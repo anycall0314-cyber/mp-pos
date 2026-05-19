@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
+import { InventoryQueryPage } from "@/pages/inventory/InventoryQueryPage";
 import { MembersPage } from "@/pages/members/MembersPage";
 import { ProductsPage } from "@/pages/products/ProductsPage";
 import { PurchasesPage } from "@/pages/purchases/PurchasesPage";
 import { PurchaseEntryPage } from "@/pages/purchases/PurchaseEntryPage";
 import { PurchaseLabelsPrintPage } from "@/pages/purchases/PurchaseLabelsPrintPage";
+import { SecondhandAcquisitionPage } from "@/pages/secondhand-acquisition/SecondhandAcquisitionPage";
 import { SalesPage } from "@/pages/sales/SalesPage";
 import { SalesEntryPage } from "@/pages/sales/SalesEntryPage";
 import { SalesPrintPage } from "@/pages/sales/SalesPrintPage";
@@ -43,6 +45,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "進銷",
     items: [
       { to: "/purchases", label: "進貨" },
+      { to: "/secondhand-acquisition", label: "中古收購(個人)" },
       { to: "/sales", label: "銷貨" },
       { to: "/transfers", label: "調撥" },
     ],
@@ -120,8 +123,6 @@ function NavGroupMenu({ group }: { group: NavGroup }) {
     <div
       ref={ref}
       className={`topnav-group${open ? " open" : ""}`}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
     >
       <button
         type="button"
@@ -177,13 +178,17 @@ export function App() {
             path="/purchases/:id/print/labels"
             element={<PurchaseLabelsPrintPage />}
           />
+          <Route
+            path="/secondhand-acquisition"
+            element={<SecondhandAcquisitionPage />}
+          />
           <Route path="/sales" element={<SalesPage />} />
           <Route path="/sales/:id" element={<SalesEntryPage />} />
           <Route path="/sales/:id/print/:type" element={<SalesPrintPage />} />
           <Route path="/members" element={<MembersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/transfers" element={<Placeholder title="調撥單" />} />
-          <Route path="/inventory" element={<Placeholder title="庫存查詢" />} />
+          <Route path="/inventory" element={<InventoryQueryPage />} />
           <Route path="/serials" element={<Placeholder title="序號查詢" />} />
         </Routes>
       </main>

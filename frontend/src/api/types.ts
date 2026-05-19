@@ -40,6 +40,7 @@ export interface Product {
   allows_telecom_line: boolean;
   allows_commission: boolean;
   is_virtual: boolean;
+  is_secondhand: boolean;
   counts_cash: boolean;
   counts_margin: boolean;
   is_active: boolean;
@@ -66,17 +67,30 @@ export type SerialStatus =
   | "rma"
   | "void";
 
+export type ConditionGrade = "S" | "A" | "B" | "C" | "D" | "";
+
 export interface ProductSerial {
   id: number;
   product: number;
   product_sku: string;
   product_name: string;
+  product_is_secondhand: boolean;
   serial_no: string;
   warehouse: number | null;
   warehouse_code: string | null;
   status: SerialStatus;
   status_label: string;
   purchase_unit_cost: string;
+  condition_grade: ConditionGrade;
+  condition_grade_label: string;
+  custom_unit_price: string | null;
+  battery_health: number | null;
+  condition_note: string;
+  acquired_from_member: number | null;
+  acquired_from_member_phone: string;
+  acquired_from_member_name: string;
+  acquired_via_sales_order: number | null;
+  acquired_via_sales_order_no: string;
   received_at: string | null;
   sold_at: string | null;
 }
@@ -204,6 +218,14 @@ export interface PurchaseOrderCategory {
   is_active: boolean;
 }
 
+export interface PurchaseSerialEntry {
+  sn: string;
+  grade?: ConditionGrade;
+  price?: string;
+  battery?: string;
+  note?: string;
+}
+
 export interface PurchaseOrderItem {
   id: number;
   line_no: number;
@@ -216,7 +238,7 @@ export interface PurchaseOrderItem {
   billed_qty: number;
   unit_price: string;
   amount: string;
-  serial_numbers: string[];
+  serial_numbers: (string | PurchaseSerialEntry)[];
   unit_landed_cost: string;
 }
 

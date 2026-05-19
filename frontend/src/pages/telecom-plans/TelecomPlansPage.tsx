@@ -9,6 +9,7 @@ import {
   DetailTab,
 } from "@/components/master-detail/MasterDetail";
 
+import { BulkAddTelecomPlansModal } from "./BulkAddTelecomPlansModal";
 import { TelecomPlanForm } from "./TelecomPlanForm";
 
 const columns: MasterColumn<TelecomPlan>[] = [
@@ -45,6 +46,8 @@ export function TelecomPlansPage() {
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerInitial, setDrawerInitial] = useState<TelecomPlan | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkResult, setBulkResult] = useState<string | null>(null);
 
   const tabs: DetailTab<TelecomPlan>[] = [
     {
@@ -93,17 +96,34 @@ export function TelecomPlansPage() {
       <Toolbar
         title="電信方案"
         actions={
-          <button
-            className="btn primary"
-            onClick={() => {
-              setDrawerInitial(null);
-              setDrawerOpen(true);
-            }}
-          >
-            + 新增方案
-          </button>
+          <>
+            <button className="btn" onClick={() => setBulkOpen(true)}>
+              批次新增
+            </button>
+            <button
+              className="btn primary"
+              onClick={() => {
+                setDrawerInitial(null);
+                setDrawerOpen(true);
+              }}
+            >
+              + 新增方案
+            </button>
+          </>
         }
       />
+      {bulkResult && (
+        <div
+          style={{
+            padding: "6px 16px",
+            background: "rgba(128,208,144,0.15)",
+            color: "#80d090",
+            fontSize: 12,
+          }}
+        >
+          {bulkResult}
+        </div>
+      )}
       {isLoading && <div className="md-empty">載入中…</div>}
       {isError && <div className="md-empty">載入失敗:{String(error)}</div>}
       {!isLoading && !isError && (
@@ -124,6 +144,15 @@ export function TelecomPlansPage() {
         open={drawerOpen}
         initial={drawerInitial}
         onClose={() => setDrawerOpen(false)}
+      />
+      <BulkAddTelecomPlansModal
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        onSuccess={(count) => {
+          setBulkOpen(false);
+          setBulkResult(`成功建立 ${count} 筆方案`);
+          setTimeout(() => setBulkResult(null), 4000);
+        }}
       />
     </div>
   );

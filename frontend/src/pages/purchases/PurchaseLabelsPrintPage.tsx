@@ -25,8 +25,10 @@ export function PurchaseLabelsPrintPage() {
     }> = [];
     for (const it of data.items) {
       if (it.serial_numbers && it.serial_numbers.length > 0) {
-        // 追序號:每個序號一張
-        it.serial_numbers.forEach((sn, i) => {
+        // 追序號:每個序號一張(可能是字串或物件)
+        it.serial_numbers.forEach((entry, i) => {
+          const sn =
+            typeof entry === "string" ? entry : (entry?.sn ?? "");
           out.push({ key: `${it.id}-${i}-${sn}`, item: it, serial: sn });
         });
       } else {

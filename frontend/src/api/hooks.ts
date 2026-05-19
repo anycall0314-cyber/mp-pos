@@ -27,10 +27,14 @@ function list<T>(path: string) {
 
 // ---- queries ----
 
-export const useProducts = (params?: string) =>
+export const useProducts = (
+  params?: string,
+  opts?: { enabled?: boolean },
+) =>
   useQuery({
     queryKey: ["products", params ?? ""],
     queryFn: () => list<Product>(`/products/${params ? "?" + params : ""}`),
+    enabled: opts?.enabled ?? true,
   });
 
 export const useProduct = (id: number | null) =>
@@ -216,6 +220,36 @@ export function useSaveSimCard() {
   });
 }
 
+export interface BulkTelecomPlanRow {
+  name: string;
+  monthly_fee?: string;
+  contract_months?: string;
+  commission?: string;
+  kind?: string;
+  carrier_name?: string;
+  note?: string;
+}
+export interface BulkTelecomPlanCommon {
+  carrier?: number;
+  kind?: string;
+  is_active?: boolean;
+}
+
+export function useBulkCreateTelecomPlans() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      common: BulkTelecomPlanCommon;
+      items: BulkTelecomPlanRow[];
+    }) =>
+      api<{ created: TelecomPlan[]; count: number }>("/telecom-plans/bulk/", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["telecom-plans"] }),
+  });
+}
+
 export function useSaveTelecomPlan() {
   const qc = useQueryClient();
   return useMutation({
@@ -303,6 +337,40 @@ export const useSalesOrder = (id: number | null) =>
   });
 
 // ---- mutations ----
+
+export interface BulkProductRow {
+  name: string;
+  spec?: string;
+  barcode?: string;
+  list_price?: string;
+  /** 每行可選的類別名稱,後端依名稱比對 Category;空白 → 使用 common.category */
+  category_name?: string;
+}
+export interface BulkProductCommon {
+  category?: number;
+  requires_serial?: boolean;
+  allows_telecom_line?: boolean;
+  allows_commission?: boolean;
+  is_virtual?: boolean;
+  counts_cash?: boolean;
+  counts_margin?: boolean;
+  is_active?: boolean;
+}
+
+export function useBulkCreateProducts() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      common: BulkProductCommon;
+      items: BulkProductRow[];
+    }) =>
+      api<{ created: Product[]; count: number }>("/products/bulk/", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["products"] }),
+  });
+}
 
 export function useSaveProduct() {
   const qc = useQueryClient();
@@ -456,4 +524,98 @@ export function useVoidSalesOrder() {
       qc.invalidateQueries({ queryKey: ["sim-cards"] });
     },
   });
+}
+
+export interface SecondhandAcquisitionPayload {
+  member: number;
+  warehouse: number;
+  product: number;
+  serial_no: string;
+  condition_grade: string;
+  custom_unit_price?: string | null;
+  battery_health?: number | null;
+  condition_note?: string;
+  acquisition_price: string;
+  payment_method_code: string;
+  doc_date?: string | null;
+  note?: string;
+}
+
+export interface SecondhandAcquisitionResult {
+  serial: ProductSerial;
+  sales_order: SalesOrder;
+}
+
+export function useSecondhandAcquisition() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: SecondhandAcquisitionPayload) =>
+      api<SecondhandAcquisitionResult>(
+        "/sales-orders/secondhand-acquisition/",
+        { method: "POST", body: JSON.stringify(payload) },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sales-orders"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["serials"] });
+    },
+  });
+}
+
+export function useSerialHistory(serialId: number | null) {
+  return useQuery({
+    queryKey: ["serial-history", serialId],
+    queryFn: () =>
+      api<SerialHistory>(`/serials/${serialId}/history/`),
+    enabled: serialId != null,
+  });
+}
+
+export interface SerialHistoryAcquisition {
+  kind: "purchase" | "trade_in";
+  kind_label: string;
+  doc_date: string;
+  amount: string;
+  // purchase
+  purchase_order_id?: number;
+  purchase_order_no?: string;
+  supplier_id?: number | null;
+  supplier_name?: string;
+  // trade_in
+  sales_order_id?: number;
+  sales_order_no?: string;
+  member_id?: number | null;
+  member_phone?: string;
+  member_name?: string;
+}
+
+export interface SerialHistoryMovement {
+  id: number;
+  movement_type: string;
+  type_label: string;
+  from_warehouse_code: string;
+  to_warehouse_code: string;
+  ref_doc_type: string;
+  ref_doc_id: number | null;
+  note: string;
+  created_at: string;
+}
+
+export interface SerialHistorySale {
+  id: number;
+  sales_order_id: number;
+  sales_order_no: string;
+  doc_date: string;
+  is_void: boolean;
+  customer_phone: string;
+  customer_name: string;
+  unit_price: string;
+  amount: string;
+}
+
+export interface SerialHistory {
+  serial: ProductSerial;
+  acquisition: SerialHistoryAcquisition | null;
+  movements: SerialHistoryMovement[];
+  sales: SerialHistorySale[];
 }

@@ -9,16 +9,18 @@
 6. 寫 StockMovement(SALE_OUT)
 7. SIM 卡 → issued
 """
+from datetime import date
 from decimal import Decimal
 
 from django.db import transaction
 from django.utils import timezone
 
+from apps.catalog.models import Category, Product
 from apps.inventory.models import ProductSerial, StockMovement
 from apps.parties.models import SimCard, TelecomPlan
 from apps.tenants.services import InvoiceTrackError, assign_invoice_no
 
-from .models import SalesOrder
+from .models import SalesOrder, SalesOrderItem, SalesOrderPayment
 
 CENTS = Decimal("0.01")
 TAX_RATE = Decimal("0.05")
@@ -239,6 +241,156 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
         so.save(update_fields=update_fields)
 
     return so
+
+
+SECONDHAND_INTAKE_NAME = "收購二手"
+SECONDHAND_INTAKE_CATEGORY_CODE = "SYS"
+
+
+class SecondhandIntakeError(Exception):
+    """個人收購入庫業務錯誤;由 view 轉成 400。"""
+
+
+def _get_or_create_secondhand_intake_product(tenant) -> Product:
+    """取得或自動建立「收購二手」虛擬商品(per tenant)。"""
+    existing = (
+        Product.objects.for_tenant(tenant).filter(name=SECONDHAND_INTAKE_NAME).first()
+    )
+    if existing:
+        return existing
+    cat = (
+        Category.objects.for_tenant(tenant)
+        .filter(code=SECONDHAND_INTAKE_CATEGORY_CODE)
+        .first()
+    )
+    if not cat:
+        cat = Category.objects.create(
+            tenant=tenant,
+            code=SECONDHAND_INTAKE_CATEGORY_CODE,
+            name="系統項目",
+            is_active=True,
+            sort_order=9999,
+        )
+    return Product.objects.create(
+        tenant=tenant,
+        category=cat,
+        name=SECONDHAND_INTAKE_NAME,
+        list_price=0,
+        requires_serial=False,
+        allows_telecom_line=False,
+        allows_commission=False,
+        is_virtual=True,
+        is_secondhand=False,
+        counts_cash=True,
+        counts_margin=False,
+        is_active=True,
+    )
+
+
+def acquire_secondhand_from_member(
+    *,
+    tenant,
+    member,
+    warehouse,
+    secondhand_product: Product,
+    serial_no: str,
+    condition_grade: str,
+    custom_unit_price,
+    acquisition_price,
+    payment_method_code: str,
+    battery_health=None,
+    condition_note: str = "",
+    doc_date=None,
+    note: str = "",
+):
+    """個人會員收購中古機:一個 transaction 內同時建立序號 + 收購二手銷貨單。
+
+    記帳方向:銷貨單 total 為負數(現金流出),與一般銷貨(正數現金流入)在報表自然相加。
+    """
+    if not secondhand_product.is_secondhand:
+        raise SecondhandIntakeError(
+            f"商品 {secondhand_product.sku} 不是中古機(is_secondhand=False)"
+        )
+    if not serial_no:
+        raise SecondhandIntakeError("序號為必填")
+    if (
+        ProductSerial.objects.for_tenant(tenant)
+        .filter(serial_no=serial_no)
+        .exists()
+    ):
+        raise SecondhandIntakeError(f"序號 {serial_no} 已存在")
+    if condition_grade not in ProductSerial.ConditionGrade.values:
+        raise SecondhandIntakeError(f"成色等級 {condition_grade} 無效")
+    price = Decimal(str(acquisition_price)).quantize(CENTS)
+    if price <= 0:
+        raise SecondhandIntakeError("收購金額需大於 0")
+
+    virtual_product = _get_or_create_secondhand_intake_product(tenant)
+
+    with transaction.atomic():
+        serial = ProductSerial.objects.create(
+            tenant=tenant,
+            product=secondhand_product,
+            serial_no=serial_no,
+            warehouse=warehouse,
+            status=ProductSerial.Status.IN_STOCK,
+            purchase_unit_cost=price,
+            condition_grade=condition_grade,
+            custom_unit_price=custom_unit_price,
+            battery_health=battery_health,
+            condition_note=condition_note,
+            acquired_from_member=member,
+            received_at=timezone.now(),
+        )
+
+        so = SalesOrder.objects.create(
+            tenant=tenant,
+            customer=member,
+            warehouse=warehouse,
+            doc_date=doc_date or date.today(),
+            sales_type=SalesOrder.SalesType.SALE,
+            tax_method=SalesOrder.TaxMethod.TAX_FREE,
+            note=(
+                f"中古收購 {serial_no}"
+                + (f" - {note}" if note else "")
+            ),
+        )
+        SalesOrderItem.objects.create(
+            tenant=tenant,
+            so=so,
+            line_no=1,
+            product=virtual_product,
+            qty=1,
+            unit_price=-price,
+            amount=-price,
+        )
+        SalesOrderPayment.objects.create(
+            tenant=tenant,
+            so=so,
+            line_no=1,
+            method=payment_method_code,
+            amount=-price,
+        )
+
+        try:
+            commit_sales_order(so)
+        except SalesOrderError as exc:
+            raise SecondhandIntakeError(str(exc))
+
+        serial.acquired_via_sales_order = so
+        serial.save(update_fields=["acquired_via_sales_order"])
+
+        StockMovement.objects.create(
+            tenant=tenant,
+            serial=serial,
+            movement_type=StockMovement.MovementType.TRADE_IN,
+            to_warehouse=warehouse,
+            ref_doc_type="sales_order",
+            ref_doc_id=so.id,
+            note=f"個人收購入庫 from {member.phone} {member.name}",
+        )
+
+    return serial, so
 
 
 def void_sales_order(so: SalesOrder) -> SalesOrder:

@@ -36,8 +36,23 @@ class WarehouseSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
 class ProductSerialSerializer(serializers.ModelSerializer):
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
+    product_is_secondhand = serializers.BooleanField(
+        source="product.is_secondhand", read_only=True
+    )
     warehouse_code = serializers.CharField(source="warehouse.code", read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
+    condition_grade_label = serializers.CharField(
+        source="get_condition_grade_display", read_only=True
+    )
+    acquired_from_member_phone = serializers.CharField(
+        source="acquired_from_member.phone", read_only=True, default=""
+    )
+    acquired_from_member_name = serializers.CharField(
+        source="acquired_from_member.name", read_only=True, default=""
+    )
+    acquired_via_sales_order_no = serializers.CharField(
+        source="acquired_via_sales_order.no", read_only=True, default=""
+    )
 
     class Meta:
         model = ProductSerial
@@ -46,12 +61,23 @@ class ProductSerialSerializer(serializers.ModelSerializer):
             "product",
             "product_sku",
             "product_name",
+            "product_is_secondhand",
             "serial_no",
             "warehouse",
             "warehouse_code",
             "status",
             "status_label",
             "purchase_unit_cost",
+            "condition_grade",
+            "condition_grade_label",
+            "custom_unit_price",
+            "battery_health",
+            "condition_note",
+            "acquired_from_member",
+            "acquired_from_member_phone",
+            "acquired_from_member_name",
+            "acquired_via_sales_order",
+            "acquired_via_sales_order_no",
             "received_at",
             "sold_at",
             "created_at",
@@ -61,9 +87,15 @@ class ProductSerialSerializer(serializers.ModelSerializer):
             "id",
             "product_sku",
             "product_name",
+            "product_is_secondhand",
             "warehouse_code",
             "status_label",
             "purchase_unit_cost",
+            "condition_grade_label",
+            "acquired_from_member_phone",
+            "acquired_from_member_name",
+            "acquired_via_sales_order",
+            "acquired_via_sales_order_no",
             "created_at",
             "updated_at",
         ]

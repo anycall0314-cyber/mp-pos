@@ -28,6 +28,23 @@ class PurchaseOrderError(Exception):
     """進貨業務錯誤;由 view 轉成 400 回應。"""
 
 
+VALID_GRADES = set(ProductSerial.ConditionGrade.values)
+
+
+def _normalize_serial_entry(raw):
+    """把進貨序號項目正規化:接受純字串或 dict 形式。
+
+    傳入:
+        "IMEI123"  → {"sn": "IMEI123"}
+        {"sn": "IMEI123", "grade": "A", ...}  → 原樣回傳(加 strip)
+    """
+    if isinstance(raw, dict):
+        out = dict(raw)
+        out["sn"] = str(out.get("sn", "")).strip()
+        return out
+    return {"sn": str(raw).strip()}
+
+
 def _validate_items(po: PurchaseOrder, items):
     if not items:
         raise PurchaseOrderError("無明細,無法過帳")
@@ -43,15 +60,25 @@ def _validate_items(po: PurchaseOrder, items):
                     f"第 {it.line_no} 行商品「{it.product.name}」不追蹤序號,序號欄請留空"
                 )
             continue
-        if len(sn) != it.qty:
+        normalized = [_normalize_serial_entry(s) for s in sn]
+        if len(normalized) != it.qty:
             raise PurchaseOrderError(
-                f"第 {it.line_no} 行序號數量({len(sn)})不符進貨數量({it.qty})"
+                f"第 {it.line_no} 行序號數量({len(normalized)})不符進貨數量({it.qty})"
             )
-        if len(set(sn)) != len(sn):
-            raise PurchaseOrderError(f"第 {it.line_no} 行序號有重複")
-        if any((not str(s).strip()) for s in sn):
+        if any((not e["sn"]) for e in normalized):
             raise PurchaseOrderError(f"第 {it.line_no} 行有空白序號")
-        all_serials.extend(sn)
+        only_sn = [e["sn"] for e in normalized]
+        if len(set(only_sn)) != len(only_sn):
+            raise PurchaseOrderError(f"第 {it.line_no} 行序號有重複")
+        if it.product.is_secondhand:
+            for e in normalized:
+                grade = (e.get("grade") or "").strip()
+                if grade and grade not in VALID_GRADES:
+                    raise PurchaseOrderError(
+                        f"第 {it.line_no} 行序號 {e['sn']} 成色等級「{grade}」無效"
+                    )
+        it.serial_numbers = normalized  # 寫回正規化結果,提交時使用
+        all_serials.extend(only_sn)
 
     if len(set(all_serials)) != len(all_serials):
         raise PurchaseOrderError("整單序號內出現重複")
@@ -144,16 +171,40 @@ def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
                 ).quantize(CENTS)
             product.save(update_fields=["weighted_avg_cost"])
 
-            for serial_no in it.serial_numbers:
+            for entry in it.serial_numbers:
+                entry = _normalize_serial_entry(entry)
+                extra = {}
+                if product.is_secondhand:
+                    grade = (entry.get("grade") or "").strip()
+                    if grade:
+                        extra["condition_grade"] = grade
+                    if entry.get("price") not in (None, "", 0, "0"):
+                        try:
+                            extra["custom_unit_price"] = Decimal(
+                                str(entry["price"])
+                            )
+                        except Exception:
+                            pass
+                    if entry.get("battery") not in (None, ""):
+                        try:
+                            bh = int(entry["battery"])
+                            if 0 <= bh <= 100:
+                                extra["battery_health"] = bh
+                        except Exception:
+                            pass
+                    note_value = (entry.get("note") or "").strip()
+                    if note_value:
+                        extra["condition_note"] = note_value
                 serial = ProductSerial.objects.create(
                     tenant=po.tenant,
                     product=product,
-                    serial_no=str(serial_no).strip(),
+                    serial_no=entry["sn"],
                     warehouse=po.warehouse,
                     status=ProductSerial.Status.IN_STOCK,
                     purchase_unit_cost=it.unit_landed_cost,
                     purchase_order_item=it,
                     received_at=now,
+                    **extra,
                 )
                 StockMovement.objects.create(
                     tenant=po.tenant,

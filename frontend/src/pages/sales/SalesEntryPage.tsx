@@ -907,6 +907,7 @@ export function SalesEntryPage() {
               allows_telecom_line: it.product_allows_telecom_line,
               allows_commission: it.product_allows_commission,
               is_virtual: it.product_is_virtual,
+              is_secondhand: false,
               counts_cash: true,
               counts_margin: true,
               is_active: true,
@@ -1046,7 +1047,16 @@ export function SalesEntryPage() {
         const next = [...l.serialChoices];
         while (next.length <= idx) next.push(null);
         next[idx] = option;
-        return { ...l, serialChoices: next };
+        const patch: Partial<Line> = { serialChoices: next };
+        // 中古機:挑到序號就把該序號的自定售價帶入單價(只在第 0 格觸發,避免亂蓋)
+        const product = l.productOption?.payload;
+        if (product?.is_secondhand && idx === 0 && option) {
+          const cp = option.payload?.custom_unit_price;
+          if (cp && Number(cp) > 0) {
+            patch.unit_price = String(cp);
+          }
+        }
+        return { ...l, ...patch };
       }),
     );
   }

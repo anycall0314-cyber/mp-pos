@@ -35,6 +35,10 @@
 | 結帳 | 銷貨單 N 筆 `SalesOrderPayment`(現金/匯款/非現金),`sum(amount) == total` 才能存 |
 | 序號生命週期 | 進貨建單 → in_stock;銷貨 → sold;銷貨作廢 → 回 in_stock;進貨作廢 → void(須全部還在 in_stock 才能作廢) |
 | 預設值連動 | 發票類型 = 免用 → 課稅別自動切免稅;選商品 → 進貨單帶上次進價 / 銷貨單帶 list_price |
+| 中古機 | `Product.is_secondhand=True`;`ProductSerial` 逐隻記 `condition_grade` (S/A/B/C/D)、`custom_unit_price`、`battery_health`、`condition_note`;銷貨選機自動帶 `custom_unit_price` |
+| 個人收購 | 走 `acquire_secondhand_from_member` service:同 transaction 建中古機序號 + 對應銷貨單(虛擬商品「收購二手」、`tax_free`、total 負數代表現金流出);serial 反向掛 `acquired_from_member` + `acquired_via_sales_order` |
+| 廠商收購中古 | 走一般進貨單;進貨側欄會多 4 欄(成色/售價/電池/備註)+「套用到下面所有」按鈕 |
+| 中古機履歷 | `GET /api/v1/serials/{id}/history/` 回傳:收購來源 (購進 or 個人收購)、所有銷貨/退貨、StockMovement 軌跡 |
 
 ## 程式碼定位
 
@@ -61,7 +65,8 @@ inventory-3c/
         │   ├── members/         MembersPage(會員查詢)
         │   ├── settings/        SettingsPage(發票類型 / 字軌 / 付款方式)
         │   ├── sim-cards/       SimCardsPage + SimCardForm
-        │   └── telecom-plans/   TelecomPlansPage + TelecomPlanForm
+        │   ├── telecom-plans/   TelecomPlansPage + TelecomPlanForm
+        │   └── secondhand-acquisition/  SecondhandAcquisitionPage(個人收購入庫)
         ├── App.tsx              路由與導覽(NAV_GROUPS 結構)
         └── styles.css           全站 CSS,暗色主題
 ```

@@ -14,11 +14,24 @@ import {
   searchSuppliers,
   searchWarehouses,
 } from "@/api/search";
-import type { InvoiceForm, Product, TaxMethod } from "@/api/types";
+import type {
+  ConditionGrade,
+  InvoiceForm,
+  Product,
+  TaxMethod,
+} from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Field } from "@/components/Field";
 import { Toolbar } from "@/components/Toolbar";
+
+interface SerialEntry {
+  sn: string;
+  grade?: ConditionGrade;
+  price?: string;
+  battery?: string;
+  note?: string;
+}
 
 interface Line {
   key: string;
@@ -28,7 +41,7 @@ interface Line {
   qty: number;
   billed_qty: number;
   unit_price: string;
-  serial_numbers: string[];
+  serial_numbers: SerialEntry[];
 }
 
 function newLine(line_no: number): Line {
@@ -44,9 +57,35 @@ function newLine(line_no: number): Line {
   };
 }
 
-function filledSerials(line: Line): string[] {
-  return line.serial_numbers.map((s) => (s ?? "").trim()).filter(Boolean);
+function normalizeSerialEntry(raw: unknown): SerialEntry {
+  if (typeof raw === "string") return { sn: raw };
+  if (raw && typeof raw === "object") {
+    const r = raw as Record<string, unknown>;
+    const entry: SerialEntry = { sn: String(r.sn ?? "") };
+    if (r.grade) entry.grade = String(r.grade) as ConditionGrade;
+    if (r.price !== undefined && r.price !== null && r.price !== "")
+      entry.price = String(r.price);
+    if (r.battery !== undefined && r.battery !== null && r.battery !== "")
+      entry.battery = String(r.battery);
+    if (r.note) entry.note = String(r.note);
+    return entry;
+  }
+  return { sn: "" };
 }
+
+function filledSerials(line: Line): SerialEntry[] {
+  return line.serial_numbers
+    .map((e) => ({ ...e, sn: (e.sn ?? "").trim() }))
+    .filter((e) => e.sn);
+}
+
+const GRADE_OPTIONS: { value: ConditionGrade; label: string }[] = [
+  { value: "S", label: "S 媲美新機" },
+  { value: "A", label: "A 95%新以上" },
+  { value: "B", label: "B 85-95%新" },
+  { value: "C", label: "C 70-85%新" },
+  { value: "D", label: "D 瑕疵 / 需報備" },
+];
 
 function calcAmount(line: Line) {
   return Number(line.billed_qty) * Number(line.unit_price);
@@ -58,6 +97,12 @@ interface SerialAsideProps {
   containerRef: React.RefObject<HTMLDivElement>;
   onUpdateSerial: (idx: number, value: string) => void;
   onPasteSerials: (startIdx: number, list: string[]) => void;
+  onUpdateSerialField: (
+    idx: number,
+    field: "grade" | "price" | "battery" | "note",
+    value: string,
+  ) => void;
+  onApplyToAll: (fromIdx: number) => void;
 }
 
 function SerialAside({
@@ -66,14 +111,24 @@ function SerialAside({
   containerRef,
   onUpdateSerial,
   onPasteSerials,
+  onUpdateSerialField,
+  onApplyToAll,
 }: SerialAsideProps) {
   const product = line?.productOption?.payload;
   const needs = !!product?.requires_serial;
+  const isSecondhand = !!product?.is_secondhand;
 
   return (
-    <aside className="serial-aside" ref={containerRef}>
+    <aside
+      className={
+        isSecondhand ? "serial-aside serial-aside-wide" : "serial-aside"
+      }
+      ref={containerRef}
+    >
       <div className="serial-aside-header">
-        <span className="serial-aside-title">序號維護</span>
+        <span className="serial-aside-title">
+          {isSecondhand ? "中古機序號 / 成色" : "序號維護"}
+        </span>
         {line && (
           <span className="serial-aside-sub">
             {product?.name ?? "(未選商品)"}
@@ -90,7 +145,7 @@ function SerialAside({
         {line && product && !needs && (
           <div className="serial-aside-hint">此商品不追蹤序號</div>
         )}
-        {line && needs && (
+        {line && needs && !isSecondhand && (
           <table className="serial-slot-table">
             <thead>
               <tr>
@@ -100,7 +155,7 @@ function SerialAside({
             </thead>
             <tbody>
               {Array.from({ length: line.qty }).map((_, i) => {
-                const value = line.serial_numbers[i] ?? "";
+                const value = line.serial_numbers[i]?.sn ?? "";
                 return (
                   <tr key={i}>
                     <td className="serial-slot-no">
@@ -134,6 +189,107 @@ function SerialAside({
                           }
                         }}
                       />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+        {line && needs && isSecondhand && (
+          <table className="serial-slot-table secondhand">
+            <thead>
+              <tr>
+                <th style={{ width: 36 }}>序</th>
+                <th>IMEI / 序號</th>
+                <th style={{ width: 80 }}>成色</th>
+                <th style={{ width: 100 }} className="num">
+                  自訂售價
+                </th>
+                <th style={{ width: 64 }} className="num">
+                  電池 %
+                </th>
+                <th>備註</th>
+                <th style={{ width: 64 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: line.qty }).map((_, i) => {
+                const entry = line.serial_numbers[i] ?? { sn: "" };
+                return (
+                  <tr key={i}>
+                    <td className="serial-slot-no">
+                      {(i + 1).toString().padStart(2, "0")}
+                    </td>
+                    <td>
+                      <input
+                        data-serial-slot={`${line.key}-${i}`}
+                        value={entry.sn ?? ""}
+                        disabled={readonly}
+                        onChange={(e) => onUpdateSerial(i, e.target.value)}
+                      />
+                    </td>
+                    <td>
+                      <select
+                        value={entry.grade ?? ""}
+                        disabled={readonly}
+                        onChange={(e) =>
+                          onUpdateSerialField(i, "grade", e.target.value)
+                        }
+                      >
+                        <option value="">—</option>
+                        {GRADE_OPTIONS.map((g) => (
+                          <option key={g.value} value={g.value}>
+                            {g.value}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        className="num-input"
+                        value={entry.price ?? ""}
+                        disabled={readonly}
+                        onChange={(e) =>
+                          onUpdateSerialField(i, "price", e.target.value)
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        className="num-input"
+                        min={0}
+                        max={100}
+                        value={entry.battery ?? ""}
+                        disabled={readonly}
+                        onChange={(e) =>
+                          onUpdateSerialField(i, "battery", e.target.value)
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        value={entry.note ?? ""}
+                        disabled={readonly}
+                        onChange={(e) =>
+                          onUpdateSerialField(i, "note", e.target.value)
+                        }
+                      />
+                    </td>
+                    <td>
+                      {!readonly && i < line.qty - 1 && (
+                        <button
+                          type="button"
+                          className="btn"
+                          style={{ fontSize: 11, padding: "2px 6px" }}
+                          title="把此列的成色/售價/電池/備註套用到下面所有序號"
+                          onClick={() => onApplyToAll(i)}
+                        >
+                          套用↓
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -349,7 +505,9 @@ export function PurchaseEntryPage() {
           qty: it.qty,
           billed_qty: it.billed_qty,
           unit_price: it.unit_price,
-          serial_numbers: it.serial_numbers,
+          serial_numbers: (it.serial_numbers as unknown[]).map(
+            normalizeSerialEntry,
+          ),
         })),
       );
     }
@@ -377,9 +535,8 @@ export function PurchaseEntryPage() {
       ls.map((l) => {
         if (l.key !== lineKey) return l;
         const next = [...l.serial_numbers];
-        // 確保長度足夠
-        while (next.length <= idx) next.push("");
-        next[idx] = value;
+        while (next.length <= idx) next.push({ sn: "" });
+        next[idx] = { ...next[idx], sn: value };
         return { ...l, serial_numbers: next };
       }),
     );
@@ -392,10 +549,59 @@ export function PurchaseEntryPage() {
         list.forEach((s, i) => {
           const pos = startIdx + i;
           if (pos < l.qty) {
-            while (next.length <= pos) next.push("");
-            next[pos] = s;
+            while (next.length <= pos) next.push({ sn: "" });
+            next[pos] = { ...next[pos], sn: s };
           }
         });
+        return { ...l, serial_numbers: next };
+      }),
+    );
+  }
+  function updateSerialFieldAt(
+    lineKey: string,
+    idx: number,
+    field: "grade" | "price" | "battery" | "note",
+    value: string,
+  ) {
+    setLines((ls) =>
+      ls.map((l) => {
+        if (l.key !== lineKey) return l;
+        const next = [...l.serial_numbers];
+        while (next.length <= idx) next.push({ sn: "" });
+        const trimmed = value.trim();
+        const updated = { ...next[idx] };
+        if (trimmed === "") {
+          delete (updated as Record<string, unknown>)[field];
+        } else if (field === "grade") {
+          updated.grade = trimmed as ConditionGrade;
+        } else {
+          (updated as Record<string, string>)[field] = trimmed;
+        }
+        next[idx] = updated;
+        return { ...l, serial_numbers: next };
+      }),
+    );
+  }
+  function applySecondhandToAll(lineKey: string, fromIdx: number) {
+    setLines((ls) =>
+      ls.map((l) => {
+        if (l.key !== lineKey) return l;
+        const source = l.serial_numbers[fromIdx];
+        if (!source) return l;
+        const { grade, price, battery, note } = source;
+        const next = l.serial_numbers.map((e, i) =>
+          i > fromIdx
+            ? {
+                ...e,
+                ...(grade !== undefined ? { grade } : {}),
+                ...(price !== undefined ? { price } : {}),
+                ...(battery !== undefined ? { battery } : {}),
+                ...(note !== undefined ? { note } : {}),
+              }
+            : e,
+        );
+        // 也補齊長度
+        while (next.length < l.qty) next.push({ sn: "" });
         return { ...l, serial_numbers: next };
       }),
     );
@@ -428,8 +634,11 @@ export function PurchaseEntryPage() {
           return `第 ${l.line_no} 行序號(${serials.length})不符數量(${l.qty})`;
         }
         for (const s of serials) {
-          if (seen.has(s)) return `序號重複:${s}`;
-          seen.add(s);
+          if (seen.has(s.sn)) return `序號重複:${s.sn}`;
+          seen.add(s.sn);
+          if (product.is_secondhand && !s.grade) {
+            return `第 ${l.line_no} 行序號 ${s.sn} 未選成色等級`;
+          }
         }
       }
     }
@@ -848,6 +1057,13 @@ export function PurchaseEntryPage() {
          }
          onPasteSerials={(idx, list) =>
            selectedLineKey && pasteSerialsAt(selectedLineKey, idx, list)
+         }
+         onUpdateSerialField={(idx, field, v) =>
+           selectedLineKey &&
+           updateSerialFieldAt(selectedLineKey, idx, field, v)
+         }
+         onApplyToAll={(idx) =>
+           selectedLineKey && applySecondhandToAll(selectedLineKey, idx)
          }
        />
       </div>

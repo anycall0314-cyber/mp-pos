@@ -107,6 +107,11 @@ class Product(TenantOwnedModel):
         default=False,
         help_text="無實體商品(手續費 / 折抵 / 成本回補等);銷貨時不扣庫存、不建 IMEI、不寫異動",
     )
+    is_secondhand = models.BooleanField(
+        "中古機",
+        default=False,
+        help_text="中古機主檔,序號需逐隻記成色 / 電池 / 售價 / 備註,銷貨單價以序號自定為準",
+    )
     counts_cash = models.BooleanField(
         "計入現金",
         default=True,

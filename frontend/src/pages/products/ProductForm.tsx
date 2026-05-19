@@ -26,6 +26,7 @@ interface FormState {
   allows_telecom_line: boolean;
   allows_commission: boolean;
   is_virtual: boolean;
+  is_secondhand: boolean;
   counts_cash: boolean;
   counts_margin: boolean;
   is_active: boolean;
@@ -41,6 +42,7 @@ const EMPTY: FormState = {
   allows_telecom_line: false,
   allows_commission: false,
   is_virtual: false,
+  is_secondhand: false,
   counts_cash: true,
   counts_margin: true,
   is_active: true,
@@ -58,6 +60,7 @@ function toState(p: Product | null | undefined): FormState {
     allows_telecom_line: p.allows_telecom_line,
     allows_commission: p.allows_commission,
     is_virtual: p.is_virtual,
+    is_secondhand: p.is_secondhand,
     counts_cash: p.counts_cash,
     counts_margin: p.counts_margin,
     is_active: p.is_active,
@@ -146,6 +149,7 @@ export function ProductForm({
         allows_telecom_line: state.allows_telecom_line,
         allows_commission: state.allows_commission,
         is_virtual: state.is_virtual,
+        is_secondhand: state.is_secondhand,
         counts_cash: state.counts_cash,
         counts_margin: state.counts_margin,
         is_active: state.is_active,
@@ -321,6 +325,18 @@ export function ProductForm({
               if (v) patch("requires_serial", false);
             }}
             label="虛擬商品"
+          />
+          <Checkbox
+            checked={state.is_secondhand}
+            onChange={(v) => {
+              patch("is_secondhand", v);
+              // 中古機一定追蹤序號;勾起時自動把追蹤序號打開、虛擬商品關掉
+              if (v) {
+                patch("requires_serial", true);
+                patch("is_virtual", false);
+              }
+            }}
+            label="中古機(逐隻記成色 / 電池 / 自定售價)"
           />
           <Checkbox
             checked={state.counts_cash}

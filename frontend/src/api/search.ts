@@ -49,6 +49,25 @@ export async function searchProducts(
   }));
 }
 
+export async function searchSecondhandProducts(
+  query: string,
+): Promise<ComboOption<Product>[]> {
+  const data = await fetchPaginated<Product>(
+    `/products/?${qs({
+      search: query,
+      page_size: LIMIT,
+      is_active: "true",
+      is_secondhand: "true",
+    })}`,
+  );
+  return data.map((p) => ({
+    id: p.id,
+    label: p.name,
+    secondary: [p.sku, p.category_name].filter(Boolean).join(" / "),
+    payload: p,
+  }));
+}
+
 export async function searchCustomers(
   query: string,
 ): Promise<ComboOption<Customer>[]> {
@@ -205,10 +224,19 @@ export async function searchInStockSerials(
       warehouse: opts.warehouse,
     })}`,
   );
-  return data.map((s) => ({
-    id: s.id,
-    label: s.serial_no,
-    secondary: s.product_name,
-    payload: s,
-  }));
+  return data.map((s) => {
+    const parts: string[] = [];
+    if (s.product_is_secondhand) {
+      if (s.condition_grade) parts.push(`${s.condition_grade} 級`);
+      if (s.custom_unit_price)
+        parts.push(`售價 ${Number(s.custom_unit_price).toLocaleString()}`);
+      if (s.battery_health != null) parts.push(`電池 ${s.battery_health}%`);
+    }
+    return {
+      id: s.id,
+      label: s.serial_no,
+      secondary: parts.length > 0 ? parts.join(" · ") : s.product_name,
+      payload: s,
+    };
+  });
 }

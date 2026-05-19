@@ -66,6 +66,7 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
             "allows_telecom_line",
             "allows_commission",
             "is_virtual",
+            "is_secondhand",
             "counts_cash",
             "counts_margin",
             "is_active",
