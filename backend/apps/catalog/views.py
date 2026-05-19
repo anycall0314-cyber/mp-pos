@@ -1,10 +1,11 @@
 from django.db import transaction
-from django.db.models import Count, OuterRef, Q, Subquery
+from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum, Value
+from django.db.models.functions import Coalesce
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from apps.inventory.models import ProductSerial
+from apps.inventory.models import ProductSerial, StockBalance
 from apps.purchasing.models import PurchaseOrderItem
 
 from .models import Category, Product
@@ -44,18 +45,36 @@ class ProductViewSet(viewsets.ModelViewSet):
             .values("unit_price")[:1]
         )
         # 庫存統計:可選 ?warehouse=N 限定倉別
+        # - 序號商品:Count(ProductSerial in_stock)
+        # - 配件:Sum(StockBalance.qty)
+        # 兩者擇一不為 0,加總即為總在庫
         warehouse_id = self.request.query_params.get("warehouse")
         stock_q = Q(serials__status=ProductSerial.Status.IN_STOCK)
+        balance_filter = Q(product=OuterRef("pk"), tenant=tenant)
         if warehouse_id:
             try:
-                stock_q &= Q(serials__warehouse_id=int(warehouse_id))
+                wid = int(warehouse_id)
+                stock_q &= Q(serials__warehouse_id=wid)
+                balance_filter &= Q(warehouse_id=wid)
             except (TypeError, ValueError):
                 pass
+        balance_sub = (
+            StockBalance.objects.filter(balance_filter)
+            .order_by()
+            .values("product")
+            .annotate(total=Sum("qty"))
+            .values("total")[:1]
+        )
         return (
             Product.objects.for_tenant(tenant)
             .select_related("category")
             .annotate(
-                stock_qty=Count("serials", filter=stock_q),
+                serial_count=Count("serials", filter=stock_q),
+                balance_total=Coalesce(
+                    Subquery(balance_sub, output_field=IntegerField()),
+                    Value(0),
+                ),
+                stock_qty=F("serial_count") + F("balance_total"),
                 last_purchase_price=Subquery(last_price_sq),
             )
         )

@@ -95,6 +95,57 @@ export interface ProductSerial {
   sold_at: string | null;
 }
 
+export interface StockBalance {
+  id: number;
+  product: number;
+  product_sku: string;
+  product_name: string;
+  warehouse: number;
+  warehouse_code: string;
+  warehouse_name: string;
+  qty: number;
+  weighted_avg_cost: string;
+}
+
+export interface TransferOrderItemSerial {
+  id: number;
+  serial: number;
+  serial_no: string;
+  line_pos: number;
+}
+
+export interface TransferOrderItem {
+  id: number;
+  line_no: number;
+  product: number;
+  product_sku: string;
+  product_name: string;
+  product_requires_serial: boolean;
+  qty: number;
+  note: string;
+  serials: TransferOrderItemSerial[];
+  /** write-only:建單時帶序號 id 列表 */
+  serial_ids?: number[];
+}
+
+export interface TransferOrder {
+  id: number;
+  no: string;
+  from_warehouse: number;
+  from_warehouse_code: string;
+  from_warehouse_name: string;
+  to_warehouse: number;
+  to_warehouse_code: string;
+  to_warehouse_name: string;
+  doc_date: string;
+  note: string;
+  created_by: number | null;
+  is_void: boolean;
+  items: TransferOrderItem[];
+  created_at: string;
+  updated_at: string;
+}
+
 // parties
 export interface Supplier {
   id: number;

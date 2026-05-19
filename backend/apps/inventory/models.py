@@ -145,6 +145,52 @@ class ProductSerial(TenantOwnedModel):
         return self.serial_no
 
 
+class StockBalance(TenantOwnedModel):
+    """非序號商品(配件)的倉別庫存餘額。每個 (商品, 倉庫) 一筆。
+
+    序號商品的庫存仍以 ProductSerial 為單位,不寫這個表。
+    """
+
+    product = models.ForeignKey(
+        "catalog.Product",
+        on_delete=models.PROTECT,
+        related_name="balances",
+        verbose_name="商品",
+    )
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name="balances",
+        verbose_name="倉庫",
+    )
+    qty = models.PositiveIntegerField("在庫數量", default=0)
+    weighted_avg_cost = models.DecimalField(
+        "加權平均成本(未稅)",
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        help_text="本倉本商品的加權平均;進貨累計,銷貨/調撥不重算",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "product", "warehouse"],
+                name="uniq_stockbalance_product_warehouse",
+            ),
+        ]
+        ordering = ["product__sku", "warehouse__code"]
+        indexes = [
+            models.Index(fields=["tenant", "product"]),
+            models.Index(fields=["tenant", "warehouse"]),
+        ]
+        verbose_name = "庫存餘額"
+        verbose_name_plural = "庫存餘額"
+
+    def __str__(self) -> str:
+        return f"{self.product_id}@{self.warehouse_id}:{self.qty}"
+
+
 class StockMovement(TenantOwnedModel):
     """庫存異動軌跡。每次序號狀態 / 位置變動都寫一筆。"""
 
@@ -162,7 +208,24 @@ class StockMovement(TenantOwnedModel):
         ProductSerial,
         on_delete=models.PROTECT,
         related_name="movements",
+        null=True,
+        blank=True,
         verbose_name="序號",
+        help_text="序號商品填這欄;配件批量異動留空",
+    )
+    product = models.ForeignKey(
+        "catalog.Product",
+        on_delete=models.PROTECT,
+        related_name="batch_movements",
+        null=True,
+        blank=True,
+        verbose_name="商品",
+        help_text="配件批量異動填這欄;序號商品由 serial 帶出可留空",
+    )
+    qty = models.PositiveIntegerField(
+        "數量",
+        default=1,
+        help_text="序號商品=1;配件=該次批量",
     )
     movement_type = models.CharField("異動類型", max_length=20, choices=MovementType.choices)
     from_warehouse = models.ForeignKey(

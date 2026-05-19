@@ -8,6 +8,8 @@ import { PurchasesPage } from "@/pages/purchases/PurchasesPage";
 import { PurchaseEntryPage } from "@/pages/purchases/PurchaseEntryPage";
 import { PurchaseLabelsPrintPage } from "@/pages/purchases/PurchaseLabelsPrintPage";
 import { SecondhandAcquisitionPage } from "@/pages/secondhand-acquisition/SecondhandAcquisitionPage";
+import { TransfersPage } from "@/pages/transfers/TransfersPage";
+import { TransferEntryPage } from "@/pages/transfers/TransferEntryPage";
 import { SalesPage } from "@/pages/sales/SalesPage";
 import { SalesEntryPage } from "@/pages/sales/SalesEntryPage";
 import { SalesPrintPage } from "@/pages/sales/SalesPrintPage";
@@ -187,7 +189,8 @@ export function App() {
           <Route path="/sales/:id/print/:type" element={<SalesPrintPage />} />
           <Route path="/members" element={<MembersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/transfers" element={<Placeholder title="調撥單" />} />
+          <Route path="/transfers" element={<TransfersPage />} />
+          <Route path="/transfers/:id" element={<TransferEntryPage />} />
           <Route path="/inventory" element={<InventoryQueryPage />} />
           <Route path="/serials" element={<Placeholder title="序號查詢" />} />
         </Routes>

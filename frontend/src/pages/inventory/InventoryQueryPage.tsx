@@ -1,6 +1,10 @@
 import { useState } from "react";
 
-import { useInStockSerials, useProducts } from "@/api/hooks";
+import {
+  useInStockSerials,
+  useProducts,
+  useStockBalances,
+} from "@/api/hooks";
 import { searchCategories, searchWarehouses } from "@/api/search";
 import type { Category, Product, Warehouse } from "@/api/types";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
@@ -137,6 +141,86 @@ function SerialListModal({
   );
 }
 
+interface BalanceListModalProps {
+  product: Product;
+  warehouseId?: number;
+  onClose: () => void;
+}
+
+function BalanceListModal({
+  product,
+  warehouseId,
+  onClose,
+}: BalanceListModalProps) {
+  const balances = useStockBalances({
+    product: product.id,
+    warehouse: warehouseId,
+  });
+  const rows = balances.data ?? [];
+  const total = rows.reduce((s, b) => s + b.qty, 0);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="modal-card serial-list-modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="modal-title">{product.name} · 各倉分佈</div>
+        <div className="modal-body">
+          {balances.isLoading && <div className="md-empty">載入中…</div>}
+          {!balances.isLoading && (
+            <table className="line-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 40 }}>#</th>
+                  <th>倉庫</th>
+                  <th className="num">在庫</th>
+                  <th className="num">加權平均成本</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((b, i) => (
+                  <tr key={b.id}>
+                    <td>{i + 1}</td>
+                    <td>
+                      {b.warehouse_code} {b.warehouse_name}
+                    </td>
+                    <td className="num">{b.qty}</td>
+                    <td className="num">
+                      {Number(b.weighted_avg_cost).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+                {rows.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="md-empty">
+                      —
+                    </td>
+                  </tr>
+                )}
+                {rows.length > 0 && (
+                  <tr style={{ fontWeight: 600 }}>
+                    <td colSpan={2}>合計</td>
+                    <td className="num">{total}</td>
+                    <td className="num">—</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="modal-actions">
+          <button className="btn primary" type="button" onClick={onClose}>
+            關閉
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function InventoryQueryPage() {
   // 表單狀態 — 使用者打字 / 切下拉時更新,但不會觸發 API
   const [keyword, setKeyword] = useState("");
@@ -150,8 +234,9 @@ export function InventoryQueryPage() {
   // 已套用 — 按「查詢」才更新,API 只在這個有值時呼叫
   const [applied, setApplied] = useState<AppliedFilter | null>(null);
 
-  // 點在庫數字打開的序號清單 modal
+  // 點在庫數字打開的明細 modal:序號商品開序號清單,配件開各倉分佈
   const [serialDialog, setSerialDialog] = useState<Product | null>(null);
+  const [balanceDialog, setBalanceDialog] = useState<Product | null>(null);
 
   const queryString = applied ? buildQS(applied) : "";
   const products = useProducts(queryString, { enabled: !!applied });
@@ -252,6 +337,13 @@ export function InventoryQueryPage() {
             onClose={() => setSerialDialog(null)}
           />
         )}
+        {balanceDialog && (
+          <BalanceListModal
+            product={balanceDialog}
+            warehouseId={applied?.warehouse || undefined}
+            onClose={() => setBalanceDialog(null)}
+          />
+        )}
         {applied && !products.isError && (
           <table>
             <thead>
@@ -271,20 +363,22 @@ export function InventoryQueryPage() {
                   <td>{p.category_name}</td>
                   <td>{p.barcode || "—"}</td>
                   <td className="num">
-                    {p.is_virtual || !p.requires_serial ? (
-                      <span style={{ color: "var(--text-dim)" }}>
-                        {p.is_virtual ? "—" : p.stock_qty}
-                      </span>
-                    ) : p.stock_qty > 0 ? (
+                    {p.is_virtual ? (
+                      <span style={{ color: "var(--text-dim)" }}>—</span>
+                    ) : p.stock_qty === 0 ? (
+                      <span style={{ color: "#ff7070" }}>0</span>
+                    ) : (
                       <button
                         type="button"
                         className="stock-link"
-                        onClick={() => setSerialDialog(p)}
+                        onClick={() =>
+                          p.requires_serial
+                            ? setSerialDialog(p)
+                            : setBalanceDialog(p)
+                        }
                       >
                         {p.stock_qty}
                       </button>
-                    ) : (
-                      <span style={{ color: "#ff7070" }}>0</span>
                     )}
                   </td>
                   <td className="num">

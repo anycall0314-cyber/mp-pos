@@ -16,7 +16,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.catalog.models import Category, Product
-from apps.inventory.models import ProductSerial, StockMovement
+from apps.inventory.models import ProductSerial, StockBalance, StockMovement
 from apps.parties.models import SimCard, TelecomPlan
 from apps.tenants.services import InvoiceTrackError, assign_invoice_no
 
@@ -70,9 +70,22 @@ def _validate_items(so: SalesOrder, items):
                 )
             all_serial_ids.extend(serial_ids)
         else:
-            raise SalesOrderError(
-                f"第 {it.line_no} 行商品 {product.sku} 不追序號的實體商品 MVP 未支援"
-            )
+            # 配件:檢查該倉庫存是否足夠
+            if item_serials:
+                raise SalesOrderError(
+                    f"第 {it.line_no} 行配件 {product.sku} 不可指定序號"
+                )
+            balance = StockBalance.objects.filter(
+                tenant=so.tenant,
+                product=product,
+                warehouse=so.warehouse,
+            ).first()
+            current = balance.qty if balance else 0
+            if current < it.qty:
+                raise SalesOrderError(
+                    f"第 {it.line_no} 行 {product.sku} 在 {so.warehouse.code} "
+                    f"現有 {current},不足銷售 {it.qty}"
+                )
 
         # 屬性限制
         has_telecom = bool(
@@ -182,15 +195,26 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
             else:
                 it.amount = it.amount.quantize(CENTS)
 
-            # cost_at_post:虛擬 = 0;實體 = sum 各 serial 的 purchase_unit_cost
+            # cost_at_post:
+            # - 虛擬:0
+            # - 序號實體:sum 各 serial 的 purchase_unit_cost
+            # - 配件(無序號實體):本倉 balance.weighted_avg_cost × qty
             if product.is_virtual:
                 it.cost_at_post = Decimal("0")
-            else:
+            elif product.requires_serial:
                 item_serials = list(it.serials.select_related("serial").all())
                 it.cost_at_post = sum(
                     (sos.serial.purchase_unit_cost for sos in item_serials),
                     Decimal("0"),
                 ).quantize(CENTS)
+            else:
+                bal = StockBalance.objects.filter(
+                    tenant=so.tenant,
+                    product=product,
+                    warehouse=so.warehouse,
+                ).first()
+                unit_cost = bal.weighted_avg_cost if bal else Decimal("0")
+                it.cost_at_post = (Decimal(it.qty) * unit_cost).quantize(CENTS)
             it.save(update_fields=["amount", "cost_at_post"])
             subtotal_raw += it.amount
 
@@ -210,6 +234,29 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
                     ref_doc_type="sales_order",
                     ref_doc_id=so.id,
                     note=f"銷貨單 {so.no} 第 {it.line_no} 行",
+                )
+
+            # 配件:扣本倉 balance(銷貨不重算 weighted_avg)
+            if (
+                not product.requires_serial
+                and not product.is_virtual
+            ):
+                bal = StockBalance.objects.get(
+                    tenant=so.tenant,
+                    product=product,
+                    warehouse=so.warehouse,
+                )
+                bal.qty -= it.qty
+                bal.save(update_fields=["qty"])
+                StockMovement.objects.create(
+                    tenant=so.tenant,
+                    product=product,
+                    qty=it.qty,
+                    movement_type=StockMovement.MovementType.SALE_OUT,
+                    from_warehouse=so.warehouse,
+                    ref_doc_type="sales_order",
+                    ref_doc_id=so.id,
+                    note=f"銷貨單 {so.no} 第 {it.line_no} 行 {product.sku} ×{it.qty}",
                 )
 
             if it.sim_card_id:
@@ -406,6 +453,7 @@ def void_sales_order(so: SalesOrder) -> SalesOrder:
 
     with transaction.atomic():
         for it in items:
+            product = it.product
             for sos in it.serials.select_related("serial").all():
                 serial = sos.serial
                 serial.status = ProductSerial.Status.IN_STOCK
@@ -420,6 +468,28 @@ def void_sales_order(so: SalesOrder) -> SalesOrder:
                     ref_doc_type="sales_order",
                     ref_doc_id=so.id,
                     note=f"銷貨單 {so.no} 作廢",
+                )
+            # 配件:回補本倉 balance(數量回補,不動 weighted_avg)
+            if (
+                not product.requires_serial
+                and not product.is_virtual
+            ):
+                bal, _ = StockBalance.objects.get_or_create(
+                    tenant=so.tenant,
+                    product=product,
+                    warehouse=so.warehouse,
+                )
+                bal.qty += it.qty
+                bal.save(update_fields=["qty"])
+                StockMovement.objects.create(
+                    tenant=so.tenant,
+                    product=product,
+                    qty=it.qty,
+                    movement_type=StockMovement.MovementType.RETURN_IN,
+                    to_warehouse=so.warehouse,
+                    ref_doc_type="sales_order",
+                    ref_doc_id=so.id,
+                    note=f"銷貨單 {so.no} 作廢 {product.sku} ×{it.qty}",
                 )
             if it.sim_card_id:
                 card = it.sim_card

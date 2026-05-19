@@ -15,8 +15,10 @@ import {
   SalesOrder,
   SalesPerson,
   SimCard,
+  StockBalance,
   Supplier,
   TelecomPlan,
+  TransferOrder,
   Warehouse,
 } from "./types";
 
@@ -618,4 +620,76 @@ export interface SerialHistory {
   acquisition: SerialHistoryAcquisition | null;
   movements: SerialHistoryMovement[];
   sales: SerialHistorySale[];
+}
+
+// ---- StockBalance ----
+
+export const useStockBalances = (params?: {
+  product?: number;
+  warehouse?: number;
+}) => {
+  const qs = new URLSearchParams();
+  qs.set("page_size", "200");
+  if (params?.product != null) qs.set("product", String(params.product));
+  if (params?.warehouse != null) qs.set("warehouse", String(params.warehouse));
+  const url = `/stock-balances/?${qs.toString()}`;
+  return useQuery({
+    queryKey: ["stock-balances", qs.toString()],
+    queryFn: () => list<StockBalance>(url),
+  });
+};
+
+// ---- TransferOrder ----
+
+export const useTransferOrders = (params?: {
+  doc_date_gte?: string;
+  doc_date_lte?: string;
+}) => {
+  const qs = new URLSearchParams();
+  qs.set("page_size", "100");
+  if (params?.doc_date_gte) qs.set("doc_date__gte", params.doc_date_gte);
+  if (params?.doc_date_lte) qs.set("doc_date__lte", params.doc_date_lte);
+  return useQuery({
+    queryKey: ["transfer-orders", qs.toString()],
+    queryFn: () => list<TransferOrder>(`/transfer-orders/?${qs.toString()}`),
+  });
+};
+
+export const useTransferOrder = (id: number | null) =>
+  useQuery({
+    queryKey: ["transfer-order", id],
+    queryFn: () => api<TransferOrder>(`/transfer-orders/${id}/`),
+    enabled: id != null,
+  });
+
+export function useCreateTransferOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Partial<TransferOrder>) =>
+      api<TransferOrder>("/transfer-orders/", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["transfer-orders"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["serials"] });
+      qc.invalidateQueries({ queryKey: ["stock-balances"] });
+    },
+  });
+}
+
+export function useVoidTransferOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<TransferOrder>(`/transfer-orders/${id}/void/`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["transfer-orders"] });
+      qc.invalidateQueries({ queryKey: ["transfer-order"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["serials"] });
+      qc.invalidateQueries({ queryKey: ["stock-balances"] });
+    },
+  });
 }

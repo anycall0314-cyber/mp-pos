@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import ProductSerial, StockMovement, Warehouse
+from .models import ProductSerial, StockBalance, StockMovement, Warehouse
 
 
 class _TenantUniqueMixin:
@@ -96,6 +96,40 @@ class ProductSerialSerializer(serializers.ModelSerializer):
             "acquired_from_member_name",
             "acquired_via_sales_order",
             "acquired_via_sales_order_no",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class StockBalanceSerializer(serializers.ModelSerializer):
+    product_sku = serializers.CharField(source="product.sku", read_only=True)
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    warehouse_code = serializers.CharField(source="warehouse.code", read_only=True)
+    warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
+
+    class Meta:
+        model = StockBalance
+        fields = [
+            "id",
+            "product",
+            "product_sku",
+            "product_name",
+            "warehouse",
+            "warehouse_code",
+            "warehouse_name",
+            "qty",
+            "weighted_avg_cost",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "product_sku",
+            "product_name",
+            "warehouse_code",
+            "warehouse_name",
+            "qty",
+            "weighted_avg_cost",
             "created_at",
             "updated_at",
         ]

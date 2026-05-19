@@ -4,9 +4,10 @@ from rest_framework.response import Response
 
 from apps.sales.models import SalesOrder, SalesOrderItemSerial
 
-from .models import ProductSerial, StockMovement, Warehouse
+from .models import ProductSerial, StockBalance, StockMovement, Warehouse
 from .serializers import (
     ProductSerialSerializer,
+    StockBalanceSerializer,
     StockMovementSerializer,
     WarehouseSerializer,
 )
@@ -153,6 +154,25 @@ class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
                 "movements": movement_data,
                 "sales": sales_data,
             }
+        )
+
+
+class StockBalanceViewSet(viewsets.ReadOnlyModelViewSet):
+    """配件庫存餘額;按 product / warehouse 篩選。
+
+    給庫存查詢「配件按倉分佈」、調撥單選來源倉、銷貨檢查庫存等場景。
+    """
+
+    serializer_class = StockBalanceSerializer
+    ordering_fields = ["product__sku", "warehouse__code", "qty"]
+    ordering = ["product__sku", "warehouse__code"]
+    filterset_fields = ["product", "warehouse"]
+
+    def get_queryset(self):
+        return (
+            StockBalance.objects.for_tenant(self.request.tenant)
+            .filter(qty__gt=0)
+            .select_related("product", "warehouse")
         )
 
 

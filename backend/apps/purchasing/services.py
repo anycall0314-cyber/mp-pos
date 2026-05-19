@@ -16,7 +16,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
-from apps.inventory.models import ProductSerial, StockMovement
+from apps.inventory.models import ProductSerial, StockBalance, StockMovement
 
 from .models import PurchaseOrder, PurchaseOrderItem
 
@@ -187,12 +187,16 @@ def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
             )
 
         # 2. 為實體商品建序號 + 寫異動 + 更新加權平均(使用未稅成本)
-        # 虛擬商品(requires_serial=False)不建序號、不寫 StockMovement、
-        # 不更新 weighted_avg_cost,僅計入單頭金額供之後做損益用。
+        # - requires_serial=True:建 ProductSerial 並寫 StockMovement
+        # - requires_serial=False 且 is_virtual=False(配件):更新 StockBalance
+        #   per (product, warehouse) + 重算 Product.weighted_avg_cost(全域)
+        # - is_virtual=True:不動庫存,只計入單頭金額(手續費 / 折抵 / 補成本等)
         now = timezone.now()
         for it in items:
             product = it.product
             if not product.requires_serial:
+                if not product.is_virtual:
+                    _update_balance_on_purchase(po, it, product)
                 continue
             current_stock = (
                 ProductSerial.objects.for_tenant(po.tenant)
@@ -273,6 +277,61 @@ def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
     return po
 
 
+def _update_balance_on_purchase(po, it, product):
+    """配件進貨:把該倉的 StockBalance 加上去並重算加權平均。
+    同時重算 Product.weighted_avg_cost(跨倉聚合,供報表)。
+    """
+    balance, _ = StockBalance.objects.get_or_create(
+        tenant=po.tenant,
+        product=product,
+        warehouse=po.warehouse,
+    )
+    batch_net_total = it.unit_landed_cost * Decimal(it.qty)
+    new_qty = balance.qty + it.qty
+    if new_qty > 0:
+        old_value = Decimal(balance.qty) * balance.weighted_avg_cost
+        balance.weighted_avg_cost = (
+            (old_value + batch_net_total) / Decimal(new_qty)
+        ).quantize(CENTS)
+    balance.qty = new_qty
+    balance.save(update_fields=["qty", "weighted_avg_cost"])
+    StockMovement.objects.create(
+        tenant=po.tenant,
+        product=product,
+        qty=it.qty,
+        movement_type=StockMovement.MovementType.PURCHASE_IN,
+        to_warehouse=po.warehouse,
+        ref_doc_type="purchase_order",
+        ref_doc_id=po.id,
+        note=f"進貨單 {po.no} 第 {it.line_no} 行 {product.sku} ×{it.qty}",
+    )
+    _recompute_product_avg_cost(po.tenant, product)
+
+
+def _recompute_product_avg_cost(tenant, product):
+    """跨倉聚合 Product.weighted_avg_cost。
+    序號商品:用所有 in_stock 序號成本平均
+    配件:用所有 StockBalance(qty>0)的加權平均
+    """
+    if product.requires_serial:
+        _recompute_weighted_avg_cost(tenant, product)
+        return
+    balances = StockBalance.objects.filter(
+        tenant=tenant, product=product, qty__gt=0
+    )
+    total_qty = 0
+    total_value = Decimal("0")
+    for b in balances:
+        total_qty += b.qty
+        total_value += Decimal(b.qty) * b.weighted_avg_cost
+    product.weighted_avg_cost = (
+        (total_value / Decimal(total_qty)).quantize(CENTS)
+        if total_qty > 0
+        else Decimal("0")
+    )
+    product.save(update_fields=["weighted_avg_cost"])
+
+
 def _recompute_weighted_avg_cost(tenant, product):
     """以該商品目前 in_stock 序號的 purchase_unit_cost 重算加權平均。"""
     serials = ProductSerial.objects.for_tenant(tenant).filter(
@@ -290,7 +349,10 @@ def _recompute_weighted_avg_cost(tenant, product):
 
 
 def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
-    """整單作廢:此單建立的序號全須仍在 in_stock,否則拒絕。"""
+    """整單作廢:
+    - 序號商品:該單建的序號全須仍 in_stock 才能作廢
+    - 配件:該倉 StockBalance 數量需 >= 本單進量(賣掉/調走的不能還回去)
+    """
     if po.is_void:
         raise PurchaseOrderError("此單已作廢")
 
@@ -304,6 +366,21 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
         raise PurchaseOrderError(
             f"序號已動用,無法作廢:{', '.join(sample)}"
         )
+
+    # 預先驗證配件庫存夠不夠扣
+    for it in items:
+        product = it.product
+        if product.requires_serial or product.is_virtual:
+            continue
+        balance = StockBalance.objects.filter(
+            tenant=po.tenant, product=product, warehouse=po.warehouse
+        ).first()
+        if not balance or balance.qty < it.qty:
+            current = balance.qty if balance else 0
+            raise PurchaseOrderError(
+                f"商品 {product.sku} 在 {po.warehouse.code} 現有 {current},"
+                f"無法回退本單的 {it.qty} 件(部分已售出/調撥)"
+            )
 
     with transaction.atomic():
         affected_product_ids = set()
@@ -322,12 +399,36 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
                 note=f"進貨單 {po.no} 作廢",
             )
 
+        # 配件:從本倉 balance 扣掉本單進貨量
+        for it in items:
+            product = it.product
+            if product.requires_serial or product.is_virtual:
+                continue
+            affected_product_ids.add(product.id)
+            balance = StockBalance.objects.get(
+                tenant=po.tenant, product=product, warehouse=po.warehouse
+            )
+            balance.qty -= it.qty
+            if balance.qty == 0:
+                balance.weighted_avg_cost = Decimal("0")
+            balance.save(update_fields=["qty", "weighted_avg_cost"])
+            StockMovement.objects.create(
+                tenant=po.tenant,
+                product=product,
+                qty=it.qty,
+                movement_type=StockMovement.MovementType.VOID,
+                from_warehouse=po.warehouse,
+                ref_doc_type="purchase_order",
+                ref_doc_id=po.id,
+                note=f"進貨單 {po.no} 作廢 {product.sku} ×{it.qty}",
+            )
+
         # 重算加權平均(受影響商品)
         from apps.catalog.models import Product
 
         for pid in affected_product_ids:
             product = Product.objects.get(pk=pid)
-            _recompute_weighted_avg_cost(po.tenant, product)
+            _recompute_product_avg_cost(po.tenant, product)
 
         po.is_void = True
         po.save(update_fields=["is_void"])

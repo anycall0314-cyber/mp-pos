@@ -39,6 +39,9 @@
 | 個人收購 | 走 `acquire_secondhand_from_member` service:同 transaction 建中古機序號 + 對應銷貨單(虛擬商品「收購二手」、`tax_free`、total 負數代表現金流出);serial 反向掛 `acquired_from_member` + `acquired_via_sales_order` |
 | 廠商收購中古 | 走一般進貨單;進貨側欄會多 4 欄(成色/售價/電池/備註)+「套用到下面所有」按鈕 |
 | 中古機履歷 | `GET /api/v1/serials/{id}/history/` 回傳:收購來源 (購進 or 個人收購)、所有銷貨/退貨、StockMovement 軌跡 |
+| 配件庫存 | 非序號商品(`requires_serial=False`、非 virtual)走 `StockBalance(product, warehouse)`,進貨累計、銷貨扣減、調撥搬移;`Product.weighted_avg_cost` 跨倉聚合 |
+| 配件不足擋下 | 銷貨單若該倉 balance 不足,`commit_sales_order` 拋錯 400,不允許負庫存 |
+| 調撥 | `TransferOrder`(單頭) + `TransferOrderItem`(明細) + `TransferOrderItemSerial`(序號 M2M);單步搬,無 in_transit 中間態;序號商品改 `serial.warehouse`,配件改兩倉的 balance;目的倉加權平均依「來源倉 avg × 搬入數」重算 |
 
 ## 程式碼定位
 
@@ -52,7 +55,8 @@ inventory-3c/
 │       ├── inventory/          Warehouse / ProductSerial / StockMovement
 │       ├── parties/            Supplier / Customer / SalesPerson / Carrier / TelecomPlan / SimCard
 │       ├── purchasing/         PurchaseOrder + commit/void service
-│       └── sales/              SalesOrder + commit/void/payment service
+│       ├── sales/              SalesOrder + commit/void/payment service
+│       └── transfers/          TransferOrder + commit/void service
 │
 └── frontend/
     └── src/
@@ -66,7 +70,8 @@ inventory-3c/
         │   ├── settings/        SettingsPage(發票類型 / 字軌 / 付款方式)
         │   ├── sim-cards/       SimCardsPage + SimCardForm
         │   ├── telecom-plans/   TelecomPlansPage + TelecomPlanForm
-        │   └── secondhand-acquisition/  SecondhandAcquisitionPage(個人收購入庫)
+        │   ├── secondhand-acquisition/  SecondhandAcquisitionPage(個人收購入庫)
+        │   └── transfers/       TransfersPage + TransferEntryPage(倉間調撥)
         ├── App.tsx              路由與導覽(NAV_GROUPS 結構)
         └── styles.css           全站 CSS,暗色主題
 ```
