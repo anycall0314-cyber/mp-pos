@@ -1,0 +1,52 @@
+/*
+ * Django admin TabularInline 緊湊化:
+ * 1. 縮 cell padding / row 高
+ * 2. 縮輸入框內距
+ * 3. 隱藏 autocomplete / related field 的 + / 鉛筆 / X / 眼睛 工具按鈕(在 inline 內冗餘)
+ * 4. JSONField TextInput 寬度與字型
+ */
+
+.inline-group .tabular table {
+  font-size: 12px;
+}
+.inline-group .tabular tr.form-row td {
+  padding: 4px 6px !important;
+  vertical-align: middle;
+}
+.inline-group .tabular tr.form-row td input,
+.inline-group .tabular tr.form-row td select,
+.inline-group .tabular tr.form-row td textarea {
+  padding: 3px 6px;
+  margin: 0;
+  font-size: 12px;
+}
+.inline-group .tabular tr.form-row td textarea {
+  min-height: unset;
+  height: 22px;
+}
+.inline-group .tabular tr.form-row td .help {
+  font-size: 11px;
+  margin: 0;
+  padding: 0;
+}
+
+/* 隱藏 inline 內的 related widget 工具按鈕 (新增/編輯/移除/查看) */
+.inline-group .tabular .related-widget-wrapper-link,
+.inline-group .tabular .related-lookup,
+.inline-group .tabular .related-widget-wrapper > a[href$="add/"],
+.inline-group .tabular .related-widget-wrapper > a[href*="change/"],
+.inline-group .tabular .related-widget-wrapper > a[href*="delete/"],
+.inline-group .tabular .related-widget-wrapper > a[href*="view/"] {
+  display: none !important;
+}
+
+/* select2 widget 在 inline 變窄 */
+.inline-group .tabular .select2-container {
+  min-width: 240px;
+}
+
+/* serial_numbers 顯示等寬字型,方便看 IMEI */
+.inline-group .tabular input[name$="-serial_numbers"] {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  letter-spacing: 0.3px;
+}
