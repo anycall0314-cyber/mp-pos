@@ -12,11 +12,16 @@ export function TransfersPage() {
   const navigate = useNavigate();
   const [from, setFrom] = useState<string>(today);
   const [to, setTo] = useState<string>(today);
+  const [statusFilter, setStatusFilter] = useState<string>("");
   const { data, isLoading, isError, error } = useTransferOrders({
     doc_date_gte: from,
     doc_date_lte: to,
+    status: statusFilter || undefined,
   });
   const rows = data ?? [];
+  const pendingCount = rows.filter(
+    (t) => t.status === "dispatched" && !t.is_void,
+  ).length;
 
   return (
     <div className="page">
@@ -59,8 +64,22 @@ export function TransfersPage() {
         >
           今天
         </button>
+        <label>
+          狀態
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="">全部</option>
+            <option value="dispatched">派發中(待確認)</option>
+            <option value="confirmed">已完成</option>
+          </select>
+        </label>
         <span className="list-filterbar-count">
-          {!isLoading && `${rows.length} 筆`}
+          {!isLoading &&
+            (pendingCount > 0
+              ? `${rows.length} 筆 · 待確認 ${pendingCount}`
+              : `${rows.length} 筆`)}
         </span>
       </div>
       <div className="md-table" style={{ height: "calc(100% - 80px)" }}>
@@ -96,7 +115,15 @@ export function TransfersPage() {
                     {t.to_warehouse_code} {t.to_warehouse_name}
                   </td>
                   <td className="num">{t.items.length}</td>
-                  <td>{t.is_void ? "作廢" : "—"}</td>
+                  <td>
+                    {t.is_void ? (
+                      <span style={{ color: "var(--text-dim)" }}>作廢</span>
+                    ) : t.status === "dispatched" ? (
+                      <span style={{ color: "#f0b060" }}>派發中</span>
+                    ) : (
+                      <span style={{ color: "#80d090" }}>已完成</span>
+                    )}
+                  </td>
                   <td>{t.note || "—"}</td>
                 </tr>
               ))}

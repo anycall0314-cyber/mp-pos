@@ -644,11 +644,13 @@ export const useStockBalances = (params?: {
 export const useTransferOrders = (params?: {
   doc_date_gte?: string;
   doc_date_lte?: string;
+  status?: string;
 }) => {
   const qs = new URLSearchParams();
   qs.set("page_size", "100");
   if (params?.doc_date_gte) qs.set("doc_date__gte", params.doc_date_gte);
   if (params?.doc_date_lte) qs.set("doc_date__lte", params.doc_date_lte);
+  if (params?.status) qs.set("status", params.status);
   return useQuery({
     queryKey: ["transfer-orders", qs.toString()],
     queryFn: () => list<TransferOrder>(`/transfer-orders/?${qs.toString()}`),
@@ -672,6 +674,21 @@ export function useCreateTransferOrder() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transfer-orders"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["serials"] });
+      qc.invalidateQueries({ queryKey: ["stock-balances"] });
+    },
+  });
+}
+
+export function useConfirmTransferOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<TransferOrder>(`/transfer-orders/${id}/confirm/`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["transfer-orders"] });
+      qc.invalidateQueries({ queryKey: ["transfer-order"] });
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["serials"] });
       qc.invalidateQueries({ queryKey: ["stock-balances"] });

@@ -64,6 +64,9 @@ class TransferOrderSerializer(serializers.ModelSerializer):
     to_warehouse_name = serializers.CharField(
         source="to_warehouse.name", read_only=True
     )
+    status_label = serializers.CharField(
+        source="get_status_display", read_only=True
+    )
 
     class Meta:
         model = TransferOrder
@@ -79,6 +82,10 @@ class TransferOrderSerializer(serializers.ModelSerializer):
             "doc_date",
             "note",
             "created_by",
+            "status",
+            "status_label",
+            "confirmed_at",
+            "confirmed_by",
             "is_void",
             "items",
             "created_at",
@@ -91,6 +98,10 @@ class TransferOrderSerializer(serializers.ModelSerializer):
             "from_warehouse_name",
             "to_warehouse_code",
             "to_warehouse_name",
+            "status",
+            "status_label",
+            "confirmed_at",
+            "confirmed_by",
             "is_void",
             "created_at",
             "updated_at",

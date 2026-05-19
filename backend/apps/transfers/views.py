@@ -5,7 +5,12 @@ from rest_framework.response import Response
 
 from .models import TransferOrder
 from .serializers import TransferOrderSerializer
-from .services import TransferOrderError, commit_transfer_order, void_transfer_order
+from .services import (
+    TransferOrderError,
+    confirm_transfer_order,
+    dispatch_transfer_order,
+    void_transfer_order,
+)
 
 
 class TransferOrderViewSet(
@@ -28,6 +33,7 @@ class TransferOrderViewSet(
     filterset_fields = {
         "from_warehouse": ["exact"],
         "to_warehouse": ["exact"],
+        "status": ["exact"],
         "is_void": ["exact"],
         "doc_date": ["exact", "gte", "lte"],
     }
@@ -48,9 +54,26 @@ class TransferOrderViewSet(
         with transaction.atomic():
             serializer.save(tenant=self.request.tenant, created_by=user)
             try:
-                commit_transfer_order(serializer.instance)
+                dispatch_transfer_order(serializer.instance)
             except TransferOrderError as exc:
                 raise serializers.ValidationError({"detail": str(exc)})
+
+    @action(detail=True, methods=["post"])
+    def confirm(self, request, pk=None):
+        to = self.get_object()
+        user = (
+            request.user
+            if getattr(request, "user", None) and request.user.is_authenticated
+            else None
+        )
+        try:
+            confirm_transfer_order(to, user=user)
+        except TransferOrderError as exc:
+            return Response(
+                {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
+            )
+        to = self.get_queryset().get(pk=to.pk)
+        return Response(self.get_serializer(to).data)
 
     @action(detail=True, methods=["post"])
     def void(self, request, pk=None):

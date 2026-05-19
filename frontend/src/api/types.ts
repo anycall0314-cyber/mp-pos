@@ -128,6 +128,8 @@ export interface TransferOrderItem {
   serial_ids?: number[];
 }
 
+export type TransferStatus = "dispatched" | "confirmed";
+
 export interface TransferOrder {
   id: number;
   no: string;
@@ -140,6 +142,10 @@ export interface TransferOrder {
   doc_date: string;
   note: string;
   created_by: number | null;
+  status: TransferStatus;
+  status_label: string;
+  confirmed_at: string | null;
+  confirmed_by: number | null;
   is_void: boolean;
   items: TransferOrderItem[];
   created_at: string;

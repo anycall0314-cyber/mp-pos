@@ -7,7 +7,15 @@ from apps.core.models import TenantOwnedModel
 
 
 class TransferOrder(TenantOwnedModel):
-    """調撥單(單頭)。儲存即生效;單步從來源倉直接到目的倉。"""
+    """調撥單(單頭)。兩階段:來源派發 → 目的倉確認。
+
+    - dispatched:來源倉已出帳(序號 → in_transit、配件 balance 扣掉)
+    - confirmed :目的倉已入帳(序號 → in_stock 在目的倉、配件 balance 加入)
+    """
+
+    class Status(models.TextChoices):
+        DISPATCHED = "dispatched", "派發中"
+        CONFIRMED = "confirmed", "已完成"
 
     no = models.CharField(
         "單號",
@@ -36,7 +44,22 @@ class TransferOrder(TenantOwnedModel):
         related_name="+",
         null=True,
         blank=True,
-        verbose_name="作業者",
+        verbose_name="派發人",
+    )
+    status = models.CharField(
+        "狀態",
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DISPATCHED,
+    )
+    confirmed_at = models.DateTimeField("確認入庫時間", null=True, blank=True)
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name="確認人",
     )
     is_void = models.BooleanField("作廢", default=False)
 
@@ -87,6 +110,14 @@ class TransferOrderItem(TenantOwnedModel):
         verbose_name="商品",
     )
     qty = models.PositiveIntegerField("數量", default=1)
+    unit_cost_at_dispatch = models.DecimalField(
+        "派發時單台成本(未稅)",
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        editable=False,
+        help_text="配件用;派發當下從來源倉 balance.weighted_avg_cost 快照,確認時拿來算目的倉的加權平均",
+    )
     note = models.CharField("備註", max_length=200, blank=True)
 
     class Meta:

@@ -65,7 +65,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             .annotate(total=Sum("qty"))
             .values("total")[:1]
         )
-        return (
+        qs = (
             Product.objects.for_tenant(tenant)
             .select_related("category")
             .annotate(
@@ -78,6 +78,11 @@ class ProductViewSet(viewsets.ModelViewSet):
                 last_purchase_price=Subquery(last_price_sq),
             )
         )
+        # 庫存查詢頁 + 庫存倉別篩選 都會帶 ?warehouse 或要看 stock_qty,
+        # 用 ?in_stock_only=true 過濾掉沒貨的(主檔頁不帶,所以仍可看到全部商品)
+        if self.request.query_params.get("in_stock_only") == "true":
+            qs = qs.filter(stock_qty__gt=0)
+        return qs
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.tenant)

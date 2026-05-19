@@ -21,6 +21,7 @@ function buildQS(f: AppliedFilter): string {
   const u = new URLSearchParams();
   u.set("page_size", "200");
   u.set("is_active", "true");
+  u.set("in_stock_only", "true");
   if (f.keyword) u.set("search", f.keyword);
   if (f.category !== "") u.set("category", String(f.category));
   if (f.warehouse !== "") u.set("warehouse", String(f.warehouse));

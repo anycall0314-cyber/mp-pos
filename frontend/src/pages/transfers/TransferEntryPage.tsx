@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { ApiHttpError } from "@/api/client";
 import {
+  useConfirmTransferOrder,
   useCreateTransferOrder,
   useTransferOrder,
   useVoidTransferOrder,
@@ -137,6 +138,7 @@ export function TransferEntryPage() {
 
   const existing = useTransferOrder(toId);
   const createMutation = useCreateTransferOrder();
+  const confirmMutation = useConfirmTransferOrder();
   const voidMutation = useVoidTransferOrder();
 
   const [fromWarehouse, setFromWarehouse] = useState<number | "">("");
@@ -315,6 +317,31 @@ export function TransferEntryPage() {
     }
   }
 
+  async function handleConfirm() {
+    if (!existing.data) return;
+    if (
+      !confirm(
+        `確認入庫調撥單 ${existing.data.no}?核對數量無誤後送出,目的倉「${existing.data.to_warehouse_name}」將收到全部明細。`,
+      )
+    )
+      return;
+    setError(null);
+    try {
+      await confirmMutation.mutateAsync(existing.data.id);
+    } catch (e) {
+      if (e instanceof ApiHttpError) {
+        const body = e.body;
+        if (typeof body === "object" && body && "detail" in body) {
+          setError(String((body as { detail: unknown }).detail));
+        } else {
+          setError(`確認失敗 (${e.status}): ${JSON.stringify(body)}`);
+        }
+      } else {
+        setError(String(e));
+      }
+    }
+  }
+
   async function handleVoid() {
     if (!existing.data) return;
     if (
@@ -345,9 +372,19 @@ export function TransferEntryPage() {
   }
 
   const isVoid = existing.data?.is_void ?? false;
+  const currentStatus = existing.data?.status;
+  const isDispatched = currentStatus === "dispatched" && !isVoid;
+  const isConfirmed = currentStatus === "confirmed" && !isVoid;
+  const statusLabel = isVoid
+    ? "(已作廢)"
+    : isDispatched
+      ? "(派發中 · 等目的倉確認)"
+      : isConfirmed
+        ? "(已完成)"
+        : "";
   const title = isNew
     ? "新增調撥單"
-    : `${existing.data?.no} ${isVoid ? "(已作廢)" : "(檢視)"}`;
+    : `${existing.data?.no} ${statusLabel}`;
 
   return (
     <div className="page entry-layout">
@@ -364,7 +401,16 @@ export function TransferEntryPage() {
                 onClick={doSave}
                 disabled={createMutation.isPending}
               >
-                {createMutation.isPending ? "儲存中…" : "儲存"}
+                {createMutation.isPending ? "派發中…" : "派發送出"}
+              </button>
+            )}
+            {isDispatched && (
+              <button
+                className="btn primary"
+                onClick={handleConfirm}
+                disabled={confirmMutation.isPending}
+              >
+                {confirmMutation.isPending ? "確認中…" : "確認入庫"}
               </button>
             )}
             {!isNew && !isVoid && (
