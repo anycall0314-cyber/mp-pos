@@ -28,6 +28,7 @@ import { Toolbar } from "@/components/Toolbar";
 interface SerialEntry {
   sn: string;
   grade?: ConditionGrade;
+  cost?: string;
   price?: string;
   battery?: string;
   note?: string;
@@ -63,6 +64,8 @@ function normalizeSerialEntry(raw: unknown): SerialEntry {
     const r = raw as Record<string, unknown>;
     const entry: SerialEntry = { sn: String(r.sn ?? "") };
     if (r.grade) entry.grade = String(r.grade) as ConditionGrade;
+    if (r.cost !== undefined && r.cost !== null && r.cost !== "")
+      entry.cost = String(r.cost);
     if (r.price !== undefined && r.price !== null && r.price !== "")
       entry.price = String(r.price);
     if (r.battery !== undefined && r.battery !== null && r.battery !== "")
@@ -88,6 +91,17 @@ const GRADE_OPTIONS: { value: ConditionGrade; label: string }[] = [
 ];
 
 function calcAmount(line: Line) {
+  const product = line.productOption?.payload;
+  // 中古機:逐隻成本加總(沒填用 line.unit_price 當預設)
+  if (product?.is_secondhand) {
+    const fallback = Number(line.unit_price) || 0;
+    let sum = 0;
+    for (let i = 0; i < line.qty; i++) {
+      const cost = Number(line.serial_numbers[i]?.cost);
+      sum += Number.isFinite(cost) && cost > 0 ? cost : fallback;
+    }
+    return sum;
+  }
   return Number(line.billed_qty) * Number(line.unit_price);
 }
 
@@ -99,7 +113,7 @@ interface SerialAsideProps {
   onPasteSerials: (startIdx: number, list: string[]) => void;
   onUpdateSerialField: (
     idx: number,
-    field: "grade" | "price" | "battery" | "note",
+    field: "grade" | "cost" | "price" | "battery" | "note",
     value: string,
   ) => void;
   onApplyToAll: (fromIdx: number) => void;
@@ -114,6 +128,17 @@ function SerialAside({
   onUpdateSerialField,
   onApplyToAll,
 }: SerialAsideProps) {
+  const [focusedIdx, setFocusedIdx] = useState(0);
+  // 切到不同明細列時把 focus 收回第 0 隻
+  useEffect(() => {
+    setFocusedIdx(0);
+  }, [line?.key]);
+  // qty 變動時 clamp
+  useEffect(() => {
+    if (line && focusedIdx >= line.qty) {
+      setFocusedIdx(Math.max(0, line.qty - 1));
+    }
+  }, [line, focusedIdx]);
   const product = line?.productOption?.payload;
   const needs = !!product?.requires_serial;
   const isSecondhand = !!product?.is_secondhand;
@@ -197,105 +222,158 @@ function SerialAside({
           </table>
         )}
         {line && needs && isSecondhand && (
-          <table className="serial-slot-table secondhand">
-            <thead>
-              <tr>
-                <th style={{ width: 36 }}>序</th>
-                <th>IMEI / 序號</th>
-                <th style={{ width: 80 }}>成色</th>
-                <th style={{ width: 100 }} className="num">
-                  自訂售價
-                </th>
-                <th style={{ width: 64 }} className="num">
-                  電池 %
-                </th>
-                <th>備註</th>
-                <th style={{ width: 64 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from({ length: line.qty }).map((_, i) => {
-                const entry = line.serial_numbers[i] ?? { sn: "" };
-                return (
-                  <tr key={i}>
-                    <td className="serial-slot-no">
-                      {(i + 1).toString().padStart(2, "0")}
-                    </td>
-                    <td>
-                      <input
-                        data-serial-slot={`${line.key}-${i}`}
-                        value={entry.sn ?? ""}
-                        disabled={readonly}
-                        onChange={(e) => onUpdateSerial(i, e.target.value)}
-                      />
-                    </td>
-                    <td>
-                      <select
-                        value={entry.grade ?? ""}
-                        disabled={readonly}
-                        onChange={(e) =>
-                          onUpdateSerialField(i, "grade", e.target.value)
-                        }
-                      >
-                        <option value="">—</option>
-                        {GRADE_OPTIONS.map((g) => (
-                          <option key={g.value} value={g.value}>
-                            {g.value}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        className="num-input"
-                        value={entry.price ?? ""}
-                        disabled={readonly}
-                        onChange={(e) =>
-                          onUpdateSerialField(i, "price", e.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        className="num-input"
-                        min={0}
-                        max={100}
-                        value={entry.battery ?? ""}
-                        disabled={readonly}
-                        onChange={(e) =>
-                          onUpdateSerialField(i, "battery", e.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        value={entry.note ?? ""}
-                        disabled={readonly}
-                        onChange={(e) =>
-                          onUpdateSerialField(i, "note", e.target.value)
-                        }
-                      />
-                    </td>
-                    <td>
-                      {!readonly && i < line.qty - 1 && (
-                        <button
-                          type="button"
-                          className="btn"
-                          style={{ fontSize: 11, padding: "2px 6px" }}
-                          title="把此列的成色/售價/電池/備註套用到下面所有序號"
-                          onClick={() => onApplyToAll(i)}
+          <>
+            <table className="serial-slot-table secondhand">
+              <thead>
+                <tr>
+                  <th style={{ width: 36 }}>序</th>
+                  <th>IMEI / 序號</th>
+                  <th style={{ width: 70 }}>成色</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: line.qty }).map((_, i) => {
+                  const entry = line.serial_numbers[i] ?? { sn: "" };
+                  return (
+                    <tr
+                      key={i}
+                      className={i === focusedIdx ? "focused" : undefined}
+                      onClick={() => setFocusedIdx(i)}
+                    >
+                      <td className="serial-slot-no">
+                        {(i + 1).toString().padStart(2, "0")}
+                      </td>
+                      <td>
+                        <input
+                          data-serial-slot={`${line.key}-${i}`}
+                          value={entry.sn ?? ""}
+                          disabled={readonly}
+                          onChange={(e) => onUpdateSerial(i, e.target.value)}
+                          onFocus={() => setFocusedIdx(i)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const next = containerRef.current?.querySelector(
+                                `[data-serial-slot="${line.key}-${i + 1}"]`,
+                              );
+                              if (next)
+                                (next as HTMLInputElement).focus();
+                            }
+                          }}
+                          onPaste={(e) => {
+                            const text = e.clipboardData.getData("text");
+                            const list = text
+                              .split(/[\s,;]+/)
+                              .map((s) => s.trim())
+                              .filter(Boolean);
+                            if (list.length > 1) {
+                              e.preventDefault();
+                              onPasteSerials(i, list);
+                            }
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <select
+                          value={entry.grade ?? ""}
+                          disabled={readonly}
+                          onFocus={() => setFocusedIdx(i)}
+                          onChange={(e) =>
+                            onUpdateSerialField(i, "grade", e.target.value)
+                          }
                         >
-                          套用↓
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                          <option value="">—</option>
+                          {GRADE_OPTIONS.map((g) => (
+                            <option key={g.value} value={g.value}>
+                              {g.value}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            <div className="serial-detail-panel">
+              <div className="serial-detail-head">
+                <span>
+                  第 <b>{(focusedIdx + 1).toString().padStart(2, "0")}</b> 隻 詳細
+                </span>
+                <span>
+                  {line.serial_numbers[focusedIdx]?.sn
+                    ? line.serial_numbers[focusedIdx].sn
+                    : "(尚未輸入序號)"}
+                </span>
+              </div>
+              <div className="serial-detail-row">
+                <label>進貨成本</label>
+                <input
+                  type="number"
+                  className="num-input"
+                  value={line.serial_numbers[focusedIdx]?.cost ?? ""}
+                  disabled={readonly}
+                  placeholder={`留空 = 用單價 ${Number(
+                    line.unit_price,
+                  ).toLocaleString()}`}
+                  onChange={(e) =>
+                    onUpdateSerialField(focusedIdx, "cost", e.target.value)
+                  }
+                />
+              </div>
+              <div className="serial-detail-row">
+                <label>自訂售價</label>
+                <input
+                  type="number"
+                  className="num-input"
+                  value={line.serial_numbers[focusedIdx]?.price ?? ""}
+                  disabled={readonly}
+                  onChange={(e) =>
+                    onUpdateSerialField(focusedIdx, "price", e.target.value)
+                  }
+                />
+              </div>
+              <div className="serial-detail-row">
+                <label>電池 %</label>
+                <input
+                  type="number"
+                  className="num-input"
+                  min={0}
+                  max={100}
+                  value={line.serial_numbers[focusedIdx]?.battery ?? ""}
+                  disabled={readonly}
+                  onChange={(e) =>
+                    onUpdateSerialField(focusedIdx, "battery", e.target.value)
+                  }
+                />
+              </div>
+              <div className="serial-detail-row">
+                <label>備註</label>
+                <input
+                  value={line.serial_numbers[focusedIdx]?.note ?? ""}
+                  disabled={readonly}
+                  onChange={(e) =>
+                    onUpdateSerialField(focusedIdx, "note", e.target.value)
+                  }
+                  placeholder="刮痕位置 / 配件齊全度"
+                />
+              </div>
+              {!readonly && focusedIdx < line.qty - 1 && (
+                <div className="serial-detail-actions">
+                  <button
+                    type="button"
+                    className="btn"
+                    style={{ fontSize: 11, padding: "3px 10px" }}
+                    title="把此隻的成色/售價/電池/備註套用到下面所有序號"
+                    onClick={() => onApplyToAll(focusedIdx)}
+                  >
+                    套用到下面所有
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
     </aside>
@@ -560,7 +638,7 @@ export function PurchaseEntryPage() {
   function updateSerialFieldAt(
     lineKey: string,
     idx: number,
-    field: "grade" | "price" | "battery" | "note",
+    field: "grade" | "cost" | "price" | "battery" | "note",
     value: string,
   ) {
     setLines((ls) =>
@@ -588,19 +666,19 @@ export function PurchaseEntryPage() {
         if (l.key !== lineKey) return l;
         const source = l.serial_numbers[fromIdx];
         if (!source) return l;
-        const { grade, price, battery, note } = source;
+        const { grade, cost, price, battery, note } = source;
         const next = l.serial_numbers.map((e, i) =>
           i > fromIdx
             ? {
                 ...e,
                 ...(grade !== undefined ? { grade } : {}),
+                ...(cost !== undefined ? { cost } : {}),
                 ...(price !== undefined ? { price } : {}),
                 ...(battery !== undefined ? { battery } : {}),
                 ...(note !== undefined ? { note } : {}),
               }
             : e,
         );
-        // 也補齊長度
         while (next.length < l.qty) next.push({ sn: "" });
         return { ...l, serial_numbers: next };
       }),
@@ -638,6 +716,16 @@ export function PurchaseEntryPage() {
           seen.add(s.sn);
           if (product.is_secondhand && !s.grade) {
             return `第 ${l.line_no} 行序號 ${s.sn} 未選成色等級`;
+          }
+          if (product.is_secondhand) {
+            const ownCost = Number(s.cost);
+            const fallback = Number(l.unit_price);
+            if (
+              !(Number.isFinite(ownCost) && ownCost > 0) &&
+              !(Number.isFinite(fallback) && fallback > 0)
+            ) {
+              return `第 ${l.line_no} 行序號 ${s.sn} 沒有進貨成本(請填單價或該隻自己的進貨成本)`;
+            }
           }
         }
       }

@@ -18,7 +18,7 @@ from django.utils import timezone
 
 from apps.inventory.models import ProductSerial, StockMovement
 
-from .models import PurchaseOrder
+from .models import PurchaseOrder, PurchaseOrderItem
 
 CENTS = Decimal("0.01")
 TAX_RATE = Decimal("0.05")
@@ -36,13 +36,24 @@ def _normalize_serial_entry(raw):
 
     傳入:
         "IMEI123"  → {"sn": "IMEI123"}
-        {"sn": "IMEI123", "grade": "A", ...}  → 原樣回傳(加 strip)
+        {"sn": "IMEI123", "grade": "A", "cost": "10000", ...}  → 原樣回傳(加 strip)
     """
     if isinstance(raw, dict):
         out = dict(raw)
         out["sn"] = str(out.get("sn", "")).strip()
         return out
     return {"sn": str(raw).strip()}
+
+
+def _serial_cost(entry: dict, fallback_unit_price: Decimal) -> Decimal:
+    """中古機每隻序號的進貨成本:有填用自己的,沒填用上方表格的單價當預設。"""
+    raw = entry.get("cost")
+    if raw in (None, "", 0, "0"):
+        return Decimal(str(fallback_unit_price))
+    try:
+        return Decimal(str(raw))
+    except Exception:
+        return Decimal(str(fallback_unit_price))
 
 
 def _validate_items(po: PurchaseOrder, items):
@@ -102,11 +113,9 @@ def _net_unit_price(unit_price: Decimal, tax_method: str) -> Decimal:
 
 def _calc_doc_tax(items, tax_method: str):
     """依課稅別把明細加總拆成 (subtotal_net, tax, total_gross)。
-    金額計算用 billed_qty(贈品不計價);weighted_avg 走實際 qty 攤分。
+    使用 item.amount(已含贈品折算 + 中古機逐隻成本加總邏輯)。
     """
-    gross_sum = sum(
-        (Decimal(it.billed_qty) * it.unit_price for it in items), Decimal("0")
-    )
+    gross_sum = sum((Decimal(it.amount) for it in items), Decimal("0"))
     if tax_method == PurchaseOrder.TaxMethod.TAXABLE_INCLUDED:
         total = gross_sum.quantize(CENTS)
         subtotal = (gross_sum / (Decimal("1") + TAX_RATE)).quantize(CENTS)
@@ -130,23 +139,52 @@ def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
     with transaction.atomic():
         # 1. 每筆明細:
         #    - billed_qty 未填 → 預設等於 qty
-        #    - amount = billed_qty × unit_price(贈品不計價)
-        #    - unit_landed_cost = (未稅 billed_amount) / qty
-        #      贈品讓平均成本被稀釋(總價分攤到實收的所有件數)
+        #    - 一般商品:amount = billed_qty × unit_price(贈品不計價),
+        #      unit_landed_cost = (未稅 billed_amount) / qty
+        #    - 中古機(is_secondhand):每隻序號可帶自己的 cost,
+        #      amount = sum(每隻 cost,空值 fallback 為 unit_price),
+        #      unit_landed_cost = 未稅 amount / qty(僅供加權平均報表參考)
         for it in items:
             if not it.billed_qty:
                 it.billed_qty = it.qty
             billed_dec = Decimal(it.billed_qty)
             qty_dec = Decimal(it.qty)
-            it.amount = (billed_dec * it.unit_price).quantize(CENTS)
-            net_unit = _net_unit_price(it.unit_price, po.tax_method)
-            net_billed_total = net_unit * billed_dec
-            it.unit_landed_cost = (
-                (net_billed_total / qty_dec).quantize(CENTS)
-                if qty_dec > 0
-                else Decimal("0")
+
+            if it.product.is_secondhand and it.product.requires_serial:
+                # 中古機:billed_qty 強制等於 qty(中古不分贈品)
+                it.billed_qty = it.qty
+                billed_dec = qty_dec
+                entries = [_normalize_serial_entry(e) for e in it.serial_numbers]
+                gross_sum = sum(
+                    (_serial_cost(e, it.unit_price) for e in entries),
+                    Decimal("0"),
+                )
+                it.amount = gross_sum.quantize(CENTS)
+                if po.tax_method == PurchaseOrder.TaxMethod.TAXABLE_INCLUDED:
+                    net_sum = (gross_sum / (Decimal("1") + TAX_RATE)).quantize(CENTS)
+                else:
+                    net_sum = gross_sum.quantize(CENTS)
+                it.unit_landed_cost = (
+                    (net_sum / qty_dec).quantize(CENTS)
+                    if qty_dec > 0
+                    else Decimal("0")
+                )
+            else:
+                it.amount = (billed_dec * it.unit_price).quantize(CENTS)
+                net_unit = _net_unit_price(it.unit_price, po.tax_method)
+                net_billed_total = net_unit * billed_dec
+                it.unit_landed_cost = (
+                    (net_billed_total / qty_dec).quantize(CENTS)
+                    if qty_dec > 0
+                    else Decimal("0")
+                )
+            # 繞過 PurchaseOrderItem.save() 的 amount 自動重算
+            # (中古機 amount 來自各序號 cost 加總,不是 billed_qty × unit_price)
+            PurchaseOrderItem.objects.filter(pk=it.pk).update(
+                billed_qty=it.billed_qty,
+                amount=it.amount,
+                unit_landed_cost=it.unit_landed_cost,
             )
-            it.save(update_fields=["billed_qty", "amount", "unit_landed_cost"])
 
         # 2. 為實體商品建序號 + 寫異動 + 更新加權平均(使用未稅成本)
         # 虛擬商品(requires_serial=False)不建序號、不寫 StockMovement、
@@ -174,6 +212,7 @@ def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
             for entry in it.serial_numbers:
                 entry = _normalize_serial_entry(entry)
                 extra = {}
+                serial_cost_net = it.unit_landed_cost  # 預設用線平均(非中古機)
                 if product.is_secondhand:
                     grade = (entry.get("grade") or "").strip()
                     if grade:
@@ -195,13 +234,21 @@ def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
                     note_value = (entry.get("note") or "").strip()
                     if note_value:
                         extra["condition_note"] = note_value
+                    # 中古機:每隻獨立成本(沒填用線單價 fallback),轉成未稅
+                    gross = _serial_cost(entry, it.unit_price)
+                    if po.tax_method == PurchaseOrder.TaxMethod.TAXABLE_INCLUDED:
+                        serial_cost_net = (
+                            gross / (Decimal("1") + TAX_RATE)
+                        ).quantize(CENTS)
+                    else:
+                        serial_cost_net = gross.quantize(CENTS)
                 serial = ProductSerial.objects.create(
                     tenant=po.tenant,
                     product=product,
                     serial_no=entry["sn"],
                     warehouse=po.warehouse,
                     status=ProductSerial.Status.IN_STOCK,
-                    purchase_unit_cost=it.unit_landed_cost,
+                    purchase_unit_cost=serial_cost_net,
                     purchase_order_item=it,
                     received_at=now,
                     **extra,

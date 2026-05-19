@@ -228,6 +228,61 @@ body { background: var(--bg); color: var(--text); }
   flex-direction: column;
   overflow: hidden;
 }
+/* 中古機選到時側欄微寬,容納列表 + 下方詳細區 */
+.serial-aside-wide { width: 380px; }
+.serial-detail-panel {
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.serial-detail-head {
+  color: var(--text-dim);
+  font-size: 11px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.serial-detail-head b { color: var(--text); }
+.serial-detail-row {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+.serial-detail-row label { color: var(--text-dim); font-size: 11px; }
+.serial-detail-row input,
+.serial-detail-row select {
+  width: 100%;
+  padding: 3px 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 12px;
+  height: 26px;
+  box-sizing: border-box;
+}
+.serial-detail-row input:focus,
+.serial-detail-row select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.serial-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+.serial-slot-table tr.focused td {
+  background: rgba(120, 160, 220, 0.08);
+}
+.serial-slot-table tr.focused .serial-slot-no {
+  color: var(--accent);
+  font-weight: 600;
+}
 .serial-aside-header {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
@@ -279,6 +334,25 @@ body { background: var(--bg); color: var(--text); }
 .serial-slot-table input:focus {
   outline: none;
   border-color: var(--accent);
+}
+.serial-slot-table select {
+  width: 100%;
+  padding: 3px 4px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 12px;
+  height: 24px;
+  box-sizing: border-box;
+}
+.serial-slot-table.secondhand th,
+.serial-slot-table.secondhand td {
+  padding: 3px 4px;
+  vertical-align: middle;
+}
+.serial-slot-table.secondhand input.num-input {
+  text-align: right;
 }
 
 /* 確認 modal */
