@@ -103,7 +103,7 @@ export function ProductForm({
       setError(null);
       setFieldErrors({});
       setShowNewCategory(false);
-      setNewCategory({ code: "", name: "" });
+      setNewCategory({ code: "", name: "", sort_order: "" });
     }
   }, [open, initial]);
 

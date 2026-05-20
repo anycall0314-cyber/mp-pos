@@ -19,6 +19,8 @@ export interface Category {
   name: string;
   sort_order: number;
   is_active: boolean;
+  /** 勾起時,本類別下所有商品自動標為中古機 */
+  is_secondhand_default: boolean;
   next_sku_seq: number;
   created_at: string;
   updated_at: string;

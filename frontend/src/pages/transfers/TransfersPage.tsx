@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { useTransferOrders } from "@/api/hooks";
 import { Toolbar } from "@/components/Toolbar";
 
+import { TransferConfirmModal } from "./TransferConfirmModal";
+
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -13,6 +15,7 @@ export function TransfersPage() {
   const [from, setFrom] = useState<string>(today);
   const [to, setTo] = useState<string>(today);
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const { data, isLoading, isError, error } = useTransferOrders({
     doc_date_gte: from,
     doc_date_lte: to,
@@ -22,18 +25,36 @@ export function TransfersPage() {
   const pendingCount = rows.filter(
     (t) => t.status === "dispatched" && !t.is_void,
   ).length;
+  // 待確認徽章用「全部時間」的 pending 數,不受日期 filter 影響
+  const pendingAllQuery = useTransferOrders({ status: "dispatched" });
+  const pendingAll = (pendingAllQuery.data ?? []).filter(
+    (t) => !t.is_void,
+  ).length;
 
   return (
     <div className="page">
       <Toolbar
         title="調撥單"
         actions={
-          <button
-            className="btn primary"
-            onClick={() => navigate("/transfers/new")}
-          >
-            + 新增調撥單
-          </button>
+          <>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => setConfirmModalOpen(true)}
+              title="待確認的調撥單"
+            >
+              調撥確認
+              {pendingAll > 0 && (
+                <span className="badge-pill">{pendingAll}</span>
+              )}
+            </button>
+            <button
+              className="btn primary"
+              onClick={() => navigate("/transfers/new")}
+            >
+              + 新增調撥單
+            </button>
+          </>
         }
       />
       <div className="list-filterbar">
@@ -138,6 +159,11 @@ export function TransfersPage() {
           </table>
         )}
       </div>
+
+      <TransferConfirmModal
+        open={confirmModalOpen}
+        onClose={() => setConfirmModalOpen(false)}
+      />
     </div>
   );
 }

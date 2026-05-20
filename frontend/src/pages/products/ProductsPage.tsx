@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useCategories, useProducts, useSaveCategory } from "@/api/hooks";
-import type { Category, Product } from "@/api/types";
+import type { Product } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 
@@ -32,6 +32,7 @@ interface CategoryEditState {
   code: string;
   name: string;
   is_active: boolean;
+  is_secondhand_default: boolean;
 }
 
 interface CategoryNewState {
@@ -39,6 +40,7 @@ interface CategoryNewState {
   name: string;
   sort_order: string;
   is_active: boolean;
+  is_secondhand_default: boolean;
 }
 
 const EMPTY_NEW_CAT: CategoryNewState = {
@@ -46,6 +48,7 @@ const EMPTY_NEW_CAT: CategoryNewState = {
   name: "",
   sort_order: "",
   is_active: true,
+  is_secondhand_default: false,
 };
 
 export function ProductsPage() {
@@ -110,6 +113,7 @@ export function ProductsPage() {
     code: "",
     name: "",
     is_active: true,
+    is_secondhand_default: false,
   });
   const [catError, setCatError] = useState<string | null>(null);
   const [catSavedFlash, setCatSavedFlash] = useState(false);
@@ -125,6 +129,7 @@ export function ProductsPage() {
       code: selectedCategory.code,
       name: selectedCategory.name,
       is_active: selectedCategory.is_active,
+      is_secondhand_default: selectedCategory.is_secondhand_default,
     });
     setCatError(null);
     setCatSavedFlash(false);
@@ -138,6 +143,7 @@ export function ProductsPage() {
         code: catEdit.code.trim().toUpperCase(),
         name: catEdit.name.trim(),
         is_active: catEdit.is_active,
+        is_secondhand_default: catEdit.is_secondhand_default,
       });
       setCatError(null);
       setCatSavedFlash(true);
@@ -173,6 +179,7 @@ export function ProductsPage() {
         name,
         sort_order,
         is_active: catNew.is_active,
+        is_secondhand_default: catNew.is_secondhand_default,
       });
       setCatNew(EMPTY_NEW_CAT);
       setCatNewError(null);
@@ -595,6 +602,30 @@ export function ProductsPage() {
                     {catNew.is_active ? "啟用" : "停用"}
                   </label>
                 </dd>
+                <dt>中古機類別</dt>
+                <dd>
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      gap: 6,
+                      alignItems: "center",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={catNew.is_secondhand_default}
+                      onChange={(e) =>
+                        setCatNew((s) => ({
+                          ...s,
+                          is_secondhand_default: e.target.checked,
+                        }))
+                      }
+                    />
+                    <span style={{ color: "var(--text-dim)", fontSize: 11 }}>
+                      勾起時,本類別下所有商品自動標為中古機(逐隻記成色 / 電池 / 自定售價)
+                    </span>
+                  </label>
+                </dd>
               </dl>
               <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
                 <button
@@ -671,6 +702,31 @@ export function ProductsPage() {
                       }
                     />
                     {catEdit.is_active ? "啟用" : "停用"}
+                  </label>
+                </dd>
+                <dt>中古機類別</dt>
+                <dd>
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      gap: 6,
+                      alignItems: "center",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={catEdit.is_secondhand_default}
+                      onChange={(e) =>
+                        setCatEdit((s) => ({
+                          ...s,
+                          is_secondhand_default: e.target.checked,
+                        }))
+                      }
+                    />
+                    <span style={{ color: "var(--text-dim)", fontSize: 11 }}>
+                      勾起並儲存時,會把底下所有商品同步標為中古機
+                      (反向取消不會還原既有商品)
+                    </span>
                   </label>
                 </dd>
               </dl>

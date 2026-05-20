@@ -1215,3 +1215,74 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   background: transparent !important;
 }
 .combobox-create.active { background: var(--accent); color: white; }
+
+/* ─── Toolbar 內的 tab 切換器(中古入庫:個人 / 廠商) ─── */
+.tab-switcher {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--panel);
+}
+.tab-switcher-item {
+  padding: 4px 14px;
+  background: transparent;
+  color: var(--text-dim);
+  border: none;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 13px;
+  height: 28px;
+  line-height: 1;
+}
+.tab-switcher-item:last-child { border-right: none; }
+.tab-switcher-item:hover { color: var(--text); }
+.tab-switcher-item.active {
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+}
+
+/* 嵌套 .page(中古入庫 hub 內含 PurchaseEntryPage)時讓內層撐高度 */
+.secondhand-hub > .page,
+.secondhand-hub > .entry-body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 文字按鈕(像連結,用在表格內單號 click-to-detail) */
+.link-button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  text-decoration: underline;
+}
+.link-button:hover { opacity: 0.8; }
+
+/* 待確認調撥單 modal */
+.transfer-confirm-modal {
+  width: min(960px, 92vw);
+}
+.transfer-confirm-modal .modal-body {
+  max-height: 64vh;
+  overflow-y: auto;
+}
+
+/* Toolbar 上的徽章(待確認筆數) */
+.badge-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  background: #f0b060;
+  color: #1a1a1a;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 4px;
+}

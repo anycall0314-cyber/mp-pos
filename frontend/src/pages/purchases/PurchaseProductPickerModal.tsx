@@ -13,6 +13,8 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onConfirm: (selected: PickerProduct[]) => void;
+  /** "regular":排除中古機;"secondhand-vendor":只列中古機。預設 regular */
+  mode?: "regular" | "secondhand-vendor";
 }
 
 interface RowState {
@@ -25,7 +27,12 @@ export function PurchaseProductPickerModal({
   open,
   onClose,
   onConfirm,
+  mode = "regular",
 }: Props) {
+  const secondhandFilter =
+    mode === "secondhand-vendor"
+      ? "&is_secondhand=true"
+      : "&is_secondhand=false";
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [rows, setRows] = useState<RowState[]>([]);
@@ -54,7 +61,7 @@ export function PurchaseProductPickerModal({
     api<Paginated<Product>>(
       `/products/?search=${encodeURIComponent(
         appliedSearch,
-      )}&page_size=50&is_active=true`,
+      )}&page_size=50&is_active=true${secondhandFilter}`,
     )
       .then((data) => {
         if (cancelled) return;
@@ -79,7 +86,7 @@ export function PurchaseProductPickerModal({
     return () => {
       cancelled = true;
     };
-  }, [open, appliedSearch]);
+  }, [open, appliedSearch, secondhandFilter]);
 
   function runSearch() {
     setAppliedSearch(search.trim());
@@ -129,7 +136,11 @@ export function PurchaseProductPickerModal({
         role="dialog"
         aria-modal="true"
       >
-        <div className="modal-title">批次選商品入庫</div>
+        <div className="modal-title">
+          {mode === "secondhand-vendor"
+            ? "批次選中古機入庫"
+            : "批次選商品入庫"}
+        </div>
 
         {error && <Banner kind="error" message={error} />}
 

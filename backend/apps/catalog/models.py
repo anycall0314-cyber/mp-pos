@@ -14,6 +14,11 @@ class Category(TenantOwnedModel):
     name = models.CharField("類別名稱", max_length=80)
     sort_order = models.PositiveIntegerField("排序", default=100)
     is_active = models.BooleanField("啟用", default=True)
+    is_secondhand_default = models.BooleanField(
+        "中古機類別",
+        default=False,
+        help_text="勾起時,本類別下所有新增/編輯的商品自動標為中古機(逐隻記成色 / 電池 / 自定售價)",
+    )
 
     next_sku_seq = models.PositiveIntegerField(
         "下一流水號",
@@ -33,6 +38,27 @@ class Category(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"[{self.code}] {self.name}"
+
+    def save(self, *args, **kwargs):
+        """偵測 is_secondhand_default 由 False → True 時,
+        把底下所有商品 is_secondhand=True、requires_serial=True、is_virtual=False。
+        反向(True → False)不 cascade,避免誤動既有資料。"""
+        cascade_to_products = False
+        if self.pk:
+            try:
+                prev = Category.objects.only("is_secondhand_default").get(pk=self.pk)
+                if not prev.is_secondhand_default and self.is_secondhand_default:
+                    cascade_to_products = True
+            except Category.DoesNotExist:
+                pass
+        super().save(*args, **kwargs)
+        if cascade_to_products:
+            # 用 .update 批次跑,避免逐筆觸發 Product.save() 的其他副作用
+            Product.objects.filter(category=self).update(
+                is_secondhand=True,
+                requires_serial=True,
+                is_virtual=False,
+            )
 
     def issue_next_sku(self) -> str:
         """原子地取下一個 SKU,回傳 `{code}-{6位流水}`。"""
@@ -146,4 +172,17 @@ class Product(TenantOwnedModel):
             if self.category_id is None:
                 raise ValueError("建立商品必須先指定 category")
             self.sku = self.category.issue_next_sku()
+        # 類別標記為「中古機類別」時自動把商品帶成中古機
+        # (使用者不用每筆都勾,新增 / 型號展開 / 批次匯入皆生效)
+        if self.category_id and not self.is_secondhand:
+            try:
+                cat = self.category
+            except Category.DoesNotExist:
+                cat = None
+            if cat and cat.is_secondhand_default:
+                self.is_secondhand = True
+        # 中古機一定追蹤序號 / 不能是虛擬商品(跟 ProductForm UI 行為一致)
+        if self.is_secondhand:
+            self.requires_serial = True
+            self.is_virtual = False
         super().save(*args, **kwargs)

@@ -45,6 +45,8 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onConfirm: (rows: BatchPasteResult[]) => void;
+  /** "regular":比對排除中古機;"secondhand-vendor":只比對中古機 */
+  mode?: "regular" | "secondhand-vendor";
 }
 
 /** 切割「商品 數量 單價 序號」一行(支援 Tab、多個空白、逗號) */
@@ -97,13 +99,18 @@ function makeKey(): string {
  */
 async function matchOne(
   query: string,
+  mode: "regular" | "secondhand-vendor",
 ): Promise<{ product: Product | null; status: MatchedRow["matchStatus"] }> {
   const q = query.trim();
   if (!q) return { product: null, status: "none" };
 
+  const secondhandFilter =
+    mode === "secondhand-vendor"
+      ? "&is_secondhand=true"
+      : "&is_secondhand=false";
   // 用既有 /products/?search 端點,後端已涵蓋 sku/name/spec/barcode 比對
   const data = await api<Paginated<Product>>(
-    `/products/?search=${encodeURIComponent(q)}&page_size=10&is_active=true`,
+    `/products/?search=${encodeURIComponent(q)}&page_size=10&is_active=true${secondhandFilter}`,
   );
   const results = data.results;
   if (results.length === 0) return { product: null, status: "none" };
@@ -122,7 +129,12 @@ async function matchOne(
   return { product: results[0], status: "fuzzy" };
 }
 
-export function PurchaseBatchPasteModal({ open, onClose, onConfirm }: Props) {
+export function PurchaseBatchPasteModal({
+  open,
+  onClose,
+  onConfirm,
+  mode = "regular",
+}: Props) {
   const [rawText, setRawText] = useState("");
   const [matching, setMatching] = useState(false);
   const [rows, setRows] = useState<MatchedRow[]>([]);
@@ -154,7 +166,7 @@ export function PurchaseBatchPasteModal({ open, onClose, onConfirm }: Props) {
       // 平行查詢:用商品文字查 /products/?search=...
       const matched = await Promise.all(
         parsed.map(async (r) => {
-          const { product, status } = await matchOne(r.rawProductText);
+          const { product, status } = await matchOne(r.rawProductText, mode);
           const option: ComboOption<Product> | null = product
             ? {
                 id: product.id,
@@ -253,7 +265,11 @@ export function PurchaseBatchPasteModal({ open, onClose, onConfirm }: Props) {
         role="dialog"
         aria-modal="true"
       >
-        <div className="modal-title">批次貼上明細</div>
+        <div className="modal-title">
+          {mode === "secondhand-vendor"
+            ? "批次貼上中古機明細"
+            : "批次貼上明細"}
+        </div>
 
         {error && <Banner kind="error" message={error} />}
 
@@ -419,7 +435,12 @@ PH-000023\t1\t29000\t356121234567000`}
                                     })
                                   }
                                   fetchOptions={(q) =>
-                                    searchProducts(q, { activeOnly: true })
+                                    searchProducts(q, {
+                                      activeOnly: true,
+                                      secondhandOnly:
+                                        mode === "secondhand-vendor",
+                                      excludeSecondhand: mode === "regular",
+                                    })
                                   }
                                   placeholder={
                                     r.rawProductText

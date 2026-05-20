@@ -32,13 +32,24 @@ async function fetchPaginated<T>(path: string): Promise<T[]> {
 
 export async function searchProducts(
   query: string,
-  opts?: { activeOnly?: boolean },
+  opts?: {
+    activeOnly?: boolean;
+    /** 只列中古機(廠商收購中古用) */
+    secondhandOnly?: boolean;
+    /** 排除中古機(一般進貨單用) */
+    excludeSecondhand?: boolean;
+  },
 ): Promise<ComboOption<Product>[]> {
   const data = await fetchPaginated<Product>(
     `/products/?${qs({
       search: query,
       page_size: LIMIT,
       is_active: opts?.activeOnly ? "true" : undefined,
+      is_secondhand: opts?.secondhandOnly
+        ? "true"
+        : opts?.excludeSecondhand
+          ? "false"
+          : undefined,
     })}`,
   );
   return data.map((p) => ({

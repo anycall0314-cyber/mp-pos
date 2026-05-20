@@ -493,6 +493,8 @@ export function useSaveCategory() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["categories"] });
+      // 類別 is_secondhand_default 可能 cascade 到 products,順便刷新
+      qc.invalidateQueries({ queryKey: ["products"] });
     },
   });
 }

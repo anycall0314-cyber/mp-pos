@@ -404,7 +404,8 @@ const TAX_METHODS: { value: TaxMethod; label: string }[] = [
   { value: "zero_tax", label: "零稅" },
 ];
 
-const DRAFT_KEY = "purchase-entry-draft";
+const DRAFT_KEY_REGULAR = "purchase-entry-draft";
+const DRAFT_KEY_SECONDHAND = "secondhand-vendor-entry-draft";
 
 interface PurchaseDraft {
   supplier: number | "";
@@ -422,9 +423,9 @@ interface PurchaseDraft {
   lines: Line[];
 }
 
-function loadDraft(): PurchaseDraft | null {
+function loadDraft(key: string): PurchaseDraft | null {
   try {
-    const raw = sessionStorage.getItem(DRAFT_KEY);
+    const raw = sessionStorage.getItem(key);
     return raw ? (JSON.parse(raw) as PurchaseDraft) : null;
   } catch {
     return null;
@@ -432,14 +433,40 @@ function loadDraft(): PurchaseDraft | null {
 }
 
 
-export function PurchaseEntryPage() {
+interface PurchaseEntryPageProps {
+  /**
+   * "regular":一般進貨單(預設,商品選品排除中古機)
+   * "secondhand-vendor":廠商收購中古機(只能選中古機,儲存後回中古入庫頁)
+   * 中古機模式下不接受 id 參數,僅供新增使用。
+   */
+  mode?: "regular" | "secondhand-vendor";
+  /**
+   * 儲存成功後的 callback(當被嵌入到中古入庫 hub 等場景時用)。
+   * 提供時:不執行內建的 navigate(backPath),交由父頁決定(通常會重置表單)。
+   */
+  onAfterCreated?: () => void;
+}
+
+export function PurchaseEntryPage({
+  mode = "regular",
+  onAfterCreated,
+}: PurchaseEntryPageProps = {}) {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const isNew = id === "new";
+  const isSecondhandVendor = mode === "secondhand-vendor";
+  // 廠商收購模式永遠是新增,沒有 :id 路由
+  const isNew = isSecondhandVendor || id === "new";
   const poId = isNew ? null : Number(id);
+  const backPath = isSecondhandVendor
+    ? "/secondhand-acquisition"
+    : "/purchases";
 
   // 草稿:只在新增模式才會啟用;切到別頁回來不會丟資料,save 成功後清空
-  const draft = useRef<PurchaseDraft | null>(isNew ? loadDraft() : null).current;
+  // 一般進貨與廠商收購中古各自獨立 key,避免互相覆蓋
+  const draftKey = isSecondhandVendor ? DRAFT_KEY_SECONDHAND : DRAFT_KEY_REGULAR;
+  const draft = useRef<PurchaseDraft | null>(
+    isNew ? loadDraft(draftKey) : null,
+  ).current;
 
   const existing = usePurchaseOrder(poId);
   const createMutation = useCreatePurchaseOrder();
@@ -518,7 +545,7 @@ export function PurchaseEntryPage() {
     };
     const handle = setTimeout(() => {
       try {
-        sessionStorage.setItem(DRAFT_KEY, JSON.stringify(snapshot));
+        sessionStorage.setItem(draftKey, JSON.stringify(snapshot));
       } catch {
         // quota / serialization 失敗就略過
       }
@@ -542,7 +569,7 @@ export function PurchaseEntryPage() {
   ]);
 
   function clearDraft() {
-    sessionStorage.removeItem(DRAFT_KEY);
+    sessionStorage.removeItem(draftKey);
   }
 
   function discardDraft() {
@@ -865,7 +892,11 @@ export function PurchaseEntryPage() {
       } as Parameters<typeof createMutation.mutateAsync>[0]);
       clearDraft();
       setShowConfirm(false);
-      navigate("/purchases");
+      if (onAfterCreated) {
+        onAfterCreated();
+      } else {
+        navigate(backPath);
+      }
     } catch (e) {
       setShowConfirm(false);
       if (e instanceof ApiHttpError) {
@@ -909,7 +940,9 @@ export function PurchaseEntryPage() {
 
   const isVoid = existing.data?.is_void ?? false;
   const title = isNew
-    ? "新增進貨單"
+    ? isSecondhandVendor
+      ? "廠商收購中古機"
+      : "新增進貨單"
     : `${existing.data?.no} ${isVoid ? "(已作廢)" : "(檢視)"}`;
 
   return (
@@ -918,8 +951,8 @@ export function PurchaseEntryPage() {
         title={title}
         actions={
           <>
-            <button className="btn" onClick={() => navigate("/purchases")}>
-              ← 回列表
+            <button className="btn" onClick={() => navigate(backPath)}>
+              ← {isSecondhandVendor ? "回中古入庫" : "回列表"}
             </button>
             {isNew && (
               <button className="btn" type="button" onClick={discardDraft}>
@@ -1136,7 +1169,11 @@ export function PurchaseEntryPage() {
                         updateLine(l.key, patch);
                       }}
                       fetchOptions={(q) =>
-                        searchProducts(q, { activeOnly: true })
+                        searchProducts(q, {
+                          activeOnly: true,
+                          secondhandOnly: isSecondhandVendor,
+                          excludeSecondhand: !isSecondhandVendor,
+                        })
                       }
                       disabled={readonly}
                       placeholder="搜尋商品"
@@ -1299,7 +1336,11 @@ export function PurchaseEntryPage() {
             role="dialog"
             aria-modal="true"
           >
-            <div className="modal-title">確認儲存進貨單?</div>
+            <div className="modal-title">
+              {isSecondhandVendor
+                ? "確認儲存中古機收購單?"
+                : "確認儲存進貨單?"}
+            </div>
             <div className="modal-body">
               <div className="modal-row">
                 <span>供應商</span>
@@ -1374,11 +1415,13 @@ export function PurchaseEntryPage() {
         open={batchOpen}
         onClose={() => setBatchOpen(false)}
         onConfirm={appendBatch}
+        mode={mode}
       />
       <PurchaseProductPickerModal
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         onConfirm={appendPicked}
+        mode={mode}
       />
     </div>
   );

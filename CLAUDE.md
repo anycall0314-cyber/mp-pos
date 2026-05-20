@@ -38,8 +38,10 @@
 | 序號生命週期 | 進貨建單 → in_stock;銷貨 → sold;銷貨作廢 → 回 in_stock;進貨作廢 → void(須全部還在 in_stock 才能作廢) |
 | 預設值連動 | 發票類型 = 免用 → 課稅別自動切免稅;選商品 → 進貨單帶上次進價 / 銷貨單帶 list_price |
 | 中古機 | `Product.is_secondhand=True`;`ProductSerial` 逐隻記 `condition_grade` (S/A/B/C/D)、`custom_unit_price`、`battery_health`、`condition_note`;銷貨選機自動帶 `custom_unit_price` |
-| 個人收購 | 走 `acquire_secondhand_from_member` service:同 transaction 建中古機序號 + 對應銷貨單(虛擬商品「收購二手」、`tax_free`、total 負數代表現金流出);serial 反向掛 `acquired_from_member` + `acquired_via_sales_order` |
-| 廠商收購中古 | 走一般進貨單;進貨側欄會多 4 欄(成色/售價/電池/備註)+「套用到下面所有」按鈕 |
+| 中古機類別連動 | `Category.is_secondhand_default=True` 時,該類別下所有 product `is_secondhand` 自動帶 True(`Product.save` override)。類別 default 由 False → True 儲存時,cascade 把底下所有商品 `is_secondhand/requires_serial` 設 True、`is_virtual` 設 False;反向(True → False)不 cascade,避免誤改既有資料。前端 ProductsPage 的類別新增/編輯 form 多一個「中古機類別」勾選 |
+| 個人收購 | 「中古入庫」頁的「個人收購」tab(`SecondhandPersonalEntry`);走 `acquire_secondhand_from_member` service:同 transaction 建中古機序號 + 對應銷貨單(虛擬商品「收購二手」、`tax_free`、total 負數代表現金流出);serial 反向掛 `acquired_from_member` + `acquired_via_sales_order` |
+| 廠商收購中古 | 「中古入庫」頁的「廠商收購」tab,內嵌 `PurchaseEntryPage mode="secondhand-vendor"`;走一般進貨單流程但商品搜尋限定 `is_secondhand=true`;進貨側欄多 4 欄(成色/售價/電池/備註)+「套用到下面所有」按鈕;儲存後不離頁,bump remount key 重置表單 + 顯示成功訊息 |
+| 一般進貨單擋下中古機 | `PurchaseEntryPage` 預設 `mode="regular"`,商品 ComboBox / PickerModal / BatchPasteModal 都帶 `is_secondhand=false`;新增進貨單時挑不到中古品。檢視 / 作廢既有中古進貨單仍走 `/purchases/:id` |
 | 中古機履歷 | `GET /api/v1/serials/{id}/history/` 回傳:收購來源 (購進 or 個人收購)、所有銷貨/退貨、StockMovement 軌跡 |
 | 配件庫存 | 非序號商品(`requires_serial=False`、非 virtual)走 `StockBalance(product, warehouse)`,進貨累計、銷貨扣減、調撥搬移;`Product.weighted_avg_cost` 跨倉聚合 |
 | 配件不足擋下 | 銷貨單若該倉 balance 不足,`commit_sales_order` 拋錯 400,不允許負庫存 |
@@ -77,7 +79,7 @@ inventory-3c/
         │   ├── settings/        SettingsPage(發票類型 / 字軌 / 付款方式)
         │   ├── sim-cards/       SimCardsPage + SimCardForm
         │   ├── telecom-plans/   TelecomPlansPage + TelecomPlanForm
-        │   ├── secondhand-acquisition/  SecondhandAcquisitionPage(個人收購入庫)
+        │   ├── secondhand-acquisition/  SecondhandAcquisitionPage(hub:tabs 切換)+ SecondhandPersonalEntry(個人收購表單;廠商收購直接內嵌 PurchaseEntryPage)
         │   ├── inventory/       InventoryQueryPage(庫存矩陣:多倉勾選 + 每倉一欄 + 點數字看序號明細 + 欄位排序)+ CategoriesPage(舊獨立頁,nav 已隱藏但路由仍在)
         │   └── transfers/       TransfersPage + TransferEntryPage(倉間調撥)
         ├── App.tsx              路由與導覽(NAV_GROUPS 6 群:報表/庫存/銷貨/門號/維修/設定)
