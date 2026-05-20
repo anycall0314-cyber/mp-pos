@@ -133,13 +133,13 @@ export function SalesPage() {
                   </td>
                   <td>{so.tax_method_label}</td>
                   <td className="num">
-                    {Number(so.subtotal).toLocaleString()}
+                    {Math.round(Number(so.subtotal)).toLocaleString()}
                   </td>
                   <td className="num">
-                    {Number(so.tax_amount).toLocaleString()}
+                    {Math.round(Number(so.tax_amount)).toLocaleString()}
                   </td>
                   <td className="num">
-                    {Number(so.total).toLocaleString()}
+                    {Math.round(Number(so.total)).toLocaleString()}
                   </td>
                 </tr>
               ))}

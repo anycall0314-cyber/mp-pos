@@ -434,6 +434,12 @@ body { background: var(--bg); color: var(--text); }
 
 .bulk-add-modal { min-width: 720px; max-width: 90vw; max-height: 85vh; }
 .bulk-add-modal .modal-body { max-height: 65vh; overflow-y: auto; }
+.expander-modal { min-width: 720px; max-width: 90vw; max-height: 90vh; }
+.expander-modal .modal-body { max-height: 72vh; overflow-y: auto; }
+.batch-paste-modal { min-width: 900px; max-width: 95vw; max-height: 92vh; }
+.batch-paste-modal .modal-body { max-height: 76vh; overflow-y: auto; }
+.picker-modal { min-width: 820px; max-width: 95vw; max-height: 90vh; }
+.picker-modal .modal-body { max-height: 76vh; overflow-y: auto; }
 .bulk-add-modal textarea {
   background: var(--panel);
   color: var(--text);
@@ -865,7 +871,11 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
 }
 .combobox-clear:hover { color: var(--text); }
 .combobox-pop {
-  position: absolute; top: calc(100% + 2px); left: 0; right: 0;
+  position: absolute; top: calc(100% + 2px); left: 0;
+  /* 容器至少跟輸入框等寬,內容過寬時自動撐開,但有上限避免超出畫面 */
+  min-width: 100%;
+  width: max-content;
+  max-width: min(640px, 90vw);
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -884,11 +894,324 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
 .combobox-option:last-child { border-bottom: 0; }
 .combobox-option.active { background: var(--accent); color: white; }
 .combobox-option.active .combobox-option-secondary { color: rgba(255,255,255,0.8); }
-.combobox-option-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.combobox-option-secondary { color: var(--text-dim); font-size: 11px; flex-shrink: 0; }
+.combobox-option-label {
+  flex: 1;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.35;
+}
+.combobox-option-secondary {
+  color: var(--text-dim);
+  font-size: 11px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .combobox-create {
   padding: 8px 10px; cursor: pointer; font-size: 12px;
   color: var(--accent); border-top: 1px solid var(--border);
   background: var(--panel);
+}
+
+/* ─── 報表頁 ─── */
+.report-meta {
+  padding: 8px 16px;
+  color: var(--text-dim);
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.report-table {
+  overflow: auto;
+  height: calc(100% - 140px);
+}
+.report-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.report-grid th, .report-grid td {
+  text-align: left;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.report-grid th {
+  position: sticky; top: 0;
+  background: var(--panel-2);
+  color: var(--text-dim); font-weight: 500;
+  z-index: 1;
+}
+.report-grid td.num, .report-grid th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* 同單第一行加上方分隔線比較粗,代表新一張單開始 */
+.report-grid tr.order-first td {
+  border-top: 2px solid var(--border);
+}
+.report-grid tr.order-cont td {
+  border-top: 0;
+}
+.report-grid tr.order-subtotal td {
+  background: rgba(255,255,255,0.03);
+  font-weight: 600;
+  border-bottom: 2px solid var(--border);
+}
+.report-grid tr:hover td {
+  background: var(--row-hover);
+}
+.report-grid tr.order-subtotal:hover td {
+  background: rgba(255,255,255,0.05);
+}
+.report-grid .report-serial {
+  color: var(--text-dim);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 11px;
+}
+.report-grid.void tr td {
+  color: var(--text-dim);
+  background: rgba(255, 100, 100, 0.06);
+  text-decoration: line-through;
+}
+.report-grid.void tr.order-subtotal td {
+  background: rgba(255, 100, 100, 0.10);
+}
+.report-void-header {
+  padding: 10px 16px;
+  margin-top: 16px;
+  font-weight: 600;
+  color: #ff9090;
+  background: rgba(255, 100, 100, 0.08);
+  border-top: 1px solid rgba(255, 100, 100, 0.3);
+  border-bottom: 1px solid rgba(255, 100, 100, 0.3);
+}
+
+/* ─── 庫存查詢:倉別多選 + 矩陣表格 ─── */
+.warehouse-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 6px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  align-items: center;
+}
+.warehouse-picker-label {
+  color: var(--text-dim);
+  margin-right: 8px;
+}
+.warehouse-picker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.warehouse-picker-hint {
+  color: #ff9090;
+  margin-left: 8px;
+}
+.stock-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.stock-matrix-table th,
+.stock-matrix-table td {
+  text-align: left;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.stock-matrix-table th {
+  position: sticky;
+  top: 0;
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-weight: 500;
+  z-index: 1;
+}
+.stock-matrix-table th .warehouse-col-name {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-weight: 400;
+}
+.stock-matrix-table th.num,
+.stock-matrix-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.stock-matrix-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.stock-matrix-table th.sortable:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+.stock-matrix-table tbody tr:hover td {
+  background: var(--row-hover);
+}
+.stock-matrix-table tr.stock-matrix-total-row td {
+  background: var(--panel-2);
+  font-weight: 600;
+  border-top: 2px solid var(--border);
+  position: sticky;
+  bottom: 0;
+}
+.inventory-filterbar {
+  flex-wrap: wrap;
+}
+
+/* ─── 商品 / 類別 合併頁版型 ─── */
+.pc-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 480px) 1fr;
+  height: 100%;
+  min-height: 0;
+}
+.pc-master {
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  min-height: 0;
+  overflow: hidden;
+}
+.pc-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.pc-section + .pc-section {
+  border-top: 2px solid var(--border);
+}
+.pc-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+  min-height: 30px;
+}
+.pc-section-header-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+.pc-section-search {
+  display: flex;
+  gap: 6px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.pc-section-search input {
+  flex: 1;
+  padding: 4px 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 12px;
+}
+.pc-section-search .btn {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.pc-section-body {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.pc-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.pc-list-table th,
+.pc-list-table td {
+  text-align: left;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pc-list-table th {
+  position: sticky;
+  top: 0;
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-weight: 500;
+  z-index: 1;
+}
+.pc-list-table tbody tr {
+  cursor: pointer;
+}
+.pc-list-table tbody tr:hover td {
+  background: var(--row-hover);
+}
+.pc-list-table tbody tr.selected td {
+  background: var(--row-selected);
+}
+.pc-list-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.pc-detail {
+  background: var(--bg);
+  overflow: auto;
+}
+.pc-detail-body {
+  padding: 20px 24px;
+}
+.pc-detail-title {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.pc-detail-body dl {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  row-gap: 10px;
+  column-gap: 16px;
+  margin: 0;
+}
+.pc-detail-body dt {
+  color: var(--text-dim);
+  font-weight: normal;
+}
+.pc-detail-body dd {
+  margin: 0;
+}
+
+/* ─── 類別管理 拖拉排序 ─── */
+.category-mgr table tr {
+  cursor: grab;
+  transition: background-color 0.1s, transform 0.1s;
+}
+.category-mgr table tr:active {
+  cursor: grabbing;
+}
+.category-mgr table .drag-handle {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 16px;
+  user-select: none;
+}
+.category-mgr table tr.row-dragging {
+  opacity: 0.4;
+}
+.category-mgr table tr.row-drag-over {
+  background: var(--accent) !important;
+  background: rgba(80, 150, 255, 0.15) !important;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.category-mgr table tr.row-drag-over td {
+  background: transparent !important;
 }
 .combobox-create.active { background: var(--accent); color: white; }

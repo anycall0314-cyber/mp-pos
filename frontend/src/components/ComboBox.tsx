@@ -28,6 +28,10 @@ interface ComboBoxProps<T = unknown> {
   debounceMs?: number;
   className?: string;
   required?: boolean;
+  /** 已有選擇且下拉收合時,按 Enter 觸發(快捷鍵:選完商品直接新增下一行) */
+  onEnterAfterValue?: () => void;
+  /** 載入後自動 focus 這個輸入框 */
+  autoFocus?: boolean;
 }
 
 export function ComboBox<T = unknown>({
@@ -43,6 +47,8 @@ export function ComboBox<T = unknown>({
   debounceMs = 200,
   className,
   required = false,
+  onEnterAfterValue,
+  autoFocus = false,
 }: ComboBoxProps<T>) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -116,8 +122,29 @@ export function ComboBox<T = unknown>({
   }
 
   function handleKey(e: KeyboardEvent<HTMLInputElement>) {
+    // 中文 / 日文 / 韓文輸入法選字中按 Enter 不應觸發「選擇選項」
+    // 三種偵測:React 合成事件、原生事件、舊版 keyCode 229
+    const native = e.nativeEvent as KeyboardEvent["nativeEvent"] & {
+      isComposing?: boolean;
+    };
+    const composing =
+      (e as unknown as { isComposing?: boolean }).isComposing ||
+      native?.isComposing ||
+      e.keyCode === 229;
+    if (composing) return;
+
     if (!open) {
-      if (e.key === "ArrowDown" || e.key === "Enter") {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        // 已有選擇且設了 onEnterAfterValue 時,Enter 用來「下一筆」而不是重開下拉
+        if (value !== "" && onEnterAfterValue) {
+          onEnterAfterValue();
+        } else {
+          openAndFocus();
+        }
+        return;
+      }
+      if (e.key === "ArrowDown") {
         e.preventDefault();
         openAndFocus();
       }
@@ -162,6 +189,7 @@ export function ComboBox<T = unknown>({
           placeholder={placeholder}
           disabled={disabled}
           required={required}
+          autoFocus={autoFocus}
           onFocus={openAndFocus}
           onChange={(e) => {
             setQuery(e.target.value);

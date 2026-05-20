@@ -49,6 +49,85 @@ export async function searchProducts(
   }));
 }
 
+/**
+ * 銷貨頁專用商品搜尋:
+ * - 一般輸入 → 走商品搜尋(品名 / 品號 / 條碼 / 規格 / 類別,後端已涵蓋 IMEI)
+ * - 若輸入像 IMEI(>=6 個英數字)→ 平行查序號,把命中的序號掛到對應商品上
+ *   選到此商品時前端可自動把這支序號塞進該行,不用使用者再挑
+ */
+export interface SalesProductHit extends Product {
+  matched_serial?: { id: number; serial_no: string };
+}
+
+export async function searchProductsForSales(
+  query: string,
+  opts?: { warehouseId?: number | "" },
+): Promise<ComboOption<SalesProductHit>[]> {
+  const q = query.trim();
+  if (!q) return [];
+
+  // 出貨倉:有指定的話,庫存以該倉計;否則跨倉合計
+  const warehouseParam =
+    opts?.warehouseId !== undefined && opts.warehouseId !== ""
+      ? (opts.warehouseId as number)
+      : undefined;
+
+  // 後端 search_fields 已包含 serials__serial_no,商品搜尋自然命中 IMEI 對應的商品
+  // sales_pickable=true 只列「有庫存 OR 虛擬商品」,排除 0 庫存的實體商品
+  const productsP = fetchPaginated<Product>(
+    `/products/?${qs({
+      search: q,
+      page_size: LIMIT,
+      is_active: "true",
+      sales_pickable: "true",
+      warehouse: warehouseParam,
+    })}`,
+  );
+
+  // IMEI 偵測:>=6 字、含數字 → 平行查 in_stock 的序號,知道是哪一支命中
+  const isImeiLike = /^[\w-]{6,}$/.test(q) && /\d/.test(q);
+  const serialsP: Promise<ProductSerial[]> = isImeiLike
+    ? fetchPaginated<ProductSerial>(
+        `/serials/?${qs({
+          search: q,
+          status: "in_stock",
+          page_size: 10,
+          warehouse: warehouseParam,
+        })}`,
+      )
+    : Promise.resolve([]);
+
+  const [products, serials] = await Promise.all([productsP, serialsP]);
+
+  // 為每個商品挑出命中的序號(若有)
+  const result: ComboOption<SalesProductHit>[] = products.map((p) => {
+    const matched = serials.find((s) => s.product === p.id);
+    const hit: SalesProductHit = matched
+      ? {
+          ...p,
+          matched_serial: { id: matched.id, serial_no: matched.serial_no },
+        }
+      : (p as SalesProductHit);
+    return {
+      id: p.id,
+      label: p.name,
+      secondary: matched
+        ? `IMEI ${matched.serial_no} · ${p.sku}`
+        : [p.sku, p.category_name].filter(Boolean).join(" / "),
+      payload: hit,
+    };
+  });
+
+  // 把帶 matched_serial 的選項排到最前面(IMEI 命中通常是使用者意圖)
+  result.sort((a, b) => {
+    const am = a.payload?.matched_serial ? 1 : 0;
+    const bm = b.payload?.matched_serial ? 1 : 0;
+    return bm - am;
+  });
+
+  return result;
+}
+
 export async function searchSecondhandProducts(
   query: string,
 ): Promise<ComboOption<Product>[]> {

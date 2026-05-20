@@ -64,6 +64,7 @@ class SalesOrderViewSet(
     filterset_fields = {
         "warehouse": ["exact"],
         "customer": ["exact"],
+        "sales_person": ["exact"],
         "sales_type": ["exact"],
         "tax_method": ["exact"],
         "is_void": ["exact"],

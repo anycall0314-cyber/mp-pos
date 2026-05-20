@@ -1,42 +1,28 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
+  StockMatrixProduct,
   useInStockSerials,
-  useProducts,
-  useStockBalances,
+  useStockMatrix,
+  useWarehouses,
 } from "@/api/hooks";
-import { searchCategories, searchWarehouses } from "@/api/search";
-import type { Category, Product, Warehouse } from "@/api/types";
+import { searchCategories } from "@/api/search";
+import type { Category } from "@/api/types";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { SerialHistoryModal } from "@/components/SerialHistoryModal";
 import { Toolbar } from "@/components/Toolbar";
 
-interface AppliedFilter {
-  keyword: string;
-  category: number | "";
-  warehouse: number | "";
-}
-
-function buildQS(f: AppliedFilter): string {
-  const u = new URLSearchParams();
-  u.set("page_size", "200");
-  u.set("is_active", "true");
-  u.set("in_stock_only", "true");
-  if (f.keyword) u.set("search", f.keyword);
-  if (f.category !== "") u.set("category", String(f.category));
-  if (f.warehouse !== "") u.set("warehouse", String(f.warehouse));
-  return u.toString();
-}
-
 interface SerialListModalProps {
-  product: Product;
-  warehouseId?: number;
+  product: StockMatrixProduct;
+  warehouseId: number;
+  warehouseLabel: string;
   onClose: () => void;
 }
 
 function SerialListModal({
   product,
   warehouseId,
+  warehouseLabel,
   onClose,
 }: SerialListModalProps) {
   const serials = useInStockSerials(product.id, warehouseId);
@@ -51,7 +37,9 @@ function SerialListModal({
         role="dialog"
         aria-modal="true"
       >
-        <div className="modal-title">{product.name}</div>
+        <div className="modal-title">
+          {product.name} · {warehouseLabel}
+        </div>
         <div className="modal-body">
           {serials.isLoading && <div className="md-empty">…</div>}
           {!serials.isLoading && (
@@ -60,7 +48,6 @@ function SerialListModal({
                 <tr>
                   <th style={{ width: 40 }}>#</th>
                   <th>序號</th>
-                  <th>倉別</th>
                   <th>進貨日</th>
                   <th className="num">單台成本</th>
                   {product.is_secondhand && <th>成色</th>}
@@ -79,10 +66,9 @@ function SerialListModal({
                   <tr key={s.id}>
                     <td>{i + 1}</td>
                     <td>{s.serial_no}</td>
-                    <td>{s.warehouse_code ?? "—"}</td>
                     <td>{s.received_at?.slice(0, 10) ?? "—"}</td>
                     <td className="num">
-                      {Number(s.purchase_unit_cost).toLocaleString()}
+                      {Math.round(Number(s.purchase_unit_cost)).toLocaleString()}
                     </td>
                     {product.is_secondhand && (
                       <td>{s.condition_grade || "—"}</td>
@@ -90,7 +76,9 @@ function SerialListModal({
                     {product.is_secondhand && (
                       <td className="num">
                         {s.custom_unit_price
-                          ? Number(s.custom_unit_price).toLocaleString()
+                          ? Math.round(
+                              Number(s.custom_unit_price),
+                            ).toLocaleString()
                           : "—"}
                       </td>
                     )}
@@ -115,7 +103,7 @@ function SerialListModal({
                 {rows.length === 0 && (
                   <tr>
                     <td
-                      colSpan={product.is_secondhand ? 10 : 6}
+                      colSpan={product.is_secondhand ? 9 : 5}
                       className="md-empty"
                     >
                       —
@@ -142,113 +130,148 @@ function SerialListModal({
   );
 }
 
-interface BalanceListModalProps {
-  product: Product;
-  warehouseId?: number;
-  onClose: () => void;
+interface AppliedFilter {
+  keyword: string;
+  category: number | "";
+  warehouseIds: number[];
 }
 
-function BalanceListModal({
-  product,
-  warehouseId,
-  onClose,
-}: BalanceListModalProps) {
-  const balances = useStockBalances({
-    product: product.id,
-    warehouse: warehouseId,
-  });
-  const rows = balances.data ?? [];
-  const total = rows.reduce((s, b) => s + b.qty, 0);
+type SortKey =
+  | { kind: "category" }
+  | { kind: "name" }
+  | { kind: "total" }
+  | { kind: "warehouse"; warehouseId: number };
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-card serial-list-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="modal-title">{product.name} · 各倉分佈</div>
-        <div className="modal-body">
-          {balances.isLoading && <div className="md-empty">載入中…</div>}
-          {!balances.isLoading && (
-            <table className="line-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 40 }}>#</th>
-                  <th>倉庫</th>
-                  <th className="num">在庫</th>
-                  <th className="num">加權平均成本</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((b, i) => (
-                  <tr key={b.id}>
-                    <td>{i + 1}</td>
-                    <td>
-                      {b.warehouse_code} {b.warehouse_name}
-                    </td>
-                    <td className="num">{b.qty}</td>
-                    <td className="num">
-                      {Number(b.weighted_avg_cost).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-                {rows.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="md-empty">
-                      —
-                    </td>
-                  </tr>
-                )}
-                {rows.length > 0 && (
-                  <tr style={{ fontWeight: 600 }}>
-                    <td colSpan={2}>合計</td>
-                    <td className="num">{total}</td>
-                    <td className="num">—</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
-        <div className="modal-actions">
-          <button className="btn primary" type="button" onClick={onClose}>
-            關閉
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+interface SortState {
+  by: SortKey;
+  dir: "asc" | "desc";
+}
+
+function sortKeyEquals(a: SortKey, b: SortKey): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === "warehouse" && b.kind === "warehouse") {
+    return a.warehouseId === b.warehouseId;
+  }
+  return true;
 }
 
 export function InventoryQueryPage() {
-  // 表單狀態 — 使用者打字 / 切下拉時更新,但不會觸發 API
+  // 表單狀態(未送出)
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState<number | "">("");
   const [categoryOption, setCategoryOption] =
     useState<ComboOption<Category> | null>(null);
-  const [warehouse, setWarehouse] = useState<number | "">("");
-  const [warehouseOption, setWarehouseOption] =
-    useState<ComboOption<Warehouse> | null>(null);
 
-  // 已套用 — 按「查詢」才更新,API 只在這個有值時呼叫
+  // 倉別多選
+  const warehousesQuery = useWarehouses();
+  const allWarehouses = warehousesQuery.data ?? [];
+  const [selectedWarehouseIds, setSelectedWarehouseIds] = useState<
+    Set<number>
+  >(new Set());
+
+  // 首次載入時把所有倉預設勾起來
+  useEffect(() => {
+    if (allWarehouses.length > 0 && selectedWarehouseIds.size === 0) {
+      setSelectedWarehouseIds(new Set(allWarehouses.map((w) => w.id)));
+    }
+  }, [allWarehouses]);
+
+  // 已套用篩選(按查詢才會更新,跟著觸發 API)
   const [applied, setApplied] = useState<AppliedFilter | null>(null);
 
-  // 點在庫數字打開的明細 modal:序號商品開序號清單,配件開各倉分佈
-  const [serialDialog, setSerialDialog] = useState<Product | null>(null);
-  const [balanceDialog, setBalanceDialog] = useState<Product | null>(null);
+  // 點數字打開的明細
+  const [serialDialog, setSerialDialog] = useState<{
+    product: StockMatrixProduct;
+    warehouseId: number;
+    warehouseLabel: string;
+  } | null>(null);
 
-  const queryString = applied ? buildQS(applied) : "";
-  const products = useProducts(queryString, { enabled: !!applied });
-  const rows = products.data ?? [];
-  const totalStock = rows.reduce((s, p) => s + (p.stock_qty || 0), 0);
+  const matrix = useStockMatrix(
+    {
+      warehouseIds: applied?.warehouseIds ?? [],
+      search: applied?.keyword,
+      category: applied?.category,
+      inStockOnly: true,
+    },
+    { enabled: !!applied && (applied.warehouseIds.length > 0) },
+  );
+
+  const warehouses = matrix.data?.warehouses ?? [];
+  const rawProducts = matrix.data?.products ?? [];
+
+  // 排序狀態(null = 用 API 預設順序)
+  const [sort, setSort] = useState<SortState | null>(null);
+
+  // 套用排序
+  const products = useMemo(() => {
+    if (!sort) return rawProducts;
+    const arr = [...rawProducts];
+    arr.sort((a, b) => {
+      let av: string | number;
+      let bv: string | number;
+      switch (sort.by.kind) {
+        case "category":
+          av = a.category_name;
+          bv = b.category_name;
+          break;
+        case "name":
+          av = a.name;
+          bv = b.name;
+          break;
+        case "total":
+          av = a.stock_total;
+          bv = b.stock_total;
+          break;
+        case "warehouse":
+          av = a.stock_by_warehouse[String(sort.by.warehouseId)] ?? 0;
+          bv = b.stock_by_warehouse[String(sort.by.warehouseId)] ?? 0;
+          break;
+      }
+      let cmp = 0;
+      if (typeof av === "string" && typeof bv === "string") {
+        // localeCompare 對中文 / 英文混合排序最穩
+        cmp = av.localeCompare(bv, "zh-Hant");
+      } else {
+        cmp = (av as number) - (bv as number);
+      }
+      return sort.dir === "asc" ? cmp : -cmp;
+    });
+    return arr;
+  }, [rawProducts, sort]);
+
+  // 點欄位標題:第一次升冪、再點變降冪、第三次回預設
+  function toggleSort(key: SortKey) {
+    setSort((prev) => {
+      if (!prev || !sortKeyEquals(prev.by, key)) {
+        return { by: key, dir: "asc" };
+      }
+      if (prev.dir === "asc") return { by: key, dir: "desc" };
+      return null;
+    });
+  }
+
+  function sortIndicator(key: SortKey): string {
+    if (!sort || !sortKeyEquals(sort.by, key)) return "";
+    return sort.dir === "asc" ? " ▲" : " ▼";
+  }
+
+  const totalsByWarehouse = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const w of warehouses) m[String(w.id)] = 0;
+    for (const p of products) {
+      for (const [wid, qty] of Object.entries(p.stock_by_warehouse)) {
+        m[wid] = (m[wid] ?? 0) + qty;
+      }
+    }
+    return m;
+  }, [warehouses, products]);
+  const grandTotal = products.reduce((s, p) => s + p.stock_total, 0);
 
   function runQuery() {
     setApplied({
       keyword: keyword.trim(),
       category,
-      warehouse,
+      warehouseIds: Array.from(selectedWarehouseIds),
     });
   }
 
@@ -256,16 +279,33 @@ export function InventoryQueryPage() {
     setKeyword("");
     setCategory("");
     setCategoryOption(null);
-    setWarehouse("");
-    setWarehouseOption(null);
+    setSelectedWarehouseIds(new Set(allWarehouses.map((w) => w.id)));
     setApplied(null);
+  }
+
+  function toggleWarehouse(wid: number) {
+    setSelectedWarehouseIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(wid)) next.delete(wid);
+      else next.add(wid);
+      return next;
+    });
+  }
+
+  function setAllWarehouses(checked: boolean) {
+    if (checked) {
+      setSelectedWarehouseIds(new Set(allWarehouses.map((w) => w.id)));
+    } else {
+      setSelectedWarehouseIds(new Set());
+    }
   }
 
   return (
     <div className="page">
       <Toolbar title="庫存查詢" />
-      <div className="list-filterbar">
-        <label style={{ minWidth: 240 }}>
+
+      <div className="list-filterbar inventory-filterbar">
+        <label style={{ minWidth: 220 }}>
           關鍵字
           <input
             type="text"
@@ -277,6 +317,7 @@ export function InventoryQueryPage() {
                 runQuery();
               }
             }}
+            placeholder="品名 / 品號 / IMEI"
             style={{ minWidth: 180 }}
           />
         </label>
@@ -291,30 +332,16 @@ export function InventoryQueryPage() {
                 setCategoryOption(opt ?? null);
               }}
               fetchOptions={searchCategories}
-              placeholder=""
+              placeholder="全部"
             />
           </div>
         </label>
-        <label style={{ minWidth: 220 }}>
-          倉庫
-          <div style={{ minWidth: 160 }}>
-            <ComboBox<Warehouse>
-              value={warehouse}
-              selectedOption={warehouseOption}
-              onChange={(id, opt) => {
-                setWarehouse(id);
-                setWarehouseOption(opt ?? null);
-              }}
-              fetchOptions={searchWarehouses}
-              placeholder=""
-            />
-          </div>
-        </label>
+
         <button
           type="button"
           className="btn primary"
           onClick={runQuery}
-          disabled={products.isFetching}
+          disabled={selectedWarehouseIds.size === 0}
         >
           查詢
         </button>
@@ -322,74 +349,160 @@ export function InventoryQueryPage() {
           清除
         </button>
         <span className="list-filterbar-count">
-          {applied && !products.isLoading
-            ? `${rows.length} 項 · 總庫存 ${totalStock} 件`
+          {applied && !matrix.isLoading
+            ? `${products.length} 項 · 總庫存 ${grandTotal} 件`
             : ""}
         </span>
       </div>
-      <div className="md-table" style={{ height: "calc(100% - 80px)" }}>
-        {applied && products.isError && (
-          <div className="md-empty">{String(products.error)}</div>
+
+      {/* 倉別勾選列 */}
+      <div className="warehouse-picker">
+        <div className="warehouse-picker-label">倉別</div>
+        <label className="warehouse-picker-item">
+          <input
+            type="checkbox"
+            checked={
+              allWarehouses.length > 0 &&
+              selectedWarehouseIds.size === allWarehouses.length
+            }
+            onChange={(e) => setAllWarehouses(e.target.checked)}
+          />
+          <strong>全選</strong>
+        </label>
+        {allWarehouses.map((w) => (
+          <label key={w.id} className="warehouse-picker-item">
+            <input
+              type="checkbox"
+              checked={selectedWarehouseIds.has(w.id)}
+              onChange={() => toggleWarehouse(w.id)}
+            />
+            {w.code} {w.name}
+          </label>
+        ))}
+        {selectedWarehouseIds.size === 0 && (
+          <span className="warehouse-picker-hint">至少勾選一個倉</span>
+        )}
+      </div>
+
+      <div className="md-table" style={{ height: "calc(100% - 130px)" }}>
+        {!applied && (
+          <div className="md-empty">
+            設定篩選條件後,點上方「查詢」開始
+          </div>
+        )}
+        {applied && matrix.isLoading && (
+          <div className="md-empty">查詢中…</div>
+        )}
+        {applied && matrix.isError && (
+          <div className="md-empty">{String(matrix.error)}</div>
         )}
         {serialDialog && (
           <SerialListModal
-            product={serialDialog}
-            warehouseId={applied?.warehouse || undefined}
+            product={serialDialog.product}
+            warehouseId={serialDialog.warehouseId}
+            warehouseLabel={serialDialog.warehouseLabel}
             onClose={() => setSerialDialog(null)}
           />
         )}
-        {balanceDialog && (
-          <BalanceListModal
-            product={balanceDialog}
-            warehouseId={applied?.warehouse || undefined}
-            onClose={() => setBalanceDialog(null)}
-          />
-        )}
-        {applied && !products.isError && (
-          <table>
+        {applied && !matrix.isLoading && !matrix.isError && (
+          <table className="stock-matrix-table">
             <thead>
               <tr>
-                <th>品名</th>
-                <th>類別</th>
-                <th>條碼</th>
-                <th className="num">在庫</th>
-                <th className="num">建議售價</th>
-                <th className="num">加權平均成本</th>
+                <th style={{ width: 50 }} className="num">
+                  序
+                </th>
+                <th
+                  style={{ width: 110 }}
+                  className="sortable"
+                  onClick={() => toggleSort({ kind: "category" })}
+                >
+                  類別{sortIndicator({ kind: "category" })}
+                </th>
+                <th
+                  className="sortable"
+                  onClick={() => toggleSort({ kind: "name" })}
+                >
+                  品名{sortIndicator({ kind: "name" })}
+                </th>
+                {warehouses.map((w) => (
+                  <th
+                    key={w.id}
+                    className="num sortable"
+                    onClick={() =>
+                      toggleSort({ kind: "warehouse", warehouseId: w.id })
+                    }
+                  >
+                    {w.code}
+                    {sortIndicator({ kind: "warehouse", warehouseId: w.id })}
+                    <div className="warehouse-col-name">{w.name}</div>
+                  </th>
+                ))}
+                <th
+                  className="num sortable"
+                  onClick={() => toggleSort({ kind: "total" })}
+                >
+                  小計{sortIndicator({ kind: "total" })}
+                </th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((p) => (
+              {products.map((p, i) => (
                 <tr key={p.id}>
-                  <td>{p.name}</td>
+                  <td className="num">{i + 1}</td>
                   <td>{p.category_name}</td>
-                  <td>{p.barcode || "—"}</td>
-                  <td className="num">
-                    {p.is_virtual ? (
-                      <span style={{ color: "var(--text-dim)" }}>—</span>
-                    ) : p.stock_qty === 0 ? (
-                      <span style={{ color: "#ff7070" }}>0</span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="stock-link"
-                        onClick={() =>
-                          p.requires_serial
-                            ? setSerialDialog(p)
-                            : setBalanceDialog(p)
-                        }
-                      >
-                        {p.stock_qty}
-                      </button>
-                    )}
-                  </td>
-                  <td className="num">
-                    {Number(p.list_price).toLocaleString()}
-                  </td>
-                  <td className="num">
-                    {Number(p.weighted_avg_cost).toLocaleString()}
+                  <td>{p.name}</td>
+                  {warehouses.map((w) => {
+                    const qty = p.stock_by_warehouse[String(w.id)] ?? 0;
+                    return (
+                      <td key={w.id} className="num">
+                        {qty > 0 ? (
+                          <button
+                            type="button"
+                            className="stock-link"
+                            onClick={() =>
+                              setSerialDialog({
+                                product: p,
+                                warehouseId: w.id,
+                                warehouseLabel: `${w.code} ${w.name}`,
+                              })
+                            }
+                          >
+                            {qty}
+                          </button>
+                        ) : (
+                          <span style={{ color: "var(--text-dim)" }}>0</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td className="num" style={{ fontWeight: 600 }}>
+                    {p.stock_total}
                   </td>
                 </tr>
               ))}
+              {products.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={4 + warehouses.length}
+                    className="md-empty"
+                  >
+                    查無資料
+                  </td>
+                </tr>
+              )}
+              {products.length > 0 && (
+                <tr className="stock-matrix-total-row">
+                  <td colSpan={3} style={{ textAlign: "right" }}>
+                    各倉合計
+                  </td>
+                  {warehouses.map((w) => (
+                    <td key={w.id} className="num">
+                      {totalsByWarehouse[String(w.id)] ?? 0}
+                    </td>
+                  ))}
+                  <td className="num">{grandTotal}</td>
+                </tr>
+              )}
             </tbody>
           </table>
         )}

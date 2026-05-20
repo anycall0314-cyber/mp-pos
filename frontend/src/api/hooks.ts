@@ -338,6 +338,99 @@ export const useSalesOrder = (id: number | null) =>
     enabled: id != null,
   });
 
+// 庫存矩陣:多倉攤開檢視
+export interface StockMatrixWarehouse {
+  id: number;
+  code: string;
+  name: string;
+}
+export interface StockMatrixProduct {
+  id: number;
+  sku: string;
+  name: string;
+  category_id: number;
+  category_name: string;
+  category_code: string;
+  list_price: string;
+  weighted_avg_cost: string;
+  requires_serial: boolean;
+  is_secondhand: boolean;
+  stock_by_warehouse: Record<string, number>;
+  stock_total: number;
+}
+export interface StockMatrixResponse {
+  warehouses: StockMatrixWarehouse[];
+  products: StockMatrixProduct[];
+}
+export interface StockMatrixFilter {
+  warehouseIds: number[];
+  search?: string;
+  category?: number | "";
+  inStockOnly?: boolean;
+}
+export const useStockMatrix = (
+  filter: StockMatrixFilter,
+  opts?: { enabled?: boolean },
+) =>
+  useQuery({
+    queryKey: [
+      "stock-matrix",
+      filter.warehouseIds.join(","),
+      filter.search ?? "",
+      filter.category ?? "",
+      filter.inStockOnly ?? true,
+    ],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (filter.warehouseIds.length > 0) {
+        params.set("warehouse_ids", filter.warehouseIds.join(","));
+      }
+      if (filter.search) params.set("search", filter.search);
+      if (filter.category) params.set("category", String(filter.category));
+      params.set(
+        "in_stock_only",
+        filter.inStockOnly === false ? "false" : "true",
+      );
+      return api<StockMatrixResponse>(`/products/stock-matrix/?${params}`);
+    },
+    enabled: opts?.enabled ?? true,
+  });
+
+// 銷貨日報專用:撈期間內全部銷貨單(含作廢),前端再分組與作廢分區
+export interface SalesDailyReportFilter extends DateRangeFilter {
+  warehouse?: number;
+  sales_person?: number;
+  customer?: number;
+}
+
+export const useSalesDailyReport = (
+  filter: SalesDailyReportFilter,
+  opts?: { enabled?: boolean },
+) =>
+  useQuery({
+    queryKey: [
+      "sales-daily-report",
+      filter.from ?? "",
+      filter.to ?? "",
+      filter.warehouse ?? "",
+      filter.sales_person ?? "",
+      filter.customer ?? "",
+    ],
+    queryFn: () =>
+      list<SalesOrder>(
+        `/sales-orders/${buildQS({
+          doc_date__gte: filter.from,
+          doc_date__lte: filter.to,
+          warehouse: filter.warehouse,
+          sales_person: filter.sales_person,
+          customer: filter.customer,
+          page_size: 500,
+          ordering: "doc_date,no",
+        })}`,
+      ),
+    enabled: opts?.enabled ?? true,
+  });
+
 // ---- mutations ----
 
 export interface BulkProductRow {

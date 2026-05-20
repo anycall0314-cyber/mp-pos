@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
+import { CategoriesPage } from "@/pages/inventory/CategoriesPage";
 import { InventoryQueryPage } from "@/pages/inventory/InventoryQueryPage";
 import { MembersPage } from "@/pages/members/MembersPage";
 import { ProductsPage } from "@/pages/products/ProductsPage";
 import { PurchasesPage } from "@/pages/purchases/PurchasesPage";
 import { PurchaseEntryPage } from "@/pages/purchases/PurchaseEntryPage";
 import { PurchaseLabelsPrintPage } from "@/pages/purchases/PurchaseLabelsPrintPage";
+import { SalesDailyReportPage } from "@/pages/reports/SalesDailyReport";
 import { SecondhandAcquisitionPage } from "@/pages/secondhand-acquisition/SecondhandAcquisitionPage";
 import { TransfersPage } from "@/pages/transfers/TransfersPage";
 import { TransferEntryPage } from "@/pages/transfers/TransferEntryPage";
@@ -34,41 +36,67 @@ interface NavGroup {
  */
 const NAV_GROUPS: NavGroup[] = [
   {
-    key: "master",
-    label: "主檔",
+    key: "reports",
+    label: "報表",
     items: [
-      { to: "/products", label: "商品" },
-      { to: "/telecom-plans", label: "電信方案" },
-      { to: "/sim-cards", label: "SIM 卡" },
+      { to: "/reports/sales-daily", label: "銷貨日報" },
+      { to: "/reports/business-daily", label: "營業日報" },
+      { to: "/reports/margin-summary", label: "毛利彙總" },
+      { to: "/reports/invoice-detail", label: "發票明細" },
     ],
-  },
-  {
-    key: "ops",
-    label: "進銷",
-    items: [
-      { to: "/purchases", label: "進貨" },
-      { to: "/secondhand-acquisition", label: "中古收購(個人)" },
-      { to: "/sales", label: "銷貨" },
-      { to: "/transfers", label: "調撥" },
-    ],
-  },
-  {
-    key: "members",
-    label: "會員",
-    items: [{ to: "/members", label: "會員查詢" }],
   },
   {
     key: "stock",
     label: "庫存",
     items: [
       { to: "/inventory", label: "庫存查詢" },
+      { to: "/purchases", label: "進貨作業" },
+      { to: "/secondhand-acquisition", label: "中古入庫" },
+      { to: "/products", label: "建立商品" },
       { to: "/serials", label: "序號查詢" },
+      { to: "/inventory/stocktake", label: "盤點作業" },
+      { to: "/inventory/movements", label: "異動查詢" },
+    ],
+  },
+  {
+    key: "sales",
+    label: "銷貨",
+    items: [
+      { to: "/sales", label: "銷貨作業" },
+      { to: "/transfers", label: "調撥作業" },
+      { to: "/sales/pre-orders", label: "訂購作業" },
+      { to: "/members", label: "會員查詢" },
+    ],
+  },
+  {
+    key: "telecom",
+    label: "門號",
+    items: [
+      { to: "/telecom/billing", label: "代收話費" },
+      { to: "/telecom/activations", label: "開通查詢" },
+      { to: "/telecom-plans", label: "方案管理" },
+      { to: "/sim-cards", label: "卡片管理" },
+      { to: "/telecom/commissions", label: "佣金對帳" },
+      { to: "/telecom/expiries", label: "到期查詢" },
+    ],
+  },
+  {
+    key: "repairs",
+    label: "維修",
+    items: [
+      { to: "/repairs/new", label: "建立報修" },
+      { to: "/repairs", label: "維修列表" },
+      { to: "/repairs/quotes", label: "報價作業" },
+      { to: "/repairs/library", label: "資料庫" },
     ],
   },
   {
     key: "settings",
     label: "設定",
-    items: [{ to: "/settings", label: "系統設定" }],
+    items: [
+      { to: "/settings", label: "發票付款" },
+      { to: "/settings/users", label: "人員權限" },
+    ],
   },
 ];
 
@@ -192,7 +220,69 @@ export function App() {
           <Route path="/transfers" element={<TransfersPage />} />
           <Route path="/transfers/:id" element={<TransferEntryPage />} />
           <Route path="/inventory" element={<InventoryQueryPage />} />
+          <Route path="/inventory/categories" element={<CategoriesPage />} />
           <Route path="/serials" element={<Placeholder title="序號查詢" />} />
+          <Route
+            path="/inventory/stocktake"
+            element={<Placeholder title="盤點作業" />}
+          />
+          <Route
+            path="/inventory/movements"
+            element={<Placeholder title="異動查詢" />}
+          />
+          <Route
+            path="/sales/pre-orders"
+            element={<Placeholder title="訂購作業" />}
+          />
+          <Route
+            path="/telecom/billing"
+            element={<Placeholder title="代收話費" />}
+          />
+          <Route
+            path="/telecom/activations"
+            element={<Placeholder title="開通查詢" />}
+          />
+          <Route
+            path="/telecom/commissions"
+            element={<Placeholder title="佣金對帳" />}
+          />
+          <Route
+            path="/telecom/expiries"
+            element={<Placeholder title="到期查詢" />}
+          />
+          <Route path="/repairs" element={<Placeholder title="維修列表" />} />
+          <Route
+            path="/repairs/new"
+            element={<Placeholder title="建立報修" />}
+          />
+          <Route
+            path="/repairs/quotes"
+            element={<Placeholder title="報價作業" />}
+          />
+          <Route
+            path="/repairs/library"
+            element={<Placeholder title="維修資料庫" />}
+          />
+          <Route
+            path="/settings/users"
+            element={<Placeholder title="人員權限" />}
+          />
+          <Route
+            path="/reports/sales-daily"
+            element={<SalesDailyReportPage />}
+          />
+          <Route
+            path="/reports/business-daily"
+            element={<Placeholder title="營業日報" />}
+          />
+          <Route
+            path="/reports/margin-summary"
+            element={<Placeholder title="毛利彙總" />}
+          />
+          <Route
+            path="/reports/invoice-detail"
+            element={<Placeholder title="發票明細" />}
+          />
         </Routes>
       </main>
     </div>

@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend (Vite)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173,
+      "cwd": "frontend"
+    },
+    {
+      "name": "backend (Django)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["manage.py", "runserver"],
+      "port": 8000,
+      "cwd": "backend"
+    }
+  ]
+}

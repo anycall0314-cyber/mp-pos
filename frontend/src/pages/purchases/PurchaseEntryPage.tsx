@@ -25,6 +25,23 @@ import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Field } from "@/components/Field";
 import { Toolbar } from "@/components/Toolbar";
 
+import {
+  BatchPasteResult,
+  PurchaseBatchPasteModal,
+} from "./PurchaseBatchPasteModal";
+import {
+  PickerProduct,
+  PurchaseProductPickerModal,
+} from "./PurchaseProductPickerModal";
+
+/** "100.00" / number / "" → 整數字串(四捨五入)。 */
+function toIntStr(v: string | number | null | undefined): string {
+  if (v === null || v === undefined || v === "") return "0";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "0";
+  return String(Math.round(n));
+}
+
 interface SerialEntry {
   sn: string;
   grade?: ConditionGrade;
@@ -314,8 +331,8 @@ function SerialAside({
                   className="num-input"
                   value={line.serial_numbers[focusedIdx]?.cost ?? ""}
                   disabled={readonly}
-                  placeholder={`留空 = 用單價 ${Number(
-                    line.unit_price,
+                  placeholder={`留空 = 用單價 ${Math.round(
+                    Number(line.unit_price),
                   ).toLocaleString()}`}
                   onChange={(e) =>
                     onUpdateSerialField(focusedIdx, "cost", e.target.value)
@@ -454,7 +471,13 @@ export function PurchaseEntryPage() {
   const [invoiceDate, setInvoiceDate] = useState(draft?.invoiceDate ?? "");
   const [note, setNote] = useState(draft?.note ?? "");
   const [lines, setLines] = useState<Line[]>(() => {
-    if (draft?.lines && draft.lines.length > 0) return draft.lines;
+    if (draft?.lines && draft.lines.length > 0) {
+      // 舊草稿可能存了「100.00」格式,還原時統一轉整數
+      return draft.lines.map((l) => ({
+        ...l,
+        unit_price: toIntStr(l.unit_price),
+      }));
+    }
     return [newLine(1)];
   });
   const [selectedLineKey, setSelectedLineKey] = useState<string | null>(null);
@@ -582,7 +605,7 @@ export function PurchaseEntryPage() {
           },
           qty: it.qty,
           billed_qty: it.billed_qty,
-          unit_price: it.unit_price,
+          unit_price: toIntStr(it.unit_price),
           serial_numbers: (it.serial_numbers as unknown[]).map(
             normalizeSerialEntry,
           ),
@@ -607,6 +630,80 @@ export function PurchaseEntryPage() {
     const fresh = newLine(lines.length + 1);
     setLines((ls) => [...ls, fresh]);
     setSelectedLineKey(fresh.key);
+  }
+  // 快捷:選完商品按 Enter → 自動新增空白列並把焦點帶到新行的商品欄
+  const [autoFocusKey, setAutoFocusKey] = useState<string | null>(null);
+  function jumpToNextLine() {
+    const fresh = newLine(lines.length + 1);
+    setLines((ls) => [...ls, fresh]);
+    setSelectedLineKey(fresh.key);
+    setAutoFocusKey(fresh.key);
+  }
+
+  // 批次貼上 → 把 N 筆 result 加進 lines
+  function appendBatch(results: BatchPasteResult[]) {
+    setLines((ls) => {
+      // 找出當前最大的 line_no,接著遞增
+      let nextNo = ls.length > 0 ? Math.max(...ls.map((l) => l.line_no)) : 0;
+      const newOnes: Line[] = results.map((r) => {
+        nextNo += 1;
+        return {
+          key: crypto.randomUUID(),
+          line_no: nextNo,
+          product: r.product.id,
+          productOption: {
+            id: r.product.id,
+            label: r.product.name,
+            secondary: [r.product.sku, r.product.category_name]
+              .filter(Boolean)
+              .join(" / "),
+            payload: r.product,
+          },
+          qty: r.qty,
+          billed_qty: r.qty,
+          unit_price: String(Math.round(Number(r.unit_price) || 0)),
+          serial_numbers: r.serial_numbers.map((sn) => ({ sn })),
+        };
+      });
+      // 若原本只有一筆空白(default newLine),替換掉;否則 append
+      const onlyDefault =
+        ls.length === 1 && ls[0].product === "" && ls[0].qty === 1;
+      return onlyDefault ? newOnes : [...ls, ...newOnes];
+    });
+    setBatchOpen(false);
+  }
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // 批次選商品 → 把每個勾選的商品變成新 line
+  function appendPicked(picks: PickerProduct[]) {
+    setLines((ls) => {
+      let nextNo = ls.length > 0 ? Math.max(...ls.map((l) => l.line_no)) : 0;
+      const newOnes: Line[] = picks.map((pk) => {
+        nextNo += 1;
+        return {
+          key: crypto.randomUUID(),
+          line_no: nextNo,
+          product: pk.product.id,
+          productOption: {
+            id: pk.product.id,
+            label: pk.product.name,
+            secondary: [pk.product.sku, pk.product.category_name]
+              .filter(Boolean)
+              .join(" / "),
+            payload: pk.product,
+          },
+          qty: pk.qty,
+          billed_qty: pk.qty,
+          unit_price: toIntStr(pk.product.last_purchase_price ?? "0"),
+          serial_numbers: [],
+        };
+      });
+      const onlyDefault =
+        ls.length === 1 && ls[0].product === "" && ls[0].qty === 1;
+      return onlyDefault ? newOnes : [...ls, ...newOnes];
+    });
+    setPickerOpen(false);
   }
   function updateSerialAt(lineKey: string, idx: number, value: string) {
     setLines((ls) =>
@@ -985,7 +1082,8 @@ export function PurchaseEntryPage() {
           <thead>
             <tr>
               <th style={{ width: 40 }}>#</th>
-              <th style={{ width: 280 }}>商品</th>
+              <th style={{ width: 260 }}>商品</th>
+              <th style={{ width: 150 }}>規格</th>
               <th style={{ width: 70 }} className="num">
                 進貨數量
               </th>
@@ -997,9 +1095,6 @@ export function PurchaseEntryPage() {
               </th>
               <th style={{ width: 110 }} className="num">
                 金額
-              </th>
-              <th style={{ width: 90 }} className="num">
-                序號
               </th>
               <th style={{ width: 110 }} className="num">
                 未稅單價
@@ -1036,7 +1131,7 @@ export function PurchaseEntryPage() {
                         // 選到商品有上一次進價就帶入;沒有的話留原值不動
                         const lastPrice = p?.last_purchase_price;
                         if (lastPrice && Number(lastPrice) > 0) {
-                          patch.unit_price = String(lastPrice);
+                          patch.unit_price = toIntStr(lastPrice);
                         }
                         updateLine(l.key, patch);
                       }}
@@ -1045,7 +1140,24 @@ export function PurchaseEntryPage() {
                       }
                       disabled={readonly}
                       placeholder="搜尋商品"
+                      autoFocus={l.key === autoFocusKey}
+                      onEnterAfterValue={jumpToNextLine}
                     />
+                  </td>
+                  <td
+                    style={{
+                      color: l.productOption?.payload?.spec
+                        ? "var(--text)"
+                        : "var(--text-dim)",
+                      fontSize: 12,
+                    }}
+                    title={
+                      needsSerial
+                        ? `IMEI 進度 ${filled}/${l.qty}(到右側面板維護)`
+                        : undefined
+                    }
+                  >
+                    {l.productOption?.payload?.spec || "—"}
                   </td>
                   <td>
                     <input
@@ -1090,28 +1202,23 @@ export function PurchaseEntryPage() {
                       onChange={(e) =>
                         updateLine(l.key, { unit_price: e.target.value })
                       }
+                      onBlur={(e) =>
+                        updateLine(l.key, {
+                          unit_price: toIntStr(e.target.value),
+                        })
+                      }
                       disabled={readonly}
                     />
                   </td>
-                  <td className="num">{calcAmount(l).toLocaleString()}</td>
                   <td className="num">
-                    {needsSerial ? (
-                      <span
-                        className={
-                          filled === l.qty
-                            ? "serial-badge ok"
-                            : "serial-badge"
-                        }
-                        title="點此列右側面板填序號"
-                      >
-                        {filled}/{l.qty}
-                      </span>
-                    ) : (
-                      <span style={{ color: "var(--text-dim)" }}>—</span>
-                    )}
+                    {Math.round(calcAmount(l)).toLocaleString()}
                   </td>
                   <td className="num">
-                    {item ? Number(item.unit_landed_cost).toLocaleString() : "—"}
+                    {item
+                      ? Math.round(
+                          Number(item.unit_landed_cost),
+                        ).toLocaleString()
+                      : "—"}
                   </td>
                   <td className="row-actions">
                     {!readonly && (
@@ -1126,14 +1233,25 @@ export function PurchaseEntryPage() {
           </tbody>
         </table>
         {!readonly && (
-          <button
-            className="btn"
-            onClick={addLine}
-            type="button"
-            style={{ marginTop: 8 }}
-          >
-            + 新增明細
-          </button>
+          <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
+            <button className="btn" onClick={addLine} type="button">
+              + 新增明細
+            </button>
+            <button
+              className="btn"
+              onClick={() => setPickerOpen(true)}
+              type="button"
+            >
+              選商品入庫
+            </button>
+            <button
+              className="btn"
+              onClick={() => setBatchOpen(true)}
+              type="button"
+            >
+              批次貼上
+            </button>
+          </div>
         )}
        </div>
        <SerialAside
@@ -1252,6 +1370,16 @@ export function PurchaseEntryPage() {
           </div>
         </div>
       )}
+      <PurchaseBatchPasteModal
+        open={batchOpen}
+        onClose={() => setBatchOpen(false)}
+        onConfirm={appendBatch}
+      />
+      <PurchaseProductPickerModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onConfirm={appendPicked}
+      />
     </div>
   );
 }

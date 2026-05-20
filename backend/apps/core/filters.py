@@ -31,7 +31,21 @@ class TrigramSearchFilter(SearchFilter):
     2. 若 icontains 命中 0 筆 且 query 長度 ≥ 3 且 DB 是 PG → 改用 trigram 相似度
     3. 相似度 ≥ threshold 才收,並依相似度遞減排序
     這樣可避免「phone 在 'PH-000004' 上出現低相似度誤命中」的情況。
+
+    額外支援:若 view 有定義 `get_search_fields()` 方法,優先使用它的回傳值
+    (DRF 預設只看 view.search_fields 類別屬性,無法動態切換)。
     """
+
+    def get_search_fields(self, view, request):
+        # 優先讓 view 動態決定;沒有就走父類預設行為(getattr search_fields)
+        getter = getattr(view, "get_search_fields", None)
+        if callable(getter):
+            try:
+                return getter()
+            except TypeError:
+                # 父類 API 可能是 get_search_fields(view, request) 形式
+                return getter(view, request)
+        return super().get_search_fields(view, request)
 
     def filter_queryset(self, request, queryset, view):
         search_terms = self.get_search_terms(request)

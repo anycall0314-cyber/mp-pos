@@ -329,8 +329,3 @@ def void_transfer_order(to: TransferOrder) -> TransferOrder:
         to.is_void = True
         to.save(update_fields=["is_void"])
     return to
-
-
-# 舊名 backward-compat
-def commit_transfer_order(to: TransferOrder) -> TransferOrder:
-    return dispatch_transfer_order(to)

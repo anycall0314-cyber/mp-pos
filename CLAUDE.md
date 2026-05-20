@@ -20,10 +20,12 @@
 
 - **儲存即生效**:單據沒有「過帳/未過帳」中間狀態,POST 成功就生效,要取消用「作廢」(`is_void=True`)
 - **庫存以序號為單位**:`ProductSerial` 一台一筆,狀態 in_stock / sold / void / returned / rma / in_transit
-- **成本走加權平均**:`Product.weighted_avg_cost`,進貨後重算;**虛擬商品**(`is_virtual=True`)不算成本、不建序號
-- **三種頁面版型**:錄入頁(進銷/調撥)、Master-Detail(主檔)、報表頁(尚未做)
+- **成本走加權平均(全公司,不分倉)**:`Product.weighted_avg_cost` 跨倉聚合;**目的是避免「店員挑低成本機賣→虛幻獎金」**。庫存查詢的單倉視窗不顯示「該倉成本」,只顯示在庫數。中古機例外:每隻獨立 `purchase_unit_cost`,賣出時用該隻自己的成本(因為每台是獨立商品)
+- **計入現金 / 計入毛利雙旗標**:`Product.counts_cash` / `counts_margin`。收購二手虛擬商品 `counts_cash=True, counts_margin=False`,讓收購單在報表上「算現金流出但不汙染毛利」
+- **三種頁面版型**:錄入頁(進銷/調撥)、Master-Detail(主檔)、報表頁
 - **唯一前端**:不開 Django admin 給使用者用,Django admin 只當 dev fallback
 - **單一 React app + 角色控制**:Platform Admin / Tenant Admin / Tenant User 共用 SPA(MVP 還沒實作登入)
+- **導覽結構(6 群)**:報表 / 庫存 / 銷貨 / 門號 / 維修 / 設定。商品與類別合併在「庫存 → 建立商品」一頁;會員查詢在「銷貨」群組底下;未實作的功能保留 placeholder 顯示「(尚未實作)」
 
 ## 業務規則速查
 
@@ -42,6 +44,10 @@
 | 配件庫存 | 非序號商品(`requires_serial=False`、非 virtual)走 `StockBalance(product, warehouse)`,進貨累計、銷貨扣減、調撥搬移;`Product.weighted_avg_cost` 跨倉聚合 |
 | 配件不足擋下 | 銷貨單若該倉 balance 不足,`commit_sales_order` 拋錯 400,不允許負庫存 |
 | 調撥 | `TransferOrder` 兩階段:`dispatched`(來源倉派發,序號 → in_transit、配件 balance 扣掉)→ `confirmed`(目的倉確認,序號 → in_stock 在目的倉、目的倉 balance 加上)。`unit_cost_at_dispatch` 在派發時快照來源倉成本,確認時用以重算目的倉加權平均(避免後續異動干擾)。`void` 智能回滾,依當下狀態決定 |
+| 標籤條碼優先序 | 有序號 → IMEI;否則 有原廠條碼(`Product.barcode`)→ 用原廠條碼;都沒有 → fallback SKU。bar code 下方顯示可讀值方便對照 |
+| 銷貨商品搜尋 | `searchProductsForSales` 支援 品名 / 品號 / 條碼 / IMEI 任一;打 IMEI 命中時 matched_serial 也預掛該行,且該倉只有 1 隻在庫時自動掛唯一序號(中古機同步帶 custom_unit_price)|
+| 銷貨可選清單 | `?sales_pickable=true` 過濾:庫存 > 0 OR `is_virtual=True`(虛擬商品永遠可選,實體 0 庫存擋下)|
+| IMEI 搜尋安全閥 | ProductViewSet.`get_search_fields` 動態化:**只有純數字 6 碼以上才把 `serials__serial_no` 加進 search_fields**,避免「18 pro 256」誤命中含 18 的 IMEI |
 
 ## 程式碼定位
 
@@ -60,21 +66,27 @@ inventory-3c/
 │
 └── frontend/
     └── src/
-        ├── api/                client.ts + hooks.ts + search.ts + types.ts
-        ├── components/         ComboBox(server-side 搜尋下拉)/ Drawer / Field / Toolbar / Banner
+        ├── api/                client.ts + hooks.ts + search.ts(searchProductsForSales 等) + types.ts
+        ├── components/         ComboBox(支援 onEnterAfterValue / autoFocus / IME 偵測)/ Drawer / Field / Toolbar / Banner
         ├── pages/
-        │   ├── products/        ProductsPage + ProductForm
-        │   ├── purchases/       PurchasesPage + PurchaseEntryPage + PurchaseLabelsPrintPage
-        │   ├── sales/           SalesPage + SalesEntryPage + SalesPrintPage
+        │   ├── products/        ProductsPage(合併商品 + 類別管理,左側兩段:商品搜尋 / 類別拖拉排序)+ ProductForm + ProductExpanderModal(型號展開,軸標籤可自訂)+ BulkAddProductsModal
+        │   ├── purchases/       PurchasesPage + PurchaseEntryPage(規格獨立欄、Enter 跳下一筆)+ PurchaseLabelsPrintPage(條碼優先序 IMEI > 原廠 > SKU)+ PurchaseBatchPasteModal(模糊比對預覽)+ PurchaseProductPickerModal(勾選多商品入庫)
+        │   ├── sales/           SalesPage + SalesEntryPage(IMEI 自動掛序號 / 單一在庫自動掛 / 中文 IME 安全)+ SalesPrintPage
         │   ├── members/         MembersPage(會員查詢)
+        │   ├── reports/         SalesDailyReport(銷貨日報,按單分組純表格 + 作廢區塊 + CSV 匯出;收購二手不計毛利)
         │   ├── settings/        SettingsPage(發票類型 / 字軌 / 付款方式)
         │   ├── sim-cards/       SimCardsPage + SimCardForm
         │   ├── telecom-plans/   TelecomPlansPage + TelecomPlanForm
         │   ├── secondhand-acquisition/  SecondhandAcquisitionPage(個人收購入庫)
+        │   ├── inventory/       InventoryQueryPage(庫存矩陣:多倉勾選 + 每倉一欄 + 點數字看序號明細 + 欄位排序)+ CategoriesPage(舊獨立頁,nav 已隱藏但路由仍在)
         │   └── transfers/       TransfersPage + TransferEntryPage(倉間調撥)
-        ├── App.tsx              路由與導覽(NAV_GROUPS 結構)
+        ├── App.tsx              路由與導覽(NAV_GROUPS 6 群:報表/庫存/銷貨/門號/維修/設定)
         └── styles.css           全站 CSS,暗色主題
 ```
+
+後端新加的 endpoint:
+- `GET /api/v1/products/stock-matrix/?warehouse_ids=1,2,3` — 庫存矩陣,給庫存查詢頁多倉欄位用
+- `GET /api/v1/sales-orders/?...` filterset 加 `sales_person`(報表用)
 
 ## 慣例(Convention)
 

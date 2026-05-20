@@ -14,8 +14,9 @@ import {
   useVoidSalesOrder,
 } from "@/api/hooks";
 import {
+  SalesProductHit,
   searchInStockSerials,
-  searchProducts,
+  searchProductsForSales,
   searchSalesPersons,
   searchSimCards,
   searchTelecomPlans,
@@ -38,6 +39,14 @@ import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Checkbox, Field } from "@/components/Field";
 import { Toolbar } from "@/components/Toolbar";
+
+/** 把資料庫的 "100.00" / number 統一轉成整數字串(四捨五入,空 / NaN 還原成 "0")。 */
+function toIntStr(v: string | number | null | undefined): string {
+  if (v === null || v === undefined || v === "") return "0";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "0";
+  return String(Math.round(n));
+}
 
 interface Line {
   key: string;
@@ -148,7 +157,7 @@ function CheckoutModal({
             </div>
             <div className="modal-row">
               <span>含稅總額</span>
-              <b>{Number(savedSO.total).toLocaleString()}</b>
+              <b>{Math.round(Number(savedSO.total)).toLocaleString()}</b>
             </div>
             {savedSO.invoice_no && (
               <div className="modal-row">
@@ -163,7 +172,7 @@ function CheckoutModal({
                   <div key={p.id} className="modal-row">
                     <span>{p.method_label}</span>
                     <b>
-                      {Number(p.amount).toLocaleString()}
+                      {Math.round(Number(p.amount)).toLocaleString()}
                       {p.note ? `(${p.note})` : ""}
                     </b>
                   </div>
@@ -232,15 +241,15 @@ function CheckoutModal({
           <div className="modal-sep" />
           <div className="modal-row">
             <span>未稅小計</span>
-            <b>{subtotal.toLocaleString()}</b>
+            <b>{Math.round(subtotal).toLocaleString()}</b>
           </div>
           <div className="modal-row">
             <span>稅額</span>
-            <b>{tax.toLocaleString()}</b>
+            <b>{Math.round(tax).toLocaleString()}</b>
           </div>
           <div className="modal-row big">
             <span>應收</span>
-            <b>{totalGross.toLocaleString()}</b>
+            <b>{Math.round(totalGross).toLocaleString()}</b>
           </div>
           <div className="modal-sep" />
           {methods.map((m, i) => (
@@ -290,10 +299,10 @@ function CheckoutModal({
             style={{ color: aligned ? "#80d090" : "#ff7070" }}
           >
             {aligned
-              ? `已對齊(共 ${paid.toLocaleString()})`
+              ? `已對齊(共 ${Math.round(paid).toLocaleString()})`
               : diff > 0
-              ? `尚需 ${diff.toLocaleString()}`
-              : `多收 ${Math.abs(diff).toLocaleString()}`}
+              ? `尚需 ${Math.round(diff).toLocaleString()}`
+              : `多收 ${Math.round(Math.abs(diff)).toLocaleString()}`}
           </div>
         </div>
         <div className="modal-actions">
@@ -430,6 +439,7 @@ interface LineRowProps {
   line: Line;
   idx: number;
   readonly: boolean;
+  warehouseId: number | "";
   update: (patch: Partial<Line>) => void;
   remove: () => void;
 }
@@ -443,6 +453,7 @@ function LineRow({
   line,
   idx,
   readonly,
+  warehouseId,
   update,
   remove,
   active,
@@ -459,17 +470,30 @@ function LineRow({
 
   function onProductPick(
     pid: number | "",
-    opt?: ComboOption<Product>,
+    opt?: ComboOption<SalesProductHit>,
   ) {
     const p = opt?.payload;
     // 選到商品時把建議零售價一次帶到單價與金額(各自獨立,之後互不同步)
     const userTypedAmount =
       Number(line.amount) !== 0 && Number(line.amount) !== Number(line.unit_price);
-    const defaultPrice = p?.list_price ?? "0";
+    const defaultPrice = toIntStr(p?.list_price ?? "0");
+
+    // 路徑一:搜尋帶 matched_serial(打 IMEI 命中)→ 立即把該序號掛上
+    const autoSerial = p?.matched_serial
+      ? ({
+          id: p.matched_serial.id,
+          label: p.matched_serial.serial_no,
+          secondary: p.sku ?? "",
+          payload: undefined as unknown as ProductSerial,
+        } as ComboOption<ProductSerial>)
+      : null;
+
     update({
       product: pid,
-      productOption: opt ?? null,
-      serialChoices: [], // 換商品就清空序號(在庫池會變)
+      productOption: opt ? { ...opt, payload: opt.payload as Product } : null,
+      // 通常 IMEI 命中 = 賣 1 隻,把該行 qty 設 1、序號預填;否則清空待挑
+      qty: autoSerial ? 1 : line.qty,
+      serialChoices: autoSerial ? [autoSerial] : [],
       unit_price: p ? defaultPrice : line.unit_price,
       amount: p && !userTypedAmount ? defaultPrice : line.amount,
       msisdn: p?.allows_telecom_line ? line.msisdn : "",
@@ -480,6 +504,47 @@ function LineRow({
       activation_date: p?.allows_telecom_line ? line.activation_date : "",
       commission: p?.allows_commission ? line.commission : "0",
     });
+
+    // 路徑二:沒打 IMEI,但商品要序號 + 該倉只有 1 隻在庫 → 自動把那隻掛上
+    // 條件:選到產品、需要序號、非虛擬、有指定倉、且不是已經透過 IMEI 命中
+    if (
+      p &&
+      pid !== "" &&
+      p.requires_serial &&
+      !p.is_virtual &&
+      warehouseId !== "" &&
+      !autoSerial
+    ) {
+      // 用 query="" + page_size=2 拿這個商品在這個倉的在庫序號:
+      // - 0 筆 → 沒貨
+      // - 1 筆 → 自動掛上去
+      // - 2 筆以上 → 讓使用者自己挑
+      searchInStockSerials("", {
+        product: pid as number,
+        warehouse: warehouseId as number,
+      })
+        .then((serials) => {
+          if (serials.length !== 1) return;
+          const only = serials[0];
+          // 同步把當下使用者最新的 line 狀態取出再更新;
+          // patch 只動 serialChoices(必要時連動中古機售價)
+          const patch: Partial<Line> = {
+            qty: 1,
+            serialChoices: [only],
+          };
+          if (p.is_secondhand) {
+            const cp = only.payload?.custom_unit_price;
+            if (cp && Number(cp) > 0) {
+              patch.unit_price = toIntStr(cp);
+              patch.amount = toIntStr(cp);
+            }
+          }
+          update(patch);
+        })
+        .catch(() => {
+          // 失敗就略過,使用者仍可手動挑
+        });
+    }
   }
 
   function onPlanPick(
@@ -508,13 +573,17 @@ function LineRow({
     >
       <td>{idx + 1}</td>
       <td>
-        <ComboBox<Product>
+        <ComboBox<SalesProductHit>
           value={line.product}
-          selectedOption={line.productOption}
+          selectedOption={
+            line.productOption as ComboOption<SalesProductHit> | null
+          }
           onChange={onProductPick}
-          fetchOptions={(q) => searchProducts(q, { activeOnly: true })}
+          fetchOptions={(q) =>
+            searchProductsForSales(q, { warehouseId })
+          }
           disabled={readonly}
-          placeholder="搜尋商品"
+          placeholder="搜尋:品名 / 品號 / 條碼 / IMEI"
         />
       </td>
       <td>
@@ -548,6 +617,7 @@ function LineRow({
           step="1"
           value={line.unit_price}
           onChange={(e) => update({ unit_price: e.target.value })}
+          onBlur={(e) => update({ unit_price: toIntStr(e.target.value) })}
           disabled={readonly}
         />
       </td>
@@ -558,6 +628,7 @@ function LineRow({
           step="1"
           value={line.amount}
           onChange={(e) => update({ amount: e.target.value })}
+          onBlur={(e) => update({ amount: toIntStr(e.target.value) })}
           disabled={readonly}
         />
       </td>
@@ -726,7 +797,14 @@ export function SalesEntryPage() {
   const [newSalesPerson, setNewSalesPerson] = useState({ code: "", name: "" });
   const [note, setNote] = useState(draft?.note ?? "");
   const [lines, setLines] = useState<Line[]>(() => {
-    if (draft?.lines && draft.lines.length > 0) return draft.lines;
+    if (draft?.lines && draft.lines.length > 0) {
+      // 草稿可能來自舊版本,單價 / 金額還是 "0.00" 格式,進來時統一轉整數
+      return draft.lines.map((l) => ({
+        ...l,
+        unit_price: toIntStr(l.unit_price),
+        amount: toIntStr(l.amount),
+      }));
+    }
     return [newLine(1)];
   });
   const [selectedLineKey, setSelectedLineKey] = useState<string | null>(null);
@@ -922,8 +1000,8 @@ export function SalesEntryPage() {
             label: s.serial_no,
             secondary: it.product_name,
           })),
-          unit_price: it.unit_price,
-          amount: it.amount,
+          unit_price: toIntStr(it.unit_price),
+          amount: toIntStr(it.amount),
           msisdn: it.msisdn,
           telecom_plan: it.telecom_plan ?? "",
           telecomPlanOption: it.telecom_plan
@@ -1517,6 +1595,7 @@ export function SalesEntryPage() {
                 line={l}
                 idx={idx}
                 readonly={readonly}
+                warehouseId={warehouse}
                 update={(p) => updateLine(l.key, p)}
                 remove={() => removeLine(l.key)}
                 active={l.key === selectedLineKey}

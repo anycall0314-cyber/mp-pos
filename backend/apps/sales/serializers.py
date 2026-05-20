@@ -73,6 +73,12 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
     product_is_virtual = serializers.BooleanField(
         source="product.is_virtual", read_only=True
     )
+    product_counts_cash = serializers.BooleanField(
+        source="product.counts_cash", read_only=True
+    )
+    product_counts_margin = serializers.BooleanField(
+        source="product.counts_margin", read_only=True
+    )
     # read:序號物件列表;write:接 serial_ids 陣列
     serials = SalesOrderItemSerialSerializer(many=True, read_only=True)
     serial_ids = serializers.PrimaryKeyRelatedField(
@@ -108,6 +114,8 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
             "product_allows_telecom_line",
             "product_allows_commission",
             "product_is_virtual",
+            "product_counts_cash",
+            "product_counts_margin",
             "qty",
             "unit_price",
             "amount",
@@ -134,6 +142,8 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
             "product_allows_telecom_line",
             "product_allows_commission",
             "product_is_virtual",
+            "product_counts_cash",
+            "product_counts_margin",
         ]
 
 

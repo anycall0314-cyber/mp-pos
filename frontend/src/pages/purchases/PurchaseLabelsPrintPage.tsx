@@ -58,6 +58,7 @@ export function PurchaseLabelsPrintPage() {
           key={t.key}
           name={t.item.product_name}
           sku={t.item.product_sku}
+          productBarcode={t.item.product_barcode}
           serial={t.serial}
           listPrice={t.item.product_list_price}
           poNo={data.no}
@@ -76,16 +77,29 @@ export function PurchaseLabelsPrintPage() {
 interface TileProps {
   name: string;
   sku: string;
+  productBarcode: string;
   serial: string | null;
   listPrice: string | undefined;
   poNo: string;
   docDate: string;
 }
 
-function LabelTile({ name, sku, serial, listPrice, poNo, docDate }: TileProps) {
+function LabelTile({
+  name,
+  sku,
+  productBarcode,
+  serial,
+  listPrice,
+  poNo,
+  docDate,
+}: TileProps) {
   const svgRef = useRef<SVGSVGElement>(null);
-  // 條碼內容:有序號用序號全碼,沒有就用 SKU
-  const barcodeValue = serial || sku || "—";
+  // 條碼內容優先序:
+  // 1. 有序號(手機/平板)→ 序號全碼(每隻唯一)
+  // 2. 配件有填原廠條碼 → 原廠條碼
+  // 3. 都沒有 → SKU(系統自動發的)
+  const barcodeValue =
+    serial || (productBarcode && productBarcode.trim()) || sku || "—";
   const last5 = serial ? serial.slice(-5) : null;
 
   useEffect(() => {
@@ -95,10 +109,10 @@ function LabelTile({ name, sku, serial, listPrice, poNo, docDate }: TileProps) {
           format: "CODE128",
           width: 1.1,
           height: 28,
-          fontSize: 9,
+          fontSize: 8,
           textMargin: 0,
           margin: 0,
-          displayValue: false,
+          displayValue: true,
         });
       } catch {
         // value 不合法時略過

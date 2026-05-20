@@ -79,7 +79,11 @@ export function ProductForm({
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [showNewCategory, setShowNewCategory] = useState(false);
-  const [newCategory, setNewCategory] = useState({ code: "", name: "" });
+  const [newCategory, setNewCategory] = useState({
+    code: "",
+    name: "",
+    sort_order: "",
+  });
 
   const saveProduct = useSaveProduct();
   const saveCategory = useSaveCategory();
@@ -112,11 +116,19 @@ export function ProductForm({
   async function handleCreateCategory() {
     if (!newCategory.code || !newCategory.name) return;
     try {
-      const c = await saveCategory.mutateAsync(newCategory as Partial<Category>);
+      const payload: Partial<Category> = {
+        code: newCategory.code,
+        name: newCategory.name,
+      };
+      const sortOrderNum = Number(newCategory.sort_order);
+      if (Number.isFinite(sortOrderNum) && sortOrderNum > 0) {
+        payload.sort_order = sortOrderNum;
+      }
+      const c = await saveCategory.mutateAsync(payload);
       patch("category", c.id);
       setCategoryOption({ id: c.id, label: c.name, secondary: c.code });
       setShowNewCategory(false);
-      setNewCategory({ code: "", name: "" });
+      setNewCategory({ code: "", name: "", sort_order: "" });
     } catch (e) {
       if (e instanceof ApiHttpError) {
         const body = e.body as Record<string, string[]>;
@@ -252,6 +264,20 @@ export function ProductForm({
                   onChange={(e) =>
                     setNewCategory((s) => ({ ...s, name: e.target.value }))
                   }
+                />
+              </Field>
+              <Field label="排序(留空自動)">
+                <input
+                  type="number"
+                  step="1"
+                  value={newCategory.sort_order}
+                  onChange={(e) =>
+                    setNewCategory((s) => ({
+                      ...s,
+                      sort_order: e.target.value,
+                    }))
+                  }
+                  placeholder="自動"
                 />
               </Field>
             </div>

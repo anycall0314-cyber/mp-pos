@@ -104,7 +104,9 @@ export function SalesPrintPage() {
                 )}
               </td>
               <td className="num">{it.qty}</td>
-              <td className="num">{Number(it.amount).toLocaleString()}</td>
+              <td className="num">
+                {Math.round(Number(it.amount)).toLocaleString()}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -113,11 +115,17 @@ export function SalesPrintPage() {
       <hr className="print-sep" />
 
       <div className="print-totals">
-        <Row label="未稅小計" value={Number(so.subtotal).toLocaleString()} />
-        <Row label="稅額" value={Number(so.tax_amount).toLocaleString()} />
+        <Row
+          label="未稅小計"
+          value={Math.round(Number(so.subtotal)).toLocaleString()}
+        />
+        <Row
+          label="稅額"
+          value={Math.round(Number(so.tax_amount)).toLocaleString()}
+        />
         <Row
           label="含稅總額"
-          value={Number(so.total).toLocaleString()}
+          value={Math.round(Number(so.total)).toLocaleString()}
           big
         />
       </div>

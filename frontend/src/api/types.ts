@@ -380,6 +380,8 @@ export interface SalesOrderItem {
   product_allows_telecom_line: boolean;
   product_allows_commission: boolean;
   product_is_virtual: boolean;
+  product_counts_cash: boolean;
+  product_counts_margin: boolean;
   qty: number;
   unit_price: string;
   amount: string;
