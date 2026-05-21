@@ -17,6 +17,7 @@ import { SalesEntryPage } from "@/pages/sales/SalesEntryPage";
 import { SalesPrintPage } from "@/pages/sales/SalesPrintPage";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { SimCardsPage } from "@/pages/sim-cards/SimCardsPage";
+import { SuppliersPage } from "@/pages/suppliers/SuppliersPage";
 import { TelecomPlansPage } from "@/pages/telecom-plans/TelecomPlansPage";
 
 interface NavItem {
@@ -95,6 +96,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "設定",
     items: [
       { to: "/settings", label: "發票付款" },
+      { to: "/suppliers", label: "供應商" },
       { to: "/settings/users", label: "人員權限" },
     ],
   },
@@ -217,6 +219,7 @@ export function App() {
           <Route path="/sales/:id/print/:type" element={<SalesPrintPage />} />
           <Route path="/members" element={<MembersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/suppliers" element={<SuppliersPage />} />
           <Route path="/transfers" element={<TransfersPage />} />
           <Route path="/transfers/:id" element={<TransferEntryPage />} />
           <Route path="/inventory" element={<InventoryQueryPage />} />
