@@ -50,6 +50,7 @@
 | 銷貨商品搜尋 | `searchProductsForSales` 支援 品名 / 品號 / 條碼 / IMEI 任一;打 IMEI 命中時 matched_serial 也預掛該行,且該倉只有 1 隻在庫時自動掛唯一序號(中古機同步帶 custom_unit_price)|
 | 銷貨可選清單 | `?sales_pickable=true` 過濾:庫存 > 0 OR `is_virtual=True`(虛擬商品永遠可選,實體 0 庫存擋下)|
 | IMEI 搜尋安全閥 | ProductViewSet.`get_search_fields` 動態化:**只有純數字 6 碼以上才把 `serials__serial_no` 加進 search_fields**,避免「18 pro 256」誤命中含 18 的 IMEI |
+| 搜尋權重(中文 vs 英數)| `get_search_fields` 偵測查詢字串是否含中日韓漢字(U+4E00–U+9FFF):**含中文 → 只搜描述欄 `name/spec/category__name`**(不碰品號/條碼/IMEI,避免「中古 11」被 SKU `AA-000011` 誤帶出);**純英數 → 搜完整代碼欄位**(sku/name/spec/barcode/category),純數字 6 碼以上才再加 IMEI |
 
 ## 程式碼定位
 

@@ -233,26 +233,14 @@ def void_transfer_order(to: TransferOrder) -> TransferOrder:
     is_confirmed = to.status == TransferOrder.Status.CONFIRMED
 
     # 預檢
+    # 序號商品:不再因序號狀態不符而擋下作廢。
+    #   序號若已脫離本單掌控(被其他流程動走,例如又被別張單調走 / 銷貨 / 手動改),
+    #   作廢時會「跳過該序號回滾」(不硬搬,避免弄亂已在別處正常使用的序號),
+    #   只記一筆 audit。這樣派發中 / 已完成的單都不會變成無法作廢的死鎖單。
+    #   配件(非序號)在「已完成」作廢時仍須檢查目的倉數量足夠,否則會變負庫存。
     for it in items:
         product = it.product
-        if product.requires_serial:
-            for sos in it.serials.select_related("serial").all():
-                s = sos.serial
-                if is_confirmed:
-                    if s.status != ProductSerial.Status.IN_STOCK:
-                        raise TransferOrderError(
-                            f"序號 {s.serial_no} 已不在 in_stock,無法作廢"
-                        )
-                    if s.warehouse_id != to.to_warehouse_id:
-                        raise TransferOrderError(
-                            f"序號 {s.serial_no} 已不在目的倉,無法作廢"
-                        )
-                else:
-                    if s.status != ProductSerial.Status.IN_TRANSIT:
-                        raise TransferOrderError(
-                            f"序號 {s.serial_no} 已不在調撥中,無法作廢"
-                        )
-        else:
+        if not product.requires_serial:
             if is_confirmed:
                 bal = StockBalance.objects.filter(
                     tenant=to.tenant,
@@ -272,19 +260,50 @@ def void_transfer_order(to: TransferOrder) -> TransferOrder:
             if product.requires_serial:
                 for sos in it.serials.select_related("serial").all():
                     s = sos.serial
-                    s.status = ProductSerial.Status.IN_STOCK
-                    s.warehouse = to.from_warehouse
-                    s.save(update_fields=["status", "warehouse"])
-                    StockMovement.objects.create(
-                        tenant=to.tenant,
-                        serial=s,
-                        movement_type=StockMovement.MovementType.VOID,
-                        from_warehouse=to.to_warehouse if is_confirmed else None,
-                        to_warehouse=to.from_warehouse,
-                        ref_doc_type="transfer_order",
-                        ref_doc_id=to.id,
-                        note=f"調撥單 {to.no} 作廢({to.get_status_display()})",
-                    )
+                    # 判斷這隻序號是否仍由本單掌控:
+                    #  - 已完成單:序號要還在目的倉 in_stock,才把它搬回來源倉
+                    #  - 派發中單:序號要還在 in_transit,才把它放回來源倉 in_stock
+                    # 若序號已被其他流程動走(不符上述),跳過回滾、不動序號,
+                    # 只記一筆 audit movement,避免弄亂已在別處正常使用的序號。
+                    if is_confirmed:
+                        can_rollback = (
+                            s.status == ProductSerial.Status.IN_STOCK
+                            and s.warehouse_id == to.to_warehouse_id
+                        )
+                    else:
+                        can_rollback = (
+                            s.status == ProductSerial.Status.IN_TRANSIT
+                        )
+                    if can_rollback:
+                        s.status = ProductSerial.Status.IN_STOCK
+                        s.warehouse = to.from_warehouse
+                        s.save(update_fields=["status", "warehouse"])
+                        StockMovement.objects.create(
+                            tenant=to.tenant,
+                            serial=s,
+                            movement_type=StockMovement.MovementType.VOID,
+                            from_warehouse=to.to_warehouse if is_confirmed else None,
+                            to_warehouse=to.from_warehouse,
+                            ref_doc_type="transfer_order",
+                            ref_doc_id=to.id,
+                            note=f"調撥單 {to.no} 作廢({to.get_status_display()})",
+                        )
+                    else:
+                        # 序號已脫離本單掌控,僅記 audit,不改序號狀態 / 倉別
+                        StockMovement.objects.create(
+                            tenant=to.tenant,
+                            serial=s,
+                            movement_type=StockMovement.MovementType.VOID,
+                            from_warehouse=None,
+                            to_warehouse=None,
+                            ref_doc_type="transfer_order",
+                            ref_doc_id=to.id,
+                            note=(
+                                f"調撥單 {to.no} 作廢({to.get_status_display()});"
+                                f"序號 {s.serial_no} 當下為「{s.get_status_display()}」"
+                                f"已脫離本單,跳過回滾"
+                            ),
+                        )
             else:
                 if is_confirmed:
                     dst = StockBalance.objects.get(

@@ -44,9 +44,21 @@ class ProductViewSet(viewsets.ModelViewSet):
     filterset_fields = ["is_active", "category", "requires_serial", "is_secondhand", "is_virtual"]
 
     def get_search_fields(self):
-        """動態 search_fields:IMEI-like 查詢才把序號比對加進來。"""
-        base = list(self.search_fields)
+        """依查詢內容動態調整搜尋欄位:
+
+        - 含中文:只比對「描述性」欄位(品名 / 規格 / 類別名稱),
+          不碰品號 / 條碼 / IMEI(那些是英數代碼,中文查詢不該命中)。
+          這樣「中古 11」的「11」只會在品名找(命中 中古iPhone11),
+          不會因為 SKU 剛好是 AA-000011 而把不相干的商品帶出來。
+        - 純英數:比對代碼 + 描述欄位;且純數字 6 碼以上才把序號(IMEI)
+          納入比對,避免「18 pro 256」誤命中含 18 的中古機 IMEI。
+        """
         q = self.request.query_params.get("search", "").strip()
+        # 偵測是否含中日韓統一漢字(U+4E00–U+9FFF),涵蓋繁體中文常用字
+        has_cjk = any("一" <= ch <= "鿿" for ch in q)
+        if has_cjk:
+            return ["name", "spec", "category__name"]
+        base = list(self.search_fields)
         if q and q.isdigit() and len(q) >= 6:
             base.append("serials__serial_no")
         return base
