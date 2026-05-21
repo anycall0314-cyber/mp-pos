@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   StockMatrixProduct,
   useInStockSerials,
+  usePendingTransfers,
   useStockMatrix,
   useWarehouses,
 } from "@/api/hooks";
@@ -126,6 +127,94 @@ function SerialListModal({
           onClose={() => setHistoryId(null)}
         />
       )}
+    </div>
+  );
+}
+
+// 配件:沒有序號履歷,改顯示「與本倉相關、已派發未確認」的調撥狀態
+function TransferStatusModal({
+  product,
+  warehouseId,
+  warehouseLabel,
+  onClose,
+}: SerialListModalProps) {
+  const pending = usePendingTransfers(product.id, warehouseId);
+  const rows = pending.data ?? [];
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="modal-card serial-list-modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="modal-title">
+          {product.name} · {warehouseLabel}
+        </div>
+        <div className="modal-body">
+          <div
+            style={{
+              fontSize: 12,
+              color: "var(--text-dim)",
+              marginBottom: 8,
+            }}
+          >
+            配件無序號履歷;以下為與本倉相關、已派發但尚未確認的調撥。
+          </div>
+          {pending.isLoading && <div className="md-empty">…</div>}
+          {!pending.isLoading && (
+            <table className="line-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 40 }}>#</th>
+                  <th>單號</th>
+                  <th>方向</th>
+                  <th>對方倉</th>
+                  <th>單據日期</th>
+                  <th className="num">數量</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((t, i) => {
+                  const counterpart =
+                    t.direction === "out" ? t.to_warehouse : t.from_warehouse;
+                  return (
+                    <tr key={`${t.transfer_no}-${i}`}>
+                      <td>{i + 1}</td>
+                      <td>{t.transfer_no}</td>
+                      <td>
+                        {t.direction === "out"
+                          ? "調出本倉"
+                          : t.direction === "in"
+                            ? "調入本倉"
+                            : "—"}
+                      </td>
+                      <td>
+                        {counterpart.code} {counterpart.name}
+                      </td>
+                      <td>{t.doc_date}</td>
+                      <td className="num">{t.qty}</td>
+                    </tr>
+                  );
+                })}
+                {rows.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="md-empty">
+                      目前沒有調撥中(未確認)的單據
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="modal-actions">
+          <button className="btn primary" type="button" onClick={onClose}>
+            關閉
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -396,14 +485,22 @@ export function InventoryQueryPage() {
         {applied && matrix.isError && (
           <div className="md-empty">{String(matrix.error)}</div>
         )}
-        {serialDialog && (
-          <SerialListModal
-            product={serialDialog.product}
-            warehouseId={serialDialog.warehouseId}
-            warehouseLabel={serialDialog.warehouseLabel}
-            onClose={() => setSerialDialog(null)}
-          />
-        )}
+        {serialDialog &&
+          (serialDialog.product.requires_serial ? (
+            <SerialListModal
+              product={serialDialog.product}
+              warehouseId={serialDialog.warehouseId}
+              warehouseLabel={serialDialog.warehouseLabel}
+              onClose={() => setSerialDialog(null)}
+            />
+          ) : (
+            <TransferStatusModal
+              product={serialDialog.product}
+              warehouseId={serialDialog.warehouseId}
+              warehouseLabel={serialDialog.warehouseLabel}
+              onClose={() => setSerialDialog(null)}
+            />
+          ))}
         {applied && !matrix.isLoading && !matrix.isError && (
           <table className="stock-matrix-table">
             <thead>

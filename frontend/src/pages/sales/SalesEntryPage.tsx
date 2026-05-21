@@ -582,8 +582,12 @@ function LineRow({
           fetchOptions={(q) =>
             searchProductsForSales(q, { warehouseId })
           }
-          disabled={readonly}
-          placeholder="搜尋:品名 / 品號 / 條碼 / IMEI"
+          disabled={readonly || !warehouseId}
+          placeholder={
+            warehouseId
+              ? "搜尋:品名 / 品號 / 條碼 / IMEI"
+              : "請先選出貨倉"
+          }
         />
       </td>
       <td>

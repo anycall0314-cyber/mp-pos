@@ -48,7 +48,14 @@ export function PurchaseProductPickerModal({
     }
   }, [open]);
 
-  // 跑搜尋:預設不撈,使用者按 Enter 或搜尋鍵
+  // 邊打邊搜:輸入後 debounce 自動套用,不必按 Enter / 搜尋鍵
+  useEffect(() => {
+    if (!open) return;
+    const handle = setTimeout(() => setAppliedSearch(search.trim()), 300);
+    return () => clearTimeout(handle);
+  }, [search, open]);
+
+  // 跑搜尋:appliedSearch 變動就撈(空字串不撈)
   useEffect(() => {
     if (!open) return;
     if (!appliedSearch) {
@@ -162,7 +169,7 @@ export function PurchaseProductPickerModal({
                   runSearch();
                 }
               }}
-              placeholder="輸入品名 / 品號 / 條碼 後按 Enter"
+              placeholder="輸入品名 / 品號 / 條碼,邊打邊搜"
               autoFocus
               style={{ flex: 1 }}
             />

@@ -38,8 +38,16 @@ export async function searchProducts(
     secondhandOnly?: boolean;
     /** 排除中古機(一般進貨單用) */
     excludeSecondhand?: boolean;
+    /** 只列有庫存的(調撥用,排除零庫存) */
+    inStockOnly?: boolean;
+    /** 庫存以此倉計(搭配 inStockOnly;調撥帶來源倉) */
+    warehouseId?: number | "";
   },
 ): Promise<ComboOption<Product>[]> {
+  const warehouseParam =
+    opts?.warehouseId !== undefined && opts.warehouseId !== ""
+      ? (opts.warehouseId as number)
+      : undefined;
   const data = await fetchPaginated<Product>(
     `/products/?${qs({
       search: query,
@@ -50,6 +58,8 @@ export async function searchProducts(
         : opts?.excludeSecondhand
           ? "false"
           : undefined,
+      in_stock_only: opts?.inStockOnly ? "true" : undefined,
+      warehouse: warehouseParam,
     })}`,
   );
   return data.map((p) => ({

@@ -2,23 +2,26 @@ import { useEffect, useState } from "react";
 
 import { ApiHttpError } from "@/api/client";
 import {
+  lookupCustomer,
   usePaymentMethods,
+  useSaveCustomer,
   useSecondhandAcquisition,
 } from "@/api/hooks";
 import {
-  searchCustomers,
   searchSecondhandProducts,
   searchWarehouses,
 } from "@/api/search";
 import type {
   ConditionGrade,
   Customer,
+  CustomerKind,
   Product,
   Warehouse,
 } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
-import { Field } from "@/components/Field";
+import { Drawer } from "@/components/Drawer";
+import { Checkbox, Field } from "@/components/Field";
 
 const GRADE_OPTIONS: { value: ConditionGrade; label: string }[] = [
   { value: "S", label: "S 媲美新機 / 拆封未使用" },
@@ -26,6 +29,13 @@ const GRADE_OPTIONS: { value: ConditionGrade; label: string }[] = [
   { value: "B", label: "B 85-95%新 輕微痕跡" },
   { value: "C", label: "C 70-85%新 明顯刮痕" },
   { value: "D", label: "D 瑕疵 / 需報備" },
+];
+
+const CUSTOMER_KINDS: { value: CustomerKind; label: string }[] = [
+  { value: "individual", label: "個人" },
+  { value: "peer", label: "同業 / 盤商" },
+  { value: "corporate", label: "企業" },
+  { value: "other", label: "其他" },
 ];
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -37,13 +47,23 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
  */
 export function SecondhandPersonalEntry() {
   const acquire = useSecondhandAcquisition();
+  const saveCustomer = useSaveCustomer();
   const paymentMethodsQuery = usePaymentMethods({ activeOnly: true });
   const paymentMethods = paymentMethodsQuery.data ?? [];
 
-  const [member, setMember] = useState<number | "">("");
-  const [memberOption, setMemberOption] = useState<ComboOption<Customer> | null>(
-    null,
-  );
+  // 會員以電話為識別:輸入電話查詢,查無則跳出新增浮窗
+  const [memberPhone, setMemberPhone] = useState("");
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [memberStatus, setMemberStatus] = useState<
+    "idle" | "checking" | "found" | "not_found"
+  >("idle");
+  const [showCreateMember, setShowCreateMember] = useState(false);
+  const [newMember, setNewMember] = useState<{
+    name: string;
+    tax_id: string;
+    kind: CustomerKind;
+    is_member: boolean;
+  }>({ name: "", tax_id: "", kind: "individual", is_member: true });
   const [warehouse, setWarehouse] = useState<number | "">("");
   const [warehouseOption, setWarehouseOption] =
     useState<ComboOption<Warehouse> | null>(null);
@@ -72,8 +92,9 @@ export function SecondhandPersonalEntry() {
   }, [paymentMethod, paymentMethods]);
 
   function reset() {
-    setMember("");
-    setMemberOption(null);
+    setMemberPhone("");
+    setCustomer(null);
+    setMemberStatus("idle");
     setProduct("");
     setProductOption(null);
     setSerialNo("");
@@ -87,7 +108,7 @@ export function SecondhandPersonalEntry() {
   }
 
   function validate(): string | null {
-    if (!member) return "請選擇收購來源會員";
+    if (!customer) return "請輸入收購來源會員電話(查無請新增)";
     if (!warehouse) return "請選擇入庫倉";
     if (!product) return "請選擇中古機商品";
     if (!serialNo.trim()) return "請輸入序號 (IMEI)";
@@ -103,6 +124,53 @@ export function SecondhandPersonalEntry() {
     return null;
   }
 
+  async function handleMemberLookup() {
+    const phone = memberPhone.trim();
+    if (!phone) {
+      setCustomer(null);
+      setMemberStatus("idle");
+      return;
+    }
+    setMemberStatus("checking");
+    const c = await lookupCustomer(phone);
+    if (c) {
+      setCustomer(c);
+      setMemberStatus("found");
+    } else {
+      setCustomer(null);
+      setMemberStatus("not_found");
+    }
+  }
+
+  async function handleCreateMember() {
+    const phone = memberPhone.trim();
+    if (!phone || !newMember.name.trim()) return;
+    try {
+      const created = await saveCustomer.mutateAsync({
+        phone,
+        name: newMember.name.trim(),
+        kind: newMember.kind,
+        is_member: newMember.is_member,
+        tax_id: newMember.tax_id || undefined,
+      });
+      setCustomer(created);
+      setMemberStatus("found");
+      setShowCreateMember(false);
+      setNewMember({
+        name: "",
+        tax_id: "",
+        kind: "individual",
+        is_member: true,
+      });
+    } catch (e) {
+      if (e instanceof ApiHttpError) {
+        setError(`新增客戶失敗:${JSON.stringify(e.body)}`);
+      } else {
+        setError(String(e));
+      }
+    }
+  }
+
   async function submit() {
     setError(null);
     setSuccess(null);
@@ -113,7 +181,7 @@ export function SecondhandPersonalEntry() {
     }
     try {
       const res = await acquire.mutateAsync({
-        member: member as number,
+        member: customer!.id,
         warehouse: warehouse as number,
         product: product as number,
         serial_no: serialNo.trim(),
@@ -129,7 +197,7 @@ export function SecondhandPersonalEntry() {
       setSuccess(
         `收購完成:序號 ${res.serial.serial_no},對應銷貨單 ${res.sales_order.no},付款 ${Number(
           acquisitionPrice,
-        ).toLocaleString()} 元給 ${memberOption?.label ?? "會員"}`,
+        ).toLocaleString()} 元給 ${customer?.name ?? "會員"}`,
       );
       reset();
     } catch (e) {
@@ -153,17 +221,50 @@ export function SecondhandPersonalEntry() {
 
       <div className="entry-header" style={{ marginBottom: 12 }}>
         <div className="field-row-3">
-          <Field label="收購來源會員" required>
-            <ComboBox<Customer>
-              value={member}
-              selectedOption={memberOption}
-              onChange={(id, opt) => {
-                setMember(id);
-                setMemberOption(opt ?? null);
-              }}
-              fetchOptions={searchCustomers}
-              placeholder="搜尋會員(電話 / 姓名)"
-            />
+          <Field label="收購來源會員 (電話)" required>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                type="tel"
+                value={memberPhone}
+                onChange={(e) => {
+                  setMemberPhone(e.target.value);
+                  setMemberStatus("idle");
+                  if (customer) setCustomer(null);
+                }}
+                onBlur={handleMemberLookup}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleMemberLookup();
+                  }
+                }}
+                placeholder="輸入電話查詢會員"
+                style={{ flex: 1 }}
+              />
+              {memberStatus === "checking" && (
+                <span
+                  className="member-tag"
+                  style={{ color: "var(--text-dim)" }}
+                >
+                  查詢中…
+                </span>
+              )}
+              {memberStatus === "found" && customer && (
+                <span className="member-tag" style={{ color: "#80d090" }}>
+                  ✓ {customer.name} ({customer.kind_label}
+                  {customer.is_member ? " / 會員" : ""})
+                </span>
+              )}
+              {memberStatus === "not_found" && (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setShowCreateMember(true)}
+                >
+                  未登錄,新增
+                </button>
+              )}
+            </div>
           </Field>
           <Field label="入庫倉" required>
             <ComboBox<Warehouse>
@@ -295,6 +396,75 @@ export function SecondhandPersonalEntry() {
         系統會以未稅方式同步建立「收購二手」銷貨單(金額負數,代表現金流出)與中古機序號,
         兩邊互相對應。售出後可在銷貨單看到完整鏈條。
       </div>
+
+      <Drawer
+        open={showCreateMember}
+        title={`新增客戶 (${memberPhone})`}
+        onClose={() => setShowCreateMember(false)}
+        width={420}
+        footer={
+          <>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => setShowCreateMember(false)}
+            >
+              取消
+            </button>
+            <button
+              className="btn primary"
+              type="button"
+              onClick={handleCreateMember}
+              disabled={saveCustomer.isPending || !newMember.name.trim()}
+            >
+              {saveCustomer.isPending ? "儲存中…" : "建立並使用"}
+            </button>
+          </>
+        }
+      >
+        <Field label="電話">
+          <input value={memberPhone} disabled />
+        </Field>
+        <Field label="姓名 / 名稱" required>
+          <input
+            value={newMember.name}
+            autoFocus
+            onChange={(e) =>
+              setNewMember((s) => ({ ...s, name: e.target.value }))
+            }
+          />
+        </Field>
+        <Field label="客戶類別">
+          <select
+            value={newMember.kind}
+            onChange={(e) =>
+              setNewMember((s) => ({
+                ...s,
+                kind: e.target.value as CustomerKind,
+              }))
+            }
+          >
+            {CUSTOMER_KINDS.map((k) => (
+              <option key={k.value} value={k.value}>
+                {k.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="統一編號">
+          <input
+            value={newMember.tax_id}
+            onChange={(e) =>
+              setNewMember((s) => ({ ...s, tax_id: e.target.value }))
+            }
+          />
+        </Field>
+        <Checkbox
+          checked={newMember.is_member}
+          onChange={(v) => setNewMember((s) => ({ ...s, is_member: v }))}
+          label="設為會員"
+        />
+      </Drawer>
     </div>
   );
 }

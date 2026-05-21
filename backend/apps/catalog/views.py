@@ -1,12 +1,15 @@
+from django.contrib.postgres.search import TrigramWordSimilarity
 from django.db import transaction
 from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum, Value
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, Greatest
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.core.filters import _is_postgres
 from apps.inventory.models import ProductSerial, StockBalance, Warehouse
 from apps.purchasing.models import PurchaseOrderItem
+from apps.transfers.models import TransferOrder, TransferOrderItem
 
 from .models import Category, Product
 from .serializers import CategorySerializer, ProductSerializer
@@ -62,6 +65,30 @@ class ProductViewSet(viewsets.ModelViewSet):
         if q and q.isdigit() and len(q) >= 6:
             base.append("serials__serial_no")
         return base
+
+    def filter_queryset(self, queryset):
+        """在套完一般 filter / search 後,搜尋情境下改以「相關度」排序:
+
+        DRF 的 OrderingFilter 會把結果壓回預設 `ordering=["sku"]`,所以即使有命中,
+        清單仍是品號順序(打「手機 17」時 iPhone 15 Pro 因品號小排在前)。
+        這裡在最後一步、僅針對「有 search 且未明確指定 ordering」的查詢,
+        用 TrigramWordSimilarity 對查詢字串重新排序,最符合的排前面,品號作為次要排序。
+        只作用在商品,供應商 / 客戶等其他 viewset 不受影響。
+        """
+        qs = super().filter_queryset(queryset)
+        q = self.request.query_params.get("search", "").strip()
+        explicit_ordering = self.request.query_params.get("ordering")
+        if not q or explicit_ordering or not _is_postgres():
+            return qs
+        plain_fields = [
+            f[1:] if f and f[0] in {"^", "=", "$", "@"} else f
+            for f in self.get_search_fields()
+        ]
+        sim_exprs = [TrigramWordSimilarity(q, f) for f in plain_fields]
+        max_sim = sim_exprs[0] if len(sim_exprs) == 1 else Greatest(*sim_exprs)
+        return qs.annotate(_relevance=max_sim).order_by(
+            F("_relevance").desc(nulls_last=True), "sku"
+        )
 
     def get_queryset(self):
         tenant = self.request.tenant
@@ -133,6 +160,59 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.tenant)
+
+    @action(detail=True, methods=["get"], url_path="pending-transfers")
+    def pending_transfers(self, request, pk=None):
+        """配件用:列出此商品「已派發、尚未確認」的調撥明細。
+
+        配件在派發當下就從來源倉 balance 扣掉、要等目的倉確認才入帳,
+        中間這段在庫存矩陣上看不出來。此 endpoint 讓使用者確認某商品是否
+        正卡在調撥途中。
+
+        - 可帶 ?warehouse=N 只看與該倉相關的(從該倉出 or 即將進該倉)。
+        - direction:相對於 ?warehouse,out = 從該倉派出,in = 即將進該倉。
+        """
+        tenant = request.tenant
+        product = self.get_object()
+        items = (
+            TransferOrderItem.objects.filter(
+                tenant=tenant,
+                product=product,
+                to__status=TransferOrder.Status.DISPATCHED,
+                to__is_void=False,
+            )
+            .select_related("to", "to__from_warehouse", "to__to_warehouse")
+            .order_by("-to__doc_date", "-to_id")
+        )
+        wh = request.query_params.get("warehouse")
+        wid = int(wh) if wh and wh.isdigit() else None
+        if wid is not None:
+            items = items.filter(
+                Q(to__from_warehouse_id=wid) | Q(to__to_warehouse_id=wid)
+            )
+        data = []
+        for it in items:
+            order = it.to
+            direction = None
+            if wid is not None:
+                direction = "out" if order.from_warehouse_id == wid else "in"
+            data.append(
+                {
+                    "transfer_no": order.no,
+                    "doc_date": order.doc_date,
+                    "qty": it.qty,
+                    "direction": direction,
+                    "from_warehouse": {
+                        "code": order.from_warehouse.code,
+                        "name": order.from_warehouse.name,
+                    },
+                    "to_warehouse": {
+                        "code": order.to_warehouse.code,
+                        "name": order.to_warehouse.name,
+                    },
+                }
+            )
+        return Response(data)
 
     @action(detail=False, methods=["get"], url_path="stock-matrix")
     def stock_matrix(self, request):

@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 
 from apps.core.models import TenantOwnedModel, TimestampedModel
 
@@ -7,6 +7,9 @@ class Tenant(TimestampedModel):
     name = models.CharField("名稱", max_length=120)
     code = models.SlugField("代碼", max_length=40, unique=True)
     is_active = models.BooleanField("啟用", default=True)
+    next_supplier_seq = models.PositiveIntegerField(
+        "下一供應商流水", default=1, editable=False
+    )
 
     class Meta:
         ordering = ["id"]
@@ -15,6 +18,16 @@ class Tenant(TimestampedModel):
 
     def __str__(self) -> str:
         return self.name
+
+    def issue_next_supplier_code(self) -> str:
+        """原子地取下一個供應商代碼:`S-{6位流水}`。"""
+        with transaction.atomic():
+            row = Tenant.objects.select_for_update().get(pk=self.pk)
+            seq = row.next_supplier_seq
+            row.next_supplier_seq = seq + 1
+            row.save(update_fields=["next_supplier_seq"])
+            self.next_supplier_seq = row.next_supplier_seq
+            return f"S-{seq:06d}"
 
 
 class InvoiceType(TenantOwnedModel):

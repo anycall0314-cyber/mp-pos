@@ -519,10 +519,18 @@ export function TransferEntryPage() {
                           });
                         }}
                         fetchOptions={(q) =>
-                          searchProducts(q, { activeOnly: true })
+                          searchProducts(q, {
+                            activeOnly: true,
+                            inStockOnly: true,
+                            warehouseId: fromWarehouse,
+                          })
                         }
-                        disabled={readonly}
-                        placeholder="搜尋商品"
+                        disabled={readonly || !fromWarehouse}
+                        placeholder={
+                          fromWarehouse
+                            ? "搜尋商品(只列來源倉有庫存)"
+                            : "請先選來源倉"
+                        }
                       />
                     </td>
                     <td>

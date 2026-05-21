@@ -164,6 +164,7 @@ export interface Supplier {
   tax_id: string;
   address: string;
   note: string;
+  sort_order: number;
   is_active: boolean;
 }
 

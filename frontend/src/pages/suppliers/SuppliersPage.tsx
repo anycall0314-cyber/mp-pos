@@ -12,7 +12,6 @@ type Selection =
   | null;
 
 interface FormState {
-  code: string;
   name: string;
   contact: string;
   phone: string;
@@ -23,7 +22,6 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = {
-  code: "",
   name: "",
   contact: "",
   phone: "",
@@ -35,7 +33,6 @@ const EMPTY_FORM: FormState = {
 
 function toForm(s: Supplier): FormState {
   return {
-    code: s.code,
     name: s.name,
     contact: s.contact,
     phone: s.phone,
@@ -54,12 +51,40 @@ export function SuppliersPage() {
   const [selection, setSelection] = useState<Selection>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
-  const [savedFlash, setSavedFlash] = useState(false);
+  const [flashMsg, setFlashMsg] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [dragOverId, setDragOverId] = useState<number | null>(null);
 
   const suppliers = useMemo(() => {
     const list = suppliersResult.data ?? [];
-    return [...list].sort((a, b) => a.code.localeCompare(b.code));
+    return [...list].sort(
+      (a, b) => a.sort_order - b.sort_order || a.code.localeCompare(b.code),
+    );
   }, [suppliersResult.data]);
+
+  async function handleReorder(srcId: number, targetId: number) {
+    if (srcId === targetId) return;
+    const arr = [...suppliers];
+    const fromIdx = arr.findIndex((s) => s.id === srcId);
+    const toIdx = arr.findIndex((s) => s.id === targetId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const [removed] = arr.splice(fromIdx, 1);
+    arr.splice(toIdx, 0, removed);
+    const renumbered = arr.map((s, i) => ({ ...s, sort_order: (i + 1) * 10 }));
+    const changed = renumbered.filter((s, i) => {
+      const before = suppliers[i];
+      return !before || before.id !== s.id || before.sort_order !== s.sort_order;
+    });
+    try {
+      await Promise.all(
+        changed.map((s) =>
+          saveSupplier.mutateAsync({ id: s.id, sort_order: s.sort_order }),
+        ),
+      );
+    } catch (e) {
+      setError("排序儲存失敗,請重新整理頁面");
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -84,11 +109,11 @@ export function SuppliersPage() {
     if (selection?.kind === "supplier" && selectedSupplier) {
       setForm(toForm(selectedSupplier));
       setError(null);
-      setSavedFlash(false);
+      setFlashMsg(null);
     } else if (selection?.kind === "new") {
       setForm(EMPTY_FORM);
       setError(null);
-      setSavedFlash(false);
+      setFlashMsg(null);
     }
   }, [selection, selectedSupplier]);
 
@@ -101,18 +126,12 @@ export function SuppliersPage() {
   }
 
   async function save() {
-    const code = form.code.trim().toUpperCase();
     const name = form.name.trim();
-    if (!code) {
-      setError("供應商代碼必填");
-      return;
-    }
     if (!name) {
       setError("供應商名稱必填");
       return;
     }
     const payload: Partial<Supplier> & { id?: number } = {
-      code,
       name,
       contact: form.contact.trim(),
       phone: form.phone.trim(),
@@ -121,16 +140,22 @@ export function SuppliersPage() {
       note: form.note.trim(),
       is_active: form.is_active,
     };
+    const isCreate = selection?.kind !== "supplier";
     if (selection?.kind === "supplier") {
       payload.id = selection.id;
     }
     try {
       const saved = await saveSupplier.mutateAsync(payload);
       setError(null);
-      setSavedFlash(true);
-      setTimeout(() => setSavedFlash(false), 2000);
-      // 新增完成後切到該筆編輯畫面
-      setSelection({ kind: "supplier", id: saved.id });
+      if (isCreate) {
+        // 連續新增:清空表單、維持新增模式,讓使用者可直接輸入下一筆
+        setForm(EMPTY_FORM);
+        setFlashMsg(`已新增「${saved.name}」(${saved.code}),可繼續輸入下一筆`);
+      } else {
+        setFlashMsg("已儲存");
+        setSelection({ kind: "supplier", id: saved.id });
+      }
+      setTimeout(() => setFlashMsg(null), 2500);
     } catch (e) {
       if (e instanceof ApiHttpError) {
         const body = e.body;
@@ -191,6 +216,17 @@ export function SuppliersPage() {
                 </button>
               )}
             </div>
+            {!query && filtered.length > 1 && (
+              <div
+                style={{
+                  padding: "2px 10px 6px",
+                  fontSize: 12,
+                  color: "var(--text-dim)",
+                }}
+              >
+                拖曳左側 ≡ 調整順序,常用供應商往前排,挑選時更快
+              </div>
+            )}
             <div className="pc-section-body">
               {suppliersResult.isLoading && (
                 <div className="md-empty">載入中…</div>
@@ -202,6 +238,7 @@ export function SuppliersPage() {
                 <table className="pc-list-table">
                   <thead>
                     <tr>
+                      <th style={{ width: 28 }}></th>
                       <th style={{ width: 90 }}>代碼</th>
                       <th>名稱</th>
                       <th style={{ width: 100 }}>電話</th>
@@ -209,34 +246,82 @@ export function SuppliersPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((s) => (
-                      <tr
-                        key={s.id}
-                        onClick={() =>
-                          setSelection({ kind: "supplier", id: s.id })
-                        }
-                        className={
-                          selection?.kind === "supplier" &&
-                          selection.id === s.id
-                            ? "selected"
-                            : ""
-                        }
-                      >
-                        <td>{s.code}</td>
-                        <td>{s.name}</td>
-                        <td>{s.phone || "—"}</td>
-                        <td
-                          style={{
-                            color: s.is_active ? "#80d090" : "var(--text-dim)",
+                    {filtered.map((s) => {
+                      const canDrag = !query;
+                      return (
+                        <tr
+                          key={s.id}
+                          draggable={canDrag}
+                          onDragStart={(e) => {
+                            if (!canDrag) return;
+                            setDraggingId(s.id);
+                            e.dataTransfer.effectAllowed = "move";
+                            e.dataTransfer.setData("text/plain", String(s.id));
                           }}
+                          onDragOver={(e) => {
+                            if (!canDrag) return;
+                            e.preventDefault();
+                            if (dragOverId !== s.id) setDragOverId(s.id);
+                          }}
+                          onDragLeave={() => setDragOverId(null)}
+                          onDrop={(e) => {
+                            if (!canDrag) return;
+                            e.preventDefault();
+                            const src = draggingId;
+                            setDraggingId(null);
+                            setDragOverId(null);
+                            if (src != null) handleReorder(src, s.id);
+                          }}
+                          onDragEnd={() => {
+                            setDraggingId(null);
+                            setDragOverId(null);
+                          }}
+                          onClick={() =>
+                            setSelection({ kind: "supplier", id: s.id })
+                          }
+                          className={[
+                            selection?.kind === "supplier" &&
+                            selection.id === s.id
+                              ? "selected"
+                              : "",
+                            draggingId === s.id ? "row-dragging" : "",
+                            dragOverId === s.id && draggingId !== s.id
+                              ? "row-drag-over"
+                              : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
                         >
-                          {s.is_active ? "啟用" : "停用"}
-                        </td>
-                      </tr>
-                    ))}
+                          <td
+                            className="drag-handle"
+                            style={{
+                              cursor: canDrag ? "grab" : "default",
+                              color: canDrag
+                                ? "var(--text-dim)"
+                                : "transparent",
+                            }}
+                            title={canDrag ? "拖曳調整排序" : "搜尋中無法排序"}
+                          >
+                            ≡
+                          </td>
+                          <td>{s.code}</td>
+                          <td>{s.name}</td>
+                          <td>{s.phone || "—"}</td>
+                          <td
+                            style={{
+                              color: s.is_active
+                                ? "#80d090"
+                                : "var(--text-dim)",
+                            }}
+                          >
+                            {s.is_active ? "啟用" : "停用"}
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {filtered.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="md-empty">
+                        <td colSpan={5} className="md-empty">
                           {query ? "查無供應商" : "尚無供應商,按右上角新增"}
                         </td>
                       </tr>
@@ -263,22 +348,27 @@ export function SuppliersPage() {
                   : `供應商 · ${selectedSupplier?.code} ${selectedSupplier?.name}`}
               </h3>
               {error && <Banner kind="error" message={error} />}
-              {savedFlash && <Banner kind="success" message="已儲存" />}
+              {flashMsg && <Banner kind="success" message={flashMsg} />}
               <dl>
-                <dt>
-                  代碼 <span style={{ color: "#ff7070" }}>*</span>
-                </dt>
-                <dd>
-                  <input
-                    value={form.code}
-                    onChange={(e) =>
-                      patch("code", e.target.value.toUpperCase())
-                    }
-                    maxLength={20}
-                    placeholder="例:APPLE / SAMSUNG"
-                    style={{ width: 200 }}
-                  />
-                </dd>
+                {isEditing && (
+                  <>
+                    <dt>代碼</dt>
+                    <dd>
+                      <span style={{ color: "var(--text-dim)" }}>
+                        {selectedSupplier?.code}
+                      </span>
+                      <span
+                        style={{
+                          marginLeft: 8,
+                          fontSize: 12,
+                          color: "var(--text-dim)",
+                        }}
+                      >
+                        (系統自動產生)
+                      </span>
+                    </dd>
+                  </>
+                )}
                 <dt>
                   名稱 <span style={{ color: "#ff7070" }}>*</span>
                 </dt>

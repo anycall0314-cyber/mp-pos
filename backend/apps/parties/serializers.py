@@ -16,7 +16,7 @@ class _TenantUniqueMixin:
         return value
 
 
-class SupplierSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
+class SupplierSerializer(serializers.ModelSerializer):
     class Meta:
         model = Supplier
         fields = [
@@ -28,14 +28,12 @@ class SupplierSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
             "tax_id",
             "address",
             "note",
+            "sort_order",
             "is_active",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
-
-    def validate_code(self, value):
-        return self._tenant_unique(Supplier.objects, "code", value)
+        read_only_fields = ["id", "code", "created_at", "updated_at"]
 
 
 class CustomerSerializer(_TenantUniqueMixin, serializers.ModelSerializer):

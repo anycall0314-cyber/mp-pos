@@ -6,25 +6,41 @@ from apps.core.models import TenantOwnedModel
 class Supplier(TenantOwnedModel):
     """供應商:進貨單的對象。"""
 
-    code = models.SlugField("供應商代碼", max_length=20)
+    code = models.SlugField(
+        "供應商代碼",
+        max_length=20,
+        blank=True,
+        editable=False,
+        help_text="系統自動產生:S-{6位流水};前端不輸入",
+    )
     name = models.CharField("供應商名稱", max_length=120)
     contact = models.CharField("聯絡人", max_length=60, blank=True)
     phone = models.CharField("電話", max_length=40, blank=True)
     tax_id = models.CharField("統一編號", max_length=20, blank=True)
     address = models.CharField("地址", max_length=200, blank=True)
     note = models.CharField("備註", max_length=200, blank=True)
+    sort_order = models.PositiveIntegerField(
+        "排序", default=100, help_text="數字小的排前面;常用供應商往前調方便快速點選"
+    )
     is_active = models.BooleanField("啟用", default=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["tenant", "code"], name="uniq_supplier_tenant_code"),
         ]
-        ordering = ["code"]
+        ordering = ["sort_order", "code"]
         verbose_name = "供應商"
         verbose_name_plural = "供應商"
 
     def __str__(self) -> str:
         return f"{self.code} {self.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            if self.tenant_id is None:
+                raise ValueError("建立供應商必須先指定 tenant")
+            self.code = self.tenant.issue_next_supplier_code()
+        super().save(*args, **kwargs)
 
 
 class Carrier(TenantOwnedModel):

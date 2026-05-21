@@ -275,6 +275,33 @@ export const useInStockSerials = (productId?: number, warehouseId?: number) => {
   });
 };
 
+export interface PendingTransfer {
+  transfer_no: string;
+  doc_date: string;
+  qty: number;
+  direction: "out" | "in" | null;
+  from_warehouse: { code: string; name: string };
+  to_warehouse: { code: string; name: string };
+}
+
+// 配件用:某商品「已派發未確認」的調撥(可限定與某倉相關)
+export const usePendingTransfers = (
+  productId?: number,
+  warehouseId?: number,
+) => {
+  return useQuery({
+    queryKey: ["pending-transfers", productId ?? null, warehouseId ?? null],
+    enabled: !!productId,
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (warehouseId) qs.set("warehouse", String(warehouseId));
+      return api<PendingTransfer[]>(
+        `/products/${productId}/pending-transfers/?${qs.toString()}`,
+      );
+    },
+  });
+};
+
 export interface DateRangeFilter {
   from?: string;
   to?: string;

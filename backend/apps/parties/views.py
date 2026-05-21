@@ -17,8 +17,8 @@ from .serializers import (
 class SupplierViewSet(viewsets.ModelViewSet):
     serializer_class = SupplierSerializer
     search_fields = ["code", "name", "contact", "phone", "tax_id"]
-    ordering_fields = ["code", "name", "created_at"]
-    ordering = ["code"]
+    ordering_fields = ["sort_order", "code", "name", "created_at"]
+    ordering = ["sort_order", "code"]
     filterset_fields = ["is_active"]
 
     def get_queryset(self):
