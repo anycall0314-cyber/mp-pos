@@ -77,7 +77,11 @@ export async function searchProducts(
  *   選到此商品時前端可自動把這支序號塞進該行,不用使用者再挑
  */
 export interface SalesProductHit extends Product {
-  matched_serial?: { id: number; serial_no: string };
+  matched_serial?: {
+    id: number;
+    serial_no: string;
+    custom_unit_price?: string | null;
+  };
 }
 
 export async function searchProductsForSales(
@@ -126,7 +130,11 @@ export async function searchProductsForSales(
     const hit: SalesProductHit = matched
       ? {
           ...p,
-          matched_serial: { id: matched.id, serial_no: matched.serial_no },
+          matched_serial: {
+            id: matched.id,
+            serial_no: matched.serial_no,
+            custom_unit_price: matched.custom_unit_price,
+          },
         }
       : (p as SalesProductHit);
     return {

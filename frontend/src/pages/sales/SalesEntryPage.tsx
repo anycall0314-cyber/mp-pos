@@ -481,7 +481,12 @@ function LineRow({
     // 選到商品時把建議零售價一次帶到單價與金額(各自獨立,之後互不同步)
     const userTypedAmount =
       Number(line.amount) !== 0 && Number(line.amount) !== Number(line.unit_price);
-    const defaultPrice = toIntStr(p?.list_price ?? "0");
+    // 中古機打/掃 IMEI 命中時,優先帶該支序號的自訂售價
+    const msCustom =
+      p?.is_secondhand && p?.matched_serial?.custom_unit_price;
+    const defaultPrice = toIntStr(
+      msCustom && Number(msCustom) > 0 ? msCustom : (p?.list_price ?? "0"),
+    );
 
     // 路徑一:搜尋帶 matched_serial(打 IMEI 命中)→ 立即把該序號掛上
     const autoSerial = p?.matched_serial
@@ -569,7 +574,7 @@ function LineRow({
     update({
       telecom_plan: pid,
       telecomPlanOption: opt ?? null,
-      commission: newPlan ? String(newPlan.commission) : line.commission,
+      commission: newPlan ? toIntStr(newPlan.commission) : line.commission,
       sim_card: keepCard ? line.sim_card : "",
       simCardOption: keepCard ? line.simCardOption : null,
     });
@@ -715,6 +720,7 @@ function LineRow({
           step="1"
           value={line.commission}
           onChange={(e) => update({ commission: e.target.value })}
+          onBlur={(e) => update({ commission: toIntStr(e.target.value) })}
           disabled={readonly || !allowCommission}
         />
       </td>
@@ -832,6 +838,7 @@ export function SalesEntryPage() {
         ...l,
         unit_price: toIntStr(l.unit_price),
         amount: toIntStr(l.amount),
+        commission: toIntStr(l.commission),
       }));
     }
     return [newLine(1)];
@@ -839,6 +846,19 @@ export function SalesEntryPage() {
   const [selectedLineKey, setSelectedLineKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  // 掃碼快速結帳
+  const [scanCode, setScanCode] = useState("");
+  const [scanMsg, setScanMsg] = useState<{ ok: boolean; text: string } | null>(
+    null,
+  );
+  const [scanning, setScanning] = useState(false);
+  const scanRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (!readonly) scanRef.current?.focus();
+    // 僅在新單載入時自動聚焦掃描框
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // payAmounts / payNotes 都以 PaymentMethod.code 為 key
   const [payAmounts, setPayAmounts] = useState<Record<string, string>>({});
   const [payNotes, setPayNotes] = useState<Record<string, string>>({});
@@ -1071,7 +1091,7 @@ export function SalesEntryPage() {
               }
             : null,
           activation_date: it.activation_date ?? "",
-          commission: it.commission,
+          commission: toIntStr(it.commission),
         })),
       );
     }
@@ -1164,6 +1184,174 @@ export function SalesEntryPage() {
     const fresh = newLine(lines.length + 1);
     setLines((ls) => [...ls, fresh]);
     setSelectedLineKey(fresh.key);
+  }
+
+  function serialOptionFrom(s: {
+    id: number;
+    serial_no: string;
+    sku?: string;
+  }): ComboOption<ProductSerial> {
+    return {
+      id: s.id,
+      label: s.serial_no,
+      secondary: s.sku ?? "",
+      payload: undefined as unknown as ProductSerial,
+    };
+  }
+
+  // 把掃到的商品/序號加進明細;有空白行(未選商品)就用它,否則新增一行
+  function applyScannedProduct(p: SalesProductHit) {
+    const isSerial = !!p.requires_serial && !p.is_virtual;
+    const ms = p.matched_serial ?? null;
+    const productOption: ComboOption<Product> = {
+      id: p.id,
+      label: p.name,
+      secondary: [p.sku, p.category_name].filter(Boolean).join(" / "),
+      payload: p as Product,
+    };
+    const price = toIntStr(p.list_price ?? "0");
+
+    setLines((ls) => {
+      const existingIdx = ls.findIndex((l) => l.product === p.id);
+
+      if (isSerial && ms) {
+        // 防重複:此序號已在單上
+        if (ls.some((l) => l.serialChoices.some((s) => s?.id === ms.id))) {
+          return ls;
+        }
+        const opt = serialOptionFrom({ id: ms.id, serial_no: ms.serial_no });
+        // 中古機:優先用該支序號的自訂售價
+        const serialPrice =
+          p.is_secondhand && ms.custom_unit_price && Number(ms.custom_unit_price) > 0
+            ? toIntStr(ms.custom_unit_price)
+            : price;
+        if (existingIdx >= 0) {
+          return ls.map((l, i) =>
+            i === existingIdx
+              ? {
+                  ...l,
+                  qty: l.qty + 1,
+                  serialChoices: [...l.serialChoices, opt],
+                  // 中古機一機一價:單價沿用第一支(同型號自訂價通常一致),
+                  // 金額依數量重算
+                  amount: toIntStr((l.qty + 1) * Number(l.unit_price || 0)),
+                }
+              : l,
+          );
+        }
+        const fresh = newLine(ls.length + 1);
+        fresh.product = p.id;
+        fresh.productOption = productOption;
+        fresh.qty = 1;
+        fresh.serialChoices = [opt];
+        fresh.unit_price = serialPrice;
+        fresh.amount = serialPrice;
+        return replaceEmptyOrAppend(ls, fresh);
+      }
+
+      if (!isSerial) {
+        // 配件:同商品累加數量
+        if (existingIdx >= 0) {
+          return ls.map((l, i) =>
+            i === existingIdx
+              ? {
+                  ...l,
+                  qty: l.qty + 1,
+                  amount: toIntStr((l.qty + 1) * Number(l.unit_price || 0)),
+                }
+              : l,
+          );
+        }
+        const fresh = newLine(ls.length + 1);
+        fresh.product = p.id;
+        fresh.productOption = productOption;
+        fresh.qty = 1;
+        fresh.unit_price = price;
+        fresh.amount = price;
+        return replaceEmptyOrAppend(ls, fresh);
+      }
+
+      // 序號商品但掃到的是型號(沒有 matched_serial):加一行待補序號
+      const fresh = newLine(ls.length + 1);
+      fresh.product = p.id;
+      fresh.productOption = productOption;
+      fresh.qty = 1;
+      fresh.unit_price = price;
+      fresh.amount = price;
+      return replaceEmptyOrAppend(ls, fresh);
+    });
+  }
+
+  function replaceEmptyOrAppend(ls: Line[], fresh: Line): Line[] {
+    const emptyIdx = ls.findIndex((l) => l.product === "");
+    if (emptyIdx >= 0) {
+      const copy = [...ls];
+      fresh.line_no = ls[emptyIdx].line_no;
+      copy[emptyIdx] = fresh;
+      return copy;
+    }
+    return [...ls, fresh];
+  }
+
+  async function handleScan(raw: string) {
+    const code = raw.trim();
+    if (!code) return;
+    if (!warehouse) {
+      setScanMsg({ ok: false, text: "請先選出貨倉再掃碼" });
+      return;
+    }
+    setScanning(true);
+    try {
+      const results = await searchProductsForSales(code, {
+        warehouseId: warehouse,
+      });
+      if (results.length === 0) {
+        setScanMsg({ ok: false, text: `查無:${code}` });
+        return;
+      }
+      // 優先:IMEI 完全命中 → 條碼/品號完全命中 → 第一筆
+      const best =
+        results.find((r) => r.payload?.matched_serial?.serial_no === code) ??
+        results.find(
+          (r) => r.payload?.barcode === code || r.payload?.sku === code,
+        ) ??
+        results[0];
+      const p = best.payload as SalesProductHit;
+      const isSerial = !!p.requires_serial && !p.is_virtual;
+
+      if (
+        isSerial &&
+        p.matched_serial &&
+        lines.some((l) =>
+          l.serialChoices.some((s) => s?.id === p.matched_serial!.id),
+        )
+      ) {
+        setScanMsg({
+          ok: false,
+          text: `序號 ${p.matched_serial.serial_no} 已在單上`,
+        });
+        return;
+      }
+
+      applyScannedProduct(p);
+      if (isSerial && !p.matched_serial) {
+        setScanMsg({ ok: true, text: `已加入 ${p.name}(請補序號)` });
+      } else if (isSerial && p.matched_serial) {
+        setScanMsg({
+          ok: true,
+          text: `已加入 ${p.name} · IMEI ${p.matched_serial.serial_no}`,
+        });
+      } else {
+        setScanMsg({ ok: true, text: `已加入 ${p.name}` });
+      }
+    } catch (e) {
+      setScanMsg({ ok: false, text: "掃碼查詢失敗,請重試" });
+    } finally {
+      setScanning(false);
+      setScanCode("");
+      // 回到掃描框等下一槍
+      scanRef.current?.focus();
+    }
   }
   function updateSerialChoice(
     lineKey: string,
@@ -1613,6 +1801,37 @@ export function SalesEntryPage() {
             </Field>
           </div>
         </div>
+
+        {!readonly && (
+          <div className="scan-bar">
+            <input
+              ref={scanRef}
+              className="scan-input"
+              value={scanCode}
+              onChange={(e) => setScanCode(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleScan(scanCode);
+                }
+              }}
+              placeholder={
+                warehouse
+                  ? "掃描商品條碼 / IMEI(掃完自動加入,可連續掃)"
+                  : "請先選出貨倉,再用掃描槍掃碼"
+              }
+              disabled={scanning}
+            />
+            {scanMsg && (
+              <span
+                className="scan-msg"
+                style={{ color: scanMsg.ok ? "#80d090" : "#ff7070" }}
+              >
+                {scanMsg.text}
+              </span>
+            )}
+          </div>
+        )}
 
         <table className="line-table">
           <thead>
