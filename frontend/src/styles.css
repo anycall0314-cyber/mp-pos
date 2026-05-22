@@ -712,7 +712,10 @@ body { background: var(--bg); color: var(--text); }
   width: 100%; box-sizing: border-box;
   background: transparent;
   border: 1px solid transparent;
-  padding: 3px 6px;
+  /* 水平 padding 設 0:讓輸入框內文字與表頭(th 的 6px padding)對齊。
+     原本 input 另有 6px,加上 td 的 6px 變成 12px,導致數量/單價/金額
+     數字比表頭往左 6px、對不準。 */
+  padding: 3px 0;
   color: var(--text);
   font-size: 12px;
   font-family: inherit;

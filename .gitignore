@@ -41,3 +41,7 @@ Thumbs.db
 *.dump
 *.sql.gz
 secrets/
+
+# 舊系統匯入用資料檔(本機用,不進版控)
+/庫存明細表.xls
+/庫存匯入_類別對照表.xlsx

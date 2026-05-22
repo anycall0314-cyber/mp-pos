@@ -106,6 +106,7 @@ interface CheckoutModalProps {
   isPending: boolean;
   savedSO: SalesOrder | null;
   onDone: () => void;
+  onContinue: () => void;
 }
 
 /** 銷貨結帳 modal:依系統設定動態列出付款方式,可任意拆分。 */
@@ -125,6 +126,7 @@ function CheckoutModal({
   isPending,
   savedSO,
   onDone,
+  onContinue,
 }: CheckoutModalProps) {
   const paid = methods.reduce(
     (s, m) => s + (Number(amounts[m.code]) || 0),
@@ -211,8 +213,11 @@ function CheckoutModal({
             >
               列印發票
             </button>
-            <button className="btn primary" type="button" onClick={onDone}>
-              完成
+            <button className="btn" type="button" onClick={onDone}>
+              完成(回列表)
+            </button>
+            <button className="btn primary" type="button" onClick={onContinue}>
+              繼續開單
             </button>
           </div>
         </div>
@@ -488,14 +493,18 @@ function LineRow({
         } as ComboOption<ProductSerial>)
       : null;
 
+    const pickedQty = autoSerial ? 1 : line.qty;
     update({
       product: pid,
       productOption: opt ? { ...opt, payload: opt.payload as Product } : null,
       // 通常 IMEI 命中 = 賣 1 隻,把該行 qty 設 1、序號預填;否則清空待挑
-      qty: autoSerial ? 1 : line.qty,
+      qty: pickedQty,
       serialChoices: autoSerial ? [autoSerial] : [],
       unit_price: p ? defaultPrice : line.unit_price,
-      amount: p && !userTypedAmount ? defaultPrice : line.amount,
+      amount:
+        p && !userTypedAmount
+          ? toIntStr(Number(defaultPrice) * pickedQty)
+          : line.amount,
       msisdn: p?.allows_telecom_line ? line.msisdn : "",
       telecom_plan: p?.allows_telecom_line ? line.telecom_plan : "",
       telecomPlanOption: p?.allows_telecom_line ? line.telecomPlanOption : null,
@@ -596,7 +605,13 @@ function LineRow({
           className="num-input"
           min={1}
           value={line.qty}
-          onChange={(e) => update({ qty: Math.max(1, Number(e.target.value)) })}
+          onChange={(e) => {
+            const q = Math.max(1, Number(e.target.value));
+            update({
+              qty: q,
+              amount: toIntStr(q * Number(line.unit_price || 0)),
+            });
+          }}
           disabled={readonly}
         />
       </td>
@@ -620,8 +635,18 @@ function LineRow({
           className="num-input"
           step="1"
           value={line.unit_price}
-          onChange={(e) => update({ unit_price: e.target.value })}
-          onBlur={(e) => update({ unit_price: toIntStr(e.target.value) })}
+          onChange={(e) =>
+            update({
+              unit_price: e.target.value,
+              amount: toIntStr(line.qty * Number(e.target.value || 0)),
+            })
+          }
+          onBlur={(e) =>
+            update({
+              unit_price: toIntStr(e.target.value),
+              amount: toIntStr(line.qty * Number(e.target.value || 0)),
+            })
+          }
           disabled={readonly}
         />
       </td>
@@ -907,6 +932,28 @@ export function SalesEntryPage() {
     setSelectedLineKey(null);
   }
 
+  // 連續開單:結帳完成後重置成新單,但「保留」出貨倉與業務員,只清會員與明細
+  function continueNewSale() {
+    clearDraft();
+    setSavedSO(null);
+    setShowConfirm(false);
+    // 清:會員 / 明細 / 付款 / 發票號 / 買受人統編 / 備註
+    setCustomer(null);
+    setMemberPhone("");
+    setMemberStatus("idle");
+    setLines([newLine(1)]);
+    setSelectedLineKey(null);
+    setPayAmounts({});
+    setPayNotes({});
+    setBuyerTaxId("");
+    setInvoiceNo("");
+    setInvoiceDate("");
+    setNote("");
+    setDocDate(new Date().toISOString().slice(0, 10));
+    // 保留:warehouse / warehouseOption / salesPerson / salesPersonOption /
+    //       taxMethod / invoiceForm(沿用方便連續結帳)
+  }
+
   // 新單時用 peek 預覽下一張發票號碼;切換發票類型時 re-peek
   useEffect(() => {
     if (!isNew) return;
@@ -1136,6 +1183,7 @@ export function SalesEntryPage() {
           const cp = option.payload?.custom_unit_price;
           if (cp && Number(cp) > 0) {
             patch.unit_price = String(cp);
+            patch.amount = toIntStr(Number(cp) * l.qty);
           }
         }
         return { ...l, ...patch };
@@ -1681,6 +1729,7 @@ export function SalesEntryPage() {
             setShowConfirm(false);
             navigate("/sales");
           }}
+          onContinue={continueNewSale}
         />
       )}
 
