@@ -15,6 +15,8 @@ import { TransferEntryPage } from "@/pages/transfers/TransferEntryPage";
 import { SalesPage } from "@/pages/sales/SalesPage";
 import { SalesEntryPage } from "@/pages/sales/SalesEntryPage";
 import { SalesPrintPage } from "@/pages/sales/SalesPrintPage";
+import { CustomersPage } from "@/pages/customers/CustomersPage";
+import { SalesPersonsPage } from "@/pages/sales-persons/SalesPersonsPage";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { SimCardsPage } from "@/pages/sim-cards/SimCardsPage";
 import { SuppliersPage } from "@/pages/suppliers/SuppliersPage";
@@ -66,6 +68,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/sales", label: "銷貨作業" },
       { to: "/transfers", label: "調撥作業" },
       { to: "/sales/pre-orders", label: "訂購作業" },
+      { to: "/customers", label: "客戶管理" },
       { to: "/members", label: "會員查詢" },
     ],
   },
@@ -97,6 +100,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/settings", label: "發票付款" },
       { to: "/suppliers", label: "供應商" },
+      { to: "/sales-persons", label: "業務員" },
       { to: "/settings/users", label: "人員權限" },
     ],
   },
@@ -217,9 +221,11 @@ export function App() {
           <Route path="/sales" element={<SalesPage />} />
           <Route path="/sales/:id" element={<SalesEntryPage />} />
           <Route path="/sales/:id/print/:type" element={<SalesPrintPage />} />
+          <Route path="/customers" element={<CustomersPage />} />
           <Route path="/members" element={<MembersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/suppliers" element={<SuppliersPage />} />
+          <Route path="/sales-persons" element={<SalesPersonsPage />} />
           <Route path="/transfers" element={<TransfersPage />} />
           <Route path="/transfers/:id" element={<TransferEntryPage />} />
           <Route path="/inventory" element={<InventoryQueryPage />} />

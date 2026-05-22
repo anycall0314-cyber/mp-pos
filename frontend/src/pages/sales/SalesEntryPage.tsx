@@ -10,7 +10,6 @@ import {
   usePaymentMethods,
   useSalesOrder,
   useSaveCustomer,
-  useSaveSalesPerson,
   useVoidSalesOrder,
 } from "@/api/hooks";
 import {
@@ -773,7 +772,6 @@ export function SalesEntryPage() {
   const createMutation = useCreateSalesOrder();
   const voidMutation = useVoidSalesOrder();
   const saveCustomer = useSaveCustomer();
-  const saveSalesPerson = useSaveSalesPerson();
   const invoiceTypesQuery = useInvoiceTypes({ activeOnly: true });
   const invoiceTypes = invoiceTypesQuery.data ?? [];
   const defaultInvoiceCode =
@@ -820,7 +818,9 @@ export function SalesEntryPage() {
     draft?.invoiceForm ?? "",
   );
   const [invoiceNo, setInvoiceNo] = useState(draft?.invoiceNo ?? "");
-  const [invoiceDate, setInvoiceDate] = useState(draft?.invoiceDate ?? "");
+  const [invoiceDate, setInvoiceDate] = useState(
+    () => draft?.invoiceDate ?? new Date().toISOString().slice(0, 10),
+  );
   // 新單時:依發票類型 peek 下一張要開的號碼;送單時後端會原子地取走它
   const [previewInvoiceNo, setPreviewInvoiceNo] = useState<string | null>(null);
   const [salesPerson, setSalesPerson] = useState<number | "">(
@@ -828,8 +828,6 @@ export function SalesEntryPage() {
   );
   const [salesPersonOption, setSalesPersonOption] =
     useState<ComboOption<unknown> | null>(draft?.salesPersonOption ?? null);
-  const [showCreateSalesPerson, setShowCreateSalesPerson] = useState(false);
-  const [newSalesPerson, setNewSalesPerson] = useState({ code: "", name: "" });
   const [note, setNote] = useState(draft?.note ?? "");
   const [lines, setLines] = useState<Line[]>(() => {
     if (draft?.lines && draft.lines.length > 0) {
@@ -967,7 +965,7 @@ export function SalesEntryPage() {
     setPayNotes({});
     setBuyerTaxId("");
     setInvoiceNo("");
-    setInvoiceDate("");
+    setInvoiceDate(new Date().toISOString().slice(0, 10));
     setNote("");
     setDocDate(new Date().toISOString().slice(0, 10));
     // 保留:warehouse / warehouseOption / salesPerson / salesPersonOption /
@@ -1118,27 +1116,6 @@ export function SalesEntryPage() {
     }
   }
 
-  async function handleCreateSalesPerson() {
-    if (!newSalesPerson.code.trim() || !newSalesPerson.name.trim()) return;
-    try {
-      const created = await saveSalesPerson.mutateAsync({
-        code: newSalesPerson.code.trim(),
-        name: newSalesPerson.name.trim(),
-      });
-      setSalesPerson(created.id);
-      setSalesPersonOption({
-        id: created.id,
-        label: created.name,
-        secondary: created.code,
-      });
-      setShowCreateSalesPerson(false);
-      setNewSalesPerson({ code: "", name: "" });
-    } catch (e) {
-      if (e instanceof ApiHttpError) {
-        setError(`新增業務員失敗:${JSON.stringify(e.body)}`);
-      }
-    }
-  }
 
   async function handleCreateMember() {
     const phone = memberPhone.trim();
@@ -1627,10 +1604,45 @@ export function SalesEntryPage() {
        <div className="entry-body">
         {error && <Banner kind="error" message={error} />}
 
-        <div className="entry-header" style={{ marginBottom: 12 }}>
-          <div className="field-row-3">
-            <Field label="客戶 (電話)">
-              <div style={{ display: "flex", gap: 6 }}>
+        <div className="entry-header" style={{ marginBottom: 8 }}>
+          <div className="sales-header-grid">
+            <div style={{ gridArea: "wh" }}>
+              <Field label="出貨倉" required>
+                <ComboBox
+                  value={warehouse}
+                  selectedOption={warehouseOption}
+                  onChange={(id, opt) => {
+                    setWarehouse(id);
+                    setWarehouseOption(opt ?? null);
+                  }}
+                  fetchOptions={searchWarehouses}
+                  disabled={readonly}
+                  placeholder="搜尋倉庫"
+                />
+              </Field>
+            </div>
+            <div style={{ gridArea: "date" }}>
+              <Field label="單據日期" required>
+                <input
+                  type="date"
+                  value={docDate}
+                  onChange={(e) => setDocDate(e.target.value)}
+                  disabled={readonly}
+                />
+              </Field>
+            </div>
+            <div style={{ gridArea: "invdate" }}>
+              <Field label="發票日期">
+                <input
+                  type="date"
+                  value={invoiceDate}
+                  onChange={(e) => setInvoiceDate(e.target.value)}
+                  disabled={readonly || noInvoice || isNew}
+                />
+              </Field>
+            </div>
+            <div style={{ gridArea: "customer" }}>
+              <Field label="客戶 (電話)">
                 <input
                   type="tel"
                   value={memberPhone}
@@ -1647,158 +1659,128 @@ export function SalesEntryPage() {
                     }
                   }}
                   disabled={readonly}
-                  style={{ flex: 1 }}
-                />
-                {memberStatus === "checking" && (
-                  <span
-                    className="member-tag"
-                    style={{ color: "var(--text-dim)" }}
-                  >
-                    查詢中…
-                  </span>
-                )}
-                {memberStatus === "found" && customer && (
-                  <span className="member-tag" style={{ color: "#80d090" }}>
-                    ✓ {customer.name} ({customer.kind_label}
-                    {customer.is_member ? " / 會員" : ""})
-                  </span>
-                )}
-                {memberStatus === "not_found" && !readonly && (
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => setShowCreateMember(true)}
-                  >
-                    未登錄,新增
-                  </button>
-                )}
-              </div>
-            </Field>
-            <Field label="出貨倉" required>
-              <ComboBox
-                value={warehouse}
-                selectedOption={warehouseOption}
-                onChange={(id, opt) => {
-                  setWarehouse(id);
-                  setWarehouseOption(opt ?? null);
-                }}
-                fetchOptions={searchWarehouses}
-                disabled={readonly}
-                placeholder="搜尋倉庫"
-              />
-            </Field>
-            <Field label="單據日期" required>
-              <input
-                type="date"
-                value={docDate}
-                onChange={(e) => setDocDate(e.target.value)}
-                disabled={readonly}
-              />
-            </Field>
-          </div>
-          <div className="field-row-3">
-            <Field label="業務員">
-              <div style={{ display: "flex", gap: 6 }}>
-                <div style={{ flex: 1 }}>
-                  <ComboBox
-                    value={salesPerson}
-                    selectedOption={salesPersonOption}
-                    onChange={(id, opt) => {
-                      setSalesPerson(id);
-                      setSalesPersonOption(opt ?? null);
-                    }}
-                    fetchOptions={searchSalesPersons}
-                    disabled={readonly}
-                    placeholder="搜尋業務員"
-                  />
-                </div>
-                {!readonly && (
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => setShowCreateSalesPerson(true)}
-                  >
-                    +
-                  </button>
-                )}
-              </div>
-            </Field>
-            <Field label="課稅別">
-              <select
-                value={taxMethod}
-                onChange={(e) => setTaxMethod(e.target.value as TaxMethod)}
-                disabled={readonly}
-              >
-                {TAX_METHODS.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {isTaxable ? (
-              <Field label="統一編號">
-                <input
-                  value={buyerTaxId}
-                  onChange={(e) => setBuyerTaxId(e.target.value)}
-                  disabled={readonly}
-                  maxLength={10}
                 />
               </Field>
-            ) : (
-              <div />
+            </div>
+
+            <div style={{ gridArea: "tax" }}>
+              <Field label="課稅別">
+                <select
+                  value={taxMethod}
+                  onChange={(e) => setTaxMethod(e.target.value as TaxMethod)}
+                  disabled={readonly}
+                >
+                  {TAX_METHODS.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            {isTaxable && (
+              <div style={{ gridArea: "taxid" }}>
+                <Field label="統一編號">
+                  <input
+                    value={buyerTaxId}
+                    onChange={(e) => setBuyerTaxId(e.target.value)}
+                    disabled={readonly}
+                    maxLength={10}
+                  />
+                </Field>
+              </div>
             )}
-          </div>
-          <div className="field-row-3">
-            <Field label="發票類型">
-              <select
-                value={invoiceForm}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setInvoiceForm(v);
-                  // 免用統一發票 → 課稅別連動到免稅
-                  if (v === "none") setTaxMethod("tax_free");
-                }}
-                disabled={readonly}
-              >
-                <option value="">— 未指定 —</option>
-                {invoiceTypes.map((f) => (
-                  <option key={f.code} value={f.code}>
-                    {f.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="發票號碼(自動取號)">
-              <input
-                value={isNew ? previewInvoiceNo ?? "" : invoiceNo}
-                disabled
-                placeholder={
-                  noInvoice
-                    ? ""
-                    : previewInvoiceNo
-                    ? ""
-                    : "尚無可用字軌,請至系統設定新增"
-                }
-              />
-            </Field>
-            <Field label="發票日期">
-              <input
-                type="date"
-                value={invoiceDate}
-                onChange={(e) => setInvoiceDate(e.target.value)}
-                disabled={readonly || noInvoice || isNew}
-              />
-            </Field>
-          </div>
-          <div className="field-row">
-            <Field label="備註">
-              <input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                disabled={readonly}
-              />
-            </Field>
+            <div style={{ gridArea: "invtype" }}>
+              <Field label="發票類型">
+                <select
+                  value={invoiceForm}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setInvoiceForm(v);
+                    // 免用統一發票 → 課稅別連動到免稅
+                    if (v === "none") setTaxMethod("tax_free");
+                  }}
+                  disabled={readonly}
+                >
+                  <option value="">— 未指定 —</option>
+                  {invoiceTypes.map((f) => (
+                    <option key={f.code} value={f.code}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <div style={{ gridArea: "member" }}>
+              <Field label="會員">
+                <div className="member-status">
+                  {memberStatus === "checking" && (
+                    <span style={{ color: "var(--text-dim)" }}>查詢中…</span>
+                  )}
+                  {memberStatus === "found" && customer && (
+                    <span style={{ color: "#80d090" }}>
+                      ✓ {customer.name} ({customer.kind_label}
+                      {customer.is_member ? " / 會員" : ""})
+                    </span>
+                  )}
+                  {memberStatus === "not_found" && !readonly && (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setShowCreateMember(true)}
+                    >
+                      未登錄,新增
+                    </button>
+                  )}
+                  {(memberStatus === "idle" ||
+                    (memberStatus === "found" && !customer)) && (
+                    <span style={{ color: "var(--text-dim)" }}>
+                      輸入電話查詢
+                    </span>
+                  )}
+                </div>
+              </Field>
+            </div>
+
+            <div style={{ gridArea: "invno" }}>
+              <Field label="發票號碼(自動取號)">
+                <input
+                  value={isNew ? previewInvoiceNo ?? "" : invoiceNo}
+                  disabled
+                  placeholder={
+                    noInvoice
+                      ? ""
+                      : previewInvoiceNo
+                      ? ""
+                      : "尚無可用字軌,請至系統設定新增"
+                  }
+                />
+              </Field>
+            </div>
+            <div style={{ gridArea: "note" }}>
+              <Field label="備註">
+                <input
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  disabled={readonly}
+                />
+              </Field>
+            </div>
+            <div style={{ gridArea: "salesperson" }}>
+              <Field label="業務員">
+                <ComboBox
+                  value={salesPerson}
+                  selectedOption={salesPersonOption}
+                  onChange={(id, opt) => {
+                    setSalesPerson(id);
+                    setSalesPersonOption(opt ?? null);
+                  }}
+                  fetchOptions={searchSalesPersons}
+                  disabled={readonly}
+                  placeholder="搜尋業務員"
+                />
+              </Field>
+            </div>
           </div>
         </div>
 
@@ -2019,58 +2001,6 @@ export function SalesEntryPage() {
           onChange={(v) => setNewMember((s) => ({ ...s, is_member: v }))}
           label="設為會員"
         />
-      </Drawer>
-
-      <Drawer
-        open={showCreateSalesPerson}
-        title="新增業務員"
-        onClose={() => setShowCreateSalesPerson(false)}
-        width={420}
-        footer={
-          <>
-            <button
-              className="btn"
-              type="button"
-              onClick={() => setShowCreateSalesPerson(false)}
-            >
-              取消
-            </button>
-            <button
-              className="btn primary"
-              type="button"
-              onClick={handleCreateSalesPerson}
-              disabled={
-                saveSalesPerson.isPending ||
-                !newSalesPerson.code.trim() ||
-                !newSalesPerson.name.trim()
-              }
-            >
-              {saveSalesPerson.isPending ? "儲存中…" : "建立並使用"}
-            </button>
-          </>
-        }
-      >
-        <Field label="業務員代號" required>
-          <input
-            value={newSalesPerson.code}
-            autoFocus
-            onChange={(e) =>
-              setNewSalesPerson((s) => ({
-                ...s,
-                code: e.target.value.toUpperCase(),
-              }))
-            }
-            maxLength={20}
-          />
-        </Field>
-        <Field label="姓名" required>
-          <input
-            value={newSalesPerson.name}
-            onChange={(e) =>
-              setNewSalesPerson((s) => ({ ...s, name: e.target.value }))
-            }
-          />
-        </Field>
       </Drawer>
     </div>
   );
