@@ -375,6 +375,7 @@ export interface StockMatrixProduct {
   id: number;
   sku: string;
   name: string;
+  spec: string;
   category_id: number;
   category_name: string;
   category_code: string;

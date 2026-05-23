@@ -521,6 +521,7 @@ export function InventoryQueryPage() {
                 >
                   品名{sortIndicator({ kind: "name" })}
                 </th>
+                <th style={{ width: 150 }}>規格</th>
                 {warehouses.map((w) => (
                   <th
                     key={w.id}
@@ -540,6 +541,9 @@ export function InventoryQueryPage() {
                 >
                   小計{sortIndicator({ kind: "total" })}
                 </th>
+                <th className="num" style={{ width: 90 }}>
+                  平均成本
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -548,6 +552,7 @@ export function InventoryQueryPage() {
                   <td className="num">{i + 1}</td>
                   <td>{p.category_name}</td>
                   <td>{p.name}</td>
+                  <td style={{ color: "var(--text-dim)" }}>{p.spec || "—"}</td>
                   {warehouses.map((w) => {
                     const qty = p.stock_by_warehouse[String(w.id)] ?? 0;
                     return (
@@ -575,12 +580,19 @@ export function InventoryQueryPage() {
                   <td className="num" style={{ fontWeight: 600 }}>
                     {p.stock_total}
                   </td>
+                  <td className="num">
+                    {Number(p.weighted_avg_cost) > 0
+                      ? Math.round(
+                          Number(p.weighted_avg_cost),
+                        ).toLocaleString()
+                      : "—"}
+                  </td>
                 </tr>
               ))}
               {products.length === 0 && (
                 <tr>
                   <td
-                    colSpan={4 + warehouses.length}
+                    colSpan={6 + warehouses.length}
                     className="md-empty"
                   >
                     查無資料
@@ -589,7 +601,7 @@ export function InventoryQueryPage() {
               )}
               {products.length > 0 && (
                 <tr className="stock-matrix-total-row">
-                  <td colSpan={3} style={{ textAlign: "right" }}>
+                  <td colSpan={4} style={{ textAlign: "right" }}>
                     各倉合計
                   </td>
                   {warehouses.map((w) => (
@@ -598,6 +610,17 @@ export function InventoryQueryPage() {
                     </td>
                   ))}
                   <td className="num">{grandTotal}</td>
+                  <td className="num">
+                    {grandTotal > 0
+                      ? Math.round(
+                          products.reduce(
+                            (s, p) =>
+                              s + Number(p.weighted_avg_cost || 0) * p.stock_total,
+                            0,
+                          ) / grandTotal,
+                        ).toLocaleString()
+                      : "—"}
+                  </td>
                 </tr>
               )}
             </tbody>

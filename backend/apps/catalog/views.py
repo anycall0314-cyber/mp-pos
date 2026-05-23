@@ -318,6 +318,7 @@ class ProductViewSet(viewsets.ModelViewSet):
                     "id": p.id,
                     "sku": p.sku,
                     "name": p.name,
+                    "spec": p.spec,
                     "category_id": p.category_id,
                     "category_name": p.category.name if p.category else "",
                     "category_code": p.category.code if p.category else "",
