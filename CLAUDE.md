@@ -25,7 +25,7 @@
 - **三種頁面版型**:錄入頁(進銷/調撥)、Master-Detail(主檔)、報表頁
 - **唯一前端**:不開 Django admin 給使用者用,Django admin 只當 dev fallback
 - **單一 React app + 角色控制**:Platform Admin / Tenant Admin / Tenant User 共用 SPA(MVP 還沒實作登入)
-- **導覽結構(6 群)**:報表 / 庫存 / 銷貨 / 門號 / 維修 / 設定。商品與類別合併在「庫存 → 建立商品」一頁;會員查詢在「銷貨」群組底下;未實作的功能保留 placeholder 顯示「(尚未實作)」
+- **導覽結構(6 群)**:報表 / 庫存 / 銷貨 / 門號 / 維修 / 設定。商品與類別合併在「庫存 → 建立商品」一頁;客戶管理在「銷貨」群組底下(會員為其中一個 tab,個人/同業/企業/其他分頁切換);未實作的功能保留 placeholder 顯示「(尚未實作)」
 
 ## 業務規則速查
 
@@ -43,6 +43,8 @@
 | 廠商收購中古 | 「中古入庫」頁的「廠商收購」tab,內嵌 `PurchaseEntryPage mode="secondhand-vendor"`;走一般進貨單流程但商品搜尋限定 `is_secondhand=true`;進貨側欄多 4 欄(成色/售價/電池/備註)+「套用到下面所有」按鈕;儲存後不離頁,bump remount key 重置表單 + 顯示成功訊息 |
 | 一般進貨單擋下中古機 | `PurchaseEntryPage` 預設 `mode="regular"`,商品 ComboBox / PickerModal / BatchPasteModal 都帶 `is_secondhand=false`;新增進貨單時挑不到中古品。檢視 / 作廢既有中古進貨單仍走 `/purchases/:id` |
 | 中古機履歷 | `GET /api/v1/serials/{id}/history/` 回傳:收購來源 (購進 or 個人收購)、所有銷貨/退貨、StockMovement 軌跡 |
+| 客戶識別 | `Customer.code` 系統自動產生 (C-{5 位流水},Tenant 持有 next_customer_seq);前端不顯示也不輸入。`phone` 改選填(同行/企業可不填);`lookup?phone=` 多筆優先 is_member |
+| 銷貨單客戶/會員雙欄位 | `SalesOrder.customer` = 收款/開發票對象(同行/直客/企業,搜名稱);`SalesOrder.member` = 服務對象/會員制度歸屬(用電話查)。**不互斥**——同行帶他的個人客戶來開門號 → customer=同行、member=個人。散客則兩欄皆空 |
 | 配件庫存 | 非序號商品(`requires_serial=False`、非 virtual)走 `StockBalance(product, warehouse)`,進貨累計、銷貨扣減、調撥搬移;`Product.weighted_avg_cost` 跨倉聚合 |
 | 配件不足擋下 | 銷貨單若該倉 balance 不足,`commit_sales_order` 拋錯 400,不允許負庫存 |
 | 調撥 | `TransferOrder` 兩階段:`dispatched`(來源倉派發,序號 → in_transit、配件 balance 扣掉)→ `confirmed`(目的倉確認,序號 → in_stock 在目的倉、目的倉 balance 加上)。`unit_cost_at_dispatch` 在派發時快照來源倉成本,確認時用以重算目的倉加權平均(避免後續異動干擾)。`void` 智能回滾,依當下狀態決定 |
@@ -75,7 +77,7 @@ inventory-3c/
         │   ├── products/        ProductsPage(合併商品 + 類別管理,左側兩段:商品搜尋 / 類別拖拉排序)+ ProductForm + ProductExpanderModal(型號展開,軸標籤可自訂)+ BulkAddProductsModal
         │   ├── purchases/       PurchasesPage + PurchaseEntryPage(規格獨立欄、Enter 跳下一筆)+ PurchaseLabelsPrintPage(條碼優先序 IMEI > 原廠 > SKU)+ PurchaseBatchPasteModal(模糊比對預覽)+ PurchaseProductPickerModal(勾選多商品入庫)
         │   ├── sales/           SalesPage + SalesEntryPage(IMEI 自動掛序號 / 單一在庫自動掛 / 中文 IME 安全)+ SalesPrintPage
-        │   ├── members/         MembersPage(會員查詢)
+        │   ├── customers/       CustomersPage(客戶管理;tabs:全部/個人/同業/企業/其他/會員;Detail 下半顯示該客戶銷售紀錄。/members 已 redirect 到 /customers?tab=member)
         │   ├── reports/         SalesDailyReport(銷貨日報,按單分組純表格 + 作廢區塊 + CSV 匯出;收購二手不計毛利)
         │   ├── settings/        SettingsPage(發票類型 / 字軌 / 付款方式)
         │   ├── sim-cards/       SimCardsPage + SimCardForm

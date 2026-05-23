@@ -35,7 +35,16 @@ class SalesOrder(TenantOwnedModel):
         null=True,
         blank=True,
         verbose_name="客戶",
-        help_text="散客可不填",
+        help_text="這次交易的對象(收款/開發票對象);散客可不填",
+    )
+    member = models.ForeignKey(
+        "parties.Customer",
+        on_delete=models.PROTECT,
+        related_name="member_sales_orders",
+        null=True,
+        blank=True,
+        verbose_name="會員",
+        help_text="服務對象/會員制度的歸屬;與 customer 不互斥(同行帶來的客戶可記在此)",
     )
     warehouse = models.ForeignKey(
         "inventory.Warehouse",

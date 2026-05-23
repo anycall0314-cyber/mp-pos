@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { ApiHttpError } from "@/api/client";
-import { useCustomers, useSaveCustomer } from "@/api/hooks";
+import { useCustomers, useSalesOrders, useSaveCustomer } from "@/api/hooks";
 import type { Customer, CustomerKind } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
@@ -11,6 +12,17 @@ const CUSTOMER_KINDS: { value: CustomerKind; label: string }[] = [
   { value: "peer", label: "同業 / 盤商" },
   { value: "corporate", label: "企業" },
   { value: "other", label: "其他" },
+];
+
+type TabKey = "all" | CustomerKind | "member";
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "all", label: "全部" },
+  { key: "individual", label: "個人 / 直客" },
+  { key: "peer", label: "同業 / 盤商" },
+  { key: "corporate", label: "企業" },
+  { key: "other", label: "其他" },
+  { key: "member", label: "會員" },
 ];
 
 type Selection = { kind: "customer"; id: number } | { kind: "new" } | null;
@@ -50,7 +62,16 @@ function toForm(c: Customer): FormState {
   };
 }
 
+function isTabKey(v: string | null): v is TabKey {
+  return !!v && TABS.some((t) => t.key === v);
+}
+
 export function CustomersPage() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const tab: TabKey = isTabKey(tabParam) ? tabParam : "all";
+
   const result = useCustomers();
   const save = useSaveCustomer();
 
@@ -62,19 +83,25 @@ export function CustomersPage() {
 
   const customers = useMemo(() => {
     const list = result.data ?? [];
-    return [...list].sort((a, b) => a.phone.localeCompare(b.phone));
+    return [...list].sort((a, b) => a.name.localeCompare(b.name, "zh-Hant"));
   }, [result.data]);
+
+  const tabFiltered = useMemo(() => {
+    if (tab === "all") return customers;
+    if (tab === "member") return customers.filter((c) => c.is_member);
+    return customers.filter((c) => c.kind === tab);
+  }, [customers, tab]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return customers;
-    return customers.filter(
+    if (!q) return tabFiltered;
+    return tabFiltered.filter(
       (c) =>
         c.phone.toLowerCase().includes(q) ||
         c.name.toLowerCase().includes(q) ||
         c.tax_id.toLowerCase().includes(q),
     );
-  }, [customers, query]);
+  }, [tabFiltered, query]);
 
   const selected = useMemo(() => {
     if (selection?.kind !== "customer") return null;
@@ -87,23 +114,46 @@ export function CustomersPage() {
       setError(null);
       setSavedFlash(false);
     } else if (selection?.kind === "new") {
-      setForm(EMPTY_FORM);
+      setForm({
+        ...EMPTY_FORM,
+        kind: tab === "all" || tab === "member" ? "individual" : tab,
+        is_member: tab === "member",
+      });
       setError(null);
       setSavedFlash(false);
     }
-  }, [selection, selected]);
+  }, [selection, selected, tab]);
+
+  const customerId = selection?.kind === "customer" ? selection.id : null;
+  const orders = useSalesOrders(
+    customerId ? { customer: customerId } : undefined,
+  );
+
+  const orderStats = useMemo(() => {
+    const list = orders.data ?? [];
+    const active = list.filter((o) => !o.is_void);
+    const total = active.reduce((s, o) => s + Number(o.total || 0), 0);
+    const lastVisit = active.reduce<string | null>((d, o) => {
+      if (!d) return o.doc_date;
+      return o.doc_date > d ? o.doc_date : d;
+    }, null);
+    return { count: active.length, total, lastVisit };
+  }, [orders.data]);
 
   function patch<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
+  function selectTab(next: TabKey) {
+    const params = new URLSearchParams(searchParams);
+    if (next === "all") params.delete("tab");
+    else params.set("tab", next);
+    setSearchParams(params, { replace: true });
+  }
+
   async function handleSave() {
     const phone = form.phone.trim();
     const name = form.name.trim();
-    if (!phone) {
-      setError("電話必填(作為客戶識別)");
-      return;
-    }
     if (!name) {
       setError("姓名 / 名稱必填");
       return;
@@ -160,6 +210,42 @@ export function CustomersPage() {
         }
       />
 
+      <div style={{ padding: "8px 16px 0" }}>
+        <div className="tab-switcher">
+          {TABS.map((t) => {
+            const count =
+              t.key === "all"
+                ? customers.length
+                : t.key === "member"
+                  ? customers.filter((c) => c.is_member).length
+                  : customers.filter((c) => c.kind === t.key).length;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                className={
+                  t.key === tab
+                    ? "tab-switcher-item active"
+                    : "tab-switcher-item"
+                }
+                onClick={() => selectTab(t.key)}
+              >
+                {t.label}
+                <span
+                  style={{
+                    marginLeft: 6,
+                    opacity: 0.7,
+                    fontSize: 12,
+                  }}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="pc-layout">
         <aside className="pc-master" style={{ gridTemplateRows: "1fr" }}>
           <section className="pc-section">
@@ -188,9 +274,9 @@ export function CustomersPage() {
                 <table className="pc-list-table">
                   <thead>
                     <tr>
-                      <th style={{ width: 110 }}>電話</th>
                       <th>姓名 / 名稱</th>
-                      <th style={{ width: 70 }}>類別</th>
+                      <th style={{ width: 120 }}>電話</th>
+                      <th style={{ width: 90 }}>類別</th>
                       <th style={{ width: 44 }}>會員</th>
                     </tr>
                   </thead>
@@ -205,8 +291,10 @@ export function CustomersPage() {
                             : ""
                         }
                       >
-                        <td>{c.phone}</td>
                         <td>{c.name}</td>
+                        <td style={{ color: c.phone ? "inherit" : "var(--text-dim)" }}>
+                          {c.phone || "—"}
+                        </td>
                         <td>{c.kind_label}</td>
                         <td
                           style={{
@@ -220,7 +308,7 @@ export function CustomersPage() {
                     {filtered.length === 0 && (
                       <tr>
                         <td colSpan={4} className="md-empty">
-                          {query ? "查無客戶" : "尚無客戶,按右上角新增"}
+                          {query ? "查無客戶" : "此分類尚無客戶"}
                         </td>
                       </tr>
                     )}
@@ -241,21 +329,19 @@ export function CustomersPage() {
           {(isEditing || isNew) && (
             <div className="pc-detail-body">
               <h3 className="pc-detail-title">
-                {isNew ? "新增客戶" : `客戶 · ${selected?.phone} ${selected?.name}`}
+                {isNew ? "新增客戶" : `客戶 · ${selected?.name}`}
               </h3>
               {error && <Banner kind="error" message={error} />}
               {savedFlash && <Banner kind="success" message="已儲存" />}
               <dl>
-                <dt>
-                  電話 <span style={{ color: "#ff7070" }}>*</span>
-                </dt>
+                <dt>電話</dt>
                 <dd>
                   <input
                     value={form.phone}
                     onChange={(e) => patch("phone", e.target.value)}
                     maxLength={40}
-                    placeholder="作為客戶識別"
-                    style={{ width: 200 }}
+                    placeholder="選填(個人客戶建議填,同業/企業可省略)"
+                    style={{ width: 280 }}
                   />
                 </dd>
                 <dt>
@@ -353,6 +439,64 @@ export function CustomersPage() {
                   取消
                 </button>
               </div>
+
+              {isEditing && selected && (
+                <div style={{ marginTop: 24 }}>
+                  <h4 className="pc-detail-title">
+                    銷售紀錄
+                    {orders.isLoading
+                      ? " 載入中…"
+                      : ` (${orderStats.count} 筆 · 累計 $${orderStats.total.toLocaleString()}${
+                          orderStats.lastVisit
+                            ? ` · 最近 ${orderStats.lastVisit}`
+                            : ""
+                        })`}
+                  </h4>
+                  <div className="md-table" style={{ height: "auto" }}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>單號</th>
+                          <th>日期</th>
+                          <th>業務員</th>
+                          <th>課稅別</th>
+                          <th>發票號</th>
+                          <th className="num">總額</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(orders.data ?? []).map((so) => (
+                          <tr
+                            key={so.id}
+                            onClick={() => navigate(`/sales/${so.id}`)}
+                            className={so.is_void ? "row-void" : undefined}
+                          >
+                            <td>{so.no}</td>
+                            <td>{so.doc_date}</td>
+                            <td>
+                              {so.sales_person_name
+                                ? `${so.sales_person_code ?? ""} ${so.sales_person_name}`
+                                : "—"}
+                            </td>
+                            <td>{so.tax_method_label}</td>
+                            <td>{so.invoice_no || "—"}</td>
+                            <td className="num">
+                              {Number(so.total).toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                        {!orders.isLoading && (orders.data ?? []).length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="md-empty">
+                              此客戶尚無銷售紀錄
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -30,10 +30,10 @@ class SupplierViewSet(viewsets.ModelViewSet):
 
 class CustomerViewSet(viewsets.ModelViewSet):
     serializer_class = CustomerSerializer
-    search_fields = ["phone", "name", "tax_id"]
-    ordering_fields = ["phone", "name", "created_at"]
-    ordering = ["phone"]
-    filterset_fields = ["is_active"]
+    search_fields = ["code", "phone", "name", "tax_id"]
+    ordering_fields = ["code", "phone", "name", "created_at"]
+    ordering = ["code"]
+    filterset_fields = ["is_active", "kind", "is_member"]
 
     def get_queryset(self):
         return Customer.objects.for_tenant(self.request.tenant)
@@ -43,15 +43,23 @@ class CustomerViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="lookup")
     def lookup(self, request):
-        """以電話精準查會員;查無回 404 由前端詢問是否新增。"""
+        """以電話精準查會員;查無回 404 由前端詢問是否新增。
+
+        phone 在 Customer 上已非唯一(同行多人共用公司電話會發生),
+        多筆時優先回傳 is_member=True 的那筆,其次最舊建立的。
+        """
         phone = request.query_params.get("phone", "").strip()
         if not phone:
             return Response(
                 {"detail": "phone 為必填參數"}, status=status.HTTP_400_BAD_REQUEST
             )
-        try:
-            obj = self.get_queryset().get(phone=phone)
-        except Customer.DoesNotExist:
+        obj = (
+            self.get_queryset()
+            .filter(phone=phone)
+            .order_by("-is_member", "created_at")
+            .first()
+        )
+        if obj is None:
             return Response(
                 {"detail": "未登錄"}, status=status.HTTP_404_NOT_FOUND
             )

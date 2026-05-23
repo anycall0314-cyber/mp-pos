@@ -14,6 +14,7 @@ import {
 } from "@/api/hooks";
 import {
   SalesProductHit,
+  searchCustomers,
   searchInStockSerials,
   searchProductsForSales,
   searchSalesPersons,
@@ -738,6 +739,8 @@ const SALES_DRAFT_KEY = "sales-entry-draft";
 
 interface SalesDraft {
   customer: Customer | null;
+  customerOption: ComboOption<Customer> | null;
+  member: Customer | null;
   memberPhone: string;
   warehouse: number | "";
   warehouseOption: ComboOption<unknown> | null;
@@ -782,14 +785,19 @@ export function SalesEntryPage() {
     isNew ? loadSalesDraft() : null,
   ).current;
 
-  // 會員(用電話查):customer = null 代表散客
+  // 客戶(同行/直客/企業,用名稱搜):對應 SalesOrder.customer
   const [customer, setCustomer] = useState<Customer | null>(
     draft?.customer ?? null,
   );
+  const [customerOption, setCustomerOption] =
+    useState<ComboOption<Customer> | null>(draft?.customerOption ?? null);
+
+  // 會員(用電話查):對應 SalesOrder.member;與 customer 不互斥
+  const [member, setMember] = useState<Customer | null>(draft?.member ?? null);
   const [memberPhone, setMemberPhone] = useState(draft?.memberPhone ?? "");
   const [memberStatus, setMemberStatus] = useState<
     "idle" | "checking" | "found" | "not_found"
-  >(draft?.customer ? "found" : "idle");
+  >(draft?.member ? "found" : "idle");
   const [showCreateMember, setShowCreateMember] = useState(false);
   const [newMember, setNewMember] = useState<{
     name: string;
@@ -800,7 +808,7 @@ export function SalesEntryPage() {
     name: "",
     tax_id: "",
     kind: "individual",
-    is_member: false,
+    is_member: true,
   });
   const [warehouse, setWarehouse] = useState<number | "">(
     draft?.warehouse ?? "",
@@ -887,6 +895,8 @@ export function SalesEntryPage() {
     if (!isNew) return;
     const snapshot: SalesDraft = {
       customer,
+      customerOption,
+      member,
       memberPhone,
       warehouse,
       warehouseOption,
@@ -910,6 +920,8 @@ export function SalesEntryPage() {
   }, [
     isNew,
     customer,
+    customerOption,
+    member,
     memberPhone,
     warehouse,
     warehouseOption,
@@ -933,6 +945,8 @@ export function SalesEntryPage() {
     if (!confirm("確定清空目前已填寫的內容?")) return;
     clearDraft();
     setCustomer(null);
+    setCustomerOption(null);
+    setMember(null);
     setMemberPhone("");
     setMemberStatus("idle");
     setWarehouse("");
@@ -955,8 +969,10 @@ export function SalesEntryPage() {
     clearDraft();
     setSavedSO(null);
     setShowConfirm(false);
-    // 清:會員 / 明細 / 付款 / 發票號 / 買受人統編 / 備註
+    // 清:客戶 / 會員 / 明細 / 付款 / 發票號 / 買受人統編 / 備註
     setCustomer(null);
+    setCustomerOption(null);
+    setMember(null);
     setMemberPhone("");
     setMemberStatus("idle");
     setLines([newLine(1)]);
@@ -992,19 +1008,43 @@ export function SalesEntryPage() {
     if (existing.data && !isNew) {
       const d = existing.data;
       if (d.customer) {
-        setCustomer({
+        const c: Customer = {
           id: d.customer,
+          code: "",
           phone: d.customer_phone ?? "",
           name: d.customer_name ?? "",
           kind: "individual",
-          kind_label: "個人",
+          kind_label: d.customer_kind_label ?? "",
           is_member: false,
           tax_id: "",
           address: "",
           note: "",
           is_active: true,
+        };
+        setCustomer(c);
+        setCustomerOption({
+          id: c.id,
+          label: c.name,
+          secondary: c.kind_label,
+          payload: c,
         });
-        setMemberPhone(d.customer_phone ?? "");
+      }
+      if (d.member) {
+        const m: Customer = {
+          id: d.member,
+          code: "",
+          phone: d.member_phone ?? "",
+          name: d.member_name ?? "",
+          kind: "individual",
+          kind_label: "個人",
+          is_member: true,
+          tax_id: "",
+          address: "",
+          note: "",
+          is_active: true,
+        };
+        setMember(m);
+        setMemberPhone(d.member_phone ?? "");
         setMemberStatus("found");
       }
       setWarehouse(d.warehouse);
@@ -1098,20 +1138,20 @@ export function SalesEntryPage() {
   async function handleMemberLookup() {
     const phone = memberPhone.trim();
     if (!phone) {
-      setCustomer(null);
+      setMember(null);
       setMemberStatus("idle");
       return;
     }
     setMemberStatus("checking");
     const c = await lookupCustomer(phone);
     if (c) {
-      setCustomer(c);
+      setMember(c);
       setMemberStatus("found");
       if (isTaxable && c.tax_id && !buyerTaxId) {
         setBuyerTaxId(c.tax_id);
       }
     } else {
-      setCustomer(null);
+      setMember(null);
       setMemberStatus("not_found");
     }
   }
@@ -1128,14 +1168,14 @@ export function SalesEntryPage() {
         is_member: newMember.is_member,
         tax_id: newMember.tax_id || undefined,
       });
-      setCustomer(created);
+      setMember(created);
       setMemberStatus("found");
       setShowCreateMember(false);
       setNewMember({
         name: "",
         tax_id: "",
         kind: "individual",
-        is_member: false,
+        is_member: true,
       });
     } catch (e) {
       if (e instanceof ApiHttpError) {
@@ -1453,6 +1493,7 @@ export function SalesEntryPage() {
     try {
       const created = await createMutation.mutateAsync({
         customer: customer ? customer.id : null,
+        member: member ? member.id : null,
         warehouse: warehouse as number,
         doc_date: docDate,
         tax_method: taxMethod,
@@ -1642,22 +1683,20 @@ export function SalesEntryPage() {
               </Field>
             </div>
             <div style={{ gridArea: "customer" }}>
-              <Field label="客戶 (電話)">
-                <input
-                  type="tel"
-                  value={memberPhone}
-                  onChange={(e) => {
-                    setMemberPhone(e.target.value);
-                    setMemberStatus("idle");
-                    if (customer) setCustomer(null);
-                  }}
-                  onBlur={handleMemberLookup}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleMemberLookup();
+              <Field label="客戶">
+                <ComboBox<Customer>
+                  value={customer?.id ?? ""}
+                  selectedOption={customerOption}
+                  onChange={(_id, opt) => {
+                    setCustomerOption(opt ?? null);
+                    const c = opt?.payload ?? null;
+                    setCustomer(c);
+                    if (isTaxable && c?.tax_id && !buyerTaxId) {
+                      setBuyerTaxId(c.tax_id);
                     }
                   }}
+                  fetchOptions={searchCustomers}
+                  placeholder="搜尋名稱 / 電話 / 統編"
                   disabled={readonly}
                 />
               </Field>
@@ -1712,32 +1751,46 @@ export function SalesEntryPage() {
               </Field>
             </div>
             <div style={{ gridArea: "member" }}>
-              <Field label="會員">
-                <div className="member-status">
-                  {memberStatus === "checking" && (
-                    <span style={{ color: "var(--text-dim)" }}>查詢中…</span>
-                  )}
-                  {memberStatus === "found" && customer && (
-                    <span style={{ color: "#80d090" }}>
-                      ✓ {customer.name} ({customer.kind_label}
-                      {customer.is_member ? " / 會員" : ""})
-                    </span>
-                  )}
-                  {memberStatus === "not_found" && !readonly && (
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => setShowCreateMember(true)}
-                    >
-                      未登錄,新增
-                    </button>
-                  )}
-                  {(memberStatus === "idle" ||
-                    (memberStatus === "found" && !customer)) && (
-                    <span style={{ color: "var(--text-dim)" }}>
-                      輸入電話查詢
-                    </span>
-                  )}
+              <Field label="會員 (電話)">
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <input
+                    type="tel"
+                    value={memberPhone}
+                    onChange={(e) => {
+                      setMemberPhone(e.target.value);
+                      setMemberStatus("idle");
+                      if (member) setMember(null);
+                    }}
+                    onBlur={handleMemberLookup}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleMemberLookup();
+                      }
+                    }}
+                    disabled={readonly}
+                    style={{ flex: 1, minWidth: 0 }}
+                  />
+                  <div className="member-status" style={{ flexShrink: 0 }}>
+                    {memberStatus === "checking" && (
+                      <span style={{ color: "var(--text-dim)" }}>查詢中…</span>
+                    )}
+                    {memberStatus === "found" && member && (
+                      <span style={{ color: "#80d090" }}>
+                        ✓ {member.name}
+                        {member.is_member ? "" : " (非會員)"}
+                      </span>
+                    )}
+                    {memberStatus === "not_found" && !readonly && (
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => setShowCreateMember(true)}
+                      >
+                        未登錄,新增
+                      </button>
+                    )}
+                  </div>
                 </div>
               </Field>
             </div>
@@ -1908,8 +1961,13 @@ export function SalesEntryPage() {
           tax={Math.round(estTax)}
           itemsCount={lines.length}
           customerLabel={
-            customer
-              ? `${customer.phone} ${customer.name ?? ""}`
+            customer || member
+              ? [
+                  customer ? `客戶: ${customer.name}` : null,
+                  member ? `會員: ${member.name}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" / ")
               : "(散客)"
           }
           methods={paymentMethods}
@@ -1936,7 +1994,7 @@ export function SalesEntryPage() {
 
       <Drawer
         open={showCreateMember}
-        title={`新增客戶 (${memberPhone})`}
+        title={`新增會員 (${memberPhone})`}
         onClose={() => setShowCreateMember(false)}
         width={420}
         footer={

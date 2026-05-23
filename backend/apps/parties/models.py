@@ -217,7 +217,10 @@ class SalesPerson(TenantOwnedModel):
 
 
 class Customer(TenantOwnedModel):
-    """客戶。涵蓋個人/同業/企業等客源類型;會員為個人客戶之中的子身分。電話為識別。"""
+    """客戶。涵蓋個人/同業/企業等客源類型;會員為其中可選的子身分。
+
+    識別:code 為系統自動產生的編號 (C-{5 位流水});phone 為選填(同業/企業可不填)。
+    """
 
     class Kind(models.TextChoices):
         INDIVIDUAL = "individual", "個人"
@@ -225,7 +228,14 @@ class Customer(TenantOwnedModel):
         CORPORATE = "corporate", "企業"
         OTHER = "other", "其他"
 
-    phone = models.CharField("電話", max_length=40)
+    code = models.SlugField(
+        "客戶編號",
+        max_length=20,
+        blank=True,
+        editable=False,
+        help_text="系統自動產生:C-{5位流水};前端不顯示也不輸入",
+    )
+    phone = models.CharField("電話", max_length=40, blank=True)
     name = models.CharField("姓名 / 名稱", max_length=120)
     kind = models.CharField(
         "客戶類別",
@@ -247,13 +257,20 @@ class Customer(TenantOwnedModel):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["tenant", "phone"],
-                name="uniq_customer_tenant_phone",
+                fields=["tenant", "code"],
+                name="uniq_customer_tenant_code",
             ),
         ]
-        ordering = ["phone"]
+        ordering = ["code"]
         verbose_name = "客戶"
         verbose_name_plural = "客戶"
 
     def __str__(self) -> str:
-        return f"{self.phone} {self.name}"
+        return f"{self.code} {self.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            if self.tenant_id is None:
+                raise ValueError("建立客戶必須先指定 tenant")
+            self.code = self.tenant.issue_next_customer_code()
+        super().save(*args, **kwargs)

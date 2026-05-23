@@ -172,6 +172,7 @@ export type CustomerKind = "individual" | "peer" | "corporate" | "other";
 
 export interface Customer {
   id: number;
+  code: string;
   phone: string;
   name: string;
   kind: CustomerKind;
@@ -410,6 +411,10 @@ export interface SalesOrder {
   customer: number | null;
   customer_phone: string | null;
   customer_name: string | null;
+  customer_kind_label: string | null;
+  member: number | null;
+  member_phone: string | null;
+  member_name: string | null;
   warehouse: number;
   warehouse_code: string;
   warehouse_name: string;

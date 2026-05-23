@@ -43,6 +43,7 @@ class CustomerSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
         model = Customer
         fields = [
             "id",
+            "code",
             "phone",
             "name",
             "kind",
@@ -55,12 +56,7 @@ class CustomerSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "kind_label", "created_at", "updated_at"]
-
-    def validate_phone(self, value):
-        if not value:
-            raise serializers.ValidationError("電話為必填")
-        return self._tenant_unique(Customer.objects, "phone", value)
+        read_only_fields = ["id", "code", "kind_label", "created_at", "updated_at"]
 
 
 class SalesPersonSerializer(_TenantUniqueMixin, serializers.ModelSerializer):

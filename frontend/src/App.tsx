@@ -3,7 +3,6 @@ import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom"
 
 import { CategoriesPage } from "@/pages/inventory/CategoriesPage";
 import { InventoryQueryPage } from "@/pages/inventory/InventoryQueryPage";
-import { MembersPage } from "@/pages/members/MembersPage";
 import { ProductsPage } from "@/pages/products/ProductsPage";
 import { PurchasesPage } from "@/pages/purchases/PurchasesPage";
 import { PurchaseEntryPage } from "@/pages/purchases/PurchaseEntryPage";
@@ -69,7 +68,6 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/transfers", label: "調撥作業" },
       { to: "/sales/pre-orders", label: "訂購作業" },
       { to: "/customers", label: "客戶管理" },
-      { to: "/members", label: "會員查詢" },
     ],
   },
   {
@@ -222,7 +220,10 @@ export function App() {
           <Route path="/sales/:id" element={<SalesEntryPage />} />
           <Route path="/sales/:id/print/:type" element={<SalesPrintPage />} />
           <Route path="/customers" element={<CustomersPage />} />
-          <Route path="/members" element={<MembersPage />} />
+          <Route
+            path="/members"
+            element={<Navigate to="/customers?tab=member" replace />}
+          />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/suppliers" element={<SuppliersPage />} />
           <Route path="/sales-persons" element={<SalesPersonsPage />} />

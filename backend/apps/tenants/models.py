@@ -10,6 +10,9 @@ class Tenant(TimestampedModel):
     next_supplier_seq = models.PositiveIntegerField(
         "下一供應商流水", default=1, editable=False
     )
+    next_customer_seq = models.PositiveIntegerField(
+        "下一客戶流水", default=1, editable=False
+    )
 
     class Meta:
         ordering = ["id"]
@@ -28,6 +31,16 @@ class Tenant(TimestampedModel):
             row.save(update_fields=["next_supplier_seq"])
             self.next_supplier_seq = row.next_supplier_seq
             return f"S-{seq:06d}"
+
+    def issue_next_customer_code(self) -> str:
+        """原子地取下一個客戶代碼:`C-{5位流水}`。"""
+        with transaction.atomic():
+            row = Tenant.objects.select_for_update().get(pk=self.pk)
+            seq = row.next_customer_seq
+            row.next_customer_seq = seq + 1
+            row.save(update_fields=["next_customer_seq"])
+            self.next_customer_seq = row.next_customer_seq
+            return f"C-{seq:05d}"
 
 
 class InvoiceType(TenantOwnedModel):

@@ -152,6 +152,11 @@ class SalesOrderSerializer(serializers.ModelSerializer):
     payments = SalesOrderPaymentSerializer(many=True, required=False)
     customer_phone = serializers.CharField(source="customer.phone", read_only=True)
     customer_name = serializers.CharField(source="customer.name", read_only=True)
+    customer_kind_label = serializers.CharField(
+        source="customer.get_kind_display", read_only=True
+    )
+    member_phone = serializers.CharField(source="member.phone", read_only=True)
+    member_name = serializers.CharField(source="member.name", read_only=True)
     warehouse_code = serializers.CharField(source="warehouse.code", read_only=True)
     warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
     sales_person_code = serializers.CharField(
@@ -172,6 +177,10 @@ class SalesOrderSerializer(serializers.ModelSerializer):
             "customer",
             "customer_phone",
             "customer_name",
+            "customer_kind_label",
+            "member",
+            "member_phone",
+            "member_name",
             "warehouse",
             "warehouse_code",
             "warehouse_name",
@@ -202,6 +211,9 @@ class SalesOrderSerializer(serializers.ModelSerializer):
             "no",
             "customer_phone",
             "customer_name",
+            "customer_kind_label",
+            "member_phone",
+            "member_name",
             "warehouse_code",
             "warehouse_name",
             "sales_person_code",
