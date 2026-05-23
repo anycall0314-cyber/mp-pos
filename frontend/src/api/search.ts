@@ -192,6 +192,42 @@ export async function searchCustomers(
   }));
 }
 
+// 銷貨單「會員」欄位用:吃電話/姓名/統編,僅回 is_member=true 的客戶
+export async function searchMembers(
+  query: string,
+): Promise<ComboOption<Customer>[]> {
+  const data = await fetchPaginated<Customer>(
+    `/customers/?${qs({ search: query, is_member: "true", page_size: LIMIT })}`,
+  );
+  return data.map((c) => ({
+    id: c.id,
+    label: c.name || c.phone || `#${c.id}`,
+    secondary: [c.phone, c.kind_label].filter(Boolean).join(" / "),
+    payload: c,
+  }));
+}
+
+// 銷貨單「客戶」欄位用:只回同行/企業/其他(不含個人),避免誤把個人會員當作客戶歸屬
+export async function searchBusinessCustomers(
+  query: string,
+): Promise<ComboOption<Customer>[]> {
+  const data = await fetchPaginated<Customer>(
+    `/customers/?${qs({
+      search: query,
+      kind__in: "peer,corporate,other",
+      page_size: LIMIT,
+    })}`,
+  );
+  return data.map((c) => ({
+    id: c.id,
+    label: c.name || `#${c.id}`,
+    secondary: [c.kind_label, c.tax_id || null, c.phone || null]
+      .filter(Boolean)
+      .join(" / "),
+    payload: c,
+  }));
+}
+
 export async function searchSuppliers(
   query: string,
 ): Promise<ComboOption<Supplier>[]> {

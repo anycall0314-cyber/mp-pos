@@ -1,9 +1,20 @@
+import django_filters
 from django.db import transaction
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from .models import Carrier, Customer, SalesPerson, SimCard, Supplier, TelecomPlan
+
+
+class CustomerFilter(django_filters.FilterSet):
+    """讓「客戶」欄位能一次過濾多個 kind:`?kind__in=peer,corporate,other`。"""
+
+    kind__in = django_filters.BaseInFilter(field_name="kind", lookup_expr="in")
+
+    class Meta:
+        model = Customer
+        fields = ["is_active", "kind", "is_member"]
 from .serializers import (
     CarrierSerializer,
     CustomerSerializer,
@@ -33,7 +44,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
     search_fields = ["code", "phone", "name", "tax_id"]
     ordering_fields = ["code", "phone", "name", "created_at"]
     ordering = ["code"]
-    filterset_fields = ["is_active", "kind", "is_member"]
+    filterset_class = CustomerFilter
 
     def get_queryset(self):
         return Customer.objects.for_tenant(self.request.tenant)

@@ -3,7 +3,6 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { ApiHttpError } from "@/api/client";
 import {
-  lookupCustomer,
   peekInvoiceNo,
   useCreateSalesOrder,
   useInvoiceTypes,
@@ -14,8 +13,9 @@ import {
 } from "@/api/hooks";
 import {
   SalesProductHit,
-  searchCustomers,
+  searchBusinessCustomers,
   searchInStockSerials,
+  searchMembers,
   searchProductsForSales,
   searchSalesPersons,
   searchSimCards,
@@ -429,6 +429,13 @@ const CUSTOMER_KINDS: { value: CustomerKind; label: string }[] = [
   { value: "other", label: "其他" },
 ];
 
+// 「新增客戶」dialog 限定的類別:不含個人(會員專用),避免誤把個人當作生意歸屬
+const BUSINESS_KINDS: { value: CustomerKind; label: string }[] = [
+  { value: "peer", label: "同業 / 盤商" },
+  { value: "corporate", label: "企業" },
+  { value: "other", label: "其他" },
+];
+
 const TAX_METHODS: { value: TaxMethod; label: string }[] = [
   { value: "taxable_included", label: "應稅內含" },
   { value: "taxable_excluded", label: "應稅外加" },
@@ -741,7 +748,7 @@ interface SalesDraft {
   customer: Customer | null;
   customerOption: ComboOption<Customer> | null;
   member: Customer | null;
-  memberPhone: string;
+  memberOption: ComboOption<Customer> | null;
   warehouse: number | "";
   warehouseOption: ComboOption<unknown> | null;
   docDate: string;
@@ -792,23 +799,38 @@ export function SalesEntryPage() {
   const [customerOption, setCustomerOption] =
     useState<ComboOption<Customer> | null>(draft?.customerOption ?? null);
 
-  // 會員(用電話查):對應 SalesOrder.member;與 customer 不互斥
+  // 會員(個人,is_member=true):對應 SalesOrder.member;與 customer 不互斥
   const [member, setMember] = useState<Customer | null>(draft?.member ?? null);
-  const [memberPhone, setMemberPhone] = useState(draft?.memberPhone ?? "");
-  const [memberStatus, setMemberStatus] = useState<
-    "idle" | "checking" | "found" | "not_found"
-  >(draft?.member ? "found" : "idle");
+  const [memberOption, setMemberOption] =
+    useState<ComboOption<Customer> | null>(draft?.memberOption ?? null);
   const [showCreateMember, setShowCreateMember] = useState(false);
   const [newMember, setNewMember] = useState<{
+    phone: string;
     name: string;
     tax_id: string;
     kind: CustomerKind;
     is_member: boolean;
   }>({
+    phone: "",
     name: "",
     tax_id: "",
     kind: "individual",
     is_member: true,
+  });
+
+  const [showCreateCustomer, setShowCreateCustomer] = useState(false);
+  const [newCustomer, setNewCustomer] = useState<{
+    name: string;
+    kind: CustomerKind;
+    tax_id: string;
+    phone: string;
+    note: string;
+  }>({
+    name: "",
+    kind: "peer",
+    tax_id: "",
+    phone: "",
+    note: "",
   });
   const [warehouse, setWarehouse] = useState<number | "">(
     draft?.warehouse ?? "",
@@ -897,7 +919,7 @@ export function SalesEntryPage() {
       customer,
       customerOption,
       member,
-      memberPhone,
+      memberOption,
       warehouse,
       warehouseOption,
       docDate,
@@ -922,7 +944,7 @@ export function SalesEntryPage() {
     customer,
     customerOption,
     member,
-    memberPhone,
+    memberOption,
     warehouse,
     warehouseOption,
     docDate,
@@ -947,8 +969,7 @@ export function SalesEntryPage() {
     setCustomer(null);
     setCustomerOption(null);
     setMember(null);
-    setMemberPhone("");
-    setMemberStatus("idle");
+    setMemberOption(null);
     setWarehouse("");
     setWarehouseOption(null);
     setDocDate(new Date().toISOString().slice(0, 10));
@@ -973,8 +994,7 @@ export function SalesEntryPage() {
     setCustomer(null);
     setCustomerOption(null);
     setMember(null);
-    setMemberPhone("");
-    setMemberStatus("idle");
+    setMemberOption(null);
     setLines([newLine(1)]);
     setSelectedLineKey(null);
     setPayAmounts({});
@@ -1044,8 +1064,12 @@ export function SalesEntryPage() {
           is_active: true,
         };
         setMember(m);
-        setMemberPhone(d.member_phone ?? "");
-        setMemberStatus("found");
+        setMemberOption({
+          id: m.id,
+          label: m.name || m.phone || `#${m.id}`,
+          secondary: m.phone,
+          payload: m,
+        });
       }
       setWarehouse(d.warehouse);
       setWarehouseOption({
@@ -1135,47 +1159,76 @@ export function SalesEntryPage() {
     }
   }, [existing.data, isNew]);
 
-  async function handleMemberLookup() {
-    const phone = memberPhone.trim();
+  async function handleCreateMember() {
+    const phone = newMember.phone.trim();
+    const name = newMember.name.trim();
     if (!phone) {
-      setMember(null);
-      setMemberStatus("idle");
+      setError("電話必填(會員以電話為主要識別)");
       return;
     }
-    setMemberStatus("checking");
-    const c = await lookupCustomer(phone);
-    if (c) {
-      setMember(c);
-      setMemberStatus("found");
-      if (isTaxable && c.tax_id && !buyerTaxId) {
-        setBuyerTaxId(c.tax_id);
-      }
-    } else {
-      setMember(null);
-      setMemberStatus("not_found");
-    }
-  }
-
-
-  async function handleCreateMember() {
-    const phone = memberPhone.trim();
-    if (!phone || !newMember.name.trim()) return;
+    if (!name) return;
     try {
       const created = await saveCustomer.mutateAsync({
         phone,
-        name: newMember.name.trim(),
+        name,
         kind: newMember.kind,
         is_member: newMember.is_member,
         tax_id: newMember.tax_id || undefined,
       });
       setMember(created);
-      setMemberStatus("found");
+      setMemberOption({
+        id: created.id,
+        label: created.name || created.phone || `#${created.id}`,
+        secondary: created.phone,
+        payload: created,
+      });
       setShowCreateMember(false);
       setNewMember({
+        phone: "",
         name: "",
         tax_id: "",
         kind: "individual",
         is_member: true,
+      });
+    } catch (e) {
+      if (e instanceof ApiHttpError) {
+        const body = e.body;
+        setError(`新增會員失敗:${JSON.stringify(body)}`);
+      }
+    }
+  }
+
+  async function handleCreateCustomer() {
+    const name = newCustomer.name.trim();
+    if (!name) return;
+    try {
+      const created = await saveCustomer.mutateAsync({
+        name,
+        kind: newCustomer.kind,
+        is_member: false,
+        tax_id: newCustomer.tax_id.trim() || undefined,
+        phone: newCustomer.phone.trim() || undefined,
+        note: newCustomer.note.trim() || undefined,
+      });
+      setCustomer(created);
+      setCustomerOption({
+        id: created.id,
+        label: created.name || `#${created.id}`,
+        secondary: [created.kind_label, created.tax_id || null]
+          .filter(Boolean)
+          .join(" / "),
+        payload: created,
+      });
+      if (isTaxable && created.tax_id && !buyerTaxId) {
+        setBuyerTaxId(created.tax_id);
+      }
+      setShowCreateCustomer(false);
+      setNewCustomer({
+        name: "",
+        kind: "peer",
+        tax_id: "",
+        phone: "",
+        note: "",
       });
     } catch (e) {
       if (e instanceof ApiHttpError) {
@@ -1683,22 +1736,36 @@ export function SalesEntryPage() {
               </Field>
             </div>
             <div style={{ gridArea: "customer" }}>
-              <Field label="客戶">
-                <ComboBox<Customer>
-                  value={customer?.id ?? ""}
-                  selectedOption={customerOption}
-                  onChange={(_id, opt) => {
-                    setCustomerOption(opt ?? null);
-                    const c = opt?.payload ?? null;
-                    setCustomer(c);
-                    if (isTaxable && c?.tax_id && !buyerTaxId) {
-                      setBuyerTaxId(c.tax_id);
-                    }
-                  }}
-                  fetchOptions={searchCustomers}
-                  placeholder="搜尋名稱 / 電話 / 統編"
-                  disabled={readonly}
-                />
+              <Field label="客戶 (同行 / 企業)">
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <ComboBox<Customer>
+                      value={customer?.id ?? ""}
+                      selectedOption={customerOption}
+                      onChange={(_id, opt) => {
+                        setCustomerOption(opt ?? null);
+                        const c = opt?.payload ?? null;
+                        setCustomer(c);
+                        if (isTaxable && c?.tax_id && !buyerTaxId) {
+                          setBuyerTaxId(c.tax_id);
+                        }
+                      }}
+                      fetchOptions={searchBusinessCustomers}
+                      placeholder="搜尋名稱 / 統編 (僅同行/企業)"
+                      disabled={readonly}
+                    />
+                  </div>
+                  {!readonly && (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setShowCreateCustomer(true)}
+                      style={{ flexShrink: 0 }}
+                    >
+                      + 新增
+                    </button>
+                  )}
+                </div>
               </Field>
             </div>
 
@@ -1751,46 +1818,35 @@ export function SalesEntryPage() {
               </Field>
             </div>
             <div style={{ gridArea: "member" }}>
-              <Field label="會員 (電話)">
+              <Field label="會員">
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <input
-                    type="tel"
-                    value={memberPhone}
-                    onChange={(e) => {
-                      setMemberPhone(e.target.value);
-                      setMemberStatus("idle");
-                      if (member) setMember(null);
-                    }}
-                    onBlur={handleMemberLookup}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleMemberLookup();
-                      }
-                    }}
-                    disabled={readonly}
-                    style={{ flex: 1, minWidth: 0 }}
-                  />
-                  <div className="member-status" style={{ flexShrink: 0 }}>
-                    {memberStatus === "checking" && (
-                      <span style={{ color: "var(--text-dim)" }}>查詢中…</span>
-                    )}
-                    {memberStatus === "found" && member && (
-                      <span style={{ color: "#80d090" }}>
-                        ✓ {member.name}
-                        {member.is_member ? "" : " (非會員)"}
-                      </span>
-                    )}
-                    {memberStatus === "not_found" && !readonly && (
-                      <button
-                        type="button"
-                        className="btn"
-                        onClick={() => setShowCreateMember(true)}
-                      >
-                        未登錄,新增
-                      </button>
-                    )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <ComboBox<Customer>
+                      value={member?.id ?? ""}
+                      selectedOption={memberOption}
+                      onChange={(_id, opt) => {
+                        setMemberOption(opt ?? null);
+                        const m = opt?.payload ?? null;
+                        setMember(m);
+                        if (isTaxable && m?.tax_id && !buyerTaxId) {
+                          setBuyerTaxId(m.tax_id);
+                        }
+                      }}
+                      fetchOptions={searchMembers}
+                      placeholder="搜尋電話 / 姓名 / 統編"
+                      disabled={readonly}
+                    />
                   </div>
+                  {!readonly && (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setShowCreateMember(true)}
+                      style={{ flexShrink: 0 }}
+                    >
+                      + 新增
+                    </button>
+                  )}
                 </div>
               </Field>
             </div>
@@ -1994,7 +2050,7 @@ export function SalesEntryPage() {
 
       <Drawer
         open={showCreateMember}
-        title={`新增會員 (${memberPhone})`}
+        title="新增會員"
         onClose={() => setShowCreateMember(false)}
         width={420}
         footer={
@@ -2010,15 +2066,26 @@ export function SalesEntryPage() {
               className="btn primary"
               type="button"
               onClick={handleCreateMember}
-              disabled={saveCustomer.isPending || !newMember.name.trim()}
+              disabled={
+                saveCustomer.isPending ||
+                !newMember.name.trim() ||
+                !newMember.phone.trim()
+              }
             >
               {saveCustomer.isPending ? "儲存中…" : "建立並使用"}
             </button>
           </>
         }
       >
-        <Field label="電話">
-          <input value={memberPhone} disabled />
+        <Field label="電話" required>
+          <input
+            value={newMember.phone}
+            onChange={(e) =>
+              setNewMember((s) => ({ ...s, phone: e.target.value }))
+            }
+            placeholder="會員以電話為主要識別"
+            maxLength={40}
+          />
         </Field>
         <Field label="姓名 / 名稱" required>
           <input
@@ -2059,6 +2126,90 @@ export function SalesEntryPage() {
           onChange={(v) => setNewMember((s) => ({ ...s, is_member: v }))}
           label="設為會員"
         />
+      </Drawer>
+
+      <Drawer
+        open={showCreateCustomer}
+        title="新增客戶 (同行 / 企業)"
+        onClose={() => setShowCreateCustomer(false)}
+        width={420}
+        footer={
+          <>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => setShowCreateCustomer(false)}
+            >
+              取消
+            </button>
+            <button
+              className="btn primary"
+              type="button"
+              onClick={handleCreateCustomer}
+              disabled={saveCustomer.isPending || !newCustomer.name.trim()}
+            >
+              {saveCustomer.isPending ? "儲存中…" : "建立並使用"}
+            </button>
+          </>
+        }
+      >
+        <Field label="名稱" required>
+          <input
+            value={newCustomer.name}
+            autoFocus
+            onChange={(e) =>
+              setNewCustomer((s) => ({ ...s, name: e.target.value }))
+            }
+            maxLength={120}
+            placeholder="例:中華電信 / 通訊宅配 / 陳通路"
+          />
+        </Field>
+        <Field label="客戶類別">
+          <select
+            value={newCustomer.kind}
+            onChange={(e) =>
+              setNewCustomer((s) => ({
+                ...s,
+                kind: e.target.value as CustomerKind,
+              }))
+            }
+          >
+            {BUSINESS_KINDS.map((k) => (
+              <option key={k.value} value={k.value}>
+                {k.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="統一編號">
+          <input
+            value={newCustomer.tax_id}
+            onChange={(e) =>
+              setNewCustomer((s) => ({ ...s, tax_id: e.target.value }))
+            }
+            maxLength={20}
+            placeholder="企業/同行建議填,開發票自動帶入"
+          />
+        </Field>
+        <Field label="電話">
+          <input
+            value={newCustomer.phone}
+            onChange={(e) =>
+              setNewCustomer((s) => ({ ...s, phone: e.target.value }))
+            }
+            maxLength={40}
+            placeholder="選填"
+          />
+        </Field>
+        <Field label="備註">
+          <input
+            value={newCustomer.note}
+            onChange={(e) =>
+              setNewCustomer((s) => ({ ...s, note: e.target.value }))
+            }
+            maxLength={200}
+          />
+        </Field>
       </Drawer>
     </div>
   );
