@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
+import { CashAdjustmentsPage } from "@/pages/cash/CashAdjustmentsPage";
 import { PettyExpensesPage } from "@/pages/cash/PettyExpensesPage";
 import { CategoriesPage } from "@/pages/inventory/CategoriesPage";
 import { InventoryQueryPage } from "@/pages/inventory/InventoryQueryPage";
@@ -8,6 +9,7 @@ import { ProductsPage } from "@/pages/products/ProductsPage";
 import { PurchasesPage } from "@/pages/purchases/PurchasesPage";
 import { PurchaseEntryPage } from "@/pages/purchases/PurchaseEntryPage";
 import { PurchaseLabelsPrintPage } from "@/pages/purchases/PurchaseLabelsPrintPage";
+import { BusinessDailyReportPage } from "@/pages/reports/BusinessDailyReport";
 import { SalesDailyReportPage } from "@/pages/reports/SalesDailyReport";
 import { SecondhandAcquisitionPage } from "@/pages/secondhand-acquisition/SecondhandAcquisitionPage";
 import { TransfersPage } from "@/pages/transfers/TransfersPage";
@@ -47,6 +49,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/reports/margin-summary", label: "毛利彙總" },
       { to: "/reports/invoice-detail", label: "發票明細" },
       { to: "/expenses", label: "店頭雜支" },
+      { to: "/cash-adjustments", label: "現金調整" },
     ],
   },
   {
@@ -264,6 +267,10 @@ export function App() {
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/expenses" element={<PettyExpensesPage />} />
           <Route
+            path="/cash-adjustments"
+            element={<CashAdjustmentsPage />}
+          />
+          <Route
             path="/members"
             element={<Navigate to="/customers?tab=member" replace />}
           />
@@ -326,7 +333,7 @@ export function App() {
           />
           <Route
             path="/reports/business-daily"
-            element={<Placeholder title="營業日報" />}
+            element={<BusinessDailyReportPage />}
           />
           <Route
             path="/reports/margin-summary"

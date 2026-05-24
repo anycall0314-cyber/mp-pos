@@ -471,3 +471,29 @@ export interface PettyExpense {
   created_at: string;
   updated_at: string;
 }
+
+export type CashAdjustmentDirection = "in" | "out";
+export type CashAdjustmentReason =
+  | "refill"
+  | "deposit"
+  | "owner_take"
+  | "adjustment"
+  | "other";
+
+export interface CashAdjustment {
+  id: number;
+  no: string;
+  warehouse: number;
+  warehouse_code: string;
+  warehouse_name: string;
+  doc_date: string;
+  direction: CashAdjustmentDirection;
+  direction_label: string;
+  reason: CashAdjustmentReason;
+  reason_label: string;
+  amount: string;
+  note: string;
+  is_void: boolean;
+  created_at: string;
+  updated_at: string;
+}

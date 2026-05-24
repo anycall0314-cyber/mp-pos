@@ -1,3 +1,5 @@
+from datetime import date
+
 from rest_framework import serializers
 
 from .models import PurchaseOrder, PurchaseOrderCategory, PurchaseOrderItem
@@ -137,6 +139,8 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             PurchaseOrderItem.objects.create(po=po, tenant=po.tenant, **item_data)
 
     def create(self, validated_data):
+        # 單據日期一律強制為系統當天,忽略傳入值以防竄改
+        validated_data["doc_date"] = date.today()
         items_data = validated_data.pop("items", [])
         po = PurchaseOrder.objects.create(**validated_data)
         self._save_items(po, items_data)

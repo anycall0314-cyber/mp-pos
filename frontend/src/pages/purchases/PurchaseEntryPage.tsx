@@ -489,8 +489,9 @@ export function PurchaseEntryPage({
   const [category, setCategory] = useState<number | "">(draft?.category ?? "");
   const [categoryOption, setCategoryOption] =
     useState<ComboOption<unknown> | null>(draft?.categoryOption ?? null);
+  // 單據日期一律 today,不開放更改(防竄改);舊單載入時會被 existing 覆寫顯示原值
   const [docDate, setDocDate] = useState(
-    () => draft?.docDate ?? new Date().toISOString().slice(0, 10),
+    () => new Date().toISOString().slice(0, 10),
   );
   const [taxMethod, setTaxMethod] = useState<TaxMethod>(
     draft?.taxMethod ?? "taxable_included",
@@ -1042,8 +1043,8 @@ export function PurchaseEntryPage({
               <input
                 type="date"
                 value={docDate}
-                onChange={(e) => setDocDate(e.target.value)}
-                disabled={readonly}
+                disabled
+                title="單據日期一律以系統當天為準,不可更改"
               />
             </Field>
           </div>
@@ -1318,24 +1319,31 @@ export function PurchaseEntryPage({
           </div>
         )}
        </div>
-       <SerialAside
-         line={lines.find((l) => l.key === selectedLineKey) ?? null}
-         readonly={readonly}
-         containerRef={serialPanelRef}
-         onUpdateSerial={(idx, v) =>
-           selectedLineKey && updateSerialAt(selectedLineKey, idx, v)
-         }
-         onPasteSerials={(idx, list) =>
-           selectedLineKey && pasteSerialsAt(selectedLineKey, idx, list)
-         }
-         onUpdateSerialField={(idx, field, v) =>
-           selectedLineKey &&
-           updateSerialFieldAt(selectedLineKey, idx, field, v)
-         }
-         onApplyToAll={(idx) =>
-           selectedLineKey && applySecondhandToAll(selectedLineKey, idx)
-         }
-       />
+       {(() => {
+         const sel = lines.find((l) => l.key === selectedLineKey);
+         const p = sel?.productOption?.payload;
+         if (!p?.requires_serial) return null;
+         return (
+           <SerialAside
+             line={sel ?? null}
+             readonly={readonly}
+             containerRef={serialPanelRef}
+             onUpdateSerial={(idx, v) =>
+               selectedLineKey && updateSerialAt(selectedLineKey, idx, v)
+             }
+             onPasteSerials={(idx, list) =>
+               selectedLineKey && pasteSerialsAt(selectedLineKey, idx, list)
+             }
+             onUpdateSerialField={(idx, field, v) =>
+               selectedLineKey &&
+               updateSerialFieldAt(selectedLineKey, idx, field, v)
+             }
+             onApplyToAll={(idx) =>
+               selectedLineKey && applySecondhandToAll(selectedLineKey, idx)
+             }
+           />
+         );
+       })()}
       </div>
 
       <div className="entry-footer">

@@ -83,3 +83,82 @@ class PettyExpense(TenantOwnedModel):
                 raise ValueError("建立雜支單必須先指定 tenant")
             self.no = self.tenant.issue_next_expense_no()
         super().save(*args, **kwargs)
+
+
+class CashAdjustment(TenantOwnedModel):
+    """現金調整單。
+
+    用途:
+    - direction=in:老闆下錢進店頭備用金(零用金不夠時補)
+    - direction=out:從店頭領現金去存銀行 / 拿回家
+    - 期初校正(現場盤點現金 vs 系統不符,記一筆把帳調平)
+
+    自動編號:CA-{5 位流水}。
+    """
+
+    class Direction(models.TextChoices):
+        IN = "in", "存入(老闆補錢)"
+        OUT = "out", "提取(領出 / 存銀行)"
+
+    class Reason(models.TextChoices):
+        REFILL = "refill", "補充備用金"
+        DEPOSIT = "deposit", "領現存銀行"
+        OWNER_TAKE = "owner_take", "老闆領用"
+        ADJUSTMENT = "adjustment", "盤點校正"
+        OTHER = "other", "其他"
+
+    no = models.CharField(
+        "單號",
+        max_length=20,
+        editable=False,
+        blank=True,
+        help_text="系統自動產生:CA-{5位流水}",
+    )
+    warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.PROTECT,
+        related_name="cash_adjustments",
+        verbose_name="門市",
+    )
+    doc_date = models.DateField("單據日期", default=date.today)
+    direction = models.CharField(
+        "方向",
+        max_length=10,
+        choices=Direction.choices,
+        default=Direction.IN,
+    )
+    reason = models.CharField(
+        "事由",
+        max_length=20,
+        choices=Reason.choices,
+        default=Reason.REFILL,
+    )
+    amount = models.DecimalField(
+        "金額",
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        help_text="正數,方向由 direction 決定 + / -",
+    )
+    note = models.CharField("備註", max_length=200, blank=True)
+    is_void = models.BooleanField("作廢", default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "no"], name="uniq_cash_adjustment_no"
+            ),
+        ]
+        ordering = ["-doc_date", "-id"]
+        verbose_name = "現金調整"
+        verbose_name_plural = "現金調整"
+
+    def __str__(self) -> str:
+        return f"{self.no} {self.get_direction_display()} {self.amount}"
+
+    def save(self, *args, **kwargs):
+        if not self.no:
+            if self.tenant_id is None:
+                raise ValueError("建立現金調整必須先指定 tenant")
+            self.no = self.tenant.issue_next_cash_adj_no()
+        super().save(*args, **kwargs)

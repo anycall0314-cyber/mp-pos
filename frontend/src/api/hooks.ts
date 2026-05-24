@@ -8,6 +8,7 @@ import {
   InvoiceTrack,
   InvoiceType,
   Paginated,
+  CashAdjustment,
   PaymentMethod,
   PettyExpense,
   Product,
@@ -232,12 +233,89 @@ export function useSavePettyExpense() {
   });
 }
 
+export interface BusinessDailyRow {
+  id: number;
+  no: string;
+  [k: string]: unknown;
+}
+export interface BusinessDailySection {
+  rows: BusinessDailyRow[];
+  total: number;
+}
+export interface BusinessDailyAdjustments {
+  rows: BusinessDailyRow[];
+  in_total: number;
+  out_total: number;
+}
+export interface BusinessDailyReport {
+  warehouse: number;
+  date: string;
+  sales: BusinessDailySection;
+  purchases: BusinessDailySection;
+  expenses: BusinessDailySection;
+  adjustments: BusinessDailyAdjustments;
+  net_change: number;
+}
+
+export const useBusinessDailyReport = (
+  warehouse: number | null,
+  date: string,
+) =>
+  useQuery({
+    queryKey: ["business-daily", warehouse ?? "", date],
+    queryFn: () =>
+      api<BusinessDailyReport>(
+        `/reports/business-daily/?warehouse=${warehouse}&date=${date}`,
+      ),
+    enabled: !!warehouse && !!date,
+  });
+
 export function useVoidPettyExpense() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) =>
       api<PettyExpense>(`/petty-expenses/${id}/void/`, { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["petty-expenses"] }),
+  });
+}
+
+export const useCashAdjustments = () =>
+  useQuery({
+    queryKey: ["cash-adjustments"],
+    queryFn: () =>
+      list<CashAdjustment>("/cash-adjustments/?page_size=200"),
+  });
+
+export function useSaveCashAdjustment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Partial<CashAdjustment> & { id?: number }) => {
+      const { id, ...body } = payload;
+      const method = id ? "PATCH" : "POST";
+      const url = id ? `/cash-adjustments/${id}/` : "/cash-adjustments/";
+      return api<CashAdjustment>(url, {
+        method,
+        body: JSON.stringify(body),
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cash-adjustments"] });
+      qc.invalidateQueries({ queryKey: ["business-daily"] });
+    },
+  });
+}
+
+export function useVoidCashAdjustment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<CashAdjustment>(`/cash-adjustments/${id}/void/`, {
+        method: "POST",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cash-adjustments"] });
+      qc.invalidateQueries({ queryKey: ["business-daily"] });
+    },
   });
 }
 

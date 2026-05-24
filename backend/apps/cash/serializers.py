@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import PettyExpense
+from .models import CashAdjustment, PettyExpense
 
 
 class PettyExpenseSerializer(serializers.ModelSerializer):
@@ -54,6 +54,52 @@ class PettyExpenseSerializer(serializers.ModelSerializer):
             "payment_method_code",
             "payment_method_name",
             "payment_method_kind",
+            "is_void",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class CashAdjustmentSerializer(serializers.ModelSerializer):
+    direction_label = serializers.CharField(
+        source="get_direction_display", read_only=True
+    )
+    reason_label = serializers.CharField(
+        source="get_reason_display", read_only=True
+    )
+    warehouse_code = serializers.CharField(
+        source="warehouse.code", read_only=True
+    )
+    warehouse_name = serializers.CharField(
+        source="warehouse.name", read_only=True
+    )
+
+    class Meta:
+        model = CashAdjustment
+        fields = [
+            "id",
+            "no",
+            "warehouse",
+            "warehouse_code",
+            "warehouse_name",
+            "doc_date",
+            "direction",
+            "direction_label",
+            "reason",
+            "reason_label",
+            "amount",
+            "note",
+            "is_void",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "no",
+            "warehouse_code",
+            "warehouse_name",
+            "direction_label",
+            "reason_label",
             "is_void",
             "created_at",
             "updated_at",

@@ -16,6 +16,9 @@ class Tenant(TimestampedModel):
     next_expense_seq = models.PositiveIntegerField(
         "下一雜支單流水", default=1, editable=False
     )
+    next_cash_adj_seq = models.PositiveIntegerField(
+        "下一現金調整流水", default=1, editable=False
+    )
 
     class Meta:
         ordering = ["id"]
@@ -54,6 +57,16 @@ class Tenant(TimestampedModel):
             row.save(update_fields=["next_expense_seq"])
             self.next_expense_seq = row.next_expense_seq
             return f"EX-{seq:05d}"
+
+    def issue_next_cash_adj_no(self) -> str:
+        """原子地取下一張現金調整單號:`CA-{5位流水}`。"""
+        with transaction.atomic():
+            row = Tenant.objects.select_for_update().get(pk=self.pk)
+            seq = row.next_cash_adj_seq
+            row.next_cash_adj_seq = seq + 1
+            row.save(update_fields=["next_cash_adj_seq"])
+            self.next_cash_adj_seq = row.next_cash_adj_seq
+            return f"CA-{seq:05d}"
 
 
 class InvoiceType(TenantOwnedModel):
