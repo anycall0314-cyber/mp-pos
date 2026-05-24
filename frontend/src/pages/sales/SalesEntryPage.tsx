@@ -13,7 +13,7 @@ import {
 } from "@/api/hooks";
 import {
   SalesProductHit,
-  searchBusinessCustomers,
+  searchCustomers,
   searchInStockSerials,
   searchMembers,
   searchProductsForSales,
@@ -587,7 +587,10 @@ function LineRow({
     });
   }
 
+  const showTelecomSub = allowTelecom || allowCommission;
+
   return (
+    <>
     <tr
       className={active ? "line-row-active" : undefined}
       onClick={onSelect}
@@ -674,63 +677,6 @@ function LineRow({
         />
       </td>
 
-      <td className={allowTelecom ? "telecom-cell" : "disabled-cell"}>
-        <input
-          value={line.msisdn}
-          onChange={(e) => update({ msisdn: e.target.value })}
-          disabled={readonly || !allowTelecom}
-        />
-      </td>
-      <td className={allowTelecom ? "telecom-cell" : "disabled-cell"}>
-        {allowTelecom ? (
-          <ComboBox<TelecomPlan>
-            value={line.telecom_plan}
-            selectedOption={line.telecomPlanOption}
-            onChange={onPlanPick}
-            fetchOptions={(q) => searchTelecomPlans(q, { activeOnly: true })}
-            disabled={readonly}
-            placeholder="搜尋方案"
-          />
-        ) : (
-          <span style={{ color: "var(--text-dim)" }}>—</span>
-        )}
-      </td>
-      <td
-        className={
-          allowTelecom && requiresCard ? "telecom-cell" : "disabled-cell"
-        }
-      >
-        {allowTelecom && requiresCard ? (
-          <ComboBox<SimCard>
-            value={line.sim_card}
-            selectedOption={line.simCardOption}
-            onChange={(cid, opt) =>
-              update({ sim_card: cid, simCardOption: opt ?? null })
-            }
-            fetchOptions={(q) =>
-              searchSimCards(q, {
-                vendor: plan?.carrier,
-                inStockOnly: true,
-              })
-            }
-            disabled={readonly}
-            placeholder="搜尋卡號"
-          />
-        ) : (
-          <span style={{ color: "var(--text-dim)" }}>—</span>
-        )}
-      </td>
-      <td className={allowCommission ? "telecom-cell" : "disabled-cell"}>
-        <input
-          type="number"
-          className="num-input"
-          step="1"
-          value={line.commission}
-          onChange={(e) => update({ commission: e.target.value })}
-          onBlur={(e) => update({ commission: toIntStr(e.target.value) })}
-          disabled={readonly || !allowCommission}
-        />
-      </td>
       <td className="row-actions">
         {!readonly && (
           <button onClick={remove} type="button">
@@ -739,6 +685,80 @@ function LineRow({
         )}
       </td>
     </tr>
+    {showTelecomSub && (
+      <tr className="telecom-sub-row">
+        <td></td>
+        <td colSpan={6}>
+          <div className="telecom-sub-grid">
+            {allowTelecom && (
+              <label className="telecom-sub-field">
+                <span>門號</span>
+                <input
+                  value={line.msisdn}
+                  onChange={(e) => update({ msisdn: e.target.value })}
+                  disabled={readonly}
+                  placeholder="0912xxxxxx"
+                />
+              </label>
+            )}
+            {allowTelecom && (
+              <label className="telecom-sub-field">
+                <span>促銷方案</span>
+                <ComboBox<TelecomPlan>
+                  value={line.telecom_plan}
+                  selectedOption={line.telecomPlanOption}
+                  onChange={onPlanPick}
+                  fetchOptions={(q) =>
+                    searchTelecomPlans(q, { activeOnly: true })
+                  }
+                  disabled={readonly}
+                  placeholder="搜尋方案"
+                />
+              </label>
+            )}
+            {allowTelecom && requiresCard && (
+              <label className="telecom-sub-field">
+                <span>卡號</span>
+                <ComboBox<SimCard>
+                  value={line.sim_card}
+                  selectedOption={line.simCardOption}
+                  onChange={(cid, opt) =>
+                    update({ sim_card: cid, simCardOption: opt ?? null })
+                  }
+                  fetchOptions={(q) =>
+                    searchSimCards(q, {
+                      vendor: plan?.carrier,
+                      inStockOnly: true,
+                    })
+                  }
+                  disabled={readonly}
+                  placeholder="搜尋卡號"
+                />
+              </label>
+            )}
+            {allowCommission && (
+              <label className="telecom-sub-field">
+                <span>佣金</span>
+                <input
+                  type="number"
+                  className="num-input"
+                  step="1"
+                  value={line.commission}
+                  onChange={(e) =>
+                    update({ commission: e.target.value })
+                  }
+                  onBlur={(e) =>
+                    update({ commission: toIntStr(e.target.value) })
+                  }
+                  disabled={readonly}
+                />
+              </label>
+            )}
+          </div>
+        </td>
+      </tr>
+    )}
+    </>
   );
 }
 
@@ -837,8 +857,9 @@ export function SalesEntryPage() {
   );
   const [warehouseOption, setWarehouseOption] =
     useState<ComboOption<unknown> | null>(draft?.warehouseOption ?? null);
+  // 單據日期永遠 = 今天,不開放更改(防竄改);舊單載入時會被 existing data 覆寫顯示原始日期
   const [docDate, setDocDate] = useState(
-    () => draft?.docDate ?? new Date().toISOString().slice(0, 10),
+    () => new Date().toISOString().slice(0, 10),
   );
   const [taxMethod, setTaxMethod] = useState<TaxMethod>(
     draft?.taxMethod ?? "taxable_included",
@@ -874,6 +895,20 @@ export function SalesEntryPage() {
   const [selectedLineKey, setSelectedLineKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  // 毛利隱藏:店員可一鍵遮蔽,避免螢幕面向客戶時毛利被看見。跨單據保留
+  const [marginHidden, setMarginHidden] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("sales-margin-hidden") === "1";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("sales-margin-hidden", marginHidden ? "1" : "0");
+    } catch {}
+  }, [marginHidden]);
 
   // 掃碼快速結帳
   const [scanCode, setScanCode] = useState("");
@@ -1476,6 +1511,8 @@ export function SalesEntryPage() {
 
   function validate(): string | null {
     if (!warehouse) return "請選出貨倉";
+    if (!customer) return "請選客戶";
+    if (!salesPerson) return "請選業務員";
     if (lines.length === 0) return "至少一筆明細";
     const seen = new Set<number>();
     for (const l of lines) {
@@ -1720,13 +1757,13 @@ export function SalesEntryPage() {
                 <input
                   type="date"
                   value={docDate}
-                  onChange={(e) => setDocDate(e.target.value)}
-                  disabled={readonly}
+                  disabled
+                  title="單據日期一律以系統當天為準,不可更改"
                 />
               </Field>
             </div>
             <div style={{ gridArea: "invdate" }}>
-              <Field label="發票日期">
+              <Field label="發票日期" required={!noInvoice}>
                 <input
                   type="date"
                   value={invoiceDate}
@@ -1736,7 +1773,7 @@ export function SalesEntryPage() {
               </Field>
             </div>
             <div style={{ gridArea: "customer" }}>
-              <Field label="客戶 (同行 / 企業)">
+              <Field label="客戶" required>
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <ComboBox<Customer>
@@ -1750,8 +1787,8 @@ export function SalesEntryPage() {
                           setBuyerTaxId(c.tax_id);
                         }
                       }}
-                      fetchOptions={searchBusinessCustomers}
-                      placeholder="搜尋名稱 / 統編 (僅同行/企業)"
+                      fetchOptions={searchCustomers}
+                      placeholder="搜尋名稱 / 電話 / 統編"
                       disabled={readonly}
                     />
                   </div>
@@ -1783,19 +1820,18 @@ export function SalesEntryPage() {
                   ))}
                 </select>
               </Field>
-            </div>
-            {isTaxable && (
-              <div style={{ gridArea: "taxid" }}>
-                <Field label="統一編號">
+              {isTaxable && (
+                <Field label="買方統編">
                   <input
                     value={buyerTaxId}
                     onChange={(e) => setBuyerTaxId(e.target.value)}
                     disabled={readonly}
                     maxLength={10}
+                    placeholder="選填,選客戶/會員時自動帶入"
                   />
                 </Field>
-              </div>
-            )}
+              )}
+            </div>
             <div style={{ gridArea: "invtype" }}>
               <Field label="發票類型">
                 <select
@@ -1852,7 +1888,7 @@ export function SalesEntryPage() {
             </div>
 
             <div style={{ gridArea: "invno" }}>
-              <Field label="發票號碼(自動取號)">
+              <Field label="發票號碼(自動取號)" required={!noInvoice}>
                 <input
                   value={isNew ? previewInvoiceNo ?? "" : invoiceNo}
                   disabled
@@ -1876,7 +1912,7 @@ export function SalesEntryPage() {
               </Field>
             </div>
             <div style={{ gridArea: "salesperson" }}>
-              <Field label="業務員">
+              <Field label="業務員" required>
                 <ComboBox
                   value={salesPerson}
                   selectedOption={salesPersonOption}
@@ -1941,12 +1977,6 @@ export function SalesEntryPage() {
               <th style={{ width: 110 }} className="num">
                 金額
               </th>
-              <th style={{ width: 130 }}>門號</th>
-              <th style={{ width: 140 }}>促銷方案</th>
-              <th style={{ width: 140 }}>卡號</th>
-              <th style={{ width: 90 }} className="num">
-                佣金
-              </th>
               <th style={{ width: 50 }}></th>
             </tr>
           </thead>
@@ -1977,16 +2007,23 @@ export function SalesEntryPage() {
           </button>
         )}
        </div>
-       <SalesSerialAside
-         line={lines.find((l) => l.key === selectedLineKey) ?? null}
-         warehouseId={warehouse}
-         readonly={readonly}
-         containerRef={serialPanelRef}
-         onPickSerial={(idx, opt) =>
-           selectedLineKey &&
-           updateSerialChoice(selectedLineKey, idx, opt)
-         }
-       />
+       {(() => {
+         const sel = lines.find((l) => l.key === selectedLineKey);
+         const p = sel?.productOption?.payload;
+         if (!p?.requires_serial || p.is_virtual) return null;
+         return (
+           <SalesSerialAside
+             line={sel ?? null}
+             warehouseId={warehouse}
+             readonly={readonly}
+             containerRef={serialPanelRef}
+             onPickSerial={(idx, opt) =>
+               selectedLineKey &&
+               updateSerialChoice(selectedLineKey, idx, opt)
+             }
+           />
+         );
+       })()}
       </div>
 
       <div className="entry-footer">
@@ -2002,12 +2039,86 @@ export function SalesEntryPage() {
           </span>
           <span
             style={{
-              color: estGrossMargin >= 0 ? "#80d090" : "#ff7070",
+              color: marginHidden
+                ? "var(--text-dim)"
+                : estGrossMargin >= 0
+                ? "#80d090"
+                : "#ff7070",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
             }}
           >
-            預估毛利<b>{Math.round(estGrossMargin).toLocaleString()}</b>
+            預估毛利
+            <b>
+              {marginHidden
+                ? "•••"
+                : Math.round(estGrossMargin).toLocaleString()}
+            </b>
+            <button
+              type="button"
+              onClick={() => setMarginHidden((v) => !v)}
+              title={
+                marginHidden
+                  ? "顯示毛利"
+                  : "隱藏毛利(避免客戶從螢幕看到)"
+              }
+              style={{
+                background: "transparent",
+                border: 0,
+                color: "inherit",
+                cursor: "pointer",
+                padding: 0,
+                marginLeft: 2,
+                display: "inline-flex",
+                alignItems: "center",
+              }}
+              aria-label={marginHidden ? "顯示毛利" : "隱藏毛利"}
+            >
+              {marginHidden ? (
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                  <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                </svg>
+              ) : (
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              )}
+            </button>
           </span>
         </div>
+        {isNew && (
+          <button
+            type="button"
+            className="btn primary checkout-cta"
+            onClick={openConfirm}
+            disabled={createMutation.isPending}
+          >
+            {createMutation.isPending ? "儲存中…" : "確認結帳"}
+          </button>
+        )}
       </div>
 
       {showConfirm && (

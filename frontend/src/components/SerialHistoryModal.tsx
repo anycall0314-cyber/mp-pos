@@ -25,7 +25,7 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
           {data && (
             <>
               <div className="bulk-preview-head">商品 / 狀態</div>
-              <div style={{ fontSize: 12, lineHeight: 1.8, marginBottom: 12 }}>
+              <div style={{ fontSize: 13, lineHeight: 1.8, marginBottom: 12 }}>
                 <div>
                   商品:<b>{data.serial.product_name}</b>{" "}
                   <span style={{ color: "var(--text-dim)" }}>
@@ -77,7 +77,7 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
                 </div>
               )}
               {data.acquisition?.kind === "purchase" && (
-                <div style={{ fontSize: 12, marginBottom: 12, lineHeight: 1.8 }}>
+                <div style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.8 }}>
                   廠商進貨單{" "}
                   <b>{data.acquisition.purchase_order_no}</b>(
                   {data.acquisition.doc_date}),供應商{" "}
@@ -86,7 +86,7 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
                 </div>
               )}
               {data.acquisition?.kind === "trade_in" && (
-                <div style={{ fontSize: 12, marginBottom: 12, lineHeight: 1.8 }}>
+                <div style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.8 }}>
                   個人會員收購{" "}
                   <b>{data.acquisition.member_name || "—"}</b>(
                   {data.acquisition.member_phone || "—"}),收購銷貨單{" "}

@@ -118,7 +118,7 @@ export function TelecomPlansPage() {
             padding: "6px 16px",
             background: "rgba(128,208,144,0.15)",
             color: "#80d090",
-            fontSize: 12,
+            fontSize: 13,
           }}
         >
           {bulkResult}

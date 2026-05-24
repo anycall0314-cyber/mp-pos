@@ -1,3 +1,5 @@
+from datetime import date
+
 from rest_framework import serializers
 
 from apps.inventory.models import ProductSerial
@@ -246,6 +248,8 @@ class SalesOrderSerializer(serializers.ModelSerializer):
             SalesOrderPayment.objects.create(so=so, tenant=so.tenant, **p)
 
     def create(self, validated_data):
+        # 單據日期一律強制為系統當天,忽略傳入值以防竄改
+        validated_data["doc_date"] = date.today()
         items_data = validated_data.pop("items", [])
         payments_data = validated_data.pop("payments", [])
         so = SalesOrder.objects.create(**validated_data)

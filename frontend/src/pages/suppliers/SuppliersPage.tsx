@@ -220,7 +220,7 @@ export function SuppliersPage() {
               <div
                 style={{
                   padding: "2px 10px 6px",
-                  fontSize: 12,
+                  fontSize: 13,
                   color: "var(--text-dim)",
                 }}
               >
@@ -360,7 +360,7 @@ export function SuppliersPage() {
                       <span
                         style={{
                           marginLeft: 8,
-                          fontSize: 12,
+                          fontSize: 13,
                           color: "var(--text-dim)",
                         }}
                       >

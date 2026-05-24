@@ -258,7 +258,7 @@ export function ProductsPage() {
             padding: "6px 16px",
             background: "rgba(128,208,144,0.15)",
             color: "#80d090",
-            fontSize: 12,
+            fontSize: 13,
           }}
         >
           {bulkResult}
@@ -303,7 +303,7 @@ export function ProductsPage() {
                     <div
                       style={{
                         padding: "6px 12px",
-                        fontSize: 11,
+                        fontSize: 12,
                         color: "var(--text-dim)",
                         background: "var(--panel-2)",
                         borderBottom: "1px solid var(--border)",
@@ -439,7 +439,7 @@ export function ProductsPage() {
                               style={{
                                 color: "var(--text-dim)",
                                 marginLeft: 6,
-                                fontSize: 11,
+                                fontSize: 12,
                               }}
                             >
                               (停用)
@@ -537,7 +537,7 @@ export function ProductsPage() {
                   <span
                     style={{
                       color: "var(--text-dim)",
-                      fontSize: 11,
+                      fontSize: 12,
                       marginLeft: 8,
                     }}
                   >
@@ -573,7 +573,7 @@ export function ProductsPage() {
                   <span
                     style={{
                       color: "var(--text-dim)",
-                      fontSize: 11,
+                      fontSize: 12,
                       marginLeft: 8,
                     }}
                   >
@@ -621,7 +621,7 @@ export function ProductsPage() {
                         }))
                       }
                     />
-                    <span style={{ color: "var(--text-dim)", fontSize: 11 }}>
+                    <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
                       勾起時,本類別下所有商品自動標為中古機(逐隻記成色 / 電池 / 自定售價)
                     </span>
                   </label>
@@ -678,7 +678,7 @@ export function ProductsPage() {
                 <dt>排序</dt>
                 <dd>
                   {selectedCategory.sort_order}{" "}
-                  <span style={{ color: "var(--text-dim)", fontSize: 11 }}>
+                  <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
                     (左側拖拉重排)
                   </span>
                 </dd>
@@ -723,7 +723,7 @@ export function ProductsPage() {
                         }))
                       }
                     />
-                    <span style={{ color: "var(--text-dim)", fontSize: 11 }}>
+                    <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
                       勾起並儲存時,會把底下所有商品同步標為中古機
                       (反向取消不會還原既有商品)
                     </span>

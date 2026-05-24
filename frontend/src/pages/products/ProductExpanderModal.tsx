@@ -214,7 +214,7 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
               alignItems: "center",
             }}
           >
-            <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
+            <span style={{ color: "var(--text-dim)", fontSize: 13 }}>
               情境快捷:
             </span>
             <button
@@ -231,7 +231,7 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
             >
               配件(功能 × 顏色)
             </button>
-            <span style={{ color: "var(--text-dim)", fontSize: 11 }}>
+            <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
               或自己改下方軸標籤
             </span>
           </div>
@@ -377,7 +377,7 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
                           />
                         </td>
                         <td>{c.name}</td>
-                        <td style={{ color: "var(--text-dim)", fontSize: 11 }}>
+                        <td style={{ color: "var(--text-dim)", fontSize: 12 }}>
                           {c.spec || "—"}
                         </td>
                         <td className="num">

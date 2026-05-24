@@ -44,7 +44,7 @@
 | 一般進貨單擋下中古機 | `PurchaseEntryPage` 預設 `mode="regular"`,商品 ComboBox / PickerModal / BatchPasteModal 都帶 `is_secondhand=false`;新增進貨單時挑不到中古品。檢視 / 作廢既有中古進貨單仍走 `/purchases/:id` |
 | 中古機履歷 | `GET /api/v1/serials/{id}/history/` 回傳:收購來源 (購進 or 個人收購)、所有銷貨/退貨、StockMovement 軌跡 |
 | 客戶識別 | `Customer.code` 系統自動產生 (C-{5 位流水},Tenant 持有 next_customer_seq);前端不顯示也不輸入。`phone` 改選填(同行/企業可不填);`lookup?phone=` 多筆優先 is_member |
-| 銷貨單客戶/會員雙欄位 | `SalesOrder.member` = **主體(人)**,Customer 表 is_member=true 的子集,ComboBox 吃電話/姓名/統編。`SalesOrder.customer` = **這筆生意的歸屬**(同行/企業,kind__in=peer,corporate,other),ComboBox 不含個人避免誤選。**不互斥**——同行帶他的個人客戶來開門號 → customer=同行、member=該個人;會員到我店直接買 → customer 留空(直客散客流程)、member=本人 |
+| 銷貨單客戶/會員雙欄位 | `SalesOrder.member` = **主體(人)**,Customer 表 is_member=true 的子集,ComboBox 吃電話/姓名/統編,選填。`SalesOrder.customer` = **這筆生意的歸屬**,ComboBox 涵蓋所有 Customer(含個人散客),**必填**。**不互斥**——同行帶他的個人客戶來開門號 → customer=同行、member=該個人;會員 walk-in → customer=該人自己、member=該人 |
 | 配件庫存 | 非序號商品(`requires_serial=False`、非 virtual)走 `StockBalance(product, warehouse)`,進貨累計、銷貨扣減、調撥搬移;`Product.weighted_avg_cost` 跨倉聚合 |
 | 配件不足擋下 | 銷貨單若該倉 balance 不足,`commit_sales_order` 拋錯 400,不允許負庫存 |
 | 調撥 | `TransferOrder` 兩階段:`dispatched`(來源倉派發,序號 → in_transit、配件 balance 扣掉)→ `confirmed`(目的倉確認,序號 → in_stock 在目的倉、目的倉 balance 加上)。`unit_cost_at_dispatch` 在派發時快照來源倉成本,確認時用以重算目的倉加權平均(避免後續異動干擾)。`void` 智能回滾,依當下狀態決定 |

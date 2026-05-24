@@ -93,7 +93,7 @@ function SerialListModal({
                       <button
                         type="button"
                         className="btn"
-                        style={{ fontSize: 11, padding: "2px 6px" }}
+                        style={{ fontSize: 12, padding: "2px 6px" }}
                         onClick={() => setHistoryId(s.id)}
                       >
                         履歷
@@ -155,7 +155,7 @@ function TransferStatusModal({
         <div className="modal-body">
           <div
             style={{
-              fontSize: 12,
+              fontSize: 13,
               color: "var(--text-dim)",
               marginBottom: 8,
             }}

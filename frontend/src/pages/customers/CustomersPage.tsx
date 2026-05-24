@@ -235,7 +235,7 @@ export function CustomersPage() {
                   style={{
                     marginLeft: 6,
                     opacity: 0.7,
-                    fontSize: 12,
+                    fontSize: 13,
                   }}
                 >
                   {count}

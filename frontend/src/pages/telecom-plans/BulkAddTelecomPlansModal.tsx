@@ -165,7 +165,7 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
               </select>
             </Field>
           </div>
-          <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 8 }}>
+          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
             Excel 第 5、6 欄可分別覆寫類型與電信商;沒填就用上方預設
           </div>
 
@@ -177,14 +177,14 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
               marginBottom: 4,
             }}
           >
-            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
+            <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
               方案清單(每行一筆)
             </div>
             <button
               type="button"
               className="btn"
               onClick={downloadTemplate}
-              style={{ fontSize: 11, padding: "2px 8px" }}
+              style={{ fontSize: 12, padding: "2px 8px" }}
             >
               下載範例檔
             </button>
@@ -196,11 +196,11 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
             style={{
               width: "100%",
               fontFamily: "monospace",
-              fontSize: 12,
+              fontSize: 13,
               resize: "vertical",
             }}
           />
-          <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
+          <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
             單欄:每行一個專案名稱 · 多欄:專案名稱[Tab]月租[Tab]綁約月數[Tab]佣金[Tab]類型[Tab]電信商
           </div>
 
@@ -247,7 +247,7 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
                             </span>
                           )}
                         </td>
-                        <td style={{ color: "#ff7070", fontSize: 11 }}>
+                        <td style={{ color: "#ff7070", fontSize: 12 }}>
                           {err ? JSON.stringify(err.errors) : ""}
                         </td>
                       </tr>

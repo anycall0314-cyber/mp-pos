@@ -163,7 +163,7 @@ export function TransferConfirmModal({ open, onClose }: Props) {
                       <td
                         style={{
                           color: dayDiff >= 3 ? "#f0b060" : "var(--text-dim)",
-                          fontSize: 12,
+                          fontSize: 13,
                         }}
                         title={`派發於 ${t.created_at}`}
                       >
@@ -172,7 +172,7 @@ export function TransferConfirmModal({ open, onClose }: Props) {
                       <td
                         style={{
                           color: "var(--text-dim)",
-                          fontSize: 12,
+                          fontSize: 13,
                           maxWidth: 180,
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -187,7 +187,7 @@ export function TransferConfirmModal({ open, onClose }: Props) {
                           <button
                             type="button"
                             className="btn"
-                            style={{ fontSize: 12, padding: "3px 8px" }}
+                            style={{ fontSize: 13, padding: "3px 8px" }}
                             onClick={() => gotoDetail(t.id)}
                             disabled={isBusy}
                           >
@@ -196,7 +196,7 @@ export function TransferConfirmModal({ open, onClose }: Props) {
                           <button
                             type="button"
                             className="btn primary"
-                            style={{ fontSize: 12, padding: "3px 8px" }}
+                            style={{ fontSize: 13, padding: "3px 8px" }}
                             onClick={() =>
                               handleConfirm(
                                 t.id,

@@ -391,7 +391,7 @@ export function SecondhandPersonalEntry() {
 
       <div
         className="md-empty"
-        style={{ marginTop: 24, fontSize: 12, lineHeight: 1.7 }}
+        style={{ marginTop: 24, fontSize: 13, lineHeight: 1.7 }}
       >
         系統會以未稅方式同步建立「收購二手」銷貨單(金額負數,代表現金流出)與中古機序號,
         兩邊互相對應。售出後可在銷貨單看到完整鏈條。

@@ -61,7 +61,7 @@ export function SettingsPage() {
       <Toolbar title="系統設定" />
       <div className="entry-body">
         <h3 style={{ marginTop: 0 }}>發票類型</h3>
-        <p style={{ color: "var(--text-dim)", fontSize: 12 }}>
+        <p style={{ color: "var(--text-dim)", fontSize: 13 }}>
           內建 6 種,可切換啟用 / 指定預設 / 改名稱。銷貨、進貨單的下拉只列「啟用中」。
         </p>
 
@@ -132,7 +132,7 @@ export function SettingsPage() {
         )}
 
         <h3 style={{ marginTop: 24 }}>發票字軌</h3>
-        <p style={{ color: "var(--text-dim)", fontSize: 12 }}>
+        <p style={{ color: "var(--text-dim)", fontSize: 13 }}>
           財政部每期發放的發票號碼區段。
           銷貨單建立時依「發票類型」自動取下一張可用號碼,使用者不需手動輸入。
         </p>
@@ -326,7 +326,7 @@ export function SettingsPage() {
         )}
 
         <h3 style={{ marginTop: 24 }}>付款方式</h3>
-        <p style={{ color: "var(--text-dim)", fontSize: 12 }}>
+        <p style={{ color: "var(--text-dim)", fontSize: 13 }}>
           結帳時可選的付款通路。分類:
           <b style={{ color: "#80d090" }}>現金</b> 計入當日營業現金;
           <b>匯款</b> 與

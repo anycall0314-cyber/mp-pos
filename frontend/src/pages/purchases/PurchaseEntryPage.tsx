@@ -381,7 +381,7 @@ function SerialAside({
                   <button
                     type="button"
                     className="btn"
-                    style={{ fontSize: 11, padding: "3px 10px" }}
+                    style={{ fontSize: 12, padding: "3px 10px" }}
                     title="把此隻的成色/售價/電池/備註套用到下面所有序號"
                     onClick={() => onApplyToAll(focusedIdx)}
                   >
@@ -1186,7 +1186,7 @@ export function PurchaseEntryPage({
                       color: l.productOption?.payload?.spec
                         ? "var(--text)"
                         : "var(--text-dim)",
-                      fontSize: 12,
+                      fontSize: 13,
                     }}
                     title={
                       needsSerial

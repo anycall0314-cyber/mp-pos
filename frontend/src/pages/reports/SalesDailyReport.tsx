@@ -340,7 +340,7 @@ export function SalesDailyReportPage() {
             {" · "}作廢 {voidOrders.length} 筆(列於下方)
           </>
         )}
-        <span style={{ marginLeft: 12, color: "var(--text-dim)", fontSize: 11 }}>
+        <span style={{ marginLeft: 12, color: "var(--text-dim)", fontSize: 12 }}>
           毛利以未稅金額減成本計算
         </span>
       </div>
