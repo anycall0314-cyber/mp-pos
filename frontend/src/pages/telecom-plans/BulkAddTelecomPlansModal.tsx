@@ -49,12 +49,12 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
   // 名稱前綴(電信商縮寫或自訂),展開後成為 「{prefix} {月租} {綁約}月 {類型}」
   const [namePrefix, setNamePrefix] = useState("");
 
-  // 軸 1:月租清單,可同時帶對應佣金
+  // 軸 1:月租清單
   const [feesText, setFeesText] = useState("");
-  const [commissionsText, setCommissionsText] = useState("");
-
   // 軸 2:綁約月數清單
   const [monthsText, setMonthsText] = useState("");
+  // 批次套用佣金:預覽展開後一鍵把所有勾選列的佣金設為此值
+  const [bulkCommission, setBulkCommission] = useState("");
 
   const [combos, setCombos] = useState<Combo[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -65,23 +65,16 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
   const bulk = useBulkCreateTelecomPlans();
 
   const fees = useMemo(() => splitList(feesText), [feesText]);
-  const commissions = useMemo(
-    () => splitList(commissionsText),
-    [commissionsText],
-  );
   const months = useMemo(() => splitList(monthsText), [monthsText]);
 
   const kindLabel =
     KIND_OPTIONS.find((k) => k.value === kind)?.label ?? kind;
 
-  // 自動展開預覽
+  // 自動展開預覽。佣金預設留空,使用者在預覽表逐格填(或用批次套用)
   const previewCombos = useMemo<Combo[]>(() => {
     if (fees.length === 0 || months.length === 0) return [];
     const result: Combo[] = [];
-    for (let i = 0; i < fees.length; i++) {
-      const fee = fees[i];
-      // 值多過佣金時,後面沿用最後一個;若完全沒給,用 0
-      const comm = commissions[i] ?? commissions[commissions.length - 1] ?? "0";
+    for (const fee of fees) {
       for (const m of months) {
         const parts = [
           namePrefix.trim(),
@@ -95,13 +88,13 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
           name,
           monthly_fee: fee,
           contract_months: m,
-          commission: comm,
+          commission: "",
           selected: true,
         });
       }
     }
     return result;
-  }, [namePrefix, fees, commissions, months, kindLabel]);
+  }, [namePrefix, fees, months, kindLabel]);
 
   // 輸入變動時把預覽結果同步到 combos(保留交集的勾選 / 改值)
   useEffect(() => {
@@ -140,11 +133,19 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
   function reset() {
     setNamePrefix("");
     setFeesText("");
-    setCommissionsText("");
     setMonthsText("");
+    setBulkCommission("");
     setCombos([]);
     setError(null);
     setLineErrors([]);
+  }
+
+  function applyBulkCommission() {
+    const v = bulkCommission.trim();
+    if (!v) return;
+    setCombos((prev) =>
+      prev.map((c) => (c.selected ? { ...c, commission: v } : c)),
+    );
   }
 
   function handleClose() {
@@ -169,11 +170,20 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
       setError("沒有勾選任何方案");
       return;
     }
+    const missingComm = toCreate.find((c) => !c.commission.trim());
+    if (missingComm) {
+      setError(
+        `「${missingComm.name}」尚未填佣金;請逐筆填或用「批次填佣金」`,
+      );
+      return;
+    }
+    // 一律送整數,避免小數點汙染
+    const toIntStr = (s: string) => String(Math.round(Number(s) || 0));
     const items: BulkTelecomPlanRow[] = toCreate.map((c) => ({
       name: c.name,
-      monthly_fee: c.monthly_fee,
-      contract_months: c.contract_months,
-      commission: c.commission || "0",
+      monthly_fee: toIntStr(c.monthly_fee),
+      contract_months: toIntStr(c.contract_months),
+      commission: toIntStr(c.commission),
     }));
     const common: BulkTelecomPlanCommon = {
       carrier: carrier as number,
@@ -298,13 +308,6 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
                 placeholder="例:599, 999, 1399"
               />
             </Field>
-            <Field label="對應佣金(對應月租)">
-              <input
-                value={commissionsText}
-                onChange={(e) => setCommissionsText(e.target.value)}
-                placeholder="例:4000, 8000, 12000"
-              />
-            </Field>
             <Field label="綁約月數(逗號分隔)">
               <input
                 value={monthsText}
@@ -313,6 +316,17 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
               />
             </Field>
           </div>
+          <div
+            style={{
+              fontSize: 12,
+              color: "var(--text-dim)",
+              marginTop: -4,
+              marginBottom: 8,
+            }}
+          >
+            佣金因月租與綁約組合而異,請在下方預覽表逐筆填寫
+            (相同數字可用「批次套用」一鍵帶入)
+          </div>
 
           {list.length > 0 && (
             <div style={{ marginTop: 12 }}>
@@ -320,17 +334,38 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
                 style={{
                   display: "flex",
                   alignItems: "center",
+                  gap: 6,
                   marginBottom: 6,
                 }}
               >
                 <strong style={{ flex: 1 }}>
                   預覽:展開 {list.length} 筆,勾選 {selectedCount} 筆
                 </strong>
+                <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+                  批次填佣金:
+                </span>
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={bulkCommission}
+                  onChange={(e) => setBulkCommission(e.target.value)}
+                  placeholder="例 8000"
+                  style={{ width: 90, textAlign: "right" }}
+                />
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={applyBulkCommission}
+                  disabled={!bulkCommission.trim() || selectedCount === 0}
+                  title="把上面數字套用到所有勾選的列"
+                >
+                  套用
+                </button>
                 <button
                   className="btn"
                   type="button"
                   onClick={() => toggleAll(true)}
-                  style={{ marginRight: 6 }}
                 >
                   全選
                 </button>
@@ -396,6 +431,8 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
                           <td className="num">
                             <input
                               type="number"
+                  step="1"
+                  min="0"
                               value={c.monthly_fee}
                               onChange={(e) =>
                                 patchField(c.key, {
@@ -408,6 +445,8 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
                           <td className="num">
                             <input
                               type="number"
+                  step="1"
+                  min="0"
                               value={c.contract_months}
                               onChange={(e) =>
                                 patchField(c.key, {
@@ -420,6 +459,8 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
                           <td className="num">
                             <input
                               type="number"
+                  step="1"
+                  min="0"
                               value={c.commission}
                               onChange={(e) =>
                                 patchField(c.key, {

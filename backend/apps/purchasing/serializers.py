@@ -64,6 +64,15 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     )
     category_code = serializers.CharField(source="category.code", read_only=True)
     category_name = serializers.CharField(source="category.name", read_only=True)
+    payment_method_code = serializers.CharField(
+        source="payment_method.code", read_only=True
+    )
+    payment_method_name = serializers.CharField(
+        source="payment_method.name", read_only=True
+    )
+    payment_method_kind = serializers.CharField(
+        source="payment_method.kind", read_only=True
+    )
 
     class Meta:
         model = PurchaseOrder
@@ -86,6 +95,10 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "invoice_form_label",
             "invoice_no",
             "invoice_date",
+            "payment_method",
+            "payment_method_code",
+            "payment_method_name",
+            "payment_method_kind",
             "note",
             "created_by",
             "is_void",
@@ -107,6 +120,9 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "category_name",
             "tax_method_label",
             "invoice_form_label",
+            "payment_method_code",
+            "payment_method_name",
+            "payment_method_kind",
             "is_void",
             "subtotal",
             "tax_amount",

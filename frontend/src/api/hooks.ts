@@ -9,6 +9,7 @@ import {
   InvoiceType,
   Paginated,
   PaymentMethod,
+  PettyExpense,
   Product,
   ProductSerial,
   PurchaseOrder,
@@ -208,6 +209,37 @@ export const useAllSimCards = () =>
     queryKey: ["sim-cards", "all"],
     queryFn: () => list<SimCard>("/sim-cards/"),
   });
+
+export const usePettyExpenses = () =>
+  useQuery({
+    queryKey: ["petty-expenses"],
+    queryFn: () => list<PettyExpense>("/petty-expenses/?page_size=200"),
+  });
+
+export function useSavePettyExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Partial<PettyExpense> & { id?: number }) => {
+      const { id, ...body } = payload;
+      const method = id ? "PATCH" : "POST";
+      const url = id ? `/petty-expenses/${id}/` : "/petty-expenses/";
+      return api<PettyExpense>(url, {
+        method,
+        body: JSON.stringify(body),
+      });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["petty-expenses"] }),
+  });
+}
+
+export function useVoidPettyExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<PettyExpense>(`/petty-expenses/${id}/void/`, { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["petty-expenses"] }),
+  });
+}
 
 export function useSaveSimCard() {
   const qc = useQueryClient();

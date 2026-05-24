@@ -213,8 +213,8 @@ body { background: var(--bg); color: var(--text); }
     minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr)
     minmax(0, 1fr) minmax(0, 1.6fr);
   grid-template-areas:
-    "wh    date invdate invtype customer"
-    "invno tax  note    member  salesperson";
+    "wh   date invdate invtype customer"
+    "note tax  invno   member  salesperson";
   gap: 2px 12px;
   align-items: start;
 }
@@ -864,7 +864,8 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
 /* Master-Detail 通用版型 */
 .md-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 420px) 1fr;
+  /* master 區放寬到 720px 容納多欄表格;detail 仍 fill 剩餘空間 */
+  grid-template-columns: minmax(360px, 720px) 1fr;
   height: 100%;
 }
 .md-master {

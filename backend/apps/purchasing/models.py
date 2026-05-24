@@ -80,6 +80,15 @@ class PurchaseOrder(TenantOwnedModel):
     )
     invoice_no = models.CharField("發票號碼", max_length=20, blank=True)
     invoice_date = models.DateField("發票日期", null=True, blank=True)
+    payment_method = models.ForeignKey(
+        "tenants.PaymentMethod",
+        on_delete=models.PROTECT,
+        related_name="purchase_orders",
+        null=True,
+        blank=True,
+        verbose_name="付款方式",
+        help_text="cash=從店頭備用金扣;transfer/non_cash=不動店頭現金",
+    )
     note = models.CharField("備註", max_length=200, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

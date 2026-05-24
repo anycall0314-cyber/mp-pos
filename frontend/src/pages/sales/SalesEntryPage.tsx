@@ -1564,6 +1564,7 @@ export function SalesEntryPage() {
     if (!warehouse) return "請選出貨倉";
     if (!customer) return "請選客戶";
     if (!salesPerson) return "請選業務員";
+    if (!invoiceForm) return "請選發票類型";
     if (lines.length === 0) return "至少一筆明細";
     const seen = new Set<number>();
     for (const l of lines) {
@@ -1884,7 +1885,7 @@ export function SalesEntryPage() {
               )}
             </div>
             <div style={{ gridArea: "invtype" }} className="short-field">
-              <Field label="發票類型">
+              <Field label="發票類型" required>
                 <select
                   value={invoiceForm}
                   onChange={(e) => {
@@ -1897,7 +1898,7 @@ export function SalesEntryPage() {
                   }}
                   disabled={readonly}
                 >
-                  <option value="">— 未指定 —</option>
+                  {!invoiceForm && <option value="">— 請選 —</option>}
                   {invoiceTypes.map((f) => (
                     <option key={f.code} value={f.code}>
                       {f.name}

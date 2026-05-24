@@ -45,6 +45,8 @@
 | 中古機履歷 | `GET /api/v1/serials/{id}/history/` 回傳:收購來源 (購進 or 個人收購)、所有銷貨/退貨、StockMovement 軌跡 |
 | 客戶識別 | `Customer.code` 系統自動產生 (C-{5 位流水},Tenant 持有 next_customer_seq);前端不顯示也不輸入。`phone` 改選填(同行/企業可不填);`lookup?phone=` 多筆優先 is_member |
 | 銷貨單客戶/會員雙欄位 | `SalesOrder.member` = **主體(人)**,Customer 表 is_member=true 的子集,ComboBox 吃電話/姓名/統編,選填。`SalesOrder.customer` = **這筆生意的歸屬**,ComboBox 涵蓋所有 Customer(含個人散客),**必填**。**不互斥**——同行帶他的個人客戶來開門號 → customer=同行、member=該個人;會員 walk-in → customer=該人自己、member=該人 |
+| 店頭雜支 | `PettyExpense` 記每家門市的零星支出(房租/水電/餐飲/雜物/其他);自動單號 `EX-{5位}`;`payment_method` FK 預設現金。Phase 1 純記錄,Phase 2 將連動 `Warehouse.cash_balance` |
+| 進貨付款方式 | `PurchaseOrder.payment_method` FK to PaymentMethod (選填);cash 將從店頭備用金扣、transfer/non_cash 不動店頭。Phase 1 只記錄欄位 |
 | 配件庫存 | 非序號商品(`requires_serial=False`、非 virtual)走 `StockBalance(product, warehouse)`,進貨累計、銷貨扣減、調撥搬移;`Product.weighted_avg_cost` 跨倉聚合 |
 | 配件不足擋下 | 銷貨單若該倉 balance 不足,`commit_sales_order` 拋錯 400,不允許負庫存 |
 | 調撥 | `TransferOrder` 兩階段:`dispatched`(來源倉派發,序號 → in_transit、配件 balance 扣掉)→ `confirmed`(目的倉確認,序號 → in_stock 在目的倉、目的倉 balance 加上)。`unit_cost_at_dispatch` 在派發時快照來源倉成本,確認時用以重算目的倉加權平均(避免後續異動干擾)。`void` 智能回滾,依當下狀態決定 |
@@ -67,7 +69,8 @@ inventory-3c/
 │       ├── parties/            Supplier / Customer / SalesPerson / Carrier / TelecomPlan / SimCard
 │       ├── purchasing/         PurchaseOrder + commit/void service
 │       ├── sales/              SalesOrder + commit/void/payment service
-│       └── transfers/          TransferOrder + commit/void service
+│       ├── transfers/          TransferOrder + commit/void service
+│       └── cash/               PettyExpense 雜支單(之後放 CashAdjustment 與現金櫃服務)
 │
 └── frontend/
     └── src/
@@ -84,7 +87,8 @@ inventory-3c/
         │   ├── telecom-plans/   TelecomPlansPage + TelecomPlanForm
         │   ├── secondhand-acquisition/  SecondhandAcquisitionPage(hub:tabs 切換)+ SecondhandPersonalEntry(個人收購表單;廠商收購直接內嵌 PurchaseEntryPage)
         │   ├── inventory/       InventoryQueryPage(庫存矩陣:多倉勾選 + 每倉一欄 + 點數字看序號明細 + 欄位排序)+ CategoriesPage(舊獨立頁,nav 已隱藏但路由仍在)
-        │   └── transfers/       TransfersPage + TransferEntryPage(倉間調撥)
+        │   ├── transfers/       TransfersPage + TransferEntryPage(倉間調撥)
+        │   └── cash/            PettyExpensesPage 店頭雜支(列表 + Drawer 新增,連續模式)
         ├── App.tsx              路由與導覽(NAV_GROUPS 6 群:報表/庫存/銷貨/門號/維修/設定)
         └── styles.css           全站 CSS,暗色主題
 ```

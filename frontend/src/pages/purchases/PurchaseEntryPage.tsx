@@ -5,6 +5,7 @@ import { ApiHttpError } from "@/api/client";
 import {
   useCreatePurchaseOrder,
   useInvoiceTypes,
+  usePaymentMethods,
   usePurchaseOrder,
   useVoidPurchaseOrder,
 } from "@/api/hooks";
@@ -419,6 +420,7 @@ interface PurchaseDraft {
   invoiceForm: InvoiceForm;
   invoiceNo: string;
   invoiceDate: string;
+  paymentMethod: number | "";
   note: string;
   lines: Line[];
 }
@@ -473,6 +475,8 @@ export function PurchaseEntryPage({
   const voidMutation = useVoidPurchaseOrder();
   const invoiceTypesQuery = useInvoiceTypes({ activeOnly: true });
   const invoiceTypes = invoiceTypesQuery.data ?? [];
+  const paymentMethodsQuery = usePaymentMethods({ activeOnly: true });
+  const paymentMethods = paymentMethodsQuery.data ?? [];
   const defaultInvoiceCode =
     invoiceTypes.find((t) => t.is_default)?.code ?? invoiceTypes[0]?.code ?? "";
 
@@ -496,6 +500,9 @@ export function PurchaseEntryPage({
   );
   const [invoiceNo, setInvoiceNo] = useState(draft?.invoiceNo ?? "");
   const [invoiceDate, setInvoiceDate] = useState(draft?.invoiceDate ?? "");
+  const [paymentMethod, setPaymentMethod] = useState<number | "">(
+    draft?.paymentMethod ?? "",
+  );
   const [note, setNote] = useState(draft?.note ?? "");
   const [lines, setLines] = useState<Line[]>(() => {
     if (draft?.lines && draft.lines.length > 0) {
@@ -540,6 +547,7 @@ export function PurchaseEntryPage({
       invoiceForm,
       invoiceNo,
       invoiceDate,
+      paymentMethod,
       note,
       lines,
     };
@@ -564,6 +572,7 @@ export function PurchaseEntryPage({
     invoiceForm,
     invoiceNo,
     invoiceDate,
+    paymentMethod,
     note,
     lines,
   ]);
@@ -619,6 +628,7 @@ export function PurchaseEntryPage({
       setInvoiceForm(d.invoice_form);
       setInvoiceNo(d.invoice_no);
       setInvoiceDate(d.invoice_date ?? "");
+      setPaymentMethod(d.payment_method ?? "");
       setNote(d.note);
       setLines(
         d.items.map((it) => ({
@@ -880,6 +890,7 @@ export function PurchaseEntryPage({
         invoice_form: invoiceForm,
         invoice_no: invoiceNo,
         invoice_date: invoiceDate || null,
+        payment_method: paymentMethod === "" ? null : (paymentMethod as number),
         note,
         items: lines.map((l, idx) => ({
           line_no: idx + 1,
@@ -1100,6 +1111,22 @@ export function PurchaseEntryPage({
                 onChange={(e) => setInvoiceDate(e.target.value)}
                 disabled={readonly || noInvoice}
               />
+            </Field>
+            <Field label="付款方式">
+              <select
+                value={paymentMethod}
+                onChange={(e) =>
+                  setPaymentMethod(Number(e.target.value) || "")
+                }
+                disabled={readonly}
+              >
+                <option value="">— 未指定 —</option>
+                {paymentMethods.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="備註">
               <input

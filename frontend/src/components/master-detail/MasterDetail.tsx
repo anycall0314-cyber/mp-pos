@@ -2,7 +2,7 @@ import { ReactNode, useState } from "react";
 
 export interface MasterColumn<T> {
   key: string;
-  header: string;
+  header: ReactNode;
   render: (row: T) => ReactNode;
 }
 

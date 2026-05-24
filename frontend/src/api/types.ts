@@ -322,6 +322,10 @@ export interface PurchaseOrder {
   invoice_form_label: string;
   invoice_no: string;
   invoice_date: string | null;
+  payment_method: number | null;
+  payment_method_code: string | null;
+  payment_method_name: string | null;
+  payment_method_kind: string | null;
   note: string;
   created_by: number | null;
   is_void: boolean;
@@ -436,6 +440,34 @@ export interface SalesOrder {
   total: string;
   items: SalesOrderItem[];
   payments: SalesOrderPayment[];
+  created_at: string;
+  updated_at: string;
+}
+
+export type PettyExpenseCategory =
+  | "rent"
+  | "utility"
+  | "meal"
+  | "supplies"
+  | "other";
+
+export interface PettyExpense {
+  id: number;
+  no: string;
+  warehouse: number;
+  warehouse_code: string;
+  warehouse_name: string;
+  doc_date: string;
+  category: PettyExpenseCategory;
+  category_label: string;
+  amount: string;
+  payment_method: number;
+  payment_method_code: string;
+  payment_method_name: string;
+  payment_method_kind: string;
+  payee: string;
+  note: string;
+  is_void: boolean;
   created_at: string;
   updated_at: string;
 }

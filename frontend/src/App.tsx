@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
+import { PettyExpensesPage } from "@/pages/cash/PettyExpensesPage";
 import { CategoriesPage } from "@/pages/inventory/CategoriesPage";
 import { InventoryQueryPage } from "@/pages/inventory/InventoryQueryPage";
 import { ProductsPage } from "@/pages/products/ProductsPage";
@@ -45,6 +46,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/reports/business-daily", label: "營業日報" },
       { to: "/reports/margin-summary", label: "毛利彙總" },
       { to: "/reports/invoice-detail", label: "發票明細" },
+      { to: "/expenses", label: "店頭雜支" },
     ],
   },
   {
@@ -260,6 +262,7 @@ export function App() {
           <Route path="/sales/:id" element={<SalesEntryPage />} />
           <Route path="/sales/:id/print/:type" element={<SalesPrintPage />} />
           <Route path="/customers" element={<CustomersPage />} />
+          <Route path="/expenses" element={<PettyExpensesPage />} />
           <Route
             path="/members"
             element={<Navigate to="/customers?tab=member" replace />}
