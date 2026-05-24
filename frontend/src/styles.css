@@ -13,6 +13,20 @@
   color-scheme: dark;
 }
 
+/* 日間模式:套用 <html data-theme="light"> 即可切換 */
+:root[data-theme="light"] {
+  --bg: #f4f6fa;
+  --panel: #ffffff;
+  --panel-2: #f0f3f8;
+  --border: #d8dde7;
+  --text: #1c2230;
+  --text-dim: #6b7280;
+  --accent: #2962ff;
+  --row-hover: #eef2fa;
+  --row-selected: #d7e3ff;
+  color-scheme: light;
+}
+
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--text); }
@@ -27,6 +41,20 @@ body { background: var(--bg); color: var(--text); }
 }
 .brand { font-weight: 600; letter-spacing: 1px; }
 .topnav { display: flex; gap: 4px; }
+.theme-toggle {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 4px;
+  width: 32px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.theme-toggle:hover { color: var(--text); border-color: var(--text-dim); }
 .topnav-link {
   padding: 6px 12px; border-radius: 4px;
   color: var(--text-dim); text-decoration: none;
@@ -180,10 +208,13 @@ body { background: var(--bg); color: var(--text); }
 /* 銷貨單頭:高密度 4 欄 3 排;最右欄固定放常改的 客戶 / 會員 / 業務員 */
 .sales-header-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* 長欄(倉/客戶/會員/業務員)寬;短欄(日期/類型)窄 */
+  grid-template-columns:
+    minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr)
+    minmax(0, 1fr) minmax(0, 1.6fr);
   grid-template-areas:
-    "wh    date    invdate tax    customer"
-    "invno invtype note    member salesperson";
+    "wh    date invdate invtype customer"
+    "invno tax  note    member  salesperson";
   gap: 2px 12px;
   align-items: start;
 }
@@ -193,6 +224,16 @@ body { background: var(--bg); color: var(--text); }
 .sales-header-grid .field select {
   padding: 3px 8px;
   font-size: 14px;
+}
+/* 短欄位(日期/類型/發票號) input/select 不要被 grid 拉到滿 */
+.sales-header-grid .short-field input,
+.sales-header-grid .short-field select {
+  max-width: 180px;
+}
+/* 中欄(出貨倉/客戶/會員/業務員 ComboBox) 限制整個容器最大寬,
+   避免 ComboBox + 「+ 新增」按鈕 flex 一起被拉到滿 */
+.sales-header-grid .medium-field {
+  max-width: 280px;
 }
 .sales-header-grid .member-status {
   min-height: 26px;
@@ -1285,17 +1326,12 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   gap: 6px 12px;
 }
 .telecom-sub-field {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-dim);
-}
-.telecom-sub-field > span {
-  font-size: 12px;
 }
 .telecom-sub-field input,
 .telecom-sub-field select {
+  width: 100%;
   padding: 3px 8px;
   font-size: 14px;
 }

@@ -393,7 +393,7 @@ export interface StockMatrixResponse {
 export interface StockMatrixFilter {
   warehouseIds: number[];
   search?: string;
-  category?: number | "";
+  categoryIds?: number[];
   inStockOnly?: boolean;
 }
 export const useStockMatrix = (
@@ -405,7 +405,7 @@ export const useStockMatrix = (
       "stock-matrix",
       filter.warehouseIds.join(","),
       filter.search ?? "",
-      filter.category ?? "",
+      (filter.categoryIds ?? []).join(","),
       filter.inStockOnly ?? true,
     ],
     queryFn: () => {
@@ -414,7 +414,9 @@ export const useStockMatrix = (
         params.set("warehouse_ids", filter.warehouseIds.join(","));
       }
       if (filter.search) params.set("search", filter.search);
-      if (filter.category) params.set("category", String(filter.category));
+      if (filter.categoryIds && filter.categoryIds.length > 0) {
+        params.set("category_ids", filter.categoryIds.join(","));
+      }
       params.set(
         "in_stock_only",
         filter.inStockOnly === false ? "false" : "true",

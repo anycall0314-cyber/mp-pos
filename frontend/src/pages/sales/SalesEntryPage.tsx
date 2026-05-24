@@ -64,6 +64,8 @@ interface Line {
   simCardOption: ComboOption<SimCard> | null;
   activation_date: string;
   commission: string;
+  // 續約預設不出卡號欄,客戶要換卡時店員按「+ 加卡號」展開;非續約方案此旗標被忽略
+  card_override?: boolean;
 }
 
 function newLine(line_no: number): Line {
@@ -584,8 +586,17 @@ function LineRow({
       commission: newPlan ? toIntStr(newPlan.commission) : line.commission,
       sim_card: keepCard ? line.sim_card : "",
       simCardOption: keepCard ? line.simCardOption : null,
+      // 切到非續約方案 → 清掉 override(避免殘留誤判);續約方案保留店員之前的選擇
+      card_override:
+        newPlan?.kind === "renewal" ? line.card_override : false,
     });
   }
+
+  // 卡號欄顯示條件:新辦/攜碼 一律顯示;續約預設不顯,店員按「+ 加卡號」才開
+  const showCard =
+    allowTelecom &&
+    !!plan &&
+    (requiresCard || (plan.kind === "renewal" && !!line.card_override));
 
   const showTelecomSub = allowTelecom || allowCommission;
 
@@ -691,19 +702,17 @@ function LineRow({
         <td colSpan={6}>
           <div className="telecom-sub-grid">
             {allowTelecom && (
-              <label className="telecom-sub-field">
-                <span>門號</span>
+              <div className="telecom-sub-field">
                 <input
                   value={line.msisdn}
                   onChange={(e) => update({ msisdn: e.target.value })}
                   disabled={readonly}
-                  placeholder="0912xxxxxx"
+                  placeholder="門號 0912xxxxxx"
                 />
-              </label>
+              </div>
             )}
             {allowTelecom && (
-              <label className="telecom-sub-field">
-                <span>促銷方案</span>
+              <div className="telecom-sub-field">
                 <ComboBox<TelecomPlan>
                   value={line.telecom_plan}
                   selectedOption={line.telecomPlanOption}
@@ -712,47 +721,85 @@ function LineRow({
                     searchTelecomPlans(q, { activeOnly: true })
                   }
                   disabled={readonly}
-                  placeholder="搜尋方案"
+                  placeholder="促銷方案"
                 />
-              </label>
+              </div>
             )}
-            {allowTelecom && requiresCard && (
-              <label className="telecom-sub-field">
-                <span>卡號</span>
-                <ComboBox<SimCard>
-                  value={line.sim_card}
-                  selectedOption={line.simCardOption}
-                  onChange={(cid, opt) =>
-                    update({ sim_card: cid, simCardOption: opt ?? null })
-                  }
-                  fetchOptions={(q) =>
-                    searchSimCards(q, {
-                      vendor: plan?.carrier,
-                      inStockOnly: true,
-                    })
-                  }
-                  disabled={readonly}
-                  placeholder="搜尋卡號"
-                />
-              </label>
+            {showCard && (
+              <div
+                className="telecom-sub-field"
+                style={{ display: "flex", gap: 4, alignItems: "center" }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <ComboBox<SimCard>
+                    value={line.sim_card}
+                    selectedOption={line.simCardOption}
+                    onChange={(cid, opt) =>
+                      update({ sim_card: cid, simCardOption: opt ?? null })
+                    }
+                    fetchOptions={(q) =>
+                      searchSimCards(q, {
+                        vendor: plan?.carrier,
+                        inStockOnly: true,
+                      })
+                    }
+                    disabled={readonly}
+                    placeholder="卡號"
+                  />
+                </div>
+                {plan?.kind === "renewal" && !readonly && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      update({
+                        card_override: false,
+                        sim_card: "",
+                        simCardOption: null,
+                      })
+                    }
+                    style={{
+                      background: "transparent",
+                      border: 0,
+                      color: "var(--text-dim)",
+                      cursor: "pointer",
+                      padding: "0 4px",
+                      fontSize: 14,
+                      flexShrink: 0,
+                    }}
+                    title="續約不換卡,收起此欄"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
             )}
+            {allowTelecom &&
+              plan?.kind === "renewal" &&
+              !line.card_override &&
+              !readonly && (
+                <div className="telecom-sub-field">
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => update({ card_override: true })}
+                    style={{ width: "100%" }}
+                  >
+                    + 加卡號
+                  </button>
+                </div>
+              )}
             {allowCommission && (
-              <label className="telecom-sub-field">
-                <span>佣金</span>
+              <div className="telecom-sub-field">
                 <input
                   type="number"
                   className="num-input"
                   step="1"
                   value={line.commission}
-                  onChange={(e) =>
-                    update({ commission: e.target.value })
-                  }
-                  onBlur={(e) =>
-                    update({ commission: toIntStr(e.target.value) })
-                  }
-                  disabled={readonly}
+                  disabled
+                  placeholder="佣金"
+                  title="佣金以方案設定為準,不可於銷貨時更改;請至「方案管理」調整"
                 />
-              </label>
+              </div>
             )}
           </div>
         </td>
@@ -869,8 +916,9 @@ export function SalesEntryPage() {
     draft?.invoiceForm ?? "",
   );
   const [invoiceNo, setInvoiceNo] = useState(draft?.invoiceNo ?? "");
+  // 發票日期一律 = 今天,不開放更改(防竄改);舊單載入時會被 existing data 覆寫顯示原始日期
   const [invoiceDate, setInvoiceDate] = useState(
-    () => draft?.invoiceDate ?? new Date().toISOString().slice(0, 10),
+    () => new Date().toISOString().slice(0, 10),
   );
   // 新單時:依發票類型 peek 下一張要開的號碼;送單時後端會原子地取走它
   const [previewInvoiceNo, setPreviewInvoiceNo] = useState<string | null>(null);
@@ -1189,6 +1237,9 @@ export function SalesEntryPage() {
             : null,
           activation_date: it.activation_date ?? "",
           commission: toIntStr(it.commission),
+          // 舊單若是續約 + 有卡號(換卡特例),把 card_override 開上,UI 才會顯示卡號欄
+          card_override:
+            it.telecom_plan_kind === "renewal" && !!it.sim_card,
         })),
       );
     }
@@ -1590,7 +1641,7 @@ export function SalesEntryPage() {
         buyer_tax_id: isTaxable ? buyerTaxId : "",
         invoice_form: invoiceForm,
         invoice_no: invoiceNo,
-        invoice_date: invoiceDate || null,
+        invoice_date: noInvoice ? null : invoiceDate,
         sales_person: salesPerson === "" ? null : (salesPerson as number),
         note,
         items: lines.map((l, idx) => ({
@@ -1737,7 +1788,7 @@ export function SalesEntryPage() {
 
         <div className="entry-header" style={{ marginBottom: 8 }}>
           <div className="sales-header-grid">
-            <div style={{ gridArea: "wh" }}>
+            <div style={{ gridArea: "wh" }} className="medium-field">
               <Field label="出貨倉" required>
                 <ComboBox
                   value={warehouse}
@@ -1752,7 +1803,7 @@ export function SalesEntryPage() {
                 />
               </Field>
             </div>
-            <div style={{ gridArea: "date" }}>
+            <div style={{ gridArea: "date" }} className="short-field">
               <Field label="單據日期" required>
                 <input
                   type="date"
@@ -1762,17 +1813,17 @@ export function SalesEntryPage() {
                 />
               </Field>
             </div>
-            <div style={{ gridArea: "invdate" }}>
+            <div style={{ gridArea: "invdate" }} className="short-field">
               <Field label="發票日期" required={!noInvoice}>
                 <input
                   type="date"
                   value={invoiceDate}
-                  onChange={(e) => setInvoiceDate(e.target.value)}
-                  disabled={readonly || noInvoice || isNew}
+                  disabled
+                  title="發票日期一律以系統當天為準,不可更改"
                 />
               </Field>
             </div>
-            <div style={{ gridArea: "customer" }}>
+            <div style={{ gridArea: "customer" }} className="medium-field">
               <Field label="客戶" required>
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -1806,7 +1857,7 @@ export function SalesEntryPage() {
               </Field>
             </div>
 
-            <div style={{ gridArea: "tax" }}>
+            <div style={{ gridArea: "tax" }} className="short-field">
               <Field label="課稅別">
                 <select
                   value={taxMethod}
@@ -1832,7 +1883,7 @@ export function SalesEntryPage() {
                 </Field>
               )}
             </div>
-            <div style={{ gridArea: "invtype" }}>
+            <div style={{ gridArea: "invtype" }} className="short-field">
               <Field label="發票類型">
                 <select
                   value={invoiceForm}
@@ -1841,6 +1892,8 @@ export function SalesEntryPage() {
                     setInvoiceForm(v);
                     // 免用統一發票 → 課稅別連動到免稅
                     if (v === "none") setTaxMethod("tax_free");
+                    // 電子發票 → 課稅別預設應稅內含
+                    else if (v === "e_invoice") setTaxMethod("taxable_included");
                   }}
                   disabled={readonly}
                 >
@@ -1853,7 +1906,7 @@ export function SalesEntryPage() {
                 </select>
               </Field>
             </div>
-            <div style={{ gridArea: "member" }}>
+            <div style={{ gridArea: "member" }} className="medium-field">
               <Field label="會員">
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -1887,7 +1940,7 @@ export function SalesEntryPage() {
               </Field>
             </div>
 
-            <div style={{ gridArea: "invno" }}>
+            <div style={{ gridArea: "invno" }} className="short-field">
               <Field label="發票號碼(自動取號)" required={!noInvoice}>
                 <input
                   value={isNew ? previewInvoiceNo ?? "" : invoiceNo}
@@ -1911,7 +1964,7 @@ export function SalesEntryPage() {
                 />
               </Field>
             </div>
-            <div style={{ gridArea: "salesperson" }}>
+            <div style={{ gridArea: "salesperson" }} className="medium-field">
               <Field label="業務員" required>
                 <ComboBox
                   value={salesPerson}

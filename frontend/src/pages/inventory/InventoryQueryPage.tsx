@@ -221,7 +221,7 @@ function TransferStatusModal({
 
 interface AppliedFilter {
   keyword: string;
-  category: number | "";
+  categoryIds: number[];
   warehouseIds: number[];
 }
 
@@ -247,8 +247,12 @@ function sortKeyEquals(a: SortKey, b: SortKey): boolean {
 export function InventoryQueryPage() {
   // 表單狀態(未送出)
   const [keyword, setKeyword] = useState("");
-  const [category, setCategory] = useState<number | "">("");
-  const [categoryOption, setCategoryOption] =
+  // 類別多選:chip 集合;categoryPicker 是 ComboBox 暫存,選後加入 chip 並清空
+  const [selectedCategories, setSelectedCategories] = useState<
+    { id: number; label: string }[]
+  >([]);
+  const [categoryPicker, setCategoryPicker] = useState<number | "">("");
+  const [categoryPickerOption, setCategoryPickerOption] =
     useState<ComboOption<Category> | null>(null);
 
   // 倉別多選
@@ -279,7 +283,7 @@ export function InventoryQueryPage() {
     {
       warehouseIds: applied?.warehouseIds ?? [],
       search: applied?.keyword,
-      category: applied?.category,
+      categoryIds: applied?.categoryIds,
       inStockOnly: true,
     },
     { enabled: !!applied && (applied.warehouseIds.length > 0) },
@@ -359,17 +363,32 @@ export function InventoryQueryPage() {
   function runQuery() {
     setApplied({
       keyword: keyword.trim(),
-      category,
+      categoryIds: selectedCategories.map((c) => c.id),
       warehouseIds: Array.from(selectedWarehouseIds),
     });
   }
 
   function resetFilters() {
     setKeyword("");
-    setCategory("");
-    setCategoryOption(null);
+    setSelectedCategories([]);
+    setCategoryPicker("");
+    setCategoryPickerOption(null);
     setSelectedWarehouseIds(new Set(allWarehouses.map((w) => w.id)));
     setApplied(null);
+  }
+
+  function addCategory(opt: ComboOption<Category>) {
+    setSelectedCategories((prev) =>
+      prev.some((c) => c.id === opt.id)
+        ? prev
+        : [...prev, { id: opt.id as number, label: opt.label }],
+    );
+    setCategoryPicker("");
+    setCategoryPickerOption(null);
+  }
+
+  function removeCategory(id: number) {
+    setSelectedCategories((prev) => prev.filter((c) => c.id !== id));
   }
 
   function toggleWarehouse(wid: number) {
@@ -410,19 +429,64 @@ export function InventoryQueryPage() {
             style={{ minWidth: 180 }}
           />
         </label>
-        <label style={{ minWidth: 220 }}>
-          類別
-          <div style={{ minWidth: 160 }}>
+        <label style={{ minWidth: 260 }}>
+          類別 (可多選)
+          <div style={{ minWidth: 200 }}>
             <ComboBox<Category>
-              value={category}
-              selectedOption={categoryOption}
-              onChange={(id, opt) => {
-                setCategory(id);
-                setCategoryOption(opt ?? null);
+              value={categoryPicker}
+              selectedOption={categoryPickerOption}
+              onChange={(_id, opt) => {
+                if (opt) addCategory(opt);
               }}
               fetchOptions={searchCategories}
-              placeholder="全部"
+              placeholder={
+                selectedCategories.length === 0 ? "全部" : "繼續加類別…"
+              }
             />
+            {selectedCategories.length > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 4,
+                  marginTop: 4,
+                }}
+              >
+                {selectedCategories.map((c) => (
+                  <span
+                    key={c.id}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: "2px 6px",
+                      background: "var(--panel-2)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 3,
+                      fontSize: 13,
+                    }}
+                  >
+                    {c.label}
+                    <button
+                      type="button"
+                      onClick={() => removeCategory(c.id)}
+                      style={{
+                        background: "transparent",
+                        border: 0,
+                        color: "var(--text-dim)",
+                        cursor: "pointer",
+                        padding: 0,
+                        fontSize: 14,
+                        lineHeight: 1,
+                      }}
+                      title="移除"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </label>
 

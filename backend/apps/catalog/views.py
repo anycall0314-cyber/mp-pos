@@ -263,9 +263,18 @@ class ProductViewSet(viewsets.ModelViewSet):
                 | Q(category__name__icontains=search)
                 | Q(category__code__icontains=search)
             )
+        # category 單選(舊版相容);category_ids 多選 CSV
         category_id = request.query_params.get("category")
         if category_id and category_id.isdigit():
             qs = qs.filter(category_id=int(category_id))
+        raw_cat_ids = request.query_params.get("category_ids", "")
+        if raw_cat_ids:
+            cat_ids = [
+                int(x) for x in raw_cat_ids.split(",")
+                if x.strip().isdigit()
+            ]
+            if cat_ids:
+                qs = qs.filter(category_id__in=cat_ids)
 
         qs = qs.order_by("category__sort_order", "category__code", "sku")
         products = list(qs[:500])

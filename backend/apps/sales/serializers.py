@@ -233,6 +233,12 @@ class SalesOrderSerializer(serializers.ModelSerializer):
         for idx, item_data in enumerate(items_data, start=1):
             serial_objs = item_data.pop("serial_ids", [])
             item_data.setdefault("line_no", idx)
+            # 佣金一律以方案設定為準,忽略傳入值(防 API 繞過前端鎖)
+            plan = item_data.get("telecom_plan")
+            if plan is not None:
+                item_data["commission"] = plan.commission
+            else:
+                item_data["commission"] = 0
             item = SalesOrderItem.objects.create(so=so, tenant=so.tenant, **item_data)
             for pos, sn in enumerate(serial_objs):
                 SalesOrderItemSerial.objects.create(
@@ -250,6 +256,11 @@ class SalesOrderSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         # 單據日期一律強制為系統當天,忽略傳入值以防竄改
         validated_data["doc_date"] = date.today()
+        # 發票日期同理:非免用發票一律 today;免用(none/空)則 null
+        invoice_form = validated_data.get("invoice_form", "")
+        validated_data["invoice_date"] = (
+            None if invoice_form in ("", "none") else date.today()
+        )
         items_data = validated_data.pop("items", [])
         payments_data = validated_data.pop("payments", [])
         so = SalesOrder.objects.create(**validated_data)
