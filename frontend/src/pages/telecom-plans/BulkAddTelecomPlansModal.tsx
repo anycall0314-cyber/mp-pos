@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ApiHttpError } from "@/api/client";
 import {
@@ -24,38 +24,20 @@ const KIND_OPTIONS: { value: TelecomPlanKind; label: string }[] = [
   { value: "portin", label: "攜碼" },
 ];
 
-function downloadTemplate() {
-  const csv =
-    "﻿專案名稱,月租,綁約月數,佣金,類型,電信商\n" +
-    "中華 1399 30月 新辦,1399,30,12000,新辦,中華電信\n" +
-    "中華 999 24月 新辦,999,24,8000,新辦,中華電信\n" +
-    "台哥大 599 24月 攜碼,599,24,4000,攜碼,台灣大哥大\n";
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "電信方案批次匯入範例.csv";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+interface Combo {
+  key: string;
+  name: string;
+  monthly_fee: string;
+  contract_months: string;
+  commission: string;
+  selected: boolean;
 }
 
-function parseRows(text: string): BulkTelecomPlanRow[] {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const parts = line.split(/\t/).map((p) => p.trim());
-      const row: BulkTelecomPlanRow = { name: parts[0] };
-      if (parts[1]) row.monthly_fee = parts[1];
-      if (parts[2]) row.contract_months = parts[2];
-      if (parts[3]) row.commission = parts[3];
-      if (parts[4]) row.kind = parts[4];
-      if (parts[5]) row.carrier_name = parts[5];
-      return row;
-    });
+function splitList(s: string): string[] {
+  return s
+    .split(/[,,\n]/g)
+    .map((x) => x.trim())
+    .filter(Boolean);
 }
 
 export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
@@ -63,7 +45,18 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
   const [carrierOption, setCarrierOption] =
     useState<ComboOption<Carrier> | null>(null);
   const [kind, setKind] = useState<TelecomPlanKind>("new");
-  const [raw, setRaw] = useState("");
+
+  // 名稱前綴(電信商縮寫或自訂),展開後成為 「{prefix} {月租} {綁約}月 {類型}」
+  const [namePrefix, setNamePrefix] = useState("");
+
+  // 軸 1:月租清單,可同時帶對應佣金
+  const [feesText, setFeesText] = useState("");
+  const [commissionsText, setCommissionsText] = useState("");
+
+  // 軸 2:綁約月數清單
+  const [monthsText, setMonthsText] = useState("");
+
+  const [combos, setCombos] = useState<Combo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [lineErrors, setLineErrors] = useState<
     Array<{ line: number; errors: unknown }>
@@ -71,31 +64,124 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
 
   const bulk = useBulkCreateTelecomPlans();
 
-  const rows = useMemo(() => parseRows(raw), [raw]);
+  const fees = useMemo(() => splitList(feesText), [feesText]);
+  const commissions = useMemo(
+    () => splitList(commissionsText),
+    [commissionsText],
+  );
+  const months = useMemo(() => splitList(monthsText), [monthsText]);
 
-  if (!open) return null;
+  const kindLabel =
+    KIND_OPTIONS.find((k) => k.value === kind)?.label ?? kind;
+
+  // 自動展開預覽
+  const previewCombos = useMemo<Combo[]>(() => {
+    if (fees.length === 0 || months.length === 0) return [];
+    const result: Combo[] = [];
+    for (let i = 0; i < fees.length; i++) {
+      const fee = fees[i];
+      // 值多過佣金時,後面沿用最後一個;若完全沒給,用 0
+      const comm = commissions[i] ?? commissions[commissions.length - 1] ?? "0";
+      for (const m of months) {
+        const parts = [
+          namePrefix.trim(),
+          fee,
+          `${m}月`,
+          kindLabel,
+        ].filter(Boolean);
+        const name = parts.join(" ");
+        result.push({
+          key: name,
+          name,
+          monthly_fee: fee,
+          contract_months: m,
+          commission: comm,
+          selected: true,
+        });
+      }
+    }
+    return result;
+  }, [namePrefix, fees, commissions, months, kindLabel]);
+
+  // 輸入變動時把預覽結果同步到 combos(保留交集的勾選 / 改值)
+  useEffect(() => {
+    setCombos((prev) => {
+      const prevMap = new Map(prev.map((c) => [c.key, c]));
+      return previewCombos.map((p) => {
+        const existed = prevMap.get(p.key);
+        return existed
+          ? {
+              ...p,
+              selected: existed.selected,
+              monthly_fee: existed.monthly_fee,
+              contract_months: existed.contract_months,
+              commission: existed.commission,
+              name: existed.name,
+            }
+          : p;
+      });
+    });
+  }, [previewCombos]);
+
+  function toggleSelect(key: string, sel: boolean) {
+    setCombos((prev) =>
+      prev.map((c) => (c.key === key ? { ...c, selected: sel } : c)),
+    );
+  }
+  function toggleAll(sel: boolean) {
+    setCombos((prev) => prev.map((c) => ({ ...c, selected: sel })));
+  }
+  function patchField(key: string, patch: Partial<Combo>) {
+    setCombos((prev) =>
+      prev.map((c) => (c.key === key ? { ...c, ...patch } : c)),
+    );
+  }
+
+  function reset() {
+    setNamePrefix("");
+    setFeesText("");
+    setCommissionsText("");
+    setMonthsText("");
+    setCombos([]);
+    setError(null);
+    setLineErrors([]);
+  }
+
+  function handleClose() {
+    reset();
+    onClose();
+  }
+
+  // 一鍵套用三家常見電信商前綴(輔助)
+  function applyCarrierPrefix(p: "中華" | "台哥大" | "遠傳") {
+    setNamePrefix(p);
+  }
 
   async function submit() {
     setError(null);
     setLineErrors([]);
-    if (rows.length === 0) {
-      setError("尚未貼上方案名稱");
+    if (!carrier) {
+      setError("請選電信商");
       return;
     }
-    if (!carrier) {
-      const missing = rows.findIndex((r) => !r.carrier_name);
-      if (missing >= 0) {
-        setError(`第 ${missing + 1} 行未指定電信商(預設電信商也沒選)`);
-        return;
-      }
+    const toCreate = combos.filter((c) => c.selected);
+    if (toCreate.length === 0) {
+      setError("沒有勾選任何方案");
+      return;
     }
+    const items: BulkTelecomPlanRow[] = toCreate.map((c) => ({
+      name: c.name,
+      monthly_fee: c.monthly_fee,
+      contract_months: c.contract_months,
+      commission: c.commission || "0",
+    }));
     const common: BulkTelecomPlanCommon = {
+      carrier: carrier as number,
       kind,
       is_active: true,
     };
-    if (carrier) common.carrier = carrier as number;
     try {
-      const res = await bulk.mutateAsync({ common, items: rows });
+      const res = await bulk.mutateAsync({ common, items });
       onSuccess(res.count);
       reset();
     } catch (e) {
@@ -103,7 +189,8 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
         const body = e.body;
         if (typeof body === "object" && body && "errors" in body) {
           setLineErrors(
-            (body as { errors: Array<{ line: number; errors: unknown }> }).errors,
+            (body as { errors: Array<{ line: number; errors: unknown }> })
+              .errors,
           );
           setError("部分方案失敗,請修正後重送");
         } else if (typeof body === "object" && body && "detail" in body) {
@@ -117,31 +204,60 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
     }
   }
 
-  function reset() {
-    setRaw("");
-    setError(null);
-    setLineErrors([]);
-  }
+  if (!open) return null;
 
-  function handleClose() {
-    reset();
-    onClose();
-  }
+  const list = combos.length > 0 ? combos : previewCombos;
+  const selectedCount = combos.filter((c) => c.selected).length;
 
   return (
     <div className="modal-overlay" onClick={handleClose}>
       <div
-        className="modal-card bulk-add-modal"
+        className="modal-card expander-modal"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
       >
-        <div className="modal-title">批次新增電信方案</div>
+        <div className="modal-title">方案展開新增</div>
+
+        {error && <Banner kind="error" message={error} />}
+
         <div className="modal-body">
-          {error && <Banner kind="error" message={error} />}
+          <div
+            style={{
+              display: "flex",
+              gap: 6,
+              marginBottom: 8,
+              alignItems: "center",
+            }}
+          >
+            <span style={{ color: "var(--text-dim)", fontSize: 13 }}>
+              前綴快捷:
+            </span>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => applyCarrierPrefix("中華")}
+            >
+              中華
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => applyCarrierPrefix("台哥大")}
+            >
+              台哥大
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => applyCarrierPrefix("遠傳")}
+            >
+              遠傳
+            </button>
+          </div>
 
           <div className="field-row">
-            <Field label="預設電信商">
+            <Field label="電信商" required>
               <ComboBox<Carrier>
                 value={carrier}
                 selectedOption={carrierOption}
@@ -150,9 +266,10 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
                   setCarrierOption(opt ?? null);
                 }}
                 fetchOptions={searchCarriers}
+                placeholder="搜尋電信商"
               />
             </Field>
-            <Field label="預設類型">
+            <Field label="類型" required>
               <select
                 value={kind}
                 onChange={(e) => setKind(e.target.value as TelecomPlanKind)}
@@ -164,100 +281,169 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
                 ))}
               </select>
             </Field>
-          </div>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
-            Excel 第 5、6 欄可分別覆寫類型與電信商;沒填就用上方預設
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 4,
-            }}
-          >
-            <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
-              方案清單(每行一筆)
-            </div>
-            <button
-              type="button"
-              className="btn"
-              onClick={downloadTemplate}
-              style={{ fontSize: 12, padding: "2px 8px" }}
-            >
-              下載範例檔
-            </button>
-          </div>
-          <textarea
-            value={raw}
-            onChange={(e) => setRaw(e.target.value)}
-            rows={8}
-            style={{
-              width: "100%",
-              fontFamily: "monospace",
-              fontSize: 13,
-              resize: "vertical",
-            }}
-          />
-          <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
-            單欄:每行一個專案名稱 · 多欄:專案名稱[Tab]月租[Tab]綁約月數[Tab]佣金[Tab]類型[Tab]電信商
+            <Field label="名稱前綴">
+              <input
+                value={namePrefix}
+                onChange={(e) => setNamePrefix(e.target.value)}
+                placeholder="例:中華 / 台哥大"
+              />
+            </Field>
           </div>
 
-          {rows.length > 0 && (
-            <div className="bulk-preview">
-              <div className="bulk-preview-head">預覽 {rows.length} 筆</div>
-              <table className="line-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 40 }}>#</th>
-                    <th>專案名稱</th>
-                    <th className="num">月租</th>
-                    <th className="num">綁約</th>
-                    <th className="num">佣金</th>
-                    <th>類型</th>
-                    <th>電信商</th>
-                    <th>錯誤</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r, i) => {
-                    const err = lineErrors.find((e) => e.line === i + 1);
-                    return (
-                      <tr key={i} className={err ? "row-void" : undefined}>
-                        <td>{i + 1}</td>
-                        <td>{r.name}</td>
-                        <td className="num">{r.monthly_fee || "—"}</td>
-                        <td className="num">{r.contract_months || "—"}</td>
-                        <td className="num">{r.commission || "—"}</td>
-                        <td>
-                          {r.kind || (
-                            <span style={{ color: "var(--text-dim)" }}>
-                              {
-                                KIND_OPTIONS.find((k) => k.value === kind)
-                                  ?.label
+          <div className="field-row">
+            <Field label="月租(逗號分隔)">
+              <input
+                value={feesText}
+                onChange={(e) => setFeesText(e.target.value)}
+                placeholder="例:599, 999, 1399"
+              />
+            </Field>
+            <Field label="對應佣金(對應月租)">
+              <input
+                value={commissionsText}
+                onChange={(e) => setCommissionsText(e.target.value)}
+                placeholder="例:4000, 8000, 12000"
+              />
+            </Field>
+            <Field label="綁約月數(逗號分隔)">
+              <input
+                value={monthsText}
+                onChange={(e) => setMonthsText(e.target.value)}
+                placeholder="例:24, 30, 36"
+              />
+            </Field>
+          </div>
+
+          {list.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  marginBottom: 6,
+                }}
+              >
+                <strong style={{ flex: 1 }}>
+                  預覽:展開 {list.length} 筆,勾選 {selectedCount} 筆
+                </strong>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => toggleAll(true)}
+                  style={{ marginRight: 6 }}
+                >
+                  全選
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => toggleAll(false)}
+                >
+                  全不選
+                </button>
+              </div>
+              <div
+                style={{
+                  maxHeight: 320,
+                  overflow: "auto",
+                  border: "1px solid var(--border)",
+                  borderRadius: 3,
+                }}
+              >
+                <table className="line-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: 32 }}></th>
+                      <th>專案名稱</th>
+                      <th className="num" style={{ width: 80 }}>
+                        月租
+                      </th>
+                      <th className="num" style={{ width: 70 }}>
+                        綁約
+                      </th>
+                      <th className="num" style={{ width: 90 }}>
+                        佣金
+                      </th>
+                      <th style={{ width: 80 }}>錯誤</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {list.map((c, i) => {
+                      const err = lineErrors.find((e) => e.line === i + 1);
+                      return (
+                        <tr
+                          key={c.key}
+                          className={err ? "row-void" : undefined}
+                        >
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={c.selected}
+                              onChange={(e) =>
+                                toggleSelect(c.key, e.target.checked)
                               }
-                            </span>
-                          )}
-                        </td>
-                        <td>
-                          {r.carrier_name || (
-                            <span style={{ color: "var(--text-dim)" }}>
-                              {carrierOption?.label ?? "—"}
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ color: "#ff7070", fontSize: 12 }}>
-                          {err ? JSON.stringify(err.errors) : ""}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                            />
+                          </td>
+                          <td>
+                            <input
+                              value={c.name}
+                              onChange={(e) =>
+                                patchField(c.key, { name: e.target.value })
+                              }
+                              style={{ width: "100%" }}
+                            />
+                          </td>
+                          <td className="num">
+                            <input
+                              type="number"
+                              value={c.monthly_fee}
+                              onChange={(e) =>
+                                patchField(c.key, {
+                                  monthly_fee: e.target.value,
+                                })
+                              }
+                              style={{ width: 70, textAlign: "right" }}
+                            />
+                          </td>
+                          <td className="num">
+                            <input
+                              type="number"
+                              value={c.contract_months}
+                              onChange={(e) =>
+                                patchField(c.key, {
+                                  contract_months: e.target.value,
+                                })
+                              }
+                              style={{ width: 60, textAlign: "right" }}
+                            />
+                          </td>
+                          <td className="num">
+                            <input
+                              type="number"
+                              value={c.commission}
+                              onChange={(e) =>
+                                patchField(c.key, {
+                                  commission: e.target.value,
+                                })
+                              }
+                              style={{ width: 80, textAlign: "right" }}
+                            />
+                          </td>
+                          <td
+                            style={{ color: "#ff7070", fontSize: 12 }}
+                          >
+                            {err ? JSON.stringify(err.errors) : ""}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
+
         <div className="modal-actions">
           <button
             className="btn"
@@ -271,9 +457,9 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
             className="btn primary"
             type="button"
             onClick={submit}
-            disabled={bulk.isPending || rows.length === 0}
+            disabled={bulk.isPending || selectedCount === 0}
           >
-            {bulk.isPending ? "建立中…" : `建立 ${rows.length} 筆`}
+            {bulk.isPending ? "建立中…" : `建立 ${selectedCount} 筆`}
           </button>
         </div>
       </div>

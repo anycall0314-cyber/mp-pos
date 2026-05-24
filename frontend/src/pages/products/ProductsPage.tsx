@@ -83,6 +83,10 @@ export function ProductsPage() {
 
   // ─── 選擇與右側面板
   const [selection, setSelection] = useState<Selection>(null);
+  // 左側欄頁籤:商品列表 vs 類別管理
+  const [leftTab, setLeftTab] = useState<"products" | "categories">(
+    "products",
+  );
 
   const selectedProduct = useMemo(() => {
     if (selection?.kind !== "product") return null;
@@ -166,6 +170,7 @@ export function ProductsPage() {
       setCatNewError("代碼與名稱必填");
       return;
     }
+    if (!confirm(`確定新增類別「${code} ${name}」?`)) return;
     const explicit = Number(catNew.sort_order);
     const sort_order =
       Number.isFinite(explicit) && explicit > 0
@@ -174,17 +179,16 @@ export function ProductsPage() {
         ? Math.max(...sortedCategories.map((c) => c.sort_order)) + 10
         : 10;
     try {
-      const created = await saveCategory.mutateAsync({
+      await saveCategory.mutateAsync({
         code,
         name,
         sort_order,
         is_active: catNew.is_active,
         is_secondhand_default: catNew.is_secondhand_default,
       });
+      // 留在新增畫面、清空輸入,方便連續新增
       setCatNew(EMPTY_NEW_CAT);
       setCatNewError(null);
-      // 建好後自動切到該類別的編輯畫面
-      setSelection({ kind: "category", id: created.id });
     } catch (e) {
       setCatNewError(e instanceof Error ? e.message : "建立失敗");
     }
@@ -231,7 +235,7 @@ export function ProductsPage() {
   return (
     <div className="page">
       <Toolbar
-        title="商品 / 類別"
+        title=""
         actions={
           <>
             <button className="btn" onClick={() => setExpanderOpen(true)}>
@@ -251,7 +255,32 @@ export function ProductsPage() {
             </button>
           </>
         }
-      />
+      >
+        <div className="tab-switcher">
+          <button
+            type="button"
+            className={
+              leftTab === "products"
+                ? "tab-switcher-item active"
+                : "tab-switcher-item"
+            }
+            onClick={() => setLeftTab("products")}
+          >
+            商品列表
+          </button>
+          <button
+            type="button"
+            className={
+              leftTab === "categories"
+                ? "tab-switcher-item active"
+                : "tab-switcher-item"
+            }
+            onClick={() => setLeftTab("categories")}
+          >
+            類別管理
+          </button>
+        </div>
+      </Toolbar>
       {bulkResult && (
         <div
           style={{
@@ -266,8 +295,12 @@ export function ProductsPage() {
       )}
 
       <div className="pc-layout">
-        <aside className="pc-master">
+        <aside
+          className="pc-master"
+          style={{ gridTemplateRows: "1fr" }}
+        >
           {/* ─── 商品區 ─── */}
+          {leftTab === "products" && (
           <section className="pc-section pc-section-products">
             <div className="pc-section-header">商品</div>
             <div className="pc-section-search">
@@ -355,8 +388,10 @@ export function ProductsPage() {
               )}
             </div>
           </section>
+          )}
 
           {/* ─── 類別區 ─── */}
+          {leftTab === "categories" && (
           <section className="pc-section pc-section-categories category-mgr">
             <div className="pc-section-header">
               <span>類別(拖拉重排)</span>
@@ -462,6 +497,7 @@ export function ProductsPage() {
               </table>
             </div>
           </section>
+          )}
         </aside>
 
         {/* ─── 右側面板 ─── */}
