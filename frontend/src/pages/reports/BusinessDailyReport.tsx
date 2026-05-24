@@ -3,35 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useBusinessDailyReport, useWarehouses } from "@/api/hooks";
 import { Toolbar } from "@/components/Toolbar";
 
-const OPENING_CASH_KEY = "business-daily-opening-cash";
-
-interface OpeningMap {
-  [key: string]: string; // key = `${warehouseId}:${date}` 或 `${warehouseId}:last`
-}
-
-function loadOpeningMap(): OpeningMap {
-  try {
-    const raw = localStorage.getItem(OPENING_CASH_KEY);
-    return raw ? (JSON.parse(raw) as OpeningMap) : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveOpening(warehouse: number, date: string, v: string) {
-  const map = loadOpeningMap();
-  map[`${warehouse}:${date}`] = v;
-  map[`${warehouse}:last`] = v;
-  try {
-    localStorage.setItem(OPENING_CASH_KEY, JSON.stringify(map));
-  } catch {}
-}
-
-function getOpening(warehouse: number, date: string): string {
-  const map = loadOpeningMap();
-  return map[`${warehouse}:${date}`] ?? map[`${warehouse}:last`] ?? "";
-}
-
 const today = () => new Date().toISOString().slice(0, 10);
 
 export function BusinessDailyReportPage() {
@@ -39,20 +10,13 @@ export function BusinessDailyReportPage() {
   const warehouses = warehousesQuery.data ?? [];
   const [warehouse, setWarehouse] = useState<number | "">("");
   const [date, setDate] = useState(today());
-  const [opening, setOpening] = useState("");
 
-  // 首次載入或切倉/切日時帶入記住的期初
+  // 首次載入帶第一個倉
   useEffect(() => {
     if (warehouses.length > 0 && warehouse === "") {
       setWarehouse(warehouses[0].id);
     }
   }, [warehouses, warehouse]);
-
-  useEffect(() => {
-    if (warehouse) {
-      setOpening(getOpening(warehouse as number, date));
-    }
-  }, [warehouse, date]);
 
   const reportQuery = useBusinessDailyReport(
     warehouse === "" ? null : (warehouse as number),
@@ -60,7 +24,8 @@ export function BusinessDailyReportPage() {
   );
   const report = reportQuery.data;
 
-  const openingInt = Math.round(Number(opening) || 0);
+  // 期初現金 = 該倉之前所有 cash 動作的累計(後端自動算,使用者不可改)
+  const openingInt = report?.opening_cash ?? 0;
   const salesTotal = report?.sales.total ?? 0;
   const purchasesTotal = report?.purchases.total ?? 0;
   const expensesTotal = report?.expenses.total ?? 0;
@@ -74,12 +39,6 @@ export function BusinessDailyReportPage() {
     const w = warehouses.find((x) => x.id === warehouse);
     return w ? `${w.code} ${w.name}` : "";
   }, [warehouses, warehouse]);
-
-  function commitOpening() {
-    if (warehouse) {
-      saveOpening(warehouse as number, date, opening);
-    }
-  }
 
   function exportCsv() {
     if (!report) return;
@@ -232,25 +191,11 @@ export function BusinessDailyReportPage() {
                 marginBottom: 16,
               }}
             >
-              <label
-                style={{
-                  display: "inline-flex",
-                  gap: 6,
-                  alignItems: "center",
-                }}
-              >
-                期初現金:
-                <input
-                  type="number"
-                  step="1"
-                  min="0"
-                  value={opening}
-                  onChange={(e) => setOpening(e.target.value)}
-                  onBlur={commitOpening}
-                  placeholder="昨日交班結餘"
-                  style={{ width: 110, textAlign: "right" }}
-                />
-              </label>
+              <SummaryItem
+                label="期初現金(歷史累計)"
+                value={openingInt}
+                color="var(--text)"
+              />
               <SummaryItem
                 label="今日收入(銷貨現金)"
                 value={salesTotal}

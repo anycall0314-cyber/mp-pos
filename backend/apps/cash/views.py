@@ -81,6 +81,69 @@ class CashAdjustmentViewSet(viewsets.ModelViewSet):
         return Response(self.get_serializer(obj).data)
 
 
+def _compute_cash_balance_before(tenant, warehouse_id, before_date, cash_codes):
+    """算指定門市在某日「之前」的 cash 累計淨變動。
+    用來當營業日報「期初現金」的值(全自動累加,使用者不可改)。
+    + 銷貨 cash 收入  − 進貨 cash 付款  − 雜支 cash 支出
+    + 現金存入        − 現金提取
+    """
+    sales_in = (
+        SalesOrderPayment.objects.filter(
+            so__tenant=tenant,
+            so__warehouse_id=warehouse_id,
+            so__doc_date__lt=before_date,
+            so__is_void=False,
+            method__in=cash_codes,
+        ).aggregate(s=Sum("amount"))["s"]
+        or 0
+    )
+    purchases_out = (
+        PurchaseOrder.objects.for_tenant(tenant)
+        .filter(
+            warehouse_id=warehouse_id,
+            doc_date__lt=before_date,
+            is_void=False,
+            payment_method__kind="cash",
+        )
+        .aggregate(s=Sum("total_cost"))["s"]
+        or 0
+    )
+    expenses_out = (
+        PettyExpense.objects.for_tenant(tenant)
+        .filter(
+            warehouse_id=warehouse_id,
+            doc_date__lt=before_date,
+            is_void=False,
+            payment_method__kind="cash",
+        )
+        .aggregate(s=Sum("amount"))["s"]
+        or 0
+    )
+    adj_in = (
+        CashAdjustment.objects.for_tenant(tenant)
+        .filter(
+            warehouse_id=warehouse_id,
+            doc_date__lt=before_date,
+            is_void=False,
+            direction="in",
+        )
+        .aggregate(s=Sum("amount"))["s"]
+        or 0
+    )
+    adj_out = (
+        CashAdjustment.objects.for_tenant(tenant)
+        .filter(
+            warehouse_id=warehouse_id,
+            doc_date__lt=before_date,
+            is_void=False,
+            direction="out",
+        )
+        .aggregate(s=Sum("amount"))["s"]
+        or 0
+    )
+    return int(sales_in - purchases_out - expenses_out + adj_in - adj_out)
+
+
 @api_view(["GET"])
 def business_daily_report(request):
     """指定門市 + 日期的現金收支日報。
@@ -115,6 +178,11 @@ def business_daily_report(request):
         PaymentMethod.objects.for_tenant(tenant)
         .filter(kind="cash")
         .values_list("code", flat=True)
+    )
+
+    # 期初現金 = 該倉所有 doc_date < target_date 的 cash 淨變動累計
+    opening_cash = _compute_cash_balance_before(
+        tenant, wid, target_date, cash_codes
     )
 
     # 1. 銷貨 cash 收入:當日 + 該倉 + 非作廢的銷貨單,
@@ -245,6 +313,7 @@ def business_daily_report(request):
         {
             "warehouse": wid,
             "date": target_date.isoformat(),
+            "opening_cash": opening_cash,
             "sales": {"rows": sales_rows, "total": sales_total},
             "purchases": {"rows": purchases_rows, "total": purchases_total},
             "expenses": {"rows": expenses_rows, "total": expenses_total},

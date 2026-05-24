@@ -250,6 +250,7 @@ export interface BusinessDailyAdjustments {
 export interface BusinessDailyReport {
   warehouse: number;
   date: string;
+  opening_cash: number;
   sales: BusinessDailySection;
   purchases: BusinessDailySection;
   expenses: BusinessDailySection;
