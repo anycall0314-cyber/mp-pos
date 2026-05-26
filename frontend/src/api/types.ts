@@ -56,6 +56,8 @@ export interface Warehouse {
   id: number;
   code: string;
   name: string;
+  address: string;
+  phone: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -177,11 +179,118 @@ export interface Customer {
   name: string;
   kind: CustomerKind;
   kind_label: string;
-  is_member: boolean;
   tax_id: string;
   address: string;
   note: string;
   is_active: boolean;
+}
+
+export interface Member {
+  id: number;
+  code: string;
+  name: string;
+  phone: string;
+  national_id: string;
+  birthday: string | null;
+  address: string;
+  note: string;
+  is_active: boolean;
+}
+
+export interface SalesReturnItemSerial {
+  id: number;
+  serial: number;
+  serial_no: string;
+  line_pos: number;
+}
+
+export interface SalesReturnItem {
+  id: number;
+  line_no: number;
+  original_item: number;
+  product: number;
+  product_sku: string;
+  product_name: string;
+  product_requires_serial: boolean;
+  product_is_virtual: boolean;
+  qty: number;
+  unit_price: string;
+  amount: string;
+  serials: SalesReturnItemSerial[];
+}
+
+export interface SalesReturn {
+  id: number;
+  no: string;
+  original_so: number;
+  original_so_no: string;
+  original_so_doc_date: string;
+  customer: number | null;
+  customer_name: string;
+  customer_phone: string;
+  member: number | null;
+  member_name: string;
+  warehouse: number;
+  warehouse_code: string;
+  warehouse_name: string;
+  doc_date: string;
+  payment_method: string;
+  void_original_invoice: boolean;
+  note: string;
+  created_by: number | null;
+  is_void: boolean;
+  subtotal: string;
+  tax_amount: string;
+  total: string;
+  items: SalesReturnItem[];
+}
+
+export interface ReturnableLine {
+  id: number;
+  line_no: number;
+  product: number;
+  product_sku: string;
+  product_name: string;
+  product_requires_serial: boolean;
+  product_is_virtual: boolean;
+  qty: number;
+  already_returned: number;
+  remaining: number;
+  unit_price: string;
+  available_serials: { id: number; serial_no: string }[];
+}
+
+export interface ReturnableSummary {
+  sales_order_id: number;
+  sales_order_no: string;
+  doc_date: string;
+  tax_method: TaxMethod;
+  invoice_voided: boolean;
+  customer: number | null;
+  customer_name: string;
+  member: number | null;
+  member_name: string;
+  warehouse: number;
+  warehouse_name: string;
+  payment_methods: string[];
+  items: ReturnableLine[];
+}
+
+export interface LegacyPurchase {
+  id: number;
+  member: number;
+  member_name: string;
+  member_phone: string;
+  product: number;
+  product_sku: string;
+  product_name: string;
+  qty: number;
+  unit_price: string;
+  amount: string;
+  doc_date: string;
+  source_no: string;
+  serial_no: string;
+  note: string;
 }
 
 export interface SalesPerson {
@@ -322,6 +431,7 @@ export interface PurchaseOrder {
   invoice_form_label: string;
   invoice_no: string;
   invoice_date: string | null;
+  invoice_voided: boolean;
   payment_method: number | null;
   payment_method_code: string | null;
   payment_method_name: string | null;
@@ -341,6 +451,7 @@ export interface PurchaseOrder {
 export type TaxMethod =
   | "taxable_included"
   | "taxable_excluded"
+  | "untaxed"
   | "tax_free"
   | "zero_tax";
 
@@ -430,6 +541,7 @@ export interface SalesOrder {
   invoice_form: InvoiceForm;
   invoice_no: string;
   invoice_date: string | null;
+  invoice_voided: boolean;
   note: string;
   sales_person: number | null;
   sales_person_code: string | null;
@@ -466,6 +578,9 @@ export interface PettyExpense {
   payment_method_name: string;
   payment_method_kind: string;
   payee: string;
+  handled_by: number | null;
+  handled_by_name: string;
+  handled_by_code: string;
   note: string;
   is_void: boolean;
   created_at: string;
@@ -492,7 +607,109 @@ export interface CashAdjustment {
   reason: CashAdjustmentReason;
   reason_label: string;
   amount: string;
+  handled_by: number | null;
+  handled_by_name: string;
+  handled_by_code: string;
   note: string;
+  is_void: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type UserRole = "platform_admin" | "tenant_admin" | "tenant_user";
+
+export interface CurrentUserProfile {
+  role: UserRole;
+  role_label: string;
+  tenant_id: number | null;
+  tenant_name: string | null;
+  default_warehouse_id: number | null;
+  default_warehouse_name: string | null;
+  is_warehouse_locked: boolean;
+}
+
+export interface CurrentUser {
+  id: number;
+  username: string;
+  first_name: string;
+  last_name: string;
+  is_superuser: boolean;
+  profile: CurrentUserProfile | null;
+  sales_person: {
+    id: number;
+    code: string;
+    name: string;
+  } | null;
+}
+
+export interface LoginResponse {
+  token: string;
+  user: CurrentUser;
+}
+
+export interface PlatformTenant {
+  id: number;
+  code: string;
+  name: string;
+  is_active: boolean;
+  user_count: number;
+  warehouse_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlatformUser {
+  id: number;
+  username: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  is_active: boolean;
+  is_superuser: boolean;
+  role_display: string;
+  tenant_id_display: number | null;
+  tenant_name: string;
+  default_warehouse_id_display: number | null;
+  default_warehouse_name: string;
+  is_warehouse_locked_display: boolean;
+  sales_person_id: number | null;
+  sales_person_name: string;
+}
+
+export interface PlatformWarehouse {
+  id: number;
+  tenant: number;
+  tenant_name: string;
+  code: string;
+  name: string;
+  address: string;
+  phone: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PhoneBillCollection {
+  id: number;
+  no: string;
+  warehouse: number;
+  warehouse_code: string;
+  warehouse_name: string;
+  warehouse_address: string;
+  warehouse_phone: string;
+  doc_date: string;
+  carrier: number;
+  carrier_code: string;
+  carrier_name: string;
+  phone_no: string;
+  amount: string;
+  id_no: string;
+  handled_by: number;
+  handled_by_name: string;
+  handled_by_code: string;
+  member: number | null;
+  member_name: string;
+  member_code: string;
   is_void: boolean;
   created_at: string;
   updated_at: string;

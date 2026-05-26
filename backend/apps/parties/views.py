@@ -4,7 +4,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Carrier, Customer, SalesPerson, SimCard, Supplier, TelecomPlan
+from .models import Carrier, Customer, Member, SalesPerson, SimCard, Supplier, TelecomPlan
 
 
 class CustomerFilter(django_filters.FilterSet):
@@ -14,10 +14,13 @@ class CustomerFilter(django_filters.FilterSet):
 
     class Meta:
         model = Customer
-        fields = ["is_active", "kind", "is_member"]
+        fields = ["is_active", "kind"]
+
+
 from .serializers import (
     CarrierSerializer,
     CustomerSerializer,
+    MemberSerializer,
     SalesPersonSerializer,
     SimCardSerializer,
     SupplierSerializer,
@@ -54,10 +57,10 @@ class CustomerViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="lookup")
     def lookup(self, request):
-        """以電話精準查會員;查無回 404 由前端詢問是否新增。
+        """以電話精準查客戶;查無回 404 由前端詢問是否新增。
 
-        phone 在 Customer 上已非唯一(同行多人共用公司電話會發生),
-        多筆時優先回傳 is_member=True 的那筆,其次最舊建立的。
+        phone 在 Customer 上非唯一(同行多人共用公司電話會發生),
+        多筆時回傳最舊建立的那筆。
         """
         phone = request.query_params.get("phone", "").strip()
         if not phone:
@@ -67,13 +70,42 @@ class CustomerViewSet(viewsets.ModelViewSet):
         obj = (
             self.get_queryset()
             .filter(phone=phone)
-            .order_by("-is_member", "created_at")
+            .order_by("created_at")
             .first()
         )
         if obj is None:
             return Response(
                 {"detail": "未登錄"}, status=status.HTTP_404_NOT_FOUND
             )
+        return Response(self.get_serializer(obj).data)
+
+
+class MemberViewSet(viewsets.ModelViewSet):
+    serializer_class = MemberSerializer
+    search_fields = ["code", "phone", "name", "national_id"]
+    ordering_fields = ["code", "phone", "name", "created_at"]
+    ordering = ["code"]
+    filterset_fields = ["is_active"]
+
+    def get_queryset(self):
+        return Member.objects.for_tenant(self.request.tenant)
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=self.request.tenant)
+
+    @action(detail=False, methods=["get"], url_path="lookup")
+    def lookup(self, request):
+        """以電話精準查會員;查無回 404 由前端詢問是否新增。"""
+        phone = request.query_params.get("phone", "").strip()
+        if not phone:
+            return Response(
+                {"detail": "phone 為必填參數"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        obj = (
+            self.get_queryset().filter(phone=phone).order_by("created_at").first()
+        )
+        if obj is None:
+            return Response({"detail": "未登錄"}, status=status.HTTP_404_NOT_FOUND)
         return Response(self.get_serializer(obj).data)
 
 

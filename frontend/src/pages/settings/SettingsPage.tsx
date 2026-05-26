@@ -9,6 +9,8 @@ import {
   useSaveInvoiceTrack,
   useSaveInvoiceType,
   useSavePaymentMethod,
+  useSaveWarehouse,
+  useWarehouses,
 } from "@/api/hooks";
 import type { InvoiceTrack, PaymentMethod, PaymentMethodKind } from "@/api/types";
 import { Banner } from "@/components/Banner";
@@ -21,6 +23,8 @@ const PM_KINDS: { value: PaymentMethodKind; label: string }[] = [
 ];
 
 export function SettingsPage() {
+  const warehouses = useWarehouses();
+  const saveWarehouse = useSaveWarehouse();
   const types = useInvoiceTypes();
   const saveType = useSaveInvoiceType();
   const tracks = useInvoiceTracks();
@@ -60,7 +64,87 @@ export function SettingsPage() {
     <div className="page">
       <Toolbar title="系統設定" />
       <div className="entry-body">
-        <h3 style={{ marginTop: 0 }}>發票類型</h3>
+        <h3 style={{ marginTop: 0 }}>門市</h3>
+        <p style={{ color: "var(--text-dim)", fontSize: 13 }}>
+          門市地址 / 電話會印在收據(代收話費等)上。代碼 / 名稱請聯絡管理員調整。
+        </p>
+
+        {saveWarehouse.isError && (
+          <Banner
+            kind="error"
+            message={`儲存失敗:${String(saveWarehouse.error ?? "")}`}
+          />
+        )}
+
+        {warehouses.isLoading && <div className="md-empty">載入中…</div>}
+        {!warehouses.isLoading && (
+          <table className="line-table" style={{ maxWidth: 920 }}>
+            <thead>
+              <tr>
+                <th style={{ width: 80 }}>代碼</th>
+                <th style={{ width: 140 }}>名稱</th>
+                <th>地址</th>
+                <th style={{ width: 160 }}>電話</th>
+                <th style={{ width: 70, textAlign: "center" }}>啟用</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(warehouses.data ?? []).map((w) => (
+                <tr key={w.id}>
+                  <td>{w.code}</td>
+                  <td>{w.name}</td>
+                  <td>
+                    <input
+                      defaultValue={w.address}
+                      placeholder="收據抬頭顯示用"
+                      onBlur={(e) =>
+                        e.target.value !== w.address &&
+                        saveWarehouse.mutate({
+                          id: w.id,
+                          address: e.target.value,
+                        })
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      defaultValue={w.phone}
+                      placeholder="例:04-12345678"
+                      onBlur={(e) =>
+                        e.target.value !== w.phone &&
+                        saveWarehouse.mutate({
+                          id: w.id,
+                          phone: e.target.value,
+                        })
+                      }
+                    />
+                  </td>
+                  <td style={{ textAlign: "center" }}>
+                    <input
+                      type="checkbox"
+                      defaultChecked={w.is_active}
+                      onChange={(e) =>
+                        saveWarehouse.mutate({
+                          id: w.id,
+                          is_active: e.target.checked,
+                        })
+                      }
+                    />
+                  </td>
+                </tr>
+              ))}
+              {(warehouses.data ?? []).length === 0 && (
+                <tr>
+                  <td colSpan={5} className="md-empty">
+                    尚無門市資料
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
+
+        <h3 style={{ marginTop: 32 }}>發票類型</h3>
         <p style={{ color: "var(--text-dim)", fontSize: 13 }}>
           內建 6 種,可切換啟用 / 指定預設 / 改名稱。銷貨、進貨單的下拉只列「啟用中」。
         </p>

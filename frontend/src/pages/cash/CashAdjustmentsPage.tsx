@@ -77,17 +77,15 @@ export function CashAdjustmentsPage() {
         </span>
       ),
     },
-    { key: "note", header: "備註", render: (r) => r.note || "—" },
     {
-      key: "void",
-      header: "狀態",
+      key: "handled_by",
+      header: "經手人",
       render: (r) =>
-        r.is_void ? (
-          <span style={{ color: "var(--text-dim)" }}>作廢</span>
-        ) : (
-          "—"
-        ),
+        r.handled_by_name
+          ? `${r.handled_by_code} ${r.handled_by_name}`
+          : "—",
     },
+    { key: "note", header: "備註", render: (r) => r.note || "—" },
   ];
 
   async function handleVoid(r: CashAdjustment) {
@@ -120,10 +118,14 @@ export function CashAdjustmentsPage() {
             <dd>{r.reason_label}</dd>
             <dt>金額</dt>
             <dd>{Math.round(Number(r.amount)).toLocaleString()}</dd>
+            <dt>經手人</dt>
+            <dd>
+              {r.handled_by_name
+                ? `${r.handled_by_code} ${r.handled_by_name}`
+                : "—"}
+            </dd>
             <dt>備註</dt>
             <dd>{r.note || "—"}</dd>
-            <dt>狀態</dt>
-            <dd>{r.is_void ? "已作廢" : "有效"}</dd>
           </dl>
           {!r.is_void && (
             <div style={{ marginTop: 12, display: "flex", gap: 8 }}>

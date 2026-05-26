@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models, transaction
 
 from apps.core.models import TenantOwnedModel, TimestampedModel
@@ -13,11 +15,17 @@ class Tenant(TimestampedModel):
     next_customer_seq = models.PositiveIntegerField(
         "下一客戶流水", default=1, editable=False
     )
+    next_member_seq = models.PositiveIntegerField(
+        "下一會員流水", default=1, editable=False
+    )
     next_expense_seq = models.PositiveIntegerField(
         "下一雜支單流水", default=1, editable=False
     )
     next_cash_adj_seq = models.PositiveIntegerField(
         "下一現金調整流水", default=1, editable=False
+    )
+    next_phone_bill_seq = models.PositiveIntegerField(
+        "下一代收話費流水", default=1, editable=False
     )
 
     class Meta:
@@ -48,6 +56,16 @@ class Tenant(TimestampedModel):
             self.next_customer_seq = row.next_customer_seq
             return f"C-{seq:05d}"
 
+    def issue_next_member_code(self) -> str:
+        """原子地取下一個會員代碼:`M-{5位流水}`。"""
+        with transaction.atomic():
+            row = Tenant.objects.select_for_update().get(pk=self.pk)
+            seq = row.next_member_seq
+            row.next_member_seq = seq + 1
+            row.save(update_fields=["next_member_seq"])
+            self.next_member_seq = row.next_member_seq
+            return f"M-{seq:05d}"
+
     def issue_next_expense_no(self) -> str:
         """原子地取下一張雜支單號:`EX-{5位流水}`。"""
         with transaction.atomic():
@@ -67,6 +85,16 @@ class Tenant(TimestampedModel):
             row.save(update_fields=["next_cash_adj_seq"])
             self.next_cash_adj_seq = row.next_cash_adj_seq
             return f"CA-{seq:05d}"
+
+    def issue_next_phone_bill_no(self) -> str:
+        """原子地取下一張代收話費單號:`PB-{5位流水}`。"""
+        with transaction.atomic():
+            row = Tenant.objects.select_for_update().get(pk=self.pk)
+            seq = row.next_phone_bill_seq
+            row.next_phone_bill_seq = seq + 1
+            row.save(update_fields=["next_phone_bill_seq"])
+            self.next_phone_bill_seq = row.next_phone_bill_seq
+            return f"PB-{seq:05d}"
 
 
 class InvoiceType(TenantOwnedModel):
@@ -191,3 +219,69 @@ class PaymentMethod(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.code} {self.name}"
+
+
+class UserProfile(TimestampedModel):
+    """Django User 的延伸:綁定 tenant + 角色 + 預設倉。
+
+    三種角色:
+    - platform_admin:不屬於任何 tenant,可看 / 管理所有經銷商
+    - tenant_admin:屬於一個 tenant,該 tenant 內全權限、不鎖倉、可看所有報表
+    - tenant_user:屬於一個 tenant,被鎖在 default_warehouse,只能操作自己倉
+    """
+
+    class Role(models.TextChoices):
+        PLATFORM_ADMIN = "platform_admin", "平台管理員"
+        TENANT_ADMIN = "tenant_admin", "經銷商管理員"
+        TENANT_USER = "tenant_user", "店員"
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="profile",
+    )
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.PROTECT,
+        related_name="user_profiles",
+        null=True,
+        blank=True,
+        verbose_name="所屬經銷商",
+        help_text="platform_admin 留空,其他必填",
+    )
+    role = models.CharField(
+        "角色",
+        max_length=20,
+        choices=Role.choices,
+        default=Role.TENANT_USER,
+    )
+    default_warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="default_for_profiles",
+        verbose_name="預設門市",
+    )
+    is_warehouse_locked = models.BooleanField(
+        "鎖定門市",
+        default=True,
+        help_text="True 時只能操作 default_warehouse;管理員角色預設 False",
+    )
+
+    class Meta:
+        verbose_name = "使用者設定"
+        verbose_name_plural = "使用者設定"
+
+    def __str__(self) -> str:
+        return f"{self.user.username} ({self.get_role_display()})"
+
+    def clean(self):
+        if self.role == self.Role.PLATFORM_ADMIN and self.tenant_id is not None:
+            raise ValidationError("平台管理員不可指定 tenant")
+        if self.role != self.Role.PLATFORM_ADMIN and self.tenant_id is None:
+            raise ValidationError("此角色必須指定 tenant")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)

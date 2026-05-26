@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Carrier, Customer, SalesPerson, SimCard, Supplier, TelecomPlan
+from .models import Carrier, Customer, Member, SalesPerson, SimCard, Supplier, TelecomPlan
 
 
 @admin.register(SalesPerson)
@@ -64,7 +64,15 @@ class SupplierAdmin(admin.ModelAdmin):
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ("phone", "name", "kind", "is_member", "tax_id", "is_active")
-    list_filter = ("kind", "is_member", "is_active")
-    search_fields = ("phone", "name", "tax_id")
-    ordering = ("phone",)
+    list_display = ("code", "phone", "name", "kind", "tax_id", "is_active")
+    list_filter = ("kind", "is_active")
+    search_fields = ("code", "phone", "name", "tax_id")
+    ordering = ("code",)
+
+
+@admin.register(Member)
+class MemberAdmin(admin.ModelAdmin):
+    list_display = ("code", "name", "phone", "birthday", "is_active")
+    list_filter = ("is_active",)
+    search_fields = ("code", "name", "phone", "national_id")
+    ordering = ("code",)

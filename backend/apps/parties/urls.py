@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     CarrierViewSet,
     CustomerViewSet,
+    MemberViewSet,
     SalesPersonViewSet,
     SimCardViewSet,
     SupplierViewSet,
@@ -12,6 +13,7 @@ from .views import (
 router = DefaultRouter()
 router.register(r"suppliers", SupplierViewSet, basename="supplier")
 router.register(r"customers", CustomerViewSet, basename="customer")
+router.register(r"members", MemberViewSet, basename="member")
 router.register(r"sales-persons", SalesPersonViewSet, basename="sales-person")
 router.register(r"carriers", CarrierViewSet, basename="carrier")
 router.register(r"telecom-plans", TelecomPlanViewSet, basename="telecom-plan")

@@ -14,6 +14,7 @@ import {
   searchWarehouses,
 } from "@/api/search";
 import type { Product, ProductSerial, Warehouse } from "@/api/types";
+import { useDefaultWarehouse } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Field } from "@/components/Field";
@@ -136,14 +137,26 @@ export function TransferEntryPage() {
   const isNew = id === "new";
   const toId = isNew ? null : Number(id);
 
+  const defaultWarehouse = useDefaultWarehouse();
   const existing = useTransferOrder(toId);
   const createMutation = useCreateTransferOrder();
   const confirmMutation = useConfirmTransferOrder();
   const voidMutation = useVoidTransferOrder();
 
-  const [fromWarehouse, setFromWarehouse] = useState<number | "">("");
-  const [fromWarehouseOption, setFromWarehouseOption] =
-    useState<ComboOption<Warehouse> | null>(null);
+  const [fromWarehouse, setFromWarehouse] = useState<number | "">(
+    isNew && defaultWarehouse.id ? defaultWarehouse.id : "",
+  );
+  const [fromWarehouseOption, setFromWarehouseOption] = useState<
+    ComboOption<Warehouse> | null
+  >(
+    isNew && defaultWarehouse.id
+      ? {
+          id: defaultWarehouse.id,
+          label: defaultWarehouse.name,
+          secondary: "",
+        }
+      : null,
+  );
   const [toWarehouse, setToWarehouse] = useState<number | "">("");
   const [toWarehouseOption, setToWarehouseOption] =
     useState<ComboOption<Warehouse> | null>(null);
@@ -433,17 +446,25 @@ export function TransferEntryPage() {
           <div className="entry-header" style={{ marginBottom: 12 }}>
             <div className="field-row-3">
               <Field label="來源倉" required>
-                <ComboBox<Warehouse>
-                  value={fromWarehouse}
-                  selectedOption={fromWarehouseOption}
-                  onChange={(id, opt) => {
-                    setFromWarehouse(id);
-                    setFromWarehouseOption(opt ?? null);
-                  }}
-                  fetchOptions={searchWarehouses}
-                  disabled={readonly}
-                  placeholder="搜尋來源倉"
-                />
+                {defaultWarehouse.locked && isNew ? (
+                  <input
+                    value={defaultWarehouse.name || "(未設定)"}
+                    disabled
+                    title="此帳號鎖定於此門市,只能從此倉調出"
+                  />
+                ) : (
+                  <ComboBox<Warehouse>
+                    value={fromWarehouse}
+                    selectedOption={fromWarehouseOption}
+                    onChange={(id, opt) => {
+                      setFromWarehouse(id);
+                      setFromWarehouseOption(opt ?? null);
+                    }}
+                    fetchOptions={searchWarehouses}
+                    disabled={readonly}
+                    placeholder="搜尋來源倉"
+                  />
+                )}
               </Field>
               <Field label="目的倉" required>
                 <ComboBox<Warehouse>

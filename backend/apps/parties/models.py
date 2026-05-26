@@ -193,13 +193,25 @@ class SimCard(TenantOwnedModel):
 
 
 class SalesPerson(TenantOwnedModel):
-    """業務員。銷貨單透過此 FK 記業績歸屬。"""
+    """業務員。銷貨單透過此 FK 記業績歸屬;經手人欄位也指這。
+
+    若綁了 user(OneToOne),登入後表單的「經手人」會預設帶這位。
+    """
 
     code = models.SlugField("業務員代號", max_length=20)
     name = models.CharField("姓名", max_length=120)
     phone = models.CharField("電話", max_length=40, blank=True)
     note = models.CharField("備註", max_length=200, blank=True)
     is_active = models.BooleanField("啟用", default=True)
+    user = models.OneToOneField(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        related_name="sales_person",
+        null=True,
+        blank=True,
+        verbose_name="登入帳號",
+        help_text="綁定後該帳號操作時,表單經手人自動預設帶此業務員",
+    )
 
     class Meta:
         constraints = [
@@ -217,9 +229,10 @@ class SalesPerson(TenantOwnedModel):
 
 
 class Customer(TenantOwnedModel):
-    """客戶。涵蓋個人/同業/企業等客源類型;會員為其中可選的子身分。
+    """客戶。記錄銷貨單的「歸屬對象」:個人/同業/企業/其他。
 
     識別:code 為系統自動產生的編號 (C-{5 位流水});phone 為選填(同業/企業可不填)。
+    會員(Member)是獨立的「人」主檔,可掛在任意客戶底下消費,不在這張表。
     """
 
     class Kind(models.TextChoices):
@@ -243,11 +256,6 @@ class Customer(TenantOwnedModel):
         choices=Kind.choices,
         default=Kind.INDIVIDUAL,
         help_text="客戶來源類型;同業/盤商指其他通訊行批發轉售",
-    )
-    is_member = models.BooleanField(
-        "會員",
-        default=False,
-        help_text="加入會員制度的客戶(會員為客戶的子身分,通常用於個人類別)",
     )
     tax_id = models.CharField("統一編號", max_length=20, blank=True)
     address = models.CharField("地址", max_length=200, blank=True)
@@ -273,4 +281,48 @@ class Customer(TenantOwnedModel):
             if self.tenant_id is None:
                 raise ValueError("建立客戶必須先指定 tenant")
             self.code = self.tenant.issue_next_customer_code()
+        super().save(*args, **kwargs)
+
+
+class Member(TenantOwnedModel):
+    """會員(人)。可掛在任何客戶底下消費,跟 Customer 各自獨立。
+
+    識別:code 為系統自動產生的編號 (M-{5 位流水});phone 為選填但建議填。
+    與 Customer 不互斥 - 同一個人可同時是 Customer 又是 Member,系統不強制連結。
+    """
+
+    code = models.SlugField(
+        "會員編號",
+        max_length=20,
+        blank=True,
+        editable=False,
+        help_text="系統自動產生:M-{5位流水};前端不顯示也不輸入",
+    )
+    name = models.CharField("姓名", max_length=120)
+    phone = models.CharField("電話", max_length=40, blank=True)
+    national_id = models.CharField("身分證字號", max_length=20, blank=True)
+    birthday = models.DateField("生日", null=True, blank=True)
+    address = models.CharField("地址", max_length=200, blank=True)
+    note = models.CharField("備註", max_length=200, blank=True)
+    is_active = models.BooleanField("啟用", default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "code"],
+                name="uniq_member_tenant_code",
+            ),
+        ]
+        ordering = ["code"]
+        verbose_name = "會員"
+        verbose_name_plural = "會員"
+
+    def __str__(self) -> str:
+        return f"{self.code} {self.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            if self.tenant_id is None:
+                raise ValueError("建立會員必須先指定 tenant")
+            self.code = self.tenant.issue_next_member_code()
         super().save(*args, **kwargs)

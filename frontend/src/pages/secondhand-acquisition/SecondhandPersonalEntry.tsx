@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 
 import { ApiHttpError } from "@/api/client";
 import {
-  lookupCustomer,
+  lookupMember,
   usePaymentMethods,
-  useSaveCustomer,
+  useSaveMember,
   useSecondhandAcquisition,
 } from "@/api/hooks";
 import {
@@ -13,15 +13,14 @@ import {
 } from "@/api/search";
 import type {
   ConditionGrade,
-  Customer,
-  CustomerKind,
+  Member,
   Product,
   Warehouse,
 } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
-import { Checkbox, Field } from "@/components/Field";
+import { Field } from "@/components/Field";
 
 const GRADE_OPTIONS: { value: ConditionGrade; label: string }[] = [
   { value: "S", label: "S 媲美新機 / 拆封未使用" },
@@ -31,39 +30,31 @@ const GRADE_OPTIONS: { value: ConditionGrade; label: string }[] = [
   { value: "D", label: "D 瑕疵 / 需報備" },
 ];
 
-const CUSTOMER_KINDS: { value: CustomerKind; label: string }[] = [
-  { value: "individual", label: "個人" },
-  { value: "peer", label: "同業 / 盤商" },
-  { value: "corporate", label: "企業" },
-  { value: "other", label: "其他" },
-];
-
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 /**
  * 個人收購中古機:會員賣機進來。
  * 走 acquire_secondhand_from_member service,同 transaction 建中古機序號 +
- * 對應銷貨單(虛擬商品「收購二手」、tax_free、total 負數代表現金流出)。
+ * 對應銷貨單(虛擬商品「收購二手」、tax_free、total 負數代表現金流出);
+ * 後端會自動依會員建立 / 比對個人 Customer 作為銷貨單歸屬。
  */
 export function SecondhandPersonalEntry() {
   const acquire = useSecondhandAcquisition();
-  const saveCustomer = useSaveCustomer();
+  const saveMember = useSaveMember();
   const paymentMethodsQuery = usePaymentMethods({ activeOnly: true });
   const paymentMethods = paymentMethodsQuery.data ?? [];
 
   // 會員以電話為識別:輸入電話查詢,查無則跳出新增浮窗
   const [memberPhone, setMemberPhone] = useState("");
-  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [member, setMember] = useState<Member | null>(null);
   const [memberStatus, setMemberStatus] = useState<
     "idle" | "checking" | "found" | "not_found"
   >("idle");
   const [showCreateMember, setShowCreateMember] = useState(false);
   const [newMember, setNewMember] = useState<{
     name: string;
-    tax_id: string;
-    kind: CustomerKind;
-    is_member: boolean;
-  }>({ name: "", tax_id: "", kind: "individual", is_member: true });
+    national_id: string;
+  }>({ name: "", national_id: "" });
   const [warehouse, setWarehouse] = useState<number | "">("");
   const [warehouseOption, setWarehouseOption] =
     useState<ComboOption<Warehouse> | null>(null);
@@ -84,7 +75,6 @@ export function SecondhandPersonalEntry() {
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // 預設帶現金付款(若無現金則帶第一筆)
   useEffect(() => {
     if (paymentMethod || paymentMethods.length === 0) return;
     const cash = paymentMethods.find((m) => m.kind === "cash");
@@ -93,7 +83,7 @@ export function SecondhandPersonalEntry() {
 
   function reset() {
     setMemberPhone("");
-    setCustomer(null);
+    setMember(null);
     setMemberStatus("idle");
     setProduct("");
     setProductOption(null);
@@ -108,7 +98,7 @@ export function SecondhandPersonalEntry() {
   }
 
   function validate(): string | null {
-    if (!customer) return "請輸入收購來源會員電話(查無請新增)";
+    if (!member) return "請輸入收購來源會員電話(查無請新增)";
     if (!warehouse) return "請選擇入庫倉";
     if (!product) return "請選擇中古機商品";
     if (!serialNo.trim()) return "請輸入序號 (IMEI)";
@@ -127,44 +117,37 @@ export function SecondhandPersonalEntry() {
   async function handleMemberLookup() {
     const phone = memberPhone.trim();
     if (!phone) {
-      setCustomer(null);
+      setMember(null);
       setMemberStatus("idle");
       return;
     }
     setMemberStatus("checking");
-    const c = await lookupCustomer(phone);
-    if (c) {
-      setCustomer(c);
+    const m = await lookupMember(phone);
+    if (m) {
+      setMember(m);
       setMemberStatus("found");
     } else {
-      setCustomer(null);
+      setMember(null);
       setMemberStatus("not_found");
     }
   }
 
   async function handleCreateMember() {
     const phone = memberPhone.trim();
-    if (!phone || !newMember.name.trim()) return;
+    if (!newMember.name.trim()) return;
     try {
-      const created = await saveCustomer.mutateAsync({
+      const created = await saveMember.mutateAsync({
         phone,
         name: newMember.name.trim(),
-        kind: newMember.kind,
-        is_member: newMember.is_member,
-        tax_id: newMember.tax_id || undefined,
+        national_id: newMember.national_id.trim() || undefined,
       });
-      setCustomer(created);
+      setMember(created);
       setMemberStatus("found");
       setShowCreateMember(false);
-      setNewMember({
-        name: "",
-        tax_id: "",
-        kind: "individual",
-        is_member: true,
-      });
+      setNewMember({ name: "", national_id: "" });
     } catch (e) {
       if (e instanceof ApiHttpError) {
-        setError(`新增客戶失敗:${JSON.stringify(e.body)}`);
+        setError(`新增會員失敗:${JSON.stringify(e.body)}`);
       } else {
         setError(String(e));
       }
@@ -181,7 +164,7 @@ export function SecondhandPersonalEntry() {
     }
     try {
       const res = await acquire.mutateAsync({
-        member: customer!.id,
+        member: member!.id,
         warehouse: warehouse as number,
         product: product as number,
         serial_no: serialNo.trim(),
@@ -197,7 +180,7 @@ export function SecondhandPersonalEntry() {
       setSuccess(
         `收購完成:序號 ${res.serial.serial_no},對應銷貨單 ${res.sales_order.no},付款 ${Number(
           acquisitionPrice,
-        ).toLocaleString()} 元給 ${customer?.name ?? "會員"}`,
+        ).toLocaleString()} 元給 ${member?.name ?? "會員"}`,
       );
       reset();
     } catch (e) {
@@ -229,7 +212,7 @@ export function SecondhandPersonalEntry() {
                 onChange={(e) => {
                   setMemberPhone(e.target.value);
                   setMemberStatus("idle");
-                  if (customer) setCustomer(null);
+                  if (member) setMember(null);
                 }}
                 onBlur={handleMemberLookup}
                 onKeyDown={(e) => {
@@ -249,10 +232,9 @@ export function SecondhandPersonalEntry() {
                   查詢中…
                 </span>
               )}
-              {memberStatus === "found" && customer && (
+              {memberStatus === "found" && member && (
                 <span className="member-tag" style={{ color: "#80d090" }}>
-                  ✓ {customer.name} ({customer.kind_label}
-                  {customer.is_member ? " / 會員" : ""})
+                  ✓ {member.name} ({member.code})
                 </span>
               )}
               {memberStatus === "not_found" && (
@@ -394,12 +376,12 @@ export function SecondhandPersonalEntry() {
         style={{ marginTop: 24, fontSize: 13, lineHeight: 1.7 }}
       >
         系統會以未稅方式同步建立「收購二手」銷貨單(金額負數,代表現金流出)與中古機序號,
-        兩邊互相對應。售出後可在銷貨單看到完整鏈條。
+        並依該會員自動帶 / 建立個人客戶作為銷貨單歸屬。
       </div>
 
       <Drawer
         open={showCreateMember}
-        title={`新增客戶 (${memberPhone})`}
+        title={`新增會員 (${memberPhone})`}
         onClose={() => setShowCreateMember(false)}
         width={420}
         footer={
@@ -415,9 +397,9 @@ export function SecondhandPersonalEntry() {
               className="btn primary"
               type="button"
               onClick={handleCreateMember}
-              disabled={saveCustomer.isPending || !newMember.name.trim()}
+              disabled={saveMember.isPending || !newMember.name.trim()}
             >
-              {saveCustomer.isPending ? "儲存中…" : "建立並使用"}
+              {saveMember.isPending ? "儲存中…" : "建立並使用"}
             </button>
           </>
         }
@@ -425,45 +407,25 @@ export function SecondhandPersonalEntry() {
         <Field label="電話">
           <input value={memberPhone} disabled />
         </Field>
-        <Field label="姓名 / 名稱" required>
+        <Field label="姓名" required>
           <input
             value={newMember.name}
             autoFocus
             onChange={(e) =>
               setNewMember((s) => ({ ...s, name: e.target.value }))
             }
+            maxLength={120}
           />
         </Field>
-        <Field label="客戶類別">
-          <select
-            value={newMember.kind}
-            onChange={(e) =>
-              setNewMember((s) => ({
-                ...s,
-                kind: e.target.value as CustomerKind,
-              }))
-            }
-          >
-            {CUSTOMER_KINDS.map((k) => (
-              <option key={k.value} value={k.value}>
-                {k.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="統一編號">
+        <Field label="身分證字號">
           <input
-            value={newMember.tax_id}
+            value={newMember.national_id}
             onChange={(e) =>
-              setNewMember((s) => ({ ...s, tax_id: e.target.value }))
+              setNewMember((s) => ({ ...s, national_id: e.target.value }))
             }
+            maxLength={20}
           />
         </Field>
-        <Checkbox
-          checked={newMember.is_member}
-          onChange={(v) => setNewMember((s) => ({ ...s, is_member: v }))}
-          label="設為會員"
-        />
       </Drawer>
     </div>
   );

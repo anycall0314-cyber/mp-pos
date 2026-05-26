@@ -17,10 +17,17 @@ from django.utils import timezone
 
 from apps.catalog.models import Category, Product
 from apps.inventory.models import ProductSerial, StockBalance, StockMovement
-from apps.parties.models import SimCard, TelecomPlan
+from apps.parties.models import Customer, SimCard, TelecomPlan
 from apps.tenants.services import InvoiceTrackError, assign_invoice_no
 
-from .models import SalesOrder, SalesOrderItem, SalesOrderPayment
+from .models import (
+    SalesOrder,
+    SalesOrderItem,
+    SalesOrderPayment,
+    SalesReturn,
+    SalesReturnItem,
+    SalesReturnItemSerial,
+)
 
 CENTS = Decimal("0.01")
 TAX_RATE = Decimal("0.05")
@@ -334,6 +341,30 @@ def _get_or_create_secondhand_intake_product(tenant) -> Product:
     )
 
 
+def _get_or_create_customer_for_member(tenant, member) -> Customer:
+    """個人收購對應一筆 Customer(銷貨單的歸屬必填)。
+
+    優先以 phone 比對既有個人客戶;phone 為空時退而求其次以 name 比對。
+    都沒有就照會員資料新建一筆 individual Customer。
+    """
+    qs = Customer.objects.for_tenant(tenant).filter(kind=Customer.Kind.INDIVIDUAL)
+    if member.phone:
+        existing = qs.filter(phone=member.phone).order_by("created_at").first()
+        if existing is not None:
+            return existing
+    else:
+        existing = qs.filter(phone="", name=member.name).order_by("created_at").first()
+        if existing is not None:
+            return existing
+    return Customer.objects.create(
+        tenant=tenant,
+        name=member.name,
+        phone=member.phone,
+        kind=Customer.Kind.INDIVIDUAL,
+        address=member.address,
+    )
+
+
 def acquire_secondhand_from_member(
     *,
     tenant,
@@ -353,6 +384,7 @@ def acquire_secondhand_from_member(
     """個人會員收購中古機:一個 transaction 內同時建立序號 + 收購二手銷貨單。
 
     記帳方向:銷貨單 total 為負數(現金流出),與一般銷貨(正數現金流入)在報表自然相加。
+    銷貨單 customer 自動帶該會員對應的個人 Customer(查無則新建),member 欄位記會員本身。
     """
     if not secondhand_product.is_secondhand:
         raise SecondhandIntakeError(
@@ -375,6 +407,8 @@ def acquire_secondhand_from_member(
     virtual_product = _get_or_create_secondhand_intake_product(tenant)
 
     with transaction.atomic():
+        customer = _get_or_create_customer_for_member(tenant, member)
+
         serial = ProductSerial.objects.create(
             tenant=tenant,
             product=secondhand_product,
@@ -392,11 +426,12 @@ def acquire_secondhand_from_member(
 
         so = SalesOrder.objects.create(
             tenant=tenant,
-            customer=member,
+            customer=customer,
+            member=member,
             warehouse=warehouse,
             doc_date=doc_date or date.today(),
             sales_type=SalesOrder.SalesType.SALE,
-            tax_method=SalesOrder.TaxMethod.TAX_FREE,
+            tax_method=SalesOrder.TaxMethod.UNTAXED,
             note=(
                 f"中古收購 {serial_no}"
                 + (f" - {note}" if note else "")
@@ -501,3 +536,243 @@ def void_sales_order(so: SalesOrder) -> SalesOrder:
         so.save(update_fields=["is_void"])
 
     return so
+
+
+class SalesReturnError(Exception):
+    """銷退業務錯誤;由 view 轉成 400。"""
+
+
+def _validate_sales_return(sr: SalesReturn):
+    """驗證銷退單可以送出:
+    1. 原銷貨單未作廢
+    2. 退款方式必須是原單付款方式之一
+    3. 每行退貨數量不超「該行原數量 − 已退累計」
+    4. 序號商品:每行的 serials 都屬於 original_item 的 serials,且未被先前的銷退退過
+    """
+    so = sr.original_so
+    if so.is_void:
+        raise SalesReturnError(f"原銷貨單 {so.no} 已作廢,不能銷退")
+
+    # 退款方式必須是原單付款方式之一
+    original_methods = set(so.payments.values_list("method", flat=True))
+    if sr.payment_method not in original_methods:
+        raise SalesReturnError(
+            f"退款方式 {sr.payment_method} 不在原單付款方式 {sorted(original_methods)} 內"
+        )
+
+    items = list(
+        sr.items.select_related("original_item", "product")
+        .prefetch_related("serials__serial")
+        .all()
+    )
+    if not items:
+        raise SalesReturnError("銷退單無明細")
+
+    # 預先撈每筆 original_item 已退累計
+    orig_ids = [it.original_item_id for it in items]
+    prior_returned = {oid: 0 for oid in orig_ids}
+    prior_items = (
+        SalesReturnItem.objects.filter(
+            original_item_id__in=orig_ids,
+            sr__is_void=False,
+        )
+        .exclude(sr_id=sr.id)
+        .values_list("original_item_id", "qty")
+    )
+    for oid, qty in prior_items:
+        prior_returned[oid] = prior_returned.get(oid, 0) + qty
+
+    # 預撈所有前次退過的序號 id
+    prior_serial_ids = set(
+        SalesReturnItemSerial.objects.filter(
+            item__original_item_id__in=orig_ids,
+            item__sr__is_void=False,
+        )
+        .exclude(item__sr_id=sr.id)
+        .values_list("serial_id", flat=True)
+    )
+
+    for it in items:
+        oi = it.original_item
+        remaining = oi.qty - prior_returned.get(oi.id, 0)
+        if it.qty > remaining:
+            raise SalesReturnError(
+                f"第 {it.line_no} 行({it.product.sku})可退數量為 {remaining},"
+                f"但要退 {it.qty}(原 {oi.qty} − 已退 {prior_returned.get(oi.id, 0)})"
+            )
+
+        # 鎖定單價必須 = 原 item 單價
+        if it.unit_price != oi.unit_price:
+            raise SalesReturnError(
+                f"第 {it.line_no} 行單價 {it.unit_price} 與原單 {oi.unit_price} 不一致"
+            )
+
+        product = it.product
+        # 序號實體 + 非虛擬 → 必須給 qty 個序號,而且都屬原 item 且未被前次退過
+        if product.requires_serial and not product.is_virtual:
+            sr_serials = list(it.serials.select_related("serial").all())
+            if len(sr_serials) != it.qty:
+                raise SalesReturnError(
+                    f"第 {it.line_no} 行({product.sku})要退 {it.qty} 隻,"
+                    f"但僅指定 {len(sr_serials)} 個序號"
+                )
+            allowed_serial_ids = set(
+                oi.serials.values_list("serial_id", flat=True)
+            )
+            for sos in sr_serials:
+                if sos.serial_id not in allowed_serial_ids:
+                    raise SalesReturnError(
+                        f"第 {it.line_no} 行序號 {sos.serial.serial_no} 不屬於原銷貨明細"
+                    )
+                if sos.serial_id in prior_serial_ids:
+                    raise SalesReturnError(
+                        f"第 {it.line_no} 行序號 {sos.serial.serial_no} 已在先前的銷退單退過"
+                    )
+
+
+def commit_sales_return(sr: SalesReturn) -> SalesReturn:
+    """銷退單儲存即觸發。
+
+    - 序號:status → returned,warehouse = 銷退倉,sold_at 清空 → 後續可手動轉回 in_stock
+    - 配件:本倉 StockBalance.qty += qty
+    - 寫 StockMovement(RETURN_IN)
+    - 計算 subtotal/tax/total(沿用原單 tax_method)
+    - void_original_invoice=True 時把 SO.invoice_voided 標 True(冪等)
+    """
+    _validate_sales_return(sr)
+    so = sr.original_so
+    items = list(
+        sr.items.select_related("product", "original_item")
+        .prefetch_related("serials__serial")
+        .all()
+    )
+
+    with transaction.atomic():
+        subtotal_raw = Decimal("0")
+
+        for it in items:
+            product = it.product
+            it.amount = (Decimal(it.qty) * it.unit_price).quantize(CENTS)
+            it.save(update_fields=["amount"])
+            subtotal_raw += it.amount
+
+            # 序號狀態 → returned,warehouse 回到銷退倉
+            for sos in it.serials.select_related("serial").all():
+                serial = sos.serial
+                serial.status = ProductSerial.Status.RETURNED
+                serial.warehouse = sr.warehouse
+                serial.sold_at = None
+                serial.save(
+                    update_fields=["status", "warehouse", "sold_at"]
+                )
+                StockMovement.objects.create(
+                    tenant=sr.tenant,
+                    serial=serial,
+                    movement_type=StockMovement.MovementType.RETURN_IN,
+                    to_warehouse=sr.warehouse,
+                    ref_doc_type="sales_return",
+                    ref_doc_id=sr.id,
+                    note=f"銷退單 {sr.no} 第 {it.line_no} 行",
+                )
+
+            # 配件:本倉 balance 加回
+            if not product.requires_serial and not product.is_virtual:
+                bal, _ = StockBalance.objects.get_or_create(
+                    tenant=sr.tenant,
+                    product=product,
+                    warehouse=sr.warehouse,
+                    defaults={"qty": 0, "weighted_avg_cost": Decimal("0")},
+                )
+                bal.qty += it.qty
+                bal.save(update_fields=["qty"])
+                StockMovement.objects.create(
+                    tenant=sr.tenant,
+                    product=product,
+                    qty=it.qty,
+                    movement_type=StockMovement.MovementType.RETURN_IN,
+                    to_warehouse=sr.warehouse,
+                    ref_doc_type="sales_return",
+                    ref_doc_id=sr.id,
+                    note=f"銷退單 {sr.no} 第 {it.line_no} 行 {product.sku} ×{it.qty}",
+                )
+
+        subtotal, tax_amount, total = _calc_tax(subtotal_raw, so.tax_method)
+        sr.subtotal = subtotal
+        sr.tax_amount = tax_amount
+        sr.total = total
+        sr.save(update_fields=["subtotal", "tax_amount", "total"])
+
+        if sr.void_original_invoice and not so.invoice_voided:
+            so.invoice_voided = True
+            so.save(update_fields=["invoice_voided"])
+
+    return sr
+
+
+def void_sales_return(sr: SalesReturn) -> SalesReturn:
+    """銷退單作廢:把退回的庫存再扣回去(=回到「銷售出去」的狀態)。
+
+    - 序號:returned → sold,warehouse=None,sold_at 不重設(歷史已失,僅恢復狀態)
+    - 配件:該倉 balance.qty -= qty(若不足會擋下,避免負庫存)
+    - 不還原 SO.invoice_voided(由使用者決定是否要再去發票系統處理)
+    """
+    if sr.is_void:
+        raise SalesReturnError("此銷退單已作廢")
+
+    items = list(
+        sr.items.select_related("product")
+        .prefetch_related("serials__serial")
+        .all()
+    )
+
+    with transaction.atomic():
+        for it in items:
+            product = it.product
+            for sos in it.serials.select_related("serial").all():
+                serial = sos.serial
+                serial.status = ProductSerial.Status.SOLD
+                serial.warehouse = None
+                serial.save(update_fields=["status", "warehouse"])
+                StockMovement.objects.create(
+                    tenant=sr.tenant,
+                    serial=serial,
+                    movement_type=StockMovement.MovementType.VOID,
+                    from_warehouse=sr.warehouse,
+                    ref_doc_type="sales_return",
+                    ref_doc_id=sr.id,
+                    note=f"銷退單 {sr.no} 作廢,序號回 sold",
+                )
+
+            if not product.requires_serial and not product.is_virtual:
+                try:
+                    bal = StockBalance.objects.get(
+                        tenant=sr.tenant,
+                        product=product,
+                        warehouse=sr.warehouse,
+                    )
+                except StockBalance.DoesNotExist:
+                    raise SalesReturnError(
+                        f"作廢失敗:{product.sku} 在倉 {sr.warehouse} 無餘額紀錄"
+                    )
+                if bal.qty < it.qty:
+                    raise SalesReturnError(
+                        f"作廢失敗:{product.sku} 在倉 {sr.warehouse} 庫存"
+                        f"{bal.qty} 不足以扣回 {it.qty}"
+                    )
+                bal.qty -= it.qty
+                bal.save(update_fields=["qty"])
+                StockMovement.objects.create(
+                    tenant=sr.tenant,
+                    product=product,
+                    qty=it.qty,
+                    movement_type=StockMovement.MovementType.VOID,
+                    from_warehouse=sr.warehouse,
+                    ref_doc_type="sales_return",
+                    ref_doc_id=sr.id,
+                    note=f"銷退單 {sr.no} 作廢 {product.sku} ×{it.qty}",
+                )
+
+        sr.is_void = True
+        sr.save(update_fields=["is_void"])
+
+    return sr

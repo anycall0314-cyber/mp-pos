@@ -8,6 +8,8 @@ class Warehouse(TenantOwnedModel):
 
     code = models.SlugField("倉庫代碼", max_length=40)
     name = models.CharField("倉庫名稱", max_length=120)
+    address = models.CharField("地址", max_length=200, blank=True)
+    phone = models.CharField("電話", max_length=40, blank=True)
     is_active = models.BooleanField("啟用", default=True)
 
     class Meta:
@@ -108,7 +110,7 @@ class ProductSerial(TenantOwnedModel):
         help_text="刮痕位置 / 配件齊全度 / 其他特殊狀況",
     )
     acquired_from_member = models.ForeignKey(
-        "parties.Customer",
+        "parties.Member",
         on_delete=models.PROTECT,
         related_name="acquired_serials",
         null=True,

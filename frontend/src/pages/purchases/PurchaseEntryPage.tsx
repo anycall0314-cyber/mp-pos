@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { ApiHttpError } from "@/api/client";
 import {
@@ -11,7 +11,6 @@ import {
 } from "@/api/hooks";
 import {
   searchProducts,
-  searchPurchaseOrderCategories,
   searchSuppliers,
   searchWarehouses,
 } from "@/api/search";
@@ -21,6 +20,7 @@ import type {
   Product,
   TaxMethod,
 } from "@/api/types";
+import { useDefaultWarehouse } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Field } from "@/components/Field";
@@ -401,8 +401,7 @@ function SerialAside({
 const TAX_METHODS: { value: TaxMethod; label: string }[] = [
   { value: "taxable_included", label: "應稅內含" },
   { value: "taxable_excluded", label: "應稅外加" },
-  { value: "tax_free", label: "免稅" },
-  { value: "zero_tax", label: "零稅" },
+  { value: "untaxed", label: "未稅" },
 ];
 
 const DRAFT_KEY_REGULAR = "purchase-entry-draft";
@@ -455,6 +454,8 @@ export function PurchaseEntryPage({
 }: PurchaseEntryPageProps = {}) {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const focusMode = searchParams.get("focus") === "1";
   const isSecondhandVendor = mode === "secondhand-vendor";
   // 廠商收購模式永遠是新增,沒有 :id 路由
   const isNew = isSecondhandVendor || id === "new";
@@ -470,6 +471,7 @@ export function PurchaseEntryPage({
     isNew ? loadDraft(draftKey) : null,
   ).current;
 
+  const defaultWarehouse = useDefaultWarehouse();
   const existing = usePurchaseOrder(poId);
   const createMutation = useCreatePurchaseOrder();
   const voidMutation = useVoidPurchaseOrder();
@@ -483,9 +485,21 @@ export function PurchaseEntryPage({
   const [supplier, setSupplier] = useState<number | "">(draft?.supplier ?? "");
   const [supplierOption, setSupplierOption] =
     useState<ComboOption<unknown> | null>(draft?.supplierOption ?? null);
-  const [warehouse, setWarehouse] = useState<number | "">(draft?.warehouse ?? "");
-  const [warehouseOption, setWarehouseOption] =
-    useState<ComboOption<unknown> | null>(draft?.warehouseOption ?? null);
+  const [warehouse, setWarehouse] = useState<number | "">(
+    draft?.warehouse ?? (isNew && defaultWarehouse.id ? defaultWarehouse.id : ""),
+  );
+  const [warehouseOption, setWarehouseOption] = useState<
+    ComboOption<unknown> | null
+  >(
+    draft?.warehouseOption ??
+      (isNew && defaultWarehouse.id
+        ? {
+            id: defaultWarehouse.id,
+            label: defaultWarehouse.name,
+            secondary: "",
+          }
+        : null),
+  );
   const [category, setCategory] = useState<number | "">(draft?.category ?? "");
   const [categoryOption, setCategoryOption] =
     useState<ComboOption<unknown> | null>(draft?.categoryOption ?? null);
@@ -527,11 +541,9 @@ export function PurchaseEntryPage({
   useEffect(() => {
     if (isNew && !invoiceForm && defaultInvoiceCode) {
       setInvoiceForm(defaultInvoiceCode);
-      if (defaultInvoiceCode === "none") setTaxMethod("tax_free");
+      if (defaultInvoiceCode === "none") setTaxMethod("untaxed");
     }
   }, [isNew, invoiceForm, defaultInvoiceCode]);
-
-  const noInvoice = invoiceForm === "" || invoiceForm === "none";
 
   // 新單時把所有表單欄位 debounce 寫進 sessionStorage,切到其他分頁回來不會掉
   useEffect(() => {
@@ -962,6 +974,7 @@ export function PurchaseEntryPage({
       <Toolbar
         title={title}
         actions={
+          focusMode ? null : (
           <>
             <button className="btn" onClick={() => navigate(backPath)}>
               ← {isSecondhandVendor ? "回中古入庫" : "回列表"}
@@ -1004,6 +1017,7 @@ export function PurchaseEntryPage({
               </button>
             )}
           </>
+          )
         }
       />
 
@@ -1012,130 +1026,120 @@ export function PurchaseEntryPage({
         {error && <Banner kind="error" message={error} />}
 
         <div className="entry-header" style={{ marginBottom: 12 }}>
-          <div className="field-row-3">
-            <Field label="供應商" required>
-              <ComboBox
-                value={supplier}
-                selectedOption={supplierOption}
-                onChange={(id, opt) => {
-                  setSupplier(id);
-                  setSupplierOption(opt ?? null);
-                }}
-                fetchOptions={searchSuppliers}
-                disabled={readonly}
-                placeholder="搜尋供應商(代碼/名稱/統編)"
-              />
-            </Field>
-            <Field label="入庫倉" required>
-              <ComboBox
-                value={warehouse}
-                selectedOption={warehouseOption}
-                onChange={(id, opt) => {
-                  setWarehouse(id);
-                  setWarehouseOption(opt ?? null);
-                }}
-                fetchOptions={searchWarehouses}
-                disabled={readonly}
-                placeholder="搜尋倉庫"
-              />
-            </Field>
-            <Field label="單據日期" required>
-              <input
-                type="date"
-                value={docDate}
-                disabled
-                title="單據日期一律以系統當天為準,不可更改"
-              />
-            </Field>
-          </div>
-          <div className="field-row-3">
-            <Field label="進貨單別">
-              <ComboBox
-                value={category}
-                selectedOption={categoryOption}
-                onChange={(id, opt) => {
-                  setCategory(id);
-                  setCategoryOption(opt ?? null);
-                }}
-                fetchOptions={searchPurchaseOrderCategories}
-                disabled={readonly}
-                placeholder="搜尋單別(代碼/名稱)"
-              />
-            </Field>
-            <Field label="課稅別">
-              <select
-                value={taxMethod}
-                onChange={(e) => setTaxMethod(e.target.value as TaxMethod)}
-                disabled={readonly}
-              >
-                {TAX_METHODS.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="發票類型">
-              <select
-                value={invoiceForm}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setInvoiceForm(v);
-                  // 免用統一發票 → 課稅別連動到免稅
-                  if (v === "none") setTaxMethod("tax_free");
-                }}
-                disabled={readonly}
-              >
-                <option value="">— 未指定 —</option>
-                {invoiceTypes.map((f) => (
-                  <option key={f.code} value={f.code}>
-                    {f.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          <div className="field-row-3">
-            <Field label="發票號碼">
-              <input
-                value={invoiceNo}
-                onChange={(e) => setInvoiceNo(e.target.value.toUpperCase())}
-                disabled={readonly || noInvoice}
-                maxLength={20}
-                placeholder="例:AB12345678"
-              />
-            </Field>
-            <Field label="發票日期">
-              <input
-                type="date"
-                value={invoiceDate}
-                onChange={(e) => setInvoiceDate(e.target.value)}
-                disabled={readonly || noInvoice}
-              />
-            </Field>
-            <Field label="付款方式">
-              <select
-                value={paymentMethod}
-                onChange={(e) =>
-                  setPaymentMethod(Number(e.target.value) || "")
-                }
-                disabled={readonly}
-              >
-                <option value="">— 未指定 —</option>
-                {paymentMethods.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="備註">
-              <input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                disabled={readonly}
-              />
-            </Field>
+          <div className="purchase-header-grid">
+            <div style={{ gridArea: "supplier" }} className="medium-field">
+              <Field label="供應商" required>
+                <ComboBox
+                  value={supplier}
+                  selectedOption={supplierOption}
+                  onChange={(id, opt) => {
+                    setSupplier(id);
+                    setSupplierOption(opt ?? null);
+                  }}
+                  fetchOptions={searchSuppliers}
+                  disabled={readonly}
+                  placeholder="搜尋供應商(代碼/名稱/統編)"
+                />
+              </Field>
+            </div>
+            <div style={{ gridArea: "wh" }} className="medium-field">
+              <Field label="入庫倉" required>
+                {defaultWarehouse.locked && isNew ? (
+                  <input
+                    value={defaultWarehouse.name || "(未設定)"}
+                    disabled
+                    title="此帳號鎖定於此門市"
+                  />
+                ) : (
+                  <ComboBox
+                    value={warehouse}
+                    selectedOption={warehouseOption}
+                    onChange={(id, opt) => {
+                      setWarehouse(id);
+                      setWarehouseOption(opt ?? null);
+                    }}
+                    fetchOptions={searchWarehouses}
+                    disabled={readonly}
+                    placeholder="搜尋倉庫"
+                  />
+                )}
+              </Field>
+            </div>
+            <div style={{ gridArea: "date" }} className="short-field">
+              <Field label="單據日期" required>
+                <input
+                  type="date"
+                  value={docDate}
+                  disabled
+                  title="單據日期一律以系統當天為準,不可更改"
+                />
+              </Field>
+            </div>
+            <div style={{ gridArea: "tax" }} className="short-field">
+              <Field label="課稅別">
+                <select
+                  value={taxMethod}
+                  onChange={(e) => setTaxMethod(e.target.value as TaxMethod)}
+                  disabled={readonly}
+                >
+                  {TAX_METHODS.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <div style={{ gridArea: "invno" }} className="short-field">
+              <Field label="發票號碼">
+                <input
+                  value={invoiceNo}
+                  onChange={(e) =>
+                    setInvoiceNo(e.target.value.toUpperCase())
+                  }
+                  disabled={readonly}
+                  maxLength={20}
+                  placeholder="例:AB12345678"
+                />
+              </Field>
+            </div>
+            <div style={{ gridArea: "invdate" }} className="short-field">
+              <Field label="發票日期">
+                <input
+                  type="date"
+                  value={invoiceDate}
+                  onChange={(e) => setInvoiceDate(e.target.value)}
+                  disabled={readonly}
+                />
+              </Field>
+            </div>
+            <div style={{ gridArea: "payment" }} className="short-field">
+              <Field label="付款方式">
+                <select
+                  value={paymentMethod}
+                  onChange={(e) =>
+                    setPaymentMethod(Number(e.target.value) || "")
+                  }
+                  disabled={readonly}
+                >
+                  <option value="">— 未指定 —</option>
+                  {paymentMethods.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <div style={{ gridArea: "note" }}>
+              <Field label="備註">
+                <input
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  disabled={readonly}
+                />
+              </Field>
+            </div>
           </div>
         </div>
 

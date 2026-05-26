@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { ApiHttpError } from "@/api/client";
 import {
+  lookupMemberLastPrice,
   peekInvoiceNo,
   useCreateSalesOrder,
   useInvoiceTypes,
   usePaymentMethods,
   useSalesOrder,
   useSaveCustomer,
+  useSaveMember,
   useVoidSalesOrder,
 } from "@/api/hooks";
 import {
@@ -25,6 +27,7 @@ import {
 import type {
   Customer,
   CustomerKind,
+  Member,
   PaymentMethod,
   Product,
   ProductSerial,
@@ -34,10 +37,14 @@ import type {
   TaxMethod,
   TelecomPlan,
 } from "@/api/types";
+import {
+  useDefaultHandledBy,
+  useDefaultWarehouse,
+} from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
-import { Checkbox, Field } from "@/components/Field";
+import { Field } from "@/components/Field";
 import { Toolbar } from "@/components/Toolbar";
 
 /** 把資料庫的 "100.00" / number 統一轉成整數字串(四捨五入,空 / NaN 還原成 "0")。 */
@@ -66,6 +73,12 @@ interface Line {
   commission: string;
   // 續約預設不出卡號欄,客戶要換卡時店員按「+ 加卡號」展開;非續約方案此旗標被忽略
   card_override?: boolean;
+  // 該會員上次買此商品的價格(不含贈品 0 元列);提醒用,不影響送單
+  lastPriceHint?: {
+    price: string;
+    date: string;
+    no: string;
+  } | null;
 }
 
 function newLine(line_no: number): Line {
@@ -424,13 +437,6 @@ function SalesSerialAside({
   );
 }
 
-const CUSTOMER_KINDS: { value: CustomerKind; label: string }[] = [
-  { value: "individual", label: "個人" },
-  { value: "peer", label: "同業 / 盤商" },
-  { value: "corporate", label: "企業" },
-  { value: "other", label: "其他" },
-];
-
 // 「新增客戶」dialog 限定的類別:不含個人(會員專用),避免誤把個人當作生意歸屬
 const BUSINESS_KINDS: { value: CustomerKind; label: string }[] = [
   { value: "peer", label: "同業 / 盤商" },
@@ -441,8 +447,7 @@ const BUSINESS_KINDS: { value: CustomerKind; label: string }[] = [
 const TAX_METHODS: { value: TaxMethod; label: string }[] = [
   { value: "taxable_included", label: "應稅內含" },
   { value: "taxable_excluded", label: "應稅外加" },
-  { value: "tax_free", label: "免稅" },
-  { value: "zero_tax", label: "零稅" },
+  { value: "untaxed", label: "未稅" },
 ];
 
 function calcAmount(line: Line) {
@@ -454,6 +459,7 @@ interface LineRowProps {
   idx: number;
   readonly: boolean;
   warehouseId: number | "";
+  memberId: number | null;
   update: (patch: Partial<Line>) => void;
   remove: () => void;
 }
@@ -468,6 +474,7 @@ function LineRow({
   idx,
   readonly,
   warehouseId,
+  memberId,
   update,
   remove,
   active,
@@ -526,7 +533,34 @@ function LineRow({
       simCardOption: p?.allows_telecom_line ? line.simCardOption : null,
       activation_date: p?.allows_telecom_line ? line.activation_date : "",
       commission: p?.allows_commission ? line.commission : "0",
+      lastPriceHint: null,
     });
+
+    // 路徑三:會員 + 商品都有 → 查該會員過往「真實成交價」(跳過 0 元贈品)
+    if (p && pid !== "" && memberId) {
+      lookupMemberLastPrice(memberId, pid as number)
+        .then((last) => {
+          if (!last) return;
+          const hint = {
+            price: toIntStr(last.unit_price),
+            date: last.doc_date,
+            no: last.sales_order_no,
+          };
+          // 已被使用者改過金額 → 只放提示、不覆蓋
+          if (userTypedAmount) {
+            update({ lastPriceHint: hint });
+            return;
+          }
+          update({
+            unit_price: hint.price,
+            amount: toIntStr(Number(hint.price) * pickedQty),
+            lastPriceHint: hint,
+          });
+        })
+        .catch(() => {
+          // 失敗不影響主流程
+        });
+    }
 
     // 路徑二:沒打 IMEI,但商品要序號 + 該倉只有 1 隻在庫 → 自動把那隻掛上
     // 條件:選到產品、需要序號、非虛擬、有指定倉、且不是已經透過 IMEI 命中
@@ -675,16 +709,29 @@ function LineRow({
           }
           disabled={readonly}
         />
+        {line.lastPriceHint && (
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--text-dim)",
+              marginTop: 2,
+              textAlign: "right",
+            }}
+            title={`前次成交價,來源單據 ${line.lastPriceHint.no}`}
+          >
+            前次 ${Number(line.lastPriceHint.price).toLocaleString()} ({line.lastPriceHint.date})
+          </div>
+        )}
       </td>
       <td>
         <input
           type="number"
           className="num-input"
           step="1"
-          value={line.amount}
-          onChange={(e) => update({ amount: e.target.value })}
-          onBlur={(e) => update({ amount: toIntStr(e.target.value) })}
-          disabled={readonly}
+          value={toIntStr(line.qty * Number(line.unit_price || 0))}
+          disabled
+          title="自動計算:數量 × 單價"
+          readOnly
         />
       </td>
 
@@ -814,8 +861,8 @@ const SALES_DRAFT_KEY = "sales-entry-draft";
 interface SalesDraft {
   customer: Customer | null;
   customerOption: ComboOption<Customer> | null;
-  member: Customer | null;
-  memberOption: ComboOption<Customer> | null;
+  member: Member | null;
+  memberOption: ComboOption<Member> | null;
   warehouse: number | "";
   warehouseOption: ComboOption<unknown> | null;
   docDate: string;
@@ -842,13 +889,19 @@ function loadSalesDraft(): SalesDraft | null {
 export function SalesEntryPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const focusMode = searchParams.get("focus") === "1";
   const isNew = id === "new";
   const soId = isNew ? null : Number(id);
+
+  const defaultWarehouse = useDefaultWarehouse();
+  const defaultHandledBy = useDefaultHandledBy();
 
   const existing = useSalesOrder(soId);
   const createMutation = useCreateSalesOrder();
   const voidMutation = useVoidSalesOrder();
   const saveCustomer = useSaveCustomer();
+  const saveMember = useSaveMember();
   const invoiceTypesQuery = useInvoiceTypes({ activeOnly: true });
   const invoiceTypes = invoiceTypesQuery.data ?? [];
   const defaultInvoiceCode =
@@ -866,23 +919,19 @@ export function SalesEntryPage() {
   const [customerOption, setCustomerOption] =
     useState<ComboOption<Customer> | null>(draft?.customerOption ?? null);
 
-  // 會員(個人,is_member=true):對應 SalesOrder.member;與 customer 不互斥
-  const [member, setMember] = useState<Customer | null>(draft?.member ?? null);
+  // 會員(獨立主檔,可掛在任何客戶底下消費):對應 SalesOrder.member;與 customer 不互斥
+  const [member, setMember] = useState<Member | null>(draft?.member ?? null);
   const [memberOption, setMemberOption] =
-    useState<ComboOption<Customer> | null>(draft?.memberOption ?? null);
+    useState<ComboOption<Member> | null>(draft?.memberOption ?? null);
   const [showCreateMember, setShowCreateMember] = useState(false);
   const [newMember, setNewMember] = useState<{
     phone: string;
     name: string;
-    tax_id: string;
-    kind: CustomerKind;
-    is_member: boolean;
+    national_id: string;
   }>({
     phone: "",
     name: "",
-    tax_id: "",
-    kind: "individual",
-    is_member: true,
+    national_id: "",
   });
 
   const [showCreateCustomer, setShowCreateCustomer] = useState(false);
@@ -900,10 +949,20 @@ export function SalesEntryPage() {
     note: "",
   });
   const [warehouse, setWarehouse] = useState<number | "">(
-    draft?.warehouse ?? "",
+    draft?.warehouse ?? (isNew && defaultWarehouse.id ? defaultWarehouse.id : ""),
   );
-  const [warehouseOption, setWarehouseOption] =
-    useState<ComboOption<unknown> | null>(draft?.warehouseOption ?? null);
+  const [warehouseOption, setWarehouseOption] = useState<
+    ComboOption<unknown> | null
+  >(
+    draft?.warehouseOption ??
+      (isNew && defaultWarehouse.id
+        ? {
+            id: defaultWarehouse.id,
+            label: defaultWarehouse.name,
+            secondary: "",
+          }
+        : null),
+  );
   // 單據日期永遠 = 今天,不開放更改(防竄改);舊單載入時會被 existing data 覆寫顯示原始日期
   const [docDate, setDocDate] = useState(
     () => new Date().toISOString().slice(0, 10),
@@ -923,10 +982,21 @@ export function SalesEntryPage() {
   // 新單時:依發票類型 peek 下一張要開的號碼;送單時後端會原子地取走它
   const [previewInvoiceNo, setPreviewInvoiceNo] = useState<string | null>(null);
   const [salesPerson, setSalesPerson] = useState<number | "">(
-    draft?.salesPerson ?? "",
+    draft?.salesPerson ??
+      (isNew && defaultHandledBy.id ? defaultHandledBy.id : ""),
   );
-  const [salesPersonOption, setSalesPersonOption] =
-    useState<ComboOption<unknown> | null>(draft?.salesPersonOption ?? null);
+  const [salesPersonOption, setSalesPersonOption] = useState<
+    ComboOption<unknown> | null
+  >(
+    draft?.salesPersonOption ??
+      (isNew && defaultHandledBy.id
+        ? {
+            id: defaultHandledBy.id,
+            label: defaultHandledBy.name,
+            secondary: defaultHandledBy.code,
+          }
+        : null),
+  );
   const [note, setNote] = useState(draft?.note ?? "");
   const [lines, setLines] = useState<Line[]>(() => {
     if (draft?.lines && draft.lines.length > 0) {
@@ -989,7 +1059,7 @@ export function SalesEntryPage() {
   useEffect(() => {
     if (isNew && !invoiceForm && defaultInvoiceCode) {
       setInvoiceForm(defaultInvoiceCode);
-      if (defaultInvoiceCode === "none") setTaxMethod("tax_free");
+      if (defaultInvoiceCode === "none") setTaxMethod("untaxed");
     }
   }, [isNew, invoiceForm, defaultInvoiceCode]);
 
@@ -1118,7 +1188,6 @@ export function SalesEntryPage() {
           name: d.customer_name ?? "",
           kind: "individual",
           kind_label: d.customer_kind_label ?? "",
-          is_member: false,
           tax_id: "",
           address: "",
           note: "",
@@ -1133,15 +1202,13 @@ export function SalesEntryPage() {
         });
       }
       if (d.member) {
-        const m: Customer = {
+        const m: Member = {
           id: d.member,
           code: "",
           phone: d.member_phone ?? "",
           name: d.member_name ?? "",
-          kind: "individual",
-          kind_label: "個人",
-          is_member: true,
-          tax_id: "",
+          national_id: "",
+          birthday: null,
           address: "",
           note: "",
           is_active: true,
@@ -1248,18 +1315,15 @@ export function SalesEntryPage() {
   async function handleCreateMember() {
     const phone = newMember.phone.trim();
     const name = newMember.name.trim();
-    if (!phone) {
-      setError("電話必填(會員以電話為主要識別)");
+    if (!name) {
+      setError("姓名必填");
       return;
     }
-    if (!name) return;
     try {
-      const created = await saveCustomer.mutateAsync({
+      const created = await saveMember.mutateAsync({
         phone,
         name,
-        kind: newMember.kind,
-        is_member: newMember.is_member,
-        tax_id: newMember.tax_id || undefined,
+        national_id: newMember.national_id || undefined,
       });
       setMember(created);
       setMemberOption({
@@ -1272,9 +1336,7 @@ export function SalesEntryPage() {
       setNewMember({
         phone: "",
         name: "",
-        tax_id: "",
-        kind: "individual",
-        is_member: true,
+        national_id: "",
       });
     } catch (e) {
       if (e instanceof ApiHttpError) {
@@ -1291,7 +1353,6 @@ export function SalesEntryPage() {
       const created = await saveCustomer.mutateAsync({
         name,
         kind: newCustomer.kind,
-        is_member: false,
         tax_id: newCustomer.tax_id.trim() || undefined,
         phone: newCustomer.phone.trim() || undefined,
         note: newCustomer.note.trim() || undefined,
@@ -1650,7 +1711,7 @@ export function SalesEntryPage() {
           product: l.product as number,
           qty: l.qty,
           unit_price: l.unit_price,
-          amount: l.amount,
+          amount: toIntStr(l.qty * Number(l.unit_price || 0)),
           serial_ids: pickedSerialIds(l),
           msisdn: l.msisdn,
           telecom_plan:
@@ -1718,6 +1779,7 @@ export function SalesEntryPage() {
       <Toolbar
         title={title}
         actions={
+          focusMode ? null : (
           <>
             <button className="btn" onClick={() => navigate("/sales")}>
               ← 回列表
@@ -1780,6 +1842,7 @@ export function SalesEntryPage() {
               </button>
             )}
           </>
+          )
         }
       />
 
@@ -1791,17 +1854,25 @@ export function SalesEntryPage() {
           <div className="sales-header-grid">
             <div style={{ gridArea: "wh" }} className="medium-field">
               <Field label="出貨倉" required>
-                <ComboBox
-                  value={warehouse}
-                  selectedOption={warehouseOption}
-                  onChange={(id, opt) => {
-                    setWarehouse(id);
-                    setWarehouseOption(opt ?? null);
-                  }}
-                  fetchOptions={searchWarehouses}
-                  disabled={readonly}
-                  placeholder="搜尋倉庫"
-                />
+                {defaultWarehouse.locked && isNew ? (
+                  <input
+                    value={defaultWarehouse.name || "(未設定)"}
+                    disabled
+                    title="此帳號鎖定於此門市"
+                  />
+                ) : (
+                  <ComboBox
+                    value={warehouse}
+                    selectedOption={warehouseOption}
+                    onChange={(id, opt) => {
+                      setWarehouse(id);
+                      setWarehouseOption(opt ?? null);
+                    }}
+                    fetchOptions={searchWarehouses}
+                    disabled={readonly}
+                    placeholder="搜尋倉庫"
+                  />
+                )}
               </Field>
             </div>
             <div style={{ gridArea: "date" }} className="short-field">
@@ -1891,8 +1962,8 @@ export function SalesEntryPage() {
                   onChange={(e) => {
                     const v = e.target.value;
                     setInvoiceForm(v);
-                    // 免用統一發票 → 課稅別連動到免稅
-                    if (v === "none") setTaxMethod("tax_free");
+                    // 免用統一發票 → 課稅別連動到未稅
+                    if (v === "none") setTaxMethod("untaxed");
                     // 電子發票 → 課稅別預設應稅內含
                     else if (v === "e_invoice") setTaxMethod("taxable_included");
                   }}
@@ -1911,49 +1982,63 @@ export function SalesEntryPage() {
               <Field label="會員">
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <ComboBox<Customer>
+                    <ComboBox<Member>
                       value={member?.id ?? ""}
                       selectedOption={memberOption}
                       onChange={(_id, opt) => {
                         setMemberOption(opt ?? null);
                         const m = opt?.payload ?? null;
                         setMember(m);
-                        if (isTaxable && m?.tax_id && !buyerTaxId) {
-                          setBuyerTaxId(m.tax_id);
-                        }
                       }}
                       fetchOptions={searchMembers}
-                      placeholder="搜尋電話 / 姓名 / 統編"
+                      placeholder="搜尋電話 / 姓名 / 身分證,查無按 Enter 新增"
                       disabled={readonly}
+                      onCreateNew={(q) => {
+                        const isPhone = /^[\d-]+$/.test(q);
+                        setNewMember({
+                          phone: isPhone ? q : "",
+                          name: isPhone ? "" : q,
+                          national_id: "",
+                        });
+                        setShowCreateMember(true);
+                      }}
+                      createNewLabel="+ 新增會員"
                     />
                   </div>
-                  {!readonly && (
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => setShowCreateMember(true)}
-                      style={{ flexShrink: 0 }}
-                    >
-                      + 新增
-                    </button>
-                  )}
                 </div>
               </Field>
             </div>
 
             <div style={{ gridArea: "invno" }} className="short-field">
               <Field label="發票號碼(自動取號)" required={!noInvoice}>
-                <input
-                  value={isNew ? previewInvoiceNo ?? "" : invoiceNo}
-                  disabled
-                  placeholder={
-                    noInvoice
-                      ? ""
-                      : previewInvoiceNo
-                      ? ""
-                      : "尚無可用字軌,請至系統設定新增"
-                  }
-                />
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <input
+                    value={isNew ? previewInvoiceNo ?? "" : invoiceNo}
+                    disabled
+                    placeholder={
+                      noInvoice
+                        ? ""
+                        : previewInvoiceNo
+                        ? ""
+                        : "尚無可用字軌,請至系統設定新增"
+                    }
+                  />
+                  {existing.data?.invoice_voided && (
+                    <span
+                      style={{
+                        padding: "2px 6px",
+                        background: "var(--danger, #c33)",
+                        color: "white",
+                        borderRadius: 3,
+                        fontSize: 11,
+                        whiteSpace: "nowrap",
+                      }}
+                      title="此銷貨單已有銷退,原發票已標作廢"
+                    >
+                      已作廢
+                    </span>
+                  )}
+                </div>
               </Field>
             </div>
             <div style={{ gridArea: "note" }}>
@@ -2042,6 +2127,7 @@ export function SalesEntryPage() {
                 idx={idx}
                 readonly={readonly}
                 warehouseId={warehouse}
+                memberId={member?.id ?? null}
                 update={(p) => updateLine(l.key, p)}
                 remove={() => removeLine(l.key)}
                 active={l.key === selectedLineKey}
@@ -2231,66 +2317,41 @@ export function SalesEntryPage() {
               className="btn primary"
               type="button"
               onClick={handleCreateMember}
-              disabled={
-                saveCustomer.isPending ||
-                !newMember.name.trim() ||
-                !newMember.phone.trim()
-              }
+              disabled={saveMember.isPending || !newMember.name.trim()}
             >
-              {saveCustomer.isPending ? "儲存中…" : "建立並使用"}
+              {saveMember.isPending ? "儲存中…" : "建立並使用"}
             </button>
           </>
         }
       >
-        <Field label="電話" required>
-          <input
-            value={newMember.phone}
-            onChange={(e) =>
-              setNewMember((s) => ({ ...s, phone: e.target.value }))
-            }
-            placeholder="會員以電話為主要識別"
-            maxLength={40}
-          />
-        </Field>
-        <Field label="姓名 / 名稱" required>
+        <Field label="姓名" required>
           <input
             value={newMember.name}
             autoFocus
             onChange={(e) =>
               setNewMember((s) => ({ ...s, name: e.target.value }))
             }
+            maxLength={120}
           />
         </Field>
-        <Field label="客戶類別">
-          <select
-            value={newMember.kind}
-            onChange={(e) =>
-              setNewMember((s) => ({
-                ...s,
-                kind: e.target.value as CustomerKind,
-              }))
-            }
-          >
-            {CUSTOMER_KINDS.map((k) => (
-              <option key={k.value} value={k.value}>
-                {k.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="統一編號">
+        <Field label="電話">
           <input
-            value={newMember.tax_id}
+            value={newMember.phone}
             onChange={(e) =>
-              setNewMember((s) => ({ ...s, tax_id: e.target.value }))
+              setNewMember((s) => ({ ...s, phone: e.target.value }))
             }
+            maxLength={40}
           />
         </Field>
-        <Checkbox
-          checked={newMember.is_member}
-          onChange={(v) => setNewMember((s) => ({ ...s, is_member: v }))}
-          label="設為會員"
-        />
+        <Field label="身分證字號">
+          <input
+            value={newMember.national_id}
+            onChange={(e) =>
+              setNewMember((s) => ({ ...s, national_id: e.target.value }))
+            }
+            maxLength={20}
+          />
+        </Field>
       </Drawer>
 
       <Drawer

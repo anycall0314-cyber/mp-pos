@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import { useSalesDailyReport } from "@/api/hooks";
 import { searchCustomers, searchSalesPersons, searchWarehouses } from "@/api/search";
+import { useDefaultWarehouse } from "@/auth/AuthContext";
 import type {
   Customer,
   SalesOrder,
@@ -19,7 +20,7 @@ function today(): string {
 /**
  * 金額(含稅)→ 未稅。
  * taxable_included:除 1.05
- * 其他(taxable_excluded / tax_free / zero_tax):amount 已是未稅
+ * 其他(taxable_excluded / untaxed / 以及舊資料 tax_free / zero_tax):amount 已是未稅
  */
 function itemUntaxedAmount(it: SalesOrderItem, taxMethod: string): number {
   const amount = Number(it.amount);
@@ -58,12 +59,21 @@ interface AppliedFilter {
 }
 
 export function SalesDailyReportPage() {
+  const defaultWarehouse = useDefaultWarehouse();
   // 表單狀態
   const [from, setFrom] = useState<string>(today);
   const [to, setTo] = useState<string>(today);
-  const [warehouse, setWarehouse] = useState<number | "">("");
+  const [warehouse, setWarehouse] = useState<number | "">(
+    defaultWarehouse.locked && defaultWarehouse.id ? defaultWarehouse.id : "",
+  );
   const [warehouseOpt, setWarehouseOpt] = useState<ComboOption<Warehouse> | null>(
-    null,
+    defaultWarehouse.locked && defaultWarehouse.id
+      ? {
+          id: defaultWarehouse.id,
+          label: defaultWarehouse.name,
+          secondary: "",
+        }
+      : null,
   );
   const [salesPerson, setSalesPerson] = useState<number | "">("");
   const [salesPersonOpt, setSalesPersonOpt] = useState<ComboOption<SalesPerson> | null>(
@@ -271,16 +281,24 @@ export function SalesDailyReportPage() {
         <label style={{ minWidth: 180 }}>
           倉別
           <div style={{ minWidth: 140 }}>
-            <ComboBox<Warehouse>
-              value={warehouse}
-              selectedOption={warehouseOpt}
-              onChange={(id, opt) => {
-                setWarehouse(id);
-                setWarehouseOpt(opt ?? null);
-              }}
-              fetchOptions={searchWarehouses}
-              placeholder="全部"
-            />
+            {defaultWarehouse.locked ? (
+              <input
+                value={defaultWarehouse.name || "(未設定)"}
+                disabled
+                title="此帳號鎖定於此門市"
+              />
+            ) : (
+              <ComboBox<Warehouse>
+                value={warehouse}
+                selectedOption={warehouseOpt}
+                onChange={(id, opt) => {
+                  setWarehouse(id);
+                  setWarehouseOpt(opt ?? null);
+                }}
+                fetchOptions={searchWarehouses}
+                placeholder="全部"
+              />
+            )}
           </div>
         </label>
         <label style={{ minWidth: 180 }}>

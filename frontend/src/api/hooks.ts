@@ -7,15 +7,23 @@ import {
   Customer,
   InvoiceTrack,
   InvoiceType,
+  LegacyPurchase,
+  Member,
   Paginated,
   CashAdjustment,
   PaymentMethod,
   PettyExpense,
+  PhoneBillCollection,
+  PlatformTenant,
+  PlatformUser,
+  PlatformWarehouse,
   Product,
   ProductSerial,
   PurchaseOrder,
+  ReturnableSummary,
   SalesOrder,
   SalesPerson,
+  SalesReturn,
   SimCard,
   StockBalance,
   Supplier,
@@ -59,6 +67,19 @@ export const useSuppliers = () =>
 
 export const useCustomers = () =>
   useQuery({ queryKey: ["customers"], queryFn: () => list<Customer>("/customers/") });
+
+export const useMembers = () =>
+  useQuery({ queryKey: ["members"], queryFn: () => list<Member>("/members/") });
+
+export const useLegacyPurchases = (memberId: number | null) =>
+  useQuery({
+    queryKey: ["legacy-purchases", memberId],
+    queryFn: () =>
+      list<LegacyPurchase>(
+        `/legacy-purchases/?member=${memberId}&page_size=200`,
+      ),
+    enabled: memberId != null,
+  });
 
 export const useSalesPersons = () =>
   useQuery({
@@ -252,8 +273,11 @@ export interface BusinessDailyReport {
   date: string;
   opening_cash: number;
   sales: BusinessDailySection;
+  non_cash_sales: BusinessDailySection;
+  sales_returns: BusinessDailySection;
   purchases: BusinessDailySection;
   expenses: BusinessDailySection;
+  phone_bills: BusinessDailySection;
   adjustments: BusinessDailyAdjustments;
   net_change: number;
 }
@@ -315,6 +339,55 @@ export function useVoidCashAdjustment() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cash-adjustments"] });
+      qc.invalidateQueries({ queryKey: ["business-daily"] });
+    },
+  });
+}
+
+export const usePhoneBills = () =>
+  useQuery({
+    queryKey: ["phone-bills"],
+    queryFn: () =>
+      list<PhoneBillCollection>("/phone-bills/?page_size=200"),
+  });
+
+export const usePhoneBill = (id: number | null) =>
+  useQuery({
+    queryKey: ["phone-bills", id ?? ""],
+    queryFn: () => api<PhoneBillCollection>(`/phone-bills/${id}/`),
+    enabled: !!id,
+  });
+
+export function useSavePhoneBill() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (
+      payload: Partial<PhoneBillCollection> & { id?: number },
+    ) => {
+      const { id, ...body } = payload;
+      const method = id ? "PATCH" : "POST";
+      const url = id ? `/phone-bills/${id}/` : "/phone-bills/";
+      return api<PhoneBillCollection>(url, {
+        method,
+        body: JSON.stringify(body),
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["phone-bills"] });
+      qc.invalidateQueries({ queryKey: ["business-daily"] });
+    },
+  });
+}
+
+export function useVoidPhoneBill() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<PhoneBillCollection>(`/phone-bills/${id}/void/`, {
+        method: "POST",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["phone-bills"] });
       qc.invalidateQueries({ queryKey: ["business-daily"] });
     },
   });
@@ -420,6 +493,7 @@ export interface DateRangeFilter {
 
 export interface SalesOrdersFilter extends DateRangeFilter {
   customer?: number;
+  member?: number;
 }
 
 function buildQS(params: Record<string, string | number | undefined>): string {
@@ -457,6 +531,7 @@ export const useSalesOrders = (filter?: SalesOrdersFilter) =>
       filter?.from ?? "",
       filter?.to ?? "",
       filter?.customer ?? "",
+      filter?.member ?? "",
     ],
     queryFn: () =>
       list<SalesOrder>(
@@ -464,6 +539,7 @@ export const useSalesOrders = (filter?: SalesOrdersFilter) =>
           doc_date__gte: filter?.from,
           doc_date__lte: filter?.to,
           customer: filter?.customer,
+          member: filter?.member,
           page_size: 100,
         })}`,
       ),
@@ -703,6 +779,49 @@ export async function lookupCustomer(phone: string): Promise<Customer | null> {
   }
 }
 
+export function useSaveMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Partial<Member> & { id?: number }) => {
+      const { id, ...body } = payload;
+      const method = id ? "PATCH" : "POST";
+      const url = id ? `/members/${id}/` : "/members/";
+      return api<Member>(url, { method, body: JSON.stringify(body) });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["members"] }),
+  });
+}
+
+export async function lookupMember(phone: string): Promise<Member | null> {
+  try {
+    return await api<Member>(
+      `/members/lookup/?phone=${encodeURIComponent(phone)}`,
+    );
+  } catch (e) {
+    return null;
+  }
+}
+
+export interface MemberLastPrice {
+  unit_price: string;
+  doc_date: string;
+  sales_order_no: string;
+  sales_order_id: number;
+}
+
+export async function lookupMemberLastPrice(
+  memberId: number,
+  productId: number,
+): Promise<MemberLastPrice | null> {
+  try {
+    return await api<MemberLastPrice>(
+      `/sales-orders/last-price/?member=${memberId}&product=${productId}`,
+    );
+  } catch (e) {
+    return null;
+  }
+}
+
 export function useCreatePurchaseOrder() {
   const qc = useQueryClient();
   return useMutation({
@@ -760,6 +879,94 @@ export function useVoidSalesOrder() {
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["serials"] });
       qc.invalidateQueries({ queryKey: ["sim-cards"] });
+    },
+  });
+}
+
+// 銷退單
+export interface SalesReturnsFilter extends DateRangeFilter {
+  original_so?: number;
+}
+
+export const useSalesReturns = (filter?: SalesReturnsFilter) =>
+  useQuery({
+    queryKey: [
+      "sales-returns",
+      filter?.from ?? "",
+      filter?.to ?? "",
+      filter?.original_so ?? "",
+    ],
+    queryFn: () =>
+      list<SalesReturn>(
+        `/sales-returns/${buildQS({
+          doc_date__gte: filter?.from,
+          doc_date__lte: filter?.to,
+          original_so: filter?.original_so,
+          page_size: 100,
+        })}`,
+      ),
+  });
+
+export const useSalesReturn = (id: number | null) =>
+  useQuery({
+    queryKey: ["sales-return", id],
+    queryFn: () => api<SalesReturn>(`/sales-returns/${id}/`),
+    enabled: id != null,
+  });
+
+/** 查指定 SO 的「可退明細」(扣除已退累計與已退序號)。 */
+export const useReturnableForSO = (salesOrderId: number | null) =>
+  useQuery({
+    queryKey: ["returnable", salesOrderId],
+    queryFn: () =>
+      api<ReturnableSummary>(
+        `/sales-returns/returnable/?sales_order=${salesOrderId}`,
+      ),
+    enabled: salesOrderId != null,
+  });
+
+export interface CreateSalesReturnPayload {
+  original_so: number;
+  payment_method: string;
+  void_original_invoice: boolean;
+  note?: string;
+  items: {
+    original_item: number;
+    qty: number;
+    serial_ids?: number[];
+  }[];
+}
+
+export function useCreateSalesReturn() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateSalesReturnPayload) =>
+      api<SalesReturn>("/sales-returns/", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sales-returns"] });
+      qc.invalidateQueries({ queryKey: ["sales-orders"] });
+      qc.invalidateQueries({ queryKey: ["sales-order"] });
+      qc.invalidateQueries({ queryKey: ["returnable"] });
+      qc.invalidateQueries({ queryKey: ["serials"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+export function useVoidSalesReturn() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<SalesReturn>(`/sales-returns/${id}/void/`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sales-returns"] });
+      qc.invalidateQueries({ queryKey: ["sales-return"] });
+      qc.invalidateQueries({ queryKey: ["returnable"] });
+      qc.invalidateQueries({ queryKey: ["serials"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
     },
   });
 }
@@ -943,6 +1150,102 @@ export function useVoidTransferOrder() {
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["serials"] });
       qc.invalidateQueries({ queryKey: ["stock-balances"] });
+    },
+  });
+}
+
+
+// ────────────────────────────────────────────────────────────
+// 平台管理員 endpoints (/platform/*)
+// ────────────────────────────────────────────────────────────
+
+export const usePlatformTenants = () =>
+  useQuery({
+    queryKey: ["platform-tenants"],
+    queryFn: () =>
+      list<PlatformTenant>("/platform/tenants/?page_size=200"),
+  });
+
+export function useSavePlatformTenant() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Partial<PlatformTenant> & { id?: number }) => {
+      const { id, ...body } = payload;
+      const method = id ? "PATCH" : "POST";
+      const url = id ? `/platform/tenants/${id}/` : "/platform/tenants/";
+      return api<PlatformTenant>(url, { method, body: JSON.stringify(body) });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["platform-tenants"] });
+      qc.invalidateQueries({ queryKey: ["platform-users"] });
+      qc.invalidateQueries({ queryKey: ["platform-warehouses"] });
+    },
+  });
+}
+
+export const usePlatformUsers = () =>
+  useQuery({
+    queryKey: ["platform-users"],
+    queryFn: () => list<PlatformUser>("/platform/users/?page_size=200"),
+  });
+
+export function useSavePlatformUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (
+      payload: Partial<PlatformUser> & {
+        id?: number;
+        password?: string;
+        tenant?: number | null;
+        role?: string;
+        default_warehouse?: number | null;
+        is_warehouse_locked?: boolean;
+        create_sales_person?: boolean;
+        sales_person_code?: string;
+      },
+    ) => {
+      const { id, ...body } = payload;
+      const method = id ? "PATCH" : "POST";
+      const url = id ? `/platform/users/${id}/` : "/platform/users/";
+      return api<PlatformUser>(url, { method, body: JSON.stringify(body) });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["platform-users"] }),
+  });
+}
+
+export function useResetPlatformUserPassword() {
+  return useMutation({
+    mutationFn: ({ id, password }: { id: number; password: string }) =>
+      api(`/platform/users/${id}/reset-password/`, {
+        method: "POST",
+        body: JSON.stringify({ password }),
+      }),
+  });
+}
+
+export const usePlatformWarehouses = () =>
+  useQuery({
+    queryKey: ["platform-warehouses"],
+    queryFn: () =>
+      list<PlatformWarehouse>("/platform/warehouses/?page_size=200"),
+  });
+
+export function useSavePlatformWarehouse() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Partial<PlatformWarehouse> & { id?: number }) => {
+      const { id, ...body } = payload;
+      const method = id ? "PATCH" : "POST";
+      const url = id ? `/platform/warehouses/${id}/` : "/platform/warehouses/";
+      return api<PlatformWarehouse>(url, {
+        method,
+        body: JSON.stringify(body),
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["platform-warehouses"] });
+      qc.invalidateQueries({ queryKey: ["platform-tenants"] });
+      qc.invalidateQueries({ queryKey: ["warehouses"] });
     },
   });
 }

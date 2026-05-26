@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
+import { useAuth } from "@/auth/AuthContext";
+import { LoginPage } from "@/pages/login/LoginPage";
+import { PlatformAdminPage } from "@/pages/platform-admin/PlatformAdminPage";
 import { CashAdjustmentsPage } from "@/pages/cash/CashAdjustmentsPage";
 import { PettyExpensesPage } from "@/pages/cash/PettyExpensesPage";
+import { PhoneBillsPage } from "@/pages/phone-bills/PhoneBillsPage";
+import { PhoneBillReceiptPage } from "@/pages/phone-bills/PhoneBillReceiptPage";
 import { CategoriesPage } from "@/pages/inventory/CategoriesPage";
 import { InventoryQueryPage } from "@/pages/inventory/InventoryQueryPage";
 import { ProductsPage } from "@/pages/products/ProductsPage";
@@ -17,7 +22,9 @@ import { TransferEntryPage } from "@/pages/transfers/TransferEntryPage";
 import { SalesPage } from "@/pages/sales/SalesPage";
 import { SalesEntryPage } from "@/pages/sales/SalesEntryPage";
 import { SalesPrintPage } from "@/pages/sales/SalesPrintPage";
+import { SalesReturnEntryPage } from "@/pages/sales/SalesReturnEntryPage";
 import { CustomersPage } from "@/pages/customers/CustomersPage";
+import { MembersPage } from "@/pages/members/MembersPage";
 import { SalesPersonsPage } from "@/pages/sales-persons/SalesPersonsPage";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { SimCardsPage } from "@/pages/sim-cards/SimCardsPage";
@@ -39,6 +46,12 @@ interface NavGroup {
  * 頂部主分類 + dropdown 子項。
  * 要加新模組就在對應 group 的 items 加一筆;新類別就 push 一個 group。
  */
+const PLATFORM_NAV_GROUP: NavGroup = {
+  key: "platform",
+  label: "平台",
+  items: [{ to: "/platform/admin", label: "經銷商 / 用戶 / 倉別" }],
+};
+
 const NAV_GROUPS: NavGroup[] = [
   {
     key: "reports",
@@ -73,6 +86,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/transfers", label: "調撥作業" },
       { to: "/sales/pre-orders", label: "訂購作業" },
       { to: "/customers", label: "客戶管理" },
+      { to: "/members", label: "會員管理" },
     ],
   },
   {
@@ -206,6 +220,15 @@ function readTheme(): Theme {
 
 export function App() {
   const [theme, setTheme] = useState<Theme>(readTheme);
+  const location = useLocation();
+  const { user, loading: authLoading, logout } = useAuth();
+  const focusMode = new URLSearchParams(location.search).get("focus") === "1";
+  // 列印頁面(/print/、/receipt、/labels)不渲染 topbar 與 main 框,避免列印時帶到導覽
+  const isPrintMode =
+    /\/print\//.test(location.pathname) ||
+    /\/receipt(\/|$)/.test(location.pathname) ||
+    /\/labels(\/|$)/.test(location.pathname);
+  const isLoginPage = location.pathname === "/login";
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     try {
@@ -213,12 +236,45 @@ export function App() {
     } catch {}
   }, [theme]);
 
+  // /login 頁直接渲染,跳過所有 shell + guard
+  if (isLoginPage) {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+      </Routes>
+    );
+  }
+
+  // 登入狀態還在解析:擋一下避免閃 login
+  if (authLoading) {
+    return (
+      <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim)" }}>
+        載入中…
+      </div>
+    );
+  }
+
+  // 未登入 + 不是列印頁(列印頁是 window.open,允許短時間沒 user)→ 強制跳 /login
+  if (!user && !isPrintMode) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ from: location.pathname + location.search }}
+      />
+    );
+  }
+
   return (
     <div className="app-shell">
+      {!focusMode && !isPrintMode && (
       <header className="topbar">
         <div className="brand">MP POS</div>
         <nav className="topnav">
-          {NAV_GROUPS.map((g) => (
+          {(user?.profile?.role === "platform_admin"
+            ? [PLATFORM_NAV_GROUP, ...NAV_GROUPS]
+            : NAV_GROUPS
+          ).map((g) => (
             <NavGroupMenu key={g.key} group={g} />
           ))}
         </nav>
@@ -244,7 +300,60 @@ export function App() {
             </svg>
           )}
         </button>
+        {user && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginLeft: 4,
+              paddingLeft: 12,
+              borderLeft: "1px solid var(--border)",
+              fontSize: 12,
+              color: "var(--text-dim)",
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
+              <span style={{ color: "var(--text)", fontWeight: 600 }}>
+                {user.username}
+              </span>
+              <span>
+                {user.profile?.role_label ?? "—"}
+                {user.profile?.tenant_name
+                  ? ` · ${user.profile.tenant_name}`
+                  : ""}
+                {user.profile?.default_warehouse_name
+                  ? ` · ${user.profile.default_warehouse_name}`
+                  : ""}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="btn"
+              style={{ padding: "4px 10px", fontSize: 12 }}
+              onClick={() => logout()}
+              title="登出"
+            >
+              登出
+            </button>
+          </div>
+        )}
       </header>
+      )}
+      {focusMode && !isPrintMode && (
+        <div
+          style={{
+            padding: "6px 16px",
+            background: "var(--panel)",
+            borderBottom: "1px solid var(--border)",
+            fontSize: 12,
+            color: "var(--text-dim)",
+            textAlign: "center",
+          }}
+        >
+          檢視模式 — 此分頁僅供資料查看,不提供任何操作
+        </div>
+      )}
       <main className="main">
         <Routes>
           <Route path="/" element={<Navigate to="/products" replace />} />
@@ -262,6 +371,14 @@ export function App() {
             element={<SecondhandAcquisitionPage />}
           />
           <Route path="/sales" element={<SalesPage />} />
+          <Route
+            path="/sales/returns/new"
+            element={<SalesReturnEntryPage />}
+          />
+          <Route
+            path="/sales/returns/:id"
+            element={<SalesReturnEntryPage />}
+          />
           <Route path="/sales/:id" element={<SalesEntryPage />} />
           <Route path="/sales/:id/print/:type" element={<SalesPrintPage />} />
           <Route path="/customers" element={<CustomersPage />} />
@@ -270,11 +387,9 @@ export function App() {
             path="/cash-adjustments"
             element={<CashAdjustmentsPage />}
           />
-          <Route
-            path="/members"
-            element={<Navigate to="/customers?tab=member" replace />}
-          />
+          <Route path="/members" element={<MembersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/platform/admin" element={<PlatformAdminPage />} />
           <Route path="/suppliers" element={<SuppliersPage />} />
           <Route path="/sales-persons" element={<SalesPersonsPage />} />
           <Route path="/transfers" element={<TransfersPage />} />
@@ -294,9 +409,10 @@ export function App() {
             path="/sales/pre-orders"
             element={<Placeholder title="訂購作業" />}
           />
+          <Route path="/telecom/billing" element={<PhoneBillsPage />} />
           <Route
-            path="/telecom/billing"
-            element={<Placeholder title="代收話費" />}
+            path="/telecom/billing/:id/receipt"
+            element={<PhoneBillReceiptPage />}
           />
           <Route
             path="/telecom/activations"

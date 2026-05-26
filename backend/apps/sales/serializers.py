@@ -5,10 +5,14 @@ from rest_framework import serializers
 from apps.inventory.models import ProductSerial
 
 from .models import (
+    LegacyPurchase,
     SalesOrder,
     SalesOrderItem,
     SalesOrderItemSerial,
     SalesOrderPayment,
+    SalesReturn,
+    SalesReturnItem,
+    SalesReturnItemSerial,
 )
 
 
@@ -194,6 +198,7 @@ class SalesOrderSerializer(serializers.ModelSerializer):
             "invoice_form",
             "invoice_no",
             "invoice_date",
+            "invoice_voided",
             "note",
             "sales_person",
             "sales_person_code",
@@ -221,6 +226,7 @@ class SalesOrderSerializer(serializers.ModelSerializer):
             "sales_person_code",
             "sales_person_name",
             "is_void",
+            "invoice_voided",
             "tax_method_label",
             "subtotal",
             "tax_amount",
@@ -267,3 +273,193 @@ class SalesOrderSerializer(serializers.ModelSerializer):
         self._save_items(so, items_data)
         self._save_payments(so, payments_data)
         return so
+
+
+class LegacyPurchaseSerializer(serializers.ModelSerializer):
+    member_name = serializers.CharField(source="member.name", read_only=True)
+    member_phone = serializers.CharField(source="member.phone", read_only=True)
+    product_sku = serializers.CharField(source="product.sku", read_only=True)
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    amount = serializers.SerializerMethodField()
+
+    def get_amount(self, obj) -> str:
+        return str(obj.amount)
+
+    class Meta:
+        model = LegacyPurchase
+        fields = [
+            "id",
+            "member",
+            "member_name",
+            "member_phone",
+            "product",
+            "product_sku",
+            "product_name",
+            "qty",
+            "unit_price",
+            "amount",
+            "doc_date",
+            "source_no",
+            "serial_no",
+            "note",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "member_name",
+            "member_phone",
+            "product_sku",
+            "product_name",
+            "amount",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class SalesReturnItemSerialSerializer(serializers.ModelSerializer):
+    serial_no = serializers.CharField(source="serial.serial_no", read_only=True)
+
+    class Meta:
+        model = SalesReturnItemSerial
+        fields = ["id", "serial", "serial_no", "line_pos"]
+        read_only_fields = ["id", "serial_no"]
+
+
+class SalesReturnItemSerializer(serializers.ModelSerializer):
+    product_sku = serializers.CharField(source="product.sku", read_only=True)
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    product_requires_serial = serializers.BooleanField(
+        source="product.requires_serial", read_only=True
+    )
+    product_is_virtual = serializers.BooleanField(
+        source="product.is_virtual", read_only=True
+    )
+    serials = SalesReturnItemSerialSerializer(many=True, read_only=True)
+    serial_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        write_only=True,
+        required=False,
+        queryset=ProductSerial.objects.all(),
+    )
+
+    class Meta:
+        model = SalesReturnItem
+        fields = [
+            "id",
+            "line_no",
+            "original_item",
+            "product",
+            "product_sku",
+            "product_name",
+            "product_requires_serial",
+            "product_is_virtual",
+            "qty",
+            "unit_price",
+            "amount",
+            "serials",
+            "serial_ids",
+        ]
+        read_only_fields = [
+            "id",
+            "amount",
+            "product",
+            "product_sku",
+            "product_name",
+            "product_requires_serial",
+            "product_is_virtual",
+        ]
+
+
+class SalesReturnSerializer(serializers.ModelSerializer):
+    items = SalesReturnItemSerializer(many=True, required=False)
+    original_so_no = serializers.CharField(source="original_so.no", read_only=True)
+    original_so_doc_date = serializers.DateField(
+        source="original_so.doc_date", read_only=True
+    )
+    customer_name = serializers.CharField(source="customer.name", read_only=True)
+    customer_phone = serializers.CharField(source="customer.phone", read_only=True)
+    member_name = serializers.CharField(source="member.name", read_only=True)
+    warehouse_code = serializers.CharField(source="warehouse.code", read_only=True)
+    warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
+
+    class Meta:
+        model = SalesReturn
+        fields = [
+            "id",
+            "no",
+            "original_so",
+            "original_so_no",
+            "original_so_doc_date",
+            "customer",
+            "customer_name",
+            "customer_phone",
+            "member",
+            "member_name",
+            "warehouse",
+            "warehouse_code",
+            "warehouse_name",
+            "doc_date",
+            "payment_method",
+            "void_original_invoice",
+            "note",
+            "created_by",
+            "is_void",
+            "subtotal",
+            "tax_amount",
+            "total",
+            "items",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "no",
+            "original_so_no",
+            "original_so_doc_date",
+            "customer_name",
+            "customer_phone",
+            "member_name",
+            "warehouse_code",
+            "warehouse_name",
+            "is_void",
+            "subtotal",
+            "tax_amount",
+            "total",
+            "created_at",
+            "updated_at",
+        ]
+
+    def create(self, validated_data):
+        from datetime import date
+
+        validated_data["doc_date"] = date.today()
+        items_data = validated_data.pop("items", [])
+        # 由 original_so 自動帶 customer/member/warehouse 預設值,讓前端只送 original_so id 即可
+        original_so = validated_data["original_so"]
+        validated_data.setdefault("customer", original_so.customer)
+        validated_data.setdefault("member", original_so.member)
+        validated_data.setdefault("warehouse", original_so.warehouse)
+
+        sr = SalesReturn.objects.create(**validated_data)
+        for idx, item_data in enumerate(items_data, start=1):
+            serial_ids = item_data.pop("serial_ids", [])
+            oi = item_data["original_item"]
+            item_data.setdefault("product", oi.product)
+            item_data.setdefault("unit_price", oi.unit_price)
+            item_data.setdefault("line_no", idx)
+            # amount 在 commit 時計算
+            item = SalesReturnItem.objects.create(
+                sr=sr,
+                tenant=sr.tenant,
+                amount=0,
+                **item_data,
+            )
+            for pos, s in enumerate(serial_ids, start=1):
+                SalesReturnItemSerial.objects.create(
+                    item=item,
+                    tenant=sr.tenant,
+                    serial=s,
+                    line_pos=pos,
+                )
+        return sr

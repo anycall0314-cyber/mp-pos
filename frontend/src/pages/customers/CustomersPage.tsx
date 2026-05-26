@@ -14,7 +14,7 @@ const CUSTOMER_KINDS: { value: CustomerKind; label: string }[] = [
   { value: "other", label: "其他" },
 ];
 
-type TabKey = "all" | CustomerKind | "member";
+type TabKey = "all" | CustomerKind;
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "all", label: "全部" },
@@ -22,7 +22,6 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "peer", label: "同業 / 盤商" },
   { key: "corporate", label: "企業" },
   { key: "other", label: "其他" },
-  { key: "member", label: "會員" },
 ];
 
 type Selection = { kind: "customer"; id: number } | { kind: "new" } | null;
@@ -31,7 +30,6 @@ interface FormState {
   phone: string;
   name: string;
   kind: CustomerKind;
-  is_member: boolean;
   tax_id: string;
   address: string;
   note: string;
@@ -42,7 +40,6 @@ const EMPTY_FORM: FormState = {
   phone: "",
   name: "",
   kind: "individual",
-  is_member: false,
   tax_id: "",
   address: "",
   note: "",
@@ -54,7 +51,6 @@ function toForm(c: Customer): FormState {
     phone: c.phone,
     name: c.name,
     kind: c.kind,
-    is_member: c.is_member,
     tax_id: c.tax_id,
     address: c.address,
     note: c.note,
@@ -76,10 +72,37 @@ export function CustomersPage() {
   const save = useSaveCustomer();
 
   const [query, setQuery] = useState("");
-  const [selection, setSelection] = useState<Selection>(null);
+  const [selection, setSelection] = useState<Selection>(() => {
+    const sel = searchParams.get("selected");
+    const n = sel ? Number(sel) : NaN;
+    return Number.isFinite(n) ? { kind: "customer", id: n } : null;
+  });
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
+
+  useEffect(() => {
+    const sel = searchParams.get("selected");
+    if (!sel) return;
+    const n = Number(sel);
+    if (!Number.isFinite(n)) return;
+    if (selection?.kind === "customer" && selection.id === n) return;
+    setSelection({ kind: "customer", id: n });
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (selection?.kind === "customer") {
+      if (searchParams.get("selected") !== String(selection.id)) {
+        const next = new URLSearchParams(searchParams);
+        next.set("selected", String(selection.id));
+        setSearchParams(next, { replace: true });
+      }
+    } else if (searchParams.has("selected")) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("selected");
+      setSearchParams(next, { replace: true });
+    }
+  }, [selection]);
 
   const customers = useMemo(() => {
     const list = result.data ?? [];
@@ -88,7 +111,6 @@ export function CustomersPage() {
 
   const tabFiltered = useMemo(() => {
     if (tab === "all") return customers;
-    if (tab === "member") return customers.filter((c) => c.is_member);
     return customers.filter((c) => c.kind === tab);
   }, [customers, tab]);
 
@@ -116,8 +138,7 @@ export function CustomersPage() {
     } else if (selection?.kind === "new") {
       setForm({
         ...EMPTY_FORM,
-        kind: tab === "all" || tab === "member" ? "individual" : tab,
-        is_member: tab === "member",
+        kind: tab === "all" ? "individual" : tab,
       });
       setError(null);
       setSavedFlash(false);
@@ -162,7 +183,6 @@ export function CustomersPage() {
       phone,
       name,
       kind: form.kind,
-      is_member: form.is_member,
       tax_id: form.tax_id.trim(),
       address: form.address.trim(),
       note: form.note.trim(),
@@ -216,9 +236,7 @@ export function CustomersPage() {
             const count =
               t.key === "all"
                 ? customers.length
-                : t.key === "member"
-                  ? customers.filter((c) => c.is_member).length
-                  : customers.filter((c) => c.kind === t.key).length;
+                : customers.filter((c) => c.kind === t.key).length;
             return (
               <button
                 key={t.key}
@@ -277,7 +295,6 @@ export function CustomersPage() {
                       <th>姓名 / 名稱</th>
                       <th style={{ width: 120 }}>電話</th>
                       <th style={{ width: 90 }}>類別</th>
-                      <th style={{ width: 44 }}>會員</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -296,18 +313,11 @@ export function CustomersPage() {
                           {c.phone || "—"}
                         </td>
                         <td>{c.kind_label}</td>
-                        <td
-                          style={{
-                            color: c.is_member ? "#80d090" : "var(--text-dim)",
-                          }}
-                        >
-                          {c.is_member ? "會員" : "—"}
-                        </td>
                       </tr>
                     ))}
                     {filtered.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="md-empty">
+                        <td colSpan={3} className="md-empty">
                           {query ? "查無客戶" : "此分類尚無客戶"}
                         </td>
                       </tr>
@@ -368,19 +378,6 @@ export function CustomersPage() {
                       </option>
                     ))}
                   </select>
-                </dd>
-                <dt>會員</dt>
-                <dd>
-                  <label
-                    style={{ display: "inline-flex", gap: 6, alignItems: "center" }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={form.is_member}
-                      onChange={(e) => patch("is_member", e.target.checked)}
-                    />
-                    {form.is_member ? "會員" : "非會員"}
-                  </label>
                 </dd>
                 <dt>統一編號</dt>
                 <dd>

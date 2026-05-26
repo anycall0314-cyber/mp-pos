@@ -61,6 +61,15 @@ class PettyExpense(TenantOwnedModel):
         blank=True,
         help_text="例:房東 / 7-11 / 中華電信",
     )
+    handled_by = models.ForeignKey(
+        "parties.SalesPerson",
+        on_delete=models.PROTECT,
+        related_name="petty_expenses_handled",
+        null=True,
+        blank=True,
+        verbose_name="經手人",
+        help_text="實際支出的執行人(從業務員主檔挑);用於老闆對帳",
+    )
     note = models.CharField("備註", max_length=200, blank=True)
     is_void = models.BooleanField("作廢", default=False)
 
@@ -140,6 +149,15 @@ class CashAdjustment(TenantOwnedModel):
         default=0,
         help_text="正數,方向由 direction 決定 + / -",
     )
+    handled_by = models.ForeignKey(
+        "parties.SalesPerson",
+        on_delete=models.PROTECT,
+        related_name="cash_adjustments_handled",
+        null=True,
+        blank=True,
+        verbose_name="經手人",
+        help_text="實際執行調整的人(從業務員主檔挑);用於老闆對帳",
+    )
     note = models.CharField("備註", max_length=200, blank=True)
     is_void = models.BooleanField("作廢", default=False)
 
@@ -161,4 +179,90 @@ class CashAdjustment(TenantOwnedModel):
             if self.tenant_id is None:
                 raise ValueError("建立現金調整必須先指定 tenant")
             self.no = self.tenant.issue_next_cash_adj_no()
+        super().save(*args, **kwargs)
+
+
+class PhoneBillCollection(TenantOwnedModel):
+    """代收電話費單。
+
+    店家代收客戶繳的電信費(中華 / 台星 / 遠傳 ...),純現金收入。
+    儲存即生效,要取消用 is_void。
+    自動編號:PB-{5 位流水}。
+    收費歸到 warehouse(門市)當日現金櫃流水。
+    member 是選填:若 phone_no 對到會員主檔則自動帶入,沒對到就 null。
+    """
+
+    no = models.CharField(
+        "單號",
+        max_length=20,
+        editable=False,
+        blank=True,
+        help_text="系統自動產生:PB-{5位流水}",
+    )
+    warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.PROTECT,
+        related_name="phone_bills",
+        verbose_name="門市",
+        help_text="收費歸到哪家門市的現金櫃",
+    )
+    doc_date = models.DateField("單據日期", default=date.today)
+    carrier = models.ForeignKey(
+        "parties.Carrier",
+        on_delete=models.PROTECT,
+        related_name="phone_bills",
+        verbose_name="電信業者",
+    )
+    phone_no = models.CharField(
+        "電話號碼",
+        max_length=20,
+        help_text="繳費對應的完整電話號碼",
+    )
+    amount = models.DecimalField(
+        "金額",
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        help_text="繳費金額(整數元)",
+    )
+    id_no = models.CharField(
+        "身分證字號",
+        max_length=20,
+        help_text="收據顯示時會做隱碼處理",
+    )
+    handled_by = models.ForeignKey(
+        "parties.SalesPerson",
+        on_delete=models.PROTECT,
+        related_name="phone_bills_handled",
+        verbose_name="經手人",
+    )
+    member = models.ForeignKey(
+        "parties.Member",
+        on_delete=models.SET_NULL,
+        related_name="phone_bills",
+        null=True,
+        blank=True,
+        verbose_name="會員",
+        help_text="phone_no 對到會員主檔時自動掛上",
+    )
+    is_void = models.BooleanField("作廢", default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "no"], name="uniq_phone_bill_no"
+            ),
+        ]
+        ordering = ["-doc_date", "-id"]
+        verbose_name = "代收話費"
+        verbose_name_plural = "代收話費"
+
+    def __str__(self) -> str:
+        return f"{self.no} {self.phone_no} {self.amount}"
+
+    def save(self, *args, **kwargs):
+        if not self.no:
+            if self.tenant_id is None:
+                raise ValueError("建立代收話費單必須先指定 tenant")
+            self.no = self.tenant.issue_next_phone_bill_no()
         super().save(*args, **kwargs)

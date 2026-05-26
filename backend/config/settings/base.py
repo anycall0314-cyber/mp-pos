@@ -20,6 +20,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "rest_framework.authtoken",
     "corsheaders",
     "django_filters",
     "apps.core",
@@ -96,12 +97,17 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
-    # MVP 尚未實作登入,API 走開放(AllowAny)。
-    # 刻意清空 authentication classes:DRF 預設含 SessionAuthentication,
-    # 一旦使用者登入過 Django admin 取得 session cookie,前端跨來源 POST
-    # 就會被 SessionAuthentication 的 CSRF 檢查擋下(Origin checking failed)。
-    # 之後做正式登入(Phase 1.8)時,改放 JWT / Token 等不依賴 cookie 的認證。
-    "DEFAULT_AUTHENTICATION_CLASSES": [],
+    # 認證走 TokenAuthentication(/auth/login 取 token,後續 API 帶
+    # `Authorization: Token xxx`)。刻意不放 SessionAuthentication 避免
+    # CSRF / cookie 問題。
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+    ],
+    # 預設要登入才能呼叫 API;個別 view 用 @permission_classes([AllowAny])
+    # 覆寫(例如 /auth/login/)。
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
 }
 
 CORS_ALLOWED_ORIGINS = [

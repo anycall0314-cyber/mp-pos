@@ -218,6 +218,32 @@ body { background: var(--bg); color: var(--text); }
   gap: 2px 12px;
   align-items: start;
 }
+
+/* 進貨單頭:4 欄 2 排,長欄(供應商/入庫倉/備註)寬,短欄(日期/類型/發票)窄 */
+.purchase-header-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.6fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.4fr);
+  grid-template-areas:
+    "supplier wh      date    tax"
+    "invno    invdate payment note";
+  gap: 2px 12px;
+  align-items: start;
+}
+.purchase-header-grid .field { margin-bottom: 6px; }
+.purchase-header-grid .field-label { margin-bottom: 2px; font-size: 13px; }
+.purchase-header-grid .field input,
+.purchase-header-grid .field select {
+  padding: 3px 8px;
+  font-size: 14px;
+}
+.purchase-header-grid .short-field input,
+.purchase-header-grid .short-field select {
+  max-width: 180px;
+}
+.purchase-header-grid .medium-field {
+  max-width: 280px;
+}
 .sales-header-grid .field { margin-bottom: 6px; }
 .sales-header-grid .field-label { margin-bottom: 2px; font-size: 13px; }
 .sales-header-grid .field input,

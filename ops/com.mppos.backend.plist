@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd plist:讓 gunicorn 開機自動啟動 + 異常時自動重啟。
+
+  使用前先把 {{USER}} 兩處替換成你的使用者名(在 Mac mini 跑 `whoami` 看)。
+
+  安裝:
+    sed "s/{{USER}}/$(whoami)/g" ops/com.mppos.backend.plist > ~/Library/LaunchAgents/com.mppos.backend.plist
+    launchctl load -w ~/Library/LaunchAgents/com.mppos.backend.plist
+
+  之後:
+    啟動: launchctl kickstart -k gui/$(id -u)/com.mppos.backend
+    停止: launchctl unload ~/Library/LaunchAgents/com.mppos.backend.plist
+    log : tail -f ~/MP_POS系統/logs/gunicorn.out  (與 .err)
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.mppos.backend</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/{{USER}}/MP_POS系統/ops/run-backend.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/{{USER}}/MP_POS系統</string>
+
+  <key>StandardOutPath</key>
+  <string>/Users/{{USER}}/MP_POS系統/logs/gunicorn.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/{{USER}}/MP_POS系統/logs/gunicorn.err</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+</dict>
+</plist>

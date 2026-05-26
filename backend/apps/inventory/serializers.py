@@ -23,6 +23,8 @@ class WarehouseSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
             "id",
             "code",
             "name",
+            "address",
+            "phone",
             "is_active",
             "created_at",
             "updated_at",

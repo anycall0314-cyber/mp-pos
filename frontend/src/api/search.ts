@@ -4,6 +4,7 @@ import type {
   Carrier,
   Category,
   Customer,
+  Member,
   Paginated,
   Product,
   ProductSerial,
@@ -137,12 +138,21 @@ export async function searchProductsForSales(
           },
         }
       : (p as SalesProductHit);
+    const stockLabel = p.is_virtual ? "" : `在庫 ${p.stock_qty}`;
     return {
       id: p.id,
       label: p.name,
       secondary: matched
-        ? `IMEI ${matched.serial_no} · ${p.sku}`
-        : [p.sku, p.category_name].filter(Boolean).join(" / "),
+        ? [
+            `IMEI ${matched.serial_no}`,
+            p.sku,
+            stockLabel,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : [p.sku, p.category_name, stockLabel]
+            .filter(Boolean)
+            .join(" / "),
       payload: hit,
     };
   });
@@ -185,25 +195,23 @@ export async function searchCustomers(
   return data.map((c) => ({
     id: c.id,
     label: c.name || c.phone || `#${c.id}`,
-    secondary: [c.phone, c.is_member ? "會員" : null]
-      .filter(Boolean)
-      .join(" / "),
+    secondary: [c.phone, c.kind_label].filter(Boolean).join(" / "),
     payload: c,
   }));
 }
 
-// 銷貨單「會員」欄位用:吃電話/姓名/統編,僅回 is_member=true 的客戶
+// 銷貨單「會員」欄位用:從獨立 Member 主檔搜尋
 export async function searchMembers(
   query: string,
-): Promise<ComboOption<Customer>[]> {
-  const data = await fetchPaginated<Customer>(
-    `/customers/?${qs({ search: query, is_member: "true", page_size: LIMIT })}`,
+): Promise<ComboOption<Member>[]> {
+  const data = await fetchPaginated<Member>(
+    `/members/?${qs({ search: query, page_size: LIMIT })}`,
   );
-  return data.map((c) => ({
-    id: c.id,
-    label: c.name || c.phone || `#${c.id}`,
-    secondary: [c.phone, c.kind_label].filter(Boolean).join(" / "),
-    payload: c,
+  return data.map((m) => ({
+    id: m.id,
+    label: m.name || m.phone || `#${m.id}`,
+    secondary: [m.phone, m.code].filter(Boolean).join(" / "),
+    payload: m,
   }));
 }
 

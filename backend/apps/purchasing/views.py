@@ -3,6 +3,8 @@ from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.core.warehouse_scoping import WarehouseScopedMixin
+
 from .models import PurchaseOrder, PurchaseOrderCategory
 from .serializers import (
     PurchaseOrderCategorySerializer,
@@ -29,6 +31,7 @@ class PurchaseOrderCategoryViewSet(viewsets.ModelViewSet):
 
 
 class PurchaseOrderViewSet(
+    WarehouseScopedMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.CreateModelMixin,

@@ -68,6 +68,14 @@ export function PettyExpensesPage() {
     },
     { key: "payee", header: "收款對象", render: (r) => r.payee || "—" },
     {
+      key: "handled_by",
+      header: "經手人",
+      render: (r) =>
+        r.handled_by_name
+          ? `${r.handled_by_code} ${r.handled_by_name}`
+          : "—",
+    },
+    {
       key: "void",
       header: "狀態",
       render: (r) =>
@@ -111,6 +119,12 @@ export function PettyExpensesPage() {
             <dd>{r.payment_method_name}</dd>
             <dt>收款對象</dt>
             <dd>{r.payee || "—"}</dd>
+            <dt>經手人</dt>
+            <dd>
+              {r.handled_by_name
+                ? `${r.handled_by_code} ${r.handled_by_name}`
+                : "—"}
+            </dd>
             <dt>備註</dt>
             <dd>{r.note || "—"}</dd>
             <dt>狀態</dt>

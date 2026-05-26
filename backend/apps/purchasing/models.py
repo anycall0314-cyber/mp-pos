@@ -34,6 +34,8 @@ class PurchaseOrder(TenantOwnedModel):
     class TaxMethod(models.TextChoices):
         TAXABLE_INCLUDED = "taxable_included", "應稅內含"
         TAXABLE_EXCLUDED = "taxable_excluded", "應稅外加"
+        UNTAXED = "untaxed", "未稅"
+        # 舊資料相容(已不在 UI 顯示):
         TAX_FREE = "tax_free", "免稅"
         ZERO_TAX = "zero_tax", "零稅"
 

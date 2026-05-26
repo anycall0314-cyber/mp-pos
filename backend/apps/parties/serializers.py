@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Carrier, Customer, SalesPerson, SimCard, Supplier, TelecomPlan
+from .models import Carrier, Customer, Member, SalesPerson, SimCard, Supplier, TelecomPlan
 
 
 class _TenantUniqueMixin:
@@ -48,7 +48,6 @@ class CustomerSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
             "name",
             "kind",
             "kind_label",
-            "is_member",
             "tax_id",
             "address",
             "note",
@@ -57,6 +56,25 @@ class CustomerSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "code", "kind_label", "created_at", "updated_at"]
+
+
+class MemberSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
+    class Meta:
+        model = Member
+        fields = [
+            "id",
+            "code",
+            "name",
+            "phone",
+            "national_id",
+            "birthday",
+            "address",
+            "note",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "code", "created_at", "updated_at"]
 
 
 class SalesPersonSerializer(_TenantUniqueMixin, serializers.ModelSerializer):

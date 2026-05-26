@@ -5,9 +5,9 @@ from .models import ProductSerial, StockMovement, Warehouse
 
 @admin.register(Warehouse)
 class WarehouseAdmin(admin.ModelAdmin):
-    list_display = ("code", "name", "is_active")
+    list_display = ("code", "name", "address", "phone", "is_active")
     list_filter = ("is_active",)
-    search_fields = ("code", "name")
+    search_fields = ("code", "name", "address", "phone")
 
 
 @admin.register(ProductSerial)

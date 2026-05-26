@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     CashAdjustmentViewSet,
     PettyExpenseViewSet,
+    PhoneBillCollectionViewSet,
     business_daily_report,
 )
 
@@ -12,6 +13,7 @@ router.register(r"petty-expenses", PettyExpenseViewSet, basename="petty-expense"
 router.register(
     r"cash-adjustments", CashAdjustmentViewSet, basename="cash-adjustment"
 )
+router.register(r"phone-bills", PhoneBillCollectionViewSet, basename="phone-bill")
 
 urlpatterns = router.urls + [
     path(
