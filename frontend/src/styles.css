@@ -1433,3 +1433,211 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   font-weight: 600;
   margin-left: 4px;
 }
+
+/* ─────────────────────────────────────────────────────────
+ * 桌機/平板 user info(>= 769px)
+ * ───────────────────────────────────────────────────────── */
+.user-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 4px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.user-pill-text { display: flex; flex-direction: column; line-height: 1.2; }
+.user-pill-name { color: var(--text); font-weight: 600; }
+.user-pill-meta { color: var(--text-dim); }
+.user-pill-logout { padding: 4px 10px; font-size: 12px; }
+
+/* 桌機版:漢堡按鈕隱藏 */
+.hamburger { display: none; }
+
+/* ─────────────────────────────────────────────────────────
+ * 手機 / 小平板響應式(<= 768px)
+ *
+ * 設計目標:整個系統在手機上至少能用、不會跑版、按鈕大到能戳。
+ *  - topbar 變漢堡選單
+ *  - master-detail 變上下 stack
+ *  - drawer / modal 全螢幕
+ *  - 多欄 grid 變單欄
+ *  - 表格保持水平捲動、字略縮小
+ * ───────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* topbar 整體 */
+  .topbar {
+    padding: 0 8px;
+    gap: 8px;
+    min-height: 44px;
+  }
+  .brand { font-size: 14px; letter-spacing: 0.5px; }
+
+  /* 漢堡按鈕顯示 */
+  .hamburger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 28px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 18px;
+    padding: 0;
+    flex-shrink: 0;
+  }
+  .hamburger:active { background: var(--row-hover); }
+
+  /* 預設隱藏 nav */
+  .topnav { display: none; }
+
+  /* nav 展開:全螢幕覆蓋 */
+  .topnav.open {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 44px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--panel);
+    padding: 8px;
+    z-index: 100;
+    gap: 2px;
+    overflow-y: auto;
+    border-top: 1px solid var(--border);
+  }
+  .topnav.open .topnav-group { width: 100%; }
+  .topnav.open .topnav-link {
+    width: 100%;
+    padding: 12px 16px;
+    justify-content: space-between;
+    font-size: 16px;
+  }
+  /* 展開後 dropdown 改 inline,不浮起來 */
+  .topnav.open .topnav-dropdown {
+    position: static;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+    padding-left: 0;
+    margin-top: 2px;
+  }
+  .topnav.open .topnav-dropdown-item {
+    padding: 12px 16px 12px 32px;
+    font-size: 15px;
+  }
+
+  /* user-pill 簡化:只留 username,角色資訊隱藏(預留漢堡內看?) */
+  .user-pill {
+    padding-left: 6px;
+    margin-left: 0;
+    border-left: 0;
+    flex-shrink: 0;
+  }
+  .user-pill-meta { display: none; }
+  .user-pill-logout { padding: 6px 10px; font-size: 13px; }
+
+  /* theme-toggle 在手機顯示但更小 */
+  .theme-toggle { width: 30px; height: 26px; }
+
+  /* Master-Detail:上下 stack;detail 預設 fold,master 站滿一頁 */
+  .md-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+  }
+  .md-master {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .md-detail { display: none; }
+  /* 加 .md-show-detail 時(可由 React 控制),才顯示 detail 隱藏 master */
+  .md-layout.md-show-detail .md-master { display: none; }
+  .md-layout.md-show-detail .md-detail { display: grid; }
+
+  .md-table th, .md-table td { padding: 8px 10px; font-size: 13px; }
+  .md-detail-body dl { grid-template-columns: 1fr; row-gap: 4px; }
+  .md-detail-body dt {
+    font-weight: 600;
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 8px;
+  }
+
+  /* Drawer 全螢幕 */
+  .drawer {
+    width: 100% !important;
+    border-left: 0;
+  }
+  .drawer-backdrop { background: var(--bg); }
+
+  /* Modal 全螢幕(若有 .modal class) */
+  .modal { width: 100% !important; max-width: 100% !important; }
+
+  /* 多欄 form grid 改單欄 */
+  .field-row, .field-row-3 { grid-template-columns: 1fr; }
+
+  /* 銷貨 / 進貨 entry header 大 grid 改 stack */
+  .sales-header-grid,
+  .purchase-header-grid {
+    display: flex !important;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sales-header-grid .short-field,
+  .sales-header-grid .medium-field,
+  .purchase-header-grid .short-field,
+  .purchase-header-grid .medium-field {
+    width: 100%;
+  }
+  .sales-header-grid .short-field input,
+  .sales-header-grid .short-field select,
+  .sales-header-grid .medium-field input,
+  .sales-header-grid .medium-field select,
+  .purchase-header-grid .short-field input,
+  .purchase-header-grid .short-field select,
+  .purchase-header-grid .medium-field input,
+  .purchase-header-grid .medium-field select {
+    width: 100%;
+  }
+
+  /* entry-body-split (側欄 + 主區) 改 stack */
+  .entry-body-split { display: flex; flex-direction: column; }
+  .serial-aside, .serial-aside-wide { width: 100% !important; }
+
+  /* Toolbar 換行 */
+  .page-toolbar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 40px;
+    padding: 8px;
+    gap: 6px;
+  }
+  .page-toolbar-mid { width: 100%; }
+  .page-toolbar-actions { width: 100%; justify-content: flex-end; }
+
+  /* line-table 水平捲動 wrapper(在父元素加 overflow-x:auto 就行;
+     但 line-table 本身字小一點 + cell padding 縮) */
+  .line-table { font-size: 13px; }
+  .line-table th, .line-table td { padding: 6px 8px; }
+
+  /* 觸控友善:btn 高一點、input 字 16px 避免 iOS 自動 zoom */
+  .btn {
+    padding: 8px 14px;
+    min-height: 36px;
+    font-size: 14px;
+  }
+  input, select, textarea { font-size: 16px; }
+  input[type="checkbox"], input[type="radio"] {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* page padding 縮小,寸土寸金 */
+  .entry-body { padding: 8px; }
+  .entry-header { margin-bottom: 8px; }
+}

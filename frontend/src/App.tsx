@@ -220,8 +220,11 @@ function readTheme(): Theme {
 
 export function App() {
   const [theme, setTheme] = useState<Theme>(readTheme);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
   const { user, loading: authLoading, logout } = useAuth();
+  // 路由切換自動關閉漢堡選單
+  useEffect(() => setMobileNavOpen(false), [location.pathname]);
   const focusMode = new URLSearchParams(location.search).get("focus") === "1";
   // 列印頁面(/print/、/receipt、/labels)不渲染 topbar 與 main 框,避免列印時帶到導覽
   const isPrintMode =
@@ -266,11 +269,19 @@ export function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${mobileNavOpen ? " mobile-nav-open" : ""}`}>
       {!focusMode && !isPrintMode && (
       <header className="topbar">
+        <button
+          type="button"
+          className="hamburger"
+          onClick={() => setMobileNavOpen((v) => !v)}
+          aria-label={mobileNavOpen ? "關閉選單" : "打開選單"}
+        >
+          {mobileNavOpen ? "✕" : "☰"}
+        </button>
         <div className="brand">MP POS</div>
-        <nav className="topnav">
+        <nav className={`topnav${mobileNavOpen ? " open" : ""}`}>
           {(user?.profile?.role === "platform_admin"
             ? [PLATFORM_NAV_GROUP, ...NAV_GROUPS]
             : NAV_GROUPS
@@ -301,23 +312,10 @@ export function App() {
           )}
         </button>
         {user && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              marginLeft: 4,
-              paddingLeft: 12,
-              borderLeft: "1px solid var(--border)",
-              fontSize: 12,
-              color: "var(--text-dim)",
-            }}
-          >
-            <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
-              <span style={{ color: "var(--text)", fontWeight: 600 }}>
-                {user.username}
-              </span>
-              <span>
+          <div className="user-pill">
+            <div className="user-pill-text">
+              <span className="user-pill-name">{user.username}</span>
+              <span className="user-pill-meta">
                 {user.profile?.role_label ?? "—"}
                 {user.profile?.tenant_name
                   ? ` · ${user.profile.tenant_name}`
@@ -329,8 +327,7 @@ export function App() {
             </div>
             <button
               type="button"
-              className="btn"
-              style={{ padding: "4px 10px", fontSize: 12 }}
+              className="btn user-pill-logout"
               onClick={() => logout()}
               title="登出"
             >
