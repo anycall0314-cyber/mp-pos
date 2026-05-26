@@ -34,11 +34,13 @@ FRONTEND_DIST = Path(
     )
 )
 
-# 讓 Django 把 dist/ 內所有 assets 都當 static 提供(JS/CSS/圖片)
-# /assets/* → dist/assets/*
+# 把整個 dist/ 收進 staticfiles/,WhiteNoise 從 /static/* 提供。
+# Vite build 已設 base="/static/",bundle 內 asset 路徑會自動帶 /static/ 前綴,
+# 所以 dist/assets/index-xxx.js → staticfiles/assets/index-xxx.js
+# → /static/assets/index-xxx.js 對應上。
 STATICFILES_DIRS = [
-    ("assets", FRONTEND_DIST / "assets"),
+    FRONTEND_DIST,
 ]
 
-# 同時讓 TEMPLATES 能找到 dist/index.html(供 catch-all view 渲染)
+# 讓 TEMPLATES 能找到 dist/index.html(catch-all view 渲染 SPA 入口)
 TEMPLATES[0]["DIRS"] = [FRONTEND_DIST]

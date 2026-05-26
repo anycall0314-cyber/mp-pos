@@ -25,18 +25,24 @@ set -a
 [ -f .env ] && source .env
 set +a
 .venv/bin/python manage.py migrate --noinput
-.venv/bin/python manage.py collectstatic --noinput
 cd ..
 
 echo ""
 echo "── 3/5 frontend deps + build ─────────────────"
+# 一定要先 build 出新的 dist/,才能 collectstatic 把新版 asset 收進去
 cd frontend
 npm ci --silent
 npm run build
 cd ..
 
 echo ""
-echo "── 4/5 reload backend service ────────────────"
+echo "── 4/5 collectstatic(把 dist/ 收進 staticfiles/)──"
+cd backend
+.venv/bin/python manage.py collectstatic --noinput
+cd ..
+
+echo ""
+echo "── 5/5 reload backend service ────────────────"
 # launchd 標籤;裝 plist 時用這個 label
 LABEL="com.mppos.backend"
 if launchctl list | grep -q "$LABEL"; then
@@ -48,5 +54,5 @@ else
 fi
 
 echo ""
-echo "── 5/5 完成 ──────────────────────────────────"
+echo "── 完成 ──────────────────────────────────────"
 echo "✓ 部署完成 $(date '+%Y-%m-%d %H:%M:%S')"
