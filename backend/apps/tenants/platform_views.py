@@ -19,6 +19,7 @@ from apps.parties.models import SalesPerson
 
 from .models import Tenant, UserProfile
 from .permissions import IsPlatformAdmin
+from .services import seed_tenant_defaults
 
 
 # ────────────────────────────────────────────────────────────
@@ -58,8 +59,8 @@ class PlatformTenantSerializer(serializers.ModelSerializer):
 
 
 class PlatformTenantViewSet(viewsets.ModelViewSet):
-    """經銷商主檔。新建後該經銷商初始沒有任何使用者 / 門市,接著用
-    /platform/users/ 跟 /platform/warehouses/ 補。
+    """經銷商主檔。新建後自動 seed 發票類型 + 付款方式;
+    使用者 / 門市仍須用 /platform/users/ 跟 /platform/warehouses/ 補。
     """
 
     permission_classes = [IsAuthenticated, IsPlatformAdmin]
@@ -67,6 +68,10 @@ class PlatformTenantViewSet(viewsets.ModelViewSet):
     queryset = Tenant.objects.all().order_by("id")
     search_fields = ["code", "name"]
     filterset_fields = ["is_active"]
+
+    def perform_create(self, serializer):
+        tenant = serializer.save()
+        seed_tenant_defaults(tenant)
 
 
 # ────────────────────────────────────────────────────────────

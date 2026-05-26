@@ -76,3 +76,57 @@ def assign_invoice_no(tenant, invoice_type_code: str) -> str:
         raise InvoiceTrackError(
             f"發票類型「{invoice_type.name}」沒有可用字軌,請至系統設定新增"
         )
+
+
+# ─────────────────────────────────────────────────────────
+# 新經銷商(Tenant)初始 seed:發票類型 + 付款方式
+# ─────────────────────────────────────────────────────────
+
+INVOICE_TYPE_SEED = [
+    # (code, name, sort_order, is_default)
+    ("e_invoice", "電子發票", 10, True),
+    ("ev_dup", "電子二聯式", 20, False),
+    ("ev_tri", "電子三聯式", 30, False),
+    ("hand_dup", "手開二聯", 40, False),
+    ("hand_tri", "手開三聯", 50, False),
+    ("none", "免用統一發票", 90, False),
+]
+
+PAYMENT_METHOD_SEED = [
+    # (code, name, kind, sort_order, is_default)
+    ("cash", "現金", "cash", 10, True),
+    ("card", "信用卡", "non_cash", 20, False),
+    ("transfer", "匯款", "transfer", 30, False),
+]
+
+
+def seed_tenant_defaults(tenant):
+    """為剛建立的 tenant 補上預設發票類型與付款方式。
+
+    可重複呼叫,既有資料用 get_or_create 不會重複建。
+    """
+    from .models import InvoiceType, PaymentMethod
+
+    for code, name, sort_order, is_default in INVOICE_TYPE_SEED:
+        InvoiceType.objects.get_or_create(
+            tenant=tenant,
+            code=code,
+            defaults={
+                "name": name,
+                "sort_order": sort_order,
+                "is_active": True,
+                "is_default": is_default,
+            },
+        )
+    for code, name, kind, sort_order, is_default in PAYMENT_METHOD_SEED:
+        PaymentMethod.objects.get_or_create(
+            tenant=tenant,
+            code=code,
+            defaults={
+                "name": name,
+                "kind": kind,
+                "sort_order": sort_order,
+                "is_active": True,
+                "is_default": is_default,
+            },
+        )
