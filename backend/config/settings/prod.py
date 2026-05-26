@@ -24,7 +24,10 @@ SECURITY_MW = "django.middleware.security.SecurityMiddleware"
 if SECURITY_MW in MIDDLEWARE:
     _idx = MIDDLEWARE.index(SECURITY_MW)
     MIDDLEWARE.insert(_idx + 1, "whitenoise.middleware.WhiteNoiseMiddleware")
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+# CompressedStaticFilesStorage:只壓縮、不做 hash manifest。
+# ManifestStaticFilesStorage 太嚴格,Vite bundle 內若有它解不開的 asset url 會
+# 整個 collectstatic 失敗或 serve 時 404。一般 SPA 部署用 Compressed 就夠了。
+STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
 
 # ── 前端 React build(dist/)路徑 ──
 # 部署 script 跑完 `npm run build` 後 dist/ 會在 frontend/ 底下
