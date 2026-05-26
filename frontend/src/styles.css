@@ -1580,7 +1580,10 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   }
   .drawer-backdrop { background: var(--bg); }
 
-  /* Modal 全螢幕:覆寫 modal-card 跟所有 *-modal 變體的固定寬度 */
+  /* Modal 全螢幕:覆寫 modal-card 跟所有 *-modal 變體的固定寬度
+   * iOS Safari 的 100vh 包含網址列 / 底部 tab bar 的高度,實際可見區域比較小,
+   * 會導致 modal-actions(關閉按鈕)被切掉。用 100dvh(dynamic viewport)
+   * 跟 env(safe-area-inset-*) 解決,iOS 15.4+ / Chrome 108+ 支援。 */
   .modal-overlay {
     padding: 0;
     align-items: stretch;
@@ -1591,25 +1594,35 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
     width: 100vw !important;
     max-height: 100vh !important;
     height: 100vh;
+    max-height: 100dvh !important;
+    height: 100dvh;
     margin: 0;
     border-radius: 0;
     padding: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
     display: flex;
     flex-direction: column;
   }
   .modal-card .modal-title {
     font-size: 16px;
     margin-bottom: 8px;
+    flex-shrink: 0;
   }
   .modal-card .modal-body {
     flex: 1;
+    min-height: 0;
     max-height: none !important;
     overflow-y: auto;
   }
   .modal-card .modal-actions {
+    flex-shrink: 0;
     margin-top: 8px;
     padding-top: 8px;
     border-top: 1px solid var(--border);
+    /* 黏在底部不被內容推下去 */
+    position: sticky;
+    bottom: 0;
+    background: var(--panel-2);
   }
 
   /* 多欄 form grid 改單欄 */
