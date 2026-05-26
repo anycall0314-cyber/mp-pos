@@ -47,3 +47,47 @@ STATICFILES_DIRS = [
 
 # 讓 TEMPLATES 能找到 dist/index.html(catch-all view 渲染 SPA 入口)
 TEMPLATES[0]["DIRS"] = [FRONTEND_DIST]
+
+# ── LOGGING ────────────────────────────────────────────────
+# Django 預設 DEBUG=False 時不會把 500 traceback 印出來,只會發 email 給 ADMINS。
+# 這裡強制把 ERROR 寫到 stderr → gunicorn.err,方便 debug。
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[{asctime}] {levelname} {name} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "loggers": {
+        "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "django.server": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+    },
+}
+
+# ── CSRF / Origin 信任 ─────────────────────────────────────
+# Django 4+:DEBUG=False + HTTPS POST 時,Origin 必須在 CSRF_TRUSTED_ORIGINS。
+# 從 DJANGO_ALLOWED_HOSTS 自動推導 https:// 版本,省設定。
+import os as _os
+
+_hosts = [
+    h.strip()
+    for h in _os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
+    if h.strip() and h.strip() != "*" and not h.startswith(".")
+]
+CSRF_TRUSTED_ORIGINS = [f"https://{h}" for h in _hosts]
