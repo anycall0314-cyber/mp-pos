@@ -322,12 +322,7 @@ export function PurchaseBatchPasteModal({
                 }}
               >
                 <div style={{ fontSize: 15, color: "var(--text-dim)", flex: 1 }}>
-                  從 Excel 複製貼入(每行一筆),欄位順序:
-                  <strong style={{ color: "var(--text)" }}>
-                    {" "}
-                    商品 [Tab] 數量 [Tab] 單價 [Tab] 序號(分號 / 換行隔開,沒序號可留空)
-                  </strong>
-                  。商品可用品名、品號或條碼,系統會自動比對,模糊符合會給你下拉再選。
+                  從 Excel 複製貼入,商品可用品名、品號或條碼,系統會自動比對,模糊符合會給你下拉再選。
                 </div>
                 <button
                   type="button"
