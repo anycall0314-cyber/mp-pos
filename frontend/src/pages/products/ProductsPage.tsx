@@ -237,23 +237,32 @@ export function ProductsPage() {
       <Toolbar
         title=""
         actions={
-          <>
-            <button className="btn" onClick={() => setExpanderOpen(true)}>
-              型號展開
-            </button>
-            <button className="btn" onClick={() => setBulkOpen(true)}>
-              批次貼上
-            </button>
+          leftTab === "products" ? (
+            <>
+              <button className="btn" onClick={() => setExpanderOpen(true)}>
+                型號展開
+              </button>
+              <button className="btn" onClick={() => setBulkOpen(true)}>
+                批次貼上
+              </button>
+              <button
+                className="btn primary"
+                onClick={() => {
+                  setDrawerInitial(null);
+                  setDrawerOpen(true);
+                }}
+              >
+                + 新增商品
+              </button>
+            </>
+          ) : (
             <button
               className="btn primary"
-              onClick={() => {
-                setDrawerInitial(null);
-                setDrawerOpen(true);
-              }}
+              onClick={startCreatingCategory}
             >
-              + 新增商品
+              + 新增類別
             </button>
-          </>
+          )
         }
       >
         <div className="tab-switcher">
@@ -395,13 +404,6 @@ export function ProductsPage() {
           <section className="pc-section pc-section-categories category-mgr">
             <div className="pc-section-header">
               <span>類別(拖拉重排)</span>
-              <button
-                type="button"
-                className="btn pc-section-header-btn"
-                onClick={startCreatingCategory}
-              >
-                + 新類別
-              </button>
             </div>
             <div className="pc-section-search">
               <input
