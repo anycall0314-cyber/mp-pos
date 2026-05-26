@@ -45,12 +45,23 @@ echo ""
 echo "── 5/5 reload backend service ────────────────"
 # launchd 標籤;裝 plist 時用這個 label
 LABEL="com.mppos.backend"
-if launchctl list | grep -q "$LABEL"; then
-  launchctl kickstart -k "gui/$(id -u)/$LABEL"
-  echo "✓ 已重啟 $LABEL"
+PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+if [ -f "$PLIST" ]; then
+  # 先試 kickstart(快);失敗的話 fallback 到 unload + load(穩)
+  if launchctl kickstart -k "gui/$(id -u)/$LABEL" 2>/dev/null; then
+    echo "✓ 已 kickstart $LABEL"
+  else
+    echo "  kickstart 失敗,改用 unload + load 重啟…"
+    launchctl unload "$PLIST" 2>/dev/null || true
+    # 順手砍掉任何殘留的 gunicorn,避免 port 卡住
+    pkill -f gunicorn 2>/dev/null || true
+    sleep 1
+    launchctl load -w "$PLIST"
+    echo "✓ 已重新 load $LABEL"
+  fi
 else
-  echo "⚠ 找不到 $LABEL launchd 服務(尚未安裝?)"
-  echo "  首次部署:依手冊把 $LABEL.plist 放到 ~/Library/LaunchAgents/ 並 launchctl load"
+  echo "⚠ 找不到 $PLIST(尚未首次安裝?)"
+  echo "  首次部署:依手冊把 plist 放到 ~/Library/LaunchAgents/ 並 launchctl load"
 fi
 
 echo ""
