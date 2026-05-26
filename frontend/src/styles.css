@@ -1700,3 +1700,122 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   .home-group-label { font-size: 17px; }
   .home-item-link { padding: 14px 14px; font-size: 16px; }
 }
+
+/* ─────────────────────────────────────────────────────────
+ * 庫存查詢手機卡片版 + 序號清單手機卡片版
+ * ───────────────────────────────────────────────────────── */
+.stock-mobile-list {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+.stock-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+.stock-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.stock-card-no {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.stock-card-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  flex: 1;
+}
+.stock-card-meta {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.stock-card-wh {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 0;
+}
+.stock-card-wh-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+.stock-card-wh-name {
+  color: var(--text-dim);
+}
+.stock-card-wh-row .stock-link {
+  font-size: 16px;
+  font-weight: 700;
+  padding: 2px 10px;
+  min-width: 44px;
+  text-align: center;
+}
+.stock-card-summary {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+.stock-card-summary b {
+  color: var(--text);
+  font-weight: 700;
+  margin-left: 2px;
+}
+.stock-card-total {
+  background: var(--panel-2);
+  border-color: var(--accent);
+}
+
+/* 序號清單手機卡片 */
+.serial-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px;
+}
+.serial-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+}
+.serial-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.serial-card-no {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-weight: 600;
+  font-size: 14px;
+}
+.serial-card-detail {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 14px;
+}
+.serial-card-detail dt {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.serial-card-detail dd {
+  margin: 0;
+  color: var(--text);
+}

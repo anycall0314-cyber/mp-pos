@@ -12,6 +12,7 @@ import type { Category } from "@/api/types";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { SerialHistoryModal } from "@/components/SerialHistoryModal";
 import { Toolbar } from "@/components/Toolbar";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 interface SerialListModalProps {
   product: StockMatrixProduct;
@@ -29,6 +30,7 @@ function SerialListModal({
   const serials = useInStockSerials(product.id, warehouseId);
   const rows = serials.data ?? [];
   const [historyId, setHistoryId] = useState<number | null>(null);
+  const isMobile = useIsMobile();
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -43,7 +45,56 @@ function SerialListModal({
         </div>
         <div className="modal-body">
           {serials.isLoading && <div className="md-empty">…</div>}
-          {!serials.isLoading && (
+          {!serials.isLoading && isMobile && (
+            <div className="serial-card-list">
+              {rows.length === 0 && <div className="md-empty">—</div>}
+              {rows.map((s, i) => (
+                <div key={s.id} className="serial-card">
+                  <div className="serial-card-head">
+                    <span className="serial-card-no">
+                      #{i + 1} {s.serial_no}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setHistoryId(s.id)}
+                    >
+                      履歷
+                    </button>
+                  </div>
+                  <dl className="serial-card-detail">
+                    <dt>進貨日</dt>
+                    <dd>{s.received_at?.slice(0, 10) ?? "—"}</dd>
+                    <dt>單台成本</dt>
+                    <dd>
+                      {Math.round(
+                        Number(s.purchase_unit_cost),
+                      ).toLocaleString()}
+                    </dd>
+                    {product.is_secondhand && (
+                      <>
+                        <dt>成色</dt>
+                        <dd>{s.condition_grade || "—"}</dd>
+                        <dt>自定售價</dt>
+                        <dd>
+                          {s.custom_unit_price
+                            ? Math.round(
+                                Number(s.custom_unit_price),
+                              ).toLocaleString()
+                            : "—"}
+                        </dd>
+                        <dt>電池 %</dt>
+                        <dd>{s.battery_health ?? "—"}</dd>
+                        <dt>備註</dt>
+                        <dd>{s.condition_note || "—"}</dd>
+                      </>
+                    )}
+                  </dl>
+                </div>
+              ))}
+            </div>
+          )}
+          {!serials.isLoading && !isMobile && (
             <table className="line-table">
               <thead>
                 <tr>
@@ -245,6 +296,7 @@ function sortKeyEquals(a: SortKey, b: SortKey): boolean {
 }
 
 export function InventoryQueryPage() {
+  const isMobile = useIsMobile();
   // 表單狀態(未送出)
   const [keyword, setKeyword] = useState("");
   // 類別多選:chip 集合;categoryPicker 是 ComboBox 暫存,選後加入 chip 並清空
@@ -565,7 +617,114 @@ export function InventoryQueryPage() {
               onClose={() => setSerialDialog(null)}
             />
           ))}
-        {applied && !matrix.isLoading && !matrix.isError && (
+        {applied && !matrix.isLoading && !matrix.isError && isMobile && (
+          <div className="stock-mobile-list">
+            {products.length === 0 && (
+              <div className="md-empty">查無資料</div>
+            )}
+            {products.map((p, i) => {
+              const totalCost =
+                p.stock_total > 0 && Number(p.weighted_avg_cost) > 0
+                  ? Math.round(
+                      Number(p.weighted_avg_cost) * p.stock_total,
+                    ).toLocaleString()
+                  : "—";
+              return (
+                <div key={p.id} className="stock-card">
+                  <div className="stock-card-head">
+                    <div className="stock-card-no">#{i + 1}</div>
+                    <div className="stock-card-name">{p.name}</div>
+                  </div>
+                  <div className="stock-card-meta">
+                    {p.category_name}
+                    {p.spec ? ` · ${p.spec}` : ""}
+                  </div>
+                  <div className="stock-card-wh">
+                    {warehouses.map((w) => {
+                      const qty = p.stock_by_warehouse[String(w.id)] ?? 0;
+                      return (
+                        <div key={w.id} className="stock-card-wh-row">
+                          <span className="stock-card-wh-name">
+                            {w.code} {w.name}
+                          </span>
+                          {qty > 0 ? (
+                            <button
+                              type="button"
+                              className="stock-link"
+                              onClick={() =>
+                                setSerialDialog({
+                                  product: p,
+                                  warehouseId: w.id,
+                                  warehouseLabel: `${w.code} ${w.name}`,
+                                })
+                              }
+                            >
+                              {qty}
+                            </button>
+                          ) : (
+                            <span style={{ color: "var(--text-dim)" }}>
+                              0
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="stock-card-summary">
+                    <span>
+                      合計 <b>{p.stock_total}</b>
+                    </span>
+                    <span>
+                      平均成本{" "}
+                      <b>
+                        {Number(p.weighted_avg_cost) > 0
+                          ? Math.round(
+                              Number(p.weighted_avg_cost),
+                            ).toLocaleString()
+                          : "—"}
+                      </b>
+                    </span>
+                    <span>
+                      總成本 <b>{totalCost}</b>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+            {products.length > 0 && (
+              <div className="stock-card stock-card-total">
+                <div className="stock-card-meta">所有商品合計</div>
+                {warehouses.map((w) => (
+                  <div key={w.id} className="stock-card-wh-row">
+                    <span className="stock-card-wh-name">
+                      {w.code} {w.name}
+                    </span>
+                    <span>{totalsByWarehouse[String(w.id)] ?? 0}</span>
+                  </div>
+                ))}
+                <div className="stock-card-summary">
+                  <span>
+                    合計 <b>{grandTotal}</b>
+                  </span>
+                  <span>
+                    總成本{" "}
+                    <b>
+                      {Math.round(
+                        products.reduce(
+                          (s, p) =>
+                            s +
+                            Number(p.weighted_avg_cost || 0) * p.stock_total,
+                          0,
+                        ),
+                      ).toLocaleString()}
+                    </b>
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {applied && !matrix.isLoading && !matrix.isError && !isMobile && (
           <table className="stock-matrix-table">
             <thead>
               <tr>
