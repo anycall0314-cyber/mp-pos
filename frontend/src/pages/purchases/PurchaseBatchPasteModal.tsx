@@ -336,7 +336,7 @@ export function PurchaseBatchPasteModal({
                   onClick={() => downloadSampleCsv(mode)}
                   title="下載 CSV 範例,可用 Excel 打開編輯"
                 >
-                  📥 下載範例
+                  下載範例
                 </button>
               </div>
               <textarea

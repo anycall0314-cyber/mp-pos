@@ -1782,7 +1782,7 @@ export function SalesEntryPage() {
           focusMode ? null : (
           <>
             <button className="btn" onClick={() => navigate("/sales")}>
-              ← 回列表
+              回列表
             </button>
             {isNew && (
               <button className="btn" type="button" onClick={discardDraft}>

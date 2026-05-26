@@ -406,7 +406,7 @@ export function TransferEntryPage() {
         actions={
           <>
             <button className="btn" onClick={() => navigate("/transfers")}>
-              ← 回列表
+              回列表
             </button>
             {isNew && (
               <button

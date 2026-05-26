@@ -247,7 +247,7 @@ export function PettyExpenseForm({ open, initial, onClose }: Props) {
               onClick={() => setConfirming(false)}
               disabled={save.isPending}
             >
-              ← 返回修改
+              返回修改
             </button>
             <button
               className="btn primary"
@@ -290,7 +290,7 @@ export function PettyExpenseForm({ open, initial, onClose }: Props) {
               marginBottom: 12,
             }}
           >
-            請再次確認以下內容,送出後將立即過帳。需要修改請按「← 返回修改」。
+            請再次確認以下內容,送出後將立即過帳。需要修改請按「返回修改」。
           </div>
           <dl>
             <dt>日期</dt>

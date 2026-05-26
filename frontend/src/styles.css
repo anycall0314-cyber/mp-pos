@@ -1479,15 +1479,15 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
+    min-width: 48px;
     height: 28px;
     background: transparent;
     border: 1px solid var(--border);
     color: var(--text);
     border-radius: 4px;
     cursor: pointer;
-    font-size: 18px;
-    padding: 0;
+    font-size: 13px;
+    padding: 0 10px;
     flex-shrink: 0;
   }
   .hamburger:active { background: var(--row-hover); }

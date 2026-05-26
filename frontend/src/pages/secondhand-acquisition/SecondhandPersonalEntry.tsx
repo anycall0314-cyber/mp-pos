@@ -234,7 +234,7 @@ export function SecondhandPersonalEntry() {
               )}
               {memberStatus === "found" && member && (
                 <span className="member-tag" style={{ color: "#80d090" }}>
-                  ✓ {member.name} ({member.code})
+                  會員:{member.name} ({member.code})
                 </span>
               )}
               {memberStatus === "not_found" && (

@@ -977,7 +977,7 @@ export function PurchaseEntryPage({
           focusMode ? null : (
           <>
             <button className="btn" onClick={() => navigate(backPath)}>
-              ← {isSecondhandVendor ? "回中古入庫" : "回列表"}
+              {isSecondhandVendor ? "回中古入庫" : "回列表"}
             </button>
             {isNew && (
               <button className="btn" type="button" onClick={discardDraft}>

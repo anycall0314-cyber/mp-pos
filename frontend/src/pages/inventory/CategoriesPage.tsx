@@ -309,7 +309,7 @@ export function CategoriesPage() {
                         }
                       />
                     ) : c.is_active ? (
-                      "✓"
+                      "啟用"
                     ) : (
                       <span style={{ color: "var(--text-dim)" }}>停用</span>
                     )}

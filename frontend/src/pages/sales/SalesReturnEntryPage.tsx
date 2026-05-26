@@ -238,7 +238,7 @@ export function SalesReturnEntryPage() {
           focusMode ? null : (
           <>
             <button className="btn" onClick={() => navigate("/sales?tab=returns")}>
-              ← 回列表
+              回列表
             </button>
             {readonly && sr && !sr.is_void && (
               <button

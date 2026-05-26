@@ -33,7 +33,7 @@ const columns: MasterColumn<SimCard>[] = [
   {
     key: "deposit_refunded",
     header: "押金歸還",
-    render: (r) => (r.deposit_refunded ? "✓" : "—"),
+    render: (r) => (r.deposit_refunded ? "是" : "—"),
   },
 ];
 

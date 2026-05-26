@@ -184,7 +184,7 @@ function NavGroupMenu({ group }: { group: NavGroup }) {
         aria-expanded={open}
         aria-haspopup="menu"
       >
-        {group.label} <span className="topnav-caret">▾</span>
+        {group.label}
       </button>
       {open && (
         <div className="topnav-dropdown" role="menu">
@@ -278,7 +278,7 @@ export function App() {
           onClick={() => setMobileNavOpen((v) => !v)}
           aria-label={mobileNavOpen ? "關閉選單" : "打開選單"}
         >
-          {mobileNavOpen ? "✕" : "☰"}
+          {mobileNavOpen ? "關閉" : "選單"}
         </button>
         <div className="brand">MP POS</div>
         <nav className={`topnav${mobileNavOpen ? " open" : ""}`}>

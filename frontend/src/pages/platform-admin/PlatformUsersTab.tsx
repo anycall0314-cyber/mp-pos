@@ -215,7 +215,7 @@ export function PlatformUsersTab() {
                 <td>{u.tenant_name || "—"}</td>
                 <td>{u.default_warehouse_name || "—"}</td>
                 <td style={{ textAlign: "center" }}>
-                  {u.is_warehouse_locked_display ? "✓" : "—"}
+                  {u.is_warehouse_locked_display ? "是" : "—"}
                 </td>
                 <td style={{ textAlign: "center" }}>
                   <input
