@@ -529,6 +529,11 @@ body { background: var(--bg); color: var(--text); }
 .expander-modal .modal-body { max-height: 72vh; overflow-y: auto; }
 .batch-paste-modal { min-width: 900px; max-width: 95vw; max-height: 92vh; }
 .batch-paste-modal .modal-body { max-height: 76vh; overflow-y: auto; }
+/* 字體整體加大兩號 */
+.batch-paste-modal .modal-title { font-size: 20px; }
+.batch-paste-modal table { font-size: 15px; }
+.batch-paste-modal table th { font-size: 14px; }
+.batch-paste-modal input, .batch-paste-modal select { font-size: 15px; }
 .picker-modal { min-width: 820px; max-width: 95vw; max-height: 90vh; }
 .picker-modal .modal-body { max-height: 76vh; overflow-y: auto; }
 .bulk-add-modal textarea {

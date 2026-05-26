@@ -321,7 +321,7 @@ export function PurchaseBatchPasteModal({
                   marginBottom: 8,
                 }}
               >
-                <div style={{ fontSize: 13, color: "var(--text-dim)", flex: 1 }}>
+                <div style={{ fontSize: 15, color: "var(--text-dim)", flex: 1 }}>
                   從 Excel 複製貼入(每行一筆),欄位順序:
                   <strong style={{ color: "var(--text)" }}>
                     {" "}
@@ -332,7 +332,7 @@ export function PurchaseBatchPasteModal({
                 <button
                   type="button"
                   className="btn"
-                  style={{ flexShrink: 0, fontSize: 12, whiteSpace: "nowrap" }}
+                  style={{ flexShrink: 0, fontSize: 14, whiteSpace: "nowrap" }}
                   onClick={() => downloadSampleCsv(mode)}
                   title="下載 CSV 範例,可用 Excel 打開編輯"
                 >
@@ -352,7 +352,7 @@ PH-000023\t1\t29000\t356121234567000`}
                   width: "100%",
                   fontFamily:
                     "ui-monospace, 'SFMono-Regular', Menlo, monospace",
-                  fontSize: 13,
+                  fontSize: 15,
                   background: "var(--panel)",
                   color: "var(--text)",
                   border: "1px solid var(--border)",
@@ -370,7 +370,7 @@ PH-000023\t1\t29000\t356121234567000`}
                   display: "flex",
                   alignItems: "center",
                   marginBottom: 8,
-                  fontSize: 13,
+                  fontSize: 15,
                 }}
               >
                 <strong style={{ flex: 1 }}>
@@ -437,7 +437,7 @@ PH-000023\t1\t29000\t356121234567000`}
                           ? (
                               <span
                                 style={{
-                                  fontSize: 11,
+                                  fontSize: 13,
                                   color: "#f0c050",
                                   marginLeft: 4,
                                 }}
@@ -448,7 +448,7 @@ PH-000023\t1\t29000\t356121234567000`}
                           : (
                               <span
                                 style={{
-                                  fontSize: 11,
+                                  fontSize: 13,
                                   color: "#ff7070",
                                   marginLeft: 4,
                                 }}
@@ -507,7 +507,7 @@ PH-000023\t1\t29000\t356121234567000`}
                             {r.rawProductText && r.productOption && (
                               <div
                                 style={{
-                                  fontSize: 11,
+                                  fontSize: 13,
                                   color: "var(--text-dim)",
                                 }}
                               >
@@ -560,7 +560,7 @@ PH-000023\t1\t29000\t356121234567000`}
                                 width: "100%",
                                 fontFamily:
                                   "ui-monospace, monospace",
-                                fontSize: 12,
+                                fontSize: 14,
                               }}
                             />
                           </td>
@@ -568,11 +568,11 @@ PH-000023\t1\t29000\t356121234567000`}
                             <button
                               type="button"
                               className="btn"
-                              style={{ fontSize: 11, padding: "2px 6px" }}
+                              style={{ fontSize: 13, padding: "2px 6px" }}
                               onClick={() => removeRow(r.key)}
                               title="刪除這列"
                             >
-                              ×
+                              刪除
                             </button>
                           </td>
                         </tr>
