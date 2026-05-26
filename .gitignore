@@ -31,6 +31,9 @@ dist/
 build/
 .vite/
 *.tsbuildinfo
+# tsc -b 編譯 vite.config.ts 留下的副產物
+frontend/vite.config.d.ts
+frontend/vite.config.js
 # OS / IDE
 .DS_Store
 Thumbs.db
