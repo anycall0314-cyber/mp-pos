@@ -14,7 +14,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   const next =
-    (location.state as { from?: string } | null)?.from ?? "/products";
+    (location.state as { from?: string } | null)?.from ?? "/home";
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();

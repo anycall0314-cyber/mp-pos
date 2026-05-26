@@ -15,7 +15,7 @@ export function PlatformAdminPage() {
   const [tab, setTab] = useState<Tab>("tenants");
   // 雙保險:即使 route 層級守衛被繞過(快取 / race),元件內也擋一次
   if (user?.profile?.role !== "platform_admin") {
-    return <Navigate to="/products" replace />;
+    return <Navigate to="/home" replace />;
   }
   return (
     <div className="page">

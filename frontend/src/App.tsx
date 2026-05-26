@@ -4,6 +4,7 @@ import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom"
 import { useAuth } from "@/auth/AuthContext";
 import { LoginPage } from "@/pages/login/LoginPage";
 import { PlatformAdminPage } from "@/pages/platform-admin/PlatformAdminPage";
+import { HomePage } from "@/pages/home/HomePage";
 import { CashAdjustmentsPage } from "@/pages/cash/CashAdjustmentsPage";
 import { PettyExpensesPage } from "@/pages/cash/PettyExpensesPage";
 import { PhoneBillsPage } from "@/pages/phone-bills/PhoneBillsPage";
@@ -30,98 +31,7 @@ import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { SimCardsPage } from "@/pages/sim-cards/SimCardsPage";
 import { SuppliersPage } from "@/pages/suppliers/SuppliersPage";
 import { TelecomPlansPage } from "@/pages/telecom-plans/TelecomPlansPage";
-
-interface NavItem {
-  to: string;
-  label: string;
-}
-
-interface NavGroup {
-  key: string;
-  label: string;
-  items: NavItem[];
-}
-
-/**
- * 頂部主分類 + dropdown 子項。
- * 要加新模組就在對應 group 的 items 加一筆;新類別就 push 一個 group。
- */
-const PLATFORM_NAV_GROUP: NavGroup = {
-  key: "platform",
-  label: "平台",
-  items: [{ to: "/platform/admin", label: "經銷商 / 用戶 / 倉別" }],
-};
-
-const NAV_GROUPS: NavGroup[] = [
-  {
-    key: "reports",
-    label: "報表",
-    items: [
-      { to: "/reports/sales-daily", label: "銷貨日報" },
-      { to: "/reports/business-daily", label: "營業日報" },
-      { to: "/reports/margin-summary", label: "毛利彙總" },
-      { to: "/reports/invoice-detail", label: "發票明細" },
-      { to: "/expenses", label: "店頭雜支" },
-      { to: "/cash-adjustments", label: "現金調整" },
-    ],
-  },
-  {
-    key: "stock",
-    label: "庫存",
-    items: [
-      { to: "/inventory", label: "庫存查詢" },
-      { to: "/purchases", label: "進貨作業" },
-      { to: "/secondhand-acquisition", label: "中古入庫" },
-      { to: "/products", label: "建立商品" },
-      { to: "/serials", label: "序號查詢" },
-      { to: "/inventory/stocktake", label: "盤點作業" },
-      { to: "/inventory/movements", label: "異動查詢" },
-    ],
-  },
-  {
-    key: "sales",
-    label: "銷貨",
-    items: [
-      { to: "/sales", label: "銷貨作業" },
-      { to: "/transfers", label: "調撥作業" },
-      { to: "/sales/pre-orders", label: "訂購作業" },
-      { to: "/customers", label: "客戶管理" },
-      { to: "/members", label: "會員管理" },
-    ],
-  },
-  {
-    key: "telecom",
-    label: "門號",
-    items: [
-      { to: "/telecom/billing", label: "代收話費" },
-      { to: "/telecom/activations", label: "開通查詢" },
-      { to: "/telecom-plans", label: "方案管理" },
-      { to: "/sim-cards", label: "卡片管理" },
-      { to: "/telecom/commissions", label: "佣金對帳" },
-      { to: "/telecom/expiries", label: "到期查詢" },
-    ],
-  },
-  {
-    key: "repairs",
-    label: "維修",
-    items: [
-      { to: "/repairs/new", label: "建立報修" },
-      { to: "/repairs", label: "維修列表" },
-      { to: "/repairs/quotes", label: "報價作業" },
-      { to: "/repairs/library", label: "資料庫" },
-    ],
-  },
-  {
-    key: "settings",
-    label: "設定",
-    items: [
-      { to: "/settings", label: "發票付款" },
-      { to: "/suppliers", label: "供應商" },
-      { to: "/sales-persons", label: "業務員" },
-      { to: "/settings/users", label: "人員權限" },
-    ],
-  },
-];
+import { NavGroup, NAV_GROUPS, PLATFORM_NAV_GROUP } from "@/nav";
 
 function Placeholder({ title }: { title: string }) {
   return <div className="placeholder">{title}(尚未實作)</div>;
@@ -353,7 +263,8 @@ export function App() {
       )}
       <main className="main">
         <Routes>
-          <Route path="/" element={<Navigate to="/products" replace />} />
+          <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route path="/home" element={<HomePage />} />
           <Route path="/products" element={<ProductsPage />} />
           <Route path="/telecom-plans" element={<TelecomPlansPage />} />
           <Route path="/sim-cards" element={<SimCardsPage />} />
@@ -392,7 +303,7 @@ export function App() {
               user?.profile?.role === "platform_admin" ? (
                 <PlatformAdminPage />
               ) : (
-                <Navigate to="/products" replace />
+                <Navigate to="/home" replace />
               )
             }
           />
