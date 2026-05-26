@@ -608,6 +608,9 @@ export function InventoryQueryPage() {
                 <th className="num" style={{ width: 90 }}>
                   平均成本
                 </th>
+                <th className="num" style={{ width: 100 }}>
+                  總成本
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -651,12 +654,19 @@ export function InventoryQueryPage() {
                         ).toLocaleString()
                       : "—"}
                   </td>
+                  <td className="num" style={{ fontWeight: 600 }}>
+                    {p.stock_total > 0 && Number(p.weighted_avg_cost) > 0
+                      ? Math.round(
+                          Number(p.weighted_avg_cost) * p.stock_total,
+                        ).toLocaleString()
+                      : "—"}
+                  </td>
                 </tr>
               ))}
               {products.length === 0 && (
                 <tr>
                   <td
-                    colSpan={6 + warehouses.length}
+                    colSpan={7 + warehouses.length}
                     className="md-empty"
                   >
                     查無資料
@@ -684,6 +694,15 @@ export function InventoryQueryPage() {
                           ) / grandTotal,
                         ).toLocaleString()
                       : "—"}
+                  </td>
+                  <td className="num" style={{ fontWeight: 700 }}>
+                    {Math.round(
+                      products.reduce(
+                        (s, p) =>
+                          s + Number(p.weighted_avg_cost || 0) * p.stock_total,
+                        0,
+                      ),
+                    ).toLocaleString()}
                   </td>
                 </tr>
               )}
