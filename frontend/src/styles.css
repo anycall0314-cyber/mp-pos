@@ -1687,6 +1687,71 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   /* page padding 縮小,寸土寸金 */
   .entry-body { padding: 8px; }
   .entry-header { margin-bottom: 8px; }
+
+  /* 列表頁篩選列:date / btn 在手機放大、整體換行 */
+  .list-filterbar {
+    padding: 8px;
+    gap: 8px;
+  }
+  .list-filterbar label {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-width: 0 !important;
+    flex: 1;
+  }
+  .list-filterbar label > div {
+    width: 100%;
+    min-width: 0 !important;
+  }
+  .list-filterbar input[type="date"] {
+    height: 38px;
+    padding: 4px 8px;
+    font-size: 15px;
+    width: 100%;
+  }
+  .list-filterbar .btn {
+    height: 36px;
+    padding: 4px 14px;
+    font-size: 14px;
+  }
+  /* 報表表頭密度 / 高度在手機獨立配 */
+  .report-meta {
+    font-size: 13px;
+    padding: 8px;
+    line-height: 1.7;
+  }
+  /* 手機卡片版改 flex,不需要 sticky thead 的高度抓 */
+  .report-table { height: auto; flex: 1; overflow-y: auto; }
+
+  /* ComboBox 下拉選單手機版:
+   * 1) 限寬不超出視窗右邊
+   * 2) 每個選項 label / secondary 改上下排,文字不會被切掉
+   * 3) 高度上限縮小,讓鍵盤跳出後還看得到一些選項
+   */
+  .combobox-pop {
+    max-width: calc(100vw - 16px) !important;
+    width: max-content;
+    min-width: 100%;
+    max-height: 40vh;
+    /* 確保不超出視窗右邊 */
+    right: auto;
+  }
+  .combobox-option {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+  .combobox-option-label {
+    width: 100%;
+  }
+  .combobox-option-secondary {
+    white-space: normal;
+    font-size: 12px;
+    width: 100%;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -1860,4 +1925,248 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
 .serial-card-detail dd {
   margin: 0;
   color: var(--text);
+}
+
+/* ─────────────────────────────────────────────────────────
+ * 銷貨日報手機卡片版(每張銷貨單一張卡)
+ * ───────────────────────────────────────────────────────── */
+.report-mobile-list {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+.report-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+.report-card.void {
+  border-color: rgba(255, 100, 100, 0.4);
+  background: rgba(255, 100, 100, 0.05);
+}
+.report-card.void .report-card-no,
+.report-card.void .report-card-customer,
+.report-card.void .report-card-item-name {
+  text-decoration: line-through;
+  color: var(--text-dim);
+}
+.report-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+.report-card-no {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+}
+.report-card-date {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.report-card-customer {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.report-card-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(255, 100, 100, 0.18);
+  color: #ff9090;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.report-card-meta {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.report-card-sep {
+  margin: 0 6px;
+  color: var(--text-dim);
+}
+.report-card-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.report-card-item {
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.report-card-item:last-child {
+  border-bottom: 0;
+}
+.report-card-item-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.report-card-item-serial {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+.report-card-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.report-card-item-row b {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.report-card-item-cost {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.report-card-item-cost.dim {
+  font-style: italic;
+}
+.report-card-foot {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.report-card-foot b {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─────────────────────────────────────────────────────────
+ * 營業日報(BusinessDailyReport)響應式
+ * 桌機:左寬右窄兩張卡片(現金櫃流水 / 當日營收)
+ * 手機:上下 stack,內格從 5 欄 / 4 欄 縮成 2 欄
+ * ───────────────────────────────────────────────────────── */
+.biz-summary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.biz-summary-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.biz-summary-card-title {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 700;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+}
+.biz-cash-cells {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1px;
+  background: var(--border);
+}
+.biz-revenue-cells {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+}
+
+/* Section 折疊區 */
+.biz-section {
+  margin-bottom: 6px;
+}
+.biz-section-header {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 20px 220px 80px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+.biz-section-arrow {
+  font-size: 11px;
+  color: var(--text-dim);
+  transition: transform 0.15s;
+  display: inline-block;
+}
+.biz-section-title {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 700;
+}
+.biz-section-count {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.biz-section-total {
+  text-align: right;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.biz-section-body {
+  padding: 8px 0 4px 12px;
+  /* line-table 父層加 overflow-x,手機可橫向捲動 */
+  overflow-x: auto;
+}
+
+@media (max-width: 768px) {
+  /* 兩張摘要卡 stack */
+  .biz-summary-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  /* 現金櫃流水 5 欄 → 2 欄;當日營收 4 欄 → 2 欄 */
+  .biz-cash-cells,
+  .biz-revenue-cells {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  /* Section header:標題彈性 + 數字併排,不再固定 220 / 80 */
+  .biz-section-header {
+    grid-template-columns: 20px 1fr auto auto;
+    gap: 8px;
+    padding: 10px 10px;
+  }
+  .biz-section-title { font-size: 15px; }
+  .biz-section-count { font-size: 12px; }
+  .biz-section-total { font-size: 14px; }
+  .biz-section-body {
+    padding: 8px 0 4px 4px;
+  }
 }

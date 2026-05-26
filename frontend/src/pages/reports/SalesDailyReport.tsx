@@ -12,6 +12,7 @@ import type {
 } from "@/api/types";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Toolbar } from "@/components/Toolbar";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -60,6 +61,7 @@ interface AppliedFilter {
 
 export function SalesDailyReportPage() {
   const defaultWarehouse = useDefaultWarehouse();
+  const isMobile = useIsMobile();
   // 表單狀態
   const [from, setFrom] = useState<string>(today);
   const [to, setTo] = useState<string>(today);
@@ -368,11 +370,19 @@ export function SalesDailyReportPage() {
         {isError && <div className="md-empty">{String(error)}</div>}
         {!isLoading && !isError && (
           <>
-            <SalesReportTable orders={activeOrders} voided={false} />
+            {isMobile ? (
+              <SalesReportMobileList orders={activeOrders} voided={false} />
+            ) : (
+              <SalesReportTable orders={activeOrders} voided={false} />
+            )}
             {voidOrders.length > 0 && (
               <>
                 <div className="report-void-header">作廢單據</div>
-                <SalesReportTable orders={voidOrders} voided={true} />
+                {isMobile ? (
+                  <SalesReportMobileList orders={voidOrders} voided={true} />
+                ) : (
+                  <SalesReportTable orders={voidOrders} voided={true} />
+                )}
               </>
             )}
             {orders.length === 0 && (
@@ -381,6 +391,107 @@ export function SalesDailyReportPage() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function SalesReportMobileList({ orders, voided }: ReportTableProps) {
+  if (orders.length === 0) return null;
+  return (
+    <div className="report-mobile-list">
+      {orders.map((o) => {
+        const hasMarginItem = o.items.some(itemCountsMargin);
+        const orderProfit = o.items.reduce(
+          (s, it) => s + itemGrossProfit(it, o.tax_method),
+          0,
+        );
+        const orderAmount = o.items.reduce(
+          (s, it) => s + Number(it.amount),
+          0,
+        );
+        return (
+          <div
+            key={o.id}
+            className={`report-card ${voided ? "void" : ""}`}
+          >
+            <div className="report-card-head">
+              <div className="report-card-no">{o.no}</div>
+              <div className="report-card-date">{o.doc_date}</div>
+            </div>
+            <div className="report-card-customer">
+              {o.customer_name ?? "散客"}
+              {voided && <span className="report-card-badge">作廢</span>}
+            </div>
+            <div className="report-card-meta">
+              {`${o.warehouse_code ?? ""} ${o.warehouse_name ?? ""}`.trim() || "—"}
+              {o.sales_person_name && (
+                <>
+                  <span className="report-card-sep">·</span>
+                  {o.sales_person_name}
+                </>
+              )}
+            </div>
+
+            <div className="report-card-items">
+              {o.items.map((it) => {
+                const countsMargin = itemCountsMargin(it);
+                const profit = itemGrossProfit(it, o.tax_method);
+                const serials = serialList(it);
+                return (
+                  <div key={it.id} className="report-card-item">
+                    <div className="report-card-item-name">
+                      {it.product_name}
+                    </div>
+                    {serials && (
+                      <div className="report-card-item-serial">{serials}</div>
+                    )}
+                    <div className="report-card-item-row">
+                      <span>
+                        {it.qty} × ${fmtMoney(Number(it.unit_price))}
+                      </span>
+                      <b>${fmtMoney(Number(it.amount))}</b>
+                    </div>
+                    {countsMargin ? (
+                      <div className="report-card-item-cost">
+                        成本 ${fmtMoney(Number(it.cost_at_post))}
+                        <span className="report-card-sep">·</span>
+                        毛利{" "}
+                        <span
+                          style={{
+                            color: profit < 0 ? "#ff7070" : undefined,
+                          }}
+                        >
+                          ${fmtMoney(profit)}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="report-card-item-cost dim">不計毛利</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="report-card-foot">
+              <span>含稅金額</span>
+              <b>${fmtMoney(orderAmount)}</b>
+              <span className="report-card-sep">·</span>
+              <span>該單毛利</span>
+              <b
+                style={{
+                  color: !hasMarginItem
+                    ? "var(--text-dim)"
+                    : orderProfit < 0
+                    ? "#ff7070"
+                    : undefined,
+                }}
+              >
+                {hasMarginItem ? `$${fmtMoney(orderProfit)}` : "—"}
+              </b>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

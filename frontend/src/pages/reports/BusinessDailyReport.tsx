@@ -252,43 +252,11 @@ export function BusinessDailyReportPage() {
         {report && (
           <>
             {/* 兩張摘要卡片:現金櫃流水 + 當日營收 */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)",
-                gap: 12,
-                marginBottom: 16,
-              }}
-            >
+            <div className="biz-summary-grid">
               {/* 現金櫃流水 */}
-              <div
-                style={{
-                  background: "var(--panel)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 4,
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: "var(--text)",
-                    fontWeight: 700,
-                    padding: "6px 10px",
-                    borderBottom: "1px solid var(--border)",
-                    background: "var(--panel-2)",
-                  }}
-                >
-                  現金櫃流水
-                </div>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(5, 1fr)",
-                    gap: 1,
-                    background: "var(--border)",
-                  }}
-                >
+              <div className="biz-summary-card">
+                <div className="biz-summary-card-title">現金櫃流水</div>
+                <div className="biz-cash-cells">
                   <CashItem label="前日現金" value={openingInt} />
                   <CashItem label="銷貨現金" value={salesTotal} />
                   <CashItem label="代收話費" value={phoneBillsTotal} />
@@ -323,34 +291,9 @@ export function BusinessDailyReportPage() {
               </div>
 
               {/* 當日營收 */}
-              <div
-                style={{
-                  background: "var(--panel)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 4,
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: "var(--text)",
-                    fontWeight: 700,
-                    padding: "6px 10px",
-                    borderBottom: "1px solid var(--border)",
-                    background: "var(--panel-2)",
-                  }}
-                >
-                  當日營收
-                </div>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(4, 1fr)",
-                    gap: 1,
-                    background: "var(--border)",
-                  }}
-                >
+              <div className="biz-summary-card">
+                <div className="biz-summary-card-title">當日營收</div>
+                <div className="biz-revenue-cells">
                   <CashItem label="現金" value={salesTotal} />
                   <CashItem label="代收話費" value={phoneBillsTotal} />
                   <CashItem label="非現金" value={nonCashSalesTotal} />
@@ -823,68 +766,30 @@ function Section({
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <div style={{ marginBottom: 6 }}>
+    <div className="biz-section">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
+        className="biz-section-header"
         style={{
-          width: "100%",
-          display: "grid",
-          gridTemplateColumns: "20px 220px 80px 1fr",
-          alignItems: "center",
-          gap: 12,
-          padding: "8px 12px",
-          background: "var(--panel)",
           borderLeft: `4px solid ${totalColor ?? "var(--border)"}`,
-          border: "none",
-          borderTop: 0,
-          borderRight: 0,
-          borderBottom: 0,
-          cursor: "pointer",
-          textAlign: "left",
-          color: "var(--text)",
         }}
         aria-expanded={expanded}
       >
         <span
+          className="biz-section-arrow"
           style={{
-            fontSize: 11,
-            color: "var(--text-dim)",
-            transition: "transform 0.15s",
             transform: expanded ? "rotate(90deg)" : "rotate(0)",
-            display: "inline-block",
           }}
         >
           ▶
         </span>
-        <span
-          style={{
-            fontSize: 14,
-            color: "var(--text)",
-            fontWeight: 700,
-          }}
-        >
-          {title}
-        </span>
-        <span
-          style={{
-            fontSize: 13,
-            color: "var(--text-dim)",
-            textAlign: "right",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {count}
-        </span>
+        <span className="biz-section-title">{title}</span>
+        <span className="biz-section-count">{count}</span>
         {total !== undefined ? (
           <span
-            style={{
-              textAlign: "right",
-              fontSize: 14,
-              fontWeight: 700,
-              color: totalColor ?? "var(--text)",
-              fontVariantNumeric: "tabular-nums",
-            }}
+            className="biz-section-total"
+            style={{ color: totalColor ?? undefined }}
           >
             {total.toLocaleString()}
           </span>
@@ -892,7 +797,7 @@ function Section({
           <span />
         )}
       </button>
-      {expanded && <div style={{ padding: "8px 0 4px 12px" }}>{children}</div>}
+      {expanded && <div className="biz-section-body">{children}</div>}
     </div>
   );
 }

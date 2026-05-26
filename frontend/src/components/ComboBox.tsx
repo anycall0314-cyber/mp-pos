@@ -190,7 +190,15 @@ export function ComboBox<T = unknown>({
           disabled={disabled}
           required={required}
           autoFocus={autoFocus}
-          onFocus={openAndFocus}
+          onFocus={(e) => {
+            openAndFocus();
+            // 手機:把 input 捲到視窗頂端,避免下拉選單被 iOS 鍵盤蓋住
+            if (window.matchMedia("(max-width: 768px)").matches) {
+              setTimeout(() => {
+                e.target.scrollIntoView({ block: "start", behavior: "smooth" });
+              }, 100);
+            }
+          }}
           onChange={(e) => {
             setQuery(e.target.value);
             if (!open) setOpen(true);
