@@ -129,6 +129,43 @@ async function matchOne(
   return { product: results[0], status: "fuzzy" };
 }
 
+// 下載 CSV 範例(Excel 可直接開啟編輯)
+function downloadSampleCsv(mode: "regular" | "secondhand-vendor") {
+  // 一般進貨 vs 中古收購,欄位不同
+  const rows =
+    mode === "secondhand-vendor"
+      ? [
+          ["商品", "數量", "單價", "序號(分號分隔)", "成色", "售價", "電池%", "備註"],
+          ["iPhone 14 Pro 256G 黑色", "1", "25000", "356121234567890", "A", "32000", "92", ""],
+          ["iPhone 13 128G 白色", "1", "12000", "356121234567891", "B", "16800", "85", "輕微擦痕"],
+        ]
+      : [
+          ["商品", "數量", "單價", "序號(分號分隔,沒序號可留空)"],
+          ["iPhone 16 PRO 256G 金色", "3", "32000", "356121234567890; 356121234567891; 356121234567892"],
+          ["iPhone 16 PRO 256G 紫色", "2", "32000", "356121234567893; 356121234567894"],
+          ["保護貼-iPhone 16 Pro", "50", "80", ""],
+          ["PH-000023", "1", "29000", "356121234567000"],
+        ];
+
+  // BOM + CSV(逗號分隔,Excel 直接打開不會亂碼)
+  const escape = (s: string) =>
+    /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  const csv =
+    "﻿" + rows.map((r) => r.map(escape).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download =
+    mode === "secondhand-vendor"
+      ? "批次貼上範例_中古機.csv"
+      : "批次貼上範例.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export function PurchaseBatchPasteModal({
   open,
   onClose,
@@ -277,14 +314,30 @@ export function PurchaseBatchPasteModal({
           {!hasParsed && (
             <>
               <div
-                style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 8 }}
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 8,
+                  marginBottom: 8,
+                }}
               >
-                從 Excel 複製貼入(每行一筆),欄位順序:
-                <strong style={{ color: "var(--text)" }}>
-                  {" "}
-                  商品 [Tab] 數量 [Tab] 單價 [Tab] 序號(分號 / 換行隔開,沒序號可留空)
-                </strong>
-                。商品可用品名、品號或條碼,系統會自動比對,模糊符合會給你下拉再選。
+                <div style={{ fontSize: 13, color: "var(--text-dim)", flex: 1 }}>
+                  從 Excel 複製貼入(每行一筆),欄位順序:
+                  <strong style={{ color: "var(--text)" }}>
+                    {" "}
+                    商品 [Tab] 數量 [Tab] 單價 [Tab] 序號(分號 / 換行隔開,沒序號可留空)
+                  </strong>
+                  。商品可用品名、品號或條碼,系統會自動比對,模糊符合會給你下拉再選。
+                </div>
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ flexShrink: 0, fontSize: 12, whiteSpace: "nowrap" }}
+                  onClick={() => downloadSampleCsv(mode)}
+                  title="下載 CSV 範例,可用 Excel 打開編輯"
+                >
+                  📥 下載範例
+                </button>
               </div>
               <textarea
                 value={rawText}
