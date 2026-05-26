@@ -386,7 +386,16 @@ export function App() {
           />
           <Route path="/members" element={<MembersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/platform/admin" element={<PlatformAdminPage />} />
+          <Route
+            path="/platform/admin"
+            element={
+              user?.profile?.role === "platform_admin" ? (
+                <PlatformAdminPage />
+              ) : (
+                <Navigate to="/products" replace />
+              )
+            }
+          />
           <Route path="/suppliers" element={<SuppliersPage />} />
           <Route path="/sales-persons" element={<SalesPersonsPage />} />
           <Route path="/transfers" element={<TransfersPage />} />

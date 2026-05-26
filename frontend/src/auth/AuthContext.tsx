@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import {
   createContext,
   ReactNode,
@@ -21,6 +22,7 @@ interface AuthState {
 const AuthCtx = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const qc = useQueryClient();
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -54,15 +56,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => authEvents.removeEventListener("unauthorized", onUnauth);
   }, []);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const res = await api<LoginResponse>("/auth/login/", {
-      method: "POST",
-      body: JSON.stringify({ username, password }),
-    });
-    setToken(res.token);
-    setUser(res.user);
-    return res.user;
-  }, []);
+  const login = useCallback(
+    async (username: string, password: string) => {
+      // 換帳號前先把上一位的資料清乾淨,避免新帳號看到舊資料
+      qc.clear();
+      const res = await api<LoginResponse>("/auth/login/", {
+        method: "POST",
+        body: JSON.stringify({ username, password }),
+      });
+      setToken(res.token);
+      setUser(res.user);
+      return res.user;
+    },
+    [qc],
+  );
 
   const logout = useCallback(async () => {
     try {
@@ -72,7 +79,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setToken(null);
     setUser(null);
-  }, []);
+    qc.clear();
+  }, [qc]);
 
   return (
     <AuthCtx.Provider value={{ user, loading, login, logout, refresh }}>
