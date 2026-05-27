@@ -45,6 +45,7 @@ export interface Product {
   is_secondhand: boolean;
   counts_cash: boolean;
   counts_margin: boolean;
+  safety_stock?: number;
   is_active: boolean;
   stock_qty: number;
   created_at: string;
@@ -713,4 +714,31 @@ export interface PhoneBillCollection {
   is_void: boolean;
   created_at: string;
   updated_at: string;
+}
+
+// 登入首頁所需的 metric 一次回
+export interface HomeSummary {
+  warehouse_id: number | null;
+  warehouse_name: string;
+  today: { revenue: number; sales_count: number };
+  yesterday: { revenue: number; sales_count: number };
+  low_stock: {
+    count: number;
+    items: {
+      id: number;
+      name: string;
+      sku: string;
+      qty: number;
+      safety_stock: number;
+    }[];
+  };
+  recent_sales: {
+    id: number;
+    no: string;
+    customer_name: string;
+    sales_person_name: string;
+    total: number;
+    doc_time: string;
+    items_brief: string;
+  }[];
 }

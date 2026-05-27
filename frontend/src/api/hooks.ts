@@ -5,6 +5,7 @@ import {
   Carrier,
   Category,
   Customer,
+  HomeSummary,
   InvoiceTrack,
   InvoiceType,
   LegacyPurchase,
@@ -293,6 +294,16 @@ export const useBusinessDailyReport = (
         `/reports/business-daily/?warehouse=${warehouse}&date=${date}`,
       ),
     enabled: !!warehouse && !!date,
+  });
+
+// 首頁總覽:今日 / 昨日營業額、低庫存、今日最新銷貨
+export const useHomeSummary = () =>
+  useQuery({
+    queryKey: ["home-summary"],
+    queryFn: () => api<HomeSummary>("/home-summary/"),
+    // 每 30 秒重抓一次,讓首頁數字接近即時
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
 
 export function useVoidPettyExpense() {

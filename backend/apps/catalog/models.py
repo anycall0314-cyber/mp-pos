@@ -148,6 +148,11 @@ class Product(TenantOwnedModel):
         default=True,
         help_text="該品號金額是否計入毛利報表",
     )
+    safety_stock = models.PositiveIntegerField(
+        "安全庫存",
+        default=0,
+        help_text="跨倉總庫存低於此數時,首頁會跳警示。0 = 不提醒",
+    )
     is_active = models.BooleanField("啟用", default=True)
 
     class Meta:

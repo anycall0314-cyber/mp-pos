@@ -70,6 +70,7 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
             "is_secondhand",
             "counts_cash",
             "counts_margin",
+            "safety_stock",
             "is_active",
             "stock_qty",
             "created_at",

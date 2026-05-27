@@ -6,6 +6,7 @@ from .views import (
     PettyExpenseViewSet,
     PhoneBillCollectionViewSet,
     business_daily_report,
+    home_summary,
 )
 
 router = DefaultRouter()
@@ -20,5 +21,10 @@ urlpatterns = router.urls + [
         "reports/business-daily/",
         business_daily_report,
         name="business-daily-report",
+    ),
+    path(
+        "home-summary/",
+        home_summary,
+        name="home-summary",
     ),
 ]

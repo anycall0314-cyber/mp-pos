@@ -1,11 +1,14 @@
-from datetime import date as date_cls
+from datetime import date as date_cls, timedelta
 
-from django.db.models import Sum
+from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum, Value
+from django.db.models.functions import Coalesce
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
+from apps.catalog.models import Product
 from apps.core.warehouse_scoping import WarehouseScopedMixin
+from apps.inventory.models import ProductSerial, StockBalance, Warehouse
 from apps.purchasing.models import PurchaseOrder
 from apps.sales.models import SalesOrder, SalesOrderPayment
 from apps.tenants.models import PaymentMethod
@@ -517,5 +520,144 @@ def business_daily_report(request):
                 "out_total": adj_out_total,
             },
             "net_change": net,
+        }
+    )
+
+
+@api_view(["GET"])
+def home_summary(request):
+    """登入首頁要的所有 metric 一次回。
+
+    - 今日 / 昨日營業額 + 銷貨筆數(算 vs % 用)
+    - 低於安全庫存的品項(safety_stock>0 且 stock_qty<safety_stock)
+    - 今日最新 5 筆銷貨單
+    - 鎖倉帳號自動限定自己門市;非鎖倉若帶 ?warehouse=N 限定那個倉,否則全公司
+    """
+    tenant = request.tenant
+    profile = getattr(request.user, "profile", None)
+
+    wid = None
+    if profile and profile.is_warehouse_locked and profile.default_warehouse_id:
+        wid = profile.default_warehouse_id
+    else:
+        q_wh = request.query_params.get("warehouse")
+        if q_wh and q_wh.isdigit():
+            wid = int(q_wh)
+
+    today = date_cls.today()
+    yesterday = today - timedelta(days=1)
+
+    def _revenue_count(target_date):
+        qs = SalesOrder.objects.for_tenant(tenant).filter(
+            doc_date=target_date, is_void=False
+        )
+        if wid is not None:
+            qs = qs.filter(warehouse_id=wid)
+        agg = qs.aggregate(t=Sum("total"), c=Count("id"))
+        return {
+            "revenue": int(agg["t"] or 0),
+            "sales_count": agg["c"] or 0,
+        }
+
+    today_data = _revenue_count(today)
+    yesterday_data = _revenue_count(yesterday)
+
+    # 低於安全庫存:safety_stock>0 AND stock < safety_stock
+    # 跟 catalog/views.py 同一 Subquery 模式
+    serial_filter = Q(
+        product=OuterRef("pk"),
+        status=ProductSerial.Status.IN_STOCK,
+    )
+    balance_filter = Q(product=OuterRef("pk"), tenant=tenant)
+    if wid is not None:
+        serial_filter &= Q(warehouse_id=wid)
+        balance_filter &= Q(warehouse_id=wid)
+    serial_sq = (
+        ProductSerial.objects.filter(serial_filter)
+        .order_by()
+        .values("product")
+        .annotate(c=Count("*"))
+        .values("c")[:1]
+    )
+    balance_sq = (
+        StockBalance.objects.filter(balance_filter)
+        .order_by()
+        .values("product")
+        .annotate(t=Sum("qty"))
+        .values("t")[:1]
+    )
+    low_qs = (
+        Product.objects.for_tenant(tenant)
+        .filter(is_active=True, is_virtual=False, safety_stock__gt=0)
+        .annotate(
+            _sc=Coalesce(
+                Subquery(serial_sq, output_field=IntegerField()), Value(0)
+            ),
+            _bc=Coalesce(
+                Subquery(balance_sq, output_field=IntegerField()), Value(0)
+            ),
+            stock=F("_sc") + F("_bc"),
+        )
+        .filter(stock__lt=F("safety_stock"))
+        .order_by("stock", "name")
+    )
+    low_items = [
+        {
+            "id": p.id,
+            "name": p.name,
+            "sku": p.sku,
+            "qty": int(p.stock),
+            "safety_stock": p.safety_stock,
+        }
+        for p in low_qs[:10]
+    ]
+    low_count = low_qs.count()
+
+    # 今日最新 5 筆銷貨單
+    recent_qs = (
+        SalesOrder.objects.for_tenant(tenant)
+        .filter(doc_date=today, is_void=False)
+        .select_related("customer", "sales_person", "warehouse")
+        .prefetch_related("items__product")
+        .order_by("-created_at")
+    )
+    if wid is not None:
+        recent_qs = recent_qs.filter(warehouse_id=wid)
+    recent_sales = []
+    for so in recent_qs[:5]:
+        items_list = list(so.items.all())
+        if not items_list:
+            items_brief = ""
+        elif len(items_list) == 1:
+            items_brief = items_list[0].product.name if items_list[0].product else ""
+        else:
+            first = items_list[0].product.name if items_list[0].product else ""
+            items_brief = f"{first} 等 {len(items_list)} 項"
+        recent_sales.append(
+            {
+                "id": so.id,
+                "no": so.no,
+                "customer_name": so.customer.name if so.customer else "散客",
+                "sales_person_name": so.sales_person.name if so.sales_person else "",
+                "total": int(so.total or 0),
+                "doc_time": so.created_at.isoformat(),
+                "items_brief": items_brief,
+            }
+        )
+
+    warehouse_name = ""
+    if wid is not None:
+        wh = Warehouse.objects.for_tenant(tenant).filter(id=wid).first()
+        if wh:
+            warehouse_name = f"{wh.code} {wh.name}"
+
+    return Response(
+        {
+            "warehouse_id": wid,
+            "warehouse_name": warehouse_name,
+            "today": today_data,
+            "yesterday": yesterday_data,
+            "low_stock": {"count": low_count, "items": low_items},
+            "recent_sales": recent_sales,
         }
     )

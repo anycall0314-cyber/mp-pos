@@ -29,6 +29,7 @@ interface FormState {
   is_secondhand: boolean;
   counts_cash: boolean;
   counts_margin: boolean;
+  safety_stock: string;
   is_active: boolean;
 }
 
@@ -45,6 +46,7 @@ const EMPTY: FormState = {
   is_secondhand: false,
   counts_cash: true,
   counts_margin: true,
+  safety_stock: "0",
   is_active: true,
 };
 
@@ -63,6 +65,7 @@ function toState(p: Product | null | undefined): FormState {
     is_secondhand: p.is_secondhand,
     counts_cash: p.counts_cash,
     counts_margin: p.counts_margin,
+    safety_stock: String(p.safety_stock ?? 0),
     is_active: p.is_active,
   };
 }
@@ -164,6 +167,7 @@ export function ProductForm({
         is_secondhand: state.is_secondhand,
         counts_cash: state.counts_cash,
         counts_margin: state.counts_margin,
+        safety_stock: Number(state.safety_stock) || 0,
         is_active: state.is_active,
       });
       onSaved?.(saved);
@@ -312,6 +316,19 @@ export function ProductForm({
               step="1"
               value={state.list_price}
               onChange={(e) => patch("list_price", e.target.value)}
+            />
+          </Field>
+          <Field
+            label="安全庫存"
+            error={fieldErrors.safety_stock}
+            hint="跨倉總量低於此數,首頁會跳警示;0 = 不提醒"
+          >
+            <input
+              type="number"
+              step="1"
+              min="0"
+              value={state.safety_stock}
+              onChange={(e) => patch("safety_stock", e.target.value)}
             />
           </Field>
         </div>
