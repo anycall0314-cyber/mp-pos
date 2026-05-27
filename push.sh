@@ -19,9 +19,29 @@ cd "$(dirname "$0")"
 # 顏色
 G='\033[0;32m'; R='\033[0;31m'; Y='\033[0;33m'; N='\033[0m'
 
-# ── 1. 檢查有沒有東西要 commit ──────────────────────────
-if [ -z "$(git status -s)" ]; then
+# ── 1. 檢查狀態:有改動 / 領先 origin / 都沒有 ──────────
+HAS_CHANGES="$(git status -s)"
+# 抓本機領先 origin/main 幾個 commit;先 fetch 確保資訊新鮮
+git fetch origin main --quiet 2>/dev/null || true
+AHEAD="$(git rev-list --count origin/main..HEAD 2>/dev/null || echo 0)"
+
+if [ -z "$HAS_CHANGES" ] && [ "$AHEAD" = "0" ]; then
   echo -e "${Y}沒有任何改動,不用 push${N}"
+  exit 0
+fi
+
+# 沒新改動但有領先 origin 的 commit → 直接 push,跳過 add/commit
+if [ -z "$HAS_CHANGES" ] && [ "$AHEAD" != "0" ]; then
+  echo -e "${G}本機已領先 GitHub ${AHEAD} 個 commit,直接 push${N}"
+  echo ""
+  git log --oneline "origin/main..HEAD"
+  echo ""
+  echo -e "${G}── git push ──${N}"
+  git push
+  echo ""
+  echo -e "${G}推上 GitHub 完成${N}"
+  echo ""
+  echo -e "${Y}下一步:到 Mac mini 跑 ./deploy.sh 把新版本上線${N}"
   exit 0
 fi
 
