@@ -192,6 +192,15 @@ export function App() {
         </button>
         <div className="brand">MP POS</div>
         <nav className={`topnav${mobileNavOpen ? " open" : ""}`}>
+          <NavLink
+            to="/home"
+            end
+            className={({ isActive }) =>
+              isActive ? "topnav-link active" : "topnav-link"
+            }
+          >
+            首頁
+          </NavLink>
           {(user?.profile?.role === "platform_admin"
             ? [PLATFORM_NAV_GROUP, ...NAV_GROUPS]
             : NAV_GROUPS
