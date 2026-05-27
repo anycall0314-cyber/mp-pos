@@ -2089,21 +2089,63 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   border-bottom: 1px solid var(--border);
   background: var(--panel-2);
 }
-/* 內部欄位也用 auto-fit:每格至少 100px,寬不夠就 wrap 成兩行
- * 桌機:現金櫃流水 5 欄一列、當日營收 4 欄一列
- * 窄畫面:會自然變成 2~3 欄多行,文字不會被擠成直書
+/* 摘要卡內部:不用 grid,改 list(每行 label 左 / 數字右)
+ * 不會被擠成直書,任何寬度都一致顯示
  */
-.biz-cash-cells {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-  gap: 1px;
-  background: var(--border);
-}
+.biz-cash-cells,
 .biz-revenue-cells {
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+.biz-cash-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.biz-cash-row:last-child {
+  border-bottom: 0;
+}
+.biz-cash-row-label {
+  font-size: 13px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.biz-cash-row-value {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* 收入 / 支出 群組 */
+.biz-group {
+  margin-bottom: 20px;
+}
+.biz-group-header {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-  gap: 1px;
-  background: var(--border);
+  /* 跟 .biz-section-header 同 column,視覺對齊 */
+  grid-template-columns: 20px minmax(0, 1fr) 50px 90px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px 4px 16px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.biz-group-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 1px;
+}
+.biz-group-th {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-align: right;
 }
 
 /* Section 折疊區 */
@@ -2113,8 +2155,8 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
 .biz-section-header {
   width: 100%;
   display: grid;
-  /* fluid:箭頭 20、標題彈性、筆數 / 小計各自寬度,不靠 @media 一律適用 */
-  grid-template-columns: 20px minmax(0, 1fr) auto auto;
+  /* 跟 .biz-group-header 同 columns,讓「筆數」「小計」上下垂直對齊 */
+  grid-template-columns: 20px minmax(0, 1fr) 50px 90px;
   align-items: center;
   gap: 12px;
   padding: 8px 12px;

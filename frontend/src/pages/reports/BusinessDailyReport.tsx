@@ -702,49 +702,12 @@ function SectionGroup({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ marginBottom: 20 }}>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "20px 220px 80px 1fr",
-          alignItems: "center",
-          gap: 12,
-          padding: "0 12px 4px 16px",
-          marginBottom: 4,
-          borderBottom: "1px solid var(--border)",
-        }}
-      >
+    <div className="biz-group">
+      <div className="biz-group-header">
         <span />
-        <span
-          style={{
-            fontSize: 13,
-            fontWeight: 700,
-            color: "var(--text)",
-            letterSpacing: 1,
-          }}
-        >
-          {label}
-        </span>
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: "var(--text-dim)",
-            textAlign: "right",
-          }}
-        >
-          筆數
-        </span>
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: "var(--text-dim)",
-            textAlign: "right",
-          }}
-        >
-          小計
-        </span>
+        <span className="biz-group-label">{label}</span>
+        <span className="biz-group-th">筆數</span>
+        <span className="biz-group-th">小計</span>
       </div>
       {children}
     </div>
@@ -815,26 +778,11 @@ function CashItem({
 }) {
   const effectiveColor = color ?? (value < 0 ? "#ff7070" : "var(--text)");
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 1,
-        padding: "6px 10px",
-        background: "var(--panel)",
-      }}
-    >
-      <span style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.3 }}>
-        {label}
-      </span>
+    <div className="biz-cash-row">
+      <span className="biz-cash-row-label">{label}</span>
       <span
-        style={{
-          fontSize: 16,
-          fontWeight: 700,
-          color: effectiveColor,
-          fontVariantNumeric: "tabular-nums",
-          lineHeight: 1.2,
-        }}
+        className="biz-cash-row-value"
+        style={{ color: effectiveColor }}
       >
         {sign && value > 0 ? sign : ""}
         {value.toLocaleString()}
