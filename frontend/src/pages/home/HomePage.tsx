@@ -46,6 +46,12 @@ export function HomePage() {
         <div className="hp-statusbar-right">
           <span className="hp-status-date">{fmtDate(now)}</span>
           <span className="hp-status-time">{fmtTime(now)}</span>
+          <span
+            className="hp-status-version"
+            title="目前部署版本(git 短 hash · 建構時間)"
+          >
+            v{__APP_VERSION__}
+          </span>
         </div>
       </header>
 
