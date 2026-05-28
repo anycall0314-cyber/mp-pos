@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { Link } from "react-router-dom";
+
 import {
   StockMatrixProduct,
+  useHomeSummary,
   useInStockSerials,
   usePendingTransfers,
   useStockMatrix,
@@ -297,6 +300,10 @@ function sortKeyEquals(a: SortKey, b: SortKey): boolean {
 
 export function InventoryQueryPage() {
   const isMobile = useIsMobile();
+  // 空狀態用:顯示低於安全庫存的品項,讓使用者一進來就看到需要關注的庫存
+  const homeSummary = useHomeSummary();
+  const lowStockItems = homeSummary.data?.low_stock?.items ?? [];
+
   // 表單狀態(未送出)
   const [keyword, setKeyword] = useState("");
   // 類別多選:chip 集合;categoryPicker 是 ComboBox 暫存,選後加入 chip 並清空
@@ -465,7 +472,7 @@ export function InventoryQueryPage() {
       <Toolbar title="庫存查詢" />
 
       <div className="list-filterbar inventory-filterbar">
-        <label style={{ minWidth: 220 }}>
+        <label className="inv-field inv-field-keyword">
           關鍵字
           <input
             type="text"
@@ -478,68 +485,21 @@ export function InventoryQueryPage() {
               }
             }}
             placeholder="品名 / 品號 / IMEI"
-            style={{ minWidth: 180 }}
           />
         </label>
-        <label style={{ minWidth: 260 }}>
+        <label className="inv-field inv-field-category">
           類別 (可多選)
-          <div style={{ minWidth: 200 }}>
-            <ComboBox<Category>
-              value={categoryPicker}
-              selectedOption={categoryPickerOption}
-              onChange={(_id, opt) => {
-                if (opt) addCategory(opt);
-              }}
-              fetchOptions={searchCategories}
-              placeholder={
-                selectedCategories.length === 0 ? "全部" : "繼續加類別…"
-              }
-            />
-            {selectedCategories.length > 0 && (
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 4,
-                  marginTop: 4,
-                }}
-              >
-                {selectedCategories.map((c) => (
-                  <span
-                    key={c.id}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      padding: "2px 6px",
-                      background: "var(--panel-2)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 3,
-                      fontSize: 13,
-                    }}
-                  >
-                    {c.label}
-                    <button
-                      type="button"
-                      onClick={() => removeCategory(c.id)}
-                      style={{
-                        background: "transparent",
-                        border: 0,
-                        color: "var(--text-dim)",
-                        cursor: "pointer",
-                        padding: 0,
-                        fontSize: 14,
-                        lineHeight: 1,
-                      }}
-                      title="移除"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
+          <ComboBox<Category>
+            value={categoryPicker}
+            selectedOption={categoryPickerOption}
+            onChange={(_id, opt) => {
+              if (opt) addCategory(opt);
+            }}
+            fetchOptions={searchCategories}
+            placeholder={
+              selectedCategories.length === 0 ? "全部" : "繼續加類別…"
+            }
+          />
         </label>
 
         <button
@@ -559,6 +519,25 @@ export function InventoryQueryPage() {
             : ""}
         </span>
       </div>
+
+      {/* 已選類別 chip 列(僅在有選時顯示) */}
+      {selectedCategories.length > 0 && (
+        <div className="inv-chip-row">
+          <span className="inv-chip-row-label">已選類別:</span>
+          {selectedCategories.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className="inv-chip"
+              onClick={() => removeCategory(c.id)}
+              title="點擊移除"
+            >
+              <span>{c.label}</span>
+              <span className="inv-chip-x">×</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* 倉別勾選列 */}
       <div className="warehouse-picker">
@@ -591,9 +570,20 @@ export function InventoryQueryPage() {
 
       <div className="md-table" style={{ height: "calc(100% - 130px)" }}>
         {!applied && (
-          <div className="md-empty">
-            設定篩選條件後,點上方「查詢」開始
-          </div>
+          <InventoryDefaultPanel
+            lowStockItems={lowStockItems}
+            onPickName={(name) => {
+              setKeyword(name);
+              // 直接觸發查詢(已勾倉別才能查)
+              if (selectedWarehouseIds.size > 0) {
+                setApplied({
+                  warehouseIds: Array.from(selectedWarehouseIds),
+                  categoryIds: [],
+                  keyword: name,
+                });
+              }
+            }}
+          />
         )}
         {applied && matrix.isLoading && (
           <div className="md-empty">查詢中…</div>
@@ -868,6 +858,71 @@ export function InventoryQueryPage() {
             </tbody>
           </table>
         )}
+      </div>
+    </div>
+  );
+}
+
+interface LowStockItem {
+  id: number;
+  name: string;
+  sku: string;
+  qty: number;
+  safety_stock: number;
+}
+
+function InventoryDefaultPanel({
+  lowStockItems,
+  onPickName,
+}: {
+  lowStockItems: LowStockItem[];
+  onPickName: (name: string) => void;
+}) {
+  if (lowStockItems.length === 0) {
+    return (
+      <div className="inv-default">
+        <div className="inv-default-empty">
+          <div className="inv-default-empty-title">沒有需要關注的庫存</div>
+          <div className="inv-default-empty-hint">
+            設定上方篩選條件後,點「查詢」開始
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="inv-default">
+      <div className="inv-default-head">
+        <div className="inv-default-title">
+          需要注意的庫存({lowStockItems.length} 項低於安全庫存)
+        </div>
+        <Link to="/products" className="inv-default-link">
+          調整安全庫存 →
+        </Link>
+      </div>
+      <div className="inv-default-list">
+        {lowStockItems.map((it) => (
+          <button
+            key={it.id}
+            type="button"
+            className="inv-default-row"
+            onClick={() => onPickName(it.name)}
+            title="點擊查詢這個品項"
+          >
+            <div className="inv-default-row-main">
+              <div className="inv-default-row-name">{it.name}</div>
+              <div className="inv-default-row-sub">
+                {it.sku} · 安全庫存 {it.safety_stock}
+              </div>
+            </div>
+            <div className="inv-default-row-qty">
+              剩 <b>{it.qty}</b> 件
+            </div>
+          </button>
+        ))}
+      </div>
+      <div className="inv-default-foot">
+        或設定上方篩選條件後,點「查詢」查看完整庫存
       </div>
     </div>
   );

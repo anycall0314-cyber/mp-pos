@@ -2468,3 +2468,154 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   color: white;
 }
 
+/* ─────────────────────────────────────────────────────────
+ * 庫存查詢頁:篩選欄位 / chip / 預設低庫存面板
+ * ───────────────────────────────────────────────────────── */
+/* 篩選欄位:fluid,容器不夠寬就自動 wrap,每欄獨立 row */
+.inv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.inv-field input,
+.inv-field .combobox {
+  width: 100%;
+  min-width: 0;
+}
+.inv-field-keyword { flex-basis: 240px; }
+.inv-field-category { flex-basis: 240px; }
+
+/* 已選類別 chip 列(篩選列下方獨立列) */
+.inv-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.inv-chip-row-label {
+  color: var(--text-dim);
+  margin-right: 4px;
+}
+.inv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--accent);
+  color: white;
+  border: 1px solid var(--accent);
+  border-radius: 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.inv-chip:hover { opacity: 0.85; }
+.inv-chip-x {
+  font-size: 14px;
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+/* 預設面板:低庫存品項列表 */
+.inv-default {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+.inv-default-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-dim);
+}
+.inv-default-empty-title {
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+.inv-default-empty-hint {
+  font-size: 13px;
+}
+.inv-default-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px;
+}
+.inv-default-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.inv-default-link {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-decoration: none;
+}
+.inv-default-link:hover { color: var(--text); }
+.inv-default-list {
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.inv-default-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+.inv-default-row:last-child { border-bottom: 0; }
+.inv-default-row:hover { background: var(--row-hover); }
+.inv-default-row-main {
+  flex: 1;
+  min-width: 0;
+}
+.inv-default-row-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inv-default-row-sub {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.inv-default-row-qty {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.inv-default-row-qty b {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fbbf24;
+  font-variant-numeric: tabular-nums;
+  margin: 0 2px;
+}
+.inv-default-foot {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 4px 0 8px;
+}
+
