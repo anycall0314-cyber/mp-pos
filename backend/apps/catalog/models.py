@@ -173,6 +173,35 @@ class Product(TenantOwnedModel):
         ),
     )
 
+    class AccessoryType(models.TextChoices):
+        NONE = "none", "非配件"  # 手機 / 主機本身
+        PHONE_SPECIFIC = "phone_specific", "機型專屬"  # 殼/保護貼
+        UNIVERSAL = "universal", "通用型"  # 充電線/耳機
+
+    accessory_type = models.CharField(
+        "配件類型",
+        max_length=16,
+        choices=AccessoryType.choices,
+        default=AccessoryType.NONE,
+        help_text=(
+            "機型專屬:安全庫存改用動態公式(主機日均×購買率×補貨天數);"
+            "通用型:用 safety_stock 靜態欄位;"
+            "非配件:商品本身是主機"
+        ),
+    )
+    attach_rate = models.DecimalField(
+        "配件購買率",
+        max_digits=4,
+        decimal_places=2,
+        default=0.30,
+        help_text="預估買主機的人有多少比例會買此配件(0.0~1.0,預設 0.30)",
+    )
+    replenish_days = models.PositiveSmallIntegerField(
+        "補貨天數",
+        default=14,
+        help_text="動態安全庫存的天數因子(下次補貨能撐幾天),預設 14",
+    )
+
     is_active = models.BooleanField("啟用", default=True)
 
     class Meta:

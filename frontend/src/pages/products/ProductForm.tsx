@@ -4,7 +4,12 @@ import { ApiHttpError } from "@/api/client";
 import { useSaveCategory, useSaveProduct } from "@/api/hooks";
 import { searchCategories } from "@/api/search";
 import { searchProducts } from "@/api/search";
-import type { Category, LifecycleStatus, Product } from "@/api/types";
+import type {
+  AccessoryType,
+  Category,
+  LifecycleStatus,
+  Product,
+} from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
@@ -32,6 +37,9 @@ interface FormState {
   counts_margin: boolean;
   safety_stock: string;
   lifecycle_status: LifecycleStatus;
+  accessory_type: AccessoryType;
+  attach_rate: string;
+  replenish_days: string;
   related_hosts: { id: number; name: string }[];
   is_active: boolean;
 }
@@ -51,6 +59,9 @@ const EMPTY: FormState = {
   counts_margin: true,
   safety_stock: "0",
   lifecycle_status: "active",
+  accessory_type: "none",
+  attach_rate: "0.30",
+  replenish_days: "14",
   related_hosts: [],
   is_active: true,
 };
@@ -72,6 +83,9 @@ function toState(p: Product | null | undefined): FormState {
     counts_margin: p.counts_margin,
     safety_stock: String(p.safety_stock ?? 0),
     lifecycle_status: p.lifecycle_status ?? "active",
+    accessory_type: p.accessory_type ?? "none",
+    attach_rate: p.attach_rate ?? "0.30",
+    replenish_days: String(p.replenish_days ?? 14),
     related_hosts: (p.related_hosts ?? []).map((h) => ({
       id: h.id,
       name: h.name,
@@ -179,6 +193,9 @@ export function ProductForm({
         counts_margin: state.counts_margin,
         safety_stock: Number(state.safety_stock) || 0,
         lifecycle_status: state.lifecycle_status,
+        accessory_type: state.accessory_type,
+        attach_rate: state.attach_rate || "0",
+        replenish_days: Number(state.replenish_days) || 0,
         related_host_ids: state.related_hosts.map((h) => h.id),
         is_active: state.is_active,
       });
@@ -416,6 +433,56 @@ export function ProductForm({
               </div>
             )}
           </Field>
+        </div>
+
+        <div className="field-row">
+          <Field
+            label="配件類型"
+            error={fieldErrors.accessory_type}
+            hint="機型專屬會用動態安全庫存公式;通用型 / 非配件用固定 safety_stock"
+          >
+            <select
+              value={state.accessory_type}
+              onChange={(e) =>
+                patch("accessory_type", e.target.value as AccessoryType)
+              }
+            >
+              <option value="none">非配件(手機 / 主機本身)</option>
+              <option value="phone_specific">機型專屬(殼 / 保護貼)</option>
+              <option value="universal">通用型(充電線 / 耳機)</option>
+            </select>
+          </Field>
+          {state.accessory_type === "phone_specific" && (
+            <>
+              <Field
+                label="配件購買率"
+                error={fieldErrors.attach_rate}
+                hint="買主機的人約幾成會買此配件(0.30 = 30%)"
+              >
+                <input
+                  type="number"
+                  step="0.05"
+                  min="0"
+                  max="1"
+                  value={state.attach_rate}
+                  onChange={(e) => patch("attach_rate", e.target.value)}
+                />
+              </Field>
+              <Field
+                label="補貨天數"
+                error={fieldErrors.replenish_days}
+                hint="動態安全庫存的天數因子,預設 14 天"
+              >
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  value={state.replenish_days}
+                  onChange={(e) => patch("replenish_days", e.target.value)}
+                />
+              </Field>
+            </>
+          )}
         </div>
 
         <div className="fieldset">

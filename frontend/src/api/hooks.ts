@@ -4,6 +4,7 @@ import { api } from "./client";
 import {
   Carrier,
   Category,
+  ClearancePressureResponse,
   Customer,
   HomeSummary,
   InventoryAlertsResponse,
@@ -312,6 +313,14 @@ export const useInventoryAlerts = () =>
   useQuery({
     queryKey: ["inventory-alerts"],
     queryFn: () => api<InventoryAlertsResponse>("/inventory-alerts/"),
+    refetchInterval: 60000,
+  });
+
+// 清倉壓力追蹤:出清商品依預估清倉天數排序,> 60 天建議降價
+export const useClearancePressure = () =>
+  useQuery({
+    queryKey: ["clearance-pressure"],
+    queryFn: () => api<ClearancePressureResponse>("/clearance-pressure/"),
     refetchInterval: 60000,
   });
 

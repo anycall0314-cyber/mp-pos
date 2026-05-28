@@ -6,6 +6,7 @@ from .views import (
     StockBalanceViewSet,
     StockMovementViewSet,
     WarehouseViewSet,
+    clearance_pressure,
     inventory_alerts,
 )
 
@@ -17,4 +18,9 @@ router.register(r"stock-movements", StockMovementViewSet, basename="stock-moveme
 
 urlpatterns = router.urls + [
     path("inventory-alerts/", inventory_alerts, name="inventory-alerts"),
+    path(
+        "clearance-pressure/",
+        clearance_pressure,
+        name="clearance-pressure",
+    ),
 ]

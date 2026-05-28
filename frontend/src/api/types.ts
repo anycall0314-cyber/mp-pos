@@ -47,6 +47,9 @@ export interface Product {
   counts_margin: boolean;
   safety_stock?: number;
   lifecycle_status?: LifecycleStatus;
+  accessory_type?: AccessoryType;
+  attach_rate?: string; // Decimal as string
+  replenish_days?: number;
   // 寫入時送 id 清單(write_only)
   related_host_ids?: number[];
   // 讀取時系統會回(從 ProductRelation 來)
@@ -728,6 +731,11 @@ export type LifecycleStatus =
   | "discontinued" // 停產下架
   | "clearance"; // 清倉處理
 
+export type AccessoryType =
+  | "none" // 非配件(手機本身)
+  | "phone_specific" // 機型專屬(殼 / 保護貼)
+  | "universal"; // 通用型(充電線 / 耳機)
+
 export type AlertSeverity = "critical" | "warning" | "info";
 export type AlertReasonCode =
   | "out_of_stock"
@@ -744,6 +752,9 @@ export interface InventoryAlertRow {
   category_name: string;
   current_qty: number;
   safety_stock: number;
+  safety_source: "dynamic" | "static";
+  safety_formula: string | null;
+  accessory_type: AccessoryType;
   lifecycle_status: LifecycleStatus;
   lifecycle_status_label: string;
   severity: AlertSeverity;
@@ -760,6 +771,29 @@ export interface InventoryAlertsResponse {
     total: number;
   };
   rows: InventoryAlertRow[];
+}
+
+export interface ClearancePressureRow {
+  id: number;
+  name: string;
+  sku: string;
+  category_name: string;
+  current_qty: number;
+  daily_avg: number;
+  daily_avg_label: string;
+  estimated_days: number;
+  recommend_discount: boolean;
+  source_label: string;
+  lifecycle_status: LifecycleStatus;
+  lifecycle_status_label: string;
+  accessory_type: AccessoryType;
+  related_hosts: { id: number; name: string; lifecycle_status: LifecycleStatus }[];
+}
+
+export interface ClearancePressureResponse {
+  counts: { recommend_discount: number; total: number };
+  threshold_days: number;
+  rows: ClearancePressureRow[];
 }
 
 // 登入首頁所需的 metric 一次回

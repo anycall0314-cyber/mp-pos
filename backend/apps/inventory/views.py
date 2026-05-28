@@ -1,3 +1,4 @@
+import math
 from datetime import timedelta
 
 from django.db.models import (
@@ -217,8 +218,67 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
 #             clearance 還有庫存(出清提醒)
 # ─────────────────────────────────────────────────────────
 
-# 「最近熱銷」窗口(天數)
-_HOT_SELLING_DAYS = 30
+# 「最近熱銷」/ 日均銷量窗口(天數)
+_SALES_WINDOW_DAYS = 30
+# 清倉壓力警示門檻:預估清倉天數超過此值 → 建議降價
+_CLEARANCE_PRESSURE_DAYS = 60
+
+
+def _daily_avg_sales(tenant, product_ids):
+    """回傳 dict {product_id: 過去 N 天日均銷量(float)}。
+    用於:
+    - 機型專屬配件的動態 safety stock(看主機 product_ids 的日均)
+    - 清倉壓力預估天數(看該配件本身 product_ids 的日均)
+    """
+    if not product_ids:
+        return {}
+    since = timezone.now().date() - timedelta(days=_SALES_WINDOW_DAYS)
+    rows = (
+        SalesOrderItem.objects.for_tenant(tenant)
+        .filter(
+            product_id__in=product_ids,
+            so__doc_date__gte=since,
+            so__is_void=False,
+        )
+        .values("product_id")
+        .annotate(total=Sum("qty"))
+    )
+    return {
+        r["product_id"]: float(r["total"] or 0) / _SALES_WINDOW_DAYS
+        for r in rows
+    }
+
+
+def _compute_safety(product, hosts, host_daily_avg_map):
+    """回傳 (effective_safety:int, source:str, formula:str|None)。
+
+    機型專屬配件 + 有關聯主機 → 動態:
+        Σ(每主機日均) × attach_rate × replenish_days,任一主機 replacing 折半
+    其他 → 用靜態 safety_stock
+    """
+    if (
+        product.accessory_type == Product.AccessoryType.PHONE_SPECIFIC
+        and hosts
+    ):
+        sum_daily = sum(host_daily_avg_map.get(h.id, 0.0) for h in hosts)
+        attach = float(product.attach_rate or 0)
+        days = int(product.replenish_days or 0)
+        base = sum_daily * attach * days
+        host_replacing = any(
+            h.lifecycle_status == Product.LifecycleStatus.REPLACING for h in hosts
+        )
+        if host_replacing:
+            base *= 0.5
+        eff = int(math.ceil(base))
+        formula = (
+            f"主機日均 {sum_daily:.1f} × 購買率 {attach:.0%}"
+            f" × 補貨 {days} 天"
+        )
+        if host_replacing:
+            formula += " × 0.5(主機即將換代,自動折半)"
+        formula += f" = {eff} 件"
+        return eff, "dynamic", formula
+    return int(product.safety_stock or 0), "static", None
 
 
 def _build_stock_annotation(tenant, warehouse_id=None):
@@ -262,18 +322,22 @@ def _annotate_stock(qs, serial_sq, balance_sq):
 def inventory_alerts(request):
     """庫存警示 API,回傳當前所有需要關注的商品。
 
-    依 lifecycle_status + ProductRelation(主機-配件)推論觸發原因:
-    - active + qty=0:已斷貨,critical
-    - active + qty<safety 無關聯主機:低於安全庫存,warning
-    - active + qty<safety 關聯主機是 active 且最近熱銷:主機熱銷帶動,warning
-    - active + qty<safety 關聯主機是 replacing/discontinued/clearance:主機已換代,info
-    - replacing + qty<safety:換代審查,info
-    - clearance + qty>0:出清提醒,info
+    觸發條件:
+    - active/replacing 商品 + qty < effective_safety(可動態 / 靜態)
+    - clearance 商品 + qty > 0
+
+    effective_safety 計算:
+    - 機型專屬配件 + 有關聯主機 → 動態公式
+      (Σ主機日均 × 配件購買率 × 補貨天數;任一主機 replacing 折半)
+    - 其他 → 靜態 safety_stock 欄位
+
+    推論 reason:
+    - out_of_stock / low_stock / host_hot_selling / host_replaced /
+      replacing_review / clearance_remain
     """
     tenant = request.tenant
     profile = getattr(request.user, "profile", None)
 
-    # 鎖倉帳號自動限定自己門市(跟 home-summary 同邏輯)
     wid = None
     if profile and profile.is_warehouse_locked and profile.default_warehouse_id:
         wid = profile.default_warehouse_id
@@ -284,56 +348,53 @@ def inventory_alerts(request):
 
     serial_sq, balance_sq = _build_stock_annotation(tenant, wid)
 
-    # 1. active / replacing 商品的庫存查詢
+    # 1. 撈所有可能進警示的候選商品(active/replacing/clearance)
+    # 動態 safety 無法在 SQL 內過濾,先全撈再 Python 過濾
     base_qs = (
         Product.objects.for_tenant(tenant)
-        .filter(is_active=True, is_virtual=False)
+        .filter(
+            is_active=True,
+            is_virtual=False,
+            lifecycle_status__in=[
+                Product.LifecycleStatus.ACTIVE,
+                Product.LifecycleStatus.REPLACING,
+                Product.LifecycleStatus.CLEARANCE,
+            ],
+        )
         .select_related("category")
         .prefetch_related("host_relations__host_product")
     )
     base_qs = _annotate_stock(base_qs, serial_sq, balance_sq)
+    candidates = list(base_qs)
 
-    # 撈所有可能進警示的:active+低於safety / replacing+低於safety / clearance+在庫
-    alert_qs = base_qs.filter(
-        Q(
-            lifecycle_status__in=[
-                Product.LifecycleStatus.ACTIVE,
-                Product.LifecycleStatus.REPLACING,
-            ],
-            safety_stock__gt=0,
-            stock__lt=F("safety_stock"),
-        )
-        | Q(
-            lifecycle_status=Product.LifecycleStatus.CLEARANCE,
-            stock__gt=0,
-        )
-    ).order_by("stock", "name")
-
-    products = list(alert_qs[:200])
-
-    # 找出所有 host product 並判斷是否最近熱銷
+    # 2. 算所有主機的日均銷量(動態 safety 用)
     host_ids = set()
-    for p in products:
+    for p in candidates:
         for r in p.host_relations.all():
             host_ids.add(r.host_product_id)
-    hot_host_ids: set[int] = set()
-    if host_ids:
-        since = timezone.now().date() - timedelta(days=_HOT_SELLING_DAYS)
-        sold_ids = (
-            SalesOrderItem.objects.for_tenant(tenant)
-            .filter(
-                product_id__in=host_ids,
-                so__doc_date__gte=since,
-                so__is_void=False,
-            )
-            .values_list("product_id", flat=True)
-            .distinct()
-        )
-        hot_host_ids = set(sold_ids)
+    host_daily_avg = _daily_avg_sales(tenant, host_ids)
+
+    # 「最近熱銷」= 該主機 active 且過去 N 天有銷貨(daily_avg > 0)
+    hot_host_ids = {pid for pid, avg in host_daily_avg.items() if avg > 0}
 
     rows = []
-    for p in products:
+    for p in candidates:
         hosts = [r.host_product for r in p.host_relations.all()]
+        effective_safety, safety_source, safety_formula = _compute_safety(
+            p, hosts, host_daily_avg
+        )
+
+        # 過濾:不符合警示條件的跳過
+        is_clearance = p.lifecycle_status == Product.LifecycleStatus.CLEARANCE
+        if is_clearance:
+            if p.stock <= 0:
+                continue
+        else:
+            if effective_safety <= 0:
+                continue  # 沒設 safety / 動態算出 0 → 不追蹤
+            if p.stock >= effective_safety:
+                continue  # 庫存充足,不警示
+
         host_replaced = any(
             h.lifecycle_status
             in (
@@ -382,7 +443,10 @@ def inventory_alerts(request):
                 "sku": p.sku,
                 "category_name": p.category.name if p.category else "",
                 "current_qty": int(p.stock),
-                "safety_stock": p.safety_stock,
+                "safety_stock": effective_safety,
+                "safety_source": safety_source,
+                "safety_formula": safety_formula,
+                "accessory_type": p.accessory_type,
                 "lifecycle_status": p.lifecycle_status,
                 "lifecycle_status_label": p.get_lifecycle_status_display(),
                 "severity": severity,
@@ -399,7 +463,6 @@ def inventory_alerts(request):
             }
         )
 
-    # 依 severity 排:critical → warning → info,同級內依 stock 升冪
     sev_rank = {"critical": 0, "warning": 1, "info": 2}
     rows.sort(key=lambda r: (sev_rank.get(r["severity"], 9), r["current_qty"]))
 
@@ -409,5 +472,125 @@ def inventory_alerts(request):
         "info": sum(1 for r in rows if r["severity"] == "info"),
         "total": len(rows),
     }
-
     return Response({"counts": counts, "rows": rows})
+
+
+@api_view(["GET"])
+def clearance_pressure(request):
+    """清倉壓力追蹤 API。
+
+    對象:
+    - lifecycle_status == clearance 的商品
+    - 機型專屬配件 且 所有關聯主機都是 discontinued/clearance(主機已退役)
+
+    每筆計算:
+    - 該商品本身過去 30 天日均銷量
+    - 預估清倉天數 = current_qty / 日均
+    - 超過 60 天 → 標記「建議降價」
+
+    日均 = 0 時用 999 表示「無銷售紀錄」(極端高壓力)。
+    """
+    tenant = request.tenant
+    profile = getattr(request.user, "profile", None)
+
+    wid = None
+    if profile and profile.is_warehouse_locked and profile.default_warehouse_id:
+        wid = profile.default_warehouse_id
+    else:
+        q_wh = request.query_params.get("warehouse")
+        if q_wh and q_wh.isdigit():
+            wid = int(q_wh)
+
+    serial_sq, balance_sq = _build_stock_annotation(tenant, wid)
+
+    base_qs = (
+        Product.objects.for_tenant(tenant)
+        .filter(is_active=True, is_virtual=False)
+        .select_related("category")
+        .prefetch_related("host_relations__host_product")
+    )
+    base_qs = _annotate_stock(base_qs, serial_sq, balance_sq)
+    candidates = list(base_qs.filter(stock__gt=0))
+
+    # 過濾出「正在出清」的:清倉狀態 OR 機型專屬+主機全退役
+    pressure_products = []
+    for p in candidates:
+        if p.lifecycle_status == Product.LifecycleStatus.CLEARANCE:
+            pressure_products.append((p, "self_clearance"))
+            continue
+        if p.accessory_type == Product.AccessoryType.PHONE_SPECIFIC:
+            hosts = list(r.host_product for r in p.host_relations.all())
+            if hosts and all(
+                h.lifecycle_status
+                in (
+                    Product.LifecycleStatus.DISCONTINUED,
+                    Product.LifecycleStatus.CLEARANCE,
+                )
+                for h in hosts
+            ):
+                pressure_products.append((p, "all_hosts_retired"))
+
+    if not pressure_products:
+        return Response({"counts": {"recommend_discount": 0, "total": 0}, "rows": []})
+
+    daily_avg = _daily_avg_sales(
+        tenant, [p.id for p, _ in pressure_products]
+    )
+
+    rows = []
+    recommend_count = 0
+    for p, source in pressure_products:
+        avg = daily_avg.get(p.id, 0.0)
+        if avg <= 0:
+            est_days = 999  # 無銷售 → 視為極端壓力
+            avg_label = "近 30 天無銷售"
+        else:
+            est_days = round(int(p.stock) / avg)
+            avg_label = f"日均 {avg:.2f} 件"
+        recommend = est_days > _CLEARANCE_PRESSURE_DAYS
+        if recommend:
+            recommend_count += 1
+        hosts = list(r.host_product for r in p.host_relations.all())
+        rows.append(
+            {
+                "id": p.id,
+                "name": p.name,
+                "sku": p.sku,
+                "category_name": p.category.name if p.category else "",
+                "current_qty": int(p.stock),
+                "daily_avg": round(avg, 2),
+                "daily_avg_label": avg_label,
+                "estimated_days": min(est_days, 999),
+                "recommend_discount": recommend,
+                "source_label": (
+                    "商品已標清倉"
+                    if source == "self_clearance"
+                    else "關聯主機全部停產 / 清倉"
+                ),
+                "lifecycle_status": p.lifecycle_status,
+                "lifecycle_status_label": p.get_lifecycle_status_display(),
+                "accessory_type": p.accessory_type,
+                "related_hosts": [
+                    {
+                        "id": h.id,
+                        "name": h.name,
+                        "lifecycle_status": h.lifecycle_status,
+                    }
+                    for h in hosts
+                ],
+            }
+        )
+
+    # 預估天數越長 → 壓力越大,放最上面
+    rows.sort(key=lambda r: -r["estimated_days"])
+
+    return Response(
+        {
+            "counts": {
+                "recommend_discount": recommend_count,
+                "total": len(rows),
+            },
+            "threshold_days": _CLEARANCE_PRESSURE_DAYS,
+            "rows": rows,
+        }
+    )
