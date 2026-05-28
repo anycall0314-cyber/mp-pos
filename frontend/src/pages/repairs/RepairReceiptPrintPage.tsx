@@ -51,10 +51,10 @@ export function RepairReceiptPrintPage() {
   const repairItemDisplay = o.repair_item_name || o.defect_description.slice(0, 30);
 
   return (
-    <div className="rr-page">
-      {renderSection("客戶收執聯")}
-      <div className="rr-cut">- - - - - - - - - - - - - - 請沿虛線剪開 - - - - - - - - - - - - - -</div>
-      {renderSection("門市存根聯")}
+    <div className="rr-page" data-theme="light">
+      {renderSection("客戶聯")}
+      <div className="rr-cut" aria-hidden="true" />
+      {renderSection("留存聯")}
     </div>
   );
 
