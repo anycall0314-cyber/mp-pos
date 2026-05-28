@@ -16,7 +16,7 @@ export function Drawer({
   open,
   title,
   onClose,
-  width = 520,
+  width = 480,
   footer,
   children,
   lockBackdrop = false,

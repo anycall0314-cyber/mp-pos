@@ -128,9 +128,16 @@ body { background: var(--bg); color: var(--text); }
   background: var(--panel-2); color: var(--text);
   border: 1px solid var(--border); cursor: pointer;
   font-size: 15px;
+  /* 預設由內容撐寬,不跟隨容器拉伸(全站規範) */
+  width: auto;
+  flex: 0 0 auto;
 }
 .btn:hover { background: var(--row-hover); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: white; }
+.btn.primary {
+  background: var(--accent); border-color: var(--accent); color: white;
+  /* 主要操作按鈕(儲存 / 結帳)給個合理寬度下限,看起來不會像小按鈕被擠 */
+  min-width: 80px;
+}
 .btn.primary:hover { filter: brightness(1.1); }
 .btn.danger { color: #ff7070; border-color: #553030; }
 .btn.danger:hover { background: #401818; }
@@ -204,6 +211,39 @@ body { background: var(--bg); color: var(--text); }
 
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .field-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+/* ─────────────────────────────────────────────────────────
+ * 表單版面通用 utility(套到任何表單頁的 form 容器)
+ *   .form-grid:auto 1/2/3 欄(響應式 by viewport)
+ *   .form-grid-span:跨整列(備註 / 描述用)
+ *   .search-input:單獨搜尋框限寬 480
+ *   .action-bar:底部按鈕列靠右 gap 8
+ * ───────────────────────────────────────────────────────── */
+.form-grid {
+  display: grid;
+  /* <768 單欄;>=768 雙欄;>=1280 三欄 */
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+@media (min-width: 768px) {
+  .form-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (min-width: 1280px) {
+  .form-grid { grid-template-columns: 1fr 1fr 1fr; }
+}
+.form-grid-span {
+  grid-column: 1 / -1;
+}
+.search-input {
+  max-width: 480px;
+  width: 100%;
+}
+.action-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 
 /* 銷貨單頭:高密度 4 欄 3 排;最右欄固定放常改的 客戶 / 會員 / 業務員 */
 .sales-header-grid {
@@ -301,6 +341,11 @@ body { background: var(--bg); color: var(--text); }
   padding: 12px 16px;
   flex: 1;
   min-width: 0;
+  /* 表單頁寬螢幕不過度拉伸,1280 居中後兩側留白 */
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 .entry-body-split {
   display: flex;
@@ -3410,6 +3455,10 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   display: flex;
   flex-direction: column;
   gap: 14px;
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 .re-mode-bar {
   display: grid;
@@ -3719,13 +3768,15 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
     width: 100%;
     gap: 8px;
   }
-  /* 快速日期 3 顆按鈕固定一行均分 */
+  /* 快速日期 3 顆按鈕:wrap 排列 + auto 寬度(每顆只由內容撐寬) */
   .sd-filter-quick {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
   }
   .sd-filter-quick .btn {
-    width: 100%;
+    width: auto;
+    flex: 0 0 auto;
   }
   /* 人員條件:倉別 / 業務員 / 客戶 各自獨立一行 */
   .sd-filter-people {
