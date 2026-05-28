@@ -4,9 +4,11 @@ const BASE = import.meta.env.VITE_API_BASE || "/api/v1";
 
 const TOKEN_KEY = "mp_pos_auth_token";
 
+// token 存在 sessionStorage:tab/瀏覽器關閉就自動清掉,重開要重新登入。
+// 同時清掉舊版 localStorage 殘留(避免升級後仍維持登入狀態)
 export function getToken(): string | null {
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    return sessionStorage.getItem(TOKEN_KEY);
   } catch {
     return null;
   }
@@ -14,10 +16,12 @@ export function getToken(): string | null {
 
 export function setToken(token: string | null) {
   try {
-    if (token) localStorage.setItem(TOKEN_KEY, token);
-    else localStorage.removeItem(TOKEN_KEY);
+    if (token) sessionStorage.setItem(TOKEN_KEY, token);
+    else sessionStorage.removeItem(TOKEN_KEY);
+    // 升級期間順手把舊版 localStorage 的 token 清掉
+    localStorage.removeItem(TOKEN_KEY);
   } catch {
-    // localStorage 不可用就靜默
+    // storage 不可用就靜默
   }
 }
 
