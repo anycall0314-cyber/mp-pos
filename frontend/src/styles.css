@@ -2072,8 +2072,8 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
 .biz-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 16px;
+  margin-bottom: 24px;
 }
 .biz-summary-card {
   background: var(--panel);
@@ -2089,36 +2089,77 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   border-bottom: 1px solid var(--border);
   background: var(--panel-2);
 }
-/* 摘要卡內部:不用 grid,改 list(每行 label 左 / 數字右)
- * 不會被擠成直書,任何寬度都一致顯示
+/* 摘要卡內部:三欄式 grid(運算子 / 標籤 / 金額)
+ * 前日現金、加項、減項是輔助行(小字),今日結餘是主角數字(大字粗體)
+ * 加項顯示 + 號,減項顯示 − 號,主角顯示 = 號
  */
-.biz-cash-cells,
-.biz-revenue-cells {
+.biz-flow {
   display: flex;
   flex-direction: column;
+  padding: 8px 0;
   background: var(--panel);
 }
-.biz-cash-row {
-  display: flex;
-  justify-content: space-between;
+.biz-flow-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
   align-items: baseline;
-  gap: 12px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
+  gap: 10px;
+  padding: 5px 16px;
 }
-.biz-cash-row:last-child {
-  border-bottom: 0;
-}
-.biz-cash-row-label {
-  font-size: 13px;
+.biz-flow-op {
+  text-align: center;
   color: var(--text-dim);
-  flex-shrink: 0;
+  font-weight: 600;
+  font-size: 14px;
 }
-.biz-cash-row-value {
-  font-size: 16px;
-  font-weight: 700;
+.biz-flow-label {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.biz-flow-value {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+/* 加項 + 號偏綠 */
+.biz-flow-add .biz-flow-op { color: #4ade80; }
+/* 減項 − 號偏紅,金額 dim */
+.biz-flow-sub .biz-flow-op { color: #ff9090; }
+.biz-flow-sub .biz-flow-value { color: var(--text-dim); }
+/* 前日現金:粗體稍微強調,但不及主角 */
+.biz-flow-opening .biz-flow-label { color: var(--text); font-weight: 600; }
+.biz-flow-opening .biz-flow-value { font-size: 16px; }
+/* 主角數字:粗體大字 + 上方分隔線 */
+.biz-flow-hero {
+  margin-top: 6px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  border-top: 1px solid var(--border);
+  align-items: center;
+}
+.biz-flow-hero .biz-flow-op {
+  color: var(--accent);
+  font-size: 16px;
+}
+.biz-flow-hero .biz-flow-label {
+  color: var(--text);
+  font-weight: 700;
+  font-size: 15px;
+}
+.biz-flow-hero .biz-flow-value {
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.biz-flow-empty {
+  padding: 12px 16px;
+}
+.biz-flow-empty .biz-flow-label {
+  color: var(--text-dim);
+  font-style: italic;
 }
 
 /* 收入 / 支出 群組 */

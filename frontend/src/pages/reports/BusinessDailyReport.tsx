@@ -253,53 +253,31 @@ export function BusinessDailyReportPage() {
           <>
             {/* 兩張摘要卡片:現金櫃流水 + 當日營收 */}
             <div className="biz-summary-grid">
-              {/* 現金櫃流水 */}
-              <div className="biz-summary-card">
-                <div className="biz-summary-card-title">現金櫃流水</div>
-                <div className="biz-cash-cells">
-                  <CashItem label="前日現金" value={openingInt} />
-                  <CashItem label="銷貨現金" value={salesTotal} />
-                  <CashItem label="代收話費" value={phoneBillsTotal} />
-                  <CashItem
-                    label="銷退現金"
-                    value={salesReturnsTotal}
-                    sign="−"
-                    color={salesReturnsTotal > 0 ? "#ff7070" : undefined}
-                  />
-                  <CashItem
-                    label="進貨付款"
-                    value={purchasesTotal}
-                    sign="−"
-                    color={purchasesTotal > 0 ? "#ff7070" : undefined}
-                  />
-                  <CashItem label="今日結餘" value={closing} />
-                  <CashItem
-                    label="雜支支出"
-                    value={expensesTotal}
-                    sign="−"
-                    color={expensesTotal > 0 ? "#ff7070" : undefined}
-                  />
-                  <CashItem label="現金存入" value={adjInTotal} />
-                  <CashItem
-                    label="現金提取"
-                    value={adjOutTotal}
-                    sign="−"
-                    color={adjOutTotal > 0 ? "#ff7070" : undefined}
-                  />
-                  <div style={{ background: "var(--panel)" }} />
-                </div>
-              </div>
-
-              {/* 當日營收 */}
-              <div className="biz-summary-card">
-                <div className="biz-summary-card-title">當日營收</div>
-                <div className="biz-revenue-cells">
-                  <CashItem label="現金" value={salesTotal} />
-                  <CashItem label="代收話費" value={phoneBillsTotal} />
-                  <CashItem label="非現金" value={nonCashSalesTotal} />
-                  <CashItem label="總計" value={dailyRevenue} />
-                </div>
-              </div>
+              <CashFlowCard
+                title="現金櫃流水"
+                opening={openingInt}
+                closing={closing}
+                adds={[
+                  { label: "銷貨現金", value: salesTotal },
+                  { label: "代收話費", value: phoneBillsTotal },
+                  { label: "現金存入", value: adjInTotal },
+                ]}
+                subs={[
+                  { label: "銷退現金", value: salesReturnsTotal },
+                  { label: "進貨付款", value: purchasesTotal },
+                  { label: "雜支支出", value: expensesTotal },
+                  { label: "現金提取", value: adjOutTotal },
+                ]}
+              />
+              <RevenueCard
+                title="當日營收"
+                total={dailyRevenue}
+                items={[
+                  { label: "現金", value: salesTotal },
+                  { label: "代收話費", value: phoneBillsTotal },
+                  { label: "非現金", value: nonCashSalesTotal },
+                ]}
+              />
             </div>
 
             {/* 收入區 */}
@@ -765,28 +743,104 @@ function Section({
   );
 }
 
-function CashItem({
-  label,
-  value,
-  sign,
-  color,
-}: {
+interface CashItemRow {
   label: string;
   value: number;
-  sign?: "+" | "−";
-  color?: string;
+}
+
+/**
+ * 現金櫃流水卡片:前日現金 → 加項 → 減項 → 今日結餘
+ * 加減項零值不顯示;前日現金跟今日結餘永遠顯示(今日結餘為主角數字)
+ */
+function CashFlowCard({
+  title,
+  opening,
+  closing,
+  adds,
+  subs,
+}: {
+  title: string;
+  opening: number;
+  closing: number;
+  adds: CashItemRow[];
+  subs: CashItemRow[];
 }) {
-  const effectiveColor = color ?? (value < 0 ? "#ff7070" : "var(--text)");
+  const nonZeroAdds = adds.filter((r) => r.value > 0);
+  const nonZeroSubs = subs.filter((r) => r.value > 0);
   return (
-    <div className="biz-cash-row">
-      <span className="biz-cash-row-label">{label}</span>
-      <span
-        className="biz-cash-row-value"
-        style={{ color: effectiveColor }}
-      >
-        {sign && value > 0 ? sign : ""}
-        {value.toLocaleString()}
-      </span>
+    <div className="biz-summary-card">
+      <div className="biz-summary-card-title">{title}</div>
+      <div className="biz-flow">
+        <div className="biz-flow-row biz-flow-opening">
+          <span className="biz-flow-op"> </span>
+          <span className="biz-flow-label">前日現金</span>
+          <span className="biz-flow-value">{opening.toLocaleString()}</span>
+        </div>
+        {nonZeroAdds.map((r) => (
+          <div key={r.label} className="biz-flow-row biz-flow-add">
+            <span className="biz-flow-op">+</span>
+            <span className="biz-flow-label">{r.label}</span>
+            <span className="biz-flow-value">{r.value.toLocaleString()}</span>
+          </div>
+        ))}
+        {nonZeroSubs.map((r) => (
+          <div key={r.label} className="biz-flow-row biz-flow-sub">
+            <span className="biz-flow-op">−</span>
+            <span className="biz-flow-label">{r.label}</span>
+            <span className="biz-flow-value">{r.value.toLocaleString()}</span>
+          </div>
+        ))}
+        <div className="biz-flow-row biz-flow-hero">
+          <span className="biz-flow-op">=</span>
+          <span className="biz-flow-label">今日結餘</span>
+          <span
+            className="biz-flow-value"
+            style={{ color: closing < 0 ? "#ff7070" : undefined }}
+          >
+            {closing.toLocaleString()}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 當日營收卡片:明細 → 總計
+ * 明細零值不顯示;總計永遠顯示(主角數字)
+ */
+function RevenueCard({
+  title,
+  total,
+  items,
+}: {
+  title: string;
+  total: number;
+  items: CashItemRow[];
+}) {
+  const nonZero = items.filter((r) => r.value > 0);
+  return (
+    <div className="biz-summary-card">
+      <div className="biz-summary-card-title">{title}</div>
+      <div className="biz-flow">
+        {nonZero.length === 0 && (
+          <div className="biz-flow-row biz-flow-empty">
+            <span className="biz-flow-label">今日尚未產生營收</span>
+          </div>
+        )}
+        {nonZero.map((r) => (
+          <div key={r.label} className="biz-flow-row biz-flow-add">
+            <span className="biz-flow-op"> </span>
+            <span className="biz-flow-label">{r.label}</span>
+            <span className="biz-flow-value">{r.value.toLocaleString()}</span>
+          </div>
+        ))}
+        <div className="biz-flow-row biz-flow-hero">
+          <span className="biz-flow-op">=</span>
+          <span className="biz-flow-label">總計</span>
+          <span className="biz-flow-value">{total.toLocaleString()}</span>
+        </div>
+      </div>
     </div>
   );
 }
