@@ -714,6 +714,13 @@ export interface BulkProductCommon {
   counts_cash?: boolean;
   counts_margin?: boolean;
   is_active?: boolean;
+  accessory_type?: "none" | "phone_specific" | "universal";
+  warehouse_type?: "product" | "parts";
+  brand?: string;
+  series?: string;
+  generation?: number | null;
+  lifecycle_status?: "pending" | "active" | "replacing" | "discontinued" | "clearance";
+  safety_stock?: number;
 }
 
 export function useBulkCreateProducts() {

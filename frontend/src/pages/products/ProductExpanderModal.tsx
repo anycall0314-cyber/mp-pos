@@ -24,12 +24,19 @@ interface Combo {
   selected: boolean;
 }
 
+type AccessoryType = "none" | "phone_specific" | "universal";
+
 function splitList(s: string): string[] {
-  // 支援 中英文逗號 / 換行 / 空白逗號 一起分割
   return s
     .split(/[,，\n]/g)
     .map((x) => x.trim())
     .filter(Boolean);
+}
+
+/** 從型號名稱末段數字推 generation,例:三星 S26 → 26;iPhone 15 Pro → 15。 */
+function deriveGeneration(model: string): string {
+  const m = model.match(/(\d{1,3})(?:\s*(?:Pro|Plus|Ultra|Max|Mini|FE)\b)?\s*$/i);
+  return m?.[1] ?? "";
 }
 
 export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
@@ -39,16 +46,23 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
     null,
   );
 
-  // 兩個變化軸 — 標籤可自訂,例如:
-  //   手機:容量 / 顏色
-  //   配件:功能 / 顏色  或  規格 / 樣式
+  // 商品性質(整合進主流程,決定後續欄位 + 屬性預設)
+  const [accessoryType, setAccessoryType] = useState<AccessoryType>("none");
+
+  // 主機資訊
+  const [brand, setBrand] = useState("");
+  const [series, setSeries] = useState("");
+  const [generation, setGeneration] = useState("");
+  const [genTouched, setGenTouched] = useState(false);
+
   const [axis1Label, setAxis1Label] = useState("容量");
   const [axis2Label, setAxis2Label] = useState("顏色");
   const [axis1Text, setAxis1Text] = useState("");
   const [axis2Text, setAxis2Text] = useState("");
   const [pricesText, setPricesText] = useState("");
+  const [safetyStock, setSafetyStock] = useState("0");
 
-  // 屬性(預設手機常見組合)
+  // 屬性(可隨商品性質自動調整,但仍允許使用者覆蓋)
   const [requiresSerial, setRequiresSerial] = useState(true);
   const [allowsTelecomLine, setAllowsTelecomLine] = useState(false);
   const [allowsCommission, setAllowsCommission] = useState(false);
@@ -62,21 +76,40 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
   const axis2Values = useMemo(() => splitList(axis2Text), [axis2Text]);
   const prices = useMemo(() => splitList(pricesText), [pricesText]);
 
-  // 自動展開預覽
+  // 商品性質改變時,自動帶屬性 + 軸標籤預設
+  function changeAccessoryType(next: AccessoryType) {
+    setAccessoryType(next);
+    if (next === "none") {
+      setRequiresSerial(true);
+      setAxis1Label("容量");
+      setAxis2Label("顏色");
+    } else if (next === "phone_specific") {
+      setRequiresSerial(false);
+      setAxis1Label("功能");
+      setAxis2Label("顏色");
+    } else {
+      setRequiresSerial(false);
+      setAxis1Label("規格");
+      setAxis2Label("樣式");
+    }
+  }
+
+  // 型號變動時自動猜世代(只在未手動修改時)
+  useEffect(() => {
+    if (genTouched) return;
+    setGeneration(deriveGeneration(model));
+  }, [model, genTouched]);
+
   const previewCombos = useMemo<Combo[]>(() => {
     const m = model.trim();
     if (!m) return [];
-
-    // 建構 (軸1 值, 售價) 配對;沒填軸1 就用單一虛擬項
     const slot1: { val: string; price: string }[] =
       axis1Values.length === 0
         ? [{ val: "", price: prices[0] ?? "0" }]
         : axis1Values.map((v, i) => ({
             val: v,
-            // 值多過價時,後面的沿用最後一個價;若完全沒給,用 0
             price: prices[i] ?? prices[prices.length - 1] ?? "0",
           }));
-
     const slot2 = axis2Values.length === 0 ? [""] : axis2Values;
 
     const result: Combo[] = [];
@@ -96,7 +129,6 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
     return result;
   }, [model, axis1Values, axis2Values, prices]);
 
-  // 表單輸入變動時,自動把預覽結果同步到 combos(保留交集的勾選 / 改價)
   useEffect(() => {
     setCombos((prev) => {
       const prevMap = new Map(prev.map((c) => [c.key, c]));
@@ -125,33 +157,30 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
     );
   }
 
+  function applyPriceToAll(v: string) {
+    setCombos((prev) => prev.map((c) => ({ ...c, list_price: v })));
+  }
+
   function reset() {
     setModel("");
     setCategory("");
     setCategoryOpt(null);
+    setAccessoryType("none");
+    setBrand("");
+    setSeries("");
+    setGeneration("");
+    setGenTouched(false);
     setAxis1Label("容量");
     setAxis2Label("顏色");
     setAxis1Text("");
     setAxis2Text("");
     setPricesText("");
+    setSafetyStock("0");
     setRequiresSerial(true);
     setAllowsTelecomLine(false);
     setAllowsCommission(false);
     setCombos([]);
     setError(null);
-  }
-
-  // 情境快捷:一鍵套用預設軸標籤與屬性
-  function applyPreset(preset: "phone" | "accessory") {
-    if (preset === "phone") {
-      setAxis1Label("容量");
-      setAxis2Label("顏色");
-      setRequiresSerial(true);
-    } else {
-      setAxis1Label("功能");
-      setAxis2Label("顏色");
-      setRequiresSerial(false);
-    }
   }
 
   async function handleCreate() {
@@ -174,9 +203,18 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
       const res = await mutation.mutateAsync({
         common: {
           category: Number(category),
+          accessory_type: accessoryType,
+          warehouse_type: "product",
           requires_serial: requiresSerial,
           allows_telecom_line: allowsTelecomLine,
           allows_commission: allowsCommission,
+          safety_stock: Number(safetyStock) || 0,
+          // 僅主機帶 brand/series/generation
+          ...(accessoryType === "none" && {
+            brand: brand || "",
+            series: series || "",
+            generation: generation.trim() ? Number(generation) : null,
+          }),
           is_active: true,
         },
         items,
@@ -192,6 +230,7 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
 
   const selectedCount = combos.filter((c) => c.selected).length;
   const list = combos.length > 0 ? combos : previewCombos;
+  const isHost = accessoryType === "none";
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -206,43 +245,99 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
         {error && <Banner kind="error" message={error} />}
 
         <div className="modal-body">
-          <div
-            style={{
-              display: "flex",
-              gap: 6,
-              marginBottom: 8,
-              alignItems: "center",
-            }}
+          {/* 商品性質 — 決定後續欄位顯示 + 屬性預設 */}
+          <Field
+            label="商品性質"
+            required
+            hint="決定後續欄位顯示與屬性預設 — 影響庫存警示推論"
           >
-            <span style={{ color: "var(--text-dim)", fontSize: 13 }}>
-              情境快捷:
-            </span>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => applyPreset("phone")}
-            >
-              手機(容量 × 顏色)
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => applyPreset("accessory")}
-            >
-              配件(功能 × 顏色)
-            </button>
-            <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
-              或自己改下方軸標籤
-            </span>
-          </div>
+            <div className="pf-tabs">
+              {(
+                [
+                  ["none", "主機", "手機 / 平板"],
+                  ["phone_specific", "機型配件", "殼 / 保護貼"],
+                  ["universal", "通用配件", "充電線 / 耳機"],
+                ] as const
+              ).map(([v, label, sub]) => (
+                <button
+                  key={v}
+                  type="button"
+                  className={`pf-tab${accessoryType === v ? " active" : ""}`}
+                  onClick={() => changeAccessoryType(v)}
+                >
+                  {label}
+                  <span className="pf-tab-sub">{sub}</span>
+                </button>
+              ))}
+            </div>
+          </Field>
 
           <Field label="型號名稱" required>
             <input
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              placeholder="例:iPhone 16 PRO / iPhone 18 手機殼"
+              placeholder={
+                isHost
+                  ? "例:iPhone 16 PRO / 三星 S26"
+                  : "例:iPhone 18 手機殼"
+              }
             />
           </Field>
+
+          {/* 主機才顯示「主機資訊」 — 一次填寫,所有展開的 SKU 都帶 */}
+          {isHost && (
+            <div className="fieldset">
+              <legend>主機資訊(套用至所有展開 SKU)</legend>
+              <div className="field-row">
+                <Field label="品牌">
+                  <select
+                    value={brand}
+                    onChange={(e) => setBrand(e.target.value)}
+                  >
+                    <option value="">未指定</option>
+                    <option value="apple">Apple</option>
+                    <option value="samsung">Samsung</option>
+                    <option value="vivo">VIVO</option>
+                    <option value="oppo">OPPO</option>
+                    <option value="xiaomi">小米</option>
+                    <option value="asus">ASUS</option>
+                    <option value="google">Google</option>
+                    <option value="sony">Sony</option>
+                    <option value="other">其他</option>
+                  </select>
+                </Field>
+                <Field
+                  label="產品系列"
+                  hint="例:iPhone、Galaxy A 系列、Redmi Note"
+                >
+                  <input
+                    value={series}
+                    onChange={(e) => setSeries(e.target.value)}
+                    placeholder="iPhone"
+                  />
+                </Field>
+                <Field
+                  label="世代序號"
+                  hint={
+                    genTouched
+                      ? "已手動修正"
+                      : "從型號末碼自動帶,可修改"
+                  }
+                >
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={generation}
+                    onChange={(e) => {
+                      setGenTouched(true);
+                      setGeneration(e.target.value);
+                    }}
+                  />
+                </Field>
+              </div>
+            </div>
+          )}
 
           <Field label="類別" required>
             <ComboBox<Category>
@@ -272,11 +367,18 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
                 placeholder="例:256G, 512G / 一般版, 防摔版, MagSafe"
               />
             </Field>
-            <Field label={`售價(對應${axis1Label || "軸 1"},可留空)`}>
+            <Field
+              label={`售價(對應${axis1Label || "軸 1"})`}
+              hint={
+                pricesText.trim()
+                  ? "可在下方表格逐筆覆寫"
+                  : "留空 = 建議零售價填 0,建議至少統一輸入一個"
+              }
+            >
               <input
                 value={pricesText}
                 onChange={(e) => setPricesText(e.target.value)}
-                placeholder="例:290, 590, 890"
+                placeholder="例:29900, 26900"
               />
             </Field>
           </div>
@@ -294,6 +396,14 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
                 value={axis2Text}
                 onChange={(e) => setAxis2Text(e.target.value)}
                 placeholder="例:金, 紫, 黑, 白 / 透明, 霧面"
+              />
+            </Field>
+            <Field label="安全庫存(套用全部,可後續調)">
+              <input
+                type="number"
+                min="0"
+                value={safetyStock}
+                onChange={(e) => setSafetyStock(e.target.value)}
               />
             </Field>
           </div>
@@ -323,17 +433,32 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
                 style={{
                   display: "flex",
                   alignItems: "center",
+                  gap: 8,
                   marginBottom: 6,
+                  flexWrap: "wrap",
                 }}
               >
-                <strong style={{ flex: 1 }}>
+                <strong style={{ flex: 1, minWidth: 200 }}>
                   預覽:展開 {list.length} 筆,勾選 {selectedCount} 筆
                 </strong>
+                <input
+                  type="number"
+                  placeholder="統一售價"
+                  style={{ width: 110 }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      applyPriceToAll(
+                        (e.target as HTMLInputElement).value || "0",
+                      );
+                      (e.target as HTMLInputElement).value = "";
+                    }
+                  }}
+                  title="輸入後按 Enter 套用至所有列"
+                />
                 <button
                   className="btn"
                   type="button"
                   onClick={() => toggleAll(true)}
-                  style={{ marginRight: 6 }}
                 >
                   全選
                 </button>
@@ -358,9 +483,9 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
                     <tr>
                       <th style={{ width: 32 }}></th>
                       <th>品名</th>
-                      <th style={{ width: 120 }}>規格</th>
-                      <th className="num" style={{ width: 100 }}>
-                        售價
+                      <th style={{ width: 140 }}>規格</th>
+                      <th className="num" style={{ width: 110 }}>
+                        建議售價
                       </th>
                     </tr>
                   </thead>
@@ -388,7 +513,7 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
                             onChange={(e) =>
                               patchPrice(c.key, e.target.value)
                             }
-                            style={{ width: 80, textAlign: "right" }}
+                            style={{ width: 90, textAlign: "right" }}
                           />
                         </td>
                       </tr>
