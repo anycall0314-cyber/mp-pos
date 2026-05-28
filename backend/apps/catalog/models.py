@@ -202,6 +202,48 @@ class Product(TenantOwnedModel):
         help_text="動態安全庫存的天數因子(下次補貨能撐幾天),預設 14",
     )
 
+    # 以下 4 欄僅在 accessory_type=none(主機本身)時有意義
+    class Brand(models.TextChoices):
+        APPLE = "apple", "Apple"
+        SAMSUNG = "samsung", "Samsung"
+        VIVO = "vivo", "VIVO"
+        OPPO = "oppo", "OPPO"
+        XIAOMI = "xiaomi", "小米"
+        ASUS = "asus", "ASUS"
+        GOOGLE = "google", "Google"
+        SONY = "sony", "Sony"
+        OTHER = "other", "其他"
+
+    brand = models.CharField(
+        "品牌",
+        max_length=16,
+        choices=Brand.choices,
+        blank=True,
+        default="",
+        help_text="僅主機需填(手機/平板品牌)",
+    )
+    series = models.CharField(
+        "產品系列",
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="例:iPhone、Galaxy A 系列、Redmi Note",
+    )
+    generation = models.PositiveIntegerField(
+        "世代序號",
+        null=True,
+        blank=True,
+        help_text="系統會從品名末碼自動帶數字,可手動修正",
+    )
+    is_variant = models.BooleanField(
+        "規格變體",
+        default=False,
+        help_text=(
+            "勾選代表此商品為同代不同容量/顏色的變體,"
+            "後續系統的『下一代上市自動換代』判斷會略過此筆"
+        ),
+    )
+
     is_active = models.BooleanField("啟用", default=True)
 
     class Meta:

@@ -2874,6 +2874,64 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   border-bottom: 1px solid var(--border);
 }
 
+/* 商品表單:性質 tabs(品名下方),3 顆滿版按鈕 */
+.pf-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+.pf-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 8px;
+  background: var(--panel-2);
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  transition: border-color 0.1s, background 0.1s;
+}
+.pf-tab:hover {
+  background: var(--row-hover);
+}
+.pf-tab.active {
+  border-color: var(--accent);
+  background: var(--panel-2);
+  color: var(--accent);
+}
+.pf-tab-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+.pf-tab.active .pf-tab-sub {
+  color: var(--accent);
+  opacity: 0.85;
+}
+.pf-chip-status {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+@media (max-width: 768px) {
+  .pf-tabs {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .pf-tab {
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 10px 14px;
+  }
+  .pf-tab-sub {
+    font-size: 12px;
+  }
+}
+
 .ia-row-stock {
   text-align: right;
   flex-shrink: 0;

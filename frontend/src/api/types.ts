@@ -50,6 +50,11 @@ export interface Product {
   accessory_type?: AccessoryType;
   attach_rate?: string; // Decimal as string
   replenish_days?: number;
+  // 以下 4 欄僅主機(accessory_type='none')有意義
+  brand?: ProductBrand | "";
+  series?: string;
+  generation?: number | null;
+  is_variant?: boolean;
   // 寫入時送 id 清單(write_only)
   related_host_ids?: number[];
   // 讀取時系統會回(從 ProductRelation 來)
@@ -732,9 +737,20 @@ export type LifecycleStatus =
   | "clearance"; // 清倉處理
 
 export type AccessoryType =
-  | "none" // 非配件(手機本身)
+  | "none" // 非配件(手機本身 = 主機)
   | "phone_specific" // 機型專屬(殼 / 保護貼)
   | "universal"; // 通用型(充電線 / 耳機)
+
+export type ProductBrand =
+  | "apple"
+  | "samsung"
+  | "vivo"
+  | "oppo"
+  | "xiaomi"
+  | "asus"
+  | "google"
+  | "sony"
+  | "other";
 
 export type AlertSeverity = "critical" | "warning" | "info";
 export type AlertReasonCode =

@@ -43,6 +43,8 @@ export async function searchProducts(
     inStockOnly?: boolean;
     /** 庫存以此倉計(搭配 inStockOnly;調撥帶來源倉) */
     warehouseId?: number | "";
+    /** 只列主機 (accessory_type=none),機型配件挑相容主機用 */
+    hostOnly?: boolean;
   },
 ): Promise<ComboOption<Product>[]> {
   const warehouseParam =
@@ -61,14 +63,35 @@ export async function searchProducts(
           : undefined,
       in_stock_only: opts?.inStockOnly ? "true" : undefined,
       warehouse: warehouseParam,
+      host_only: opts?.hostOnly ? "true" : undefined,
     })}`,
   );
   return data.map((p) => ({
     id: p.id,
     label: p.name,
-    secondary: [p.sku, p.category_name].filter(Boolean).join(" / "),
+    // 主機搜尋時 secondary 顯示「狀態 · SKU」,使用者能一眼看出該機型狀態
+    secondary: opts?.hostOnly
+      ? [lifecycleLabel(p.lifecycle_status), p.sku]
+          .filter(Boolean)
+          .join(" · ")
+      : [p.sku, p.category_name].filter(Boolean).join(" / "),
     payload: p,
   }));
+}
+
+function lifecycleLabel(s?: string): string {
+  switch (s) {
+    case "active":
+      return "主力現貨";
+    case "replacing":
+      return "即將換代";
+    case "discontinued":
+      return "停產下架";
+    case "clearance":
+      return "清倉處理";
+    default:
+      return "";
+  }
 }
 
 /**

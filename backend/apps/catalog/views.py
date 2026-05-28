@@ -156,6 +156,9 @@ class ProductViewSet(viewsets.ModelViewSet):
         # 銷貨用:能挑的 = 有庫存 OR 虛擬商品(手續費 / 收購二手 等不算庫存的)
         if self.request.query_params.get("sales_pickable") == "true":
             qs = qs.filter(Q(stock_qty__gt=0) | Q(is_virtual=True))
+        # 機型配件挑「相容主機」用:只列主機(accessory_type=none)
+        if self.request.query_params.get("host_only") == "true":
+            qs = qs.filter(accessory_type=Product.AccessoryType.NONE)
         return qs
 
     def perform_create(self, serializer):
