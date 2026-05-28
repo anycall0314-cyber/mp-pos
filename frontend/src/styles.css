@@ -2910,6 +2910,106 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   border-bottom: 1px solid var(--border);
 }
 
+/* ─────────────────────────────────────────────────────────
+ * 商品表單緊湊版(套用在 ProductForm 內,改抽屜內部所有間距/分群/segmented)
+ *  - 欄位間距 24 → 12;標籤與輸入框 → 4;input 高度統一 34px
+ *  - .pf-tabs / fieldset 收緊
+ *  - 群組以 1px 細線分隔
+ * ───────────────────────────────────────────────────────── */
+.pf-compact .field {
+  margin-bottom: 12px;
+}
+.pf-compact .field-label {
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+.pf-compact .field input[type="text"],
+.pf-compact .field input[type="number"],
+.pf-compact .field input[type="date"],
+.pf-compact .field input[type="search"],
+.pf-compact .field input:not([type]),
+.pf-compact .field select {
+  height: 34px;
+  padding: 4px 8px;
+  font-size: 14px;
+}
+.pf-compact .field textarea {
+  font-size: 14px;
+  min-height: 56px;
+}
+/* 群組用淺色背景 + 細線分隔 */
+.pf-compact .fieldset {
+  border: 0;
+  background: var(--panel-2);
+  padding: 10px 12px;
+  border-radius: 4px;
+  margin: 0 0 12px;
+}
+.pf-compact .fieldset legend {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dim);
+  padding: 0;
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+}
+.pf-compact .field-row {
+  gap: 10px;
+  margin-bottom: 12px;
+}
+/* 商品性質 / 倉別 segmented 改緊湊單行,高度 34 跟輸入框齊 */
+.pf-compact .pf-tabs {
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.pf-compact .pf-tab {
+  flex-direction: row;
+  justify-content: center;
+  padding: 0 10px;
+  height: 34px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  border-right: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 500;
+}
+.pf-compact .pf-tab:last-child { border-right: 0; }
+.pf-compact .pf-tab.active {
+  background: var(--accent);
+  color: white;
+}
+.pf-compact .pf-tab .pf-tab-sub { display: none; }
+/* details 折疊區塊 */
+.pf-compact .pf-details {
+  border-top: 1px solid var(--border);
+  padding: 8px 0 0;
+  margin-top: 12px;
+}
+.pf-compact .pf-details > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+  padding: 4px 0;
+  list-style: revert;
+  letter-spacing: 0.5px;
+}
+.pf-compact .pf-details > summary:hover { color: var(--text); }
+.pf-compact .pf-details-body {
+  padding: 6px 4px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pf-compact .pf-details-body .checkbox {
+  font-size: 13px;
+}
+
 /* 商品表單:性質 tabs(品名下方),3 顆滿版按鈕 */
 .pf-tabs {
   display: grid;

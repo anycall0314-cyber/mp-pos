@@ -275,14 +275,21 @@ export function ProductForm({
     }
   }
 
+  function handleClose() {
+    // 防誤觸:點背景已 lock,僅 X / 取消按鈕能關;這裡再加一層確認
+    if (!confirm("目前填寫的資料將會清除,確定要關閉嗎?")) return;
+    onClose();
+  }
+
   return (
     <Drawer
       open={open}
       title={isEdit ? `編輯商品 ${initial?.name}` : "新增商品"}
-      onClose={onClose}
+      onClose={handleClose}
+      lockBackdrop
       footer={
         <>
-          <button className="btn" onClick={onClose} type="button">
+          <button className="btn" onClick={handleClose} type="button">
             取消
           </button>
           <button
@@ -297,7 +304,7 @@ export function ProductForm({
       }
     >
       {error && <Banner kind="error" message={error} />}
-      <form onSubmit={submit}>
+      <form onSubmit={submit} className="pf-compact">
         <Field
           label="倉別"
           required
@@ -731,34 +738,37 @@ export function ProductForm({
           </div>
         )}
 
-        <div className="fieldset">
-          <legend>屬性</legend>
-          <Checkbox
-            checked={state.requires_serial}
-            onChange={(v) =>
-              patch("requires_serial", state.is_virtual ? false : v)
-            }
-            label="需追蹤序號"
-          />
-          <Checkbox
-            checked={state.allows_telecom_line}
-            onChange={(v) => patch("allows_telecom_line", v)}
-            label="可綁門號合約"
-          />
-          <Checkbox
-            checked={state.allows_commission}
-            onChange={(v) => patch("allows_commission", v)}
-            label="可有業務員佣金"
-          />
-          <Checkbox
-            checked={state.is_active}
-            onChange={(v) => patch("is_active", v)}
-            label="啟用"
-          />
-        </div>
+        <details className="pf-details" open>
+          <summary>屬性</summary>
+          <div className="pf-details-body">
+            <Checkbox
+              checked={state.requires_serial}
+              onChange={(v) =>
+                patch("requires_serial", state.is_virtual ? false : v)
+              }
+              label="需追蹤序號"
+            />
+            <Checkbox
+              checked={state.allows_telecom_line}
+              onChange={(v) => patch("allows_telecom_line", v)}
+              label="可綁門號合約"
+            />
+            <Checkbox
+              checked={state.allows_commission}
+              onChange={(v) => patch("allows_commission", v)}
+              label="可有業務員佣金"
+            />
+            <Checkbox
+              checked={state.is_active}
+              onChange={(v) => patch("is_active", v)}
+              label="啟用"
+            />
+          </div>
+        </details>
 
-        <div className="fieldset">
-          <legend>會計處理</legend>
+        <details className="pf-details">
+          <summary>會計處理</summary>
+          <div className="pf-details-body fieldset-skip">
           <Checkbox
             checked={state.is_virtual}
             onChange={(v) => {
@@ -789,7 +799,8 @@ export function ProductForm({
             onChange={(v) => patch("counts_margin", v)}
             label="計入毛利"
           />
-        </div>
+          </div>
+        </details>
       </form>
     </Drawer>
   );
