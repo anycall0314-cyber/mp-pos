@@ -148,9 +148,6 @@ class RepairOrderSerializer(serializers.ModelSerializer):
     warehouse_phone = serializers.CharField(
         source="warehouse.phone", read_only=True, default=""
     )
-    repair_item_name_snapshot = serializers.CharField(
-        source="repair_item.name", read_only=True, default=""
-    )
     repair_item_name = serializers.CharField(source="repair_item.name", read_only=True, default="")
     external_vendor_name = serializers.CharField(source="external_vendor.name", read_only=True, default="")
     sales_person_name = serializers.CharField(source="sales_person.name", read_only=True, default="")
