@@ -721,6 +721,30 @@ export interface BulkProductCommon {
   generation?: number | null;
   lifecycle_status?: "pending" | "active" | "replacing" | "discontinued" | "clearance";
   safety_stock?: number;
+  related_host_keys?: string[];
+}
+
+export interface BulkEditResult {
+  updated: number;
+  ids: number[];
+}
+
+export function useBulkEditProducts() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      ids: number[];
+      patch: Record<string, unknown>;
+    }) =>
+      api<BulkEditResult>("/products/bulk-edit/", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["product"] });
+    },
+  });
 }
 
 export function useBulkCreateProducts() {

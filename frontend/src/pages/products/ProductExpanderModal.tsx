@@ -9,6 +9,7 @@ import type { Category } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Checkbox, Field } from "@/components/Field";
+import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 
 interface Props {
   open: boolean;
@@ -54,6 +55,9 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
   const [series, setSeries] = useState("");
   const [generation, setGeneration] = useState("");
   const [genTouched, setGenTouched] = useState(false);
+
+  // 相容機型(機型配件用):key → name
+  const [compat, setCompat] = useState<Map<string, string>>(new Map());
 
   const [axis1Label, setAxis1Label] = useState("容量");
   const [axis2Label, setAxis2Label] = useState("顏色");
@@ -179,6 +183,7 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
     setRequiresSerial(true);
     setAllowsTelecomLine(false);
     setAllowsCommission(false);
+    setCompat(new Map());
     setCombos([]);
     setError(null);
   }
@@ -214,6 +219,10 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
             brand: brand || "",
             series: series || "",
             generation: generation.trim() ? Number(generation) : null,
+          }),
+          // 機型配件 → 帶相容機型 keys(套用至所有展開 SKU)
+          ...(accessoryType === "phone_specific" && {
+            related_host_keys: Array.from(compat.keys()),
           }),
           is_active: true,
         },
@@ -337,6 +346,73 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
                 </Field>
               </div>
             </div>
+          )}
+
+          {/* 機型配件 → 多選相容機型,套用至所有展開 SKU */}
+          {accessoryType === "phone_specific" && (
+            <Field
+              label="相容機型(套用至所有展開 SKU)"
+              hint="搜尋並選取多個機型;找不到可直接輸入新增"
+            >
+              <PhoneModelPicker
+                allowCreate
+                placeholder="搜尋機型加入相容清單…"
+                onPick={(m) => {
+                  setCompat((prev) => {
+                    if (prev.has(m.model_key)) return prev;
+                    const next = new Map(prev);
+                    next.set(m.model_key, m.model_name);
+                    return next;
+                  });
+                }}
+              />
+              {compat.size > 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 6,
+                    marginTop: 8,
+                  }}
+                >
+                  {Array.from(compat.entries()).map(([key, name]) => (
+                    <span
+                      key={key}
+                      className="bcp-model-chip on"
+                      style={{ cursor: "default" }}
+                    >
+                      {name}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCompat((prev) => {
+                            const next = new Map(prev);
+                            next.delete(key);
+                            return next;
+                          })
+                        }
+                        style={{
+                          marginLeft: 6,
+                          background: "transparent",
+                          border: 0,
+                          color: "inherit",
+                          cursor: "pointer",
+                          fontSize: 14,
+                          padding: 0,
+                          lineHeight: 1,
+                        }}
+                        title="移除"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                  <span style={{ alignSelf: "center", fontSize: 12, color: "var(--text-dim)" }}>
+                    共 {compat.size} 款
+                  </span>
+                </div>
+              )}
+            </Field>
           )}
 
           <Field label="類別" required>

@@ -687,6 +687,77 @@ class ProductViewSet(viewsets.ModelViewSet):
             }
         )
 
+    @action(detail=False, methods=["post"], url_path="bulk-edit")
+    def bulk_edit(self, request):
+        """批次修改既有商品欄位。
+
+        payload:
+        {
+          "ids": [1, 2, 3],
+          "patch": {
+            "list_price": "990",
+            "lifecycle_status": "clearance",
+            "accessory_type": "phone_specific",
+            "related_host_keys": ["iphone 15 pro"]  // 覆寫(replace)
+            ...
+          }
+        }
+        - 用 ProductSerializer partial=True 做欄位驗證
+        - 任一筆驗證失敗就整批 rollback,回傳每筆錯誤
+        - 不允許批次修改 name(避免命名衝突)
+        """
+        ids = request.data.get("ids") or []
+        patch = request.data.get("patch") or {}
+        if not ids:
+            return Response(
+                {"detail": "ids 為空"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        if not patch:
+            return Response(
+                {"detail": "patch 為空,沒有要修改的欄位"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if "name" in patch or "sku" in patch:
+            return Response(
+                {"detail": "不允許批次修改 name / sku(避免命名衝突)"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        qs = (
+            Product.objects.for_tenant(request.tenant)
+            .filter(id__in=ids)
+        )
+        if not qs.exists():
+            return Response(
+                {"detail": "找不到任何符合的商品"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        updated_ids: list[int] = []
+        errors: list[dict] = []
+        try:
+            with transaction.atomic():
+                for p in qs:
+                    ser = ProductSerializer(
+                        p,
+                        data=patch,
+                        partial=True,
+                        context={"request": request},
+                    )
+                    if ser.is_valid():
+                        ser.save()
+                        updated_ids.append(p.id)
+                    else:
+                        errors.append(
+                            {"id": p.id, "name": p.name, "errors": ser.errors}
+                        )
+                if errors:
+                    raise ValueError("partial_failed")
+        except ValueError:
+            return Response(
+                {"detail": "部分商品失敗,已全部復原", "errors": errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({"updated": len(updated_ids), "ids": updated_ids})
+
     @action(detail=False, methods=["post"], url_path="bulk")
     def bulk_create(self, request):
         """批次新增商品。

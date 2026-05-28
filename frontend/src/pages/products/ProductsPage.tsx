@@ -7,6 +7,7 @@ import { Toolbar } from "@/components/Toolbar";
 
 import { BulkAddProductsModal } from "./BulkAddProductsModal";
 import { BulkCreatePartsModal } from "./BulkCreatePartsModal";
+import { BulkEditProductsModal } from "./BulkEditProductsModal";
 import { ProductExpanderModal } from "./ProductExpanderModal";
 import { ProductForm } from "./ProductForm";
 import { ProductImportModal } from "./ProductImportModal";
@@ -113,6 +114,10 @@ export function ProductsPage() {
   const [expanderOpen, setExpanderOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [bulkPartsOpen, setBulkPartsOpen] = useState(false);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<number>>(
+    new Set(),
+  );
   const [bulkResult, setBulkResult] = useState<string | null>(null);
 
   // ─── 類別編輯(右側面板 inline form)
@@ -243,6 +248,31 @@ export function ProductsPage() {
         actions={
           leftTab === "products" ? (
             <>
+              {selectedProductIds.size > 0 && (
+                <>
+                  <span
+                    style={{
+                      color: "var(--text-dim)",
+                      fontSize: 13,
+                      padding: "0 6px",
+                    }}
+                  >
+                    已勾選 {selectedProductIds.size} 筆
+                  </span>
+                  <button
+                    className="btn"
+                    onClick={() => setSelectedProductIds(new Set())}
+                  >
+                    清除選取
+                  </button>
+                  <button
+                    className="btn primary"
+                    onClick={() => setBulkEditOpen(true)}
+                  >
+                    批次修改 {selectedProductIds.size} 筆
+                  </button>
+                </>
+              )}
               <button className="btn" onClick={() => setExpanderOpen(true)}>
                 型號展開
               </button>
@@ -368,6 +398,30 @@ export function ProductsPage() {
                   <table className="pc-list-table">
                     <thead>
                       <tr>
+                        <th style={{ width: 30 }}>
+                          <input
+                            type="checkbox"
+                            title="全選本頁"
+                            checked={
+                              (productsResult.data ?? []).length > 0 &&
+                              (productsResult.data ?? []).every((p) =>
+                                selectedProductIds.has(p.id),
+                              )
+                            }
+                            onChange={(e) => {
+                              const all = productsResult.data ?? [];
+                              setSelectedProductIds((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) {
+                                  all.forEach((p) => next.add(p.id));
+                                } else {
+                                  all.forEach((p) => next.delete(p.id));
+                                }
+                                return next;
+                              });
+                            }}
+                          />
+                        </th>
                         <th>品名</th>
                         <th style={{ width: 80 }}>類別</th>
                         <th className="num" style={{ width: 50 }}>
@@ -389,6 +443,20 @@ export function ProductsPage() {
                               : ""
                           }
                         >
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedProductIds.has(p.id)}
+                              onChange={(e) => {
+                                setSelectedProductIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (e.target.checked) next.add(p.id);
+                                  else next.delete(p.id);
+                                  return next;
+                                });
+                              }}
+                            />
+                          </td>
                           <td>{p.name}</td>
                           <td>{p.category_name}</td>
                           <td className="num">{p.stock_qty}</td>
@@ -396,7 +464,7 @@ export function ProductsPage() {
                       ))}
                       {(productsResult.data ?? []).length === 0 && (
                         <tr>
-                          <td colSpan={3} className="md-empty">
+                          <td colSpan={4} className="md-empty">
                             {isSearching ? "查無商品" : "尚無商品"}
                           </td>
                         </tr>
@@ -827,6 +895,17 @@ export function ProductsPage() {
       <BulkCreatePartsModal
         open={bulkPartsOpen}
         onClose={() => setBulkPartsOpen(false)}
+      />
+      <BulkEditProductsModal
+        open={bulkEditOpen}
+        productIds={Array.from(selectedProductIds)}
+        onClose={() => setBulkEditOpen(false)}
+        onSuccess={(count) => {
+          setBulkEditOpen(false);
+          setBulkResult(`批次修改成功:${count} 筆`);
+          setSelectedProductIds(new Set());
+          setTimeout(() => setBulkResult(null), 4000);
+        }}
       />
     </div>
   );

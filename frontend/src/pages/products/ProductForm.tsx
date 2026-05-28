@@ -126,6 +126,13 @@ function toState(p: Product | null | undefined): FormState {
   };
 }
 
+const DRAFT_KEY = "product-form-draft-new";
+
+interface DraftPayload {
+  state: FormState;
+  savedAt: string;
+}
+
 export function ProductForm({
   open,
   initial,
@@ -143,6 +150,11 @@ export function ProductForm({
     name: "",
     sort_order: "",
   });
+  const [closePromptOpen, setClosePromptOpen] = useState(false);
+  const [draftInfo, setDraftInfo] = useState<DraftPayload | null>(null);
+  const baselineRef = useRef<FormState>(toState(initial));
+  // 已明確處理過草稿(捨棄 / 已儲存上線),unmount 時不要再 flush 覆蓋回去
+  const skipFlushRef = useRef(false);
 
   const saveProduct = useSaveProduct();
   const saveCategory = useSaveCategory();
@@ -151,7 +163,10 @@ export function ProductForm({
 
   useEffect(() => {
     if (open) {
-      setState(toState(initial));
+      const base = toState(initial);
+      setState(base);
+      baselineRef.current = base;
+      skipFlushRef.current = false;
       setCategoryOption(
         initial?.category
           ? {
@@ -165,8 +180,26 @@ export function ProductForm({
       setFieldErrors({});
       setShowNewCategory(false);
       setNewCategory({ code: "", name: "", sort_order: "" });
+      setClosePromptOpen(false);
       // 編輯既有商品時:若已有 generation 值就視為已被設定過,不再自動覆蓋
       genTouchedRef.current = !!initial?.generation;
+      // 新增模式時檢查是否有上次未完成的草稿
+      if (!initial?.id) {
+        try {
+          const raw = localStorage.getItem(DRAFT_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw) as DraftPayload;
+            if (parsed?.state && parsed?.savedAt) setDraftInfo(parsed);
+            else setDraftInfo(null);
+          } else {
+            setDraftInfo(null);
+          }
+        } catch {
+          setDraftInfo(null);
+        }
+      } else {
+        setDraftInfo(null);
+      }
     }
   }, [open, initial]);
 
@@ -179,6 +212,91 @@ export function ProductForm({
       setState((s) => ({ ...s, generation: m[1] }));
     }
   }, [state.name, state.accessory_type]);
+
+  // 安全網:用 ref 追蹤最新 state + 模式,unmount 與 beforeunload 時同步 flush 一次
+  // (避免 debounce 還沒觸發就被誤觸關掉導致最後幾筆輸入丟失)
+  const flushRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    flushRef.current = () => {
+      if (skipFlushRef.current) return;
+      if (!open || initial?.id) return;
+      const base = baselineRef.current;
+      const keys = Object.keys(base) as (keyof FormState)[];
+      let dirty = false;
+      for (const k of keys) {
+        const a = state[k];
+        const b = base[k];
+        if (Array.isArray(a) && Array.isArray(b)) {
+          if (a.length !== b.length) {
+            dirty = true;
+            break;
+          }
+          continue;
+        }
+        if (a !== b) {
+          dirty = true;
+          break;
+        }
+      }
+      if (!dirty) return;
+      try {
+        localStorage.setItem(
+          DRAFT_KEY,
+          JSON.stringify({
+            state,
+            savedAt: new Date().toISOString(),
+          } as DraftPayload),
+        );
+      } catch {}
+    };
+  }, [state, open, initial?.id]);
+  useEffect(() => {
+    const onBeforeUnload = () => flushRef.current();
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      // 元件 unmount(切到別頁、關抽屜等)同步 flush 一次
+      flushRef.current();
+    };
+  }, []);
+
+  // 自動草稿:新增模式 + 開啟中,debounce 600ms 把 state 同步到 localStorage
+  // → 即使誤觸分頁/路由切換抽屜被 unmount,localStorage 已存最新版,
+  //   下次重開新增商品就會跳出載入草稿 banner
+  useEffect(() => {
+    if (!open) return;
+    if (initial?.id) return; // 編輯模式不存草稿
+    // 沒任何變更就不寫 localStorage,避免空值蓋掉之前的真草稿
+    const base = baselineRef.current;
+    const keys = Object.keys(base) as (keyof FormState)[];
+    let dirty = false;
+    for (const k of keys) {
+      const a = state[k];
+      const b = base[k];
+      if (Array.isArray(a) && Array.isArray(b)) {
+        if (a.length !== b.length) {
+          dirty = true;
+          break;
+        }
+        continue;
+      }
+      if (a !== b) {
+        dirty = true;
+        break;
+      }
+    }
+    if (!dirty) return;
+    const t = setTimeout(() => {
+      try {
+        const payload: DraftPayload = {
+          state,
+          savedAt: new Date().toISOString(),
+        };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
+      } catch {}
+    }, 600);
+    return () => clearTimeout(t);
+  }, [state, open, initial?.id]);
 
   const isEdit = !!initial?.id;
 
@@ -253,6 +371,13 @@ export function ProductForm({
         min_sale_price: state.min_sale_price || "0",
         is_active: state.is_active,
       });
+      // 儲存成功 → 清掉草稿(只有新增模式有草稿)+ 阻止 unmount flush 再寫回
+      if (!initial?.id) {
+        skipFlushRef.current = true;
+        try {
+          localStorage.removeItem(DRAFT_KEY);
+        } catch {}
+      }
       onSaved?.(saved);
       onClose();
     } catch (e) {
@@ -275,10 +400,71 @@ export function ProductForm({
     }
   }
 
+  function isDirty(): boolean {
+    const base = baselineRef.current;
+    const keys = Object.keys(base) as (keyof FormState)[];
+    for (const k of keys) {
+      const a = state[k];
+      const b = base[k];
+      if (Array.isArray(a) && Array.isArray(b)) {
+        if (a.length !== b.length) return true;
+        for (let i = 0; i < a.length; i++) {
+          if (JSON.stringify(a[i]) !== JSON.stringify(b[i])) return true;
+        }
+        continue;
+      }
+      if (a !== b) return true;
+    }
+    return false;
+  }
+
   function handleClose() {
-    // 防誤觸:點背景已 lock,僅 X / 取消按鈕能關;這裡再加一層確認
-    if (!confirm("目前填寫的資料將會清除,確定要關閉嗎?")) return;
+    // 沒任何變更 → 直接關,不提示
+    if (!isDirty()) {
+      onClose();
+      return;
+    }
+    setClosePromptOpen(true);
+  }
+
+  function saveDraftAndClose() {
+    try {
+      const payload: DraftPayload = {
+        state,
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
+    } catch {
+      // localStorage 滿了之類的,略過
+    }
+    setClosePromptOpen(false);
     onClose();
+  }
+
+  function discardAndClose() {
+    setClosePromptOpen(false);
+    // 使用者明確選擇捨棄 → 清掉自動存的草稿,並阻止 unmount flush 再把它存回去
+    skipFlushRef.current = true;
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {}
+    onClose();
+  }
+
+  function loadDraft() {
+    if (!draftInfo) return;
+    setState(draftInfo.state);
+    setDraftInfo(null);
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {}
+  }
+
+  function discardDraft() {
+    setDraftInfo(null);
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {}
   }
 
   return (
@@ -304,6 +490,62 @@ export function ProductForm({
       }
     >
       {error && <Banner kind="error" message={error} />}
+      {draftInfo && !isEdit && (
+        <div className="pf-draft-banner">
+          <span>
+            上次有未完成的草稿(
+            {new Date(draftInfo.savedAt).toLocaleString()})
+          </span>
+          <div className="pf-draft-actions">
+            <button type="button" className="btn" onClick={discardDraft}>
+              捨棄草稿
+            </button>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={loadDraft}
+            >
+              載入草稿
+            </button>
+          </div>
+        </div>
+      )}
+      {closePromptOpen && (
+        <div
+          className="pf-close-prompt"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="pf-close-prompt-title">關閉前處理未儲存資料</div>
+          <div className="pf-close-prompt-msg">
+            目前已輸入的內容尚未儲存,請選擇處理方式:
+          </div>
+          <div className="pf-close-prompt-actions">
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setClosePromptOpen(false)}
+            >
+              繼續編輯
+            </button>
+            <button
+              type="button"
+              className="btn danger"
+              onClick={discardAndClose}
+            >
+              捨棄,離開
+            </button>
+            {!isEdit && (
+              <button
+                type="button"
+                className="btn primary"
+                onClick={saveDraftAndClose}
+              >
+                儲存草稿,離開
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       <form onSubmit={submit} className="pf-compact">
         <Field
           label="倉別"
