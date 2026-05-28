@@ -88,6 +88,48 @@ def complete_repair_order(repair_order: RepairOrder) -> None:
     )
 
 
+@transaction.atomic
+def reopen_repair_order(repair_order: RepairOrder) -> None:
+    """重開已完成的維修單:歸還零件庫存 + 清完工時間 + 狀態退回待取件。
+
+    僅在 status=completed 時有效;呼叫端負責權限檢查。
+    回退邏輯與 complete_repair_order 對稱:
+    - 自修:每筆 RepairOrderPart 把 qty 加回 StockBalance,寫 ADJUST 異動
+    - 委外:無庫存異動,純改狀態
+    """
+    if repair_order.status != RepairOrder.Status.COMPLETED:
+        return
+
+    tenant = repair_order.tenant
+    wh = repair_order.warehouse
+
+    if repair_order.mode == RepairOrder.Mode.IN_HOUSE:
+        for line in repair_order.parts.select_related("part_product").all():
+            part = line.part_product
+            balance, _ = StockBalance.objects.get_or_create(
+                tenant=tenant,
+                product=part,
+                warehouse=wh,
+                defaults={"qty": 0},
+            )
+            balance.qty = balance.qty + line.qty
+            balance.save(update_fields=["qty"])
+            StockMovement.objects.create(
+                tenant=tenant,
+                product=part,
+                qty=line.qty,
+                movement_type=StockMovement.MovementType.ADJUST,
+                to_warehouse=wh,
+                ref_doc_type="repair_order_reopen",
+                ref_doc_id=repair_order.id,
+                note=f"{repair_order.no} 重開維修單,歸還零件",
+            )
+
+    repair_order.status = RepairOrder.Status.READY_PICKUP
+    repair_order.completed_at = None
+    repair_order.save(update_fields=["status", "completed_at"])
+
+
 def parts_with_insufficient_stock(
     repair_order: RepairOrder,
 ) -> list[dict]:

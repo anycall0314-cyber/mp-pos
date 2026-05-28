@@ -11,6 +11,7 @@ from .services import (
     compute_in_house_quote,
     compute_margin,
     parts_with_insufficient_stock,
+    reopen_repair_order,
 )
 
 
@@ -97,6 +98,29 @@ class RepairOrderViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
         """轉「完成」狀態:扣零件倉庫存 + 寫異動。"""
         order = self.get_object()
         complete_repair_order(order)
+        return Response(self.get_serializer(order).data)
+
+    @action(detail=True, methods=["post"], url_path="reopen")
+    def reopen(self, request, pk=None):
+        """重開已完成的維修單:歸還零件庫存 + 退回待取件狀態。
+
+        限 tenant_admin / platform_admin。一般店員若需修改已完成單據,
+        須由店長執行此操作。
+        """
+        profile = getattr(request.user, "profile", None)
+        role = profile.role if profile else None
+        if role not in ("platform_admin", "tenant_admin"):
+            return Response(
+                {"detail": "重開維修單需店長或管理員權限"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        order = self.get_object()
+        if order.status != RepairOrder.Status.COMPLETED:
+            return Response(
+                {"detail": "此單尚未完成,不需重開"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        reopen_repair_order(order)
         return Response(self.get_serializer(order).data)
 
     @action(detail=True, methods=["get"], url_path="quote-preview")

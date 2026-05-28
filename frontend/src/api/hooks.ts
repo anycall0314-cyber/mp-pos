@@ -1382,7 +1382,7 @@ export function useSaveRepairOrder() {
       return api<RepairOrder>(
         id ? `/repair-orders/${id}/` : "/repair-orders/",
         {
-          method: id ? "PUT" : "POST",
+          method: id ? "PATCH" : "POST",
           body: JSON.stringify(rest),
         },
       );
@@ -1414,6 +1414,18 @@ export function useCompleteRepair() {
   return useMutation({
     mutationFn: (id: number) =>
       api<RepairOrder>(`/repair-orders/${id}/complete/`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["repair-orders"] });
+      qc.invalidateQueries({ queryKey: ["repair-order"] });
+    },
+  });
+}
+
+export function useReopenRepair() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<RepairOrder>(`/repair-orders/${id}/reopen/`, { method: "POST" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["repair-orders"] });
       qc.invalidateQueries({ queryKey: ["repair-order"] });

@@ -8,6 +8,7 @@ import {
   useCompleteRepair,
   useRepairItemsByModel,
   useRepairOrder,
+  useReopenRepair,
   useSaveCustomer,
   useSaveMember,
   useSaveRepairOrder,
@@ -18,7 +19,11 @@ import {
   searchProducts,
   searchSalesPersons,
 } from "@/api/search";
-import { useDefaultHandledBy, useDefaultWarehouse } from "@/auth/AuthContext";
+import {
+  useCurrentUser,
+  useDefaultHandledBy,
+  useDefaultWarehouse,
+} from "@/auth/AuthContext";
 import type {
   Member,
   Product,
@@ -89,9 +94,14 @@ export function RepairEntryPage() {
   const save = useSaveRepairOrder();
   const setStatus = useSetRepairStatus();
   const complete = useCompleteRepair();
+  const reopen = useReopenRepair();
   const warehouses = useWarehouses();
   const defaultWh = useDefaultWarehouse();
   const defaultHandledBy = useDefaultHandledBy();
+  const currentUser = useCurrentUser();
+  const userRole = currentUser?.profile?.role ?? "tenant_user";
+  const isAdmin =
+    userRole === "tenant_admin" || userRole === "platform_admin";
 
   const [mode, setMode] = useState<RepairMode>("in_house");
   const [customer, setCustomer] = useState<number | "">("");
@@ -131,6 +141,7 @@ export function RepairEntryPage() {
 
   const [customerPaid, setCustomerPaid] = useState("0");
   const [status, setStatusState] = useState<RepairStatus>("pending");
+  const isLocked = status === "completed"; // 完成後鎖定欄位,須重開才能改
 
   // 手機解鎖方式
   const [unlockMethod, setUnlockMethod] = useState<RepairUnlockMethod | "">("");
@@ -340,6 +351,7 @@ export function RepairEntryPage() {
 
   async function submit(opts?: { printAfter?: boolean }) {
     setError(null);
+    // 收件必填最小集合(per spec):電話/姓名/門市/經手人/機型/序號/收件日/故障描述/解鎖方式
     if (!customerPhone.trim()) {
       setError("請輸入聯絡電話");
       return;
@@ -348,8 +360,28 @@ export function RepairEntryPage() {
       setError("請依電話建立客戶,或從歷史維修挑出已存在客戶");
       return;
     }
-    if (!modelKey || !receivedDate || !warehouseId) {
-      setError("請填機型 / 收件日 / 門市");
+    if (!warehouseId) {
+      setError("請選擇收件門市");
+      return;
+    }
+    if (!salesPerson) {
+      setError("請選擇經手人");
+      return;
+    }
+    if (!modelKey) {
+      setError("請選擇機型(找不到可現場新增)");
+      return;
+    }
+    if (!deviceSerial.trim()) {
+      setError("請輸入機身序號 / IMEI");
+      return;
+    }
+    if (!receivedDate) {
+      setError("請選擇收件日期");
+      return;
+    }
+    if (!defect.trim()) {
+      setError("請輸入故障描述(客戶描述即可,不需精確)");
       return;
     }
     if (!unlockMethod) {
@@ -368,6 +400,7 @@ export function RepairEntryPage() {
       setError("已勾選『返修』,請先從歷史維修中選一張關聯單");
       return;
     }
+    // 維修項目 / 零件 / 報價屬於評估後再填,收件當下允許留空
     try {
       const body: Record<string, unknown> = {
         id: id ?? undefined,
@@ -410,11 +443,53 @@ export function RepairEntryPage() {
       );
       if (opts?.printAfter) {
         window.open(`/print/repair-receipt/${saved.id}`, "_blank");
+        // 列印頁開新分頁後,原分頁回維修單列表(可直接做下一張)
+        navigate("/repairs");
+      } else if (!isEdit) {
+        navigate(`/repairs/${saved.id}`);
       }
-      if (!isEdit) navigate(`/repairs/${saved.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+  }
+
+  function tryChangeMode(next: RepairMode) {
+    if (next === mode) return;
+    const hasInHouseContent =
+      parts.length > 0 ||
+      repairItemId !== null ||
+      Number(laborFee) > 0 ||
+      Number(finalQuote) > 0;
+    const hasExternalContent =
+      !!vendor ||
+      Number(extEst) > 0 ||
+      Number(extActual) > 0 ||
+      !!sentDate ||
+      !!expectedPickup;
+    const hasContent =
+      mode === "in_house" ? hasInHouseContent : hasExternalContent;
+    if (
+      hasContent &&
+      !confirm(
+        `此操作將清除目前的${mode === "in_house" ? "自修" : "委外"}維修內容,是否確認切換為${next === "in_house" ? "自修" : "委外"}?`,
+      )
+    ) {
+      return;
+    }
+    if (next === "external") {
+      setParts([]);
+      setRepairItemId(null);
+      setLaborFee("0");
+      setFinalQuote("0");
+    } else {
+      setVendor("");
+      setVendorOpt(null);
+      setExtEst("0");
+      setExtActual("0");
+      setSentDate("");
+      setExpectedPickup("");
+    }
+    setMode(next);
   }
 
   function handlePickHistory(item: RepairHistoryItem) {
@@ -452,29 +527,79 @@ export function RepairEntryPage() {
         actions={
           <>
             <button className="btn" onClick={() => navigate("/repairs")}>
-              取消
+              {isLocked ? "回列表" : "取消"}
             </button>
-            <button
-              className="btn"
-              onClick={() => submit()}
-              disabled={save.isPending}
-              title="只儲存,不開啟列印"
-            >
-              {save.isPending ? "儲存中…" : "儲存"}
-            </button>
-            <button
-              className="btn primary"
-              onClick={() => submit({ printAfter: true })}
-              disabled={save.isPending}
-            >
-              {save.isPending ? "儲存中…" : "儲存並列印收據"}
-            </button>
+            {isLocked ? (
+              isAdmin ? (
+                <button
+                  className="btn primary"
+                  disabled={reopen.isPending}
+                  onClick={async () => {
+                    if (!id) return;
+                    if (
+                      !confirm(
+                        "重開維修單會把已扣的零件庫存歸還,狀態退回『待取件』。確認?",
+                      )
+                    )
+                      return;
+                    try {
+                      await reopen.mutateAsync(id);
+                      setStatusState("ready_pickup");
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : String(e));
+                    }
+                  }}
+                >
+                  {reopen.isPending ? "重開中…" : "重開維修單"}
+                </button>
+              ) : (
+                <span
+                  style={{
+                    color: "var(--text-dim)",
+                    fontSize: 13,
+                    padding: "0 12px",
+                  }}
+                >
+                  已完成 · 需店長/管理員權限才能重開修改
+                </span>
+              )
+            ) : (
+              <>
+                <button
+                  className="btn"
+                  onClick={() => submit()}
+                  disabled={save.isPending}
+                  title="只儲存,不開啟列印"
+                >
+                  {save.isPending ? "儲存中…" : "儲存"}
+                </button>
+                <button
+                  className="btn primary"
+                  onClick={() => submit({ printAfter: true })}
+                  disabled={save.isPending}
+                >
+                  {save.isPending ? "儲存中…" : "儲存並列印收據"}
+                </button>
+              </>
+            )}
           </>
         }
       />
 
       <div className="re-page-body">
         {error && <Banner kind="error" message={error} />}
+
+        {/* 完成狀態鎖定提示 */}
+        {isLocked && (
+          <Banner
+            kind="info"
+            message={
+              isAdmin
+                ? "此單已完成,欄位為唯讀。需修改請按右上「重開維修單」(會把零件庫存歸還、狀態退回待取件)。"
+                : "此單已完成,欄位為唯讀。需修改請聯絡店長或管理員執行重開。"
+            }
+          />
+        )}
 
         {/* 保固狀態 banner */}
         {warrantyStatus && (
@@ -506,7 +631,7 @@ export function RepairEntryPage() {
           <button
             type="button"
             className={`pf-tab${mode === "in_house" ? " active" : ""}`}
-            onClick={() => setMode("in_house")}
+            onClick={() => tryChangeMode("in_house")}
           >
             自修
             <span className="pf-tab-sub">店內處理</span>
@@ -514,7 +639,7 @@ export function RepairEntryPage() {
           <button
             type="button"
             className={`pf-tab${mode === "external" ? " active" : ""}`}
-            onClick={() => setMode("external")}
+            onClick={() => tryChangeMode("external")}
           >
             委外
             <span className="pf-tab-sub">送外廠</span>

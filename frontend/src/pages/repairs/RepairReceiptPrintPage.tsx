@@ -48,7 +48,13 @@ export function RepairReceiptPrintPage() {
   }
   const titleSuffix = typeLabels.join(" · ");
   const quote = o.mode === "in_house" ? o.final_quote : o.external_quote_estimated;
-  const repairItemDisplay = o.repair_item_name || o.defect_description.slice(0, 30);
+  const quoteNum = Math.round(Number(quote) || 0);
+  const quoteDisplay =
+    quoteNum > 0
+      ? `NT$ ${quoteNum.toLocaleString()}`
+      : "待評估後通知";
+  const repairItemDisplay =
+    o.repair_item_name || o.defect_description.slice(0, 30) || "待評估";
 
   return (
     <div className="rr-page" data-theme="light">
@@ -124,9 +130,7 @@ export function RepairReceiptPrintPage() {
             </div>
             <div>
               <div className="rr-info-label">預估報價</div>
-              <div className="rr-info-val rr-quote">
-                NT$ {Math.round(Number(quote) || 0).toLocaleString()}
-              </div>
+              <div className="rr-info-val rr-quote">{quoteDisplay}</div>
             </div>
           </div>
         </div>
