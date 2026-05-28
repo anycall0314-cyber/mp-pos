@@ -1004,6 +1004,7 @@ export interface RepairOrder {
   host_model_name: string;
   device_serial: string;
   defect_description: string;
+  internal_note: string;
   received_date: string;
   expected_complete_date: string | null;
   warehouse: number;

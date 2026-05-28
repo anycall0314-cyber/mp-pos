@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { api } from "@/api/client";
@@ -21,7 +21,6 @@ import type {
   Product,
   RepairItem,
   RepairMode,
-  RepairQuotePreview,
   RepairStatus,
   SalesPerson,
   Supplier,
@@ -37,9 +36,27 @@ interface PartLine {
   part_name: string;
   part_sku: string;
   qty: number;
+  unit_cost: string;
 }
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
+
+// 狀態流程(自修):待評估 → 報價中 → 維修中 → 待取件 → 完成
+const STEPS_IN_HOUSE: { value: RepairStatus; label: string }[] = [
+  { value: "pending", label: "待評估" },
+  { value: "quoting", label: "報價中" },
+  { value: "in_repair", label: "維修中" },
+  { value: "ready_pickup", label: "待取件" },
+  { value: "completed", label: "完成" },
+];
+// 委外流程:多一個「已送外廠」節點
+const STEPS_EXTERNAL: { value: RepairStatus; label: string }[] = [
+  { value: "pending", label: "待評估" },
+  { value: "quoting", label: "報價中" },
+  { value: "sent_external", label: "已送外廠" },
+  { value: "ready_pickup", label: "待取件" },
+  { value: "completed", label: "完成" },
+];
 
 async function searchRepairVendors(
   q: string,
@@ -76,6 +93,7 @@ export function RepairEntryPage() {
   const [modelName, setModelName] = useState("");
   const [deviceSerial, setDeviceSerial] = useState("");
   const [defect, setDefect] = useState("");
+  const [internalNote, setInternalNote] = useState("");
   const [receivedDate, setReceivedDate] = useState(TODAY());
   const [expectedDate, setExpectedDate] = useState("");
   const [warehouseId, setWarehouseId] = useState<number | "">("");
@@ -98,14 +116,11 @@ export function RepairEntryPage() {
   const [status, setStatusState] = useState<RepairStatus>("pending");
 
   const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<RepairQuotePreview | null>(null);
 
   const itemsByModel = useRepairItemsByModel(modelKey);
 
-  // 既有單載入
   useEffect(() => {
     if (!isEdit) {
-      // 預設值
       if (defaultWh.id && warehouseId === "") setWarehouseId(defaultWh.id);
       if (defaultHandledBy.id && salesPerson === "") {
         setSalesPerson(defaultHandledBy.id);
@@ -129,14 +144,13 @@ export function RepairEntryPage() {
     setModelName(o.host_model_name);
     setDeviceSerial(o.device_serial);
     setDefect(o.defect_description);
+    setInternalNote(o.internal_note ?? "");
     setReceivedDate(o.received_date);
     setExpectedDate(o.expected_complete_date ?? "");
     setWarehouseId(o.warehouse);
     setSalesPerson(o.sales_person ?? "");
     setSalesPersonOpt(
-      o.sales_person
-        ? { id: o.sales_person, label: o.sales_person_name }
-        : null,
+      o.sales_person ? { id: o.sales_person, label: o.sales_person_name } : null,
     );
     setRepairItemId(o.repair_item);
     setLaborFee(o.labor_fee);
@@ -147,6 +161,7 @@ export function RepairEntryPage() {
         part_name: p.part_name,
         part_sku: p.part_sku,
         qty: p.qty,
+        unit_cost: p.unit_cost,
       })),
     );
     setVendor(o.external_vendor ?? "");
@@ -163,16 +178,27 @@ export function RepairEntryPage() {
     setStatusState(o.status);
   }, [existing.data, isEdit, defaultWh, defaultHandledBy]);
 
+  // 即時計算:零件成本 / 建議報價 / 預估毛利
+  const partsCost = useMemo(
+    () => parts.reduce((s, p) => s + Number(p.unit_cost || 0) * p.qty, 0),
+    [parts],
+  );
+  const suggestedQuote = partsCost + Number(laborFee || 0);
+  const margin =
+    mode === "in_house"
+      ? Number(customerPaid || 0) - partsCost - Number(laborFee || 0)
+      : Number(customerPaid || 0) - Number(extActual || 0);
+
   function pickRepairItem(item: RepairItem) {
     setRepairItemId(item.id);
     setLaborFee(item.default_labor_fee);
-    // 帶入該項目預設零件清單(覆蓋現有)
     setParts(
       item.parts.map((p) => ({
         part_product: p.part_product,
         part_name: p.part_name,
         part_sku: p.part_sku,
         qty: p.default_qty,
+        unit_cost: "0",
       })),
     );
   }
@@ -192,6 +218,7 @@ export function RepairEntryPage() {
         host_model_name: modelName,
         device_serial: deviceSerial,
         defect_description: defect,
+        internal_note: internalNote,
         received_date: receivedDate,
         expected_complete_date: expectedDate || null,
         warehouse: warehouseId,
@@ -214,20 +241,10 @@ export function RepairEntryPage() {
         body.sent_external_at = sentDate || null;
         body.external_expected_pickup = expectedPickup || null;
       }
-      const saved = await save.mutateAsync(body as Parameters<typeof save.mutateAsync>[0]);
-      if (!isEdit) navigate(`/repairs/${saved.id}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  async function loadPreview() {
-    if (!id) return;
-    try {
-      const res = await api<RepairQuotePreview>(
-        `/repair-orders/${id}/quote-preview/`,
+      const saved = await save.mutateAsync(
+        body as Parameters<typeof save.mutateAsync>[0],
       );
-      setPreview(res);
+      if (!isEdit) navigate(`/repairs/${saved.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -248,6 +265,9 @@ export function RepairEntryPage() {
     }
   }
 
+  const steps = mode === "external" ? STEPS_EXTERNAL : STEPS_IN_HOUSE;
+  const currentStepIdx = steps.findIndex((s) => s.value === status);
+
   return (
     <div className="page">
       <Toolbar
@@ -267,412 +287,461 @@ export function RepairEntryPage() {
           </>
         }
       />
-      <div className="entry-body" style={{ padding: 16 }}>
+
+      <div className="re-page-body">
         {error && <Banner kind="error" message={error} />}
 
-        <Field label="維修方式" required>
-          <div className="pf-tabs">
-            <button
-              type="button"
-              className={`pf-tab${mode === "in_house" ? " active" : ""}`}
-              onClick={() => setMode("in_house")}
-            >
-              自修
-              <span className="pf-tab-sub">店內處理</span>
-            </button>
-            <button
-              type="button"
-              className={`pf-tab${mode === "external" ? " active" : ""}`}
-              onClick={() => setMode("external")}
-            >
-              委外
-              <span className="pf-tab-sub">送外廠</span>
-            </button>
-          </div>
-        </Field>
-
-        <div className="field-row">
-          <Field label="客戶" required>
-            <ComboBox<Customer>
-              value={customer}
-              selectedOption={customerOpt}
-              onChange={(v, opt) => {
-                setCustomer(v);
-                setCustomerOpt(opt ?? null);
-              }}
-              fetchOptions={(q) => searchCustomers(q)}
-            />
-          </Field>
-          <Field label="收件門市" required>
-            <select
-              value={warehouseId}
-              onChange={(e) =>
-                setWarehouseId(e.target.value ? Number(e.target.value) : "")
-              }
-              disabled={defaultWh.locked}
-            >
-              <option value="">選擇門市</option>
-              {(warehouses.data ?? []).map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.code} {w.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="經手人">
-            <ComboBox<SalesPerson>
-              value={salesPerson}
-              selectedOption={salesPersonOpt}
-              onChange={(v, opt) => {
-                setSalesPerson(v);
-                setSalesPersonOpt(opt ?? null);
-              }}
-              fetchOptions={(q) => searchSalesPersons(q)}
-            />
-          </Field>
+        {/* 頂部:維修方式 segmented,全寬 */}
+        <div className="re-mode-bar">
+          <button
+            type="button"
+            className={`pf-tab${mode === "in_house" ? " active" : ""}`}
+            onClick={() => setMode("in_house")}
+          >
+            自修
+            <span className="pf-tab-sub">店內處理</span>
+          </button>
+          <button
+            type="button"
+            className={`pf-tab${mode === "external" ? " active" : ""}`}
+            onClick={() => setMode("external")}
+          >
+            委外
+            <span className="pf-tab-sub">送外廠</span>
+          </button>
         </div>
 
-        <Field label="機型" required hint="跨同款 SKU,維修項目綁定也用機型 key">
-          <PhoneModelPicker
-            placeholder={modelName || "搜尋機型…"}
-            onPick={(m) => {
-              setModelKey(m.model_key);
-              setModelName(m.model_name);
-            }}
-          />
-          {modelName && (
-            <div style={{ marginTop: 6, fontSize: 13, color: "var(--text-dim)" }}>
-              已選:<b>{modelName}</b>
-            </div>
-          )}
-        </Field>
-
-        <div className="field-row">
-          <Field label="機身序號 / IMEI">
-            <input
-              value={deviceSerial}
-              onChange={(e) => setDeviceSerial(e.target.value)}
-              placeholder="客戶這台機的 IMEI"
-            />
-          </Field>
-          <Field label="收件日期" required>
-            <input
-              type="date"
-              value={receivedDate}
-              onChange={(e) => setReceivedDate(e.target.value)}
-            />
-          </Field>
-          <Field label="預計完修日">
-            <input
-              type="date"
-              value={expectedDate}
-              onChange={(e) => setExpectedDate(e.target.value)}
-            />
-          </Field>
-        </div>
-
-        <Field label="故障描述">
-          <textarea
-            rows={3}
-            value={defect}
-            onChange={(e) => setDefect(e.target.value)}
-            placeholder="客戶描述的問題"
-          />
-        </Field>
-
-        {/* ── 自修區 ── */}
-        {mode === "in_house" && (
-          <div className="fieldset">
-            <legend>自修</legend>
-            <Field
-              label="維修項目"
-              hint="選擇後自動帶入預設零件 + 預設工資"
-            >
-              <select
-                value={repairItemId ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (!v) {
-                    setRepairItemId(null);
-                    return;
-                  }
-                  const it = itemsByModel.data?.find(
-                    (x) => x.id === Number(v),
-                  );
-                  if (it) pickRepairItem(it);
-                }}
-                disabled={!modelKey}
-              >
-                <option value="">
-                  {modelKey
-                    ? itemsByModel.data && itemsByModel.data.length > 0
-                      ? "請選擇"
-                      : "此機型尚無維修項目"
-                    : "請先選擇機型"}
-                </option>
-                {(itemsByModel.data ?? []).map((it) => (
-                  <option key={it.id} value={it.id}>
-                    {it.name}(工資 $
-                    {Math.round(Number(it.default_labor_fee)).toLocaleString()})
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field
-              label="領用零件"
-              hint="可手動加減;完工時依此清單扣零件倉庫存"
-            >
-              <ComboBox<Product>
-                value=""
-                selectedOption={null}
-                onChange={(_id, opt) => {
-                  if (!opt) return;
-                  if (opt.payload?.warehouse_type !== "parts") {
-                    alert("只能挑零件倉的商品");
-                    return;
-                  }
-                  if (parts.some((p) => p.part_product === opt.id)) return;
-                  setParts([
-                    ...parts,
-                    {
-                      part_product: opt.id,
-                      part_name: opt.label,
-                      part_sku: opt.payload?.sku ?? "",
-                      qty: 1,
-                    },
-                  ]);
-                }}
-                fetchOptions={(q) => searchProducts(q, { activeOnly: true })}
-                placeholder="搜尋零件加入…"
-              />
-              {parts.length > 0 && (
-                <table className="line-table" style={{ width: "100%", marginTop: 8 }}>
-                  <thead>
-                    <tr>
-                      <th>零件</th>
-                      <th style={{ width: 90 }}>數量</th>
-                      <th style={{ width: 70 }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {parts.map((p, idx) => (
-                      <tr key={p.part_product}>
-                        <td>
-                          {p.part_name}
-                          <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
-                            {p.part_sku}
-                          </div>
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            min="1"
-                            value={p.qty}
-                            onChange={(e) => {
-                              const newParts = [...parts];
-                              newParts[idx] = {
-                                ...p,
-                                qty: Math.max(1, Number(e.target.value) || 1),
-                              };
-                              setParts(newParts);
-                            }}
-                          />
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="btn danger"
-                            onClick={() =>
-                              setParts(
-                                parts.filter(
-                                  (x) => x.part_product !== p.part_product,
-                                ),
-                              )
-                            }
-                          >
-                            刪除
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </Field>
-
-            <div className="field-row">
-              <Field label="工資">
-                <input
-                  type="number"
-                  min="0"
-                  value={laborFee}
-                  onChange={(e) => setLaborFee(e.target.value)}
-                />
-              </Field>
-              <Field
-                label="實際報價"
-                hint="師傅可手動調整,系統會跟建議報價對比"
-              >
-                <input
-                  type="number"
-                  min="0"
-                  value={finalQuote}
-                  onChange={(e) => setFinalQuote(e.target.value)}
-                />
-              </Field>
-              <Field label="客戶實付金額">
-                <input
-                  type="number"
-                  min="0"
-                  value={customerPaid}
-                  onChange={(e) => setCustomerPaid(e.target.value)}
-                />
-              </Field>
-            </div>
-
-            {isEdit && (
-              <div style={{ marginTop: 10 }}>
-                <button type="button" className="btn" onClick={loadPreview}>
-                  重算建議報價 + 缺料檢查
-                </button>
-                {preview && (
-                  <div
-                    style={{
-                      marginTop: 8,
-                      padding: 10,
-                      background: "var(--panel-2)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 4,
-                    }}
+        {/* 左右兩欄 */}
+        <div className="re-grid">
+          {/* ─── 左欄 60% ─── */}
+          <div className="re-col-main">
+            {/* 第一區:基本資料 */}
+            <section className="re-section">
+              <div className="re-section-title">基本資料</div>
+              <div className="re-section-body">
+                <div className="re-2col">
+                  <Field label="客戶" required>
+                    <ComboBox<Customer>
+                      value={customer}
+                      selectedOption={customerOpt}
+                      onChange={(v, opt) => {
+                        setCustomer(v);
+                        setCustomerOpt(opt ?? null);
+                      }}
+                      fetchOptions={(q) => searchCustomers(q)}
+                    />
+                  </Field>
+                  <Field label="收件門市" required>
+                    <select
+                      value={warehouseId}
+                      onChange={(e) =>
+                        setWarehouseId(
+                          e.target.value ? Number(e.target.value) : "",
+                        )
+                      }
+                      disabled={defaultWh.locked}
+                    >
+                      <option value="">選擇門市</option>
+                      {(warehouses.data ?? []).map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.code} {w.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="經手人">
+                    <ComboBox<SalesPerson>
+                      value={salesPerson}
+                      selectedOption={salesPersonOpt}
+                      onChange={(v, opt) => {
+                        setSalesPerson(v);
+                        setSalesPersonOpt(opt ?? null);
+                      }}
+                      fetchOptions={(q) => searchSalesPersons(q)}
+                    />
+                  </Field>
+                  <Field label="收件日期" required>
+                    <input
+                      type="date"
+                      value={receivedDate}
+                      onChange={(e) => setReceivedDate(e.target.value)}
+                    />
+                  </Field>
+                  <Field
+                    label="機型"
+                    required
+                    hint={modelName ? `已選:${modelName}` : "跨同款 SKU"}
                   >
-                    <div>
-                      建議報價:<b>${Math.round(Number(preview.suggested_quote)).toLocaleString()}</b>
-                    </div>
-                    <div>
-                      預估毛利:<b>${Math.round(Number(preview.margin)).toLocaleString()}</b>
-                    </div>
-                    {preview.shortages.length > 0 && (
-                      <div style={{ color: "#ff7070", marginTop: 6 }}>
-                        缺料警示:
-                        <ul>
-                          {preview.shortages.map((s) => (
-                            <li key={s.part_id}>
-                              {s.part_name}:需 {s.needed} / 庫存 {s.available}{" "}
-                              (差 {s.short_by})
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
+                    <PhoneModelPicker
+                      placeholder={modelName || "搜尋機型…"}
+                      onPick={(m) => {
+                        setModelKey(m.model_key);
+                        setModelName(m.model_name);
+                      }}
+                    />
+                  </Field>
+                  <Field label="機身序號 / IMEI">
+                    <input
+                      value={deviceSerial}
+                      onChange={(e) => setDeviceSerial(e.target.value)}
+                      placeholder="客戶這台機的 IMEI"
+                    />
+                  </Field>
+                  <Field label="預計完修日期">
+                    <input
+                      type="date"
+                      value={expectedDate}
+                      onChange={(e) => setExpectedDate(e.target.value)}
+                    />
+                  </Field>
+                </div>
+                <Field label="故障描述">
+                  <textarea
+                    rows={3}
+                    value={defect}
+                    onChange={(e) => setDefect(e.target.value)}
+                    placeholder="客戶描述的問題"
+                  />
+                </Field>
               </div>
+            </section>
+
+            {/* 第二區:維修內容(自修) */}
+            {mode === "in_house" && (
+              <section className="re-section">
+                <div className="re-section-title">維修內容</div>
+                <div className="re-section-body">
+                  <Field
+                    label="維修項目"
+                    hint="選擇後自動帶入該項目的預設零件與工資"
+                  >
+                    <select
+                      value={repairItemId ?? ""}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (!v) {
+                          setRepairItemId(null);
+                          return;
+                        }
+                        const it = itemsByModel.data?.find(
+                          (x) => x.id === Number(v),
+                        );
+                        if (it) pickRepairItem(it);
+                      }}
+                      disabled={!modelKey}
+                    >
+                      <option value="">
+                        {modelKey
+                          ? itemsByModel.data && itemsByModel.data.length > 0
+                            ? "請選擇"
+                            : "此機型尚無維修項目"
+                          : "請先選擇機型"}
+                      </option>
+                      {(itemsByModel.data ?? []).map((it) => (
+                        <option key={it.id} value={it.id}>
+                          {it.name}(工資 $
+                          {Math.round(
+                            Number(it.default_labor_fee),
+                          ).toLocaleString()}
+                          )
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+
+                  <Field
+                    label="領用零件清單"
+                    hint="可手動增刪;完工時依此扣零件倉庫存"
+                  >
+                    <ComboBox<Product>
+                      value=""
+                      selectedOption={null}
+                      onChange={(_id, opt) => {
+                        if (!opt) return;
+                        if (opt.payload?.warehouse_type !== "parts") {
+                          alert("只能挑零件倉的商品");
+                          return;
+                        }
+                        if (parts.some((p) => p.part_product === opt.id)) return;
+                        setParts([
+                          ...parts,
+                          {
+                            part_product: opt.id,
+                            part_name: opt.label,
+                            part_sku: opt.payload?.sku ?? "",
+                            qty: 1,
+                            unit_cost:
+                              opt.payload?.weighted_avg_cost ?? "0",
+                          },
+                        ]);
+                      }}
+                      fetchOptions={(q) =>
+                        searchProducts(q, { activeOnly: true })
+                      }
+                      placeholder="搜尋零件加入…"
+                    />
+                    {parts.length > 0 && (
+                      <table className="re-parts-table">
+                        <thead>
+                          <tr>
+                            <th>品名 / SKU</th>
+                            <th style={{ width: 90 }}>數量</th>
+                            <th style={{ width: 110 }} className="num">
+                              單位成本
+                            </th>
+                            <th style={{ width: 110 }} className="num">
+                              小計
+                            </th>
+                            <th style={{ width: 64 }}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {parts.map((p, idx) => (
+                            <tr key={p.part_product}>
+                              <td>
+                                <div className="re-parts-name">{p.part_name}</div>
+                                <div className="re-parts-sku">{p.part_sku}</div>
+                              </td>
+                              <td>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={p.qty}
+                                  onChange={(e) => {
+                                    const newParts = [...parts];
+                                    newParts[idx] = {
+                                      ...p,
+                                      qty: Math.max(
+                                        1,
+                                        Number(e.target.value) || 1,
+                                      ),
+                                    };
+                                    setParts(newParts);
+                                  }}
+                                />
+                              </td>
+                              <td className="num">
+                                ${Math.round(Number(p.unit_cost) || 0).toLocaleString()}
+                              </td>
+                              <td className="num">
+                                <b>
+                                  ${(
+                                    Math.round(Number(p.unit_cost) || 0) * p.qty
+                                  ).toLocaleString()}
+                                </b>
+                              </td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className="btn danger"
+                                  onClick={() =>
+                                    setParts(
+                                      parts.filter(
+                                        (x) =>
+                                          x.part_product !== p.part_product,
+                                      ),
+                                    )
+                                  }
+                                >
+                                  刪除
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="re-parts-foot">
+                            <td colSpan={3} className="num">
+                              零件成本合計
+                            </td>
+                            <td className="num">
+                              <b>${Math.round(partsCost).toLocaleString()}</b>
+                            </td>
+                            <td></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    )}
+                  </Field>
+                </div>
+              </section>
+            )}
+
+            {/* 第三區:委外資訊 */}
+            {mode === "external" && (
+              <section className="re-section">
+                <div className="re-section-title">委外資訊</div>
+                <div className="re-section-body">
+                  <Field label="委外廠商">
+                    <ComboBox<Supplier>
+                      value={vendor}
+                      selectedOption={vendorOpt}
+                      onChange={(v, opt) => {
+                        setVendor(v);
+                        setVendorOpt(opt ?? null);
+                      }}
+                      fetchOptions={searchRepairVendors}
+                      placeholder="搜尋已標記『維修委外廠商』的供應商"
+                    />
+                  </Field>
+                  <div className="re-2col">
+                    <Field label="預估費用(送修前)">
+                      <input
+                        type="number"
+                        min="0"
+                        value={extEst}
+                        onChange={(e) => setExtEst(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="實際費用(取件後)">
+                      <input
+                        type="number"
+                        min="0"
+                        value={extActual}
+                        onChange={(e) => setExtActual(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="送出外廠日期">
+                      <input
+                        type="date"
+                        value={sentDate}
+                        onChange={(e) => setSentDate(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="預計取回日期">
+                      <input
+                        type="date"
+                        value={expectedPickup}
+                        onChange={(e) => setExpectedPickup(e.target.value)}
+                      />
+                    </Field>
+                  </div>
+                </div>
+              </section>
             )}
           </div>
-        )}
 
-        {/* ── 委外區 ── */}
-        {mode === "external" && (
-          <div className="fieldset">
-            <legend>委外</legend>
-            <Field label="委外廠商">
-              <ComboBox<Supplier>
-                value={vendor}
-                selectedOption={vendorOpt}
-                onChange={(v, opt) => {
-                  setVendor(v);
-                  setVendorOpt(opt ?? null);
-                }}
-                fetchOptions={searchRepairVendors}
-                placeholder="搜尋已標記『維修委外廠商』的供應商"
+          {/* ─── 右欄 40% sticky ─── */}
+          <aside className="re-col-side">
+            {/* 費用摘要卡 */}
+            <section className="re-card re-summary">
+              <div className="re-card-title">費用摘要</div>
+              <div className="re-summary-list">
+                {mode === "in_house" ? (
+                  <>
+                    <div className="re-summary-row">
+                      <span>零件成本合計</span>
+                      <b>${Math.round(partsCost).toLocaleString()}</b>
+                    </div>
+                    <div className="re-summary-row">
+                      <span>工資</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={laborFee}
+                        onChange={(e) => setLaborFee(e.target.value)}
+                        className="re-summary-input"
+                      />
+                    </div>
+                    <div className="re-summary-row re-summary-divider">
+                      <span>系統建議報價</span>
+                      <span className="re-summary-calc">
+                        ${Math.round(suggestedQuote).toLocaleString()}
+                        <span className="re-summary-formula">
+                          (零件 + 工資)
+                        </span>
+                      </span>
+                    </div>
+                    <div className="re-summary-row">
+                      <span>實際報價</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={finalQuote}
+                        onChange={(e) => setFinalQuote(e.target.value)}
+                        className="re-summary-input"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="re-summary-row">
+                      <span>委外預估費用</span>
+                      <b>${Math.round(Number(extEst) || 0).toLocaleString()}</b>
+                    </div>
+                    <div className="re-summary-row re-summary-divider">
+                      <span>委外實際費用</span>
+                      <b>${Math.round(Number(extActual) || 0).toLocaleString()}</b>
+                    </div>
+                  </>
+                )}
+                <div className="re-summary-row re-summary-hero">
+                  <span>客戶實付金額</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={customerPaid}
+                    onChange={(e) => setCustomerPaid(e.target.value)}
+                    className="re-summary-input re-summary-input-hero"
+                  />
+                </div>
+                <div className="re-summary-row re-summary-margin">
+                  <span>預估毛利</span>
+                  <b style={{ color: margin < 0 ? "#ff7070" : "#4ade80" }}>
+                    ${Math.round(margin).toLocaleString()}
+                  </b>
+                </div>
+                <div className="re-summary-formula re-summary-margin-formula">
+                  {mode === "in_house"
+                    ? "= 實付 − 零件成本 − 工資"
+                    : "= 實付 − 委外實際費用"}
+                </div>
+              </div>
+            </section>
+
+            {/* 狀態步驟條(僅 isEdit) */}
+            {isEdit && (
+              <section className="re-card">
+                <div className="re-card-title">維修狀態</div>
+                <div className="re-stepper">
+                  {steps.map((s, i) => {
+                    const isCurrent = i === currentStepIdx;
+                    const isPast = i < currentStepIdx;
+                    return (
+                      <button
+                        key={s.value}
+                        type="button"
+                        className={
+                          "re-step" +
+                          (isCurrent ? " current" : "") +
+                          (isPast ? " past" : "")
+                        }
+                        onClick={() => changeStatus(s.value)}
+                        title={`切換到 ${s.label}`}
+                      >
+                        <span className="re-step-dot">{i + 1}</span>
+                        <span className="re-step-label">{s.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="re-stepper-hint">
+                  點擊任一節點切換狀態;按「完成」會扣零件倉庫存
+                </div>
+              </section>
+            )}
+
+            {/* 備註 */}
+            <section className="re-card">
+              <div className="re-card-title">內部備註</div>
+              <textarea
+                className="re-note-textarea"
+                rows={4}
+                value={internalNote}
+                onChange={(e) => setInternalNote(e.target.value)}
+                placeholder="師傅 / 經手人內部記事(不顯示給客戶)"
               />
-            </Field>
-            <div className="field-row">
-              <Field label="預估費用(送修前)">
-                <input
-                  type="number"
-                  min="0"
-                  value={extEst}
-                  onChange={(e) => setExtEst(e.target.value)}
-                />
-              </Field>
-              <Field label="實際費用(取件後)">
-                <input
-                  type="number"
-                  min="0"
-                  value={extActual}
-                  onChange={(e) => setExtActual(e.target.value)}
-                />
-              </Field>
-              <Field label="客戶實付金額">
-                <input
-                  type="number"
-                  min="0"
-                  value={customerPaid}
-                  onChange={(e) => setCustomerPaid(e.target.value)}
-                />
-              </Field>
-            </div>
-            <div className="field-row">
-              <Field label="送出外廠日期">
-                <input
-                  type="date"
-                  value={sentDate}
-                  onChange={(e) => setSentDate(e.target.value)}
-                />
-              </Field>
-              <Field label="預計取回日期">
-                <input
-                  type="date"
-                  value={expectedPickup}
-                  onChange={(e) => setExpectedPickup(e.target.value)}
-                />
-              </Field>
-            </div>
-          </div>
-        )}
-
-        {/* 狀態切換區 */}
-        {isEdit && (
-          <div className="fieldset">
-            <legend>狀態</legend>
-            <div style={{ marginBottom: 8 }}>
-              目前:<b>{existing.data?.status_label}</b>
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              <button className="btn" onClick={() => changeStatus("pending")}>
-                待評估
-              </button>
-              <button className="btn" onClick={() => changeStatus("quoting")}>
-                報價中
-              </button>
-              <button className="btn" onClick={() => changeStatus("in_repair")}>
-                維修中
-              </button>
-              {mode === "external" && (
-                <button
-                  className="btn"
-                  onClick={() => changeStatus("sent_external")}
-                >
-                  已送外廠
-                </button>
-              )}
-              <button
-                className="btn"
-                onClick={() => changeStatus("ready_pickup")}
-              >
-                待取件
-              </button>
-              <button
-                className="btn primary"
-                onClick={() => changeStatus("completed")}
-              >
-                完工(扣庫存)
-              </button>
-            </div>
-          </div>
-        )}
+            </section>
+          </aside>
+        </div>
       </div>
     </div>
   );

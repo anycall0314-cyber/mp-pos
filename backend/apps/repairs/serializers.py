@@ -164,6 +164,7 @@ class RepairOrderSerializer(serializers.ModelSerializer):
             "host_model_name",
             "device_serial",
             "defect_description",
+            "internal_note",
             "received_date",
             "expected_complete_date",
             "warehouse",

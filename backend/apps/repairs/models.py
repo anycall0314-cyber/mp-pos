@@ -121,6 +121,11 @@ class RepairOrder(TenantOwnedModel):
         "機身序號 / IMEI", max_length=64, blank=True,
     )
     defect_description = models.TextField("故障描述", blank=True)
+    internal_note = models.TextField(
+        "內部備註",
+        blank=True,
+        help_text="師傅 / 經手人內部記事(不顯示給客戶)",
+    )
     received_date = models.DateField("收件日期")
     expected_complete_date = models.DateField(
         "預計完修日期", null=True, blank=True

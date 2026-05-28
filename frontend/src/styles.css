@@ -3300,6 +3300,313 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   font-weight: 600;
 }
 
+/* ─────────────────────────────────────────────────────────
+ * 維修單建單 / 編輯頁:60/40 左右兩欄,右欄 sticky
+ * ───────────────────────────────────────────────────────── */
+.re-page-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.re-mode-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background: var(--panel);
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.re-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 14px;
+  align-items: flex-start;
+}
+.re-col-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.re-col-side {
+  position: sticky;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* 區塊樣式 */
+.re-section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.re-section-title {
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+}
+.re-section-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.re-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* 領用零件 table */
+.re-parts-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+  font-size: 13px;
+}
+.re-parts-table th,
+.re-parts-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+.re-parts-table th {
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-weight: 500;
+  font-size: 12px;
+}
+.re-parts-table td.num,
+.re-parts-table th.num {
+  text-align: right;
+}
+.re-parts-name {
+  font-weight: 600;
+  color: var(--text);
+}
+.re-parts-sku {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.re-parts-foot td {
+  background: var(--panel-2);
+  font-weight: 600;
+}
+
+/* 右欄卡片通用 */
+.re-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.re-card-title {
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* 費用摘要 */
+.re-summary-list {
+  padding: 8px 14px 12px;
+  display: flex;
+  flex-direction: column;
+}
+.re-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 14px;
+  border-bottom: 1px dashed var(--border);
+}
+.re-summary-row:last-child { border-bottom: 0; }
+.re-summary-row span:first-child {
+  color: var(--text-dim);
+}
+.re-summary-row b {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.re-summary-input {
+  width: 110px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.re-summary-divider {
+  border-bottom-style: solid !important;
+  padding-bottom: 10px;
+}
+.re-summary-calc {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.re-summary-formula {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 400;
+}
+.re-summary-hero {
+  margin-top: 6px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  border-top: 2px solid var(--accent);
+  border-bottom: 0 !important;
+}
+.re-summary-hero span:first-child {
+  color: var(--text);
+  font-weight: 700;
+  font-size: 15px;
+}
+.re-summary-input-hero {
+  width: 140px;
+  font-size: 18px;
+  font-weight: 700;
+  height: 36px;
+}
+.re-summary-margin {
+  border-bottom: 0 !important;
+  padding-bottom: 0;
+}
+.re-summary-margin b {
+  font-size: 16px;
+  font-weight: 700;
+}
+.re-summary-margin-formula {
+  text-align: right;
+  padding-top: 2px;
+}
+
+/* 狀態 stepper */
+.re-stepper {
+  display: flex;
+  align-items: stretch;
+  padding: 14px 10px 10px;
+  position: relative;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.re-step {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 4px 2px;
+  position: relative;
+}
+.re-step-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--panel-2);
+  border: 2px solid var(--border);
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  z-index: 1;
+}
+.re-step-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+}
+/* 連接線 */
+.re-step:not(:first-child)::before {
+  content: "";
+  position: absolute;
+  top: 17px; /* 對齊 dot 中心 */
+  left: -50%;
+  width: 100%;
+  height: 2px;
+  background: var(--border);
+  z-index: 0;
+}
+.re-step:hover .re-step-dot {
+  border-color: var(--accent);
+}
+.re-step.past .re-step-dot {
+  background: #4ade80;
+  border-color: #4ade80;
+  color: white;
+}
+.re-step.past:not(:first-child)::before {
+  background: #4ade80;
+}
+.re-step.current .re-step-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.2);
+}
+.re-step.current .re-step-label {
+  color: var(--accent);
+  font-weight: 700;
+}
+.re-stepper-hint {
+  padding: 4px 14px 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.re-note-textarea {
+  width: 100%;
+  min-height: 90px;
+  border: 0;
+  background: transparent;
+  resize: vertical;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+}
+.re-note-textarea:focus {
+  outline: none;
+}
+
+/* 響應式:窄畫面收成單欄 stack */
+@media (max-width: 960px) {
+  .re-grid {
+    grid-template-columns: 1fr;
+  }
+  .re-col-side {
+    position: static;
+  }
+  .re-2col {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 768px) {
   /* 篩選列在手機改 column,每群組獨立一行 */
   .sd-filter {
