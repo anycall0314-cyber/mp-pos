@@ -4092,6 +4092,40 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   color: #fb923c;
 }
 
+/* 維修列表 inline 編輯欄(報價/成本/實付) */
+.rp-inline-money {
+  width: 80px;
+  padding: 3px 6px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 13px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.rp-inline-money:hover:not(:disabled) {
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+.rp-inline-money:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg-2);
+}
+.rp-inline-money:disabled {
+  color: var(--text-dim);
+  cursor: not-allowed;
+}
+.rp-inline-money.saving {
+  opacity: 0.6;
+}
+.rp-inline-money.saved {
+  border-color: #4ade80;
+  background: rgba(74, 222, 128, 0.1);
+}
+
 /* ============== 維修收據列印頁 (A4 直式,單張兩聯,中間裁切線) ============== */
 
 .rr-page {

@@ -2,10 +2,6 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { useRepairOrders, useSaveRepairOrder } from "@/api/hooks";
-import type { RepairOrder, RepairStatus } from "@/api/types";
-import { Banner } from "@/components/Banner";
-import { Drawer } from "@/components/Drawer";
-import { Field } from "@/components/Field";
 import { Toolbar } from "@/components/Toolbar";
 
 const STATUS_OPTIONS = [
@@ -17,6 +13,72 @@ const STATUS_OPTIONS = [
   { v: "ready_pickup", label: "待取件" },
   { v: "completed", label: "完成" },
 ];
+
+/** 一筆數字 inline 編輯欄:點即改,失焦或按 Enter 自動 PATCH 存入。 */
+function InlineMoneyCell({
+  initial,
+  disabled,
+  onSave,
+  title,
+}: {
+  initial: string;
+  disabled?: boolean;
+  onSave: (v: string) => Promise<void>;
+  title?: string;
+}) {
+  const normalized = String(Math.round(Number(initial) || 0));
+  const [val, setVal] = useState(normalized);
+  const [saving, setSaving] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  useEffect(() => {
+    setVal(normalized);
+  }, [normalized]);
+
+  async function flush() {
+    if (saving) return;
+    const trimmed = val.trim() === "" ? "0" : val.trim();
+    if (trimmed === normalized) {
+      setVal(normalized);
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(trimmed);
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 900);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+      setVal(normalized);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <input
+      type="number"
+      min={0}
+      value={val}
+      disabled={disabled || saving}
+      onChange={(e) => setVal(e.target.value)}
+      onBlur={flush}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        if (e.key === "Escape") {
+          setVal(normalized);
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+      title={title}
+      className={
+        "rp-inline-money" +
+        (saving ? " saving" : "") +
+        (savedFlash ? " saved" : "")
+      }
+    />
+  );
+}
 
 const NUMBER_FMT = (v: string | number) =>
   Math.round(Number(v) || 0).toLocaleString();
@@ -31,47 +93,10 @@ export function RepairsPage() {
     ? all.filter((r) => r.is_return_visit)
     : all;
   const returnVisitCount = all.filter((r) => r.is_return_visit).length;
-
-  // 委外快速編輯 Drawer
-  const [editing, setEditing] = useState<RepairOrder | null>(null);
-  const [editEst, setEditEst] = useState("0");
-  const [editActual, setEditActual] = useState("0");
-  const [editPaid, setEditPaid] = useState("0");
-  const [editStatus, setEditStatus] = useState("");
-  const [editErr, setEditErr] = useState<string | null>(null);
   const save = useSaveRepairOrder();
 
-  useEffect(() => {
-    if (!editing) return;
-    setEditEst(editing.external_quote_estimated || "0");
-    setEditActual(editing.external_quote_actual || "0");
-    setEditPaid(editing.customer_paid_amount || "0");
-    setEditStatus(editing.status);
-    setEditErr(null);
-  }, [editing]);
-
-  const editMargin =
-    Number(editPaid || 0) - Number(editActual || 0);
-
-  function openExternalEdit(r: RepairOrder) {
-    setEditing(r);
-  }
-
-  async function submitFinance() {
-    if (!editing) return;
-    setEditErr(null);
-    try {
-      await save.mutateAsync({
-        id: editing.id,
-        external_quote_estimated: editEst || "0",
-        external_quote_actual: editActual || "0",
-        customer_paid_amount: editPaid || "0",
-        status: editStatus as RepairStatus,
-      });
-      setEditing(null);
-    } catch (e) {
-      setEditErr(e instanceof Error ? e.message : String(e));
-    }
+  async function patchField(id: number, body: Record<string, string>) {
+    await save.mutateAsync({ id, ...body });
   }
 
   return (
@@ -121,6 +146,15 @@ export function RepairsPage() {
             </span>
           )}
         </span>
+        <span
+          style={{
+            marginLeft: "auto",
+            color: "var(--text-dim)",
+            fontSize: 12,
+          }}
+        >
+          報價 / 成本 / 實付欄位可直接點選編輯(失焦自動存)
+        </span>
       </div>
 
       <div className="md-table" style={{ height: "calc(100% - 100px)" }}>
@@ -140,174 +174,133 @@ export function RepairsPage() {
                 <th>收件日</th>
                 <th>預計完修</th>
                 <th>門市</th>
-                <th className="num">預估</th>
-                <th className="num">實際</th>
+                <th className="num" title="委外:預估費用">
+                  預估
+                </th>
+                <th className="num" title="委外:實際費用 / 自修:工資">
+                  成本
+                </th>
                 <th className="num">客戶實付</th>
-                <th style={{ width: 80 }}></th>
+                <th className="num" title="客戶實付 − 成本">
+                  毛利
+                </th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <Link to={`/repairs/${r.id}`} className="stock-link-name">
-                      {r.no}
-                    </Link>
-                    {r.is_return_visit && (
-                      <span
-                        className="rh-badge"
-                        style={{
-                          marginLeft: 6,
-                          background:
-                            r.warranty_info?.status === "within"
-                              ? "rgba(74,222,128,0.15)"
-                              : "rgba(251,146,60,0.15)",
-                          color:
-                            r.warranty_info?.status === "within"
+              {rows.map((r) => {
+                const cost =
+                  r.mode === "external"
+                    ? Number(r.external_quote_actual || 0)
+                    : Number(r.labor_fee || 0);
+                const paid = Number(r.customer_paid_amount || 0);
+                const margin = paid - cost;
+                const locked = r.is_void || r.status === "completed";
+                return (
+                  <tr key={r.id}>
+                    <td>
+                      <Link
+                        to={`/repairs/${r.id}`}
+                        className="stock-link-name"
+                      >
+                        {r.no}
+                      </Link>
+                      {r.is_return_visit && (
+                        <span
+                          className="rh-badge"
+                          style={{
+                            marginLeft: 6,
+                            background:
+                              r.warranty_info?.status === "within"
+                                ? "rgba(74,222,128,0.15)"
+                                : "rgba(251,146,60,0.15)",
+                            color:
+                              r.warranty_info?.status === "within"
+                                ? "#4ade80"
+                                : "#fb923c",
+                          }}
+                        >
+                          返修
+                        </span>
+                      )}
+                    </td>
+                    <td>{r.mode_label}</td>
+                    <td>{r.status_label}</td>
+                    <td>{r.customer_name}</td>
+                    <td>{r.host_model_name}</td>
+                    <td>{r.received_date}</td>
+                    <td>{r.expected_complete_date ?? "—"}</td>
+                    <td>{r.warehouse_code}</td>
+                    <td className="num">
+                      {r.mode === "external" ? (
+                        <InlineMoneyCell
+                          initial={r.external_quote_estimated}
+                          disabled={locked}
+                          title="委外預估費用"
+                          onSave={(v) =>
+                            patchField(r.id, {
+                              external_quote_estimated: v,
+                            })
+                          }
+                        />
+                      ) : (
+                        <span style={{ color: "var(--text-dim)" }}>—</span>
+                      )}
+                    </td>
+                    <td className="num">
+                      {r.mode === "external" ? (
+                        <InlineMoneyCell
+                          initial={r.external_quote_actual}
+                          disabled={locked}
+                          title="委外實際費用"
+                          onSave={(v) =>
+                            patchField(r.id, {
+                              external_quote_actual: v,
+                            })
+                          }
+                        />
+                      ) : (
+                        <InlineMoneyCell
+                          initial={r.labor_fee}
+                          disabled={locked}
+                          title="自修工資(零件成本由領用清單彙總,需點進單號編輯)"
+                          onSave={(v) =>
+                            patchField(r.id, { labor_fee: v })
+                          }
+                        />
+                      )}
+                    </td>
+                    <td className="num">
+                      <InlineMoneyCell
+                        initial={r.customer_paid_amount}
+                        disabled={locked}
+                        title="客戶實付金額"
+                        onSave={(v) =>
+                          patchField(r.id, { customer_paid_amount: v })
+                        }
+                      />
+                    </td>
+                    <td
+                      className="num"
+                      style={{
+                        color:
+                          margin < 0
+                            ? "#ff7070"
+                            : margin > 0
                               ? "#4ade80"
-                              : "#fb923c",
-                        }}
-                      >
-                        返修
-                      </span>
-                    )}
-                  </td>
-                  <td>{r.mode_label}</td>
-                  <td>{r.status_label}</td>
-                  <td>{r.customer_name}</td>
-                  <td>{r.host_model_name}</td>
-                  <td>{r.received_date}</td>
-                  <td>{r.expected_complete_date ?? "—"}</td>
-                  <td>{r.warehouse_code}</td>
-                  <td className="num">
-                    {r.mode === "external"
-                      ? `$${NUMBER_FMT(r.external_quote_estimated)}`
-                      : "—"}
-                  </td>
-                  <td className="num">
-                    {r.mode === "external"
-                      ? `$${NUMBER_FMT(r.external_quote_actual)}`
-                      : "—"}
-                  </td>
-                  <td className="num">
-                    ${NUMBER_FMT(r.customer_paid_amount)}
-                  </td>
-                  <td>
-                    {r.mode === "external" && !r.is_void && (
-                      <button
-                        type="button"
-                        className="btn"
-                        onClick={() => openExternalEdit(r)}
-                      >
-                        報價/成本
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                              : "var(--text-dim)",
+                        fontWeight: 600,
+                      }}
+                      title="客戶實付 − 成本"
+                    >
+                      ${NUMBER_FMT(margin)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
       </div>
-
-      <Drawer
-        open={!!editing}
-        title={`委外報價 · ${editing?.no ?? ""}`}
-        onClose={() => setEditing(null)}
-        footer={
-          <>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setEditing(null)}
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              className="btn primary"
-              onClick={submitFinance}
-              disabled={save.isPending}
-            >
-              {save.isPending ? "儲存中…" : "儲存"}
-            </button>
-          </>
-        }
-      >
-        {editing && (
-          <>
-            {editErr && <Banner kind="error" message={editErr} />}
-            <div style={{ marginBottom: 12, color: "var(--text-dim)", fontSize: 13 }}>
-              客戶 {editing.customer_name} · 機型 {editing.host_model_name || "—"}
-              <br />
-              委外廠商 {editing.external_vendor_name || "(未選)"}
-            </div>
-
-            <Field label="委外預估費用(送修前)">
-              <input
-                type="number"
-                min="0"
-                value={editEst}
-                onChange={(e) => setEditEst(e.target.value)}
-              />
-            </Field>
-            <Field label="委外實際費用(取件後)">
-              <input
-                type="number"
-                min="0"
-                value={editActual}
-                onChange={(e) => setEditActual(e.target.value)}
-              />
-            </Field>
-            <Field label="客戶實付金額">
-              <input
-                type="number"
-                min="0"
-                value={editPaid}
-                onChange={(e) => setEditPaid(e.target.value)}
-              />
-            </Field>
-
-            <div
-              style={{
-                padding: 10,
-                background: "var(--bg-2)",
-                borderRadius: 6,
-                marginBottom: 12,
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <span>預估毛利</span>
-              <b
-                style={{
-                  color: editMargin < 0 ? "#ff7070" : "#4ade80",
-                  fontSize: 18,
-                }}
-              >
-                ${NUMBER_FMT(editMargin)}
-              </b>
-            </div>
-            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 16 }}>
-              = 客戶實付 − 委外實際費用
-            </div>
-
-            <Field label="狀態">
-              <select
-                value={editStatus}
-                onChange={(e) => setEditStatus(e.target.value)}
-              >
-                {STATUS_OPTIONS.filter((s) => s.v).map((o) => (
-                  <option key={o.v} value={o.v}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </>
-        )}
-      </Drawer>
     </div>
   );
 }
