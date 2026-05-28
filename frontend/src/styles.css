@@ -2168,11 +2168,11 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
 }
 .biz-group-header {
   display: grid;
-  /* 跟 .biz-section-header 同 column,視覺對齊 */
+  /* 跟 .biz-section-header 完全同 column + padding,讓「筆數/小計」header 上下對齊 */
   grid-template-columns: 20px minmax(0, 1fr) 50px 90px;
   align-items: center;
   gap: 12px;
-  padding: 0 12px 4px 16px;
+  padding: 0 12px 4px 12px;
   margin-bottom: 4px;
   border-bottom: 1px solid var(--border);
 }
@@ -2186,6 +2186,12 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   font-size: 11px;
   font-weight: 600;
   color: var(--text-dim);
+}
+/* 筆數欄:header 跟 value 都置中,避免兩個字的「筆數」靠右後 0 看起來偏向小計欄 */
+.biz-group-th-count {
+  text-align: center;
+}
+.biz-group-th-total {
   text-align: right;
 }
 
@@ -2221,7 +2227,7 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
 .biz-section-count {
   font-size: 13px;
   color: var(--text-dim);
-  text-align: right;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 .biz-section-total {

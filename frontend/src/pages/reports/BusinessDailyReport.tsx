@@ -684,8 +684,8 @@ function SectionGroup({
       <div className="biz-group-header">
         <span />
         <span className="biz-group-label">{label}</span>
-        <span className="biz-group-th">筆數</span>
-        <span className="biz-group-th">小計</span>
+        <span className="biz-group-th biz-group-th-count">筆數</span>
+        <span className="biz-group-th biz-group-th-total">小計</span>
       </div>
       {children}
     </div>
