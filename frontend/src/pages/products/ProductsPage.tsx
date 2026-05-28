@@ -8,6 +8,7 @@ import { Toolbar } from "@/components/Toolbar";
 import { BulkAddProductsModal } from "./BulkAddProductsModal";
 import { ProductExpanderModal } from "./ProductExpanderModal";
 import { ProductForm } from "./ProductForm";
+import { ProductImportModal } from "./ProductImportModal";
 
 function formatMoney(value: string | number) {
   const n = Number(value);
@@ -109,6 +110,7 @@ export function ProductsPage() {
   // ─── 批次新增 Modal
   const [bulkOpen, setBulkOpen] = useState(false);
   const [expanderOpen, setExpanderOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [bulkResult, setBulkResult] = useState<string | null>(null);
 
   // ─── 類別編輯(右側面板 inline form)
@@ -244,6 +246,9 @@ export function ProductsPage() {
               </button>
               <button className="btn" onClick={() => setBulkOpen(true)}>
                 批次貼上
+              </button>
+              <button className="btn" onClick={() => setImportOpen(true)}>
+                匯入 Excel
               </button>
               <button
                 className="btn primary"
@@ -794,6 +799,15 @@ export function ProductsPage() {
           setBulkOpen(false);
           setBulkResult(`成功建立 ${count} 筆商品`);
           setTimeout(() => setBulkResult(null), 4000);
+        }}
+      />
+      <ProductImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={() => {
+          // 匯入成功後讓商品 / 類別清單重抓
+          productsResult.refetch();
+          categoriesResult.refetch();
         }}
       />
       <ProductExpanderModal

@@ -7,6 +7,7 @@ from django.db.models.functions import Coalesce, Greatest
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from apps.core.filters import _is_postgres
@@ -15,6 +16,7 @@ from apps.purchasing.models import PurchaseOrderItem
 from apps.sales.models import SalesOrderItem
 from apps.transfers.models import TransferOrder, TransferOrderItem
 
+from .import_service import import_products_from_file
 from .models import Category, Product, ProductRelation
 from .serializers import CategorySerializer, ProductSerializer
 
@@ -167,6 +169,43 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.tenant)
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="import",
+        parser_classes=[MultiPartParser, FormParser, JSONParser],
+    )
+    def import_csv(self, request):
+        """CSV / Excel 商品匯入。
+
+        - 必填:品名 / 類別(名稱或代碼)/ 品號
+        - 選填:安全庫存(預設 0)/ 建議售價 / 條碼
+        - 類別不存在自動建立,品號 / 品名重複跳過
+        - 新匯入商品 lifecycle_status=pending,不影響庫存警示
+        - dry_run=true(預設)只回報告不寫入;false 才正式 commit
+
+        Body(multipart):
+            file: 上傳檔(xlsx / csv)
+            dry_run: "true" / "false"(預設 true)
+        """
+        file_obj = request.FILES.get("file")
+        if not file_obj:
+            return Response(
+                {"detail": "請上傳 xlsx 或 csv 檔(欄位名稱 file)"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        dry_run_raw = request.data.get("dry_run", "true")
+        dry_run = str(dry_run_raw).lower() not in ("false", "0", "no")
+        try:
+            report = import_products_from_file(
+                request.tenant, file_obj, file_obj.name, dry_run=dry_run
+            )
+        except ValueError as e:
+            return Response(
+                {"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST
+            )
+        return Response(report)
 
     @action(detail=False, methods=["get"], url_path="phone-models")
     def phone_models(self, request):

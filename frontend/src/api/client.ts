@@ -36,8 +36,11 @@ export class ApiHttpError extends Error {
 export const authEvents = new EventTarget();
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  // 上傳檔案(FormData)時不能設 Content-Type,要讓瀏覽器自動帶 multipart boundary
+  const isFormData =
+    typeof FormData !== "undefined" && init?.body instanceof FormData;
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...((init?.headers as Record<string, string>) ?? {}),
   };
   const token = getToken();

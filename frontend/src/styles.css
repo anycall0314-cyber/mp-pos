@@ -3042,6 +3042,114 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   margin-top: 2px;
 }
 
+/* 商品匯入 Modal */
+.pi-modal {
+  min-width: 560px;
+  max-width: 800px;
+}
+.pi-note {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pi-note-dim {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.pi-file-info {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.pi-error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 100, 100, 0.12);
+  border: 1px solid rgba(255, 100, 100, 0.4);
+  border-radius: 4px;
+  color: #ff9090;
+  font-size: 13px;
+}
+.pi-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 100px), 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.pi-summary-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  text-align: center;
+}
+.pi-summary-num {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.pi-summary-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+.pi-summary-ok .pi-summary-num { color: #4ade80; }
+.pi-summary-skip .pi-summary-num { color: #fbbf24; }
+
+.pi-section {
+  margin-top: 14px;
+}
+.pi-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+.pi-section-warn { color: #fbbf24; }
+.pi-section-ok { color: #4ade80; }
+.pi-cat-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pi-cat-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+  border-radius: 10px;
+  font-size: 12px;
+}
+.pi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.pi-table th,
+.pi-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.pi-table th {
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-weight: 500;
+  font-size: 12px;
+}
+.pi-skip-reason {
+  color: #ff9090;
+  font-size: 12px;
+}
+
 .ia-row-stock {
   text-align: right;
   flex-shrink: 0;

@@ -155,6 +155,7 @@ class Product(TenantOwnedModel):
     )
 
     class LifecycleStatus(models.TextChoices):
+        PENDING = "pending", "待補齊"  # 匯入時的初始狀態,不觸發庫存警示
         ACTIVE = "active", "主力現貨"
         REPLACING = "replacing", "即將換代"
         DISCONTINUED = "discontinued", "停產下架"
