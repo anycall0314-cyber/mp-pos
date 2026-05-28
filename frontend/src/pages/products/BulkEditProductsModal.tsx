@@ -125,7 +125,7 @@ export function BulkEditProductsModal({
 
   if (!open) return null;
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">{/* 遮罩點擊不關閉,只能用「取消」按鈕關 */}
       <div
         className="modal-card be-modal"
         onClick={(e) => e.stopPropagation()}

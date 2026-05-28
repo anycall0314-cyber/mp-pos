@@ -375,6 +375,14 @@ class PartTemplateItem(TenantOwnedModel):
         "預設成本", max_digits=14, decimal_places=2, default=0
     )
     default_safety_stock = models.PositiveIntegerField("預設安全庫存", default=0)
+    shared_across_models = models.BooleanField(
+        "跨機型共用",
+        default=False,
+        help_text=(
+            "勾選後,此零件在批次建立時不會逐機型展開,而是每個品牌建立一筆共用 SKU,"
+            "相容多個選定機型。常見於電池等少數可共用的零件;螢幕/後蓋等請保持不勾"
+        ),
+    )
 
     class Meta:
         constraints = [

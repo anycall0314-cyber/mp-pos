@@ -130,7 +130,7 @@ export function BulkAddProductsModal({ open, onClose, onSuccess }: Props) {
   }
 
   return (
-    <div className="modal-overlay" onClick={handleClose}>
+    <div className="modal-overlay">{/* 遮罩點擊不關閉,只能用「取消」按鈕關 */}
       <div
         className="modal-card bulk-add-modal"
         onClick={(e) => e.stopPropagation()}

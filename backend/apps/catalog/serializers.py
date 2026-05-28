@@ -19,6 +19,7 @@ class PartTemplateItemSerializer(serializers.ModelSerializer):
             "sort_order",
             "default_cost",
             "default_safety_stock",
+            "shared_across_models",
         ]
 
 
@@ -69,6 +70,9 @@ class PartTemplateSerializer(serializers.ModelSerializer):
                 it.default_safety_stock = row.get(
                     "default_safety_stock", it.default_safety_stock
                 )
+                it.shared_across_models = bool(
+                    row.get("shared_across_models", it.shared_across_models)
+                )
                 it.save()
                 seen.add(item_id)
             else:
@@ -80,6 +84,9 @@ class PartTemplateSerializer(serializers.ModelSerializer):
                     sort_order=row.get("sort_order", idx),
                     default_cost=row.get("default_cost", 0),
                     default_safety_stock=row.get("default_safety_stock", 0),
+                    shared_across_models=bool(
+                        row.get("shared_across_models", False)
+                    ),
                 )
         for itid, it in existing.items():
             if itid not in seen:

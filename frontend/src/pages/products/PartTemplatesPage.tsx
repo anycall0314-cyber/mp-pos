@@ -34,8 +34,8 @@ export function PartTemplatesPage() {
       note: "",
       is_active: true,
       items: [
-        { name: "螢幕總成", code: "SCR", sort_order: 0, default_cost: "0", default_safety_stock: 0 },
-        { name: "電池", code: "BAT", sort_order: 1, default_cost: "0", default_safety_stock: 0 },
+        { name: "螢幕總成", code: "SCR", sort_order: 0, default_cost: "0", default_safety_stock: 0, shared_across_models: false },
+        { name: "電池", code: "BAT", sort_order: 1, default_cost: "0", default_safety_stock: 0, shared_across_models: false },
       ],
       created_at: "",
       updated_at: "",
@@ -72,6 +72,7 @@ export function PartTemplatesPage() {
           sort_order: editing.items.length,
           default_cost: "0",
           default_safety_stock: 0,
+          shared_across_models: false,
         },
       ],
     });
@@ -115,6 +116,7 @@ export function PartTemplatesPage() {
           sort_order: idx,
           default_cost: it.default_cost,
           default_safety_stock: it.default_safety_stock,
+          shared_across_models: it.shared_across_models,
         })),
       };
       const saved = await save.mutateAsync(body);
@@ -233,6 +235,12 @@ export function PartTemplatesPage() {
                     <th style={{ width: 100 }}>代碼</th>
                     <th style={{ width: 110 }}>預設成本</th>
                     <th style={{ width: 110 }}>預設安全庫存</th>
+                    <th
+                      style={{ width: 110 }}
+                      title="勾選後此零件在批次建立時不會逐機型展開,而是每個品牌建一筆共用 SKU,相容多個選定機型"
+                    >
+                      跨機型共用
+                    </th>
                     <th style={{ width: 60 }}></th>
                   </tr>
                 </thead>
@@ -280,6 +288,22 @@ export function PartTemplatesPage() {
                               default_safety_stock:
                                 Number(e.target.value) || 0,
                             })
+                          }
+                        />
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        <input
+                          type="checkbox"
+                          checked={it.shared_across_models}
+                          onChange={(e) =>
+                            patchItem(idx, {
+                              shared_across_models: e.target.checked,
+                            })
+                          }
+                          title={
+                            it.shared_across_models
+                              ? "共用 — 同品牌只建一筆 SKU,相容多機型"
+                              : "勾選 = 跨機型共用(常用於電池等少數零件)"
                           }
                         />
                       </td>

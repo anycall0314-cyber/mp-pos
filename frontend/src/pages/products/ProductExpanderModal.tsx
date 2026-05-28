@@ -242,7 +242,7 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
   const isHost = accessoryType === "none";
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">{/* 遮罩點擊不關閉,只能用「取消」按鈕關 */}
       <div
         className="modal-card expander-modal"
         onClick={(e) => e.stopPropagation()}

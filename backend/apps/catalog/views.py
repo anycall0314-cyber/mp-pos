@@ -277,7 +277,8 @@ class ProductViewSet(viewsets.ModelViewSet):
                 Q(name__icontains=q) | Q(series__icontains=q)
             )
 
-        # group by model_key
+        # group by model_key — brand 空白時自動從品名推斷
+        from .phone_model import infer_brand_from_name
         groups: dict[str, dict] = {}
         for p in qs:
             key = p.phone_model_key
@@ -285,6 +286,7 @@ class ProductViewSet(viewsets.ModelViewSet):
                 continue
             g = groups.get(key)
             if g is None:
+                effective_brand = p.brand or infer_brand_from_name(p.name)
                 g = {
                     "model_key": key,
                     "model_name": p.phone_model_name,
@@ -294,7 +296,7 @@ class ProductViewSet(viewsets.ModelViewSet):
                     "any_lifecycle_status_label": p.get_lifecycle_status_display(),
                     "sample_sku_id": p.id,
                     "sample_sku_name": p.name,
-                    "brand": p.brand,
+                    "brand": effective_brand,
                     "series": p.series,
                 }
                 groups[key] = g

@@ -80,7 +80,7 @@ export function ProductImportModal({ open, onClose, onImported }: Props) {
   }
 
   return (
-    <div className="modal-overlay" onClick={close}>
+    <div className="modal-overlay">{/* 遮罩點擊不關閉,只能用「取消」按鈕關 */}
       <div
         className="modal-card pi-modal"
         onClick={(e) => e.stopPropagation()}

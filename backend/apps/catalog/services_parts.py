@@ -15,6 +15,7 @@ from .models import (
     Product,
     ProductRelation,
 )
+from .phone_model import infer_brand_from_name
 
 # 常見品牌縮寫對照表(未列的會自動取前 3 個英文字母大寫)
 BRAND_ABBREV_MAP = {
@@ -102,39 +103,84 @@ def build_preview(tenant, template_id, model_keys, defaults=None):
         Product.objects.for_tenant(tenant).values_list("sku", flat=True)
     )
 
-    rows = []
+    # 預先依品牌分組,給「跨機型共用」的零件用 — brand 空白時自動推斷
+    by_brand: dict[str, list[tuple[str, str, str]]] = {}
     for k in keys_lower:
         host = host_by_key.get(k)
         model_name = host.phone_model_name if host else k
-        brand = host.brand if host else ""
-        brand_code = derive_brand_code(brand)
-        model_code = derive_model_code(model_name, brand)
-        for item in template.items.all():
-            sku = f"PRT-{brand_code}-{model_code}-{item.code}"
-            name = f"{model_name} {item.name}"
-            cost = item.default_cost if item.default_cost else default_cost
-            safety = (
-                item.default_safety_stock
-                if item.default_safety_stock
-                else default_safety
-            )
-            rows.append(
-                {
-                    "model_key": k,
-                    "model_name": model_name,
-                    "brand": brand,
-                    "brand_code": brand_code,
-                    "model_code": model_code,
-                    "item_id": item.id,
-                    "item_name": item.name,
-                    "item_code": item.code,
-                    "name": name,
-                    "sku": sku,
-                    "cost": str(cost),
-                    "safety_stock": safety,
-                    "exists": sku in existing_skus,
-                }
-            )
+        brand = (host.brand if host else "") or infer_brand_from_name(
+            host.name if host else k
+        )
+        by_brand.setdefault(brand, []).append((k, model_name, brand))
+
+    rows = []
+    for item in template.items.all():
+        cost = item.default_cost if item.default_cost else default_cost
+        safety = (
+            item.default_safety_stock
+            if item.default_safety_stock
+            else default_safety
+        )
+        if item.shared_across_models:
+            # 共用:每個品牌一筆,相容該品牌所有選定機型
+            for brand, model_list in by_brand.items():
+                brand_code = derive_brand_code(brand)
+                sku = f"PRT-{brand_code}-SHARED-{item.code}"
+                # 共用品名取品牌或第一支機型名
+                brand_label = brand or (model_list[0][1] if model_list else "")
+                name = f"{brand_label} {item.name}(共用)"
+                model_keys_list = [k for k, _, _ in model_list]
+                model_names_list = [n for _, n, _ in model_list]
+                rows.append(
+                    {
+                        "model_key": ",".join(model_keys_list),
+                        "model_keys": model_keys_list,
+                        "model_name": " / ".join(model_names_list),
+                        "brand": brand,
+                        "brand_code": brand_code,
+                        "model_code": "SHARED",
+                        "item_id": item.id,
+                        "item_name": item.name,
+                        "item_code": item.code,
+                        "name": name,
+                        "sku": sku,
+                        "cost": str(cost),
+                        "safety_stock": safety,
+                        "exists": sku in existing_skus,
+                        "shared": True,
+                    }
+                )
+        else:
+            # 單機型專屬:每個 model_key 一筆(預設行為)
+            for k in keys_lower:
+                host = host_by_key.get(k)
+                model_name = host.phone_model_name if host else k
+                brand = (host.brand if host else "") or infer_brand_from_name(
+                    host.name if host else k
+                )
+                brand_code = derive_brand_code(brand)
+                model_code = derive_model_code(model_name, brand)
+                sku = f"PRT-{brand_code}-{model_code}-{item.code}"
+                name = f"{model_name} {item.name}"
+                rows.append(
+                    {
+                        "model_key": k,
+                        "model_keys": [k],
+                        "model_name": model_name,
+                        "brand": brand,
+                        "brand_code": brand_code,
+                        "model_code": model_code,
+                        "item_id": item.id,
+                        "item_name": item.name,
+                        "item_code": item.code,
+                        "name": name,
+                        "sku": sku,
+                        "cost": str(cost),
+                        "safety_stock": safety,
+                        "exists": sku in existing_skus,
+                        "shared": False,
+                    }
+                )
     return rows
 
 
@@ -181,15 +227,26 @@ def bulk_create_parts(tenant, category_id, rows):
                 safety_stock=int(r.get("safety_stock") or 0),
                 weighted_avg_cost=Decimal(str(r.get("cost") or "0")),
             )
-            model_key = (r.get("model_key") or "").lower().strip()
-            host = hosts_by_key.get(model_key)
-            if host and host.id != prod.id:
-                ProductRelation.objects.create(
-                    tenant=tenant,
-                    host_product=host,
-                    host_model_key=model_key,
-                    accessory_product=prod,
-                )
+            # 支援單機型 or 跨機型共用兩種 row:
+            # - shared rows: r["model_keys"] 為 list,逐一建關聯
+            # - 一般 rows: 用 r["model_key"]
+            target_keys: list[str] = []
+            mk_list = r.get("model_keys")
+            if isinstance(mk_list, list) and mk_list:
+                target_keys = [str(x).lower().strip() for x in mk_list if x]
+            else:
+                single = (r.get("model_key") or "").lower().strip()
+                if single:
+                    target_keys = [single]
+            for mk in target_keys:
+                host = hosts_by_key.get(mk)
+                if host and host.id != prod.id:
+                    ProductRelation.objects.get_or_create(
+                        tenant=tenant,
+                        host_product=host,
+                        host_model_key=mk,
+                        accessory_product=prod,
+                    )
             created += 1
         except Exception as e:  # noqa: BLE001
             errors.append({"sku": sku, "error": str(e)})

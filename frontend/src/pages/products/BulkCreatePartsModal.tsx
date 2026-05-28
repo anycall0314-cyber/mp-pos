@@ -103,6 +103,7 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
         category_id: Number(categoryId),
         rows: rows.map((r) => ({
           model_key: r.model_key,
+          model_keys: r.model_keys,
           name: r.name,
           sku: r.sku,
           cost: r.cost,
@@ -163,7 +164,7 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
   if (!open) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">{/* 遮罩點擊不關閉,只能用「取消」按鈕關 */}
       <div
         className="modal-card bcp-modal"
         onClick={(e) => e.stopPropagation()}
@@ -373,8 +374,37 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
                         </td>
                         <td>
                           <span className="bcp-tag">{r.item_name}</span>
+                          {r.shared && (
+                            <span
+                              className="bcp-tag"
+                              style={{
+                                background: "rgba(251, 191, 36, 0.15)",
+                                color: "#fbbf24",
+                                marginLeft: 4,
+                              }}
+                            >
+                              共用
+                            </span>
+                          )}
                         </td>
-                        <td>{r.model_name}</td>
+                        <td title={r.model_name}>
+                          {r.shared ? (
+                            <span>
+                              <b>{r.model_keys.length}</b> 款共用{" "}
+                              <span
+                                style={{
+                                  color: "var(--text-dim)",
+                                  fontSize: 11,
+                                }}
+                              >
+                                ({r.model_name.split(" / ").slice(0, 2).join(" / ")}
+                                {r.model_keys.length > 2 ? " …" : ""})
+                              </span>
+                            </span>
+                          ) : (
+                            r.model_name
+                          )}
+                        </td>
                         <td>
                           <input
                             type="number"

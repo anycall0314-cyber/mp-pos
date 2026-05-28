@@ -960,6 +960,7 @@ export interface PartTemplateItem {
   sort_order: number;
   default_cost: string;
   default_safety_stock: number;
+  shared_across_models: boolean;
 }
 
 export interface PartTemplate {
@@ -974,6 +975,8 @@ export interface PartTemplate {
 
 export interface PartPreviewRow {
   model_key: string;
+  /** 跨機型共用時為多個 key;單機型則為 [model_key] */
+  model_keys: string[];
   model_name: string;
   brand: string;
   brand_code: string;
@@ -986,6 +989,7 @@ export interface PartPreviewRow {
   cost: string;
   safety_stock: number;
   exists: boolean;
+  shared: boolean;
 }
 
 export interface PartBulkCreateResult {

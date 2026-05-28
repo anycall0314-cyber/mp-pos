@@ -9,13 +9,21 @@
 """
 import re
 
-# 容量:「128G」「256GB」「1TB」(允許前後空白)
-_CAPACITY_RE = re.compile(r"\s*\d+\s*(?:G|GB|TB)\b", re.IGNORECASE)
+# 容量:「128G」「256GB」「1TB」 + 允許 RAM/儲存 串接格式
+# 分隔符僅支援 「/」(例:「12/512G」「8/256/512G」);
+# 不收 「+」,避免「三星 S26+」這種 Plus 機型尾碼被誤吃成「RAM+儲存」
+_CAPACITY_RE = re.compile(
+    r"\s*(?:\d+\s*/\s*)*\d+\s*(?:G|GB|TB)\b", re.IGNORECASE
+)
 
-# 末段顏色:漢字「黑白金銀灰藍紅綠紫粉橙黃青棕褐」(可選「色」),或英文常用色名
+# 容量被剝後常剩下空的括號(全形 / 半形 / 方括號)— 移除
+_EMPTY_PARENS_RE = re.compile(r"[\(\[（［]\s*[\)\]）］]")
+
+# 末段顏色:支援 0~3 個 CJK 前綴 + 色字(漫遊紫 / 星空黑 / 鈦金 / 雪松白…),
+# 或單獨漢字色字 + 可選「色」字,或英文常用色名
 _COLOR_RE = re.compile(
     r"\s*(?:"
-    r"[黑白金銀灰藍紅綠紫粉橙黃青棕褐]+色?"
+    r"(?:[一-鿿]{1,3})?[黑白金銀灰藍紅綠紫粉橙黃青棕褐]+色?"
     r"|Black|White|Gold|Silver|Grey|Gray|Blue|Red|Green|Purple"
     r"|Pink|Orange|Yellow|Bronze|Midnight|Starlight|Graphite|Sierra"
     r")\s*$",
@@ -46,11 +54,63 @@ def extract_phone_model_name(name: str) -> str:
     while prev != s:
         prev = s
         s = _CAPACITY_RE.sub("", s)
+        s = _EMPTY_PARENS_RE.sub("", s)
         s = _COLOR_RE.sub("", s)
         s = _SECONDHAND_RE.sub("", s)
         s = re.sub(r"\s*/\s*", " ", s)
         s = re.sub(r"\s+", " ", s).strip()
     return s
+
+
+# 品名 → 品牌 的關鍵字對照表(從上而下嘗試,先匹配先用)
+_BRAND_KEYWORDS: list[tuple[str, str]] = [
+    ("iPhone", "apple"),
+    ("iPad", "apple"),
+    ("Apple", "apple"),
+    ("Galaxy", "samsung"),
+    ("Samsung", "samsung"),
+    ("三星", "samsung"),
+    ("Redmi", "xiaomi"),
+    ("紅米", "xiaomi"),
+    ("Xiaomi", "xiaomi"),
+    ("小米", "xiaomi"),
+    ("OPPO", "oppo"),
+    ("Reno", "oppo"),
+    ("VIVO", "vivo"),
+    ("ASUS", "asus"),
+    ("ROG", "asus"),
+    ("Zenfone", "asus"),
+    ("華碩", "asus"),
+    ("Pixel", "google"),
+    ("Sony", "sony"),
+    ("索尼", "sony"),
+    ("Xperia", "sony"),
+    ("HUAWEI", "huawei"),
+    ("華為", "huawei"),
+    ("Honor", "honor"),
+    ("榮耀", "honor"),
+    ("OnePlus", "oneplus"),
+    ("Nothing", "nothing"),
+    ("Realme", "realme"),
+    ("Motorola", "motorola"),
+    ("Moto", "motorola"),
+    ("Nokia", "nokia"),
+]
+
+
+def infer_brand_from_name(name: str) -> str:
+    """從品名前綴自動猜品牌 code(對應 Product.Brand choices)。
+
+    比 Product.brand 欄位被遺漏填寫的情況用 — 主要供前端「批次建立 / 機型挑選」
+    分組顯示,不會真的寫回 Product.brand。
+    """
+    if not name:
+        return ""
+    lower = name.lower()
+    for kw, brand_code in _BRAND_KEYWORDS:
+        if kw.lower() in lower:
+            return brand_code
+    return ""
 
 
 def compute_phone_model_name(product) -> str:
