@@ -1048,6 +1048,20 @@ export interface RepairOrder {
   warehouse_phone: string;
   sales_person: number | null;
   sales_person_name: string;
+  technician: number | null;
+  technician_name: string;
+  internal_settle_amount: string;
+  margin_breakdown: {
+    kind:
+      | "in_house_solo"
+      | "in_house_split"
+      | "external_vendor"
+      | "internal_transfer";
+    sales_person_id: number | null;
+    sales_person_amount: string;
+    technician_id: number | null;
+    technician_amount: string;
+  };
   repair_item: number | null;
   repair_item_name: string;
   labor_fee: string;

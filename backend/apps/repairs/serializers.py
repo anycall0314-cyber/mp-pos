@@ -151,6 +151,19 @@ class RepairOrderSerializer(serializers.ModelSerializer):
     repair_item_name = serializers.CharField(source="repair_item.name", read_only=True, default="")
     external_vendor_name = serializers.CharField(source="external_vendor.name", read_only=True, default="")
     sales_person_name = serializers.CharField(source="sales_person.name", read_only=True, default="")
+    technician_name = serializers.CharField(source="technician.name", read_only=True, default="")
+    margin_breakdown = serializers.SerializerMethodField()
+
+    def get_margin_breakdown(self, obj):
+        from .services import compute_personal_margin
+        b = compute_personal_margin(obj)
+        return {
+            "kind": b["kind"],
+            "sales_person_id": b["sales_person_id"],
+            "sales_person_amount": str(b["sales_person_amount"]),
+            "technician_id": b["technician_id"],
+            "technician_amount": str(b["technician_amount"]),
+        }
     mode_label = serializers.CharField(source="get_mode_display", read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     previous_repair_no = serializers.CharField(
@@ -214,6 +227,10 @@ class RepairOrderSerializer(serializers.ModelSerializer):
             "warehouse_phone",
             "sales_person",
             "sales_person_name",
+            "technician",
+            "technician_name",
+            "internal_settle_amount",
+            "margin_breakdown",
             "repair_item",
             "repair_item_name",
             "labor_fee",
@@ -248,6 +265,8 @@ class RepairOrderSerializer(serializers.ModelSerializer):
             "repair_item_name",
             "external_vendor_name",
             "sales_person_name",
+            "technician_name",
+            "margin_breakdown",
             "mode_label",
             "status_label",
             "previous_repair_no",

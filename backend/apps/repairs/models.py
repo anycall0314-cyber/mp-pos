@@ -176,6 +176,24 @@ class RepairOrder(TenantOwnedModel):
         null=True,
         blank=True,
     )
+    technician = models.ForeignKey(
+        SalesPerson,
+        on_delete=models.PROTECT,
+        verbose_name="維修人員",
+        null=True,
+        blank=True,
+        related_name="repair_orders_as_technician",
+        help_text="實際維修人;空 = 同收件人。"
+        "不空且為自家業務員時,該筆視為內部轉單,毛利依 internal_settle_amount 分潤。",
+    )
+    internal_settle_amount = models.DecimalField(
+        "內部結算價",
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="收件人付給技師的內部結算價(僅內部轉單適用);"
+        "個人毛利:收件人 = 客戶實付 − 此值;技師 = 此值 − 零件成本",
+    )
     status = models.CharField(
         "狀態",
         max_length=16,

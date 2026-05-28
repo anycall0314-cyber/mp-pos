@@ -4092,6 +4092,40 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   color: #fb923c;
 }
 
+/* 維修單個人毛利分解卡 */
+.re-personal .re-card-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.re-personal-kind {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-dim);
+  padding: 2px 8px;
+  background: var(--bg-2);
+  border-radius: 4px;
+}
+.re-personal-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.re-personal-row:last-of-type {
+  border-bottom: 0;
+}
+.re-personal-name {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.re-personal-formula {
+  color: var(--text-dim);
+  font-size: 11px;
+  padding-top: 6px;
+}
+
 /* 維修列表 inline 編輯欄(報價/成本/實付) */
 .rp-inline-money {
   width: 80px;

@@ -126,6 +126,9 @@ export function RepairEntryPage() {
   const [warehouseId, setWarehouseId] = useState<number | "">("");
   const [salesPerson, setSalesPerson] = useState<number | "">("");
   const [salesPersonOpt, setSalesPersonOpt] = useState<ComboOption<SalesPerson> | null>(null);
+  const [technician, setTechnician] = useState<number | "">("");
+  const [technicianOpt, setTechnicianOpt] = useState<ComboOption<SalesPerson> | null>(null);
+  const [internalSettle, setInternalSettle] = useState("0");
 
   const [repairItemId, setRepairItemId] = useState<number | null>(null);
   const [laborFee, setLaborFee] = useState("0");
@@ -193,6 +196,11 @@ export function RepairEntryPage() {
     setSalesPersonOpt(
       o.sales_person ? { id: o.sales_person, label: o.sales_person_name } : null,
     );
+    setTechnician(o.technician ?? "");
+    setTechnicianOpt(
+      o.technician ? { id: o.technician, label: o.technician_name } : null,
+    );
+    setInternalSettle(o.internal_settle_amount ?? "0");
     setRepairItemId(o.repair_item);
     setLaborFee(o.labor_fee);
     setFinalQuote(o.final_quote);
@@ -256,6 +264,57 @@ export function RepairEntryPage() {
     mode === "in_house"
       ? Number(customerPaid || 0) - partsCost - Number(laborFee || 0)
       : Number(customerPaid || 0) - Number(extActual || 0);
+
+  // 個人毛利分解(前端即時計算,與 backend compute_personal_margin 公式對齊)
+  const personalBreakdown = useMemo(() => {
+    const paid = Number(customerPaid || 0);
+    const labor = Number(laborFee || 0);
+    const settle = Number(internalSettle || 0);
+    const extA = Number(extActual || 0);
+    const samePerson = !technician || technician === salesPerson;
+    if (mode === "in_house") {
+      if (samePerson) {
+        return {
+          kind: "in_house_solo" as const,
+          spAmt: paid - partsCost,
+          techAmt: 0,
+        };
+      }
+      return {
+        kind: "in_house_split" as const,
+        spAmt: paid - labor - partsCost,
+        techAmt: labor,
+      };
+    }
+    if (!samePerson) {
+      return {
+        kind: "internal_transfer" as const,
+        spAmt: paid - settle,
+        techAmt: settle - partsCost,
+      };
+    }
+    return {
+      kind: "external_vendor" as const,
+      spAmt: paid - extA,
+      techAmt: 0,
+    };
+  }, [
+    mode,
+    customerPaid,
+    laborFee,
+    internalSettle,
+    extActual,
+    partsCost,
+    salesPerson,
+    technician,
+  ]);
+
+  const breakdownKindLabel = {
+    in_house_solo: "自修(同人)",
+    in_house_split: "自修(收件 ≠ 維修人員)",
+    external_vendor: "委外給外廠",
+    internal_transfer: "內部轉單",
+  }[personalBreakdown.kind];
 
   function pickRepairItem(item: RepairItem) {
     setRepairItemId(item.id);
@@ -420,6 +479,8 @@ export function RepairEntryPage() {
         expected_complete_date: expectedDate || null,
         warehouse: warehouseId,
         sales_person: salesPerson || null,
+        technician: technician || null,
+        internal_settle_amount: internalSettle || "0",
         status,
         customer_paid_amount: customerPaid || "0",
       };
@@ -799,13 +860,37 @@ export function RepairEntryPage() {
                       ))}
                     </select>
                   </Field>
-                  <Field label="經手人">
+                  <Field
+                    label="收件人"
+                    required
+                    hint="客戶實付歸這位"
+                  >
                     <ComboBox<SalesPerson>
                       value={salesPerson}
                       selectedOption={salesPersonOpt}
                       onChange={(v, opt) => {
                         setSalesPerson(v);
                         setSalesPersonOpt(opt ?? null);
+                      }}
+                      fetchOptions={(q) => searchSalesPersons(q)}
+                    />
+                  </Field>
+                  <Field
+                    label="維修人員"
+                    hint={
+                      technician && technician !== salesPerson
+                        ? mode === "external"
+                          ? "委外模式:此單視為內部轉單,毛利按內部結算價分潤"
+                          : "自修:工資全歸維修人員,客戶實付剩餘歸收件人"
+                        : "留空 = 同收件人;填了會啟動個人毛利分潤"
+                    }
+                  >
+                    <ComboBox<SalesPerson>
+                      value={technician}
+                      selectedOption={technicianOpt}
+                      onChange={(v, opt) => {
+                        setTechnician(v);
+                        setTechnicianOpt(opt ?? null);
                       }}
                       fetchOptions={(q) => searchSalesPersons(q)}
                     />
@@ -1118,6 +1203,19 @@ export function RepairEntryPage() {
                       />
                     </Field>
                   </div>
+                  {technician && technician !== salesPerson && (
+                    <Field
+                      label="內部結算價(收件人 → 維修人員)"
+                      hint="此單視為內部轉單。收件人毛利 = 客戶實付 − 此值;維修人員毛利 = 此值 − 零件成本"
+                    >
+                      <input
+                        type="number"
+                        min="0"
+                        value={internalSettle}
+                        onChange={(e) => setInternalSettle(e.target.value)}
+                      />
+                    </Field>
+                  )}
                 </div>
               </section>
             )}
@@ -1198,6 +1296,66 @@ export function RepairEntryPage() {
                     ? "= 實付 − 零件成本 − 工資"
                     : "= 實付 − 委外實際費用"}
                 </div>
+              </div>
+            </section>
+
+            {/* 個人毛利分解(按公式即時算) */}
+            <section className="re-card re-personal">
+              <div className="re-card-title">
+                個人毛利分解
+                <span className="re-personal-kind">{breakdownKindLabel}</span>
+              </div>
+              <div className="re-personal-row">
+                <span>
+                  收件人
+                  {salesPersonOpt?.label && (
+                    <span className="re-personal-name">
+                       · {salesPersonOpt.label}
+                    </span>
+                  )}
+                </span>
+                <b
+                  style={{
+                    color:
+                      personalBreakdown.spAmt < 0 ? "#ff7070" : "#4ade80",
+                  }}
+                >
+                  ${Math.round(personalBreakdown.spAmt).toLocaleString()}
+                </b>
+              </div>
+              <div className="re-personal-row">
+                <span>
+                  維修人員
+                  {technicianOpt?.label ? (
+                    <span className="re-personal-name">
+                       · {technicianOpt.label}
+                    </span>
+                  ) : (
+                    <span className="re-personal-name"> · (同收件人)</span>
+                  )}
+                </span>
+                <b
+                  style={{
+                    color:
+                      personalBreakdown.techAmt < 0
+                        ? "#ff7070"
+                        : personalBreakdown.techAmt > 0
+                          ? "#4ade80"
+                          : "var(--text-dim)",
+                  }}
+                >
+                  ${Math.round(personalBreakdown.techAmt).toLocaleString()}
+                </b>
+              </div>
+              <div className="re-personal-formula">
+                {personalBreakdown.kind === "in_house_solo" &&
+                  "收件 = 實付 − 零件成本"}
+                {personalBreakdown.kind === "in_house_split" &&
+                  "收件 = 實付 − 工資 − 零件;維修人員 = 工資"}
+                {personalBreakdown.kind === "external_vendor" &&
+                  "收件 = 實付 − 委外實際費用"}
+                {personalBreakdown.kind === "internal_transfer" &&
+                  "收件 = 實付 − 內部結算價;維修人員 = 內部結算價 − 零件成本"}
               </div>
             </section>
 

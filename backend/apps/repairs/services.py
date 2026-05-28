@@ -18,6 +18,82 @@ def compute_in_house_quote(repair_order: RepairOrder) -> Decimal:
     return Decimal(parts_cost) + (repair_order.labor_fee or Decimal("0"))
 
 
+def _parts_cost(repair_order: RepairOrder) -> Decimal:
+    """合計這張單已領用零件的成本(用各 line 的 unit_cost,未填則用 product 加權平均)。"""
+    total = Decimal("0")
+    for p in repair_order.parts.select_related("part_product").all():
+        unit = p.unit_cost or (p.part_product.weighted_avg_cost or Decimal("0"))
+        total += Decimal(unit) * p.qty
+    return total
+
+
+def compute_personal_margin(repair_order: RepairOrder) -> dict:
+    """個人毛利分解 — 拆給 sales_person(收件)與 technician(技師)。
+
+    公式表:
+    - 自修(technician 空或 = sales_person):全歸 sales_person
+        sales_person 毛利 = 客戶實付 − 零件成本
+    - 自修(technician ≠ sales_person):
+        sales_person 毛利 = 客戶實付 − 工資 − 零件成本
+        technician     毛利 = 工資
+    - 委外給外廠(technician 空):
+        sales_person 毛利 = 客戶實付 − 委外實際費用
+    - 內部轉單(technician 不空 且 mode=external):
+        sales_person 毛利 = 客戶實付 − internal_settle_amount
+        technician     毛利 = internal_settle_amount − 零件成本
+
+    回傳 dict:{ sales_person_id: Decimal, technician_id: Decimal,
+                sales_person_amount, technician_amount,
+                kind: "in_house_solo" | "in_house_split" |
+                      "external_vendor" | "internal_transfer" }
+    """
+    paid = repair_order.customer_paid_amount or Decimal("0")
+    parts_cost = _parts_cost(repair_order)
+    labor = repair_order.labor_fee or Decimal("0")
+    settle = repair_order.internal_settle_amount or Decimal("0")
+    ext_actual = repair_order.external_quote_actual or Decimal("0")
+
+    sp_id = repair_order.sales_person_id
+    tech_id = repair_order.technician_id
+    same_person = (not tech_id) or tech_id == sp_id
+
+    if repair_order.mode == RepairOrder.Mode.IN_HOUSE:
+        if same_person:
+            return {
+                "kind": "in_house_solo",
+                "sales_person_id": sp_id,
+                "sales_person_amount": paid - parts_cost,
+                "technician_id": None,
+                "technician_amount": Decimal("0"),
+            }
+        return {
+            "kind": "in_house_split",
+            "sales_person_id": sp_id,
+            "sales_person_amount": paid - labor - parts_cost,
+            "technician_id": tech_id,
+            "technician_amount": labor,
+        }
+
+    # mode == external
+    if tech_id and tech_id != sp_id:
+        # 內部轉單
+        return {
+            "kind": "internal_transfer",
+            "sales_person_id": sp_id,
+            "sales_person_amount": paid - settle,
+            "technician_id": tech_id,
+            "technician_amount": settle - parts_cost,
+        }
+    # 委外給外廠
+    return {
+        "kind": "external_vendor",
+        "sales_person_id": sp_id,
+        "sales_person_amount": paid - ext_actual,
+        "technician_id": None,
+        "technician_amount": Decimal("0"),
+    }
+
+
 def compute_margin(repair_order: RepairOrder) -> Decimal:
     """完工毛利。
     自修:客戶實付 - 零件成本合計 - 工資
