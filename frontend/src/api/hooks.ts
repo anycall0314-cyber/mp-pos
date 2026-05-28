@@ -5,6 +5,7 @@ import {
   Carrier,
   Category,
   ClearancePressureResponse,
+  CompatibilityResponse,
   Customer,
   HomeSummary,
   InventoryAlertsResponse,
@@ -322,6 +323,15 @@ export const useClearancePressure = () =>
     queryKey: ["clearance-pressure"],
     queryFn: () => api<ClearancePressureResponse>("/clearance-pressure/"),
     refetchInterval: 60000,
+  });
+
+// 商品相容性:主機 → 列配件;機型配件 → 列主機 + 需求熱度
+export const useProductCompatibility = (productId: number | null) =>
+  useQuery({
+    queryKey: ["product-compatibility", productId],
+    queryFn: () =>
+      api<CompatibilityResponse>(`/products/${productId}/compatibility/`),
+    enabled: !!productId,
   });
 
 export function useVoidPettyExpense() {

@@ -812,6 +812,35 @@ export interface ClearancePressureResponse {
   rows: ClearancePressureRow[];
 }
 
+// 商品相容性查詢:主機列配件,配件列主機
+export type DemandLabel = "無近期銷售" | "冷門" | "平穩" | "熱銷" | "爆款";
+
+export interface CompatibilityItem {
+  id: number;
+  sku: string;
+  name: string;
+  category_name: string;
+  current_qty: number;
+  lifecycle_status: LifecycleStatus;
+  lifecycle_status_label: string;
+  accessory_type: AccessoryType;
+  daily_avg: number;
+  demand_label: DemandLabel | string;
+}
+
+export interface CompatibilityResponse {
+  role: "host" | "accessory" | "universal";
+  self?: {
+    id: number;
+    sku: string;
+    name: string;
+    accessory_type: AccessoryType;
+    lifecycle_status: LifecycleStatus;
+    lifecycle_status_label: string;
+  };
+  items: CompatibilityItem[];
+}
+
 // 登入首頁所需的 metric 一次回
 export interface HomeSummary {
   warehouse_id: number | null;

@@ -13,6 +13,7 @@ import {
 import { searchCategories } from "@/api/search";
 import type { Category } from "@/api/types";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
+import { CompatibilityModal } from "@/components/CompatibilityModal";
 import { SerialHistoryModal } from "@/components/SerialHistoryModal";
 import { Toolbar } from "@/components/Toolbar";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -338,6 +339,12 @@ export function InventoryQueryPage() {
     warehouseLabel: string;
   } | null>(null);
 
+  // 點品名打開的相容性 modal
+  const [compatibilityDialog, setCompatibilityDialog] = useState<{
+    productId: number;
+    productName: string;
+  } | null>(null);
+
   const matrix = useStockMatrix(
     {
       warehouseIds: applied?.warehouseIds ?? [],
@@ -607,6 +614,13 @@ export function InventoryQueryPage() {
               onClose={() => setSerialDialog(null)}
             />
           ))}
+        {compatibilityDialog && (
+          <CompatibilityModal
+            productId={compatibilityDialog.productId}
+            productName={compatibilityDialog.productName}
+            onClose={() => setCompatibilityDialog(null)}
+          />
+        )}
         {applied && !matrix.isLoading && !matrix.isError && isMobile && (
           <div className="stock-mobile-list">
             {products.length === 0 && (
@@ -624,6 +638,19 @@ export function InventoryQueryPage() {
                   <div className="stock-card-head">
                     <div className="stock-card-no">#{i + 1}</div>
                     <div className="stock-card-name">{p.name}</div>
+                    <button
+                      type="button"
+                      className="stock-card-compat"
+                      onClick={() =>
+                        setCompatibilityDialog({
+                          productId: p.id,
+                          productName: p.name,
+                        })
+                      }
+                      title="查看相容性"
+                    >
+                      相容
+                    </button>
                   </div>
                   <div className="stock-card-meta">
                     {p.category_name}
@@ -767,7 +794,21 @@ export function InventoryQueryPage() {
                 <tr key={p.id}>
                   <td className="num">{i + 1}</td>
                   <td>{p.category_name}</td>
-                  <td>{p.name}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="stock-link-name"
+                      onClick={() =>
+                        setCompatibilityDialog({
+                          productId: p.id,
+                          productName: p.name,
+                        })
+                      }
+                      title="查看相容性"
+                    >
+                      {p.name}
+                    </button>
+                  </td>
                   <td style={{ color: "var(--text-dim)" }}>{p.spec || "—"}</td>
                   {warehouses.map((w) => {
                     const qty = p.stock_by_warehouse[String(w.id)] ?? 0;

@@ -1,7 +1,10 @@
+from datetime import timedelta
+
 from django.contrib.postgres.search import TrigramWordSimilarity
 from django.db import transaction
 from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce, Greatest
+from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -9,9 +12,10 @@ from rest_framework.response import Response
 from apps.core.filters import _is_postgres
 from apps.inventory.models import ProductSerial, StockBalance, Warehouse
 from apps.purchasing.models import PurchaseOrderItem
+from apps.sales.models import SalesOrderItem
 from apps.transfers.models import TransferOrder, TransferOrderItem
 
-from .models import Category, Product
+from .models import Category, Product, ProductRelation
 from .serializers import CategorySerializer, ProductSerializer
 
 
@@ -163,6 +167,147 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.tenant)
+
+    @action(detail=True, methods=["get"], url_path="compatibility")
+    def compatibility(self, request, pk=None):
+        """商品相容性查詢。
+
+        - 主機(accessory_type=none):列出所有「以此為 host_product」的配件,
+          含品名/類別/目前跨倉庫存
+        - 機型配件(accessory_type=phone_specific):列出所有 related_hosts 主機,
+          含品名/狀態/庫存/需求熱度 (近 30 天日均銷量)
+        - 通用配件:回傳空 list
+
+        需求熱度 demand_label:
+          0       → 無近期銷售
+          0~1     → 冷門
+          1~3     → 平穩
+          3~10    → 熱銷
+          >=10    → 爆款
+        """
+        tenant = request.tenant
+        product = self.get_object()
+        is_host = product.accessory_type == Product.AccessoryType.NONE
+        is_accessory_specific = (
+            product.accessory_type == Product.AccessoryType.PHONE_SPECIFIC
+        )
+
+        if is_host:
+            # 找所有 host=this product 的關聯,撈出 accessory 端
+            related_ids = list(
+                ProductRelation.objects.filter(
+                    tenant=tenant, host_product=product
+                ).values_list("accessory_product_id", flat=True)
+            )
+            role = "host"
+        elif is_accessory_specific:
+            related_ids = list(
+                ProductRelation.objects.filter(
+                    tenant=tenant, accessory_product=product
+                ).values_list("host_product_id", flat=True)
+            )
+            role = "accessory"
+        else:
+            return Response({"role": "universal", "items": []})
+
+        if not related_ids:
+            return Response({"role": role, "items": []})
+
+        # 跨倉庫存 annotate(同 stock-matrix 模式)
+        serial_sq = (
+            ProductSerial.objects.filter(
+                product=OuterRef("pk"),
+                status=ProductSerial.Status.IN_STOCK,
+            )
+            .order_by()
+            .values("product")
+            .annotate(c=Count("*"))
+            .values("c")[:1]
+        )
+        balance_sq = (
+            StockBalance.objects.filter(
+                product=OuterRef("pk"), tenant=tenant
+            )
+            .order_by()
+            .values("product")
+            .annotate(t=Sum("qty"))
+            .values("t")[:1]
+        )
+        related_qs = (
+            Product.objects.for_tenant(tenant)
+            .filter(id__in=related_ids)
+            .select_related("category")
+            .annotate(
+                _sc=Coalesce(Subquery(serial_sq, output_field=IntegerField()), Value(0)),
+                _bc=Coalesce(Subquery(balance_sq, output_field=IntegerField()), Value(0)),
+                stock=F("_sc") + F("_bc"),
+            )
+        )
+
+        # 算近 30 天日均銷量
+        since = timezone.now().date() - timedelta(days=30)
+        sales_rows = (
+            SalesOrderItem.objects.for_tenant(tenant)
+            .filter(
+                product_id__in=related_ids,
+                so__doc_date__gte=since,
+                so__is_void=False,
+            )
+            .values("product_id")
+            .annotate(total=Sum("qty"))
+        )
+        daily_avg = {r["product_id"]: float(r["total"] or 0) / 30 for r in sales_rows}
+
+        def _label(avg: float) -> str:
+            if avg <= 0:
+                return "無近期銷售"
+            if avg < 1:
+                return "冷門"
+            if avg < 3:
+                return "平穩"
+            if avg < 10:
+                return "熱銷"
+            return "爆款"
+
+        items = []
+        for p in related_qs:
+            avg = daily_avg.get(p.id, 0.0)
+            items.append(
+                {
+                    "id": p.id,
+                    "sku": p.sku,
+                    "name": p.name,
+                    "category_name": p.category.name if p.category else "",
+                    "current_qty": int(p.stock),
+                    "lifecycle_status": p.lifecycle_status,
+                    "lifecycle_status_label": p.get_lifecycle_status_display(),
+                    "accessory_type": p.accessory_type,
+                    "daily_avg": round(avg, 2),
+                    "demand_label": _label(avg),
+                }
+            )
+
+        # 主機看配件 → 依庫存升冪(缺貨的先)
+        # 配件看主機 → 依日均降冪(熱銷的先)
+        if role == "host":
+            items.sort(key=lambda x: x["current_qty"])
+        else:
+            items.sort(key=lambda x: -x["daily_avg"])
+
+        return Response(
+            {
+                "role": role,
+                "self": {
+                    "id": product.id,
+                    "sku": product.sku,
+                    "name": product.name,
+                    "accessory_type": product.accessory_type,
+                    "lifecycle_status": product.lifecycle_status,
+                    "lifecycle_status_label": product.get_lifecycle_status_display(),
+                },
+                "items": items,
+            }
+        )
 
     @action(detail=True, methods=["get"], url_path="pending-transfers")
     def pending_transfers(self, request, pk=None):
