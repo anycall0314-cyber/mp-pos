@@ -3284,6 +3284,16 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   background: var(--panel);
   border-bottom: 1px solid var(--border);
 }
+.sd-parts-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  background: rgba(96, 165, 250, 0.18);
+  color: #60a5fa;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
 
 @media (max-width: 768px) {
   /* 篩選列在手機改 column,每群組獨立一行 */

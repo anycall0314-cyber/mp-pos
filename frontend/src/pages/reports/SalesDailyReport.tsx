@@ -114,23 +114,47 @@ export function SalesDailyReportPage() {
     return { activeOrders: active, voidOrders: voided };
   }, [orders]);
 
-  // 統計合計(只算正常單;毛利 / 成本只算 counts_margin=true 的項目)
+  // 統計合計(分商品 / 零件:毛利不互相污染)
   const totals = useMemo(() => {
     let lines = 0;
     let amountIncl = 0;
     let cost = 0;
     let profit = 0;
+    // 零件調貨單獨統計(不汙染商品毛利)
+    let partsLines = 0;
+    let partsAmount = 0;
+    let partsCost = 0;
+    let partsProfit = 0;
     for (const o of activeOrders) {
       for (const it of o.items) {
-        lines += 1;
-        amountIncl += Number(it.amount);
-        if (itemCountsMargin(it)) {
-          cost += Number(it.cost_at_post);
-          profit += itemGrossProfit(it, o.tax_method);
+        const isParts = it.product_warehouse_type === "parts";
+        if (isParts) {
+          partsLines += 1;
+          partsAmount += Number(it.amount);
+          if (itemCountsMargin(it)) {
+            partsCost += Number(it.cost_at_post);
+            partsProfit += itemGrossProfit(it, o.tax_method);
+          }
+        } else {
+          lines += 1;
+          amountIncl += Number(it.amount);
+          if (itemCountsMargin(it)) {
+            cost += Number(it.cost_at_post);
+            profit += itemGrossProfit(it, o.tax_method);
+          }
         }
       }
     }
-    return { lines, amountIncl, cost, profit };
+    return {
+      lines,
+      amountIncl,
+      cost,
+      profit,
+      partsLines,
+      partsAmount,
+      partsCost,
+      partsProfit,
+    };
   }, [activeOrders]);
 
   function runQuery() {
@@ -393,6 +417,43 @@ export function SalesDailyReportPage() {
       </div>
       <div className="sd-summary-hint">毛利以未稅金額減成本計算</div>
 
+      {totals.partsLines > 0 && (
+        <>
+          <div className="sd-summary">
+            <div className="sd-summary-card" style={{ borderColor: "#60a5fa" }}>
+              <div className="sd-summary-card-label">零件調貨 明細</div>
+              <div className="sd-summary-card-value">{totals.partsLines}</div>
+            </div>
+            <div className="sd-summary-card" style={{ borderColor: "#60a5fa" }}>
+              <div className="sd-summary-card-label">零件 含稅金額</div>
+              <div className="sd-summary-card-value">
+                ${fmtMoney(totals.partsAmount)}
+              </div>
+            </div>
+            <div className="sd-summary-card" style={{ borderColor: "#60a5fa" }}>
+              <div className="sd-summary-card-label">零件 成本</div>
+              <div className="sd-summary-card-value">
+                ${fmtMoney(totals.partsCost)}
+              </div>
+            </div>
+            <div className="sd-summary-card" style={{ borderColor: "#60a5fa" }}>
+              <div className="sd-summary-card-label">零件 毛利</div>
+              <div
+                className="sd-summary-card-value"
+                style={{
+                  color: totals.partsProfit < 0 ? "#ff7070" : undefined,
+                }}
+              >
+                ${fmtMoney(totals.partsProfit)}
+              </div>
+            </div>
+          </div>
+          <div className="sd-summary-hint">
+            零件調貨獨立列計,不污染商品毛利
+          </div>
+        </>
+      )}
+
       <div className="report-table">
         {isLoading && <div className="md-empty">載入中…</div>}
         {isError && <div className="md-empty">{String(error)}</div>}
@@ -469,6 +530,9 @@ function SalesReportMobileList({ orders, voided }: ReportTableProps) {
                   <div key={it.id} className="report-card-item">
                     <div className="report-card-item-name">
                       {it.product_name}
+                      {it.product_warehouse_type === "parts" && (
+                        <span className="sd-parts-badge"> 零件調貨</span>
+                      )}
                     </div>
                     {serials && (
                       <div className="report-card-item-serial">{serials}</div>
@@ -604,7 +668,12 @@ function ReportOrderGroup({
             </td>
             <td>{first ? order.sales_person_name ?? "" : ""}</td>
             <td>{first ? order.customer_name ?? "散客" : ""}</td>
-            <td>{it.product_name}</td>
+            <td>
+              {it.product_name}
+              {it.product_warehouse_type === "parts" && (
+                <span className="sd-parts-badge"> 零件調貨</span>
+              )}
+            </td>
             <td className="report-serial">{serialList(it)}</td>
             <td className="num">{it.qty}</td>
             <td className="num">{fmtMoney(Number(it.unit_price))}</td>

@@ -243,11 +243,28 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
                     note=f"銷貨單 {so.no} 第 {it.line_no} 行",
                 )
 
-            # 配件:扣本倉 balance(銷貨不重算 weighted_avg)
+            # 配件 / 零件:扣本倉 balance(銷貨不重算 weighted_avg)
+            # 零件倉商品異動類型用 parts_transfer(對外調貨),其餘用 sale_out
             if (
                 not product.requires_serial
                 and not product.is_virtual
             ):
+                is_parts = (
+                    getattr(product, "warehouse_type", "product") == "parts"
+                )
+                # 零件對外銷售:售價防呆,不可低於最低售價
+                if is_parts and product.min_sale_price and product.min_sale_price > 0:
+                    if it.unit_price < product.min_sale_price:
+                        from rest_framework.exceptions import ValidationError
+                        raise ValidationError(
+                            {
+                                "detail": (
+                                    f"零件「{product.name}」單價 "
+                                    f"{int(it.unit_price)} 不可低於最低售價 "
+                                    f"{int(product.min_sale_price)}"
+                                )
+                            }
+                        )
                 bal = StockBalance.objects.get(
                     tenant=so.tenant,
                     product=product,
@@ -255,15 +272,24 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
                 )
                 bal.qty -= it.qty
                 bal.save(update_fields=["qty"])
+                mtype = (
+                    StockMovement.MovementType.PARTS_TRANSFER
+                    if is_parts
+                    else StockMovement.MovementType.SALE_OUT
+                )
                 StockMovement.objects.create(
                     tenant=so.tenant,
                     product=product,
                     qty=it.qty,
-                    movement_type=StockMovement.MovementType.SALE_OUT,
+                    movement_type=mtype,
                     from_warehouse=so.warehouse,
                     ref_doc_type="sales_order",
                     ref_doc_id=so.id,
-                    note=f"銷貨單 {so.no} 第 {it.line_no} 行 {product.sku} ×{it.qty}",
+                    note=(
+                        f"銷貨單 {so.no} 第 {it.line_no} 行 "
+                        f"{product.sku} ×{it.qty}"
+                        + (" (零件調貨)" if is_parts else "")
+                    ),
                 )
 
             if it.sim_card_id:

@@ -85,6 +85,9 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
     product_counts_margin = serializers.BooleanField(
         source="product.counts_margin", read_only=True
     )
+    product_warehouse_type = serializers.CharField(
+        source="product.warehouse_type", read_only=True
+    )
     # read:序號物件列表;write:接 serial_ids 陣列
     serials = SalesOrderItemSerialSerializer(many=True, read_only=True)
     serial_ids = serializers.PrimaryKeyRelatedField(
@@ -122,6 +125,7 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
             "product_is_virtual",
             "product_counts_cash",
             "product_counts_margin",
+            "product_warehouse_type",
             "qty",
             "unit_price",
             "amount",
@@ -150,6 +154,7 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
             "product_is_virtual",
             "product_counts_cash",
             "product_counts_margin",
+            "product_warehouse_type",
         ]
 
 

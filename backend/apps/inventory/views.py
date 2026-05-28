@@ -660,3 +660,94 @@ def clearance_pressure(request):
             "rows": rows,
         }
     )
+
+
+@api_view(["GET"])
+def parts_usage_report(request):
+    """月底零件耗用報表:依日期區間統計每個零件的「維修領用」vs「對外調貨」數量。
+
+    Query params:
+    - from / to:日期區間(YYYY-MM-DD)。預設本月 1 號 → 今日
+    - warehouse:可選,限定某倉(鎖倉帳號自動套用)
+    """
+    from datetime import date as date_cls
+
+    tenant = request.tenant
+    profile = getattr(request.user, "profile", None)
+
+    today = date_cls.today()
+    from_str = request.query_params.get("from", "").strip()
+    to_str = request.query_params.get("to", "").strip()
+    try:
+        date_from = (
+            date_cls.fromisoformat(from_str) if from_str else today.replace(day=1)
+        )
+        date_to = date_cls.fromisoformat(to_str) if to_str else today
+    except ValueError:
+        return Response({"detail": "日期格式錯誤(YYYY-MM-DD)"}, status=400)
+
+    wid = None
+    if profile and profile.is_warehouse_locked and profile.default_warehouse_id:
+        wid = profile.default_warehouse_id
+    else:
+        q_wh = request.query_params.get("warehouse")
+        if q_wh and q_wh.isdigit():
+            wid = int(q_wh)
+
+    # 撈這段期間內所有 repair_usage / parts_transfer 的異動
+    mv_qs = (
+        StockMovement.objects.for_tenant(tenant)
+        .filter(
+            movement_type__in=[
+                StockMovement.MovementType.REPAIR_USAGE,
+                StockMovement.MovementType.PARTS_TRANSFER,
+            ],
+            created_at__date__gte=date_from,
+            created_at__date__lte=date_to,
+        )
+        .select_related("product")
+    )
+    if wid is not None:
+        mv_qs = mv_qs.filter(from_warehouse_id=wid)
+
+    # 依 product_id 彙整:repair_qty / transfer_qty / 成本金額
+    rows: dict[int, dict] = {}
+    for m in mv_qs:
+        if not m.product_id:
+            continue
+        r = rows.setdefault(
+            m.product_id,
+            {
+                "product_id": m.product_id,
+                "sku": m.product.sku,
+                "name": m.product.name,
+                "warehouse_type": m.product.warehouse_type,
+                "repair_qty": 0,
+                "transfer_qty": 0,
+                "total_qty": 0,
+                "unit_cost": str(m.product.weighted_avg_cost or 0),
+            },
+        )
+        if m.movement_type == StockMovement.MovementType.REPAIR_USAGE:
+            r["repair_qty"] += m.qty
+        else:
+            r["transfer_qty"] += m.qty
+        r["total_qty"] = r["repair_qty"] + r["transfer_qty"]
+
+    result = sorted(rows.values(), key=lambda x: -x["total_qty"])
+
+    summary = {
+        "repair_qty_total": sum(r["repair_qty"] for r in result),
+        "transfer_qty_total": sum(r["transfer_qty"] for r in result),
+        "total_qty_total": sum(r["total_qty"] for r in result),
+        "rows_count": len(result),
+    }
+    return Response(
+        {
+            "date_from": date_from.isoformat(),
+            "date_to": date_to.isoformat(),
+            "warehouse_id": wid,
+            "summary": summary,
+            "rows": result,
+        }
+    )

@@ -500,8 +500,15 @@ function LineRow({
     // 中古機打/掃 IMEI 命中時,優先帶該支序號的自訂售價
     const msCustom =
       p?.is_secondhand && p?.matched_serial?.custom_unit_price;
+    // 零件倉商品被選到:自動帶 external_sale_price(對外售價)
+    const isPartsExternal =
+      p?.warehouse_type === "parts" && p?.is_externally_sellable;
     const defaultPrice = toIntStr(
-      msCustom && Number(msCustom) > 0 ? msCustom : (p?.list_price ?? "0"),
+      isPartsExternal && Number(p?.external_sale_price ?? 0) > 0
+        ? (p?.external_sale_price ?? "0")
+        : msCustom && Number(msCustom) > 0
+          ? msCustom
+          : (p?.list_price ?? "0"),
     );
 
     // 路徑一:搜尋帶 matched_serial(打 IMEI 命中)→ 立即把該序號掛上

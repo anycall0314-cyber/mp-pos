@@ -20,6 +20,7 @@ import { PurchasesPage } from "@/pages/purchases/PurchasesPage";
 import { PurchaseEntryPage } from "@/pages/purchases/PurchaseEntryPage";
 import { PurchaseLabelsPrintPage } from "@/pages/purchases/PurchaseLabelsPrintPage";
 import { BusinessDailyReportPage } from "@/pages/reports/BusinessDailyReport";
+import { PartsUsageReportPage } from "@/pages/reports/PartsUsageReportPage";
 import { SalesDailyReportPage } from "@/pages/reports/SalesDailyReport";
 import { SecondhandAcquisitionPage } from "@/pages/secondhand-acquisition/SecondhandAcquisitionPage";
 import { TransfersPage } from "@/pages/transfers/TransfersPage";
@@ -371,6 +372,10 @@ export function App() {
           <Route
             path="/reports/business-daily"
             element={<BusinessDailyReportPage />}
+          />
+          <Route
+            path="/reports/parts-usage"
+            element={<PartsUsageReportPage />}
           />
           <Route
             path="/reports/margin-summary"

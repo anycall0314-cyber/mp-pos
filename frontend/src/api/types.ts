@@ -529,6 +529,7 @@ export interface SalesOrderItem {
   product_is_virtual: boolean;
   product_counts_cash: boolean;
   product_counts_margin: boolean;
+  product_warehouse_type?: WarehouseType;
   qty: number;
   unit_price: string;
   amount: string;
@@ -979,6 +980,28 @@ export interface RepairOrder {
   parts: RepairOrderPart[];
   created_at: string;
   updated_at: string;
+}
+
+export interface PartsUsageReport {
+  date_from: string;
+  date_to: string;
+  warehouse_id: number | null;
+  summary: {
+    repair_qty_total: number;
+    transfer_qty_total: number;
+    total_qty_total: number;
+    rows_count: number;
+  };
+  rows: {
+    product_id: number;
+    sku: string;
+    name: string;
+    warehouse_type: WarehouseType;
+    repair_qty: number;
+    transfer_qty: number;
+    total_qty: number;
+    unit_cost: string;
+  }[];
 }
 
 export interface RepairQuotePreview {

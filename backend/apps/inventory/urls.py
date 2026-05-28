@@ -8,6 +8,7 @@ from .views import (
     WarehouseViewSet,
     clearance_pressure,
     inventory_alerts,
+    parts_usage_report,
 )
 
 router = DefaultRouter()
@@ -22,5 +23,10 @@ urlpatterns = router.urls + [
         "clearance-pressure/",
         clearance_pressure,
         name="clearance-pressure",
+    ),
+    path(
+        "parts-usage-report/",
+        parts_usage_report,
+        name="parts-usage-report",
     ),
 ]

@@ -26,6 +26,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/reports/sales-daily", label: "銷貨日報" },
       { to: "/reports/business-daily", label: "營業日報" },
+      { to: "/reports/parts-usage", label: "零件耗用報表" },
       { to: "/reports/margin-summary", label: "毛利彙總" },
       { to: "/reports/invoice-detail", label: "發票明細" },
       { to: "/expenses", label: "店頭雜支" },

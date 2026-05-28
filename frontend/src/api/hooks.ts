@@ -11,6 +11,7 @@ import {
   InventoryAlertsResponse,
   InvoiceTrack,
   InvoiceType,
+  PartsUsageReport,
   RepairItem,
   RepairOrder,
   RepairQuotePreview,
@@ -1426,3 +1427,18 @@ export const useRepairQuotePreview = (id: number | null) =>
       api<RepairQuotePreview>(`/repair-orders/${id}/quote-preview/`),
     enabled: !!id,
   });
+
+export const usePartsUsageReport = (params: {
+  from?: string;
+  to?: string;
+}) => {
+  const q = new URLSearchParams();
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  return useQuery({
+    queryKey: ["parts-usage-report", params],
+    queryFn: () =>
+      api<PartsUsageReport>(`/parts-usage-report/?${q.toString()}`),
+    enabled: !!(params.from && params.to),
+  });
+};
