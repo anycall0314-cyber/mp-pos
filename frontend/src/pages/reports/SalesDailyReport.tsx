@@ -226,63 +226,69 @@ export function SalesDailyReportPage() {
   return (
     <div className="page">
       <Toolbar title="銷貨日報" />
-      <div className="list-filterbar">
-        <label>
-          起日
-          <input
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-          />
-        </label>
-        <label>
-          迄日
-          <input
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-          />
-        </label>
-        <button
-          className="btn"
-          type="button"
-          onClick={() => {
-            const t = today();
-            setFrom(t);
-            setTo(t);
-          }}
-        >
-          今天
-        </button>
-        <button
-          className="btn"
-          type="button"
-          onClick={() => {
-            const t = today();
-            const d = new Date();
-            d.setDate(d.getDate() - 6);
-            setFrom(d.toISOString().slice(0, 10));
-            setTo(t);
-          }}
-        >
-          近 7 天
-        </button>
-        <button
-          className="btn"
-          type="button"
-          onClick={() => {
-            const t = today();
-            const d = new Date();
-            d.setDate(1);
-            setFrom(d.toISOString().slice(0, 10));
-            setTo(t);
-          }}
-        >
-          本月
-        </button>
-        <label style={{ minWidth: 180 }}>
-          倉別
-          <div style={{ minWidth: 140 }}>
+      <div className="list-filterbar sd-filter">
+        <div className="sd-filter-group sd-filter-dates">
+          <label className="sd-field">
+            起日
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+            />
+          </label>
+          <label className="sd-field">
+            迄日
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+            />
+          </label>
+        </div>
+
+        <div className="sd-filter-group sd-filter-quick">
+          <button
+            className="btn"
+            type="button"
+            onClick={() => {
+              const t = today();
+              setFrom(t);
+              setTo(t);
+            }}
+          >
+            今天
+          </button>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => {
+              const t = today();
+              const d = new Date();
+              d.setDate(d.getDate() - 6);
+              setFrom(d.toISOString().slice(0, 10));
+              setTo(t);
+            }}
+          >
+            近 7 天
+          </button>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => {
+              const t = today();
+              const d = new Date();
+              d.setDate(1);
+              setFrom(d.toISOString().slice(0, 10));
+              setTo(t);
+            }}
+          >
+            本月
+          </button>
+        </div>
+
+        <div className="sd-filter-group sd-filter-people">
+          <label className="sd-field">
+            倉別
             {defaultWarehouse.locked ? (
               <input
                 value={defaultWarehouse.name || "(未設定)"}
@@ -301,11 +307,9 @@ export function SalesDailyReportPage() {
                 placeholder="全部"
               />
             )}
-          </div>
-        </label>
-        <label style={{ minWidth: 180 }}>
-          業務員
-          <div style={{ minWidth: 140 }}>
+          </label>
+          <label className="sd-field">
+            業務員
             <ComboBox<SalesPerson>
               value={salesPerson}
               selectedOption={salesPersonOpt}
@@ -316,11 +320,9 @@ export function SalesDailyReportPage() {
               fetchOptions={searchSalesPersons}
               placeholder="全部"
             />
-          </div>
-        </label>
-        <label style={{ minWidth: 200 }}>
-          客戶
-          <div style={{ minWidth: 160 }}>
+          </label>
+          <label className="sd-field">
+            客戶
             <ComboBox<Customer>
               value={customer}
               selectedOption={customerOpt}
@@ -331,39 +333,65 @@ export function SalesDailyReportPage() {
               fetchOptions={searchCustomers}
               placeholder="全部"
             />
-          </div>
-        </label>
-        <button type="button" className="btn primary" onClick={runQuery}>
-          查詢
-        </button>
-        <button type="button" className="btn" onClick={resetFilters}>
-          清除
-        </button>
-        <button
-          type="button"
-          className="btn"
-          onClick={exportCsv}
-          disabled={orders.length === 0}
-        >
-          轉 Excel
-        </button>
+          </label>
+        </div>
+
+        <div className="sd-filter-group sd-filter-actions">
+          <button type="button" className="btn primary" onClick={runQuery}>
+            查詢
+          </button>
+          <button type="button" className="btn" onClick={resetFilters}>
+            清除
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={exportCsv}
+            disabled={orders.length === 0}
+          >
+            轉 Excel
+          </button>
+        </div>
       </div>
 
-      <div className="report-meta">
-        正常單 {activeOrders.length} 筆 · 明細 {totals.lines} 筆 · 含稅金額{" "}
-        {fmtMoney(totals.amountIncl)} · 成本 {fmtMoney(totals.cost)} · 毛利{" "}
-        <span style={{ color: totals.profit < 0 ? "#ff7070" : undefined }}>
-          {fmtMoney(totals.profit)}
-        </span>
+      <div className="sd-summary">
+        <div className="sd-summary-card">
+          <div className="sd-summary-card-label">正常單</div>
+          <div className="sd-summary-card-value">{activeOrders.length}</div>
+        </div>
+        <div className="sd-summary-card">
+          <div className="sd-summary-card-label">明細</div>
+          <div className="sd-summary-card-value">{totals.lines}</div>
+        </div>
+        <div className="sd-summary-card">
+          <div className="sd-summary-card-label">含稅金額</div>
+          <div className="sd-summary-card-value">
+            ${fmtMoney(totals.amountIncl)}
+          </div>
+        </div>
+        <div className="sd-summary-card">
+          <div className="sd-summary-card-label">成本</div>
+          <div className="sd-summary-card-value">${fmtMoney(totals.cost)}</div>
+        </div>
+        <div className="sd-summary-card">
+          <div className="sd-summary-card-label">毛利</div>
+          <div
+            className="sd-summary-card-value"
+            style={{ color: totals.profit < 0 ? "#ff7070" : undefined }}
+          >
+            ${fmtMoney(totals.profit)}
+          </div>
+        </div>
         {voidOrders.length > 0 && (
-          <>
-            {" · "}作廢 {voidOrders.length} 筆(列於下方)
-          </>
+          <div className="sd-summary-card sd-summary-card-void">
+            <div className="sd-summary-card-label">作廢</div>
+            <div className="sd-summary-card-value">
+              {voidOrders.length} 筆
+            </div>
+          </div>
         )}
-        <span style={{ marginLeft: 12, color: "var(--text-dim)", fontSize: 12 }}>
-          毛利以未稅金額減成本計算
-        </span>
       </div>
+      <div className="sd-summary-hint">毛利以未稅金額減成本計算</div>
 
       <div className="report-table">
         {isLoading && <div className="md-empty">載入中…</div>}

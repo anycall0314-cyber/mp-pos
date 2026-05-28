@@ -2619,3 +2619,125 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   padding: 4px 0 8px;
 }
 
+/* ─────────────────────────────────────────────────────────
+ * 銷貨日報:篩選列分群 + 摘要卡片
+ * ───────────────────────────────────────────────────────── */
+.sd-filter {
+  /* 桌機:沿用 .list-filterbar 的 flex-wrap row 行為 */
+  align-items: flex-start;
+}
+.sd-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.sd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 160px;
+}
+.sd-field > input,
+.sd-field > .combobox {
+  width: 100%;
+  min-width: 0;
+}
+
+/* 摘要列改成卡片網格,fluid auto-fit */
+.sd-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr));
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.sd-summary-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+.sd-summary-card-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.sd-summary-card-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.sd-summary-card-void {
+  border-color: rgba(255, 100, 100, 0.4);
+}
+.sd-summary-card-void .sd-summary-card-value {
+  color: #ff9090;
+}
+.sd-summary-hint {
+  padding: 4px 16px 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+@media (max-width: 768px) {
+  /* 篩選列在手機改 column,每群組獨立一行 */
+  .sd-filter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px;
+  }
+  .sd-filter-group {
+    width: 100%;
+    gap: 8px;
+  }
+  /* 快速日期 3 顆按鈕固定一行均分 */
+  .sd-filter-quick {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .sd-filter-quick .btn {
+    width: 100%;
+  }
+  /* 人員條件:倉別 / 業務員 / 客戶 各自獨立一行 */
+  .sd-filter-people {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .sd-filter-people .sd-field {
+    width: 100%;
+    flex: 0 0 auto;
+  }
+  /* 動作按鈕:三顆併排,「查詢」是 primary 拉長放眼 */
+  .sd-filter-actions {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 8px;
+  }
+  .sd-filter-actions .btn {
+    width: 100%;
+  }
+  /* 摘要列:每張卡至少 100px,擠不下會換行 */
+  .sd-summary {
+    grid-template-columns: repeat(auto-fit, minmax(min(50% - 4px, 110px), 1fr));
+    padding: 8px;
+    gap: 6px;
+  }
+  .sd-summary-card {
+    padding: 6px 8px;
+  }
+  .sd-summary-card-value {
+    font-size: 16px;
+  }
+  .sd-summary-hint {
+    padding: 4px 10px 8px;
+  }
+}
+
