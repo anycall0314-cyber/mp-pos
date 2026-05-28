@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 interface Props {
   value: string;
   onChange: (v: string) => void;
@@ -7,42 +5,44 @@ interface Props {
 
 /**
  * 九宮格圖形鎖輸入。
- * value 格式:用「-」串接的 1~9 數字,例如 "1-5-9-6-3"。
- * 操作:點一下加入路徑、再點同一格移除最後一步、按「清除」整路徑清空。
+ * value 格式:用「-」串接的 1~9 數字,允許節點重複,例如 "1-2-1-5-9"。
+ * 操作:點任一格 = 加入路徑(可重複);「退一步」移除最後一步;「清除」整段歸零。
  */
 export function UnlockPatternInput({ value, onChange }: Props) {
   const path = value ? value.split("-").filter(Boolean).map(Number) : [];
-  const [hint, setHint] = useState("");
 
-  function toggle(n: number) {
-    setHint("");
-    if (path.length && path[path.length - 1] === n) {
-      const next = path.slice(0, -1);
-      onChange(next.join("-"));
-      return;
-    }
-    if (path.includes(n)) {
-      setHint("此節點已在路徑中,點最後一個節點可以退一步");
-      return;
-    }
+  function append(n: number) {
     onChange([...path, n].join("-"));
   }
+
+  function back() {
+    onChange(path.slice(0, -1).join("-"));
+  }
+
+  // 每個節點記它在路徑中所有出現的位置(顯示用)
+  const occurrences: Record<number, number[]> = {};
+  path.forEach((n, idx) => {
+    if (!occurrences[n]) occurrences[n] = [];
+    occurrences[n].push(idx + 1);
+  });
 
   return (
     <div className="up-wrap">
       <div className="up-grid">
         {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => {
-          const idx = path.indexOf(n);
-          const active = idx >= 0;
+          const orders = occurrences[n] ?? [];
+          const active = orders.length > 0;
           return (
             <button
               key={n}
               type="button"
               className={"up-cell" + (active ? " active" : "")}
-              onClick={() => toggle(n)}
+              onClick={() => append(n)}
             >
               <span className="up-cell-n">{n}</span>
-              {active && <span className="up-cell-order">{idx + 1}</span>}
+              {active && (
+                <span className="up-cell-order">{orders.join(",")}</span>
+              )}
             </button>
           );
         })}
@@ -56,14 +56,21 @@ export function UnlockPatternInput({ value, onChange }: Props) {
             type="button"
             className="btn"
             disabled={!path.length}
+            onClick={back}
+          >
+            退一步
+          </button>
+          <button
+            type="button"
+            className="btn"
+            disabled={!path.length}
             onClick={() => onChange("")}
           >
             清除
           </button>
         </div>
-        {hint && <div className="up-hint">{hint}</div>}
         <div className="up-tip">
-          依客戶指示依序點擊節點。再點最後一個節點可退一步。
+          依客戶指示點擊節點(允許重複)。點錯按「退一步」回到上一節點。
         </div>
       </div>
     </div>

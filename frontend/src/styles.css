@@ -3885,6 +3885,43 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   background: rgba(96, 165, 250, 0.1);
 }
 
+/* 客戶 / 會員狀態列 + 快速建立 */
+.re-customer-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-2);
+  border-radius: 6px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+.re-customer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.re-customer-badge.ok {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+.re-customer-badge.member {
+  background: rgba(96, 165, 250, 0.15);
+  color: #60a5fa;
+}
+.re-quick-create {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
 /* 解鎖方式區 */
 .re-unlock-bar {
   display: flex;

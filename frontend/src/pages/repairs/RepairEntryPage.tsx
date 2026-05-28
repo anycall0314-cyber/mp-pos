@@ -3,21 +3,24 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { api } from "@/api/client";
 import {
+  lookupCustomer,
+  lookupMember,
   useCompleteRepair,
   useRepairItemsByModel,
   useRepairOrder,
+  useSaveCustomer,
+  useSaveMember,
   useSaveRepairOrder,
   useSetRepairStatus,
   useWarehouses,
 } from "@/api/hooks";
 import {
-  searchCustomers,
   searchProducts,
   searchSalesPersons,
 } from "@/api/search";
 import { useDefaultHandledBy, useDefaultWarehouse } from "@/auth/AuthContext";
 import type {
-  Customer,
+  Member,
   Product,
   RepairHistoryItem,
   RepairItem,
@@ -92,7 +95,17 @@ export function RepairEntryPage() {
 
   const [mode, setMode] = useState<RepairMode>("in_house");
   const [customer, setCustomer] = useState<number | "">("");
-  const [customerOpt, setCustomerOpt] = useState<ComboOption<Customer> | null>(null);
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [member, setMember] = useState<Member | null>(null);
+  const [lookupStatus, setLookupStatus] = useState<
+    "idle" | "checking" | "found" | "not_found"
+  >("idle");
+  const [showQuickCreate, setShowQuickCreate] = useState(false);
+  const [quickCreateAlsoMember, setQuickCreateAlsoMember] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const saveCustomer = useSaveCustomer();
+  const saveMember = useSaveMember();
   const [modelKey, setModelKey] = useState("");
   const [modelName, setModelName] = useState("");
   const [deviceSerial, setDeviceSerial] = useState("");
@@ -154,11 +167,9 @@ export function RepairEntryPage() {
     if (!o) return;
     setMode(o.mode);
     setCustomer(o.customer);
-    setCustomerOpt({
-      id: o.customer,
-      label: o.customer_name,
-      secondary: o.customer_phone,
-    });
+    setCustomerName(o.customer_name);
+    setCustomerPhone(o.customer_phone);
+    setLookupStatus("found");
     setModelKey(o.host_model_key);
     setModelName(o.host_model_name);
     setDeviceSerial(o.device_serial);
@@ -249,10 +260,96 @@ export function RepairEntryPage() {
     );
   }
 
+  // 電話 debounce 查詢:同時查 Customer + Member
+  useEffect(() => {
+    const phone = customerPhone.trim();
+    if (!phone || phone.length < 4) {
+      setLookupStatus("idle");
+      setMember(null);
+      setShowQuickCreate(false);
+      return;
+    }
+    if (isEdit && customer) return; // 編輯狀態下不重複查
+    setLookupStatus("checking");
+    const t = setTimeout(async () => {
+      try {
+        const [cust, mem] = await Promise.all([
+          lookupCustomer(phone),
+          lookupMember(phone),
+        ]);
+        setMember(mem);
+        if (cust) {
+          setCustomer(cust.id);
+          setCustomerName(cust.name);
+          setLookupStatus("found");
+          setShowQuickCreate(false);
+        } else if (mem) {
+          // 有會員沒客戶 → 用會員資料預填,等送出時建立 individual customer
+          setCustomer("");
+          if (!customerName.trim()) setCustomerName(mem.name);
+          setLookupStatus("not_found");
+          setShowQuickCreate(true);
+        } else {
+          setCustomer("");
+          setLookupStatus("not_found");
+          setShowQuickCreate(true);
+        }
+      } catch {
+        setLookupStatus("idle");
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [customerPhone, isEdit]);
+
+  async function quickCreateCustomer() {
+    const phone = customerPhone.trim();
+    const name = customerName.trim();
+    if (!phone) {
+      setError("請先輸入聯絡電話");
+      return;
+    }
+    if (!name) {
+      setError("請輸入客戶姓名");
+      return;
+    }
+    setCreating(true);
+    try {
+      const cust = await saveCustomer.mutateAsync({
+        name,
+        phone,
+        kind: "individual",
+      });
+      setCustomer(cust.id);
+      setLookupStatus("found");
+      setShowQuickCreate(false);
+      if (quickCreateAlsoMember && !member) {
+        try {
+          const m = await saveMember.mutateAsync({ name, phone });
+          setMember(m);
+        } catch {
+          // 會員建立失敗不擋客戶,僅提示
+        }
+      }
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCreating(false);
+    }
+  }
+
   async function submit(opts?: { printAfter?: boolean }) {
     setError(null);
-    if (!customer || !modelKey || !receivedDate || !warehouseId) {
-      setError("請填客戶 / 機型 / 收件日 / 門市");
+    if (!customerPhone.trim()) {
+      setError("請輸入聯絡電話");
+      return;
+    }
+    if (!customer) {
+      setError("請依電話建立客戶,或從歷史維修挑出已存在客戶");
+      return;
+    }
+    if (!modelKey || !receivedDate || !warehouseId) {
+      setError("請填機型 / 收件日 / 門市");
       return;
     }
     if (!unlockMethod) {
@@ -472,17 +569,93 @@ export function RepairEntryPage() {
               <div className="re-section-title">基本資料</div>
               <div className="re-section-body">
                 <div className="re-2col">
-                  <Field label="客戶" required>
-                    <ComboBox<Customer>
-                      value={customer}
-                      selectedOption={customerOpt}
-                      onChange={(v, opt) => {
-                        setCustomer(v);
-                        setCustomerOpt(opt ?? null);
+                  <Field
+                    label="聯絡電話"
+                    required
+                    hint={
+                      lookupStatus === "checking"
+                        ? "查詢中…"
+                        : lookupStatus === "found" && customer
+                          ? "已對應客戶,自動帶入"
+                          : lookupStatus === "not_found"
+                            ? "查無此電話,可下方建立"
+                            : "輸入電話會自動帶會員 / 客戶"
+                    }
+                  >
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      value={customerPhone}
+                      onChange={(e) => {
+                        setCustomerPhone(e.target.value);
+                        if (e.target.value.trim() !== customerPhone.trim()) {
+                          setCustomer("");
+                        }
                       }}
-                      fetchOptions={(q) => searchCustomers(q)}
+                      placeholder="09xx-xxx-xxx"
                     />
                   </Field>
+                  <Field label="客戶姓名" required>
+                    <input
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="王小明"
+                      disabled={!!customer && lookupStatus === "found"}
+                    />
+                  </Field>
+                </div>
+                {(member || (customer && lookupStatus === "found") ||
+                  showQuickCreate) && (
+                  <div className="re-customer-status">
+                    {customer && lookupStatus === "found" && (
+                      <span className="re-customer-badge ok">
+                        客戶 ✓ {customerName}
+                      </span>
+                    )}
+                    {member && (
+                      <span className="re-customer-badge member">
+                        會員 {member.code} {member.name}
+                      </span>
+                    )}
+                    {showQuickCreate && !customer && (
+                      <div className="re-quick-create">
+                        <span style={{ color: "var(--text-dim)", fontSize: 13 }}>
+                          查無此電話的客戶,
+                        </span>
+                        <label
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            fontSize: 13,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={quickCreateAlsoMember}
+                            onChange={(e) =>
+                              setQuickCreateAlsoMember(e.target.checked)
+                            }
+                          />
+                          同步建立會員
+                        </label>
+                        <button
+                          type="button"
+                          className="btn primary"
+                          onClick={quickCreateCustomer}
+                          disabled={
+                            creating ||
+                            !customerPhone.trim() ||
+                            !customerName.trim()
+                          }
+                        >
+                          {creating ? "建立中…" : "立即建立"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="re-2col">
                   <Field label="收件門市" required>
                     <select
                       value={warehouseId}
@@ -952,7 +1125,7 @@ export function RepairEntryPage() {
 
       <RepairHistoryModal
         open={historyOpen}
-        phone={customerOpt?.secondary ?? ""}
+        phone={customerPhone}
         onClose={() => setHistoryOpen(false)}
         onPick={handlePickHistory}
       />
