@@ -1,8 +1,23 @@
+from datetime import timedelta
+
+from django.db.models import (
+    Count,
+    F,
+    IntegerField,
+    OuterRef,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+)
+from django.db.models.functions import Coalesce
+from django.utils import timezone
 from rest_framework import viewsets
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
-from apps.sales.models import SalesOrder, SalesOrderItemSerial
+from apps.catalog.models import Product, ProductRelation
+from apps.sales.models import SalesOrder, SalesOrderItem, SalesOrderItemSerial
 
 from .models import ProductSerial, StockBalance, StockMovement, Warehouse
 from .serializers import (
@@ -190,3 +205,209 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
             StockMovement.objects.for_tenant(self.request.tenant)
             .select_related("serial")
         )
+
+
+# ─────────────────────────────────────────────────────────
+# 庫存警示 API:依 lifecycle_status + 商品關聯 推論觸發原因
+# 嚴重度 severity:critical > warning > info
+#   critical: active 已斷貨(qty=0)
+#   warning : active 低庫存 + 主機正在熱銷帶動
+#   warning : active 低庫存(無關聯主機 / 主機也低庫存)
+#   info    : active 低庫存但對應主機已換代 / replacing 商品低庫存(審查) /
+#             clearance 還有庫存(出清提醒)
+# ─────────────────────────────────────────────────────────
+
+# 「最近熱銷」窗口(天數)
+_HOT_SELLING_DAYS = 30
+
+
+def _build_stock_annotation(tenant, warehouse_id=None):
+    """回傳:(serial_count_sq, balance_sq) 兩個用 OuterRef 的 Subquery。
+    與 catalog/views.py 同模式,確保庫存統計不被 search 的 JOIN 干擾。
+    """
+    serial_filter = Q(
+        product=OuterRef("pk"),
+        status=ProductSerial.Status.IN_STOCK,
+    )
+    balance_filter = Q(product=OuterRef("pk"), tenant=tenant)
+    if warehouse_id is not None:
+        serial_filter &= Q(warehouse_id=warehouse_id)
+        balance_filter &= Q(warehouse_id=warehouse_id)
+    serial_sq = (
+        ProductSerial.objects.filter(serial_filter)
+        .order_by()
+        .values("product")
+        .annotate(c=Count("*"))
+        .values("c")[:1]
+    )
+    balance_sq = (
+        StockBalance.objects.filter(balance_filter)
+        .order_by()
+        .values("product")
+        .annotate(t=Sum("qty"))
+        .values("t")[:1]
+    )
+    return serial_sq, balance_sq
+
+
+def _annotate_stock(qs, serial_sq, balance_sq):
+    return qs.annotate(
+        _sc=Coalesce(Subquery(serial_sq, output_field=IntegerField()), Value(0)),
+        _bc=Coalesce(Subquery(balance_sq, output_field=IntegerField()), Value(0)),
+        stock=F("_sc") + F("_bc"),
+    )
+
+
+@api_view(["GET"])
+def inventory_alerts(request):
+    """庫存警示 API,回傳當前所有需要關注的商品。
+
+    依 lifecycle_status + ProductRelation(主機-配件)推論觸發原因:
+    - active + qty=0:已斷貨,critical
+    - active + qty<safety 無關聯主機:低於安全庫存,warning
+    - active + qty<safety 關聯主機是 active 且最近熱銷:主機熱銷帶動,warning
+    - active + qty<safety 關聯主機是 replacing/discontinued/clearance:主機已換代,info
+    - replacing + qty<safety:換代審查,info
+    - clearance + qty>0:出清提醒,info
+    """
+    tenant = request.tenant
+    profile = getattr(request.user, "profile", None)
+
+    # 鎖倉帳號自動限定自己門市(跟 home-summary 同邏輯)
+    wid = None
+    if profile and profile.is_warehouse_locked and profile.default_warehouse_id:
+        wid = profile.default_warehouse_id
+    else:
+        q_wh = request.query_params.get("warehouse")
+        if q_wh and q_wh.isdigit():
+            wid = int(q_wh)
+
+    serial_sq, balance_sq = _build_stock_annotation(tenant, wid)
+
+    # 1. active / replacing 商品的庫存查詢
+    base_qs = (
+        Product.objects.for_tenant(tenant)
+        .filter(is_active=True, is_virtual=False)
+        .select_related("category")
+        .prefetch_related("host_relations__host_product")
+    )
+    base_qs = _annotate_stock(base_qs, serial_sq, balance_sq)
+
+    # 撈所有可能進警示的:active+低於safety / replacing+低於safety / clearance+在庫
+    alert_qs = base_qs.filter(
+        Q(
+            lifecycle_status__in=[
+                Product.LifecycleStatus.ACTIVE,
+                Product.LifecycleStatus.REPLACING,
+            ],
+            safety_stock__gt=0,
+            stock__lt=F("safety_stock"),
+        )
+        | Q(
+            lifecycle_status=Product.LifecycleStatus.CLEARANCE,
+            stock__gt=0,
+        )
+    ).order_by("stock", "name")
+
+    products = list(alert_qs[:200])
+
+    # 找出所有 host product 並判斷是否最近熱銷
+    host_ids = set()
+    for p in products:
+        for r in p.host_relations.all():
+            host_ids.add(r.host_product_id)
+    hot_host_ids: set[int] = set()
+    if host_ids:
+        since = timezone.now().date() - timedelta(days=_HOT_SELLING_DAYS)
+        sold_ids = (
+            SalesOrderItem.objects.for_tenant(tenant)
+            .filter(
+                product_id__in=host_ids,
+                so__doc_date__gte=since,
+                so__is_void=False,
+            )
+            .values_list("product_id", flat=True)
+            .distinct()
+        )
+        hot_host_ids = set(sold_ids)
+
+    rows = []
+    for p in products:
+        hosts = [r.host_product for r in p.host_relations.all()]
+        host_replaced = any(
+            h.lifecycle_status
+            in (
+                Product.LifecycleStatus.REPLACING,
+                Product.LifecycleStatus.DISCONTINUED,
+                Product.LifecycleStatus.CLEARANCE,
+            )
+            for h in hosts
+        )
+        host_hot = any(
+            h.id in hot_host_ids
+            and h.lifecycle_status == Product.LifecycleStatus.ACTIVE
+            for h in hosts
+        )
+
+        # 推論 reason + severity
+        if p.lifecycle_status == Product.LifecycleStatus.CLEARANCE:
+            reason_code = "clearance_remain"
+            reason_label = f"清倉中還剩 {p.stock} 件,加速出清"
+            severity = "info"
+        elif p.lifecycle_status == Product.LifecycleStatus.REPLACING:
+            reason_code = "replacing_review"
+            reason_label = "商品即將換代,審查補貨需求"
+            severity = "info"
+        elif p.stock == 0:
+            reason_code = "out_of_stock"
+            reason_label = "已斷貨,優先補貨"
+            severity = "critical"
+        elif host_replaced and not host_hot:
+            reason_code = "host_replaced"
+            reason_label = "主機已換代,審查是否續備"
+            severity = "info"
+        elif host_hot:
+            reason_code = "host_hot_selling"
+            reason_label = "主機熱銷帶動,建議備貨"
+            severity = "warning"
+        else:
+            reason_code = "low_stock"
+            reason_label = "低於安全庫存,建議補貨"
+            severity = "warning"
+
+        rows.append(
+            {
+                "id": p.id,
+                "name": p.name,
+                "sku": p.sku,
+                "category_name": p.category.name if p.category else "",
+                "current_qty": int(p.stock),
+                "safety_stock": p.safety_stock,
+                "lifecycle_status": p.lifecycle_status,
+                "lifecycle_status_label": p.get_lifecycle_status_display(),
+                "severity": severity,
+                "reason_code": reason_code,
+                "reason_label": reason_label,
+                "related_hosts": [
+                    {
+                        "id": h.id,
+                        "name": h.name,
+                        "lifecycle_status": h.lifecycle_status,
+                    }
+                    for h in hosts
+                ],
+            }
+        )
+
+    # 依 severity 排:critical → warning → info,同級內依 stock 升冪
+    sev_rank = {"critical": 0, "warning": 1, "info": 2}
+    rows.sort(key=lambda r: (sev_rank.get(r["severity"], 9), r["current_qty"]))
+
+    counts = {
+        "critical": sum(1 for r in rows if r["severity"] == "critical"),
+        "warning": sum(1 for r in rows if r["severity"] == "warning"),
+        "info": sum(1 for r in rows if r["severity"] == "info"),
+        "total": len(rows),
+    }
+
+    return Response({"counts": counts, "rows": rows})

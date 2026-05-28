@@ -153,6 +153,26 @@ class Product(TenantOwnedModel):
         default=0,
         help_text="跨倉總庫存低於此數時,首頁會跳警示。0 = 不提醒",
     )
+
+    class LifecycleStatus(models.TextChoices):
+        ACTIVE = "active", "主力現貨"
+        REPLACING = "replacing", "即將換代"
+        DISCONTINUED = "discontinued", "停產下架"
+        CLEARANCE = "clearance", "清倉處理"
+
+    lifecycle_status = models.CharField(
+        "商品狀態",
+        max_length=16,
+        choices=LifecycleStatus.choices,
+        default=LifecycleStatus.ACTIVE,
+        help_text=(
+            "影響庫存警示行為:"
+            "active=主力現貨,低庫存會跳補貨警示;"
+            "replacing=即將換代,低庫存改顯示審查提醒;"
+            "discontinued/clearance=停產/清倉,不觸發補貨警示"
+        ),
+    )
+
     is_active = models.BooleanField("啟用", default=True)
 
     class Meta:
@@ -191,3 +211,43 @@ class Product(TenantOwnedModel):
             self.requires_serial = True
             self.is_virtual = False
         super().save(*args, **kwargs)
+
+
+class ProductRelation(TenantOwnedModel):
+    """商品關聯 — 主機 ↔ 配件 的對應。
+
+    一個配件可同時關聯多個主機(例:玻璃貼可同時適配 iPhone 15 / 15 Pro)。
+    用於庫存警示推論:配件低庫存時,若關聯主機是「主力現貨」且最近有銷貨,
+    觸發原因會升級成「主機熱銷帶動」;若關聯主機是「即將換代/停產」,
+    觸發原因變「主機已換代」提示審查是否還要備貨。
+    """
+
+    host_product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="accessory_relations",
+        verbose_name="主機商品",
+    )
+    accessory_product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="host_relations",
+        verbose_name="配件商品",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "host_product", "accessory_product"],
+                name="uniq_product_relation",
+            ),
+            models.CheckConstraint(
+                check=~models.Q(host_product=models.F("accessory_product")),
+                name="product_relation_not_self",
+            ),
+        ]
+        verbose_name = "商品關聯"
+        verbose_name_plural = "商品關聯"
+
+    def __str__(self):
+        return f"{self.accessory_product.name} → {self.host_product.name}"

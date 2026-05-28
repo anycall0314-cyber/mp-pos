@@ -2659,6 +2659,218 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   font-variant-numeric: tabular-nums;
   margin: 0 2px;
 }
+
+/* ─────────────────────────────────────────────────────────
+ * 庫存警示頁(/inventory/alerts)
+ * 左色條區分緊急度 + 商品狀態 badge + 觸發原因 + 操作按鈕
+ * ───────────────────────────────────────────────────────── */
+/* 上方緊急度統計列(可點 filter) */
+.ia-counts-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 100px), 1fr));
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.ia-count {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+}
+.ia-count:hover { background: var(--row-hover); }
+.ia-count.active {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.ia-count-num {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.ia-count-label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.ia-count-critical .ia-count-num { color: #ff7070; }
+.ia-count-warning .ia-count-num { color: #fbbf24; }
+.ia-count-info .ia-count-num { color: #60a5fa; }
+
+/* 警示列表 */
+.ia-list {
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ia-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-dim);
+}
+.ia-empty-title { font-size: 15px; margin-bottom: 6px; }
+.ia-empty-hint { font-size: 13px; }
+.ia-empty-link {
+  color: var(--accent);
+  text-decoration: none;
+  margin: 0 4px;
+}
+
+/* 每一筆警示 row */
+.ia-row {
+  display: grid;
+  grid-template-columns: 6px 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 12px 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.ia-row-bar {
+  width: 6px;
+  height: 100%;
+  align-self: stretch;
+}
+.ia-row-critical .ia-row-bar { background: #ff7070; }
+.ia-row-warning .ia-row-bar { background: #fbbf24; }
+.ia-row-info .ia-row-bar { background: #60a5fa; }
+.ia-row-critical { border-color: rgba(255, 100, 100, 0.3); }
+.ia-row-warning { border-color: rgba(251, 191, 36, 0.3); }
+.ia-row-info { border-color: rgba(96, 165, 250, 0.3); }
+
+.ia-row-main {
+  min-width: 0;
+}
+.ia-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.ia-row-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.ia-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.ia-badge-active {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+.ia-badge-replacing {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+.ia-badge-discontinued {
+  background: rgba(148, 148, 148, 0.15);
+  color: var(--text-dim);
+}
+.ia-badge-clearance {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+}
+.ia-row-sub {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.ia-sep { margin: 0 5px; }
+.ia-row-reason {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+.ia-row-critical .ia-row-reason { color: #ff9090; font-weight: 600; }
+.ia-row-warning .ia-row-reason { color: #fbbf24; font-weight: 600; }
+.ia-row-hosts {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.ia-row-stock {
+  text-align: right;
+  flex-shrink: 0;
+  padding: 0 8px;
+}
+.ia-row-stock-num {
+  font-size: 28px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  line-height: 1;
+}
+.ia-row-critical .ia-row-stock-num { color: #ff7070; }
+.ia-row-warning .ia-row-stock-num { color: #fbbf24; }
+.ia-row-stock-of {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.ia-row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.ia-row-btn {
+  font-size: 12px;
+  padding: 6px 10px;
+  text-decoration: none;
+  white-space: nowrap;
+  min-height: 0;
+}
+
+@media (max-width: 768px) {
+  /* 手機:row 改成兩段式直立 — 主資訊 / 庫存數字併排上,操作按鈕全寬獨立下 */
+  .ia-row {
+    grid-template-columns: 6px 1fr auto;
+    grid-template-areas:
+      "bar main stock"
+      "bar actions actions";
+    row-gap: 8px;
+    padding-bottom: 10px;
+  }
+  .ia-row-bar { grid-area: bar; }
+  .ia-row-main { grid-area: main; }
+  .ia-row-stock { grid-area: stock; }
+  .ia-row-actions {
+    grid-area: actions;
+    flex-direction: row;
+    gap: 8px;
+    padding-right: 14px;
+  }
+  .ia-row-actions .ia-row-btn {
+    flex: 1;
+    text-align: center;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+  .ia-row-stock-num { font-size: 22px; }
+}
 .inv-default-foot {
   text-align: center;
   font-size: 12px;

@@ -46,6 +46,11 @@ export interface Product {
   counts_cash: boolean;
   counts_margin: boolean;
   safety_stock?: number;
+  lifecycle_status?: LifecycleStatus;
+  // 寫入時送 id 清單(write_only)
+  related_host_ids?: number[];
+  // 讀取時系統會回(從 ProductRelation 來)
+  related_hosts?: { id: number; name: string; sku: string; lifecycle_status: LifecycleStatus }[];
   is_active: boolean;
   stock_qty: number;
   created_at: string;
@@ -714,6 +719,47 @@ export interface PhoneBillCollection {
   is_void: boolean;
   created_at: string;
   updated_at: string;
+}
+
+// 商品生命週期狀態(影響庫存警示行為)
+export type LifecycleStatus =
+  | "active" // 主力現貨
+  | "replacing" // 即將換代
+  | "discontinued" // 停產下架
+  | "clearance"; // 清倉處理
+
+export type AlertSeverity = "critical" | "warning" | "info";
+export type AlertReasonCode =
+  | "out_of_stock"
+  | "low_stock"
+  | "host_hot_selling"
+  | "host_replaced"
+  | "replacing_review"
+  | "clearance_remain";
+
+export interface InventoryAlertRow {
+  id: number;
+  name: string;
+  sku: string;
+  category_name: string;
+  current_qty: number;
+  safety_stock: number;
+  lifecycle_status: LifecycleStatus;
+  lifecycle_status_label: string;
+  severity: AlertSeverity;
+  reason_code: AlertReasonCode;
+  reason_label: string;
+  related_hosts: { id: number; name: string; lifecycle_status: LifecycleStatus }[];
+}
+
+export interface InventoryAlertsResponse {
+  counts: {
+    critical: number;
+    warning: number;
+    info: number;
+    total: number;
+  };
+  rows: InventoryAlertRow[];
 }
 
 // 登入首頁所需的 metric 一次回

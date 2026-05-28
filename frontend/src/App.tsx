@@ -10,6 +10,7 @@ import { PettyExpensesPage } from "@/pages/cash/PettyExpensesPage";
 import { PhoneBillsPage } from "@/pages/phone-bills/PhoneBillsPage";
 import { PhoneBillReceiptPage } from "@/pages/phone-bills/PhoneBillReceiptPage";
 import { CategoriesPage } from "@/pages/inventory/CategoriesPage";
+import { InventoryAlertsPage } from "@/pages/inventory/InventoryAlertsPage";
 import { InventoryQueryPage } from "@/pages/inventory/InventoryQueryPage";
 import { ProductsPage } from "@/pages/products/ProductsPage";
 import { PurchasesPage } from "@/pages/purchases/PurchasesPage";
@@ -321,6 +322,7 @@ export function App() {
           <Route path="/transfers" element={<TransfersPage />} />
           <Route path="/transfers/:id" element={<TransferEntryPage />} />
           <Route path="/inventory" element={<InventoryQueryPage />} />
+          <Route path="/inventory/alerts" element={<InventoryAlertsPage />} />
           <Route path="/inventory/categories" element={<CategoriesPage />} />
           <Route path="/serials" element={<Placeholder title="序號查詢" />} />
           <Route

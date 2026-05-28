@@ -6,6 +6,7 @@ import {
   Category,
   Customer,
   HomeSummary,
+  InventoryAlertsResponse,
   InvoiceTrack,
   InvoiceType,
   LegacyPurchase,
@@ -304,6 +305,14 @@ export const useHomeSummary = () =>
     // 每 30 秒重抓一次,讓首頁數字接近即時
     refetchInterval: 30000,
     refetchOnWindowFocus: true,
+  });
+
+// 庫存警示:依商品狀態 + 關聯主機 推論觸發原因
+export const useInventoryAlerts = () =>
+  useQuery({
+    queryKey: ["inventory-alerts"],
+    queryFn: () => api<InventoryAlertsResponse>("/inventory-alerts/"),
+    refetchInterval: 60000,
   });
 
 export function useVoidPettyExpense() {

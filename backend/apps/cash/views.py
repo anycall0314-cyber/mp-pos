@@ -588,7 +588,16 @@ def home_summary(request):
     )
     low_qs = (
         Product.objects.for_tenant(tenant)
-        .filter(is_active=True, is_virtual=False, safety_stock__gt=0)
+        .filter(
+            is_active=True,
+            is_virtual=False,
+            safety_stock__gt=0,
+            # 只算「主力現貨」/「即將換代」;停產 / 清倉不算補貨警示
+            lifecycle_status__in=[
+                Product.LifecycleStatus.ACTIVE,
+                Product.LifecycleStatus.REPLACING,
+            ],
+        )
         .annotate(
             _sc=Coalesce(
                 Subquery(serial_sq, output_field=IntegerField()), Value(0)

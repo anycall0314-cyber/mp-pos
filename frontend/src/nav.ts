@@ -37,6 +37,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "庫存",
     items: [
       { to: "/inventory", label: "庫存查詢" },
+      { to: "/inventory/alerts", label: "庫存警示" },
       { to: "/purchases", label: "進貨作業" },
       { to: "/secondhand-acquisition", label: "中古入庫" },
       { to: "/products", label: "建立商品" },

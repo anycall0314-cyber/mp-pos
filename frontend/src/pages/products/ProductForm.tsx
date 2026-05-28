@@ -3,7 +3,8 @@ import { FormEvent, useEffect, useState } from "react";
 import { ApiHttpError } from "@/api/client";
 import { useSaveCategory, useSaveProduct } from "@/api/hooks";
 import { searchCategories } from "@/api/search";
-import type { Category, Product } from "@/api/types";
+import { searchProducts } from "@/api/search";
+import type { Category, LifecycleStatus, Product } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
@@ -30,6 +31,8 @@ interface FormState {
   counts_cash: boolean;
   counts_margin: boolean;
   safety_stock: string;
+  lifecycle_status: LifecycleStatus;
+  related_hosts: { id: number; name: string }[];
   is_active: boolean;
 }
 
@@ -47,6 +50,8 @@ const EMPTY: FormState = {
   counts_cash: true,
   counts_margin: true,
   safety_stock: "0",
+  lifecycle_status: "active",
+  related_hosts: [],
   is_active: true,
 };
 
@@ -66,6 +71,11 @@ function toState(p: Product | null | undefined): FormState {
     counts_cash: p.counts_cash,
     counts_margin: p.counts_margin,
     safety_stock: String(p.safety_stock ?? 0),
+    lifecycle_status: p.lifecycle_status ?? "active",
+    related_hosts: (p.related_hosts ?? []).map((h) => ({
+      id: h.id,
+      name: h.name,
+    })),
     is_active: p.is_active,
   };
 }
@@ -168,6 +178,8 @@ export function ProductForm({
         counts_cash: state.counts_cash,
         counts_margin: state.counts_margin,
         safety_stock: Number(state.safety_stock) || 0,
+        lifecycle_status: state.lifecycle_status,
+        related_host_ids: state.related_hosts.map((h) => h.id),
         is_active: state.is_active,
       });
       onSaved?.(saved);
@@ -321,7 +333,12 @@ export function ProductForm({
           <Field
             label="安全庫存"
             error={fieldErrors.safety_stock}
-            hint="跨倉總量低於此數,首頁會跳警示;0 = 不提醒"
+            hint={
+              state.lifecycle_status === "discontinued" ||
+              state.lifecycle_status === "clearance"
+                ? "停產 / 清倉商品不觸發補貨警示"
+                : "跨倉總量低於此數,首頁會跳警示;0 = 不提醒"
+            }
           >
             <input
               type="number"
@@ -329,7 +346,75 @@ export function ProductForm({
               min="0"
               value={state.safety_stock}
               onChange={(e) => patch("safety_stock", e.target.value)}
+              disabled={
+                state.lifecycle_status === "discontinued" ||
+                state.lifecycle_status === "clearance"
+              }
             />
+          </Field>
+        </div>
+
+        <div className="field-row">
+          <Field
+            label="商品狀態"
+            error={fieldErrors.lifecycle_status}
+            hint="決定庫存警示行為(停產 / 清倉不觸發補貨警示)"
+          >
+            <select
+              value={state.lifecycle_status}
+              onChange={(e) =>
+                patch("lifecycle_status", e.target.value as LifecycleStatus)
+              }
+            >
+              <option value="active">主力現貨</option>
+              <option value="replacing">即將換代</option>
+              <option value="discontinued">停產下架</option>
+              <option value="clearance">清倉處理</option>
+            </select>
+          </Field>
+          <Field
+            label="關聯主機"
+            hint="此商品是哪些主機的配件?低庫存警示時會推論「主機熱銷帶動」或「主機已換代」"
+          >
+            <ComboBox<Product>
+              value=""
+              selectedOption={null}
+              onChange={(_id, opt) => {
+                if (!opt) return;
+                if (state.related_hosts.some((h) => h.id === opt.id)) return;
+                patch("related_hosts", [
+                  ...state.related_hosts,
+                  { id: opt.id, name: opt.label },
+                ]);
+              }}
+              fetchOptions={(q) => searchProducts(q, { activeOnly: true })}
+              placeholder={
+                state.related_hosts.length === 0
+                  ? "搜尋並挑主機商品…"
+                  : "繼續加主機…"
+              }
+            />
+            {state.related_hosts.length > 0 && (
+              <div className="inv-chip-row" style={{ padding: 0, background: "transparent", border: 0 }}>
+                {state.related_hosts.map((h) => (
+                  <button
+                    key={h.id}
+                    type="button"
+                    className="inv-chip"
+                    onClick={() =>
+                      patch(
+                        "related_hosts",
+                        state.related_hosts.filter((x) => x.id !== h.id),
+                      )
+                    }
+                    title="點擊移除"
+                  >
+                    <span>{h.name}</span>
+                    <span className="inv-chip-x">×</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </Field>
         </div>
 
