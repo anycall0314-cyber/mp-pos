@@ -13,6 +13,8 @@ interface PhoneModelOption {
 interface Props {
   onPick: (model: PhoneModelOption) => void;
   placeholder?: string;
+  /** 允許找不到時直接以輸入字串新增一個機型(維修單 / 配件挑機型常用)。 */
+  allowCreate?: boolean;
 }
 
 function lifecycleClass(s: string): string {
@@ -51,6 +53,7 @@ function lifecycleLabel(s: string): string {
 export function PhoneModelPicker({
   onPick,
   placeholder = "搜尋機型名稱…",
+  allowCreate = false,
 }: Props) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -123,8 +126,12 @@ export function PhoneModelPicker({
         <div className="combobox-pop">
           {loading && options.length === 0 ? (
             <div className="combobox-hint">搜尋中…</div>
-          ) : options.length === 0 ? (
-            <div className="combobox-hint">找不到符合的機型</div>
+          ) : options.length === 0 && !(allowCreate && query.trim()) ? (
+            <div className="combobox-hint">
+              {allowCreate
+                ? "請輸入機型名稱以新增"
+                : "找不到符合的機型"}
+            </div>
           ) : (
             <ul className="combobox-list" role="listbox">
               {options.map((opt) => (
@@ -151,6 +158,38 @@ export function PhoneModelPicker({
                   </span>
                 </li>
               ))}
+              {allowCreate &&
+                query.trim() &&
+                !options.some(
+                  (o) =>
+                    o.model_name.toLowerCase() ===
+                      query.trim().toLowerCase() ||
+                    o.model_key === query.trim().toLowerCase(),
+                ) && (
+                  <li
+                    role="option"
+                    className="combobox-option combobox-option-create"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      const name = query.trim();
+                      onPick({
+                        model_key: name.toLowerCase(),
+                        model_name: name,
+                        sku_count: 0,
+                        any_lifecycle_status: "",
+                      });
+                      setOpen(false);
+                      setQuery("");
+                    }}
+                  >
+                    <span className="combobox-option-label">
+                      新增機型「{query.trim()}」
+                    </span>
+                    <span className="combobox-option-secondary">
+                      自訂(本店未販售)
+                    </span>
+                  </li>
+                )}
             </ul>
           )}
         </div>

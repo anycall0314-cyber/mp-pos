@@ -248,10 +248,12 @@ class ProductViewSet(viewsets.ModelViewSet):
             .annotate(t=Sum("qty"))
             .values("t")[:1]
         )
+        # 只列「需要序號」的主機:配件 / 耗材即使 accessory_type 漏填,也不應出現在機型清單
         qs = (
             Product.objects.for_tenant(tenant)
             .filter(
                 accessory_type=Product.AccessoryType.NONE,
+                requires_serial=True,
                 is_active=True,
                 is_virtual=False,
             )

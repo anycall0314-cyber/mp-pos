@@ -522,10 +522,15 @@ export function RepairEntryPage() {
                   <Field
                     label="機型"
                     required
-                    hint={modelName ? `已選:${modelName}` : "跨同款 SKU"}
+                    hint={
+                      modelName
+                        ? `已選:${modelName}`
+                        : "輸入找不到時可直接新增本店未販售的機型"
+                    }
                   >
                     <PhoneModelPicker
                       placeholder={modelName || "搜尋機型…"}
+                      allowCreate
                       onPick={(m) => {
                         setModelKey(m.model_key);
                         setModelName(m.model_name);
