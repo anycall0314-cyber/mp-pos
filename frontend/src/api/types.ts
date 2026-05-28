@@ -953,6 +953,47 @@ export interface HomeSummary {
 
 // ─── 維修模組 ───
 
+export interface PartTemplateItem {
+  id?: number;
+  name: string;
+  code: string;
+  sort_order: number;
+  default_cost: string;
+  default_safety_stock: number;
+}
+
+export interface PartTemplate {
+  id: number;
+  name: string;
+  note: string;
+  is_active: boolean;
+  items: PartTemplateItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PartPreviewRow {
+  model_key: string;
+  model_name: string;
+  brand: string;
+  brand_code: string;
+  model_code: string;
+  item_id: number;
+  item_name: string;
+  item_code: string;
+  name: string;
+  sku: string;
+  cost: string;
+  safety_stock: number;
+  exists: boolean;
+}
+
+export interface PartBulkCreateResult {
+  created: number;
+  skipped: string[];
+  errors: { sku: string; error: string }[];
+}
+
 export type RepairMode = "in_house" | "external";
 export type RepairStatus =
   | "pending"

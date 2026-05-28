@@ -1,6 +1,89 @@
 from rest_framework import serializers
 
-from .models import Category, Product, ProductRelation
+from .models import (
+    Category,
+    PartTemplate,
+    PartTemplateItem,
+    Product,
+    ProductRelation,
+)
+
+
+class PartTemplateItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PartTemplateItem
+        fields = [
+            "id",
+            "name",
+            "code",
+            "sort_order",
+            "default_cost",
+            "default_safety_stock",
+        ]
+
+
+class PartTemplateSerializer(serializers.ModelSerializer):
+    items = PartTemplateItemSerializer(many=True, read_only=True)
+    items_input = serializers.ListField(
+        child=serializers.DictField(), required=False, write_only=True
+    )
+
+    class Meta:
+        model = PartTemplate
+        fields = [
+            "id",
+            "name",
+            "note",
+            "is_active",
+            "items",
+            "items_input",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "items", "created_at", "updated_at"]
+
+    def create(self, validated_data):
+        items = validated_data.pop("items_input", None) or []
+        instance = super().create(validated_data)
+        self._sync_items(instance, items)
+        return instance
+
+    def update(self, instance, validated_data):
+        items = validated_data.pop("items_input", None)
+        instance = super().update(instance, validated_data)
+        if items is not None:
+            self._sync_items(instance, items)
+        return instance
+
+    def _sync_items(self, template, items):
+        existing = {it.id: it for it in template.items.all()}
+        seen = set()
+        for idx, row in enumerate(items):
+            item_id = row.get("id")
+            if item_id and item_id in existing:
+                it = existing[item_id]
+                it.name = row.get("name", it.name)
+                it.code = row.get("code", it.code)
+                it.sort_order = row.get("sort_order", idx)
+                it.default_cost = row.get("default_cost", it.default_cost)
+                it.default_safety_stock = row.get(
+                    "default_safety_stock", it.default_safety_stock
+                )
+                it.save()
+                seen.add(item_id)
+            else:
+                PartTemplateItem.objects.create(
+                    tenant=template.tenant,
+                    template=template,
+                    name=row.get("name", ""),
+                    code=row.get("code", ""),
+                    sort_order=row.get("sort_order", idx),
+                    default_cost=row.get("default_cost", 0),
+                    default_safety_stock=row.get("default_safety_stock", 0),
+                )
+        for itid, it in existing.items():
+            if itid not in seen:
+                it.delete()
 
 
 class _TenantUniqueMixin:

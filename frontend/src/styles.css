@@ -4126,6 +4126,221 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   padding-top: 6px;
 }
 
+/* ─── 零件批次建立 wizard ─── */
+.bcp-modal {
+  width: 92vw;
+  max-width: 1100px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+.bcp-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  min-height: 300px;
+}
+.bcp-step-hint {
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 4px 0 12px;
+}
+.bcp-tpl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  margin: 8px 0;
+}
+.bcp-tpl-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.bcp-tpl-card:hover { border-color: var(--accent); }
+.bcp-tpl-card.selected {
+  border-color: var(--accent);
+  background: rgba(96, 165, 250, 0.08);
+}
+.bcp-tpl-name {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.bcp-tpl-count {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+.bcp-tpl-items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.7;
+}
+
+.bcp-brand-block {
+  border-bottom: 1px solid var(--border);
+  padding: 8px 0;
+}
+.bcp-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 8px;
+  background: var(--bg-2);
+  border-radius: 4px;
+}
+.bcp-brand-count { color: var(--text-dim); font-size: 12px; }
+.bcp-model-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px 4px;
+}
+.bcp-model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+  cursor: pointer;
+  background: transparent;
+}
+.bcp-model-chip input { margin: 0; }
+.bcp-model-chip.on {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.bcp-summary {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+  padding: 12px;
+  background: var(--bg-2);
+  border-radius: 6px;
+  margin-top: 12px;
+}
+.bcp-summary b { font-size: 18px; color: var(--accent); }
+
+.bcp-defaults-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  background: var(--bg-2);
+  border-radius: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.bcp-defaults-bar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.bcp-cat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+.bcp-cat-row select { min-width: 240px; }
+.bcp-preview-wrap {
+  max-height: 400px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.bcp-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.bcp-preview-table th,
+.bcp-preview-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.bcp-preview-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-2);
+  z-index: 1;
+}
+.bcp-preview-table input {
+  width: 100%;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+.bcp-preview-table .bcp-exists {
+  background: rgba(251, 146, 60, 0.15);
+  border-color: #fb923c;
+}
+.bcp-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(96, 165, 250, 0.15);
+  color: #60a5fa;
+  font-size: 11px;
+  border-radius: 4px;
+}
+.bcp-format-hint {
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 6px 0;
+}
+.bcp-result-card {
+  padding: 20px;
+  background: var(--bg-2);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+.bcp-result-hero { font-size: 20px; }
+.bcp-result-hero b { color: #4ade80; font-size: 28px; padding: 0 6px; }
+.bcp-result-row { margin-top: 10px; font-size: 13px; }
+.bcp-result-sub { color: var(--text-dim); font-size: 12px; margin-top: 4px; }
+
+/* PartTemplatesPage 左側列表項 */
+.pt-list-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  color: var(--text);
+  cursor: pointer;
+}
+.pt-list-item:hover { background: var(--bg-2); }
+.pt-list-item.selected {
+  background: rgba(96, 165, 250, 0.1);
+  border-color: var(--accent);
+}
+.pt-list-name { font-weight: 600; }
+.pt-list-meta { font-size: 12px; color: var(--text-dim); }
+.pt-items-table input {
+  width: 100%;
+  font-size: 13px;
+  padding: 4px 6px;
+}
+
 /* 維修列表 inline 編輯欄(報價/成本/實付) */
 .rp-inline-money {
   width: 80px;

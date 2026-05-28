@@ -17,8 +17,13 @@ from apps.sales.models import SalesOrderItem
 from apps.transfers.models import TransferOrder, TransferOrderItem
 
 from .import_service import import_products_from_file
-from .models import Category, Product, ProductRelation
-from .serializers import CategorySerializer, ProductSerializer
+from .models import Category, PartTemplate, Product, ProductRelation
+from .serializers import (
+    CategorySerializer,
+    PartTemplateSerializer,
+    ProductSerializer,
+)
+from .services_parts import bulk_create_parts, build_preview
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -746,3 +751,54 @@ class ProductViewSet(viewsets.ModelViewSet):
             {"created": created, "count": len(created)},
             status=status.HTTP_201_CREATED,
         )
+
+
+class PartTemplateViewSet(viewsets.ModelViewSet):
+    """零件範本 CRUD + 批次建立 actions。
+
+    /api/v1/part-templates/                            CRUD
+    /api/v1/part-templates/{id}/preview/               POST 預覽笛卡兒積
+    /api/v1/part-templates/{id}/bulk-create/           POST 真的批次建立
+    """
+
+    serializer_class = PartTemplateSerializer
+    search_fields = ["name", "note"]
+    filterset_fields = ["is_active"]
+
+    def get_queryset(self):
+        return (
+            PartTemplate.objects.for_tenant(self.request.tenant)
+            .prefetch_related("items")
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=self.request.tenant)
+
+    @action(detail=True, methods=["post"], url_path="preview")
+    def preview(self, request, pk=None):
+        body = request.data
+        rows = build_preview(
+            request.tenant,
+            pk,
+            body.get("model_keys", []),
+            body.get("defaults", {}),
+        )
+        return Response({"rows": rows})
+
+    @action(detail=True, methods=["post"], url_path="bulk-create")
+    def bulk_create_action(self, request, pk=None):
+        body = request.data
+        category_id = body.get("category_id")
+        rows = body.get("rows") or []
+        if not category_id:
+            return Response(
+                {"detail": "category_id 為必填"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not rows:
+            return Response(
+                {"detail": "rows 為空,沒有要建立的項目"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        result = bulk_create_parts(request.tenant, category_id, rows)
+        return Response(result)

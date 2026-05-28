@@ -12,6 +12,9 @@ import {
   InvoiceTrack,
   InvoiceType,
   PartsUsageReport,
+  PartBulkCreateResult,
+  PartPreviewRow,
+  PartTemplate,
   RepairHistoryItem,
   RepairItem,
   RepairOrder,
@@ -1494,3 +1497,96 @@ export const usePartsUsageReport = (params: {
     enabled: !!(params.from && params.to),
   });
 };
+
+export const usePartTemplates = () =>
+  useQuery({
+    queryKey: ["part-templates"],
+    queryFn: () => list<PartTemplate>(`/part-templates/?page_size=100`),
+  });
+
+export const usePartTemplate = (id: number | null) =>
+  useQuery({
+    queryKey: ["part-template", id],
+    queryFn: () => api<PartTemplate>(`/part-templates/${id}/`),
+    enabled: !!id,
+  });
+
+export function useSavePartTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (
+      body: Partial<PartTemplate> & {
+        id?: number;
+        items_input?: unknown[];
+      },
+    ) => {
+      const { id, ...rest } = body;
+      return api<PartTemplate>(
+        id ? `/part-templates/${id}/` : "/part-templates/",
+        {
+          method: id ? "PATCH" : "POST",
+          body: JSON.stringify(rest),
+        },
+      );
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["part-templates"] });
+      qc.invalidateQueries({ queryKey: ["part-template"] });
+    },
+  });
+}
+
+export function useDeletePartTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<void>(`/part-templates/${id}/`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["part-templates"] });
+    },
+  });
+}
+
+export function usePartTemplatePreview() {
+  return useMutation({
+    mutationFn: (vars: {
+      template_id: number;
+      model_keys: string[];
+      defaults?: { cost?: string; safety_stock?: number };
+    }) =>
+      api<{ rows: PartPreviewRow[] }>(
+        `/part-templates/${vars.template_id}/preview/`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            model_keys: vars.model_keys,
+            defaults: vars.defaults ?? {},
+          }),
+        },
+      ),
+  });
+}
+
+export function usePartBulkCreate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: {
+      template_id: number;
+      category_id: number;
+      rows: Partial<PartPreviewRow>[];
+    }) =>
+      api<PartBulkCreateResult>(
+        `/part-templates/${vars.template_id}/bulk-create/`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            category_id: vars.category_id,
+            rows: vars.rows,
+          }),
+        },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}

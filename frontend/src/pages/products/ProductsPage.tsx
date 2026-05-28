@@ -6,6 +6,7 @@ import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 
 import { BulkAddProductsModal } from "./BulkAddProductsModal";
+import { BulkCreatePartsModal } from "./BulkCreatePartsModal";
 import { ProductExpanderModal } from "./ProductExpanderModal";
 import { ProductForm } from "./ProductForm";
 import { ProductImportModal } from "./ProductImportModal";
@@ -111,6 +112,7 @@ export function ProductsPage() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [expanderOpen, setExpanderOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [bulkPartsOpen, setBulkPartsOpen] = useState(false);
   const [bulkResult, setBulkResult] = useState<string | null>(null);
 
   // ─── 類別編輯(右側面板 inline form)
@@ -243,6 +245,9 @@ export function ProductsPage() {
             <>
               <button className="btn" onClick={() => setExpanderOpen(true)}>
                 型號展開
+              </button>
+              <button className="btn" onClick={() => setBulkPartsOpen(true)}>
+                零件批次建立
               </button>
               <button className="btn" onClick={() => setBulkOpen(true)}>
                 批次貼上
@@ -818,6 +823,10 @@ export function ProductsPage() {
           setBulkResult(`型號展開:成功建立 ${count} 筆商品`);
           setTimeout(() => setBulkResult(null), 4000);
         }}
+      />
+      <BulkCreatePartsModal
+        open={bulkPartsOpen}
+        onClose={() => setBulkPartsOpen(false)}
       />
     </div>
   );

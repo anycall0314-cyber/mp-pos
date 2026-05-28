@@ -333,6 +333,61 @@ class Product(TenantOwnedModel):
         return compute_phone_model_key(self)
 
 
+class PartTemplate(TenantOwnedModel):
+    """零件範本:定義「一種機型類別有哪些零件種類」。
+
+    例:智慧型手機(標準) = 螢幕總成 / 電池 / 後蓋 / 充電孔排線 / 喇叭 / 聽筒 / Home 鍵 / 指紋模組
+    範本建好可重複套用至多款機型,批次建立 SKU。
+    """
+
+    name = models.CharField("範本名稱", max_length=80)
+    note = models.CharField("備註", max_length=200, blank=True)
+    is_active = models.BooleanField("啟用", default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "name"], name="uniq_part_template_name"
+            ),
+        ]
+        ordering = ["name"]
+        verbose_name = "零件範本"
+        verbose_name_plural = "零件範本"
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class PartTemplateItem(TenantOwnedModel):
+    """零件範本內的零件種類條目。"""
+
+    template = models.ForeignKey(
+        PartTemplate, on_delete=models.CASCADE, related_name="items"
+    )
+    name = models.CharField("零件種類名稱", max_length=80, help_text="例:螢幕總成")
+    code = models.CharField(
+        "零件代碼",
+        max_length=10,
+        help_text="用於組品號的後綴(例:SCR / BAT / BACK)",
+    )
+    sort_order = models.PositiveIntegerField("排序", default=0)
+    default_cost = models.DecimalField(
+        "預設成本", max_digits=14, decimal_places=2, default=0
+    )
+    default_safety_stock = models.PositiveIntegerField("預設安全庫存", default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["template", "code"], name="uniq_part_template_item_code"
+            ),
+        ]
+        ordering = ["sort_order", "code"]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.code})"
+
+
 class ProductRelation(TenantOwnedModel):
     """商品關聯 — 配件 ↔ 主機機型 的對應。
 
