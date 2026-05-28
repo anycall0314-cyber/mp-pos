@@ -2441,6 +2441,11 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   border-bottom: 1px solid var(--border);
 }
 .hp-alert-row:last-child { border-bottom: 0; }
+.hp-alert-link {
+  text-decoration: none;
+  color: inherit;
+}
+.hp-alert-link:hover { background: var(--row-hover); }
 .hp-alert-dot {
   display: inline-block;
   width: 8px;

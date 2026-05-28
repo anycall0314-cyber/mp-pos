@@ -660,6 +660,19 @@ def home_summary(request):
         if wh:
             warehouse_name = f"{wh.code} {wh.name}"
 
+    # 維修警示彙整
+    repair_alerts = _build_repair_alerts(tenant, wid)
+
+    # 維修進行中:non-completed 且非作廢
+    from apps.repairs.models import RepairOrder
+
+    repair_qs = RepairOrder.objects.for_tenant(tenant).filter(is_void=False)
+    if wid is not None:
+        repair_qs = repair_qs.filter(warehouse_id=wid)
+    repair_in_progress = repair_qs.exclude(
+        status=RepairOrder.Status.COMPLETED
+    ).count()
+
     return Response(
         {
             "warehouse_id": wid,
@@ -668,5 +681,182 @@ def home_summary(request):
             "yesterday": yesterday_data,
             "low_stock": {"count": low_count, "items": low_items},
             "recent_sales": recent_sales,
+            "repair_alerts": repair_alerts,
+            "repair_in_progress": repair_in_progress,
+            "repair_overdue": repair_alerts["overdue_repairs"]["count"]
+            + repair_alerts["overdue_external"]["count"],
         }
     )
+
+
+def _build_repair_alerts(tenant, wid):
+    """彙整維修相關警示:
+    - 維修單逾期(預計完修日已過但狀態未完成)
+    - 零件庫存不足(零件倉 + 低於安全庫存)
+    - 委外超過預計取回日期
+    - 待取件超過 3 天
+    """
+    from apps.catalog.models import Product
+    from apps.inventory.models import ProductSerial, StockBalance
+    from apps.repairs.models import RepairOrder
+
+    today = date_cls.today()
+    pickup_threshold = today - timedelta(days=3)
+
+    base = RepairOrder.objects.for_tenant(tenant).filter(is_void=False)
+    if wid is not None:
+        base = base.filter(warehouse_id=wid)
+
+    # 1. 維修單逾期(預計完修日 < 今天 + 狀態 !=completed)
+    overdue_repairs = list(
+        base.filter(
+            expected_complete_date__lt=today,
+        )
+        .exclude(status=RepairOrder.Status.COMPLETED)
+        .select_related("customer")
+        .order_by("expected_complete_date")[:10]
+    )
+    overdue_data = [
+        {
+            "id": r.id,
+            "no": r.no,
+            "customer_name": r.customer.name if r.customer_id else "",
+            "host_model_name": r.host_model_name,
+            "expected_complete_date": (
+                r.expected_complete_date.isoformat()
+                if r.expected_complete_date
+                else ""
+            ),
+            "overdue_days": (today - r.expected_complete_date).days
+            if r.expected_complete_date
+            else 0,
+            "status_label": r.get_status_display(),
+        }
+        for r in overdue_repairs
+    ]
+
+    # 2. 委外超過預計取回日期
+    overdue_external = list(
+        base.filter(
+            mode=RepairOrder.Mode.EXTERNAL,
+            external_expected_pickup__lt=today,
+            status=RepairOrder.Status.SENT_EXTERNAL,
+        )
+        .select_related("customer", "external_vendor")
+        .order_by("external_expected_pickup")[:10]
+    )
+    external_data = [
+        {
+            "id": r.id,
+            "no": r.no,
+            "customer_name": r.customer.name if r.customer_id else "",
+            "vendor_name": (
+                r.external_vendor.name if r.external_vendor_id else ""
+            ),
+            "expected_pickup": (
+                r.external_expected_pickup.isoformat()
+                if r.external_expected_pickup
+                else ""
+            ),
+            "overdue_days": (today - r.external_expected_pickup).days
+            if r.external_expected_pickup
+            else 0,
+        }
+        for r in overdue_external
+    ]
+
+    # 3. 待取件超過 3 天
+    awaiting_pickup = list(
+        base.filter(
+            status=RepairOrder.Status.READY_PICKUP,
+            completed_at__date__lt=pickup_threshold,
+        )
+        .select_related("customer")
+        .order_by("completed_at")[:10]
+    )
+    # 完工日是 completed_at;若沒填(老資料)用 received_date
+    pickup_data = []
+    for r in awaiting_pickup:
+        completed_d = r.completed_at.date() if r.completed_at else r.received_date
+        pickup_data.append(
+            {
+                "id": r.id,
+                "no": r.no,
+                "customer_name": r.customer.name if r.customer_id else "",
+                "customer_phone": r.customer.phone if r.customer_id else "",
+                "host_model_name": r.host_model_name,
+                "ready_days": (today - completed_d).days,
+            }
+        )
+
+    # 4. 零件不足(零件倉 + 低於 safety_stock)
+    serial_filter = Q(
+        product=OuterRef("pk"), status=ProductSerial.Status.IN_STOCK
+    )
+    balance_filter = Q(product=OuterRef("pk"), tenant=tenant)
+    if wid is not None:
+        serial_filter &= Q(warehouse_id=wid)
+        balance_filter &= Q(warehouse_id=wid)
+    serial_sq = (
+        ProductSerial.objects.filter(serial_filter)
+        .order_by()
+        .values("product")
+        .annotate(c=Count("*"))
+        .values("c")[:1]
+    )
+    balance_sq = (
+        StockBalance.objects.filter(balance_filter)
+        .order_by()
+        .values("product")
+        .annotate(t=Sum("qty"))
+        .values("t")[:1]
+    )
+    parts_low_qs = (
+        Product.objects.for_tenant(tenant)
+        .filter(
+            is_active=True,
+            is_virtual=False,
+            warehouse_type=Product.WarehouseType.PARTS,
+            safety_stock__gt=0,
+        )
+        .annotate(
+            _sc=Coalesce(
+                Subquery(serial_sq, output_field=IntegerField()), Value(0)
+            ),
+            _bc=Coalesce(
+                Subquery(balance_sq, output_field=IntegerField()), Value(0)
+            ),
+            stock=F("_sc") + F("_bc"),
+        )
+        .filter(stock__lt=F("safety_stock"))
+        .order_by("stock", "name")[:10]
+    )
+    parts_low_data = [
+        {
+            "id": p.id,
+            "name": p.name,
+            "sku": p.sku,
+            "qty": int(p.stock),
+            "safety_stock": p.safety_stock,
+        }
+        for p in parts_low_qs
+    ]
+
+    return {
+        "overdue_repairs": {
+            "count": len(overdue_data),
+            "items": overdue_data,
+        },
+        "overdue_external": {
+            "count": len(external_data),
+            "items": external_data,
+        },
+        "awaiting_pickup": {
+            "count": len(pickup_data),
+            "items": pickup_data,
+        },
+        "parts_low_stock": {
+            "count": len(parts_low_data),
+            "items": parts_low_data,
+        },
+    }

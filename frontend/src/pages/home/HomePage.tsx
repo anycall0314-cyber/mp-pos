@@ -21,6 +21,13 @@ export function HomePage() {
   const yesterday = summary.data?.yesterday;
   const lowStock = summary.data?.low_stock;
   const recent = summary.data?.recent_sales ?? [];
+  const repair = summary.data?.repair_alerts;
+  const repairAlertsCount =
+    (repair?.overdue_repairs.count ?? 0) +
+    (repair?.overdue_external.count ?? 0) +
+    (repair?.awaiting_pickup.count ?? 0) +
+    (repair?.parts_low_stock.count ?? 0);
+  const noticeCount = (lowStock?.count ?? 0) + repairAlertsCount;
 
   const revenueDiff = pctDiff(today?.revenue, yesterday?.revenue);
   const countDiff = absDiff(today?.sales_count, yesterday?.sales_count);
@@ -71,8 +78,16 @@ export function HomePage() {
             />
             <StatCard
               label="維修待處理"
-              value="—"
-              hint={<span className="hp-stat-muted">(模組尚未實作)</span>}
+              value={String(summary.data?.repair_in_progress ?? 0)}
+              hint={
+                (summary.data?.repair_overdue ?? 0) > 0 ? (
+                  <span className="hp-stat-warn">
+                    {summary.data?.repair_overdue} 件逾期
+                  </span>
+                ) : (
+                  "—"
+                )
+              }
             />
             <StatCard
               label="庫存警示"
@@ -92,7 +107,7 @@ export function HomePage() {
           <section className="hp-panel">
             <div className="hp-panel-head">
               <div className="hp-panel-title">需要注意</div>
-              <NavLink to="/inventory" className="hp-panel-link">
+              <NavLink to="/inventory/alerts" className="hp-panel-link">
                 查看全部 →
               </NavLink>
             </div>
@@ -100,11 +115,87 @@ export function HomePage() {
               {summary.isLoading && (
                 <div className="hp-panel-empty">載入中…</div>
               )}
-              {!summary.isLoading && (lowStock?.items?.length ?? 0) === 0 && (
+              {!summary.isLoading && noticeCount === 0 && (
                 <div className="hp-panel-empty">目前沒有待辦事項</div>
               )}
+              {repair?.overdue_repairs.items.map((it) => (
+                <NavLink
+                  key={`or-${it.id}`}
+                  to={`/repairs/${it.id}`}
+                  className="hp-alert-row hp-alert-link"
+                >
+                  <span className="hp-alert-dot hp-alert-red" />
+                  <div className="hp-alert-content">
+                    <div className="hp-alert-title">
+                      維修單 {it.no} 逾期 {it.overdue_days} 天
+                    </div>
+                    <div className="hp-alert-sub">
+                      {it.customer_name} · {it.host_model_name} ·{" "}
+                      {it.status_label}
+                    </div>
+                  </div>
+                </NavLink>
+              ))}
+              {repair?.overdue_external.items.map((it) => (
+                <NavLink
+                  key={`oe-${it.id}`}
+                  to={`/repairs/${it.id}`}
+                  className="hp-alert-row hp-alert-link"
+                >
+                  <span className="hp-alert-dot hp-alert-red" />
+                  <div className="hp-alert-content">
+                    <div className="hp-alert-title">
+                      委外維修 {it.no} 超過取回日 {it.overdue_days} 天
+                    </div>
+                    <div className="hp-alert-sub">
+                      廠商:{it.vendor_name} · {it.customer_name}
+                    </div>
+                  </div>
+                </NavLink>
+              ))}
+              {repair?.awaiting_pickup.items.map((it) => (
+                <NavLink
+                  key={`ap-${it.id}`}
+                  to={`/repairs/${it.id}`}
+                  className="hp-alert-row hp-alert-link"
+                >
+                  <span className="hp-alert-dot hp-alert-yellow" />
+                  <div className="hp-alert-content">
+                    <div className="hp-alert-title">
+                      待取件 {it.ready_days} 天 · {it.customer_name}
+                    </div>
+                    <div className="hp-alert-sub">
+                      {it.host_model_name}
+                      {it.customer_phone && (
+                        <> · 電話 {it.customer_phone}</>
+                      )}
+                    </div>
+                  </div>
+                </NavLink>
+              ))}
+              {repair?.parts_low_stock.items.map((it) => (
+                <NavLink
+                  key={`pl-${it.id}`}
+                  to="/inventory/alerts"
+                  className="hp-alert-row hp-alert-link"
+                >
+                  <span className="hp-alert-dot hp-alert-yellow" />
+                  <div className="hp-alert-content">
+                    <div className="hp-alert-title">
+                      零件不足·維修備料 {it.name} 剩 {it.qty} 件
+                    </div>
+                    <div className="hp-alert-sub">
+                      低於安全庫存({it.safety_stock}) · 點此調整
+                    </div>
+                  </div>
+                </NavLink>
+              ))}
               {lowStock?.items?.map((it) => (
-                <div key={it.id} className="hp-alert-row">
+                <NavLink
+                  key={`ls-${it.id}`}
+                  to="/inventory/alerts"
+                  className="hp-alert-row hp-alert-link"
+                >
                   <span className="hp-alert-dot hp-alert-red" />
                   <div className="hp-alert-content">
                     <div className="hp-alert-title">
@@ -114,7 +205,7 @@ export function HomePage() {
                       低於安全庫存({it.safety_stock}) · 建議補貨
                     </div>
                   </div>
-                </div>
+                </NavLink>
               ))}
             </div>
           </section>

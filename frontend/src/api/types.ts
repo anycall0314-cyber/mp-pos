@@ -901,6 +901,54 @@ export interface HomeSummary {
     doc_time: string;
     items_brief: string;
   }[];
+  repair_in_progress?: number;
+  repair_overdue?: number;
+  repair_alerts: {
+    overdue_repairs: {
+      count: number;
+      items: {
+        id: number;
+        no: string;
+        customer_name: string;
+        host_model_name: string;
+        expected_complete_date: string;
+        overdue_days: number;
+        status_label: string;
+      }[];
+    };
+    overdue_external: {
+      count: number;
+      items: {
+        id: number;
+        no: string;
+        customer_name: string;
+        vendor_name: string;
+        expected_pickup: string;
+        overdue_days: number;
+      }[];
+    };
+    awaiting_pickup: {
+      count: number;
+      items: {
+        id: number;
+        no: string;
+        customer_name: string;
+        customer_phone: string;
+        host_model_name: string;
+        ready_days: number;
+      }[];
+    };
+    parts_low_stock: {
+      count: number;
+      items: {
+        id: number;
+        name: string;
+        sku: string;
+        qty: number;
+        safety_stock: number;
+      }[];
+    };
+  };
 }
 
 // ─── 維修模組 ───
