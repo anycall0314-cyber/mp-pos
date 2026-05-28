@@ -103,15 +103,17 @@ def build_preview(tenant, template_id, model_keys, defaults=None):
         Product.objects.for_tenant(tenant).values_list("sku", flat=True)
     )
 
-    # 預先依品牌分組,給「跨機型共用」的零件用 — brand 空白時自動推斷
+    # 預先依品牌分組,給「跨機型共用」的零件用 — brand 取 FK code,沒設則從品名推斷
     by_brand: dict[str, list[tuple[str, str, str]]] = {}
     for k in keys_lower:
         host = host_by_key.get(k)
         model_name = host.phone_model_name if host else k
-        brand = (host.brand if host else "") or infer_brand_from_name(
-            host.name if host else k
-        )
-        by_brand.setdefault(brand, []).append((k, model_name, brand))
+        brand_code = ""
+        if host and host.brand_id:
+            brand_code = host.brand.code
+        if not brand_code:
+            brand_code = infer_brand_from_name(host.name if host else k)
+        by_brand.setdefault(brand_code, []).append((k, model_name, brand_code))
 
     rows = []
     for item in template.items.all():
@@ -155,10 +157,16 @@ def build_preview(tenant, template_id, model_keys, defaults=None):
             for k in keys_lower:
                 host = host_by_key.get(k)
                 model_name = host.phone_model_name if host else k
-                brand = (host.brand if host else "") or infer_brand_from_name(
-                    host.name if host else k
-                )
-                brand_code = derive_brand_code(brand)
+                # brand: FK code 優先,沒設就推斷
+                raw_brand = ""
+                if host and host.brand_id:
+                    raw_brand = host.brand.code
+                if not raw_brand:
+                    raw_brand = infer_brand_from_name(
+                        host.name if host else k
+                    )
+                brand_code = derive_brand_code(raw_brand)
+                brand = raw_brand
                 model_code = derive_model_code(model_name, brand)
                 sku = f"PRT-{brand_code}-{model_code}-{item.code}"
                 name = f"{model_name} {item.name}"

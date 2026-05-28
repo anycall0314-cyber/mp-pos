@@ -203,38 +203,40 @@ class Product(TenantOwnedModel):
         help_text="動態安全庫存的天數因子(下次補貨能撐幾天),預設 14",
     )
 
-    # 以下 4 欄僅在 accessory_type=none(主機本身)時有意義
-    class Brand(models.TextChoices):
-        APPLE = "apple", "Apple"
-        SAMSUNG = "samsung", "Samsung"
-        VIVO = "vivo", "VIVO"
-        OPPO = "oppo", "OPPO"
-        XIAOMI = "xiaomi", "小米"
-        ASUS = "asus", "ASUS"
-        GOOGLE = "google", "Google"
-        SONY = "sony", "Sony"
-        OTHER = "other", "其他"
-
-    brand = models.CharField(
-        "品牌",
-        max_length=16,
-        choices=Brand.choices,
+    # 以下 5 欄僅在 accessory_type=none(主機本身)時有意義
+    brand = models.ForeignKey(
+        "catalog.Brand",
+        on_delete=models.PROTECT,
+        related_name="products",
+        verbose_name="品牌",
+        null=True,
         blank=True,
-        default="",
-        help_text="僅主機需填(手機/平板品牌)",
+        help_text="僅主機需填(從品牌主檔挑)",
     )
-    series = models.CharField(
-        "產品系列",
-        max_length=64,
+    series = models.ForeignKey(
+        "catalog.PhoneSeries",
+        on_delete=models.PROTECT,
+        related_name="products",
+        verbose_name="產品系列",
+        null=True,
         blank=True,
-        default="",
-        help_text="例:iPhone、Galaxy A 系列、Redmi Note",
+        help_text="同品牌底下的系列(從產品系列主檔挑)",
     )
     generation = models.PositiveIntegerField(
         "世代序號",
         null=True,
         blank=True,
-        help_text="系統會從品名末碼自動帶數字,可手動修正",
+        help_text="同系列第幾代;例:iPhone 15 → 15、Galaxy S26 → 26",
+    )
+    model_suffix = models.CharField(
+        "型號後綴",
+        max_length=30,
+        blank=True,
+        default="",
+        help_text=(
+            "型號的尾段差異化標記;例:Pro / Pro Max / Plus / Ultra / +。"
+            "拼出完整機型名稱:系列名稱 + 世代 + 後綴"
+        ),
     )
     is_variant = models.BooleanField(
         "規格變體",
@@ -331,6 +333,68 @@ class Product(TenantOwnedModel):
         from .phone_model import compute_phone_model_key
 
         return compute_phone_model_key(self)
+
+
+class Brand(TenantOwnedModel):
+    """品牌主檔(per-tenant)。
+
+    Phase 1:取代 Product.brand CharField,改用 FK 控制詞彙。
+    code 為穩定識別(slug:apple / samsung / xiaomi …),name 是顯示名(可繁體中文)。
+    """
+
+    code = models.SlugField("代碼", max_length=20)
+    name = models.CharField("顯示名稱", max_length=80)
+    sort_order = models.PositiveIntegerField("排序", default=0)
+    is_active = models.BooleanField("啟用", default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "code"], name="uniq_brand_tenant_code"
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "name"], name="uniq_brand_tenant_name"
+            ),
+        ]
+        ordering = ["sort_order", "code"]
+        verbose_name = "品牌"
+        verbose_name_plural = "品牌"
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class PhoneSeries(TenantOwnedModel):
+    """產品系列主檔,掛在 Brand 底下(per-tenant)。
+
+    例:Samsung 底下有 Galaxy S / Galaxy A / Galaxy Z / Galaxy Note / Galaxy FE …
+    Apple 底下有 iPhone / iPad / Watch …
+    """
+
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.PROTECT,
+        related_name="series",
+        verbose_name="品牌",
+    )
+    code = models.SlugField("代碼", max_length=20)
+    name = models.CharField("顯示名稱", max_length=80)
+    sort_order = models.PositiveIntegerField("排序", default=0)
+    is_active = models.BooleanField("啟用", default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "brand", "code"],
+                name="uniq_phone_series_brand_code",
+            ),
+        ]
+        ordering = ["sort_order", "code"]
+        verbose_name = "產品系列"
+        verbose_name_plural = "產品系列"
+
+    def __str__(self) -> str:
+        return f"{self.brand.name} {self.name}"
 
 
 class PartTemplate(TenantOwnedModel):

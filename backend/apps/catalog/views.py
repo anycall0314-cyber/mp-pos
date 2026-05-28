@@ -17,10 +17,19 @@ from apps.sales.models import SalesOrderItem
 from apps.transfers.models import TransferOrder, TransferOrderItem
 
 from .import_service import import_products_from_file
-from .models import Category, PartTemplate, Product, ProductRelation
+from .models import (
+    Brand,
+    Category,
+    PartTemplate,
+    PhoneSeries,
+    Product,
+    ProductRelation,
+)
 from .serializers import (
+    BrandSerializer,
     CategorySerializer,
     PartTemplateSerializer,
+    PhoneSeriesSerializer,
     ProductSerializer,
 )
 from .services_parts import bulk_create_parts, build_preview
@@ -277,16 +286,20 @@ class ProductViewSet(viewsets.ModelViewSet):
                 Q(name__icontains=q) | Q(series__icontains=q)
             )
 
-        # group by model_key — brand 空白時自動從品名推斷
+        # group by model_key — 優先用 Product.brand FK 的 code;沒設就退回從品名推斷
         from .phone_model import infer_brand_from_name
         groups: dict[str, dict] = {}
-        for p in qs:
+        for p in qs.select_related("brand", "series"):
             key = p.phone_model_key
             if not key:
                 continue
             g = groups.get(key)
             if g is None:
-                effective_brand = p.brand or infer_brand_from_name(p.name)
+                brand_code = p.brand.code if p.brand_id else ""
+                brand_name = p.brand.name if p.brand_id else ""
+                if not brand_code:
+                    brand_code = infer_brand_from_name(p.name)
+                    brand_name = brand_code  # fallback,沒主檔
                 g = {
                     "model_key": key,
                     "model_name": p.phone_model_name,
@@ -296,8 +309,10 @@ class ProductViewSet(viewsets.ModelViewSet):
                     "any_lifecycle_status_label": p.get_lifecycle_status_display(),
                     "sample_sku_id": p.id,
                     "sample_sku_name": p.name,
-                    "brand": effective_brand,
-                    "series": p.series,
+                    "brand": brand_code,
+                    "brand_name": brand_name,
+                    "series_id": p.series_id,
+                    "series_name": p.series.name if p.series_id else "",
                 }
                 groups[key] = g
             g["sku_count"] += 1
@@ -824,6 +839,46 @@ class ProductViewSet(viewsets.ModelViewSet):
             {"created": created, "count": len(created)},
             status=status.HTTP_201_CREATED,
         )
+
+
+class BrandViewSet(viewsets.ModelViewSet):
+    """品牌主檔 CRUD(per-tenant)。"""
+
+    serializer_class = BrandSerializer
+    search_fields = ["code", "name"]
+    ordering_fields = ["sort_order", "code", "name"]
+    ordering = ["sort_order", "code"]
+    filterset_fields = ["is_active"]
+
+    def get_queryset(self):
+        return (
+            Brand.objects.for_tenant(self.request.tenant)
+            .annotate(series_count=Count("series"))
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=self.request.tenant)
+
+
+class PhoneSeriesViewSet(viewsets.ModelViewSet):
+    """產品系列主檔 CRUD(掛在 Brand 下,per-tenant)。
+
+    用 ?brand=<id> 過濾單一品牌的系列。
+    """
+
+    serializer_class = PhoneSeriesSerializer
+    search_fields = ["code", "name"]
+    ordering_fields = ["sort_order", "code", "name"]
+    ordering = ["sort_order", "code"]
+    filterset_fields = ["is_active", "brand"]
+
+    def get_queryset(self):
+        return PhoneSeries.objects.for_tenant(
+            self.request.tenant
+        ).select_related("brand")
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=self.request.tenant)
 
 
 class PartTemplateViewSet(viewsets.ModelViewSet):

@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   BulkProductRow,
+  useBrands,
   useBulkCreateProducts,
+  usePhoneSeriesList,
 } from "@/api/hooks";
 import { searchCategories } from "@/api/search";
-import type { Category } from "@/api/types";
+import type { Brand, Category, PhoneSeries } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Checkbox, Field } from "@/components/Field";
@@ -50,11 +52,16 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
   // 商品性質(整合進主流程,決定後續欄位 + 屬性預設)
   const [accessoryType, setAccessoryType] = useState<AccessoryType>("none");
 
-  // 主機資訊
-  const [brand, setBrand] = useState("");
-  const [series, setSeries] = useState("");
+  // 主機資訊(Phase 1: brand/series 改用 FK id)
+  const [brandId, setBrandId] = useState<number | "">("");
+  const [seriesId, setSeriesId] = useState<number | "">("");
   const [generation, setGeneration] = useState("");
+  const [modelSuffix, setModelSuffix] = useState("");
   const [genTouched, setGenTouched] = useState(false);
+  const brands = useBrands();
+  const phoneSeries = usePhoneSeriesList(
+    typeof brandId === "number" ? brandId : null,
+  );
 
   // 相容機型(機型配件用):key → name
   const [compat, setCompat] = useState<Map<string, string>>(new Map());
@@ -170,9 +177,10 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
     setCategory("");
     setCategoryOpt(null);
     setAccessoryType("none");
-    setBrand("");
-    setSeries("");
+    setBrandId("");
+    setSeriesId("");
     setGeneration("");
+    setModelSuffix("");
     setGenTouched(false);
     setAxis1Label("容量");
     setAxis2Label("顏色");
@@ -214,11 +222,12 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
           allows_telecom_line: allowsTelecomLine,
           allows_commission: allowsCommission,
           safety_stock: Number(safetyStock) || 0,
-          // 僅主機帶 brand/series/generation
+          // 僅主機帶 brand/series/generation/suffix(用 FK id)
           ...(accessoryType === "none" && {
-            brand: brand || "",
-            series: series || "",
+            brand: brandId || null,
+            series: seriesId || null,
             generation: generation.trim() ? Number(generation) : null,
+            model_suffix: modelSuffix,
           }),
           // 機型配件 → 帶相容機型 keys(套用至所有展開 SKU)
           ...(accessoryType === "phone_specific" && {
@@ -298,39 +307,53 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
             <div className="fieldset">
               <legend>主機資訊(套用至所有展開 SKU)</legend>
               <div className="field-row">
-                <Field label="品牌">
+                <Field label="品牌" required>
                   <select
-                    value={brand}
-                    onChange={(e) => setBrand(e.target.value)}
+                    value={brandId}
+                    onChange={(e) => {
+                      const v = e.target.value
+                        ? Number(e.target.value)
+                        : "";
+                      setBrandId(v);
+                      setSeriesId("");
+                    }}
                   >
-                    <option value="">未指定</option>
-                    <option value="apple">Apple</option>
-                    <option value="samsung">Samsung</option>
-                    <option value="vivo">VIVO</option>
-                    <option value="oppo">OPPO</option>
-                    <option value="xiaomi">小米</option>
-                    <option value="asus">ASUS</option>
-                    <option value="google">Google</option>
-                    <option value="sony">Sony</option>
-                    <option value="other">其他</option>
+                    <option value="">請選擇品牌</option>
+                    {(brands.data ?? []).map((b: Brand) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
                   </select>
                 </Field>
                 <Field
                   label="產品系列"
-                  hint="例:iPhone、Galaxy A 系列、Redmi Note"
+                  required
+                  hint={brandId ? "從此品牌挑選" : "請先選品牌"}
                 >
-                  <input
-                    value={series}
-                    onChange={(e) => setSeries(e.target.value)}
-                    placeholder="iPhone"
-                  />
+                  <select
+                    value={seriesId}
+                    disabled={!brandId}
+                    onChange={(e) =>
+                      setSeriesId(
+                        e.target.value ? Number(e.target.value) : "",
+                      )
+                    }
+                  >
+                    <option value="">請選擇系列</option>
+                    {(phoneSeries.data ?? []).map((s: PhoneSeries) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
                 <Field
                   label="世代序號"
                   hint={
                     genTouched
                       ? "已手動修正"
-                      : "從型號末碼自動帶,可修改"
+                      : "同系列第幾代;例:iPhone 15 → 15"
                   }
                 >
                   <input
@@ -345,6 +368,16 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
                   />
                 </Field>
               </div>
+              <Field
+                label="型號後綴(選填)"
+                hint="Pro / Pro Max / Plus / Ultra / +;留空 = 標準款"
+              >
+                <input
+                  value={modelSuffix}
+                  onChange={(e) => setModelSuffix(e.target.value)}
+                  placeholder="Pro Max"
+                />
+              </Field>
             </div>
           )}
 

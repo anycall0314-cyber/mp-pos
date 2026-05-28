@@ -12,6 +12,8 @@ import {
   InvoiceTrack,
   InvoiceType,
   PartsUsageReport,
+  Brand,
+  PhoneSeries,
   PartBulkCreateResult,
   PartPreviewRow,
   PartTemplate,
@@ -716,9 +718,11 @@ export interface BulkProductCommon {
   is_active?: boolean;
   accessory_type?: "none" | "phone_specific" | "universal";
   warehouse_type?: "product" | "parts";
-  brand?: string;
-  series?: string;
+  // Phase 1: brand / series 改用 FK id;model_suffix 補上
+  brand?: number | null;
+  series?: number | null;
   generation?: number | null;
+  model_suffix?: string;
   lifecycle_status?: "pending" | "active" | "replacing" | "discontinued" | "clearance";
   safety_stock?: number;
   related_host_keys?: string[];
@@ -1619,5 +1623,51 @@ export function usePartBulkCreate() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["products"] });
     },
+  });
+}
+
+// ─── Brand / PhoneSeries master ───
+
+export const useBrands = () =>
+  useQuery({
+    queryKey: ["brands"],
+    queryFn: () => list<Brand>(`/brands/?page_size=100`),
+  });
+
+export function useSaveBrand() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Partial<Brand> & { id?: number }) => {
+      const { id, ...body } = payload;
+      const method = id ? "PATCH" : "POST";
+      const url = id ? `/brands/${id}/` : "/brands/";
+      return api<Brand>(url, { method, body: JSON.stringify(body) });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["brands"] }),
+  });
+}
+
+export const usePhoneSeriesList = (brandId?: number | null) =>
+  useQuery({
+    queryKey: ["phone-series", brandId ?? "all"],
+    queryFn: () =>
+      list<PhoneSeries>(
+        brandId
+          ? `/phone-series/?brand=${brandId}&is_active=true&page_size=100`
+          : `/phone-series/?is_active=true&page_size=100`,
+      ),
+    enabled: brandId != null && brandId > 0,
+  });
+
+export function useSavePhoneSeries() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Partial<PhoneSeries> & { id?: number }) => {
+      const { id, ...body } = payload;
+      const method = id ? "PATCH" : "POST";
+      const url = id ? `/phone-series/${id}/` : "/phone-series/";
+      return api<PhoneSeries>(url, { method, body: JSON.stringify(body) });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["phone-series"] }),
   });
 }

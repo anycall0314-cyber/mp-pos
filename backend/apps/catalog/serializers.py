@@ -1,12 +1,59 @@
 from rest_framework import serializers
 
 from .models import (
+    Brand,
     Category,
     PartTemplate,
     PartTemplateItem,
+    PhoneSeries,
     Product,
     ProductRelation,
 )
+
+
+class BrandSerializer(serializers.ModelSerializer):
+    series_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Brand
+        fields = [
+            "id",
+            "code",
+            "name",
+            "sort_order",
+            "is_active",
+            "series_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "series_count", "created_at", "updated_at"]
+
+
+class PhoneSeriesSerializer(serializers.ModelSerializer):
+    brand_code = serializers.CharField(source="brand.code", read_only=True)
+    brand_name = serializers.CharField(source="brand.name", read_only=True)
+
+    class Meta:
+        model = PhoneSeries
+        fields = [
+            "id",
+            "brand",
+            "brand_code",
+            "brand_name",
+            "code",
+            "name",
+            "sort_order",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "brand_code",
+            "brand_name",
+            "created_at",
+            "updated_at",
+        ]
 
 
 class PartTemplateItemSerializer(serializers.ModelSerializer):
@@ -135,6 +182,12 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
     stock_qty = serializers.IntegerField(read_only=True)
     category_code = serializers.CharField(source="category.code", read_only=True)
     category_name = serializers.CharField(source="category.name", read_only=True)
+    # Brand / Series 顯示用(read-only label)
+    brand_code = serializers.CharField(source="brand.code", read_only=True, default="")
+    brand_name = serializers.CharField(source="brand.name", read_only=True, default="")
+    series_name = serializers.CharField(source="series.name", read_only=True, default="")
+    phone_model_name = serializers.CharField(read_only=True)
+    phone_model_key = serializers.CharField(read_only=True)
     last_purchase_price = serializers.DecimalField(
         max_digits=14, decimal_places=2, read_only=True, allow_null=True
     )
@@ -180,8 +233,14 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
             "attach_rate",
             "replenish_days",
             "brand",
+            "brand_code",
+            "brand_name",
             "series",
+            "series_name",
             "generation",
+            "model_suffix",
+            "phone_model_name",
+            "phone_model_key",
             "is_variant",
             "warehouse_type",
             "is_externally_sellable",

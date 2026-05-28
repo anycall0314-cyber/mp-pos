@@ -113,14 +113,40 @@ def infer_brand_from_name(name: str) -> str:
     return ""
 
 
+def _smart_join(parts: list[str]) -> str:
+    """組裝機型名稱片段;遇到 「+」「/」 開頭的後綴不加空格,其餘加空格。"""
+    if not parts:
+        return ""
+    out = parts[0]
+    for p in parts[1:]:
+        if not p:
+            continue
+        if p[0] in "+/":
+            out += p
+        else:
+            out += " " + p
+    return out
+
+
 def compute_phone_model_name(product) -> str:
     """從 Product 算出機型名稱。
-    series 有填優先(配上 generation);否則退回 regex 解析 name。
+
+    優先順序:
+    1. (新框架)brand_id + series_id 都有 → 系列名 + 世代 + 後綴
+       例:Galaxy S 26 / Galaxy S 26+ / Galaxy S 26 Ultra / iPhone 15 Pro Max
+    2. 退回 regex 解析 Product.name
     """
-    if product.series:
+    if product.series_id:
+        parts: list[str] = []
+        try:
+            parts.append(product.series.name)
+        except Exception:
+            return extract_phone_model_name(product.name or "")
         if product.generation:
-            return f"{product.series} {product.generation}".strip()
-        return product.series.strip()
+            parts.append(str(product.generation))
+        if product.model_suffix:
+            parts.append(product.model_suffix)
+        return _smart_join(parts).strip()
     return extract_phone_model_name(product.name or "")
 
 

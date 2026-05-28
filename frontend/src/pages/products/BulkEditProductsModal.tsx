@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 
-import { useBulkEditProducts } from "@/api/hooks";
+import {
+  useBrands,
+  useBulkEditProducts,
+  usePhoneSeriesList,
+} from "@/api/hooks";
+import type { Brand, PhoneSeries } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 
@@ -51,9 +56,14 @@ export function BulkEditProductsModal({
   const [allowsCommission, setAllowsCommission] = useState(false);
   const [countsCash, setCountsCash] = useState(true);
   const [countsMargin, setCountsMargin] = useState(true);
-  const [brand, setBrand] = useState("");
-  const [series, setSeries] = useState("");
+  const [brand, setBrand] = useState<number | "">("");
+  const [series, setSeries] = useState<number | "">("");
   const [generation, setGeneration] = useState("");
+  const [modelSuffix, setModelSuffix] = useState("");
+  const brands = useBrands();
+  const phoneSeries = usePhoneSeriesList(
+    typeof brand === "number" ? brand : null,
+  );
   const [compat, setCompat] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
@@ -77,6 +87,7 @@ export function BulkEditProductsModal({
     setBrand("");
     setSeries("");
     setGeneration("");
+    setModelSuffix("");
     setCompat(new Map());
   }, [open]);
 
@@ -98,9 +109,10 @@ export function BulkEditProductsModal({
       patch.counts_margin = countsMargin;
     }
     if (enHost) {
-      patch.brand = brand;
-      patch.series = series;
+      patch.brand = brand || null;
+      patch.series = series || null;
       patch.generation = generation.trim() ? Number(generation) : null;
+      patch.model_suffix = modelSuffix;
     }
     if (enCompat) {
       patch.related_host_keys = Array.from(compat.keys());
@@ -303,7 +315,7 @@ export function BulkEditProductsModal({
                 checked={enHost}
                 onChange={(e) => setEnHost(e.target.checked)}
               />
-              <b>修改 主機資訊(品牌 / 系列 / 世代)</b>
+              <b>修改 主機資訊(品牌 / 系列 / 世代 / 後綴)</b>
             </label>
             {enHost && (
               <div className="be-section-body be-grid3">
@@ -311,27 +323,40 @@ export function BulkEditProductsModal({
                   品牌
                   <select
                     value={brand}
-                    onChange={(e) => setBrand(e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value
+                        ? Number(e.target.value)
+                        : "";
+                      setBrand(v);
+                      setSeries("");
+                    }}
                   >
-                    <option value="">未指定</option>
-                    <option value="apple">Apple</option>
-                    <option value="samsung">Samsung</option>
-                    <option value="vivo">VIVO</option>
-                    <option value="oppo">OPPO</option>
-                    <option value="xiaomi">小米</option>
-                    <option value="asus">ASUS</option>
-                    <option value="google">Google</option>
-                    <option value="sony">Sony</option>
-                    <option value="other">其他</option>
+                    <option value="">不變更</option>
+                    {(brands.data ?? []).map((b: Brand) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label>
                   產品系列
-                  <input
+                  <select
                     value={series}
-                    onChange={(e) => setSeries(e.target.value)}
-                    placeholder="例:iPhone"
-                  />
+                    disabled={!brand}
+                    onChange={(e) =>
+                      setSeries(
+                        e.target.value ? Number(e.target.value) : "",
+                      )
+                    }
+                  >
+                    <option value="">不變更</option>
+                    {(phoneSeries.data ?? []).map((s: PhoneSeries) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label>
                   世代序號
@@ -340,6 +365,14 @@ export function BulkEditProductsModal({
                     min="0"
                     value={generation}
                     onChange={(e) => setGeneration(e.target.value)}
+                  />
+                </label>
+                <label>
+                  型號後綴
+                  <input
+                    value={modelSuffix}
+                    onChange={(e) => setModelSuffix(e.target.value)}
+                    placeholder="Pro Max / Plus / +"
                   />
                 </label>
               </div>

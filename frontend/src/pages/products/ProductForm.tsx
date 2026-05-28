@@ -1,14 +1,22 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { ApiHttpError } from "@/api/client";
-import { useSaveCategory, useSaveProduct } from "@/api/hooks";
+import {
+  useBrands,
+  usePhoneSeriesList,
+  useSaveBrand,
+  useSaveCategory,
+  useSavePhoneSeries,
+  useSaveProduct,
+} from "@/api/hooks";
 import { searchCategories } from "@/api/search";
 import type {
   AccessoryType,
+  Brand,
   Category,
   LifecycleStatus,
+  PhoneSeries,
   Product,
-  ProductBrand,
   WarehouseType,
 } from "@/api/types";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
@@ -42,9 +50,10 @@ interface FormState {
   accessory_type: AccessoryType;
   attach_rate: string;
   replenish_days: string;
-  brand: ProductBrand | "";
-  series: string;
+  brand: number | "";
+  series: number | "";
   generation: string; // 字串方便輸入,送出時 parseInt
+  model_suffix: string;
   is_variant: boolean;
   related_models: {
     model_key: string;
@@ -80,6 +89,7 @@ const EMPTY: FormState = {
   brand: "",
   series: "",
   generation: "",
+  model_suffix: "",
   is_variant: false,
   related_models: [],
   warehouse_type: "product",
@@ -112,6 +122,7 @@ function toState(p: Product | null | undefined): FormState {
     brand: p.brand ?? "",
     series: p.series ?? "",
     generation: p.generation != null ? String(p.generation) : "",
+    model_suffix: p.model_suffix ?? "",
     is_variant: p.is_variant ?? false,
     related_models: (p.related_hosts ?? []).map((h) => ({
       model_key: h.model_key,
@@ -127,6 +138,28 @@ function toState(p: Product | null | undefined): FormState {
 }
 
 const DRAFT_KEY = "product-form-draft-new";
+
+/** 即時拼出機型名稱(讓店員一邊填一邊看效果) */
+function previewPhoneModelName(
+  s: FormState,
+  _brands?: Brand[],
+  series?: PhoneSeries[],
+): string {
+  if (!s.series) return "";
+  const ser = (series ?? []).find((x) => x.id === s.series);
+  if (!ser) return "";
+  const parts: string[] = [ser.name];
+  if (s.generation.trim()) parts.push(s.generation.trim());
+  if (s.model_suffix.trim()) parts.push(s.model_suffix.trim());
+  let out = parts[0];
+  for (let i = 1; i < parts.length; i++) {
+    const p = parts[i];
+    if (!p) continue;
+    if (p[0] === "+" || p[0] === "/") out += p;
+    else out += " " + p;
+  }
+  return out;
+}
 
 interface DraftPayload {
   state: FormState;
@@ -158,6 +191,17 @@ export function ProductForm({
 
   const saveProduct = useSaveProduct();
   const saveCategory = useSaveCategory();
+  // Phase 1: Brand / Series master
+  const brands = useBrands();
+  const phoneSeries = usePhoneSeriesList(
+    typeof state.brand === "number" ? state.brand : null,
+  );
+  const saveBrand = useSaveBrand();
+  const savePhoneSeries = useSavePhoneSeries();
+  const [showNewBrand, setShowNewBrand] = useState(false);
+  const [newBrandName, setNewBrandName] = useState("");
+  const [showNewSeries, setShowNewSeries] = useState(false);
+  const [newSeriesName, setNewSeriesName] = useState("");
   // 紀錄使用者是否手動改過世代序號;改過就不再從品名自動帶
   const genTouchedRef = useRef(false);
 
@@ -360,9 +404,10 @@ export function ProductForm({
         accessory_type: state.accessory_type,
         attach_rate: state.attach_rate || "0",
         replenish_days: Number(state.replenish_days) || 0,
-        brand: state.brand,
-        series: state.series,
+        brand: state.brand || null,
+        series: state.series || null,
         generation: state.generation ? Number(state.generation) : null,
+        model_suffix: state.model_suffix,
         is_variant: state.is_variant,
         related_host_keys: state.related_models.map((m) => m.model_key),
         warehouse_type: state.warehouse_type,
@@ -671,43 +716,90 @@ export function ProductForm({
           <div className="fieldset">
             <legend>主機資訊</legend>
             <div className="field-row">
-              <Field label="品牌" error={fieldErrors.brand}>
-                <select
-                  value={state.brand}
-                  onChange={(e) =>
-                    patch("brand", e.target.value as ProductBrand | "")
-                  }
-                >
-                  <option value="">未指定</option>
-                  <option value="apple">Apple</option>
-                  <option value="samsung">Samsung</option>
-                  <option value="vivo">VIVO</option>
-                  <option value="oppo">OPPO</option>
-                  <option value="xiaomi">小米</option>
-                  <option value="asus">ASUS</option>
-                  <option value="google">Google</option>
-                  <option value="sony">Sony</option>
-                  <option value="other">其他</option>
-                </select>
+              <Field label="品牌" required error={fieldErrors.brand}>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <select
+                    style={{ flex: 1 }}
+                    value={state.brand}
+                    onChange={(e) => {
+                      const v = e.target.value ? Number(e.target.value) : "";
+                      patch("brand", v);
+                      // 換品牌就清空系列
+                      if (v !== state.brand) patch("series", "");
+                    }}
+                  >
+                    <option value="">請選擇品牌</option>
+                    {(brands.data ?? []).map((b: Brand) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      setNewBrandName("");
+                      setShowNewBrand(true);
+                    }}
+                    title="新增品牌主檔"
+                  >
+                    + 新增
+                  </button>
+                </div>
               </Field>
               <Field
                 label="產品系列"
+                required
                 error={fieldErrors.series}
-                hint="例:iPhone、Galaxy A 系列、Redmi Note"
+                hint={
+                  state.brand
+                    ? "從此品牌的系列主檔挑;找不到可按右側新增"
+                    : "請先選品牌"
+                }
               >
-                <input
-                  value={state.series}
-                  onChange={(e) => patch("series", e.target.value)}
-                  placeholder="iPhone"
-                />
+                <div style={{ display: "flex", gap: 6 }}>
+                  <select
+                    style={{ flex: 1 }}
+                    value={state.series}
+                    disabled={!state.brand}
+                    onChange={(e) =>
+                      patch(
+                        "series",
+                        e.target.value ? Number(e.target.value) : "",
+                      )
+                    }
+                  >
+                    <option value="">請選擇系列</option>
+                    {(phoneSeries.data ?? []).map((s: PhoneSeries) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={!state.brand}
+                    onClick={() => {
+                      setNewSeriesName("");
+                      setShowNewSeries(true);
+                    }}
+                    title="新增此品牌的系列"
+                  >
+                    + 新增
+                  </button>
+                </div>
               </Field>
+            </div>
+            <div className="field-row">
               <Field
                 label="世代序號"
                 error={fieldErrors.generation}
                 hint={
                   genTouchedRef.current
                     ? "已手動修正"
-                    : "從品名末碼自動帶,可修改"
+                    : "同系列第幾代;例:iPhone 15 → 15"
                 }
               >
                 <input
@@ -721,6 +813,23 @@ export function ProductForm({
                   }}
                 />
               </Field>
+              <Field
+                label="型號後綴(選填)"
+                hint="例:Pro / Pro Max / Plus / Ultra / +;留空 = 標準款"
+              >
+                <input
+                  value={state.model_suffix}
+                  onChange={(e) => patch("model_suffix", e.target.value)}
+                  placeholder="Pro Max"
+                />
+              </Field>
+              <Field label="拼出機型名稱">
+                <input
+                  value={previewPhoneModelName(state, brands.data, phoneSeries.data)}
+                  readOnly
+                  style={{ background: "var(--bg-2)", color: "var(--text-dim)" }}
+                />
+              </Field>
             </div>
             <Checkbox
               checked={state.is_variant}
@@ -728,6 +837,116 @@ export function ProductForm({
               label="規格變體"
               hint="勾選代表此為同代不同容量/顏色的變體,不觸發換代判斷邏輯"
             />
+
+            {showNewBrand && (
+              <div className="pf-inline-modal">
+                <div className="pf-inline-modal-title">新增品牌</div>
+                <div className="pf-inline-modal-body">
+                  <input
+                    autoFocus
+                    placeholder="例:Asus / Nokia / Honor"
+                    value={newBrandName}
+                    onChange={(e) => setNewBrandName(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setShowNewBrand(false)}
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    disabled={!newBrandName.trim() || saveBrand.isPending}
+                    onClick={async () => {
+                      const name = newBrandName.trim();
+                      const code = name
+                        .toLowerCase()
+                        .replace(/\s+/g, "-")
+                        .replace(/[^a-z0-9\-]/g, "")
+                        .slice(0, 20) || `brand-${Date.now()}`;
+                      try {
+                        const b = await saveBrand.mutateAsync({
+                          code,
+                          name,
+                          sort_order: 99,
+                          is_active: true,
+                        });
+                        patch("brand", b.id);
+                        patch("series", "");
+                        setShowNewBrand(false);
+                      } catch (e) {
+                        alert(
+                          e instanceof Error ? e.message : String(e),
+                        );
+                      }
+                    }}
+                  >
+                    {saveBrand.isPending ? "建立中…" : "建立"}
+                  </button>
+                </div>
+              </div>
+            )}
+            {showNewSeries && state.brand && (
+              <div className="pf-inline-modal">
+                <div className="pf-inline-modal-title">
+                  新增系列
+                  <span style={{ color: "var(--text-dim)", fontSize: 12, marginLeft: 8 }}>
+                    (
+                    {(brands.data ?? []).find((b) => b.id === state.brand)?.name}
+                    )
+                  </span>
+                </div>
+                <div className="pf-inline-modal-body">
+                  <input
+                    autoFocus
+                    placeholder="例:Galaxy S / iPhone / Redmi Note"
+                    value={newSeriesName}
+                    onChange={(e) => setNewSeriesName(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setShowNewSeries(false)}
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    disabled={
+                      !newSeriesName.trim() || savePhoneSeries.isPending
+                    }
+                    onClick={async () => {
+                      const name = newSeriesName.trim();
+                      const code = name
+                        .toLowerCase()
+                        .replace(/\s+/g, "-")
+                        .replace(/[^a-z0-9\-]/g, "")
+                        .slice(0, 20) || `series-${Date.now()}`;
+                      try {
+                        const s = await savePhoneSeries.mutateAsync({
+                          brand: state.brand as number,
+                          code,
+                          name,
+                          sort_order: 99,
+                          is_active: true,
+                        });
+                        patch("series", s.id);
+                        setShowNewSeries(false);
+                      } catch (e) {
+                        alert(
+                          e instanceof Error ? e.message : String(e),
+                        );
+                      }
+                    }}
+                  >
+                    {savePhoneSeries.isPending ? "建立中…" : "建立"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
         </>

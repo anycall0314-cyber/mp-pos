@@ -55,10 +55,17 @@ export interface Product {
   is_externally_sellable?: boolean;
   external_sale_price?: string;
   min_sale_price?: string;
-  // 以下 4 欄僅主機(accessory_type='none')有意義
-  brand?: ProductBrand | "";
-  series?: string;
+  // 以下 5 欄僅主機(accessory_type='none')有意義
+  // Phase 1: brand / series 改為 FK id;新增 model_suffix
+  brand?: number | null;
+  brand_code?: string;
+  brand_name?: string;
+  series?: number | null;
+  series_name?: string;
   generation?: number | null;
+  model_suffix?: string;
+  phone_model_name?: string;
+  phone_model_key?: string;
   is_variant?: boolean;
   // (deprecated)舊版 SKU id 寫入,新版改用 related_host_keys
   related_host_ids?: number[];
@@ -952,6 +959,30 @@ export interface HomeSummary {
 }
 
 // ─── 維修模組 ───
+
+export interface Brand {
+  id: number;
+  code: string;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+  series_count?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PhoneSeries {
+  id: number;
+  brand: number;
+  brand_code: string;
+  brand_name: string;
+  code: string;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
 
 export interface PartTemplateItem {
   id?: number;

@@ -4126,6 +4126,28 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   padding-top: 6px;
 }
 
+/* ─── ProductForm 內嵌新增品牌 / 系列 ─── */
+.pf-inline-modal {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: rgba(96, 165, 250, 0.08);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+}
+.pf-inline-modal-title {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.pf-inline-modal-body {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.pf-inline-modal-body input {
+  flex: 1;
+}
+
 /* ─── ProductForm 草稿 banner + 關閉前 3 選項提示 ─── */
 .pf-draft-banner {
   display: flex;
