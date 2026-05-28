@@ -94,6 +94,42 @@ function lifecycleLabel(s?: string): string {
   }
 }
 
+export interface PhoneModelSearchResult {
+  model_key: string;
+  model_name: string;
+  sku_count: number;
+  total_stock: number;
+  any_lifecycle_status: string;
+}
+
+/** 機型清單搜尋(配件挑相容機型用)。
+ * 不走 ComboOption 因為 id 需是 string(model_key);PhoneModelPicker 直接吃這個陣列。
+ */
+export async function searchPhoneModels(
+  query: string,
+): Promise<PhoneModelSearchResult[]> {
+  const url = `/products/phone-models/?${qs({ search: query })}`;
+  const list = await api<
+    {
+      model_key: string;
+      model_name: string;
+      sku_count: number;
+      total_stock: number;
+      any_lifecycle_status: string;
+      any_lifecycle_status_label: string;
+      sample_sku_id: number;
+      sample_sku_name: string;
+    }[]
+  >(url);
+  return list.map((m) => ({
+    model_key: m.model_key,
+    model_name: m.model_name,
+    sku_count: m.sku_count,
+    total_stock: m.total_stock,
+    any_lifecycle_status: m.any_lifecycle_status,
+  }));
+}
+
 /**
  * 銷貨頁專用商品搜尋:
  * - 一般輸入 → 走商品搜尋(品名 / 品號 / 條碼 / 規格 / 類別,後端已涵蓋 IMEI)

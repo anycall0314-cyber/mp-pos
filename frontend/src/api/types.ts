@@ -55,10 +55,18 @@ export interface Product {
   series?: string;
   generation?: number | null;
   is_variant?: boolean;
-  // 寫入時送 id 清單(write_only)
+  // (deprecated)舊版 SKU id 寫入,新版改用 related_host_keys
   related_host_ids?: number[];
-  // 讀取時系統會回(從 ProductRelation 來)
-  related_hosts?: { id: number; name: string; sku: string; lifecycle_status: LifecycleStatus }[];
+  // 寫入時送機型 key 清單(以機型為單位,涵蓋同款所有 SKU 變體)
+  related_host_keys?: string[];
+  // 讀取時系統回機型層級的關聯清單
+  related_hosts?: {
+    model_key: string;
+    model_name: string;
+    sample_sku_id: number | null;
+    sample_sku_name: string;
+    lifecycle_status: LifecycleStatus | "";
+  }[];
   is_active: boolean;
   stock_qty: number;
   created_at: string;
@@ -812,7 +820,7 @@ export interface ClearancePressureResponse {
   rows: ClearancePressureRow[];
 }
 
-// 商品相容性查詢:主機列配件,配件列主機
+// 商品相容性查詢:主機列配件(SKU 級),配件列主機(機型級)
 export type DemandLabel = "無近期銷售" | "冷門" | "平穩" | "熱銷" | "爆款";
 
 export interface CompatibilityItem {
@@ -826,6 +834,10 @@ export interface CompatibilityItem {
   accessory_type: AccessoryType;
   daily_avg: number;
   demand_label: DemandLabel | string;
+  // 配件視角:該機型有幾個 SKU 變體
+  is_model?: boolean;
+  model_key?: string;
+  sku_count?: number;
 }
 
 export interface CompatibilityResponse {
@@ -839,6 +851,20 @@ export interface CompatibilityResponse {
     lifecycle_status_label: string;
   };
   items: CompatibilityItem[];
+}
+
+// 機型清單(配件挑相容機型用)
+export interface PhoneModel {
+  model_key: string;
+  model_name: string;
+  sku_count: number;
+  total_stock: number;
+  any_lifecycle_status: LifecycleStatus;
+  any_lifecycle_status_label: string;
+  sample_sku_id: number;
+  sample_sku_name: string;
+  brand: string;
+  series: string;
 }
 
 // 登入首頁所需的 metric 一次回

@@ -48,13 +48,19 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
     last_purchase_price = serializers.DecimalField(
         max_digits=14, decimal_places=2, read_only=True, allow_null=True
     )
-    # 配件商品的「關聯主機」清單(該配件適用於哪幾支主機)
-    # write_only:寫入時帶 host product id 清單,系統用 ProductRelation 同步
+    # (舊)配件 → 主機 id 清單;保留作向後相容,新前端請改用 related_host_keys
     related_host_ids = serializers.ListField(
         child=serializers.IntegerField(),
         required=False,
         write_only=True,
-        help_text="關聯主機商品 id 清單(配件 → 主機)",
+        help_text="(deprecated)請用 related_host_keys 改以機型 key 為單位",
+    )
+    # (新)配件 → 機型 key 清單,以機型為單位涵蓋該款所有 SKU 變體
+    related_host_keys = serializers.ListField(
+        child=serializers.CharField(allow_blank=False),
+        required=False,
+        write_only=True,
+        help_text="配件相容的機型 key 清單",
     )
 
     class Meta:
@@ -88,6 +94,7 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
             "generation",
             "is_variant",
             "related_host_ids",
+            "related_host_keys",
             "is_active",
             "stock_qty",
             "created_at",
@@ -110,52 +117,83 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        # 讀取時把目前關聯的主機 id 也輸出 + 顯示用的 label
-        rels = instance.host_relations.select_related("host_product").all()
-        data["related_hosts"] = [
-            {
-                "id": r.host_product.id,
-                "name": r.host_product.name,
-                "sku": r.host_product.sku,
-                "lifecycle_status": r.host_product.lifecycle_status,
+        # 把目前關聯的「機型」也輸出(以 host_model_key 為單位 group)
+        rels = list(instance.host_relations.select_related("host_product").all())
+        seen: dict[str, dict] = {}
+        for r in rels:
+            key = r.host_model_key or (
+                r.host_product.phone_model_key if r.host_product_id else ""
+            )
+            if not key or key in seen:
+                continue
+            host = r.host_product
+            seen[key] = {
+                "model_key": key,
+                "model_name": host.phone_model_name if host else key,
+                "sample_sku_id": host.id if host else None,
+                "sample_sku_name": host.name if host else "",
+                "lifecycle_status": host.lifecycle_status if host else "",
             }
-            for r in rels
-        ]
+        data["related_hosts"] = list(seen.values())
         return data
 
     def create(self, validated_data):
+        host_keys = validated_data.pop("related_host_keys", None)
         host_ids = validated_data.pop("related_host_ids", None)
         instance = super().create(validated_data)
-        if host_ids is not None:
-            self._sync_host_relations(instance, host_ids)
+        if host_keys is not None:
+            self._sync_host_relations_by_keys(instance, host_keys)
+        elif host_ids is not None:
+            self._sync_host_relations_by_ids(instance, host_ids)
         return instance
 
     def update(self, instance, validated_data):
+        host_keys = validated_data.pop("related_host_keys", None)
         host_ids = validated_data.pop("related_host_ids", None)
         instance = super().update(instance, validated_data)
-        if host_ids is not None:
-            self._sync_host_relations(instance, host_ids)
+        if host_keys is not None:
+            self._sync_host_relations_by_keys(instance, host_keys)
+        elif host_ids is not None:
+            self._sync_host_relations_by_ids(instance, host_ids)
         return instance
 
-    def _sync_host_relations(self, accessory, host_ids):
-        """同步配件 → 主機關聯;傳入的 list 為唯一真相,缺的刪、多的加。"""
+    def _sync_host_relations_by_keys(self, accessory, host_keys):
+        """同步配件 → 機型關聯(以 model_key 為單位,涵蓋該款所有 SKU 變體)。"""
         tenant = accessory.tenant
-        # 過濾掉 self-reference,防 user 不小心勾自己
-        host_ids = [hid for hid in host_ids if hid != accessory.id]
-        existing = {
-            r.host_product_id: r
-            for r in accessory.host_relations.all()
-        }
-        target = set(host_ids)
-        # 刪掉不在新清單裡的
-        for hid, rel in existing.items():
-            if hid not in target:
+        target_keys = {k.strip().lower() for k in host_keys if k and k.strip()}
+        existing = {r.host_model_key: r for r in accessory.host_relations.all()}
+        for key, rel in existing.items():
+            if key not in target_keys:
                 rel.delete()
-        # 加上新的
-        for hid in target:
-            if hid not in existing:
-                ProductRelation.objects.create(
-                    tenant=tenant,
-                    host_product_id=hid,
-                    accessory_product=accessory,
-                )
+        if not target_keys - set(existing):
+            return
+        # 為了 host_product FK,撈一遍主機清單找代表 SKU
+        candidate_hosts = list(
+            Product.objects.for_tenant(tenant).filter(
+                accessory_type=Product.AccessoryType.NONE,
+                is_active=True,
+            )
+        )
+        for key in target_keys:
+            if key in existing:
+                continue
+            sample = next(
+                (p for p in candidate_hosts if p.phone_model_key == key),
+                None,
+            )
+            if sample is None or sample.id == accessory.id:
+                continue
+            ProductRelation.objects.create(
+                tenant=tenant,
+                host_product=sample,
+                host_model_key=key,
+                accessory_product=accessory,
+            )
+
+    def _sync_host_relations_by_ids(self, accessory, host_ids):
+        """(legacy)接收 host SKU id 清單,內部轉成 model_key 同步。"""
+        tenant = accessory.tenant
+        ids = [hid for hid in host_ids if hid != accessory.id]
+        hosts = list(Product.objects.for_tenant(tenant).filter(id__in=ids))
+        keys = [h.phone_model_key for h in hosts if h.phone_model_key]
+        self._sync_host_relations_by_keys(accessory, keys)

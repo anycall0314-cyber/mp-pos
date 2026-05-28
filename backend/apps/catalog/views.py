@@ -168,6 +168,92 @@ class ProductViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.tenant)
 
+    @action(detail=False, methods=["get"], url_path="phone-models")
+    def phone_models(self, request):
+        """列出所有「機型」(distinct phone_model_key 內含於主機 SKU)。
+
+        每筆回傳:
+        - model_key:lowercase 機型 key
+        - model_name:顯示用機型名稱
+        - sku_count:該機型有幾支 SKU
+        - total_stock:該機型所有 SKU 的跨倉庫存合計
+        - any_lifecycle_status:採用任一支 active 的狀態,沒有則用第一支
+        - sample_sku:代表 SKU(顯示用)
+        - brand / series:任一支提供(用於後續 filter)
+        """
+        tenant = request.tenant
+        # 主機 SKU(accessory_type=none),含跨倉庫存 annotation
+        serial_sq = (
+            ProductSerial.objects.filter(
+                product=OuterRef("pk"),
+                status=ProductSerial.Status.IN_STOCK,
+            )
+            .order_by()
+            .values("product")
+            .annotate(c=Count("*"))
+            .values("c")[:1]
+        )
+        balance_sq = (
+            StockBalance.objects.filter(
+                product=OuterRef("pk"), tenant=tenant
+            )
+            .order_by()
+            .values("product")
+            .annotate(t=Sum("qty"))
+            .values("t")[:1]
+        )
+        qs = (
+            Product.objects.for_tenant(tenant)
+            .filter(
+                accessory_type=Product.AccessoryType.NONE,
+                is_active=True,
+                is_virtual=False,
+            )
+            .annotate(
+                _sc=Coalesce(Subquery(serial_sq, output_field=IntegerField()), Value(0)),
+                _bc=Coalesce(Subquery(balance_sq, output_field=IntegerField()), Value(0)),
+                stock=F("_sc") + F("_bc"),
+            )
+            .order_by("name")
+        )
+
+        # 可選 search 過濾
+        q = request.query_params.get("search", "").strip()
+        if q:
+            qs = qs.filter(
+                Q(name__icontains=q) | Q(series__icontains=q)
+            )
+
+        # group by model_key
+        groups: dict[str, dict] = {}
+        for p in qs:
+            key = p.phone_model_key
+            if not key:
+                continue
+            g = groups.get(key)
+            if g is None:
+                g = {
+                    "model_key": key,
+                    "model_name": p.phone_model_name,
+                    "sku_count": 0,
+                    "total_stock": 0,
+                    "any_lifecycle_status": p.lifecycle_status,
+                    "any_lifecycle_status_label": p.get_lifecycle_status_display(),
+                    "sample_sku_id": p.id,
+                    "sample_sku_name": p.name,
+                    "brand": p.brand,
+                    "series": p.series,
+                }
+                groups[key] = g
+            g["sku_count"] += 1
+            g["total_stock"] += int(p.stock)
+            # 任一支 active → 該機型整體記 active(顯示用)
+            if p.lifecycle_status == Product.LifecycleStatus.ACTIVE:
+                g["any_lifecycle_status"] = p.lifecycle_status
+                g["any_lifecycle_status_label"] = p.get_lifecycle_status_display()
+
+        return Response(sorted(groups.values(), key=lambda g: g["model_name"]))
+
     @action(detail=True, methods=["get"], url_path="compatibility")
     def compatibility(self, request, pk=None):
         """商品相容性查詢。
@@ -193,19 +279,37 @@ class ProductViewSet(viewsets.ModelViewSet):
         )
 
         if is_host:
-            # 找所有 host=this product 的關聯,撈出 accessory 端
+            # 主機:用此 product 的 phone_model_key 反查 ProductRelation
+            # → 列出所有「綁此機型」的配件 SKU
+            my_key = product.phone_model_key
             related_ids = list(
                 ProductRelation.objects.filter(
-                    tenant=tenant, host_product=product
-                ).values_list("accessory_product_id", flat=True)
+                    tenant=tenant, host_model_key=my_key
+                ).values_list("accessory_product_id", flat=True).distinct()
             )
             role = "host"
         elif is_accessory_specific:
-            related_ids = list(
+            # 配件:列出綁定的所有 model_key,每個 key 反查同款主機 SKU
+            host_keys = list(
                 ProductRelation.objects.filter(
                     tenant=tenant, accessory_product=product
-                ).values_list("host_product_id", flat=True)
+                ).values_list("host_model_key", flat=True).distinct()
             )
+            if not host_keys:
+                return Response({"role": "accessory", "items": []})
+            # 撈出所有 key 對應的主機 SKU(可能多個機型,每機型多個 SKU)
+            all_hosts = list(
+                Product.objects.for_tenant(tenant)
+                .filter(
+                    accessory_type=Product.AccessoryType.NONE,
+                    is_active=True,
+                    is_virtual=False,
+                )
+            )
+            # 依 phone_model_key match
+            related_ids = [
+                p.id for p in all_hosts if p.phone_model_key in host_keys
+            ]
             role = "accessory"
         else:
             return Response({"role": "universal", "items": []})
@@ -270,29 +374,64 @@ class ProductViewSet(viewsets.ModelViewSet):
             return "爆款"
 
         items = []
-        for p in related_qs:
-            avg = daily_avg.get(p.id, 0.0)
-            items.append(
-                {
-                    "id": p.id,
-                    "sku": p.sku,
-                    "name": p.name,
-                    "category_name": p.category.name if p.category else "",
-                    "current_qty": int(p.stock),
-                    "lifecycle_status": p.lifecycle_status,
-                    "lifecycle_status_label": p.get_lifecycle_status_display(),
-                    "accessory_type": p.accessory_type,
-                    "daily_avg": round(avg, 2),
-                    "demand_label": _label(avg),
-                }
-            )
-
-        # 主機看配件 → 依庫存升冪(缺貨的先)
-        # 配件看主機 → 依日均降冪(熱銷的先)
         if role == "host":
+            # 主機看配件 → 仍以 SKU 為單位列(配件本來就 SKU 級)
+            for p in related_qs:
+                avg = daily_avg.get(p.id, 0.0)
+                items.append(
+                    {
+                        "id": p.id,
+                        "sku": p.sku,
+                        "name": p.name,
+                        "category_name": p.category.name if p.category else "",
+                        "current_qty": int(p.stock),
+                        "lifecycle_status": p.lifecycle_status,
+                        "lifecycle_status_label": p.get_lifecycle_status_display(),
+                        "accessory_type": p.accessory_type,
+                        "daily_avg": round(avg, 2),
+                        "demand_label": _label(avg),
+                        "is_model": False,
+                    }
+                )
             items.sort(key=lambda x: x["current_qty"])
         else:
-            items.sort(key=lambda x: -x["daily_avg"])
+            # 配件看主機 → 依機型 group(每個 model_key 一個 row,
+            # current_qty=機型總庫存,daily_avg=機型總日均)
+            groups: dict[str, dict] = {}
+            for p in related_qs:
+                key = p.phone_model_key
+                if not key:
+                    continue
+                avg = daily_avg.get(p.id, 0.0)
+                g = groups.get(key)
+                if g is None:
+                    g = {
+                        "id": p.id,  # 代表 SKU
+                        "model_key": key,
+                        "name": p.phone_model_name,
+                        "sku_count": 0,
+                        "current_qty": 0,
+                        "daily_avg": 0.0,
+                        "lifecycle_status": p.lifecycle_status,
+                        "lifecycle_status_label": p.get_lifecycle_status_display(),
+                        "accessory_type": p.accessory_type,
+                        "is_model": True,
+                    }
+                    groups[key] = g
+                g["sku_count"] += 1
+                g["current_qty"] += int(p.stock)
+                g["daily_avg"] += avg
+                # 取 active 的狀態作代表
+                if p.lifecycle_status == Product.LifecycleStatus.ACTIVE:
+                    g["lifecycle_status"] = p.lifecycle_status
+                    g["lifecycle_status_label"] = p.get_lifecycle_status_display()
+            for g in groups.values():
+                g["daily_avg"] = round(g["daily_avg"], 2)
+                g["demand_label"] = _label(g["daily_avg"])
+                # 補幾個欄位讓前端共用 component 不會炸
+                g["sku"] = ""
+                g["category_name"] = f"{g['sku_count']} 款 SKU"
+            items = sorted(groups.values(), key=lambda x: -x["daily_avg"])
 
         return Response(
             {

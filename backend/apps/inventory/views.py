@@ -249,36 +249,108 @@ def _daily_avg_sales(tenant, product_ids):
     }
 
 
-def _compute_safety(product, hosts, host_daily_avg_map):
-    """回傳 (effective_safety:int, source:str, formula:str|None)。
-
-    機型專屬配件 + 有關聯主機 → 動態:
-        Σ(每主機日均) × attach_rate × replenish_days,任一主機 replacing 折半
-    其他 → 用靜態 safety_stock
+def _compute_safety(product, model_daily_avg_map, model_replacing_map):
+    """機型專屬配件 + 有關聯機型 → 動態 safety。
+    Σ(每機型日均) × attach_rate × replenish_days;任一機型 replacing → 折半。
+    model_daily_avg_map / model_replacing_map 以機型 key 為單位匯總。
     """
-    if (
-        product.accessory_type == Product.AccessoryType.PHONE_SPECIFIC
-        and hosts
-    ):
-        sum_daily = sum(host_daily_avg_map.get(h.id, 0.0) for h in hosts)
-        attach = float(product.attach_rate or 0)
-        days = int(product.replenish_days or 0)
-        base = sum_daily * attach * days
-        host_replacing = any(
-            h.lifecycle_status == Product.LifecycleStatus.REPLACING for h in hosts
+    if product.accessory_type == Product.AccessoryType.PHONE_SPECIFIC:
+        keys = list(
+            {r.host_model_key for r in product.host_relations.all() if r.host_model_key}
         )
-        if host_replacing:
-            base *= 0.5
-        eff = int(math.ceil(base))
-        formula = (
-            f"主機日均 {sum_daily:.1f} × 購買率 {attach:.0%}"
-            f" × 補貨 {days} 天"
-        )
-        if host_replacing:
-            formula += " × 0.5(主機即將換代,自動折半)"
-        formula += f" = {eff} 件"
-        return eff, "dynamic", formula
+        if keys:
+            sum_daily = sum(model_daily_avg_map.get(k, 0.0) for k in keys)
+            attach = float(product.attach_rate or 0)
+            days = int(product.replenish_days or 0)
+            base = sum_daily * attach * days
+            host_replacing = any(model_replacing_map.get(k, False) for k in keys)
+            if host_replacing:
+                base *= 0.5
+            eff = int(math.ceil(base))
+            formula = (
+                f"關聯機型日均合計 {sum_daily:.1f}"
+                f" × 購買率 {attach:.0%}"
+                f" × 補貨 {days} 天"
+            )
+            if host_replacing:
+                formula += " × 0.5(主機即將換代,自動折半)"
+            formula += f" = {eff} 件"
+            return eff, "dynamic", formula
     return int(product.safety_stock or 0), "static", None
+
+
+def _model_sample_id(accessory, model_key: str):
+    """從 accessory 的 host_relations 找該 key 對應的 host_product id(代表 SKU)。"""
+    for r in accessory.host_relations.all():
+        if r.host_model_key == model_key and r.host_product_id:
+            return r.host_product_id
+    return None
+
+
+def _model_sample_name(accessory, model_key: str) -> str:
+    """顯示用機型名稱:從關聯的 host_product 推。"""
+    for r in accessory.host_relations.all():
+        if r.host_model_key == model_key and r.host_product_id:
+            return r.host_product.phone_model_name
+    return model_key
+
+
+def _collect_model_stats(tenant, candidates):
+    """從 candidates 的 host_relations 收集所有 model_key,
+    撈出對應的主機 SKU,匯總 per-model 統計。
+
+    回傳 dict {
+      'daily_avg': {key: 該機型所有 SKU 過去 30 天日均合計},
+      'replacing': {key: True 如果該機型任一 SKU 是 replacing},
+      'retired':   {key: True 如果該機型所有 SKU 都退役(replacing/discontinued/clearance)},
+      'hot':       {key: True 如果該機型有 active SKU + 整體日均 > 0},
+    }
+    """
+    all_keys = set()
+    for p in candidates:
+        for r in p.host_relations.all():
+            if r.host_model_key:
+                all_keys.add(r.host_model_key)
+    if not all_keys:
+        return {"daily_avg": {}, "replacing": {}, "retired": {}, "hot": {}}
+
+    all_hosts = list(
+        Product.objects.for_tenant(tenant).filter(
+            accessory_type=Product.AccessoryType.NONE,
+            is_active=True,
+            is_virtual=False,
+        )
+    )
+    model_to_hosts: dict[str, list] = {}
+    for h in all_hosts:
+        k = h.phone_model_key
+        if k in all_keys:
+            model_to_hosts.setdefault(k, []).append(h)
+
+    sku_daily_avg = _daily_avg_sales(
+        tenant, [h.id for hs in model_to_hosts.values() for h in hs]
+    )
+
+    out = {"daily_avg": {}, "replacing": {}, "retired": {}, "hot": {}}
+    for k, hs in model_to_hosts.items():
+        sum_avg = sum(sku_daily_avg.get(h.id, 0.0) for h in hs)
+        out["daily_avg"][k] = sum_avg
+        out["replacing"][k] = any(
+            h.lifecycle_status == Product.LifecycleStatus.REPLACING for h in hs
+        )
+        out["retired"][k] = bool(hs) and all(
+            h.lifecycle_status
+            in (
+                Product.LifecycleStatus.REPLACING,
+                Product.LifecycleStatus.DISCONTINUED,
+                Product.LifecycleStatus.CLEARANCE,
+            )
+            for h in hs
+        )
+        out["hot"][k] = sum_avg > 0 and any(
+            h.lifecycle_status == Product.LifecycleStatus.ACTIVE for h in hs
+        )
+    return out
 
 
 def _build_stock_annotation(tenant, warehouse_id=None):
@@ -367,21 +439,20 @@ def inventory_alerts(request):
     base_qs = _annotate_stock(base_qs, serial_sq, balance_sq)
     candidates = list(base_qs)
 
-    # 2. 算所有主機的日均銷量(動態 safety 用)
-    host_ids = set()
-    for p in candidates:
-        for r in p.host_relations.all():
-            host_ids.add(r.host_product_id)
-    host_daily_avg = _daily_avg_sales(tenant, host_ids)
-
-    # 「最近熱銷」= 該主機 active 且過去 N 天有銷貨(daily_avg > 0)
-    hot_host_ids = {pid for pid, avg in host_daily_avg.items() if avg > 0}
+    # 2. 算每個關聯機型(key)的彙總統計(動態 safety / hot / retired 判斷用)
+    stats = _collect_model_stats(tenant, candidates)
+    model_daily_avg = stats["daily_avg"]
+    model_replacing = stats["replacing"]
+    model_retired = stats["retired"]
+    model_hot = stats["hot"]
 
     rows = []
     for p in candidates:
-        hosts = [r.host_product for r in p.host_relations.all()]
+        my_keys = list(
+            {r.host_model_key for r in p.host_relations.all() if r.host_model_key}
+        )
         effective_safety, safety_source, safety_formula = _compute_safety(
-            p, hosts, host_daily_avg
+            p, model_daily_avg, model_replacing
         )
 
         # 過濾:不符合警示條件的跳過
@@ -391,24 +462,12 @@ def inventory_alerts(request):
                 continue
         else:
             if effective_safety <= 0:
-                continue  # 沒設 safety / 動態算出 0 → 不追蹤
+                continue
             if p.stock >= effective_safety:
-                continue  # 庫存充足,不警示
+                continue
 
-        host_replaced = any(
-            h.lifecycle_status
-            in (
-                Product.LifecycleStatus.REPLACING,
-                Product.LifecycleStatus.DISCONTINUED,
-                Product.LifecycleStatus.CLEARANCE,
-            )
-            for h in hosts
-        )
-        host_hot = any(
-            h.id in hot_host_ids
-            and h.lifecycle_status == Product.LifecycleStatus.ACTIVE
-            for h in hosts
-        )
+        host_replaced = any(model_retired.get(k, False) for k in my_keys)
+        host_hot = any(model_hot.get(k, False) for k in my_keys)
 
         # 推論 reason + severity
         if p.lifecycle_status == Product.LifecycleStatus.CLEARANCE:
@@ -452,13 +511,20 @@ def inventory_alerts(request):
                 "severity": severity,
                 "reason_code": reason_code,
                 "reason_label": reason_label,
+                # 改為機型層級:每個機型只列一筆,顯示機型名稱
                 "related_hosts": [
                     {
-                        "id": h.id,
-                        "name": h.name,
-                        "lifecycle_status": h.lifecycle_status,
+                        "id": _model_sample_id(p, k),
+                        "name": _model_sample_name(p, k),
+                        "lifecycle_status": (
+                            "replacing"
+                            if model_replacing.get(k)
+                            else (
+                                "discontinued" if model_retired.get(k) else "active"
+                            )
+                        ),
                     }
-                    for h in hosts
+                    for k in my_keys
                 ],
             }
         )
@@ -512,22 +578,20 @@ def clearance_pressure(request):
     base_qs = _annotate_stock(base_qs, serial_sq, balance_sq)
     candidates = list(base_qs.filter(stock__gt=0))
 
-    # 過濾出「正在出清」的:清倉狀態 OR 機型專屬+主機全退役
+    # 過濾出「正在出清」的:清倉狀態 OR 機型專屬 + 關聯機型全退役
+    stats = _collect_model_stats(tenant, candidates)
+    model_retired = stats["retired"]
+
     pressure_products = []
     for p in candidates:
         if p.lifecycle_status == Product.LifecycleStatus.CLEARANCE:
             pressure_products.append((p, "self_clearance"))
             continue
         if p.accessory_type == Product.AccessoryType.PHONE_SPECIFIC:
-            hosts = list(r.host_product for r in p.host_relations.all())
-            if hosts and all(
-                h.lifecycle_status
-                in (
-                    Product.LifecycleStatus.DISCONTINUED,
-                    Product.LifecycleStatus.CLEARANCE,
-                )
-                for h in hosts
-            ):
+            my_keys = list(
+                {r.host_model_key for r in p.host_relations.all() if r.host_model_key}
+            )
+            if my_keys and all(model_retired.get(k, False) for k in my_keys):
                 pressure_products.append((p, "all_hosts_retired"))
 
     if not pressure_products:
@@ -542,7 +606,7 @@ def clearance_pressure(request):
     for p, source in pressure_products:
         avg = daily_avg.get(p.id, 0.0)
         if avg <= 0:
-            est_days = 999  # 無銷售 → 視為極端壓力
+            est_days = 999
             avg_label = "近 30 天無銷售"
         else:
             est_days = round(int(p.stock) / avg)
@@ -550,7 +614,9 @@ def clearance_pressure(request):
         recommend = est_days > _CLEARANCE_PRESSURE_DAYS
         if recommend:
             recommend_count += 1
-        hosts = list(r.host_product for r in p.host_relations.all())
+        my_keys = list(
+            {r.host_model_key for r in p.host_relations.all() if r.host_model_key}
+        )
         rows.append(
             {
                 "id": p.id,
@@ -565,18 +631,18 @@ def clearance_pressure(request):
                 "source_label": (
                     "商品已標清倉"
                     if source == "self_clearance"
-                    else "關聯主機全部停產 / 清倉"
+                    else "關聯機型全部停產 / 清倉"
                 ),
                 "lifecycle_status": p.lifecycle_status,
                 "lifecycle_status_label": p.get_lifecycle_status_display(),
                 "accessory_type": p.accessory_type,
                 "related_hosts": [
                     {
-                        "id": h.id,
-                        "name": h.name,
-                        "lifecycle_status": h.lifecycle_status,
+                        "id": _model_sample_id(p, k),
+                        "name": _model_sample_name(p, k),
+                        "lifecycle_status": "discontinued",
                     }
-                    for h in hosts
+                    for k in my_keys
                 ],
             }
         )

@@ -3,7 +3,6 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { ApiHttpError } from "@/api/client";
 import { useSaveCategory, useSaveProduct } from "@/api/hooks";
 import { searchCategories } from "@/api/search";
-import { searchProducts } from "@/api/search";
 import type {
   AccessoryType,
   Category,
@@ -11,6 +10,7 @@ import type {
   Product,
   ProductBrand,
 } from "@/api/types";
+import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
@@ -45,7 +45,11 @@ interface FormState {
   series: string;
   generation: string; // 字串方便輸入,送出時 parseInt
   is_variant: boolean;
-  related_hosts: { id: number; name: string; lifecycle_status?: LifecycleStatus }[];
+  related_models: {
+    model_key: string;
+    model_name: string;
+    lifecycle_status?: LifecycleStatus | "";
+  }[];
   is_active: boolean;
 }
 
@@ -72,7 +76,7 @@ const EMPTY: FormState = {
   series: "",
   generation: "",
   is_variant: false,
-  related_hosts: [],
+  related_models: [],
   is_active: true,
 };
 
@@ -100,9 +104,9 @@ function toState(p: Product | null | undefined): FormState {
     series: p.series ?? "",
     generation: p.generation != null ? String(p.generation) : "",
     is_variant: p.is_variant ?? false,
-    related_hosts: (p.related_hosts ?? []).map((h) => ({
-      id: h.id,
-      name: h.name,
+    related_models: (p.related_hosts ?? []).map((h) => ({
+      model_key: h.model_key,
+      model_name: h.model_name,
       lifecycle_status: h.lifecycle_status,
     })),
     is_active: p.is_active,
@@ -229,7 +233,7 @@ export function ProductForm({
         series: state.series,
         generation: state.generation ? Number(state.generation) : null,
         is_variant: state.is_variant,
-        related_host_ids: state.related_hosts.map((h) => h.id),
+        related_host_keys: state.related_models.map((m) => m.model_key),
         is_active: state.is_active,
       });
       onSaved?.(saved);
@@ -463,33 +467,31 @@ export function ProductForm({
         {state.accessory_type === "phone_specific" && (
           <Field
             label="相容機型"
-            hint="綁定後,查詢該機型庫存時此配件將自動列出,並納入安全庫存動態計算"
+            hint="綁定後,查詢該機型庫存時此配件將自動列出,並納入安全庫存動態計算。同款不同容量/顏色/中古機等變體 SKU 全部涵蓋。"
           >
-            <ComboBox<Product>
-              value=""
-              selectedOption={null}
-              onChange={(_id, opt) => {
-                if (!opt) return;
-                if (state.related_hosts.some((h) => h.id === opt.id)) return;
-                patch("related_hosts", [
-                  ...state.related_hosts,
-                  {
-                    id: opt.id,
-                    name: opt.label,
-                    lifecycle_status: opt.payload?.lifecycle_status,
-                  },
-                ]);
-              }}
-              fetchOptions={(q) =>
-                searchProducts(q, { activeOnly: true, hostOnly: true })
-              }
+            <PhoneModelPicker
               placeholder={
-                state.related_hosts.length === 0
+                state.related_models.length === 0
                   ? "搜尋機型名稱…"
                   : "繼續加機型…"
               }
+              onPick={(m) => {
+                if (
+                  state.related_models.some((x) => x.model_key === m.model_key)
+                )
+                  return;
+                patch("related_models", [
+                  ...state.related_models,
+                  {
+                    model_key: m.model_key,
+                    model_name: m.model_name,
+                    lifecycle_status:
+                      m.any_lifecycle_status as LifecycleStatus,
+                  },
+                ]);
+              }}
             />
-            {state.related_hosts.length > 0 && (
+            {state.related_models.length > 0 && (
               <div
                 className="inv-chip-row"
                 style={{
@@ -498,29 +500,31 @@ export function ProductForm({
                   border: 0,
                 }}
               >
-                {state.related_hosts.map((h) => (
+                {state.related_models.map((m) => (
                   <button
-                    key={h.id}
+                    key={m.model_key}
                     type="button"
                     className="inv-chip"
                     onClick={() =>
                       patch(
-                        "related_hosts",
-                        state.related_hosts.filter((x) => x.id !== h.id),
+                        "related_models",
+                        state.related_models.filter(
+                          (x) => x.model_key !== m.model_key,
+                        ),
                       )
                     }
                     title="點擊移除"
                   >
                     <span>
-                      {h.name}
-                      {h.lifecycle_status &&
-                        h.lifecycle_status !== "active" && (
+                      {m.model_name}
+                      {m.lifecycle_status &&
+                        m.lifecycle_status !== "active" && (
                           <span className="pf-chip-status">
                             {" "}
                             ·{" "}
-                            {h.lifecycle_status === "replacing"
+                            {m.lifecycle_status === "replacing"
                               ? "即將換代"
-                              : h.lifecycle_status === "discontinued"
+                              : m.lifecycle_status === "discontinued"
                                 ? "停產下架"
                                 : "清倉處理"}
                           </span>

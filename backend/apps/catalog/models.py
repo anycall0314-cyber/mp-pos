@@ -283,21 +283,46 @@ class Product(TenantOwnedModel):
             self.is_virtual = False
         super().save(*args, **kwargs)
 
+    @property
+    def phone_model_name(self) -> str:
+        """機型名稱:用於配件 - 主機相容性綁定(跨同款 SKU)。
+        實作在 phone_model.py。
+        """
+        from .phone_model import compute_phone_model_name
+
+        return compute_phone_model_name(self)
+
+    @property
+    def phone_model_key(self) -> str:
+        from .phone_model import compute_phone_model_key
+
+        return compute_phone_model_key(self)
+
 
 class ProductRelation(TenantOwnedModel):
-    """商品關聯 — 主機 ↔ 配件 的對應。
+    """商品關聯 — 配件 ↔ 主機機型 的對應。
 
-    一個配件可同時關聯多個主機(例:玻璃貼可同時適配 iPhone 15 / 15 Pro)。
-    用於庫存警示推論:配件低庫存時,若關聯主機是「主力現貨」且最近有銷貨,
-    觸發原因會升級成「主機熱銷帶動」;若關聯主機是「即將換代/停產」,
-    觸發原因變「主機已換代」提示審查是否還要備貨。
+    一個配件可同時相容多個機型(例:玻璃貼可同時適配 iPhone 15 / 15 Pro);
+    一個機型涵蓋該款的所有 SKU 變體(不同容量/顏色/中古機都共用同一關聯)。
+
+    主鍵層級:`host_model_key`(機型 key,跨 SKU)。
+    `host_product` 保留作為代表 SKU(用於 UI 顯示某機型範例 SKU),但邏輯上以 key 為準。
     """
 
     host_product = models.ForeignKey(
         Product,
         on_delete=models.CASCADE,
         related_name="accessory_relations",
-        verbose_name="主機商品",
+        verbose_name="主機代表 SKU",
+        help_text="該機型的代表 SKU(任一);邏輯比對以 host_model_key 為準",
+    )
+    host_model_key = models.CharField(
+        "機型 key",
+        max_length=128,
+        default="",
+        blank=True,
+        db_index=True,
+        help_text="lowercase 機型名稱,從 host_product 推導(品名去變體 / series+generation)",
     )
     accessory_product = models.ForeignKey(
         Product,
@@ -309,8 +334,8 @@ class ProductRelation(TenantOwnedModel):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["tenant", "host_product", "accessory_product"],
-                name="uniq_product_relation",
+                fields=["tenant", "host_model_key", "accessory_product"],
+                name="uniq_product_relation_by_model",
             ),
             models.CheckConstraint(
                 check=~models.Q(host_product=models.F("accessory_product")),
@@ -321,4 +346,12 @@ class ProductRelation(TenantOwnedModel):
         verbose_name_plural = "商品關聯"
 
     def __str__(self):
-        return f"{self.accessory_product.name} → {self.host_product.name}"
+        return (
+            f"{self.accessory_product.name} → {self.host_model_key or self.host_product.name}"
+        )
+
+    def save(self, *args, **kwargs):
+        # host_model_key 為空時自動從 host_product 推
+        if not self.host_model_key and self.host_product_id:
+            self.host_model_key = self.host_product.phone_model_key
+        super().save(*args, **kwargs)
