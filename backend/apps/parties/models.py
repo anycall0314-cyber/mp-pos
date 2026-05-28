@@ -22,6 +22,11 @@ class Supplier(TenantOwnedModel):
     sort_order = models.PositiveIntegerField(
         "排序", default=100, help_text="數字小的排前面;常用供應商往前調方便快速點選"
     )
+    is_repair_vendor = models.BooleanField(
+        "維修委外廠商",
+        default=False,
+        help_text="勾選後此供應商會出現在維修單『委外』模式的廠商清單",
+    )
     is_active = models.BooleanField("啟用", default=True)
 
     class Meta:

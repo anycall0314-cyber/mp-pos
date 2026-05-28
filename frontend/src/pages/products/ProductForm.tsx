@@ -9,6 +9,7 @@ import type {
   LifecycleStatus,
   Product,
   ProductBrand,
+  WarehouseType,
 } from "@/api/types";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { Banner } from "@/components/Banner";
@@ -50,6 +51,10 @@ interface FormState {
     model_name: string;
     lifecycle_status?: LifecycleStatus | "";
   }[];
+  warehouse_type: WarehouseType;
+  is_externally_sellable: boolean;
+  external_sale_price: string;
+  min_sale_price: string;
   is_active: boolean;
 }
 
@@ -77,6 +82,10 @@ const EMPTY: FormState = {
   generation: "",
   is_variant: false,
   related_models: [],
+  warehouse_type: "product",
+  is_externally_sellable: false,
+  external_sale_price: "0",
+  min_sale_price: "0",
   is_active: true,
 };
 
@@ -109,6 +118,10 @@ function toState(p: Product | null | undefined): FormState {
       model_name: h.model_name,
       lifecycle_status: h.lifecycle_status,
     })),
+    warehouse_type: p.warehouse_type ?? "product",
+    is_externally_sellable: p.is_externally_sellable ?? false,
+    external_sale_price: p.external_sale_price ?? "0",
+    min_sale_price: p.min_sale_price ?? "0",
     is_active: p.is_active,
   };
 }
@@ -234,6 +247,10 @@ export function ProductForm({
         generation: state.generation ? Number(state.generation) : null,
         is_variant: state.is_variant,
         related_host_keys: state.related_models.map((m) => m.model_key),
+        warehouse_type: state.warehouse_type,
+        is_externally_sellable: state.is_externally_sellable,
+        external_sale_price: state.external_sale_price || "0",
+        min_sale_price: state.min_sale_price || "0",
         is_active: state.is_active,
       });
       onSaved?.(saved);
@@ -281,6 +298,33 @@ export function ProductForm({
     >
       {error && <Banner kind="error" message={error} />}
       <form onSubmit={submit}>
+        <Field
+          label="倉別"
+          required
+          hint="商品倉=銷貨用,零件倉=維修用(隱藏建議售價;可選擇對外調貨同行)"
+        >
+          <div className="pf-tabs">
+            <button
+              type="button"
+              className={`pf-tab${state.warehouse_type === "product" ? " active" : ""}`}
+              onClick={() =>
+                patch("warehouse_type", "product" as WarehouseType)
+              }
+            >
+              商品倉
+              <span className="pf-tab-sub">銷貨用</span>
+            </button>
+            <button
+              type="button"
+              className={`pf-tab${state.warehouse_type === "parts" ? " active" : ""}`}
+              onClick={() => patch("warehouse_type", "parts" as WarehouseType)}
+            >
+              零件倉
+              <span className="pf-tab-sub">維修用</span>
+            </button>
+          </div>
+        </Field>
+
         <Field label="品名" required error={fieldErrors.name}>
           <input
             value={state.name}
@@ -288,6 +332,54 @@ export function ProductForm({
           />
         </Field>
 
+        {state.warehouse_type === "parts" && (
+          <>
+            <div className="fieldset">
+              <legend>零件選項</legend>
+              <Checkbox
+                checked={state.is_externally_sellable}
+                onChange={(v) => patch("is_externally_sellable", v)}
+                label="可對外銷售(調貨給同行)"
+                hint="開啟後此零件可被銷貨單搜尋到,異動標記為「零件調貨」"
+              />
+              {state.is_externally_sellable && (
+                <div className="field-row">
+                  <Field
+                    label="對外售價"
+                    hint="銷貨時自動帶入"
+                  >
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={state.external_sale_price}
+                      onChange={(e) =>
+                        patch("external_sale_price", e.target.value)
+                      }
+                    />
+                  </Field>
+                  <Field
+                    label="最低售價"
+                    hint="防呆下限,銷貨手動調整不可低於此值"
+                  >
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={state.min_sale_price}
+                      onChange={(e) =>
+                        patch("min_sale_price", e.target.value)
+                      }
+                    />
+                  </Field>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {state.warehouse_type === "product" && (
+        <>
         <Field
           label="商品性質"
           required
@@ -389,6 +481,8 @@ export function ProductForm({
             />
           </div>
         )}
+        </>
+        )}
 
         <Field label="類別" required error={fieldErrors.category}>
           <div style={{ display: "flex", gap: 6 }}>
@@ -464,7 +558,8 @@ export function ProductForm({
           </div>
         )}
 
-        {state.accessory_type === "phone_specific" && (
+        {state.warehouse_type === "product" &&
+          state.accessory_type === "phone_specific" && (
           <Field
             label="相容機型"
             hint="綁定後,查詢該機型庫存時此配件將自動列出,並納入安全庫存動態計算。同款不同容量/顏色/中古機等變體 SKU 全部涵蓋。"
@@ -552,14 +647,16 @@ export function ProductForm({
               onChange={(e) => patch("barcode", e.target.value)}
             />
           </Field>
-          <Field label="建議零售價" error={fieldErrors.list_price}>
-            <input
-              type="number"
-              step="1"
-              value={state.list_price}
-              onChange={(e) => patch("list_price", e.target.value)}
-            />
-          </Field>
+          {state.warehouse_type === "product" && (
+            <Field label="建議零售價" error={fieldErrors.list_price}>
+              <input
+                type="number"
+                step="1"
+                value={state.list_price}
+                onChange={(e) => patch("list_price", e.target.value)}
+              />
+            </Field>
+          )}
           <Field
             label="安全庫存"
             error={fieldErrors.safety_stock}

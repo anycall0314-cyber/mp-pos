@@ -245,6 +245,39 @@ class Product(TenantOwnedModel):
         ),
     )
 
+    # 倉別:商品倉(銷貨用)vs 零件倉(維修用),預設 product
+    class WarehouseType(models.TextChoices):
+        PRODUCT = "product", "商品倉"  # 一般銷售商品 / 配件
+        PARTS = "parts", "零件倉"  # 維修用零件(螢幕 / 電池 等)
+
+    warehouse_type = models.CharField(
+        "倉別",
+        max_length=16,
+        choices=WarehouseType.choices,
+        default=WarehouseType.PRODUCT,
+        help_text="商品倉=銷貨用、安全庫存動態算;零件倉=維修用、靜態安全庫存",
+    )
+    # 零件倉專用:是否可對外調貨給同行
+    is_externally_sellable = models.BooleanField(
+        "可對外銷售",
+        default=False,
+        help_text="零件可對同行調貨;銷貨單能挑,異動原因標『零件調貨』",
+    )
+    external_sale_price = models.DecimalField(
+        "對外售價",
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        help_text="零件對同行調貨的標準售價",
+    )
+    min_sale_price = models.DecimalField(
+        "最低售價",
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        help_text="防呆下限;銷貨時手動調整不可低於此值",
+    )
+
     is_active = models.BooleanField("啟用", default=True)
 
     class Meta:

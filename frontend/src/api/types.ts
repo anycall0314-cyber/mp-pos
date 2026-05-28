@@ -48,8 +48,13 @@ export interface Product {
   safety_stock?: number;
   lifecycle_status?: LifecycleStatus;
   accessory_type?: AccessoryType;
-  attach_rate?: string; // Decimal as string
+  attach_rate?: string;
   replenish_days?: number;
+  // 雙倉
+  warehouse_type?: WarehouseType;
+  is_externally_sellable?: boolean;
+  external_sale_price?: string;
+  min_sale_price?: string;
   // 以下 4 欄僅主機(accessory_type='none')有意義
   brand?: ProductBrand | "";
   series?: string;
@@ -189,6 +194,7 @@ export interface Supplier {
   address: string;
   note: string;
   sort_order: number;
+  is_repair_vendor?: boolean;
   is_active: boolean;
 }
 
@@ -749,6 +755,8 @@ export type AccessoryType =
   | "phone_specific" // 機型專屬(殼 / 保護貼)
   | "universal"; // 通用型(充電線 / 耳機)
 
+export type WarehouseType = "product" | "parts";
+
 export type ProductBrand =
   | "apple"
   | "samsung"
@@ -891,5 +899,96 @@ export interface HomeSummary {
     total: number;
     doc_time: string;
     items_brief: string;
+  }[];
+}
+
+// ─── 維修模組 ───
+
+export type RepairMode = "in_house" | "external";
+export type RepairStatus =
+  | "pending"
+  | "quoting"
+  | "in_repair"
+  | "sent_external"
+  | "ready_pickup"
+  | "completed";
+
+export interface RepairItemPart {
+  id: number;
+  part_product: number;
+  part_name: string;
+  part_sku: string;
+  default_qty: number;
+}
+
+export interface RepairItem {
+  id: number;
+  name: string;
+  default_labor_fee: string;
+  is_active: boolean;
+  parts: RepairItemPart[];
+  bound_model_keys: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RepairOrderPart {
+  id: number;
+  part_product: number;
+  part_name: string;
+  part_sku: string;
+  qty: number;
+  unit_cost: string;
+}
+
+export interface RepairOrder {
+  id: number;
+  no: string;
+  mode: RepairMode;
+  mode_label: string;
+  status: RepairStatus;
+  status_label: string;
+  customer: number;
+  customer_name: string;
+  customer_phone: string;
+  host_model_key: string;
+  host_model_name: string;
+  device_serial: string;
+  defect_description: string;
+  received_date: string;
+  expected_complete_date: string | null;
+  warehouse: number;
+  warehouse_code: string;
+  warehouse_name: string;
+  sales_person: number | null;
+  sales_person_name: string;
+  repair_item: number | null;
+  repair_item_name: string;
+  labor_fee: string;
+  suggested_quote: string;
+  final_quote: string;
+  external_vendor: number | null;
+  external_vendor_name: string;
+  external_quote_estimated: string;
+  external_quote_actual: string;
+  sent_external_at: string | null;
+  external_expected_pickup: string | null;
+  customer_paid_amount: string;
+  completed_at: string | null;
+  is_void: boolean;
+  parts: RepairOrderPart[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RepairQuotePreview {
+  suggested_quote: string;
+  margin: string;
+  shortages: {
+    part_id: number;
+    part_name: string;
+    needed: number;
+    available: number;
+    short_by: number;
   }[];
 }

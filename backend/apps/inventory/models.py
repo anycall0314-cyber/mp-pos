@@ -203,6 +203,8 @@ class StockMovement(TenantOwnedModel):
         TRANSFER_OUT = "transfer_out", "調撥出庫"
         TRANSFER_IN = "transfer_in", "調撥入庫"
         RETURN_IN = "return_in", "退貨入庫"
+        REPAIR_USAGE = "repair_usage", "維修領用"
+        PARTS_TRANSFER = "parts_transfer", "零件調貨"
         ADJUST = "adjust", "盤點調整"
         VOID = "void", "作廢"
 

@@ -11,6 +11,9 @@ import {
   InventoryAlertsResponse,
   InvoiceTrack,
   InvoiceType,
+  RepairItem,
+  RepairOrder,
+  RepairQuotePreview,
   LegacyPurchase,
   Member,
   Paginated,
@@ -1288,3 +1291,138 @@ export function useSavePlatformWarehouse() {
     },
   });
 }
+
+// ─── 維修模組 ───
+export const useRepairItems = () =>
+  useQuery({
+    queryKey: ["repair-items"],
+    queryFn: () => list<RepairItem>("/repair-items/?page_size=500"),
+  });
+
+export const useRepairItemsByModel = (modelKey: string) =>
+  useQuery({
+    queryKey: ["repair-items-by-model", modelKey],
+    queryFn: () =>
+      api<RepairItem[]>(
+        `/repair-items/by-model/?model_key=${encodeURIComponent(modelKey)}`,
+      ),
+    enabled: !!modelKey,
+  });
+
+export function useSaveRepairItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: Partial<RepairItem> & {
+      id?: number;
+      model_keys?: string[];
+      parts_input?: { part_product: number; default_qty: number }[];
+    }) => {
+      const { id, ...rest } = body;
+      return api<RepairItem>(
+        id ? `/repair-items/${id}/` : "/repair-items/",
+        {
+          method: id ? "PUT" : "POST",
+          body: JSON.stringify(rest),
+        },
+      );
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["repair-items"] });
+      qc.invalidateQueries({ queryKey: ["repair-items-by-model"] });
+    },
+  });
+}
+
+export function useDeleteRepairItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api(`/repair-items/${id}/`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["repair-items"] }),
+  });
+}
+
+export const useRepairOrders = (params?: {
+  status?: string;
+  mode?: string;
+  date_from?: string;
+  date_to?: string;
+}) => {
+  const q = new URLSearchParams();
+  if (params?.status) q.set("status", params.status);
+  if (params?.mode) q.set("mode", params.mode);
+  if (params?.date_from) q.set("received_date__gte", params.date_from);
+  if (params?.date_to) q.set("received_date__lte", params.date_to);
+  q.set("page_size", "200");
+  return useQuery({
+    queryKey: ["repair-orders", params],
+    queryFn: () => list<RepairOrder>(`/repair-orders/?${q.toString()}`),
+  });
+};
+
+export const useRepairOrder = (id: number | null) =>
+  useQuery({
+    queryKey: ["repair-order", id],
+    queryFn: () => api<RepairOrder>(`/repair-orders/${id}/`),
+    enabled: !!id,
+  });
+
+export function useSaveRepairOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      body: Partial<RepairOrder> & {
+        id?: number;
+        parts_input?: { part_product: number; qty: number }[];
+      },
+    ) => {
+      const { id, ...rest } = body;
+      return api<RepairOrder>(
+        id ? `/repair-orders/${id}/` : "/repair-orders/",
+        {
+          method: id ? "PUT" : "POST",
+          body: JSON.stringify(rest),
+        },
+      );
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["repair-orders"] });
+      qc.invalidateQueries({ queryKey: ["repair-order"] });
+    },
+  });
+}
+
+export function useSetRepairStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: number; status: string }) =>
+      api<RepairOrder>(`/repair-orders/${vars.id}/set-status/`, {
+        method: "POST",
+        body: JSON.stringify({ status: vars.status }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["repair-orders"] });
+      qc.invalidateQueries({ queryKey: ["repair-order"] });
+    },
+  });
+}
+
+export function useCompleteRepair() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<RepairOrder>(`/repair-orders/${id}/complete/`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["repair-orders"] });
+      qc.invalidateQueries({ queryKey: ["repair-order"] });
+    },
+  });
+}
+
+export const useRepairQuotePreview = (id: number | null) =>
+  useQuery({
+    queryKey: ["repair-quote-preview", id],
+    queryFn: () =>
+      api<RepairQuotePreview>(`/repair-orders/${id}/quote-preview/`),
+    enabled: !!id,
+  });

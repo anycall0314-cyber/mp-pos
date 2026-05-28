@@ -1,0 +1,99 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+
+import { useRepairOrders } from "@/api/hooks";
+import { Toolbar } from "@/components/Toolbar";
+
+const STATUS_OPTIONS = [
+  { v: "", label: "全部" },
+  { v: "pending", label: "待評估" },
+  { v: "quoting", label: "報價中" },
+  { v: "in_repair", label: "維修中" },
+  { v: "sent_external", label: "已送外廠" },
+  { v: "ready_pickup", label: "待取件" },
+  { v: "completed", label: "完成" },
+];
+
+export function RepairsPage() {
+  const [status, setStatus] = useState("");
+  const [mode, setMode] = useState("");
+  const { data, isLoading } = useRepairOrders({ status, mode });
+  const rows = data ?? [];
+
+  return (
+    <div className="page">
+      <Toolbar
+        title="維修單"
+        actions={
+          <Link to="/repairs/new" className="btn primary">
+            + 建立維修單
+          </Link>
+        }
+      />
+      <div className="list-filterbar">
+        <label>
+          狀態
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            {STATUS_OPTIONS.map((o) => (
+              <option key={o.v} value={o.v}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          維修方式
+          <select value={mode} onChange={(e) => setMode(e.target.value)}>
+            <option value="">全部</option>
+            <option value="in_house">自修</option>
+            <option value="external">委外</option>
+          </select>
+        </label>
+        <span className="list-filterbar-count">
+          {rows.length} 筆
+        </span>
+      </div>
+
+      <div className="md-table" style={{ height: "calc(100% - 100px)" }}>
+        {isLoading && <div className="md-empty">載入中…</div>}
+        {!isLoading && rows.length === 0 && (
+          <div className="md-empty">查無資料</div>
+        )}
+        {rows.length > 0 && (
+          <table className="md-table-inner">
+            <thead>
+              <tr>
+                <th>單號</th>
+                <th>方式</th>
+                <th>狀態</th>
+                <th>客戶</th>
+                <th>機型</th>
+                <th>收件日</th>
+                <th>預計完修</th>
+                <th>門市</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    <Link to={`/repairs/${r.id}`} className="stock-link-name">
+                      {r.no}
+                    </Link>
+                  </td>
+                  <td>{r.mode_label}</td>
+                  <td>{r.status_label}</td>
+                  <td>{r.customer_name}</td>
+                  <td>{r.host_model_name}</td>
+                  <td>{r.received_date}</td>
+                  <td>{r.expected_complete_date ?? "—"}</td>
+                  <td>{r.warehouse_code}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}

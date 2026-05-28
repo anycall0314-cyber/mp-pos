@@ -27,6 +27,9 @@ class Tenant(TimestampedModel):
     next_phone_bill_seq = models.PositiveIntegerField(
         "下一代收話費流水", default=1, editable=False
     )
+    next_repair_seq = models.PositiveIntegerField(
+        "下一維修單流水", default=1, editable=False
+    )
 
     class Meta:
         ordering = ["id"]
@@ -95,6 +98,16 @@ class Tenant(TimestampedModel):
             row.save(update_fields=["next_phone_bill_seq"])
             self.next_phone_bill_seq = row.next_phone_bill_seq
             return f"PB-{seq:05d}"
+
+    def issue_next_repair_no(self) -> str:
+        """原子地取下一張維修單號:`R-{6位流水}`。"""
+        with transaction.atomic():
+            row = Tenant.objects.select_for_update().get(pk=self.pk)
+            seq = row.next_repair_seq
+            row.next_repair_seq = seq + 1
+            row.save(update_fields=["next_repair_seq"])
+            self.next_repair_seq = row.next_repair_seq
+            return f"R-{seq:06d}"
 
 
 class InvoiceType(TenantOwnedModel):

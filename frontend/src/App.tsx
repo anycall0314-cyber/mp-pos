@@ -12,6 +12,9 @@ import { PhoneBillReceiptPage } from "@/pages/phone-bills/PhoneBillReceiptPage";
 import { CategoriesPage } from "@/pages/inventory/CategoriesPage";
 import { InventoryAlertsPage } from "@/pages/inventory/InventoryAlertsPage";
 import { InventoryQueryPage } from "@/pages/inventory/InventoryQueryPage";
+import { RepairEntryPage } from "@/pages/repairs/RepairEntryPage";
+import { RepairItemsPage } from "@/pages/repairs/RepairItemsPage";
+import { RepairsPage } from "@/pages/repairs/RepairsPage";
 import { ProductsPage } from "@/pages/products/ProductsPage";
 import { PurchasesPage } from "@/pages/purchases/PurchasesPage";
 import { PurchaseEntryPage } from "@/pages/purchases/PurchaseEntryPage";
@@ -354,19 +357,9 @@ export function App() {
             path="/telecom/expiries"
             element={<Placeholder title="到期查詢" />}
           />
-          <Route path="/repairs" element={<Placeholder title="維修列表" />} />
-          <Route
-            path="/repairs/new"
-            element={<Placeholder title="建立報修" />}
-          />
-          <Route
-            path="/repairs/quotes"
-            element={<Placeholder title="報價作業" />}
-          />
-          <Route
-            path="/repairs/library"
-            element={<Placeholder title="維修資料庫" />}
-          />
+          <Route path="/repairs" element={<RepairsPage />} />
+          <Route path="/repairs/items" element={<RepairItemsPage />} />
+          <Route path="/repairs/:id" element={<RepairEntryPage />} />
           <Route
             path="/settings/users"
             element={<Placeholder title="人員權限" />}

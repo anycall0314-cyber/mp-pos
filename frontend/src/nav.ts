@@ -73,10 +73,9 @@ export const NAV_GROUPS: NavGroup[] = [
     key: "repairs",
     label: "維修",
     items: [
-      { to: "/repairs/new", label: "建立報修" },
+      { to: "/repairs/new", label: "建立維修單" },
       { to: "/repairs", label: "維修列表" },
-      { to: "/repairs/quotes", label: "報價作業" },
-      { to: "/repairs/library", label: "資料庫" },
+      { to: "/repairs/items", label: "維修項目設定" },
     ],
   },
   {

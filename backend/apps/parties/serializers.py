@@ -29,6 +29,7 @@ class SupplierSerializer(serializers.ModelSerializer):
             "address",
             "note",
             "sort_order",
+            "is_repair_vendor",
             "is_active",
             "created_at",
             "updated_at",
