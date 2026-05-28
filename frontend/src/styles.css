@@ -3813,3 +3813,408 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   }
 }
 
+/* ---------- 維修單:返修 / 保固 banner / 解鎖方式 / 歷史 modal / 收據列印 ---------- */
+
+.re-warranty-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  border: 1px solid transparent;
+}
+.re-warranty-banner.ok {
+  background: rgba(74, 222, 128, 0.08);
+  border-color: rgba(74, 222, 128, 0.4);
+  color: #4ade80;
+}
+.re-warranty-banner.expired {
+  background: rgba(251, 146, 60, 0.08);
+  border-color: rgba(251, 146, 60, 0.4);
+  color: #fb923c;
+}
+.re-warranty-meta {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.re-return-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--text);
+}
+.re-return-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+.re-return-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.re-return-change,
+.re-return-pick {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--accent);
+  cursor: pointer;
+}
+.re-return-change:hover,
+.re-return-pick:hover {
+  background: rgba(96, 165, 250, 0.1);
+}
+
+/* 解鎖方式區 */
+.re-unlock-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.pf-tab-mini {
+  flex: 0 0 auto;
+  padding: 6px 18px;
+  font-size: 13px;
+  min-width: 80px;
+}
+.re-unlock-pw {
+  max-width: 280px;
+}
+
+/* 九宮格圖形鎖 */
+.up-wrap {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  padding: 12px 0;
+}
+.up-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 64px);
+  grid-template-rows: repeat(3, 64px);
+  gap: 8px;
+}
+.up-cell {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text-dim);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.up-cell:hover {
+  border-color: var(--accent);
+}
+.up-cell.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  font-weight: 700;
+}
+.up-cell-n {
+  font-size: 18px;
+}
+.up-cell-order {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: var(--bg);
+  color: var(--accent);
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.up-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 220px;
+}
+.up-path {
+  font-size: 13px;
+  color: var(--text);
+  font-family: monospace;
+  background: var(--bg-2);
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+.up-actions {
+  display: flex;
+  gap: 8px;
+}
+.up-hint {
+  color: #fb923c;
+  font-size: 12px;
+}
+.up-tip {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 歷史維修 modal */
+.rh-modal {
+  width: 92vw;
+  max-width: 960px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.rh-close {
+  float: right;
+  background: transparent;
+  border: 0;
+  font-size: 24px;
+  color: var(--text-dim);
+  cursor: pointer;
+  line-height: 1;
+}
+.rh-close:hover {
+  color: var(--text);
+}
+.rh-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  min-height: 200px;
+}
+.rh-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+.rh-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.rh-table th,
+.rh-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.rh-table th {
+  background: var(--bg-2);
+  font-weight: 600;
+  color: var(--text-dim);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.rh-sub {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.rh-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 4px;
+  margin-top: 4px;
+}
+.rh-badge.ok {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+.rh-badge.expired {
+  background: rgba(251, 146, 60, 0.15);
+  color: #fb923c;
+}
+
+/* ============== 維修收據列印頁 (A4 直式,一式兩聯) ============== */
+
+.rr-page {
+  width: 210mm;
+  margin: 0 auto;
+  padding: 12mm;
+  background: white;
+  color: #111;
+  font-family: "Microsoft JhengHei", "PingFang TC", sans-serif;
+  font-size: 11pt;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+.rr-section {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.rr-cut {
+  text-align: center;
+  font-size: 10pt;
+  color: #666;
+  letter-spacing: 0.2em;
+  padding: 10mm 0 6mm;
+}
+.rr-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 6mm;
+  border-bottom: 2px solid #111;
+  margin-bottom: 4mm;
+}
+.rr-store-name {
+  font-size: 16pt;
+  font-weight: 700;
+}
+.rr-store-meta {
+  font-size: 10pt;
+  color: #444;
+}
+.rr-title {
+  text-align: right;
+}
+.rr-title-main {
+  font-size: 14pt;
+  font-weight: 700;
+}
+.rr-no {
+  font-size: 18pt;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin-top: 2mm;
+}
+.rr-tag {
+  display: inline-block;
+  margin-top: 2mm;
+  padding: 2px 10px;
+  border: 1px solid #111;
+  border-radius: 4px;
+  font-size: 10pt;
+}
+.rr-meta-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11pt;
+  margin-bottom: 4mm;
+}
+.rr-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3mm 6mm;
+  margin-bottom: 4mm;
+}
+.rr-info-label {
+  font-size: 9pt;
+  color: #555;
+}
+.rr-info-val {
+  font-size: 11pt;
+  font-weight: 600;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 2px;
+  min-height: 18px;
+}
+.rr-info-multiline {
+  font-weight: 400;
+  min-height: 36px;
+  white-space: pre-wrap;
+}
+.rr-section-box {
+  border: 1px solid #111;
+  border-radius: 4px;
+  padding: 3mm 4mm;
+  margin-bottom: 4mm;
+}
+.rr-section-box-title {
+  font-size: 10pt;
+  font-weight: 700;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 2mm;
+  margin-bottom: 2mm;
+}
+.rr-quote {
+  font-size: 14pt;
+  font-weight: 700;
+  border-bottom: 0;
+}
+.rr-terms {
+  margin: 4mm 0;
+}
+.rr-terms-title {
+  font-weight: 700;
+  margin-bottom: 2mm;
+}
+.rr-terms-list {
+  font-size: 9.5pt;
+  line-height: 1.6;
+  padding-left: 18px;
+  margin: 0;
+}
+.rr-terms-list li {
+  margin-bottom: 1mm;
+}
+.rr-terms-foot {
+  font-size: 9.5pt;
+  margin-top: 2mm;
+}
+.rr-sign {
+  margin-top: 4mm;
+  border-top: 1px solid #ccc;
+  padding-top: 3mm;
+}
+.rr-sign-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr;
+  gap: 8mm;
+  margin-bottom: 2mm;
+}
+.rr-sign-cell {
+  display: flex;
+  flex-direction: column;
+}
+.rr-sign-label {
+  font-size: 9pt;
+  color: #555;
+}
+.rr-sign-line {
+  border-bottom: 1px solid #111;
+  min-height: 22px;
+  padding-bottom: 2px;
+  font-size: 11pt;
+}
+.rr-sign-note {
+  font-size: 9pt;
+  color: #666;
+  text-align: right;
+}
+
+@media print {
+  .rr-page {
+    width: auto;
+    padding: 0;
+  }
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+}
+

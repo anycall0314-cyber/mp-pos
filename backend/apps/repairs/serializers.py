@@ -142,11 +142,46 @@ class RepairOrderSerializer(serializers.ModelSerializer):
     customer_phone = serializers.CharField(source="customer.phone", read_only=True)
     warehouse_code = serializers.CharField(source="warehouse.code", read_only=True)
     warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
+    warehouse_address = serializers.CharField(
+        source="warehouse.address", read_only=True, default=""
+    )
+    warehouse_phone = serializers.CharField(
+        source="warehouse.phone", read_only=True, default=""
+    )
+    repair_item_name_snapshot = serializers.CharField(
+        source="repair_item.name", read_only=True, default=""
+    )
     repair_item_name = serializers.CharField(source="repair_item.name", read_only=True, default="")
     external_vendor_name = serializers.CharField(source="external_vendor.name", read_only=True, default="")
     sales_person_name = serializers.CharField(source="sales_person.name", read_only=True, default="")
     mode_label = serializers.CharField(source="get_mode_display", read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
+    previous_repair_no = serializers.CharField(
+        source="previous_repair_order.no", read_only=True, default=""
+    )
+    previous_repair_completed_at = serializers.DateTimeField(
+        source="previous_repair_order.completed_at", read_only=True, default=None
+    )
+    warranty_info = serializers.SerializerMethodField()
+
+    def get_warranty_info(self, obj):
+        """根據 previous_repair_order + 租戶保固天數,即時推算保固狀態。"""
+        if not obj.is_return_visit or not obj.previous_repair_order_id:
+            return None
+        prev = obj.previous_repair_order
+        completed = prev.completed_at
+        if not completed:
+            return {"status": "unknown", "warranty_days": obj.tenant.repair_warranty_days}
+        from django.utils import timezone
+        days_since = (timezone.now().date() - completed.date()).days
+        warranty_days = obj.tenant.repair_warranty_days
+        within = days_since <= warranty_days
+        return {
+            "status": "within" if within else "expired",
+            "warranty_days": warranty_days,
+            "days_since_complete": days_since,
+            "previous_completed_date": completed.date().isoformat(),
+        }
 
     class Meta:
         model = RepairOrder
@@ -164,12 +199,22 @@ class RepairOrderSerializer(serializers.ModelSerializer):
             "host_model_name",
             "device_serial",
             "defect_description",
+            "unlock_method",
+            "unlock_password",
+            "unlock_pattern",
+            "is_return_visit",
+            "previous_repair_order",
+            "previous_repair_no",
+            "previous_repair_completed_at",
+            "warranty_info",
             "internal_note",
             "received_date",
             "expected_complete_date",
             "warehouse",
             "warehouse_code",
             "warehouse_name",
+            "warehouse_address",
+            "warehouse_phone",
             "sales_person",
             "sales_person_name",
             "repair_item",
@@ -201,11 +246,16 @@ class RepairOrderSerializer(serializers.ModelSerializer):
             "customer_phone",
             "warehouse_code",
             "warehouse_name",
+            "warehouse_address",
+            "warehouse_phone",
             "repair_item_name",
             "external_vendor_name",
             "sales_person_name",
             "mode_label",
             "status_label",
+            "previous_repair_no",
+            "previous_repair_completed_at",
+            "warranty_info",
             "created_at",
             "updated_at",
         ]

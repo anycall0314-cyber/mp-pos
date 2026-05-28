@@ -19,9 +19,11 @@ import { useDefaultHandledBy, useDefaultWarehouse } from "@/auth/AuthContext";
 import type {
   Customer,
   Product,
+  RepairHistoryItem,
   RepairItem,
   RepairMode,
   RepairStatus,
+  RepairUnlockMethod,
   SalesPerson,
   Supplier,
 } from "@/api/types";
@@ -30,6 +32,8 @@ import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Field } from "@/components/Field";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { Toolbar } from "@/components/Toolbar";
+import { RepairHistoryModal } from "./RepairHistoryModal";
+import { UnlockPatternInput } from "./UnlockPatternInput";
 
 interface PartLine {
   part_product: number;
@@ -115,6 +119,21 @@ export function RepairEntryPage() {
   const [customerPaid, setCustomerPaid] = useState("0");
   const [status, setStatusState] = useState<RepairStatus>("pending");
 
+  // 手機解鎖方式
+  const [unlockMethod, setUnlockMethod] = useState<RepairUnlockMethod | "">("");
+  const [unlockPassword, setUnlockPassword] = useState("");
+  const [unlockPattern, setUnlockPattern] = useState("");
+
+  // 返修
+  const [isReturnVisit, setIsReturnVisit] = useState(false);
+  const [previousId, setPreviousId] = useState<number | null>(null);
+  const [previousNo, setPreviousNo] = useState("");
+  const [previousCompletedDate, setPreviousCompletedDate] = useState<
+    string | null
+  >(null);
+  const [previousWarrantyDays, setPreviousWarrantyDays] = useState<number>(90);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
 
   const itemsByModel = useRepairItemsByModel(modelKey);
@@ -176,7 +195,34 @@ export function RepairEntryPage() {
     setExpectedPickup(o.external_expected_pickup ?? "");
     setCustomerPaid(o.customer_paid_amount);
     setStatusState(o.status);
+    setUnlockMethod(o.unlock_method ?? "none");
+    setUnlockPassword(o.unlock_password ?? "");
+    setUnlockPattern(o.unlock_pattern ?? "");
+    setIsReturnVisit(!!o.is_return_visit);
+    setPreviousId(o.previous_repair_order);
+    setPreviousNo(o.previous_repair_no ?? "");
+    setPreviousCompletedDate(
+      o.warranty_info?.previous_completed_date ?? null,
+    );
+    setPreviousWarrantyDays(o.warranty_info?.warranty_days ?? 90);
   }, [existing.data, isEdit, defaultWh, defaultHandledBy]);
+
+  // 計算保固狀態(僅在勾選返修 + 有完修日時)
+  const warrantyStatus = useMemo(() => {
+    if (!isReturnVisit || !previousId || !previousCompletedDate) return null;
+    const completed = new Date(previousCompletedDate);
+    const today = new Date(TODAY());
+    const days = Math.floor(
+      (today.getTime() - completed.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    const within = days <= previousWarrantyDays;
+    return {
+      within,
+      days,
+      warranty_days: previousWarrantyDays,
+      completed_date: previousCompletedDate,
+    };
+  }, [isReturnVisit, previousId, previousCompletedDate, previousWarrantyDays]);
 
   // 即時計算:零件成本 / 建議報價 / 預估毛利
   const partsCost = useMemo(
@@ -203,10 +249,26 @@ export function RepairEntryPage() {
     );
   }
 
-  async function submit() {
+  async function submit(opts?: { printAfter?: boolean }) {
     setError(null);
     if (!customer || !modelKey || !receivedDate || !warehouseId) {
       setError("請填客戶 / 機型 / 收件日 / 門市");
+      return;
+    }
+    if (!unlockMethod) {
+      setError("請選擇手機解鎖方式");
+      return;
+    }
+    if (unlockMethod === "password" && !unlockPassword.trim()) {
+      setError("已選擇『密碼』,請輸入密碼;若無密碼請改選『無』");
+      return;
+    }
+    if (unlockMethod === "pattern" && !unlockPattern.trim()) {
+      setError("已選擇『圖形鎖』,請完成九宮格繪製;若無圖形鎖請改選『無』");
+      return;
+    }
+    if (isReturnVisit && !previousId) {
+      setError("已勾選『返修』,請先從歷史維修中選一張關聯單");
       return;
     }
     try {
@@ -218,6 +280,11 @@ export function RepairEntryPage() {
         host_model_name: modelName,
         device_serial: deviceSerial,
         defect_description: defect,
+        unlock_method: unlockMethod,
+        unlock_password: unlockMethod === "password" ? unlockPassword : "",
+        unlock_pattern: unlockMethod === "pattern" ? unlockPattern : "",
+        is_return_visit: isReturnVisit,
+        previous_repair_order: isReturnVisit ? previousId : null,
         internal_note: internalNote,
         received_date: receivedDate,
         expected_complete_date: expectedDate || null,
@@ -244,10 +311,23 @@ export function RepairEntryPage() {
       const saved = await save.mutateAsync(
         body as Parameters<typeof save.mutateAsync>[0],
       );
+      if (opts?.printAfter) {
+        window.open(`/print/repair-receipt/${saved.id}`, "_blank");
+      }
       if (!isEdit) navigate(`/repairs/${saved.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+  }
+
+  function handlePickHistory(item: RepairHistoryItem) {
+    setPreviousId(item.id);
+    setPreviousNo(item.no);
+    setPreviousCompletedDate(item.completed_date);
+    setPreviousWarrantyDays(item.warranty_days);
+    if (item.host_model_name && !modelName) setModelName(item.host_model_name);
+    if (item.device_serial && !deviceSerial) setDeviceSerial(item.device_serial);
+    setHistoryOpen(false);
   }
 
   async function changeStatus(newStatus: RepairStatus) {
@@ -275,14 +355,22 @@ export function RepairEntryPage() {
         actions={
           <>
             <button className="btn" onClick={() => navigate("/repairs")}>
-              回列表
+              取消
+            </button>
+            <button
+              className="btn"
+              onClick={() => submit()}
+              disabled={save.isPending}
+              title="只儲存,不開啟列印"
+            >
+              {save.isPending ? "儲存中…" : "儲存"}
             </button>
             <button
               className="btn primary"
-              onClick={submit}
+              onClick={() => submit({ printAfter: true })}
               disabled={save.isPending}
             >
-              {save.isPending ? "儲存中…" : "儲存"}
+              {save.isPending ? "儲存中…" : "儲存並列印收據"}
             </button>
           </>
         }
@@ -291,7 +379,32 @@ export function RepairEntryPage() {
       <div className="re-page-body">
         {error && <Banner kind="error" message={error} />}
 
-        {/* 頂部:維修方式 segmented,全寬 */}
+        {/* 保固狀態 banner */}
+        {warrantyStatus && (
+          <div
+            className={
+              "re-warranty-banner " +
+              (warrantyStatus.within ? "ok" : "expired")
+            }
+          >
+            <b>
+              {warrantyStatus.within
+                ? `保固有效 · 距完修日 ${warrantyStatus.days} 天`
+                : `保固已到期 · 已超出保固期 ${
+                    warrantyStatus.days - warrantyStatus.warranty_days
+                  } 天`}
+            </b>
+            <span className="re-warranty-meta">
+              關聯原單 {previousNo}
+              {previousCompletedDate
+                ? ` · 完修日 ${previousCompletedDate}`
+                : ""}
+              {` · 保固 ${warrantyStatus.warranty_days} 天`}
+            </span>
+          </div>
+        )}
+
+        {/* 頂部:維修方式 segmented + 返修勾選 */}
         <div className="re-mode-bar">
           <button
             type="button"
@@ -309,6 +422,45 @@ export function RepairEntryPage() {
             委外
             <span className="pf-tab-sub">送外廠</span>
           </button>
+          <label className="re-return-toggle">
+            <input
+              type="checkbox"
+              checked={isReturnVisit}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setIsReturnVisit(v);
+                if (v) {
+                  setHistoryOpen(true);
+                } else {
+                  setPreviousId(null);
+                  setPreviousNo("");
+                  setPreviousCompletedDate(null);
+                }
+              }}
+            />
+            <span>返修</span>
+            {isReturnVisit && previousNo && (
+              <span className="re-return-link">
+                關聯 {previousNo}
+                <button
+                  type="button"
+                  className="re-return-change"
+                  onClick={() => setHistoryOpen(true)}
+                >
+                  更換
+                </button>
+              </span>
+            )}
+            {isReturnVisit && !previousNo && (
+              <button
+                type="button"
+                className="re-return-pick"
+                onClick={() => setHistoryOpen(true)}
+              >
+                選擇關聯單
+              </button>
+            )}
+          </label>
         </div>
 
         {/* 左右兩欄 */}
@@ -402,6 +554,55 @@ export function RepairEntryPage() {
                     onChange={(e) => setDefect(e.target.value)}
                     placeholder="客戶描述的問題"
                   />
+                </Field>
+
+                <Field
+                  label="手機解鎖方式"
+                  required
+                  hint={
+                    unlockMethod === "password"
+                      ? "此資訊僅供維修使用,不對外揭露,列印收據時自動隱藏"
+                      : unlockMethod === "pattern"
+                        ? "依客戶指示繪製九宮格路徑,列印收據時自動隱藏"
+                        : "請確認客戶裝置的解鎖方式"
+                  }
+                >
+                  <div className="re-unlock-bar">
+                    {(
+                      [
+                        ["password", "密碼"],
+                        ["pattern", "圖形鎖"],
+                        ["none", "無"],
+                      ] as const
+                    ).map(([v, label]) => (
+                      <button
+                        key={v}
+                        type="button"
+                        className={
+                          "pf-tab pf-tab-mini" +
+                          (unlockMethod === v ? " active" : "")
+                        }
+                        onClick={() => setUnlockMethod(v)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {unlockMethod === "password" && (
+                    <input
+                      className="re-unlock-pw"
+                      value={unlockPassword}
+                      onChange={(e) => setUnlockPassword(e.target.value)}
+                      placeholder="輸入解鎖密碼"
+                      autoComplete="off"
+                    />
+                  )}
+                  {unlockMethod === "pattern" && (
+                    <UnlockPatternInput
+                      value={unlockPattern}
+                      onChange={setUnlockPattern}
+                    />
+                  )}
                 </Field>
               </div>
             </section>
@@ -743,6 +944,13 @@ export function RepairEntryPage() {
           </aside>
         </div>
       </div>
+
+      <RepairHistoryModal
+        open={historyOpen}
+        phone={customerOpt?.secondary ?? ""}
+        onClose={() => setHistoryOpen(false)}
+        onPick={handlePickHistory}
+      />
     </div>
   );
 }

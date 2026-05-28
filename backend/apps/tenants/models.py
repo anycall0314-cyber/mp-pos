@@ -30,6 +30,11 @@ class Tenant(TimestampedModel):
     next_repair_seq = models.PositiveIntegerField(
         "下一維修單流水", default=1, editable=False
     )
+    repair_warranty_days = models.PositiveIntegerField(
+        "維修保固天數",
+        default=90,
+        help_text="返修保固判定基準(自完修日起算)",
+    )
 
     class Meta:
         ordering = ["id"]

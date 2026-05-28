@@ -12,6 +12,7 @@ import {
   InvoiceTrack,
   InvoiceType,
   PartsUsageReport,
+  RepairHistoryItem,
   RepairItem,
   RepairOrder,
   RepairQuotePreview,
@@ -1427,6 +1428,45 @@ export const useRepairQuotePreview = (id: number | null) =>
       api<RepairQuotePreview>(`/repair-orders/${id}/quote-preview/`),
     enabled: !!id,
   });
+
+export const useRepairHistoryByPhone = (phone: string) =>
+  useQuery({
+    queryKey: ["repair-history-by-phone", phone],
+    queryFn: () =>
+      api<RepairHistoryItem[]>(
+        `/repair-orders/history-by-phone/?phone=${encodeURIComponent(phone)}`,
+      ),
+    enabled: !!phone && phone.trim().length >= 4,
+    staleTime: 60_000,
+  });
+
+export interface TenantSettings {
+  id: number;
+  name?: string;
+  code?: string;
+  repair_warranty_days: number;
+}
+
+export const useTenantSettings = () =>
+  useQuery({
+    queryKey: ["tenant-settings"],
+    queryFn: () => api<TenantSettings>(`/tenant-settings/`),
+    staleTime: 5 * 60_000,
+  });
+
+export function useSaveTenantSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Partial<TenantSettings>) =>
+      api<TenantSettings>(`/tenant-settings/`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tenant-settings"] });
+    },
+  });
+}
 
 export const usePartsUsageReport = (params: {
   from?: string;

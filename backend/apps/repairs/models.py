@@ -92,6 +92,11 @@ class RepairOrder(TenantOwnedModel):
         IN_HOUSE = "in_house", "自修"
         EXTERNAL = "external", "委外"
 
+    class UnlockMethod(models.TextChoices):
+        NONE = "none", "無"
+        PASSWORD = "password", "密碼"
+        PATTERN = "pattern", "圖形鎖"
+
     class Status(models.TextChoices):
         PENDING = "pending", "待評估"
         QUOTING = "quoting", "報價中"
@@ -121,6 +126,37 @@ class RepairOrder(TenantOwnedModel):
         "機身序號 / IMEI", max_length=64, blank=True,
     )
     defect_description = models.TextField("故障描述", blank=True)
+    unlock_method = models.CharField(
+        "手機解鎖方式",
+        max_length=16,
+        choices=UnlockMethod.choices,
+        default=UnlockMethod.NONE,
+    )
+    unlock_password = models.CharField(
+        "解鎖密碼",
+        max_length=64,
+        blank=True,
+        help_text="僅供維修使用,列印收據不會印出",
+    )
+    unlock_pattern = models.CharField(
+        "解鎖圖形(九宮格)",
+        max_length=32,
+        blank=True,
+        help_text="例:1-5-9-6-3",
+    )
+    is_return_visit = models.BooleanField(
+        "返修",
+        default=False,
+        help_text="此單為先前維修的後續處理",
+    )
+    previous_repair_order = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="return_visits",
+        verbose_name="關聯原維修單",
+    )
     internal_note = models.TextField(
         "內部備註",
         blank=True,

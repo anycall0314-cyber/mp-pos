@@ -1,6 +1,7 @@
 from django.db import transaction
 from rest_framework import status, viewsets
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import InvoiceTrack, InvoiceType, PaymentMethod
@@ -94,3 +95,45 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
             PaymentMethod.objects.for_tenant(instance.tenant).exclude(
                 pk=instance.pk
             ).update(is_default=False)
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def tenant_settings(request):
+    """GET 回租戶層級設定;PATCH 更新(限 tenant_admin / platform_admin)。"""
+    tenant = request.tenant
+    if request.method == "GET":
+        return Response(
+            {
+                "id": tenant.id,
+                "name": tenant.name,
+                "code": tenant.code,
+                "repair_warranty_days": tenant.repair_warranty_days,
+            }
+        )
+    profile = getattr(request.user, "profile", None)
+    role = profile.role if profile else None
+    if role not in ("platform_admin", "tenant_admin"):
+        return Response({"detail": "權限不足"}, status=status.HTTP_403_FORBIDDEN)
+    days = request.data.get("repair_warranty_days")
+    if days is not None:
+        try:
+            days = int(days)
+        except (ValueError, TypeError):
+            return Response(
+                {"detail": "保固天數需為整數"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if days < 1 or days > 3650:
+            return Response(
+                {"detail": "保固天數需在 1 ~ 3650 之間"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        tenant.repair_warranty_days = days
+        tenant.save(update_fields=["repair_warranty_days"])
+    return Response(
+        {
+            "id": tenant.id,
+            "repair_warranty_days": tenant.repair_warranty_days,
+        }
+    )

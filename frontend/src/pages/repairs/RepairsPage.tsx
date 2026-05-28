@@ -17,8 +17,13 @@ const STATUS_OPTIONS = [
 export function RepairsPage() {
   const [status, setStatus] = useState("");
   const [mode, setMode] = useState("");
+  const [returnVisitOnly, setReturnVisitOnly] = useState(false);
   const { data, isLoading } = useRepairOrders({ status, mode });
-  const rows = data ?? [];
+  const all = data ?? [];
+  const rows = returnVisitOnly
+    ? all.filter((r) => r.is_return_visit)
+    : all;
+  const returnVisitCount = all.filter((r) => r.is_return_visit).length;
 
   return (
     <div className="page">
@@ -49,8 +54,23 @@ export function RepairsPage() {
             <option value="external">委外</option>
           </select>
         </label>
+        <label
+          style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+        >
+          <input
+            type="checkbox"
+            checked={returnVisitOnly}
+            onChange={(e) => setReturnVisitOnly(e.target.checked)}
+          />
+          僅看返修
+        </label>
         <span className="list-filterbar-count">
           {rows.length} 筆
+          {returnVisitCount > 0 && !returnVisitOnly && (
+            <span style={{ marginLeft: 8, color: "var(--text-dim)" }}>
+              (含返修 {returnVisitCount} 筆)
+            </span>
+          )}
         </span>
       </div>
 
@@ -80,6 +100,24 @@ export function RepairsPage() {
                     <Link to={`/repairs/${r.id}`} className="stock-link-name">
                       {r.no}
                     </Link>
+                    {r.is_return_visit && (
+                      <span
+                        className="rh-badge"
+                        style={{
+                          marginLeft: 6,
+                          background:
+                            r.warranty_info?.status === "within"
+                              ? "rgba(74,222,128,0.15)"
+                              : "rgba(251,146,60,0.15)",
+                          color:
+                            r.warranty_info?.status === "within"
+                              ? "#4ade80"
+                              : "#fb923c",
+                        }}
+                      >
+                        返修
+                      </span>
+                    )}
                   </td>
                   <td>{r.mode_label}</td>
                   <td>{r.status_label}</td>

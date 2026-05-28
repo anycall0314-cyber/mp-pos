@@ -13,6 +13,7 @@ import { CategoriesPage } from "@/pages/inventory/CategoriesPage";
 import { InventoryAlertsPage } from "@/pages/inventory/InventoryAlertsPage";
 import { InventoryQueryPage } from "@/pages/inventory/InventoryQueryPage";
 import { RepairEntryPage } from "@/pages/repairs/RepairEntryPage";
+import { RepairReceiptPrintPage } from "@/pages/repairs/RepairReceiptPrintPage";
 import { RepairItemsPage } from "@/pages/repairs/RepairItemsPage";
 import { RepairsPage } from "@/pages/repairs/RepairsPage";
 import { ProductsPage } from "@/pages/products/ProductsPage";
@@ -361,6 +362,10 @@ export function App() {
           <Route path="/repairs" element={<RepairsPage />} />
           <Route path="/repairs/items" element={<RepairItemsPage />} />
           <Route path="/repairs/:id" element={<RepairEntryPage />} />
+          <Route
+            path="/print/repair-receipt/:id"
+            element={<RepairReceiptPrintPage />}
+          />
           <Route
             path="/settings/users"
             element={<Placeholder title="人員權限" />}

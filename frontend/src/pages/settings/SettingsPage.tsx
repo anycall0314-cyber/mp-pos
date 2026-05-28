@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   useDeleteInvoiceTrack,
@@ -9,7 +9,9 @@ import {
   useSaveInvoiceTrack,
   useSaveInvoiceType,
   useSavePaymentMethod,
+  useSaveTenantSettings,
   useSaveWarehouse,
+  useTenantSettings,
   useWarehouses,
 } from "@/api/hooks";
 import type { InvoiceTrack, PaymentMethod, PaymentMethodKind } from "@/api/types";
@@ -33,9 +35,27 @@ export function SettingsPage() {
   const pms = usePaymentMethods();
   const savePm = useSavePaymentMethod();
   const delPm = useDeletePaymentMethod();
+  const tenantSettings = useTenantSettings();
+  const saveTenantSettings = useSaveTenantSettings();
 
   const [editing, setEditing] = useState<Partial<InvoiceTrack> | null>(null);
   const [editingPm, setEditingPm] = useState<Partial<PaymentMethod> | null>(null);
+
+  const [warrantyDays, setWarrantyDays] = useState("");
+  useEffect(() => {
+    if (tenantSettings.data && warrantyDays === "") {
+      setWarrantyDays(String(tenantSettings.data.repair_warranty_days));
+    }
+  }, [tenantSettings.data]);
+
+  async function saveWarranty() {
+    const n = Number(warrantyDays);
+    if (!Number.isFinite(n) || n < 1 || n > 3650) {
+      alert("保固天數需在 1 ~ 3650 之間");
+      return;
+    }
+    await saveTenantSettings.mutateAsync({ repair_warranty_days: n });
+  }
 
   function startNew() {
     const firstType = types.data?.[0];
@@ -64,7 +84,47 @@ export function SettingsPage() {
     <div className="page">
       <Toolbar title="系統設定" />
       <div className="entry-body">
-        <h3 style={{ marginTop: 0 }}>門市</h3>
+        <h3 style={{ marginTop: 0 }}>維修</h3>
+        <p style={{ color: "var(--text-dim)", fontSize: 13 }}>
+          返修保固天數:自原維修單完修日起算,在此範圍內視為保固有效。
+        </p>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            marginBottom: 24,
+            flexWrap: "wrap",
+          }}
+        >
+          <label style={{ fontSize: 13 }}>保固天數</label>
+          <input
+            type="number"
+            min={1}
+            max={3650}
+            value={warrantyDays}
+            onChange={(e) => setWarrantyDays(e.target.value)}
+            style={{ width: 120 }}
+          />
+          <span style={{ fontSize: 13, color: "var(--text-dim)" }}>
+            天(預設 90 天)
+          </span>
+          <button
+            type="button"
+            className="btn primary"
+            onClick={saveWarranty}
+            disabled={
+              saveTenantSettings.isPending ||
+              !tenantSettings.data ||
+              String(tenantSettings.data?.repair_warranty_days) ===
+                warrantyDays.trim()
+            }
+          >
+            {saveTenantSettings.isPending ? "儲存中…" : "儲存"}
+          </button>
+        </div>
+
+        <h3>門市</h3>
         <p style={{ color: "var(--text-dim)", fontSize: 13 }}>
           門市地址 / 電話會印在收據(代收話費等)上。代碼 / 名稱請聯絡管理員調整。
         </p>

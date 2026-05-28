@@ -11,6 +11,7 @@ from .views import (
     InvoiceTrackViewSet,
     InvoiceTypeViewSet,
     PaymentMethodViewSet,
+    tenant_settings,
 )
 
 router = DefaultRouter()
@@ -33,4 +34,5 @@ urlpatterns = router.urls + [
     path("auth/login/", login, name="auth-login"),
     path("auth/me/", me, name="auth-me"),
     path("auth/logout/", logout, name="auth-logout"),
+    path("tenant-settings/", tenant_settings, name="tenant-settings"),
 ]

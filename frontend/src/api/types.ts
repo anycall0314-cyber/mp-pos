@@ -961,6 +961,32 @@ export type RepairStatus =
   | "sent_external"
   | "ready_pickup"
   | "completed";
+export type RepairUnlockMethod = "none" | "password" | "pattern";
+
+export interface RepairWarrantyInfo {
+  status: "within" | "expired" | "unknown";
+  warranty_days: number;
+  days_since_complete?: number;
+  previous_completed_date?: string;
+}
+
+export interface RepairHistoryItem {
+  id: number;
+  no: string;
+  mode: RepairMode;
+  mode_label: string;
+  status: RepairStatus;
+  status_label: string;
+  received_date: string;
+  completed_at: string | null;
+  completed_date: string | null;
+  host_model_name: string;
+  device_serial: string;
+  repair_item_name: string;
+  warranty_within: boolean;
+  days_since_complete: number | null;
+  warranty_days: number;
+}
 
 export interface RepairItemPart {
   id: number;
@@ -1004,12 +1030,22 @@ export interface RepairOrder {
   host_model_name: string;
   device_serial: string;
   defect_description: string;
+  unlock_method: RepairUnlockMethod;
+  unlock_password: string;
+  unlock_pattern: string;
+  is_return_visit: boolean;
+  previous_repair_order: number | null;
+  previous_repair_no: string;
+  previous_repair_completed_at: string | null;
+  warranty_info: RepairWarrantyInfo | null;
   internal_note: string;
   received_date: string;
   expected_complete_date: string | null;
   warehouse: number;
   warehouse_code: string;
   warehouse_name: string;
+  warehouse_address: string;
+  warehouse_phone: string;
   sales_person: number | null;
   sales_person_name: string;
   repair_item: number | null;

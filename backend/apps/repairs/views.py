@@ -119,3 +119,50 @@ class RepairOrderViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
         order.is_void = True
         order.save(update_fields=["is_void"])
         return Response(self.get_serializer(order).data)
+
+    @action(detail=False, methods=["get"], url_path="history-by-phone")
+    def history_by_phone(self, request):
+        """依電話號碼查詢歷史維修紀錄(返修勾選用)。"""
+        phone = (request.query_params.get("phone") or "").strip()
+        if not phone:
+            return Response([])
+        qs = (
+            self.get_queryset()
+            .filter(is_void=False, customer__phone=phone)
+            .order_by("-received_date", "-id")[:30]
+        )
+        warranty_days = request.tenant.repair_warranty_days
+        from django.utils import timezone
+        today = timezone.now().date()
+        items = []
+        for o in qs:
+            completed = o.completed_at.date() if o.completed_at else None
+            days_since = (today - completed).days if completed else None
+            within = (
+                completed is not None and days_since is not None
+                and days_since <= warranty_days
+            )
+            items.append(
+                {
+                    "id": o.id,
+                    "no": o.no,
+                    "mode": o.mode,
+                    "mode_label": o.get_mode_display(),
+                    "status": o.status,
+                    "status_label": o.get_status_display(),
+                    "received_date": o.received_date.isoformat(),
+                    "completed_at": (
+                        o.completed_at.isoformat() if o.completed_at else None
+                    ),
+                    "completed_date": completed.isoformat() if completed else None,
+                    "host_model_name": o.host_model_name,
+                    "device_serial": o.device_serial,
+                    "repair_item_name": (
+                        o.repair_item.name if o.repair_item_id else ""
+                    ),
+                    "warranty_within": within,
+                    "days_since_complete": days_since,
+                    "warranty_days": warranty_days,
+                }
+            )
+        return Response(items)
