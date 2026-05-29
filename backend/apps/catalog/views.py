@@ -8,12 +8,14 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.filters import _is_postgres
 from apps.inventory.models import ProductSerial, StockBalance, Warehouse
 from apps.purchasing.models import PurchaseOrderItem
 from apps.sales.models import SalesOrderItem
+from apps.tenants.permissions import IsPlatformAdmin
 from apps.transfers.models import TransferOrder, TransferOrderItem
 
 from .brand_import import import_brands_series
@@ -843,7 +845,12 @@ class ProductViewSet(viewsets.ModelViewSet):
 
 
 class BrandViewSet(viewsets.ModelViewSet):
-    """品牌主檔 CRUD(per-tenant)。"""
+    """品牌主檔 CRUD(per-tenant)。
+
+    經銷商可自行新增 / 編輯 / 刪除自家的品牌與系列;
+    但「批次匯入(CSV / Excel)」鎖給 platform_admin —
+    由平台端統一維護市面品牌字典,確保資料一致。
+    """
 
     serializer_class = BrandSerializer
     search_fields = ["code", "name"]
@@ -851,6 +858,11 @@ class BrandViewSet(viewsets.ModelViewSet):
     ordering = ["sort_order", "code"]
     filterset_fields = ["is_active"]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_permissions(self):
+        if self.action == "import_csv":
+            return [IsAuthenticated(), IsPlatformAdmin()]
+        return super().get_permissions()
 
     def get_queryset(self):
         return (

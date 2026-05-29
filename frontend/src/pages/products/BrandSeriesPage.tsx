@@ -9,6 +9,7 @@ import {
   useSavePhoneSeries,
 } from "@/api/hooks";
 import type { Brand, PhoneSeries } from "@/api/types";
+import { useCurrentUser } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { BrandSeriesImportModal } from "./BrandSeriesImportModal";
@@ -42,6 +43,8 @@ function slugify(s: string): string {
 }
 
 export function BrandSeriesPage() {
+  const user = useCurrentUser();
+  const canImport = user?.profile?.role === "platform_admin";
   const brands = useBrands();
   const saveBrand = useSaveBrand();
   const delBrand = useDeleteBrand();
@@ -174,13 +177,16 @@ export function BrandSeriesPage() {
         title="品牌 / 系列管理"
         actions={
           <>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setImportOpen(true)}
-            >
-              匯入 CSV / Excel
-            </button>
+            {canImport && (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setImportOpen(true)}
+                title="平台管理員專用:批次匯入市面品牌字典"
+              >
+                匯入 CSV / Excel
+              </button>
+            )}
             <button className="btn primary" onClick={startNewBrand}>
               + 新增品牌
             </button>
@@ -535,15 +541,17 @@ export function BrandSeriesPage() {
         </div>
       </div>
 
-      <BrandSeriesImportModal
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        onSuccess={() => {
-          setImportOpen(false);
-          setImportSuccess("匯入完成");
-          setTimeout(() => setImportSuccess(null), 4000);
-        }}
-      />
+      {canImport && (
+        <BrandSeriesImportModal
+          open={importOpen}
+          onClose={() => setImportOpen(false)}
+          onSuccess={() => {
+            setImportOpen(false);
+            setImportSuccess("匯入完成");
+            setTimeout(() => setImportSuccess(null), 4000);
+          }}
+        />
+      )}
     </div>
   );
 }
