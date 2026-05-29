@@ -11,6 +11,7 @@ import {
 import type { Brand, PhoneSeries } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { BrandSeriesImportModal } from "./BrandSeriesImportModal";
 
 interface EditingBrand {
   id?: number;
@@ -61,6 +62,8 @@ export function BrandSeriesPage() {
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importSuccess, setImportSuccess] = useState<string | null>(null);
 
   function startNewBrand() {
     setEditingBrand({
@@ -170,11 +173,32 @@ export function BrandSeriesPage() {
       <Toolbar
         title="品牌 / 系列管理"
         actions={
-          <button className="btn primary" onClick={startNewBrand}>
-            + 新增品牌
-          </button>
+          <>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setImportOpen(true)}
+            >
+              匯入 CSV / Excel
+            </button>
+            <button className="btn primary" onClick={startNewBrand}>
+              + 新增品牌
+            </button>
+          </>
         }
       />
+      {importSuccess && (
+        <div
+          style={{
+            padding: "6px 16px",
+            background: "rgba(128,208,144,0.15)",
+            color: "#80d090",
+            fontSize: 13,
+          }}
+        >
+          {importSuccess}
+        </div>
+      )}
       <div className="entry-body" style={{ display: "flex", gap: 16 }}>
         {/* 左:品牌列表 */}
         <div
@@ -510,6 +534,16 @@ export function BrandSeriesPage() {
           )}
         </div>
       </div>
+
+      <BrandSeriesImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onSuccess={() => {
+          setImportOpen(false);
+          setImportSuccess("匯入完成");
+          setTimeout(() => setImportSuccess(null), 4000);
+        }}
+      />
     </div>
   );
 }

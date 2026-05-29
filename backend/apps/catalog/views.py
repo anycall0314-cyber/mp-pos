@@ -16,6 +16,7 @@ from apps.purchasing.models import PurchaseOrderItem
 from apps.sales.models import SalesOrderItem
 from apps.transfers.models import TransferOrder, TransferOrderItem
 
+from .brand_import import import_brands_series
 from .import_service import import_products_from_file
 from .models import (
     Brand,
@@ -849,6 +850,7 @@ class BrandViewSet(viewsets.ModelViewSet):
     ordering_fields = ["sort_order", "code", "name"]
     ordering = ["sort_order", "code"]
     filterset_fields = ["is_active"]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_queryset(self):
         return (
@@ -858,6 +860,38 @@ class BrandViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.tenant)
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="import",
+        parser_classes=[MultiPartParser, FormParser, JSONParser],
+    )
+    def import_csv(self, request):
+        """品牌 + 系列 批次匯入。
+
+        CSV / xlsx 一行一個系列(同品牌可多列):
+          品牌名稱, 品牌代碼, 系列名稱, 系列代碼, 品牌排序, 系列排序
+
+        dry_run=true(預設)只回 preview 不寫入;
+        dry_run=false 才正式 commit。
+        """
+        file_obj = request.FILES.get("file")
+        if not file_obj:
+            return Response(
+                {"detail": "請上傳 file 欄位(CSV 或 xlsx)"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        dry_run = str(request.data.get("dry_run", "true")).lower() == "true"
+        result = import_brands_series(
+            request.tenant,
+            file_obj,
+            file_obj.name,
+            dry_run=dry_run,
+        )
+        if not dry_run and result.get("errors"):
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result)
 
 
 class PhoneSeriesViewSet(viewsets.ModelViewSet):

@@ -1695,3 +1695,44 @@ export function useDeletePhoneSeries() {
     },
   });
 }
+
+export interface BrandImportResult {
+  summary: {
+    brands_created: number;
+    brands_updated: number;
+    series_created: number;
+    series_updated: number;
+    rows_skipped: number;
+  };
+  preview: Array<{
+    line: number;
+    brand_name: string;
+    brand_code: string;
+    brand_action: string;
+    series_name: string;
+    series_code: string;
+    series_action: string;
+  }>;
+  errors: Array<{ line: number; msg: string }>;
+}
+
+export function useImportBrandsSeries() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { file: File; dryRun: boolean }) => {
+      const fd = new FormData();
+      fd.append("file", vars.file);
+      fd.append("dry_run", vars.dryRun ? "true" : "false");
+      return api<BrandImportResult>("/brands/import/", {
+        method: "POST",
+        body: fd,
+      });
+    },
+    onSuccess: (_, vars) => {
+      if (!vars.dryRun) {
+        qc.invalidateQueries({ queryKey: ["brands"] });
+        qc.invalidateQueries({ queryKey: ["phone-series"] });
+      }
+    },
+  });
+}

@@ -4192,6 +4192,75 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   flex-wrap: wrap;
 }
 
+/* ─── 品牌系列匯入 modal ─── */
+.bsi-modal {
+  width: 92vw;
+  max-width: 980px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+.bsi-body {
+  flex: 1 1 auto;
+  overflow: auto;
+}
+.bsi-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 10px 12px;
+  background: var(--bg-2);
+  border-radius: 6px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+.bsi-summary b { color: #4ade80; }
+.bsi-errors {
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  background: rgba(255, 112, 112, 0.08);
+  border: 1px solid rgba(255, 112, 112, 0.3);
+  border-radius: 4px;
+}
+.bsi-preview-wrap {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.bsi-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.bsi-preview-table th,
+.bsi-preview-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.bsi-preview-table th {
+  background: var(--bg-2);
+  position: sticky;
+  top: 0;
+}
+.bsi-tag-new {
+  display: inline-block;
+  padding: 1px 6px;
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+  border-radius: 3px;
+  font-size: 11px;
+}
+.bsi-tag-upd {
+  display: inline-block;
+  padding: 1px 6px;
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
 /* ─── 商品批次修改 modal ─── */
 .be-modal {
   width: 90vw;
