@@ -2,17 +2,22 @@
 
 CSV / Excel 格式(一行一個系列,同品牌有多列):
 
-    品牌名稱 | 品牌代碼(選填) | 系列名稱(選填) | 系列代碼(選填) | 品牌排序(選填) | 系列排序(選填)
+    品牌名稱 | 品牌代碼(選填) | 系列名稱(選填) | 系列代碼(選填)
+    | 產品類型名稱(選填) | 產品類型代碼(選填)
+    | 品牌排序(選填) | 系列排序(選填)
 
 範例:
-    Apple,apple,iPhone,iphone,1,1
-    Apple,apple,iPad,ipad,1,2
-    Samsung,samsung,Galaxy S,s,2,1
+    Apple,apple,iPhone,iphone,手機,phone,1,1
+    Apple,apple,iPad,ipad,平板,tablet,1,2
+    Apple,apple,Watch,watch,手錶,watch,1,3
+    Samsung,samsung,Galaxy S,s,手機,phone,2,1
 
 - 品牌名稱必填;代碼留空 → 自動 slugify
 - 系列名稱留空 → 該列只新增/更新品牌
+- 產品類型(name/code)留空 → 系列不掛類型;有填且不存在 → 自動建立
 - 已存在的 (品牌 code) 會 update_or_create
 - 已存在的 (品牌, 系列 code) 會 update_or_create
+- 已存在的 (產品類型 code) 會 update_or_create
 """
 import csv
 import io
@@ -22,7 +27,7 @@ from typing import Any
 from django.db import transaction
 from openpyxl import load_workbook
 
-from .models import Brand, PhoneSeries
+from .models import Brand, PhoneSeries, ProductType
 
 
 _FIELD_MAP: dict[str, str] = {
@@ -38,6 +43,14 @@ _FIELD_MAP: dict[str, str] = {
     "series_name": "series_name",
     "系列代碼": "series_code",
     "series_code": "series_code",
+    "產品類型": "type_name",
+    "產品類型名稱": "type_name",
+    "類型": "type_name",
+    "type": "type_name",
+    "type_name": "type_name",
+    "產品類型代碼": "type_code",
+    "類型代碼": "type_code",
+    "type_code": "type_code",
     "品牌排序": "brand_sort",
     "brand_sort": "brand_sort",
     "系列排序": "series_sort",
@@ -126,6 +139,7 @@ def import_brands_series(
 
     existing_brands = {b.code: b for b in Brand.objects.for_tenant(tenant)}
     existing_series_by_brand: dict[str, dict[str, PhoneSeries]] = {}
+    existing_types = {t.code: t for t in ProductType.objects.for_tenant(tenant)}
 
     preview: list[dict] = []
     errors: list[dict] = []
@@ -133,11 +147,15 @@ def import_brands_series(
     brands_upd = 0
     series_new = 0
     series_upd = 0
+    types_new = 0
+    types_upd = 0
     skipped = 0
 
     # 暫存要寫入的資料
     to_write_brands: dict[str, dict] = {}  # code → {name, sort}
-    to_write_series: list[dict] = []  # [{brand_code, code, name, sort}]
+    to_write_types: dict[str, dict] = {}  # code → {name}
+    to_write_series: list[dict] = []  # [{brand_code, code, name, sort, type_code}]
+    seen_types: set[str] = set()
 
     for idx, r in enumerate(rows, start=2):  # 第 2 行起 (header 是 1)
         brand_name = r.get("brand_name", "").strip()
@@ -150,6 +168,11 @@ def import_brands_series(
         series_code = r.get("series_code", "").strip()
         if series_name and not series_code:
             series_code = _slugify(series_name)
+
+        type_name = r.get("type_name", "").strip()
+        type_code = r.get("type_code", "").strip()
+        if type_name and not type_code:
+            type_code = _slugify(type_name)
 
         brand_sort_str = r.get("brand_sort", "").strip()
         series_sort_str = r.get("series_sort", "").strip()
@@ -172,6 +195,21 @@ def import_brands_series(
             "name": brand_name,
             "sort": brand_sort,
         }
+
+        # 產品類型:同代碼第一次出現才計新增 / 更新,後續出現視為「沿用」
+        type_action = ""
+        if type_name:
+            if type_code not in seen_types:
+                seen_types.add(type_code)
+                if type_code in existing_types:
+                    types_upd += 1
+                    type_action = "(已存在)"
+                else:
+                    types_new += 1
+                    type_action = "新增"
+            else:
+                type_action = "沿用"
+            to_write_types[type_code] = {"name": type_name}
 
         if series_name:
             # series action
@@ -196,6 +234,7 @@ def import_brands_series(
                     "code": series_code,
                     "name": series_name,
                     "sort": series_sort,
+                    "type_code": type_code,
                 }
             )
         else:
@@ -210,6 +249,9 @@ def import_brands_series(
                 "series_name": series_name,
                 "series_code": series_code,
                 "series_action": series_action,
+                "type_name": type_name,
+                "type_code": type_code,
+                "type_action": type_action,
             }
         )
 
@@ -218,6 +260,8 @@ def import_brands_series(
         "brands_updated": brands_upd,
         "series_created": series_new,
         "series_updated": series_upd,
+        "types_created": types_new,
+        "types_updated": types_upd,
         "rows_skipped": skipped,
     }
 
@@ -233,6 +277,22 @@ def import_brands_series(
             "detail": "驗證有錯誤,請修正後再匯入",
         }
     with transaction.atomic():
+        # ProductType upsert
+        type_obj_by_code: dict[str, ProductType] = dict(existing_types)
+        next_sort = (
+            max([t.sort_order for t in existing_types.values()] + [0]) + 1
+        )
+        for code, data in to_write_types.items():
+            obj, created = ProductType.objects.update_or_create(
+                tenant=tenant,
+                code=code,
+                defaults={"name": data["name"]},
+            )
+            if created:
+                obj.sort_order = next_sort
+                obj.save(update_fields=["sort_order"])
+                next_sort += 1
+            type_obj_by_code[code] = obj
         # Brand upsert
         brand_obj_by_code: dict[str, Brand] = {}
         for code, data in to_write_brands.items():
@@ -247,10 +307,13 @@ def import_brands_series(
             brand = brand_obj_by_code.get(s["brand_code"])
             if brand is None:
                 continue
+            defaults = {"name": s["name"], "sort_order": s["sort"]}
+            if s["type_code"]:
+                defaults["product_type"] = type_obj_by_code.get(s["type_code"])
             PhoneSeries.objects.update_or_create(
                 tenant=tenant,
                 brand=brand,
                 code=s["code"],
-                defaults={"name": s["name"], "sort_order": s["sort"]},
+                defaults=defaults,
             )
     return {"summary": summary, "preview": preview, "errors": errors}

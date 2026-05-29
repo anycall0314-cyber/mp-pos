@@ -27,6 +27,7 @@ from .models import (
     PhoneSeries,
     Product,
     ProductRelation,
+    ProductType,
 )
 from .serializers import (
     BrandSerializer,
@@ -34,6 +35,7 @@ from .serializers import (
     PartTemplateSerializer,
     PhoneSeriesSerializer,
     ProductSerializer,
+    ProductTypeSerializer,
 )
 from .services_parts import bulk_create_parts, build_preview
 
@@ -909,19 +911,43 @@ class BrandViewSet(viewsets.ModelViewSet):
 class PhoneSeriesViewSet(viewsets.ModelViewSet):
     """產品系列主檔 CRUD(掛在 Brand 下,per-tenant)。
 
-    用 ?brand=<id> 過濾單一品牌的系列。
+    用 ?brand=<id> 過濾單一品牌的系列;
+    ?product_type=<id> 篩單一類型(手機 / 平板 / 耳機 …)。
     """
 
     serializer_class = PhoneSeriesSerializer
     search_fields = ["code", "name"]
     ordering_fields = ["sort_order", "code", "name"]
     ordering = ["sort_order", "code"]
-    filterset_fields = ["is_active", "brand"]
+    filterset_fields = ["is_active", "brand", "product_type"]
 
     def get_queryset(self):
         return PhoneSeries.objects.for_tenant(
             self.request.tenant
-        ).select_related("brand")
+        ).select_related("brand", "product_type")
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=self.request.tenant)
+
+
+class ProductTypeViewSet(viewsets.ModelViewSet):
+    """產品類型主檔 CRUD(per-tenant)。
+
+    經銷商可自訂類型(手機 / 平板 / 耳機 / 手錶 / 智慧家電 …),
+    系列建立時可指定屬於哪個類型。
+    """
+
+    serializer_class = ProductTypeSerializer
+    search_fields = ["code", "name"]
+    ordering_fields = ["sort_order", "code", "name"]
+    ordering = ["sort_order", "code"]
+    filterset_fields = ["is_active"]
+
+    def get_queryset(self):
+        return (
+            ProductType.objects.for_tenant(self.request.tenant)
+            .annotate(series_count=Count("series"))
+        )
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.tenant)

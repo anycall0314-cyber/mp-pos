@@ -364,11 +364,42 @@ class Brand(TenantOwnedModel):
         return self.name
 
 
+class ProductType(TenantOwnedModel):
+    """產品類型主檔(per-tenant)。
+
+    用於標示「系列屬於哪一類產品」:手機 / 平板 / 耳機 / 手錶 / 智慧家電 …
+    可自訂。平台管理員可預先匯入固定範本給經銷商當起手式。
+    """
+
+    code = models.SlugField("代碼", max_length=20)
+    name = models.CharField("顯示名稱", max_length=40)
+    sort_order = models.PositiveIntegerField("排序", default=0)
+    is_active = models.BooleanField("啟用", default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "code"], name="uniq_product_type_tenant_code"
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "name"], name="uniq_product_type_tenant_name"
+            ),
+        ]
+        ordering = ["sort_order", "code"]
+        verbose_name = "產品類型"
+        verbose_name_plural = "產品類型"
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class PhoneSeries(TenantOwnedModel):
     """產品系列主檔,掛在 Brand 底下(per-tenant)。
 
     例:Samsung 底下有 Galaxy S / Galaxy A / Galaxy Z / Galaxy Note / Galaxy FE …
     Apple 底下有 iPhone / iPad / Watch …
+    每個系列可指定「產品類型」(手機 / 平板 / 耳機 / 手錶 …),
+    讓同品牌底下混放不同類型的系列。
     """
 
     brand = models.ForeignKey(
@@ -376,6 +407,14 @@ class PhoneSeries(TenantOwnedModel):
         on_delete=models.PROTECT,
         related_name="series",
         verbose_name="品牌",
+    )
+    product_type = models.ForeignKey(
+        ProductType,
+        on_delete=models.SET_NULL,
+        related_name="series",
+        verbose_name="產品類型",
+        null=True,
+        blank=True,
     )
     code = models.SlugField("代碼", max_length=20)
     name = models.CharField("顯示名稱", max_length=80)

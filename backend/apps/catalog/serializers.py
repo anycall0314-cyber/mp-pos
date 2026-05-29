@@ -8,6 +8,7 @@ from .models import (
     PhoneSeries,
     Product,
     ProductRelation,
+    ProductType,
 )
 
 
@@ -29,9 +30,33 @@ class BrandSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "series_count", "created_at", "updated_at"]
 
 
+class ProductTypeSerializer(serializers.ModelSerializer):
+    series_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = ProductType
+        fields = [
+            "id",
+            "code",
+            "name",
+            "sort_order",
+            "is_active",
+            "series_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "series_count", "created_at", "updated_at"]
+
+
 class PhoneSeriesSerializer(serializers.ModelSerializer):
     brand_code = serializers.CharField(source="brand.code", read_only=True)
     brand_name = serializers.CharField(source="brand.name", read_only=True)
+    product_type_code = serializers.CharField(
+        source="product_type.code", read_only=True, default=""
+    )
+    product_type_name = serializers.CharField(
+        source="product_type.name", read_only=True, default=""
+    )
 
     class Meta:
         model = PhoneSeries
@@ -40,6 +65,9 @@ class PhoneSeriesSerializer(serializers.ModelSerializer):
             "brand",
             "brand_code",
             "brand_name",
+            "product_type",
+            "product_type_code",
+            "product_type_name",
             "code",
             "name",
             "sort_order",
@@ -51,6 +79,8 @@ class PhoneSeriesSerializer(serializers.ModelSerializer):
             "id",
             "brand_code",
             "brand_name",
+            "product_type_code",
+            "product_type_name",
             "created_at",
             "updated_at",
         ]

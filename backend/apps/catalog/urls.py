@@ -5,11 +5,13 @@ from .views import (
     CategoryViewSet,
     PartTemplateViewSet,
     PhoneSeriesViewSet,
+    ProductTypeViewSet,
     ProductViewSet,
 )
 
 router = DefaultRouter()
 router.register(r"brands", BrandViewSet, basename="brand")
+router.register(r"product-types", ProductTypeViewSet, basename="product-type")
 router.register(r"phone-series", PhoneSeriesViewSet, basename="phone-series")
 router.register(r"categories", CategoryViewSet, basename="category")
 router.register(r"products", ProductViewSet, basename="product")

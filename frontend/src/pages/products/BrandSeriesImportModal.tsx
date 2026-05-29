@@ -15,16 +15,19 @@ interface Props {
 function downloadTemplate() {
   // BOM + CSV;Excel 雙擊開啟會自動辨識 UTF-8、中文不亂碼
   const csv =
-    "﻿品牌名稱,品牌代碼,系列名稱,系列代碼,品牌排序,系列排序\n" +
-    "Apple,apple,iPhone,iphone,1,1\n" +
-    "Apple,apple,iPad,ipad,1,2\n" +
-    "Apple,apple,Watch,watch,1,3\n" +
-    "Samsung,samsung,Galaxy S,s,2,1\n" +
-    "Samsung,samsung,Galaxy A,a,2,2\n" +
-    "Samsung,samsung,Galaxy Z,z,2,3\n" +
-    "Samsung,samsung,Galaxy Note,note,2,4\n" +
-    "小米,xiaomi,Mi,mi,3,1\n" +
-    "小米,xiaomi,Redmi,redmi,3,2\n";
+    "﻿品牌名稱,品牌代碼,系列名稱,系列代碼,產品類型名稱,產品類型代碼,品牌排序,系列排序\n" +
+    "Apple,apple,iPhone,iphone,手機,phone,1,1\n" +
+    "Apple,apple,iPad,ipad,平板,tablet,1,2\n" +
+    "Apple,apple,Watch,watch,手錶,watch,1,3\n" +
+    "Apple,apple,AirPods,airpods,耳機,earphone,1,4\n" +
+    "Samsung,samsung,Galaxy S,s,手機,phone,2,1\n" +
+    "Samsung,samsung,Galaxy A,a,手機,phone,2,2\n" +
+    "Samsung,samsung,Galaxy Z,z,手機,phone,2,3\n" +
+    "Samsung,samsung,Galaxy Tab,tab,平板,tablet,2,4\n" +
+    "Samsung,samsung,Galaxy Watch,watch,手錶,watch,2,5\n" +
+    "Samsung,samsung,Galaxy Buds,buds,耳機,earphone,2,6\n" +
+    "小米,xiaomi,Xiaomi,mi,手機,phone,3,1\n" +
+    "小米,xiaomi,Redmi,redmi,手機,phone,3,2\n";
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -111,7 +114,7 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
                   }}
                 >
                   欄位:品牌名稱(必填)/ 品牌代碼 / 系列名稱 / 系列代碼 /
-                  品牌排序 / 系列排序
+                  產品類型名稱 / 產品類型代碼 / 品牌排序 / 系列排序
                 </span>
               </div>
               <div style={{ marginBottom: 12 }}>
@@ -135,9 +138,11 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
                 <br />
                 · 系列代碼留空 → 從系列名稱自動產生
                 <br />
+                · 產品類型留空 → 該系列不掛類型;有填且不存在 → 自動建立類型
+                <br />
                 · 系列名稱整列留空 → 該列只新增/更新品牌,不建系列
                 <br />
-                · 已存在的品牌/系列(以代碼比對)會更新名稱與排序
+                · 已存在的品牌 / 系列 / 類型(以代碼比對)會更新名稱與排序
               </div>
             </>
           )}
@@ -156,6 +161,12 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
                   <b>新增 {preview.summary.series_created}</b>
                   <span> / </span>
                   <span>更新 {preview.summary.series_updated}</span>
+                </div>
+                <div>
+                  類型:
+                  <b>新增 {preview.summary.types_created}</b>
+                  <span> / </span>
+                  <span>更新 {preview.summary.types_updated}</span>
                 </div>
                 {preview.summary.rows_skipped > 0 && (
                   <div style={{ color: "#fb923c" }}>
@@ -189,6 +200,8 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
                       <th>動作</th>
                       <th>系列</th>
                       <th>系列代碼</th>
+                      <th>動作</th>
+                      <th>類型</th>
                       <th>動作</th>
                     </tr>
                   </thead>
@@ -225,6 +238,22 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
                               }
                             >
                               {r.series_action}
+                            </span>
+                          ) : (
+                            <span style={{ color: "var(--text-dim)" }}>—</span>
+                          )}
+                        </td>
+                        <td>{r.type_name || "—"}</td>
+                        <td>
+                          {r.type_name ? (
+                            <span
+                              className={
+                                r.type_action === "新增"
+                                  ? "bsi-tag-new"
+                                  : "bsi-tag-upd"
+                              }
+                            >
+                              {r.type_action}
                             </span>
                           ) : (
                             <span style={{ color: "var(--text-dim)" }}>—</span>
@@ -290,7 +319,7 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
               >
                 {importMut.isPending
                   ? "匯入中…"
-                  : `確認匯入(品牌 ${preview.summary.brands_created + preview.summary.brands_updated} / 系列 ${preview.summary.series_created + preview.summary.series_updated})`}
+                  : `確認匯入(品牌 ${preview.summary.brands_created + preview.summary.brands_updated} / 系列 ${preview.summary.series_created + preview.summary.series_updated} / 類型 ${preview.summary.types_created + preview.summary.types_updated})`}
               </button>
             </>
           )}

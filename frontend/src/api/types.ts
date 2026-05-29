@@ -976,10 +976,24 @@ export interface PhoneSeries {
   brand: number;
   brand_code: string;
   brand_name: string;
+  product_type: number | null;
+  product_type_code: string;
+  product_type_name: string;
   code: string;
   name: string;
   sort_order: number;
   is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProductType {
+  id: number;
+  code: string;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+  series_count?: number;
   created_at?: string;
   updated_at?: string;
 }

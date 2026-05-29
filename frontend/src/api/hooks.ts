@@ -14,6 +14,7 @@ import {
   PartsUsageReport,
   Brand,
   PhoneSeries,
+  ProductType,
   PartBulkCreateResult,
   PartPreviewRow,
   PartTemplate,
@@ -1696,12 +1697,50 @@ export function useDeletePhoneSeries() {
   });
 }
 
+// ─── ProductType master ───
+
+export const useProductTypes = () =>
+  useQuery({
+    queryKey: ["product-types"],
+    queryFn: () => list<ProductType>(`/product-types/?page_size=100`),
+  });
+
+export function useSaveProductType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Partial<ProductType> & { id?: number }) => {
+      const { id, ...body } = payload;
+      const method = id ? "PATCH" : "POST";
+      const url = id ? `/product-types/${id}/` : "/product-types/";
+      return api<ProductType>(url, { method, body: JSON.stringify(body) });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["product-types"] });
+      qc.invalidateQueries({ queryKey: ["phone-series"] });
+    },
+  });
+}
+
+export function useDeleteProductType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<void>(`/product-types/${id}/`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["product-types"] });
+      qc.invalidateQueries({ queryKey: ["phone-series"] });
+    },
+  });
+}
+
 export interface BrandImportResult {
   summary: {
     brands_created: number;
     brands_updated: number;
     series_created: number;
     series_updated: number;
+    types_created: number;
+    types_updated: number;
     rows_skipped: number;
   };
   preview: Array<{
@@ -1712,6 +1751,9 @@ export interface BrandImportResult {
     series_name: string;
     series_code: string;
     series_action: string;
+    type_name: string;
+    type_code: string;
+    type_action: string;
   }>;
   errors: Array<{ line: number; msg: string }>;
 }
@@ -1732,6 +1774,7 @@ export function useImportBrandsSeries() {
       if (!vars.dryRun) {
         qc.invalidateQueries({ queryKey: ["brands"] });
         qc.invalidateQueries({ queryKey: ["phone-series"] });
+        qc.invalidateQueries({ queryKey: ["product-types"] });
       }
     },
   });

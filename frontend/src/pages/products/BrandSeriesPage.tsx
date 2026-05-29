@@ -5,6 +5,7 @@ import {
   useDeleteBrand,
   useDeletePhoneSeries,
   usePhoneSeriesList,
+  useProductTypes,
   useSaveBrand,
   useSavePhoneSeries,
 } from "@/api/hooks";
@@ -25,6 +26,7 @@ interface EditingBrand {
 interface EditingSeries {
   id?: number;
   brand: number;
+  product_type: number | null;
   code: string;
   name: string;
   sort_order: number;
@@ -46,6 +48,7 @@ export function BrandSeriesPage() {
   const user = useCurrentUser();
   const canImport = user?.profile?.role === "platform_admin";
   const brands = useBrands();
+  const productTypes = useProductTypes();
   const saveBrand = useSaveBrand();
   const delBrand = useDeleteBrand();
 
@@ -123,6 +126,7 @@ export function BrandSeriesPage() {
     if (!selectedBrandId) return;
     setEditingSeries({
       brand: selectedBrandId,
+      product_type: null,
       code: "",
       name: "",
       sort_order: (series.data?.length ?? 0) + 1,
@@ -135,6 +139,7 @@ export function BrandSeriesPage() {
     setEditingSeries({
       id: s.id,
       brand: s.brand,
+      product_type: s.product_type,
       code: s.code,
       name: s.name,
       sort_order: s.sort_order,
@@ -422,6 +427,28 @@ export function BrandSeriesPage() {
                       }
                       style={{ width: 160 }}
                     />
+                    <select
+                      value={editingSeries.product_type ?? ""}
+                      onChange={(e) =>
+                        setEditingSeries({
+                          ...editingSeries,
+                          product_type: e.target.value
+                            ? Number(e.target.value)
+                            : null,
+                        })
+                      }
+                      style={{ width: 140 }}
+                      title="產品類型"
+                    >
+                      <option value="">— 未指定 —</option>
+                      {(productTypes.data ?? [])
+                        .filter((t) => t.is_active)
+                        .map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                    </select>
                     <input
                       type="number"
                       min={0}
@@ -493,6 +520,7 @@ export function BrandSeriesPage() {
                       <th style={{ width: 60 }}>排序</th>
                       <th style={{ width: 120 }}>代碼</th>
                       <th>名稱</th>
+                      <th style={{ width: 100 }}>類型</th>
                       <th style={{ width: 80 }}>啟用</th>
                       <th style={{ width: 140 }}></th>
                     </tr>
@@ -506,6 +534,23 @@ export function BrandSeriesPage() {
                         </td>
                         <td>
                           <b>{s.name}</b>
+                        </td>
+                        <td>
+                          {s.product_type_name ? (
+                            <span
+                              style={{
+                                padding: "2px 6px",
+                                borderRadius: 4,
+                                background: "rgba(96,165,250,0.15)",
+                                color: "#60a5fa",
+                                fontSize: 12,
+                              }}
+                            >
+                              {s.product_type_name}
+                            </span>
+                          ) : (
+                            <span style={{ color: "var(--text-dim)" }}>—</span>
+                          )}
                         </td>
                         <td>
                           {s.is_active ? (
