@@ -4911,6 +4911,238 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   background: #f9fafb;
 }
 
+/* ─── 通用元件:膠囊鈕 / 開關 / 提示問號 / 圖示鈕 / 虛線新增列
+       (零件範本管理頁主用,其他頁面也可共用)─── */
+
+/* 膠囊鈕(套用範本 / 快速加入零件)*/
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.pill:hover {
+  background: var(--row-hover);
+  border-color: var(--text-dim);
+}
+.pill.pill-strong {
+  background: rgba(79, 140, 255, 0.12);
+  border-color: rgba(79, 140, 255, 0.35);
+  color: var(--accent);
+}
+.pill.pill-strong:hover {
+  background: rgba(79, 140, 255, 0.2);
+  border-color: rgba(79, 140, 255, 0.55);
+}
+:root[data-theme="light"] .pill {
+  background: #ffffff;
+}
+:root[data-theme="light"] .pill:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+:root[data-theme="light"] .pill.pill-strong {
+  background: #eef2ff;
+  color: #4338ca;
+  border-color: #c7d2fe;
+}
+:root[data-theme="light"] .pill.pill-strong:hover {
+  background: #e0e7ff;
+  border-color: #818cf8;
+}
+
+/* Toggle 開關 */
+.toggle-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 14px;
+}
+.toggle-switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.toggle-track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: #6b7280;
+  border-radius: 12px;
+  transition: background 0.18s ease;
+  flex-shrink: 0;
+}
+.toggle-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
+  border-radius: 50%;
+  transition: left 0.18s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+.toggle-switch input:checked + .toggle-track {
+  background: var(--accent);
+}
+.toggle-switch input:checked + .toggle-track::after {
+  left: 18px;
+}
+.toggle-switch input:focus-visible + .toggle-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+:root[data-theme="light"] .toggle-track {
+  background: #d1d5db;
+}
+:root[data-theme="light"] .toggle-switch input:checked + .toggle-track {
+  background: #2962ff;
+}
+
+/* 問號提示(hover 顯示說明)*/
+.info-tip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: help;
+  margin-left: 6px;
+  position: relative;
+}
+.info-tip:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+.info-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 260px;
+  white-space: normal;
+  background: #1f2937;
+  color: #ffffff;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+.info-tip:hover::after {
+  opacity: 1;
+}
+
+/* 圖示按鈕(垃圾桶等,hover 才顯色)*/
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease,
+    border-color 0.12s ease;
+}
+.icon-btn:hover {
+  background: var(--row-hover);
+  color: var(--text);
+}
+.icon-btn.icon-btn-danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+:root[data-theme="light"] .icon-btn.icon-btn-danger:hover {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+/* 全寬虛線「+ 加一項」 */
+.btn-add-row {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 10px;
+  margin-top: 8px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.12s ease, border-color 0.12s ease,
+    color 0.12s ease;
+}
+.btn-add-row:hover {
+  background: var(--row-hover);
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+:root[data-theme="light"] .btn-add-row:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+  color: #1f2937;
+}
+
+/* CTA 強調按鈕(例:儲存範本)—— 強制實心強調色,不被日間 outline 規則覆蓋 */
+:root[data-theme="light"] .btn.btn-save,
+:root[data-theme="light"] .btn.primary.btn-save {
+  background: #2962ff;
+  color: #ffffff;
+  border-color: #2962ff;
+}
+:root[data-theme="light"] .btn.btn-save:hover,
+:root[data-theme="light"] .btn.primary.btn-save:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #ffffff;
+  filter: none;
+}
+:root[data-theme="light"] .btn.btn-save:disabled,
+:root[data-theme="light"] .btn.primary.btn-save:disabled {
+  background: #93c5fd;
+  border-color: #93c5fd;
+  color: #ffffff;
+}
+
+/* 大型輸入框(範本名稱、主標題輸入框)*/
+.input-lg {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  font-size: 15px;
+}
+
 /* ─── Master-Detail 左側列表(品牌 / 系列 / 範本 …)
        預設每一筆都包卡片框,不再只剩浮空文字 ─── */
 :root[data-theme="light"] .pt-list-item {
