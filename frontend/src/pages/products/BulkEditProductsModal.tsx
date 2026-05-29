@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   useBrands,
@@ -7,7 +7,11 @@ import {
 } from "@/api/hooks";
 import type { Brand, PhoneSeries } from "@/api/types";
 import { Banner } from "@/components/Banner";
+import { DraftBanner } from "@/components/DraftBanner";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
+import { useModalDraft } from "@/hooks/useModalDraft";
+
+const DRAFT_KEY = "modal-draft:bulk-edit-products";
 
 interface Props {
   open: boolean;
@@ -91,6 +95,57 @@ export function BulkEditProductsModal({
     setCompat(new Map());
   }, [open]);
 
+  // ── 草稿
+  const draftState = useMemo(
+    () => ({
+      enPrice, enKind, enLifecycle, enAttrs, enHost, enCompat,
+      listPrice, safetyStock, accessoryType, lifecycleStatus,
+      requiresSerial, allowsTelecomLine, allowsCommission, countsCash, countsMargin,
+      brand, series, generation, modelSuffix,
+      compat: Array.from(compat.entries()),
+    }),
+    [
+      enPrice, enKind, enLifecycle, enAttrs, enHost, enCompat,
+      listPrice, safetyStock, accessoryType, lifecycleStatus,
+      requiresSerial, allowsTelecomLine, allowsCommission, countsCash, countsMargin,
+      brand, series, generation, modelSuffix, compat,
+    ],
+  );
+  const draftHelper = useModalDraft({
+    key: DRAFT_KEY,
+    open,
+    state: draftState,
+    isEditMode: false,
+    isEmpty: (s) =>
+      !s.enPrice && !s.enKind && !s.enLifecycle && !s.enAttrs && !s.enHost && !s.enCompat,
+  });
+  function loadDraftToState() {
+    const d = draftHelper.draft;
+    if (!d) return;
+    const s = d.state;
+    setEnPrice(s.enPrice);
+    setEnKind(s.enKind);
+    setEnLifecycle(s.enLifecycle);
+    setEnAttrs(s.enAttrs);
+    setEnHost(s.enHost);
+    setEnCompat(s.enCompat);
+    setListPrice(s.listPrice);
+    setSafetyStock(s.safetyStock);
+    setAccessoryType(s.accessoryType);
+    setLifecycleStatus(s.lifecycleStatus);
+    setRequiresSerial(s.requiresSerial);
+    setAllowsTelecomLine(s.allowsTelecomLine);
+    setAllowsCommission(s.allowsCommission);
+    setCountsCash(s.countsCash);
+    setCountsMargin(s.countsMargin);
+    setBrand(s.brand);
+    setSeries(s.series);
+    setGeneration(s.generation);
+    setModelSuffix(s.modelSuffix);
+    setCompat(new Map(s.compat));
+    draftHelper.consumeDraft();
+  }
+
   async function submit() {
     setError(null);
     const patch: Record<string, unknown> = {};
@@ -129,6 +184,7 @@ export function BulkEditProductsModal({
       return;
     try {
       const res = await save.mutateAsync({ ids: productIds, patch });
+      draftHelper.markSavedAndClear();
       onSuccess(res.updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -147,6 +203,13 @@ export function BulkEditProductsModal({
         </div>
         <div className="modal-body be-body">
           {error && <Banner kind="error" message={error} />}
+          {draftHelper.draft && (
+            <DraftBanner
+              savedAt={draftHelper.draft.savedAt}
+              onLoad={loadDraftToState}
+              onDiscard={() => draftHelper.discardDraft()}
+            />
+          )}
           <div className="be-hint">
             勾選要修改的區塊,未勾選的欄位保留原值。
           </div>

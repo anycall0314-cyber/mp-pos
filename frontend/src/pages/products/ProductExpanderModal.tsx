@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
+const DRAFT_KEY = "modal-draft:expander";
+
 import {
   BulkProductRow,
   useBrands,
@@ -10,8 +12,10 @@ import { searchCategories } from "@/api/search";
 import type { Brand, Category, PhoneSeries } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
+import { DraftBanner } from "@/components/DraftBanner";
 import { Checkbox, Field } from "@/components/Field";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
+import { useModalDraft } from "@/hooks/useModalDraft";
 
 interface Props {
   open: boolean;
@@ -86,6 +90,82 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
   const axis1Values = useMemo(() => splitList(axis1Text), [axis1Text]);
   const axis2Values = useMemo(() => splitList(axis2Text), [axis2Text]);
   const prices = useMemo(() => splitList(pricesText), [pricesText]);
+
+  // ── 草稿:打包要保存的欄位
+  const draftState = useMemo(
+    () => ({
+      model,
+      accessoryType,
+      brandId,
+      seriesId,
+      generation,
+      modelSuffix,
+      axis1Label,
+      axis2Label,
+      axis1Text,
+      axis2Text,
+      pricesText,
+      safetyStock,
+      requiresSerial,
+      allowsTelecomLine,
+      allowsCommission,
+      compat: Array.from(compat.entries()),
+    }),
+    [
+      model,
+      accessoryType,
+      brandId,
+      seriesId,
+      generation,
+      modelSuffix,
+      axis1Label,
+      axis2Label,
+      axis1Text,
+      axis2Text,
+      pricesText,
+      safetyStock,
+      requiresSerial,
+      allowsTelecomLine,
+      allowsCommission,
+      compat,
+    ],
+  );
+  const draftHelper = useModalDraft({
+    key: DRAFT_KEY,
+    open,
+    state: draftState,
+    isEditMode: false,
+    isEmpty: (s) =>
+      !s.model.trim() &&
+      !s.axis1Text.trim() &&
+      !s.axis2Text.trim() &&
+      !s.pricesText.trim() &&
+      s.compat.length === 0 &&
+      !s.brandId &&
+      !s.seriesId,
+  });
+  function loadDraftToState() {
+    const d = draftHelper.draft;
+    if (!d) return;
+    const s = d.state;
+    setModel(s.model);
+    setAccessoryType(s.accessoryType);
+    setBrandId(s.brandId);
+    setSeriesId(s.seriesId);
+    setGeneration(s.generation);
+    setModelSuffix(s.modelSuffix);
+    setAxis1Label(s.axis1Label);
+    setAxis2Label(s.axis2Label);
+    setAxis1Text(s.axis1Text);
+    setAxis2Text(s.axis2Text);
+    setPricesText(s.pricesText);
+    setSafetyStock(s.safetyStock);
+    setRequiresSerial(s.requiresSerial);
+    setAllowsTelecomLine(s.allowsTelecomLine);
+    setAllowsCommission(s.allowsCommission);
+    setCompat(new Map(s.compat));
+    draftHelper.consumeDraft();
+  }
 
   // 商品性質改變時,自動帶屬性 + 軸標籤預設
   function changeAccessoryType(next: AccessoryType) {
@@ -237,6 +317,7 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
         },
         items,
       });
+      draftHelper.markSavedAndClear();
       onSuccess(res.count);
       reset();
     } catch (e: unknown) {
@@ -261,6 +342,13 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
         <div className="modal-title">型號展開新增</div>
 
         {error && <Banner kind="error" message={error} />}
+        {draftHelper.draft && (
+          <DraftBanner
+            savedAt={draftHelper.draft.savedAt}
+            onLoad={loadDraftToState}
+            onDiscard={() => draftHelper.discardDraft()}
+          />
+        )}
 
         <div className="modal-body">
           {/* 商品性質 — 決定後續欄位顯示 + 屬性預設 */}

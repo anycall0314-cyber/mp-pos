@@ -13,6 +13,10 @@ import type {
   PartTemplate,
 } from "@/api/types";
 import { Banner } from "@/components/Banner";
+import { DraftBanner } from "@/components/DraftBanner";
+import { useModalDraft } from "@/hooks/useModalDraft";
+
+const DRAFT_KEY = "modal-draft:bulk-create-parts";
 
 interface Props {
   open: boolean;
@@ -28,7 +32,7 @@ interface PhoneModelOption {
 
 /** 四步驟批次建立零件: 選範本 → 選機型 → 預覽調整 → 確認 */
 export function BulkCreatePartsModal({ open, onClose }: Props) {
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState<number>(1);
   const [templateId, setTemplateId] = useState<number | null>(null);
   const [models, setModels] = useState<PhoneModelOption[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -55,6 +59,43 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
     setResult(null);
     setError(null);
   }, [open]);
+
+  // 草稿(step 也存,下次重開可從中途繼續)
+  const draftState = useMemo(
+    () => ({
+      step,
+      templateId,
+      selectedKeys: Array.from(selectedKeys),
+      defaultCost,
+      defaultSafety,
+      categoryId,
+      rows,
+    }),
+    [step, templateId, selectedKeys, defaultCost, defaultSafety, categoryId, rows],
+  );
+  const draftHelper = useModalDraft({
+    key: DRAFT_KEY,
+    open,
+    state: draftState,
+    isEditMode: false,
+    isEmpty: (s) =>
+      !s.templateId &&
+      s.selectedKeys.length === 0 &&
+      s.rows.length === 0,
+  });
+  function loadDraftToState() {
+    const d = draftHelper.draft;
+    if (!d) return;
+    const s = d.state;
+    setStep(s.step);
+    setTemplateId(s.templateId);
+    setSelectedKeys(new Set(s.selectedKeys));
+    setDefaultCost(s.defaultCost);
+    setDefaultSafety(s.defaultSafety);
+    setCategoryId(s.categoryId);
+    setRows(s.rows);
+    draftHelper.consumeDraft();
+  }
 
   // Step 2 載入機型
   useEffect(() => {
@@ -110,6 +151,7 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
           safety_stock: r.safety_stock,
         })),
       });
+      draftHelper.markSavedAndClear();
       setResult(res);
       setStep(4);
     } catch (e) {
@@ -174,6 +216,14 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
         </div>
         <div className="modal-body bcp-body">
           {error && <Banner kind="error" message={error} />}
+          {draftHelper.draft && (
+            <DraftBanner
+              savedAt={draftHelper.draft.savedAt}
+              onLoad={loadDraftToState}
+              onDiscard={() => draftHelper.discardDraft()}
+              label="上次有未完成的零件批次建立"
+            />
+          )}
 
           {/* Step 1: 選範本 */}
           {step === 1 && (

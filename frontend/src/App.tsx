@@ -16,6 +16,7 @@ import { RepairEntryPage } from "@/pages/repairs/RepairEntryPage";
 import { RepairReceiptPrintPage } from "@/pages/repairs/RepairReceiptPrintPage";
 import { RepairItemsPage } from "@/pages/repairs/RepairItemsPage";
 import { RepairsPage } from "@/pages/repairs/RepairsPage";
+import { BrandSeriesPage } from "@/pages/products/BrandSeriesPage";
 import { PartTemplatesPage } from "@/pages/products/PartTemplatesPage";
 import { ProductsPage } from "@/pages/products/ProductsPage";
 import { PurchasesPage } from "@/pages/purchases/PurchasesPage";
@@ -283,6 +284,7 @@ export function App() {
           <Route path="/home" element={<HomePage />} />
           <Route path="/products" element={<ProductsPage />} />
           <Route path="/part-templates" element={<PartTemplatesPage />} />
+          <Route path="/brand-series" element={<BrandSeriesPage />} />
           <Route path="/telecom-plans" element={<TelecomPlansPage />} />
           <Route path="/sim-cards" element={<SimCardsPage />} />
           <Route path="/purchases" element={<PurchasesPage />} />

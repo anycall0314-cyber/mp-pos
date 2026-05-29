@@ -10,7 +10,11 @@ import { searchCategories } from "@/api/search";
 import type { Category } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
+import { DraftBanner } from "@/components/DraftBanner";
 import { Checkbox, Field } from "@/components/Field";
+import { useModalDraft } from "@/hooks/useModalDraft";
+
+const DRAFT_KEY = "modal-draft:bulk-add-products";
 
 interface Props {
   open: boolean;
@@ -70,6 +74,45 @@ export function BulkAddProductsModal({ open, onClose, onSuccess }: Props) {
 
   const rows = useMemo(() => parseRows(raw), [raw]);
 
+  // 草稿
+  const draftState = useMemo(
+    () => ({
+      category,
+      requiresSerial,
+      allowsTelecomLine,
+      allowsCommission,
+      isVirtual,
+      raw,
+    }),
+    [
+      category,
+      requiresSerial,
+      allowsTelecomLine,
+      allowsCommission,
+      isVirtual,
+      raw,
+    ],
+  );
+  const draftHelper = useModalDraft({
+    key: DRAFT_KEY,
+    open,
+    state: draftState,
+    isEditMode: false,
+    isEmpty: (s) => !s.raw.trim() && !s.category,
+  });
+  function loadDraftToState() {
+    const d = draftHelper.draft;
+    if (!d) return;
+    const s = d.state;
+    setCategory(s.category);
+    setRequiresSerial(s.requiresSerial);
+    setAllowsTelecomLine(s.allowsTelecomLine);
+    setAllowsCommission(s.allowsCommission);
+    setIsVirtual(s.isVirtual);
+    setRaw(s.raw);
+    draftHelper.consumeDraft();
+  }
+
   if (!open) return null;
 
   async function submit() {
@@ -97,6 +140,7 @@ export function BulkAddProductsModal({ open, onClose, onSuccess }: Props) {
     if (category) common.category = category as number;
     try {
       const res = await bulk.mutateAsync({ common, items: rows });
+      draftHelper.markSavedAndClear();
       onSuccess(res.count);
       reset();
     } catch (e) {
@@ -140,6 +184,13 @@ export function BulkAddProductsModal({ open, onClose, onSuccess }: Props) {
         <div className="modal-title">批次新增商品</div>
         <div className="modal-body">
           {error && <Banner kind="error" message={error} />}
+          {draftHelper.draft && (
+            <DraftBanner
+              savedAt={draftHelper.draft.savedAt}
+              onLoad={loadDraftToState}
+              onDiscard={() => draftHelper.discardDraft()}
+            />
+          )}
 
           <div className="field-row">
             <Field label="預設類別">

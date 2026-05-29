@@ -1671,3 +1671,27 @@ export function useSavePhoneSeries() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["phone-series"] }),
   });
 }
+
+export function useDeleteBrand() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<void>(`/brands/${id}/`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["brands"] });
+      qc.invalidateQueries({ queryKey: ["phone-series"] });
+    },
+  });
+}
+
+export function useDeletePhoneSeries() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<void>(`/phone-series/${id}/`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["phone-series"] });
+      qc.invalidateQueries({ queryKey: ["brands"] });
+    },
+  });
+}
