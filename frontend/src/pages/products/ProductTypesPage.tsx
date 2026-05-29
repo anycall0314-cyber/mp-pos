@@ -98,7 +98,7 @@ export function ProductTypesPage() {
       <div className="entry-body">
         <div
           style={{
-            fontSize: 13,
+            fontSize: 14,
             color: "var(--text-dim)",
             marginBottom: 12,
             lineHeight: 1.6,
@@ -155,7 +155,7 @@ export function ProductTypesPage() {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 4,
-                  fontSize: 13,
+                  fontSize: 14,
                 }}
               >
                 <input
@@ -215,7 +215,7 @@ export function ProductTypesPage() {
                 <tr key={t.id}>
                   <td>{t.sort_order}</td>
                   <td>
-                    <code style={{ fontSize: 12 }}>{t.code}</code>
+                    <code style={{ fontSize: 13 }}>{t.code}</code>
                   </td>
                   <td>
                     <b>{t.name}</b>
