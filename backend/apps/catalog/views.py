@@ -37,6 +37,7 @@ from .serializers import (
     ProductSerializer,
     ProductTypeSerializer,
 )
+from .services_dynamic_stock import insights_trending
 from .services_parts import bulk_create_parts, build_preview
 
 
@@ -574,6 +575,17 @@ class ProductViewSet(viewsets.ModelViewSet):
                     },
                 }
             )
+        return Response(data)
+
+    @action(detail=False, methods=["get"], url_path="trending")
+    def trending(self, request):
+        """銷售趨勢推送:回溫(trend_ratio>=1.2)/ 退燒(trend_ratio<=0.5)兩類。
+
+        資料由 manage.py compute_dynamic_stock 每晚算好寫進 Product 欄位,
+        這個 endpoint 只是取 + 分類。
+        """
+        limit = int(request.query_params.get("limit", 10))
+        data = insights_trending(request.tenant, limit=limit)
         return Response(data)
 
     @action(detail=False, methods=["get"], url_path="stock-matrix")

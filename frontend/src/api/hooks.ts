@@ -320,6 +320,32 @@ export const useHomeSummary = () =>
     refetchOnWindowFocus: true,
   });
 
+// 銷售趨勢(回溫 / 退燒):資料由 manage.py compute_dynamic_stock 排程算
+export interface TrendingItem {
+  id: number;
+  sku: string;
+  name: string;
+  stock: number;
+  velocity_ewma: string;
+  velocity_recent_14d: string;
+  velocity_baseline_90d: string;
+  trend_ratio: string;
+  dynamic_safety_stock: number;
+  kind: "up" | "down";
+}
+export interface TrendingResponse {
+  trending_up: TrendingItem[];
+  trending_down: TrendingItem[];
+}
+export const useTrending = (limit = 6) =>
+  useQuery({
+    queryKey: ["trending", limit],
+    queryFn: () =>
+      api<TrendingResponse>(`/products/trending/?limit=${limit}`),
+    refetchInterval: 5 * 60 * 1000, // 5 分鐘重抓(資料每晚才會變,refetch 主要是換頁觸發)
+    refetchOnWindowFocus: false,
+  });
+
 // 庫存警示:依商品狀態 + 關聯主機 推論觸發原因
 export const useInventoryAlerts = () =>
   useQuery({

@@ -2507,6 +2507,43 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
 }
 .hp-alert-red { background: #ff7070; }
 .hp-alert-yellow { background: #fbbf24; }
+
+/* 銷售趨勢膠囊 — 取代 alert-dot,把 % 數直接秀出來 */
+.hp-trend-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.hp-trend-up {
+  background: rgba(74, 222, 128, 0.18);
+  color: #4ade80;
+}
+.hp-trend-down {
+  background: rgba(251, 146, 60, 0.18);
+  color: #fb923c;
+}
+:root[data-theme="light"] .hp-trend-up {
+  background: #dcfce7;
+  color: #15803d;
+}
+:root[data-theme="light"] .hp-trend-down {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.hp-panel-meta {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-dim);
+}
 .hp-alert-content { flex: 1; min-width: 0; }
 .hp-alert-title {
   font-size: 14px;

@@ -586,17 +586,15 @@ def home_summary(request):
         .annotate(t=Sum("qty"))
         .values("t")[:1]
     )
+    # 安全庫存判定:取「人工 safety_stock」與「系統算出 dynamic_safety_stock」
+    # 兩者較大者。dynamic_safety_stock 已經考量 lifecycle(停產 / 清倉會是 0)
+    # 與配件主機帶動需求,所以不再用 lifecycle 過濾。
+    from django.db.models.functions import Greatest
     low_qs = (
         Product.objects.for_tenant(tenant)
         .filter(
             is_active=True,
             is_virtual=False,
-            safety_stock__gt=0,
-            # 只算「主力現貨」/「即將換代」;停產 / 清倉不算補貨警示
-            lifecycle_status__in=[
-                Product.LifecycleStatus.ACTIVE,
-                Product.LifecycleStatus.REPLACING,
-            ],
         )
         .annotate(
             _sc=Coalesce(
@@ -606,8 +604,9 @@ def home_summary(request):
                 Subquery(balance_sq, output_field=IntegerField()), Value(0)
             ),
             stock=F("_sc") + F("_bc"),
+            effective_safety=Greatest(F("safety_stock"), F("dynamic_safety_stock")),
         )
-        .filter(stock__lt=F("safety_stock"))
+        .filter(effective_safety__gt=0, stock__lt=F("effective_safety"))
         .order_by("stock", "name")
     )
     low_items = [
@@ -616,7 +615,9 @@ def home_summary(request):
             "name": p.name,
             "sku": p.sku,
             "qty": int(p.stock),
-            "safety_stock": p.safety_stock,
+            "safety_stock": int(p.effective_safety),
+            "dynamic_safety_stock": p.dynamic_safety_stock,
+            "trend_ratio": str(p.trend_ratio),
         }
         for p in low_qs[:10]
     ]

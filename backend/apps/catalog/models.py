@@ -203,6 +203,47 @@ class Product(TenantOwnedModel):
         help_text="動態安全庫存的天數因子(下次補貨能撐幾天),預設 14",
     )
 
+    # ─── 動態庫存統計(由 manage.py compute_dynamic_stock 排程更新)──
+    # 這 6 欄全由排程算出,前端 / 進貨流程不該手動填。
+    velocity_ewma = models.DecimalField(
+        "EWMA 日均銷量",
+        max_digits=10,
+        decimal_places=3,
+        default=0,
+        help_text="指數加權移動平均(α=0.15)的最新日均銷量",
+    )
+    velocity_recent_14d = models.DecimalField(
+        "近 14 日均銷量",
+        max_digits=10,
+        decimal_places=3,
+        default=0,
+        help_text="最近 14 天的單純日均",
+    )
+    velocity_baseline_90d = models.DecimalField(
+        "90 日基準日均",
+        max_digits=10,
+        decimal_places=3,
+        default=0,
+        help_text="過去 90 天的日均,當做趨勢比較基準",
+    )
+    trend_ratio = models.DecimalField(
+        "銷售趨勢比",
+        max_digits=5,
+        decimal_places=2,
+        default=1,
+        help_text=">1.2 銷售回溫;<0.5 銷售退燒;1 表示穩定",
+    )
+    dynamic_safety_stock = models.PositiveIntegerField(
+        "動態安全庫存",
+        default=0,
+        help_text="由銷量 / 主機帶動算出的補貨點。0 = 系統判定不需補貨",
+    )
+    dynamic_stats_updated_at = models.DateTimeField(
+        "動態統計更新時間",
+        null=True,
+        blank=True,
+    )
+
     # 以下 5 欄僅在 accessory_type=none(主機本身)時有意義
     brand = models.ForeignKey(
         "catalog.Brand",

@@ -897,6 +897,8 @@ export interface HomeSummary {
       sku: string;
       qty: number;
       safety_stock: number;
+      dynamic_safety_stock?: number;
+      trend_ratio?: string;
     }[];
   };
   recent_sales: {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 
-import { useHomeSummary } from "@/api/hooks";
+import { TrendingItem, useHomeSummary, useTrending } from "@/api/hooks";
 import { useCurrentUser } from "@/auth/AuthContext";
 
 /**
@@ -15,6 +15,7 @@ import { useCurrentUser } from "@/auth/AuthContext";
 export function HomePage() {
   const user = useCurrentUser();
   const summary = useHomeSummary();
+  const trending = useTrending(6);
   const now = useNow();
 
   const today = summary.data?.today;
@@ -253,6 +254,62 @@ export function HomePage() {
           </section>
         </div>
 
+        <div className="hp-two-col">
+          <section className="hp-panel">
+            <div className="hp-panel-head">
+              <div className="hp-panel-title">
+                銷量回溫
+                <span className="hp-panel-meta">
+                  最近 14 天 vs 過去 90 天
+                </span>
+              </div>
+              <NavLink to="/inventory" className="hp-panel-link">
+                查看庫存 →
+              </NavLink>
+            </div>
+            <div className="hp-panel-body">
+              {trending.isLoading && (
+                <div className="hp-panel-empty">載入中…</div>
+              )}
+              {!trending.isLoading &&
+                (trending.data?.trending_up?.length ?? 0) === 0 && (
+                  <div className="hp-panel-empty">
+                    暫無顯著回溫商品 — 系統每晚重算
+                  </div>
+                )}
+              {trending.data?.trending_up?.map((it) => (
+                <TrendingRow key={`up-${it.id}`} item={it} />
+              ))}
+            </div>
+          </section>
+
+          <section className="hp-panel">
+            <div className="hp-panel-head">
+              <div className="hp-panel-title">
+                銷量退燒
+                <span className="hp-panel-meta">考慮清倉或降價</span>
+              </div>
+              <NavLink to="/inventory" className="hp-panel-link">
+                查看庫存 →
+              </NavLink>
+            </div>
+            <div className="hp-panel-body">
+              {trending.isLoading && (
+                <div className="hp-panel-empty">載入中…</div>
+              )}
+              {!trending.isLoading &&
+                (trending.data?.trending_down?.length ?? 0) === 0 && (
+                  <div className="hp-panel-empty">
+                    暫無顯著退燒商品 — 系統每晚重算
+                  </div>
+                )}
+              {trending.data?.trending_down?.map((it) => (
+                <TrendingRow key={`dn-${it.id}`} item={it} />
+              ))}
+            </div>
+          </section>
+        </div>
+
         <section className="hp-section">
           <div className="hp-section-title">快速入口</div>
           <div className="hp-quick-grid">
@@ -305,6 +362,54 @@ function QuickLink({
       className={`hp-quick-link${tone === "primary" ? " primary" : ""}`}
     >
       {label}
+    </NavLink>
+  );
+}
+
+function TrendingRow({ item }: { item: TrendingItem }) {
+  const ratio = Number(item.trend_ratio);
+  const recent = Number(item.velocity_recent_14d);
+  const baseline = Number(item.velocity_baseline_90d);
+  // 換算成「+N% / -N%」字面;baseline 0 時 ratio 算出 2.0,顯示「新熱」
+  let trendLabel = "";
+  let trendClass = "";
+  if (baseline === 0 && recent > 0) {
+    trendLabel = "新崛起";
+    trendClass = "hp-trend-up";
+  } else if (ratio >= 1) {
+    trendLabel = `+${Math.round((ratio - 1) * 100)}%`;
+    trendClass = "hp-trend-up";
+  } else {
+    trendLabel = `-${Math.round((1 - ratio) * 100)}%`;
+    trendClass = "hp-trend-down";
+  }
+  const dailyHint =
+    recent >= 1 ? `近 14 天日均 ${recent.toFixed(1)}` : `近 14 天 ${recent.toFixed(2)}/日`;
+  const stockHint =
+    item.kind === "up"
+      ? `庫存 ${item.stock} 件${
+          item.dynamic_safety_stock > 0
+            ? ` / 建議 ${item.dynamic_safety_stock}`
+            : ""
+        }`
+      : `庫存 ${item.stock} 件`;
+  return (
+    <NavLink
+      to={`/inventory?search=${encodeURIComponent(item.sku)}`}
+      className="hp-alert-row hp-alert-link"
+    >
+      <span
+        className={`hp-trend-badge ${trendClass}`}
+        title={`recent ${item.velocity_recent_14d} / baseline ${item.velocity_baseline_90d}`}
+      >
+        {trendLabel}
+      </span>
+      <div className="hp-alert-content">
+        <div className="hp-alert-title">{item.name}</div>
+        <div className="hp-alert-sub">
+          {dailyHint} · {stockHint}
+        </div>
+      </div>
     </NavLink>
   );
 }
