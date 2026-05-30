@@ -75,7 +75,6 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
   const [axis1Text, setAxis1Text] = useState("");
   const [axis2Text, setAxis2Text] = useState("");
   const [pricesText, setPricesText] = useState("");
-  const [safetyStock, setSafetyStock] = useState("0");
 
   // 屬性(可隨商品性質自動調整,但仍允許使用者覆蓋)
   const [requiresSerial, setRequiresSerial] = useState(true);
@@ -105,7 +104,6 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
       axis1Text,
       axis2Text,
       pricesText,
-      safetyStock,
       requiresSerial,
       allowsTelecomLine,
       allowsCommission,
@@ -123,7 +121,6 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
       axis1Text,
       axis2Text,
       pricesText,
-      safetyStock,
       requiresSerial,
       allowsTelecomLine,
       allowsCommission,
@@ -159,7 +156,6 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
     setAxis1Text(s.axis1Text);
     setAxis2Text(s.axis2Text);
     setPricesText(s.pricesText);
-    setSafetyStock(s.safetyStock);
     setRequiresSerial(s.requiresSerial);
     setAllowsTelecomLine(s.allowsTelecomLine);
     setAllowsCommission(s.allowsCommission);
@@ -267,7 +263,6 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
     setAxis1Text("");
     setAxis2Text("");
     setPricesText("");
-    setSafetyStock("0");
     setRequiresSerial(true);
     setAllowsTelecomLine(false);
     setAllowsCommission(false);
@@ -301,7 +296,6 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
           requires_serial: requiresSerial,
           allows_telecom_line: allowsTelecomLine,
           allows_commission: allowsCommission,
-          safety_stock: Number(safetyStock) || 0,
           // 僅主機帶 brand/series/generation/suffix(用 FK id)
           ...(accessoryType === "none" && {
             brand: brandId || null,
@@ -593,14 +587,6 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
                 value={axis2Text}
                 onChange={(e) => setAxis2Text(e.target.value)}
                 placeholder="例:金, 紫, 黑, 白 / 透明, 霧面"
-              />
-            </Field>
-            <Field label="安全庫存(套用全部,可後續調)">
-              <input
-                type="number"
-                min="0"
-                value={safetyStock}
-                onChange={(e) => setSafetyStock(e.target.value)}
               />
             </Field>
           </div>

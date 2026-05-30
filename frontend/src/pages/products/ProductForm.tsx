@@ -64,11 +64,8 @@ interface FormState {
   is_secondhand: boolean;
   counts_cash: boolean;
   counts_margin: boolean;
-  safety_stock: string;
   lifecycle_status: LifecycleStatus;
   accessory_type: AccessoryType;
-  attach_rate: string;
-  replenish_days: string;
   brand: number | "";
   series: number | "";
   generation: string; // 字串方便輸入,送出時 parseInt
@@ -99,12 +96,9 @@ const EMPTY: FormState = {
   is_secondhand: false,
   counts_cash: true,
   counts_margin: true,
-  safety_stock: "0",
   lifecycle_status: "active",
   // 預設「機型配件」(spec 要求)
   accessory_type: "phone_specific",
-  attach_rate: "0.30",
-  replenish_days: "14",
   brand: "",
   series: "",
   generation: "",
@@ -133,11 +127,8 @@ function toState(p: Product | null | undefined): FormState {
     is_secondhand: p.is_secondhand,
     counts_cash: p.counts_cash,
     counts_margin: p.counts_margin,
-    safety_stock: String(p.safety_stock ?? 0),
     lifecycle_status: p.lifecycle_status ?? "active",
     accessory_type: p.accessory_type ?? "none",
-    attach_rate: p.attach_rate ?? "0.30",
-    replenish_days: String(p.replenish_days ?? 14),
     brand: p.brand ?? "",
     series: p.series ?? "",
     generation: p.generation != null ? String(p.generation) : "",
@@ -316,11 +307,8 @@ export function ProductForm({
         is_secondhand: state.is_secondhand,
         counts_cash: state.counts_cash,
         counts_margin: state.counts_margin,
-        safety_stock: Number(state.safety_stock) || 0,
         lifecycle_status: state.lifecycle_status,
         accessory_type: state.accessory_type,
-        attach_rate: state.attach_rate || "0",
-        replenish_days: Number(state.replenish_days) || 0,
         brand: state.brand || null,
         series: state.series || null,
         generation: state.generation ? Number(state.generation) : null,
@@ -1001,28 +989,6 @@ export function ProductForm({
               />
             </Field>
           )}
-          <Field
-            label="安全庫存"
-            error={fieldErrors.safety_stock}
-            hint={
-              state.lifecycle_status === "discontinued" ||
-              state.lifecycle_status === "clearance"
-                ? "停產 / 清倉商品不觸發補貨警示"
-                : "跨倉總量低於此數,首頁會跳警示;0 = 不提醒"
-            }
-          >
-            <input
-              type="number"
-              step="1"
-              min="0"
-              value={state.safety_stock}
-              onChange={(e) => patch("safety_stock", e.target.value)}
-              disabled={
-                state.lifecycle_status === "discontinued" ||
-                state.lifecycle_status === "clearance"
-              }
-            />
-          </Field>
         </div>
 
         <Field
@@ -1042,38 +1008,6 @@ export function ProductForm({
             <option value="clearance">清倉處理</option>
           </select>
         </Field>
-
-        {state.accessory_type === "phone_specific" && (
-          <div className="field-row">
-            <Field
-              label="配件購買率"
-              error={fieldErrors.attach_rate}
-              hint="買主機的人約幾成會買此配件(0.30 = 30%)"
-            >
-              <input
-                type="number"
-                step="0.05"
-                min="0"
-                max="1"
-                value={state.attach_rate}
-                onChange={(e) => patch("attach_rate", e.target.value)}
-              />
-            </Field>
-            <Field
-              label="補貨天數"
-              error={fieldErrors.replenish_days}
-              hint="動態安全庫存的天數因子,預設 14 天"
-            >
-              <input
-                type="number"
-                step="1"
-                min="1"
-                value={state.replenish_days}
-                onChange={(e) => patch("replenish_days", e.target.value)}
-              />
-            </Field>
-          </div>
-        )}
 
         <details className="pf-details" open>
           <summary>屬性</summary>
