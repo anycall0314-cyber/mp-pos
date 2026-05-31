@@ -40,6 +40,10 @@ from .serializers import (
     ProductTypeSerializer,
 )
 from .services_dynamic_stock import insights_trending
+from .services_model_bundle import (
+    create_phone_model_bundle,
+    preview_phone_model_bundle,
+)
 from .services_parts import bulk_create_parts, build_preview
 
 
@@ -793,6 +797,44 @@ class ProductViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response({"updated": len(updated_ids), "ids": updated_ids})
+
+    @action(detail=False, methods=["post"], url_path="create-phone-model")
+    def create_phone_model(self, request):
+        """新增手機型號 — 一次建好「狀態 × 容量 × 顏色」主機 SKU + 配件 placeholder + 維修零件 SKU。
+
+        Payload(JSON):
+            brand_id          (必)
+            series_id         (選)
+            generation        (選,int)
+            model_suffix      (選,例 "Pro" / "Pro Max")
+            main_category_id  (必,主機要掛的類別)
+            list_price        (選,主機售價,字串數字)
+            condition_ids     (必,要建哪些狀態 — Condition.id list)
+            capacities        (必,容量字串 list,例 ["128GB","256GB"])
+            colors            (必,顏色字串 list)
+            accessory_categories (選,配件類別字串 list,例 ["殼","貼"])
+            accessory_category_id (選,配件 SKU 掛的類別,空白沿用 main_category_id)
+            parts_category_id    (選,零件 SKU 掛的類別,空白沿用 main_category_id)
+            template_id          (選,PartTemplate id,沒指定就只建主機 SKU)
+            parts_items          (選,覆寫範本零件清單)
+            dry_run              (bool,預設 false;true 只回預覽不寫 DB)
+
+        回傳:
+            { model_name, model_key, main_count, accessory_count, parts_count,
+              main: [...], accessories: [...], parts: [...] }
+        """
+        payload = request.data or {}
+        dry_run = str(payload.get("dry_run", "false")).lower() in ("true", "1", "yes")
+        try:
+            if dry_run:
+                result = preview_phone_model_bundle(request.tenant, payload)
+            else:
+                result = create_phone_model_bundle(request.tenant, payload)
+        except ValueError as e:
+            return Response(
+                {"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST
+            )
+        return Response(result)
 
     @action(detail=False, methods=["post"], url_path="bulk")
     def bulk_create(self, request):
