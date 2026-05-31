@@ -24,39 +24,70 @@ const QUICK_PARTS: Array<{ name: string; code: string }> = [
 ];
 
 /**
- * 「套用常用範本」 — 點一下清空並帶入整組零件。
+ * 「套用常用範本」 — 點一下清空並帶入整組(容量 / 顏色 / 配件類別 / 零件)。
+ * Phase 2 起每個 preset 多了 capacities / colors / accessory_categories
+ * 三個維度,wizard 套用此範本時會用這 3 個維度產生 SKU。
  */
 const PRESET_TEMPLATES: Record<
   string,
-  Array<{ name: string; code: string; shared_across_models?: boolean }>
+  {
+    capacities: string[];
+    colors: string[];
+    accessory_categories: string[];
+    parts: Array<{
+      name: string;
+      code: string;
+      shared_across_models?: boolean;
+    }>;
+  }
 > = {
-  智慧型手機: [
-    { name: "螢幕總成", code: "SCR" },
-    { name: "電池", code: "BAT", shared_across_models: true },
-    { name: "充電尾插", code: "USB" },
-    { name: "後相機", code: "RCAM" },
-    { name: "聽筒", code: "RCV" },
-    { name: "喇叭", code: "SPK" },
-  ],
-  平板: [
-    { name: "螢幕總成", code: "SCR" },
-    { name: "電池", code: "BAT", shared_across_models: true },
-    { name: "充電尾插", code: "USB" },
-    { name: "後相機", code: "RCAM" },
-    { name: "喇叭", code: "SPK" },
-  ],
-  智慧手錶: [
-    { name: "螢幕總成", code: "SCR" },
-    { name: "電池", code: "BAT", shared_across_models: true },
-    { name: "後蓋", code: "BCV" },
-  ],
-  筆電: [
-    { name: "螢幕總成", code: "SCR" },
-    { name: "電池", code: "BAT" },
-    { name: "鍵盤", code: "KB" },
-    { name: "觸控板", code: "TP" },
-    { name: "充電尾插", code: "USB" },
-  ],
+  智慧型手機: {
+    capacities: ["128GB", "256GB", "512GB", "1TB"],
+    colors: ["黑", "白", "鈦原色"],
+    accessory_categories: ["殼", "貼"],
+    parts: [
+      { name: "螢幕總成", code: "SCR" },
+      { name: "電池", code: "BAT", shared_across_models: true },
+      { name: "充電尾插", code: "USB" },
+      { name: "後相機", code: "RCAM" },
+      { name: "聽筒", code: "RCV" },
+      { name: "喇叭", code: "SPK" },
+    ],
+  },
+  平板: {
+    capacities: ["128GB", "256GB", "512GB", "1TB"],
+    colors: ["太空灰", "銀", "金"],
+    accessory_categories: ["保護套", "貼"],
+    parts: [
+      { name: "螢幕總成", code: "SCR" },
+      { name: "電池", code: "BAT", shared_across_models: true },
+      { name: "充電尾插", code: "USB" },
+      { name: "後相機", code: "RCAM" },
+      { name: "喇叭", code: "SPK" },
+    ],
+  },
+  智慧手錶: {
+    capacities: ["41mm", "45mm", "49mm"],
+    colors: ["黑", "銀", "金"],
+    accessory_categories: ["錶帶", "保護貼"],
+    parts: [
+      { name: "螢幕總成", code: "SCR" },
+      { name: "電池", code: "BAT", shared_across_models: true },
+      { name: "後蓋", code: "BCV" },
+    ],
+  },
+  筆電: {
+    capacities: ["256GB", "512GB", "1TB", "2TB"],
+    colors: ["太空灰", "銀"],
+    accessory_categories: ["保護套"],
+    parts: [
+      { name: "螢幕總成", code: "SCR" },
+      { name: "電池", code: "BAT" },
+      { name: "鍵盤", code: "KB" },
+      { name: "觸控板", code: "TP" },
+      { name: "充電尾插", code: "USB" },
+    ],
+  },
 };
 
 /**
@@ -78,6 +109,9 @@ interface EditingTemplate {
   name: string;
   note: string;
   is_active: boolean;
+  default_capacities: string[];
+  default_colors: string[];
+  default_accessory_categories: string[];
   items: EditingItem[];
 }
 
@@ -87,6 +121,9 @@ function toEditing(t: PartTemplate): EditingTemplate {
     name: t.name,
     note: t.note,
     is_active: t.is_active,
+    default_capacities: t.default_capacities ?? [],
+    default_colors: t.default_colors ?? [],
+    default_accessory_categories: t.default_accessory_categories ?? [],
     items: t.items.map((it, idx) => ({
       id: it.id,
       name: it.name,
@@ -101,8 +138,127 @@ function toEditing(t: PartTemplate): EditingTemplate {
   };
 }
 
+/**
+ * ChipInput — 小型 tag 輸入器。
+ * 輸入文字按 Enter / 逗號 / 頓號 提交一個 chip,backspace 在空白時刪掉最後一個。
+ * 每個 chip 有 X 可移除;onChange 回 array<string>。
+ */
+function ChipInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string[];
+  onChange: (next: string[]) => void;
+  placeholder?: string;
+}) {
+  const [draft, setDraft] = useState("");
+  function commit(raw: string) {
+    const trimmed = raw.trim().replace(/[,、]+$/, "").trim();
+    if (!trimmed) return;
+    if (value.includes(trimmed)) {
+      setDraft("");
+      return;
+    }
+    onChange([...value, trimmed]);
+    setDraft("");
+  }
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: 6,
+        padding: "6px 8px",
+        background: "var(--bg)",
+        border: "1px solid var(--border)",
+        borderRadius: 6,
+        minHeight: 40,
+      }}
+    >
+      {value.map((v, i) => (
+        <span
+          key={`${v}-${i}`}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            padding: "3px 8px",
+            borderRadius: 999,
+            background: "rgba(79, 140, 255, 0.12)",
+            border: "1px solid rgba(79, 140, 255, 0.35)",
+            color: "var(--accent)",
+            fontSize: 13,
+          }}
+        >
+          {v}
+          <button
+            type="button"
+            onClick={() => onChange(value.filter((_, j) => j !== i))}
+            aria-label={`移除 ${v}`}
+            style={{
+              background: "transparent",
+              border: 0,
+              color: "inherit",
+              cursor: "pointer",
+              fontSize: 14,
+              lineHeight: 1,
+              padding: 0,
+              marginLeft: 2,
+            }}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <input
+        value={draft}
+        onChange={(e) => {
+          const v = e.target.value;
+          // 逗號 / 頓號 自動 commit
+          if (/[,、]/.test(v)) {
+            commit(v);
+            return;
+          }
+          setDraft(v);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit(draft);
+          } else if (e.key === "Backspace" && !draft && value.length > 0) {
+            onChange(value.slice(0, -1));
+          }
+        }}
+        onBlur={() => draft && commit(draft)}
+        placeholder={value.length === 0 ? placeholder : ""}
+        style={{
+          flex: 1,
+          minWidth: 100,
+          background: "transparent",
+          border: 0,
+          outline: 0,
+          color: "var(--text)",
+          fontSize: 14,
+          padding: "4px 2px",
+        }}
+      />
+    </div>
+  );
+}
+
 function emptyEditing(): EditingTemplate {
-  return { id: 0, name: "", note: "", is_active: true, items: [] };
+  return {
+    id: 0,
+    name: "",
+    note: "",
+    is_active: true,
+    default_capacities: [],
+    default_colors: [],
+    default_accessory_categories: [],
+    items: [],
+  };
 }
 
 export function PartTemplatesPage() {
@@ -179,13 +335,21 @@ export function PartTemplatesPage() {
 
   function applyPreset(name: keyof typeof PRESET_TEMPLATES) {
     if (!editing) return;
+    const dirty =
+      editing.items.length > 0 ||
+      editing.default_capacities.length > 0 ||
+      editing.default_colors.length > 0 ||
+      editing.default_accessory_categories.length > 0;
     if (
-      editing.items.length > 0 &&
-      !confirm(`套用「${name}」範本會清空現有 ${editing.items.length} 項零件,確定?`)
+      dirty &&
+      !confirm(
+        `套用「${name}」範本會清空現有零件 / 容量 / 顏色 / 配件類別清單,確定?`,
+      )
     ) {
       return;
     }
-    const items: EditingItem[] = PRESET_TEMPLATES[name].map((p, idx) => ({
+    const preset = PRESET_TEMPLATES[name];
+    const items: EditingItem[] = preset.parts.map((p, idx) => ({
       name: p.name,
       code: p.code,
       sort_order: idx,
@@ -193,7 +357,13 @@ export function PartTemplatesPage() {
       default_safety_stock: "",
       shared_across_models: p.shared_across_models ?? false,
     }));
-    setEditing({ ...editing, items });
+    setEditing({
+      ...editing,
+      default_capacities: [...preset.capacities],
+      default_colors: [...preset.colors],
+      default_accessory_categories: [...preset.accessory_categories],
+      items,
+    });
   }
 
   function cancel() {
@@ -234,6 +404,9 @@ export function PartTemplatesPage() {
         name: editing.name,
         note: editing.note,
         is_active: editing.is_active,
+        default_capacities: editing.default_capacities,
+        default_colors: editing.default_colors,
+        default_accessory_categories: editing.default_accessory_categories,
         items_input: editing.items.map((it, idx) => ({
           id: it.id,
           name: it.name,
@@ -436,6 +609,55 @@ export function PartTemplatesPage() {
                     <span className="toggle-track" />
                     啟用
                   </label>
+                </div>
+              </div>
+
+              {/* ─── 機型維度預設(wizard 第 2 步會用)─── */}
+              <div
+                className="section-head"
+                style={{ marginTop: 8, marginBottom: 6 }}
+              >
+                機型維度預設
+                <span className="section-head-meta">
+                  新增手機型號 wizard 套用此範本後自動帶入,可再微調
+                </span>
+              </div>
+
+              <div className="form-field">
+                <label className="form-field-label">預設容量清單</label>
+                <ChipInput
+                  value={editing.default_capacities}
+                  onChange={(v) => patch("default_capacities", v)}
+                  placeholder="輸入後按 Enter / 逗號 / 頓號 加入,例:128GB"
+                />
+                <div className="form-field-hint">
+                  例:128GB / 256GB / 512GB / 1TB。
+                  排序就是顯示順序,wizard 第 2 步用這個當預設勾選項。
+                </div>
+              </div>
+
+              <div className="form-field">
+                <label className="form-field-label">預設顏色清單</label>
+                <ChipInput
+                  value={editing.default_colors}
+                  onChange={(v) => patch("default_colors", v)}
+                  placeholder="輸入後按 Enter,例:黑"
+                />
+                <div className="form-field-hint">
+                  例:黑 / 白 / 鈦原色。中古機收購時的具體成色寫在序號備註,不放這裡。
+                </div>
+              </div>
+
+              <div className="form-field">
+                <label className="form-field-label">預設配件類別</label>
+                <ChipInput
+                  value={editing.default_accessory_categories}
+                  onChange={(v) => patch("default_accessory_categories", v)}
+                  placeholder="輸入後按 Enter,例:殼"
+                />
+                <div className="form-field-hint">
+                  例:殼 / 貼。線、充電器走「通用配件」不綁機型,不放這裡。
+                  Wizard 會為每個類別建一個配件 placeholder SKU 並綁定到此機型。
                 </div>
               </div>
 

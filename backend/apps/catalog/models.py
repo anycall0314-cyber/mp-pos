@@ -530,15 +530,41 @@ class PhoneSeries(TenantOwnedModel):
 
 
 class PartTemplate(TenantOwnedModel):
-    """零件範本:定義「一種機型類別有哪些零件種類」。
+    """機型範本 / 零件範本:定義「一種機型類別建單時要產出哪些東西」。
 
-    例:智慧型手機(標準) = 螢幕總成 / 電池 / 後蓋 / 充電孔排線 / 喇叭 / 聽筒 / Home 鍵 / 指紋模組
-    範本建好可重複套用至多款機型,批次建立 SKU。
+    原本只覆蓋維修零件清單(items),Phase 2 擴充為「機型範本」:
+    - default_capacities:預設容量清單,例 ["128G","256G","512G","1TB"]
+    - default_colors:預設顏色清單,例 ["黑","白","鈦原色"]
+    - default_accessory_categories:預設配件類別清單,例 ["殼","貼"]
+    - items(沿用):維修零件種類清單
+
+    新增手機型號 wizard 套用此範本後,會用「狀態主檔 × 預設容量 × 預設顏色」
+    產生主機 SKU,並依「預設配件類別」建配件 placeholder、依 items 建零件 SKU。
+    舊範本三個 JSON 欄位都是空,wizard 套用時就只建主機 SKU,不影響相容性。
     """
 
     name = models.CharField("範本名稱", max_length=80)
     note = models.CharField("備註", max_length=200, blank=True)
     is_active = models.BooleanField("啟用", default=True)
+
+    default_capacities = models.JSONField(
+        "預設容量清單",
+        default=list,
+        blank=True,
+        help_text="例:[\"128GB\",\"256GB\",\"512GB\",\"1TB\"];wizard 第 2 步當作預設勾選項",
+    )
+    default_colors = models.JSONField(
+        "預設顏色清單",
+        default=list,
+        blank=True,
+        help_text="例:[\"黑\",\"白\",\"鈦原色\"];wizard 第 2 步當作預設勾選項",
+    )
+    default_accessory_categories = models.JSONField(
+        "預設配件類別",
+        default=list,
+        blank=True,
+        help_text="例:[\"殼\",\"貼\"];線 / 充走通用配件不綁機型,不放這裡",
+    )
 
     class Meta:
         constraints = [

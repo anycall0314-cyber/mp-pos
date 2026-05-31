@@ -1027,6 +1027,9 @@ export interface PartTemplate {
   name: string;
   note: string;
   is_active: boolean;
+  default_capacities: string[];
+  default_colors: string[];
+  default_accessory_categories: string[];
   items: PartTemplateItem[];
   created_at: string;
   updated_at: string;
