@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { useCategories, useProducts, useSaveCategory } from "@/api/hooks";
 import type { Product } from "@/api/types";
@@ -55,6 +56,7 @@ const EMPTY_NEW_CAT: CategoryNewState = {
 };
 
 export function ProductsPage() {
+  const nav = useNavigate();
   // ─── 商品搜尋
   // 預設顯示「近期新增 10 筆」(按建立時間倒序);有搜尋字才用搜尋
   const [productQuery, setProductQuery] = useState("");
@@ -284,6 +286,13 @@ export function ProductsPage() {
               </button>
               <button className="btn" onClick={() => setImportOpen(true)}>
                 匯入 Excel
+              </button>
+              <button
+                className="btn"
+                onClick={() => nav("/products/new-phone-model")}
+                title="一次建好「狀態 × 容量 × 顏色」所有 SKU 變體"
+              >
+                + 新增手機型號
               </button>
               <button
                 className="btn primary"

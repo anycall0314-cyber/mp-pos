@@ -18,6 +18,7 @@ import { RepairItemsPage } from "@/pages/repairs/RepairItemsPage";
 import { RepairsPage } from "@/pages/repairs/RepairsPage";
 import { BrandSeriesPage } from "@/pages/products/BrandSeriesPage";
 import { ConditionsPage } from "@/pages/products/ConditionsPage";
+import { NewPhoneModelWizardPage } from "@/pages/products/NewPhoneModelWizardPage";
 import { PartTemplatesPage } from "@/pages/products/PartTemplatesPage";
 import { ProductTypesPage } from "@/pages/products/ProductTypesPage";
 import { ProductsPage } from "@/pages/products/ProductsPage";
@@ -289,6 +290,10 @@ export function App() {
           <Route path="/brand-series" element={<BrandSeriesPage />} />
           <Route path="/product-types" element={<ProductTypesPage />} />
           <Route path="/conditions" element={<ConditionsPage />} />
+          <Route
+            path="/products/new-phone-model"
+            element={<NewPhoneModelWizardPage />}
+          />
           <Route path="/telecom-plans" element={<TelecomPlansPage />} />
           <Route path="/sim-cards" element={<SimCardsPage />} />
           <Route path="/purchases" element={<PurchasesPage />} />

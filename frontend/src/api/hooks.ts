@@ -1760,6 +1760,80 @@ export function useDeleteProductType() {
   });
 }
 
+// ─── 新增手機型號 wizard:一鍵建主機 SKU + 配件 + 零件 ───
+
+export interface PhoneModelBundlePayload {
+  brand_id: number | null;
+  series_id: number | null;
+  generation: number | null;
+  model_suffix: string;
+  main_category_id: number | null;
+  accessory_category_id: number | null;
+  parts_category_id: number | null;
+  template_id: number | null;
+  list_price: string;
+  condition_ids: number[];
+  capacities: string[];
+  colors: string[];
+  accessory_categories: string[];
+  parts_items: Array<{
+    name: string;
+    code: string;
+    shared_across_models?: boolean;
+    default_cost?: string;
+    default_safety_stock?: number;
+  }>;
+  dry_run?: boolean;
+}
+
+export interface PhoneModelBundleResult {
+  model_name: string;
+  model_key: string;
+  main_count: number;
+  accessory_count: number;
+  parts_count: number;
+  main: Array<{
+    id?: number;
+    sku?: string;
+    name: string;
+    spec?: string;
+    is_secondhand: boolean;
+    condition_name?: string;
+    capacity?: string;
+    color?: string;
+  }>;
+  accessories: Array<{
+    id?: number;
+    sku?: string;
+    name: string;
+    category_label?: string;
+  }>;
+  parts: Array<{
+    id?: number;
+    sku?: string;
+    name: string;
+    code?: string;
+    shared_across_models?: boolean;
+  }>;
+}
+
+export function useCreatePhoneModelBundle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: PhoneModelBundlePayload) =>
+      api<PhoneModelBundleResult>("/products/create-phone-model/", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (_, vars) => {
+      if (!vars.dry_run) {
+        qc.invalidateQueries({ queryKey: ["products"] });
+        qc.invalidateQueries({ queryKey: ["stock-matrix"] });
+      }
+    },
+  });
+}
+
 // ─── Condition master(商品狀態:全新 / 已拆封 / 中古機 …)───
 
 export const useConditions = () =>
