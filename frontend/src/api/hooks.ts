@@ -13,6 +13,7 @@ import {
   InvoiceType,
   PartsUsageReport,
   Brand,
+  Condition,
   PhoneSeries,
   ProductType,
   PartBulkCreateResult,
@@ -1756,6 +1757,36 @@ export function useDeleteProductType() {
       qc.invalidateQueries({ queryKey: ["product-types"] });
       qc.invalidateQueries({ queryKey: ["phone-series"] });
     },
+  });
+}
+
+// ─── Condition master(商品狀態:全新 / 已拆封 / 中古機 …)───
+
+export const useConditions = () =>
+  useQuery({
+    queryKey: ["conditions"],
+    queryFn: () => list<Condition>(`/conditions/?page_size=100`),
+  });
+
+export function useSaveCondition() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Partial<Condition> & { id?: number }) => {
+      const { id, ...body } = payload;
+      const method = id ? "PATCH" : "POST";
+      const url = id ? `/conditions/${id}/` : "/conditions/";
+      return api<Condition>(url, { method, body: JSON.stringify(body) });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["conditions"] }),
+  });
+}
+
+export function useDeleteCondition() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<void>(`/conditions/${id}/`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["conditions"] }),
   });
 }
 

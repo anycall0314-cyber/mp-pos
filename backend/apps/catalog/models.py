@@ -138,6 +138,18 @@ class Product(TenantOwnedModel):
         default=False,
         help_text="中古機主檔,序號需逐隻記成色 / 電池 / 售價 / 備註,銷貨單價以序號自定為準",
     )
+    condition = models.ForeignKey(
+        "Condition",
+        on_delete=models.PROTECT,
+        related_name="products",
+        verbose_name="商品狀態",
+        null=True,
+        blank=True,
+        help_text=(
+            "全新 / 已拆封 / 中古機(保固內)/ 中古機 …"
+            "由「新增手機型號」wizard 一鍵帶入;舊資料未指定為 NULL,沿用 is_secondhand 旗標判斷"
+        ),
+    )
     counts_cash = models.BooleanField(
         "計入現金",
         default=True,
@@ -429,6 +441,46 @@ class ProductType(TenantOwnedModel):
         ordering = ["sort_order", "code"]
         verbose_name = "產品類型"
         verbose_name_plural = "產品類型"
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class Condition(TenantOwnedModel):
+    """商品狀態主檔(per-tenant)。
+
+    用於建手機型號時的狀態維度:全新 / 已拆封 / 中古機(保固內)/ 中古機 …
+    `is_secondhand=True` 的狀態下建立的 SKU 會自動 `Product.is_secondhand=True`,
+    沿用中古機「每隻獨立 purchase_unit_cost」邏輯。
+
+    系統建議的 4 個預設值由 migration 自動 seed,經銷商可自行 CRUD。
+    """
+
+    code = models.SlugField("代碼", max_length=20)
+    name = models.CharField("顯示名稱", max_length=40)
+    is_secondhand = models.BooleanField(
+        "視為中古機",
+        default=False,
+        help_text=(
+            "勾選後此狀態下建立的 SKU 自動 is_secondhand=True,"
+            "觸發中古機成本邏輯(每隻獨立 purchase_unit_cost)"
+        ),
+    )
+    sort_order = models.PositiveIntegerField("排序", default=0)
+    is_active = models.BooleanField("啟用", default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "code"], name="uniq_condition_tenant_code"
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "name"], name="uniq_condition_tenant_name"
+            ),
+        ]
+        ordering = ["sort_order", "code"]
+        verbose_name = "商品狀態"
+        verbose_name_plural = "商品狀態"
 
     def __str__(self) -> str:
         return self.name

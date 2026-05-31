@@ -23,6 +23,7 @@ from .import_service import import_products_from_file
 from .models import (
     Brand,
     Category,
+    Condition,
     PartTemplate,
     PhoneSeries,
     Product,
@@ -32,6 +33,7 @@ from .models import (
 from .serializers import (
     BrandSerializer,
     CategorySerializer,
+    ConditionSerializer,
     PartTemplateSerializer,
     PhoneSeriesSerializer,
     ProductSerializer,
@@ -937,6 +939,29 @@ class PhoneSeriesViewSet(viewsets.ModelViewSet):
         return PhoneSeries.objects.for_tenant(
             self.request.tenant
         ).select_related("brand", "product_type")
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=self.request.tenant)
+
+
+class ConditionViewSet(viewsets.ModelViewSet):
+    """商品狀態主檔 CRUD(per-tenant)。
+
+    用於建手機型號 wizard 的「狀態」維度:全新 / 已拆封 / 中古機(保固內)/ 中古機。
+    Migration 自動 seed 4 個預設值,經銷商可自行增刪改。
+    """
+
+    serializer_class = ConditionSerializer
+    search_fields = ["code", "name"]
+    ordering_fields = ["sort_order", "code", "name"]
+    ordering = ["sort_order", "code"]
+    filterset_fields = ["is_active", "is_secondhand"]
+
+    def get_queryset(self):
+        return (
+            Condition.objects.for_tenant(self.request.tenant)
+            .annotate(product_count=Count("products"))
+        )
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.tenant)

@@ -44,6 +44,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: "/products", label: "建立商品" },
       { to: "/brand-series", label: "品牌 / 系列" },
       { to: "/product-types", label: "產品類型" },
+      { to: "/conditions", label: "商品狀態" },
       { to: "/part-templates", label: "零件範本" },
       { to: "/serials", label: "序號查詢" },
       { to: "/inventory/stocktake", label: "盤點作業" },

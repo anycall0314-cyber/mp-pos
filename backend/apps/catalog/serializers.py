@@ -3,6 +3,7 @@ from rest_framework import serializers
 from .models import (
     Brand,
     Category,
+    Condition,
     PartTemplate,
     PartTemplateItem,
     PhoneSeries,
@@ -28,6 +29,25 @@ class BrandSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "series_count", "created_at", "updated_at"]
+
+
+class ConditionSerializer(serializers.ModelSerializer):
+    product_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Condition
+        fields = [
+            "id",
+            "code",
+            "name",
+            "is_secondhand",
+            "sort_order",
+            "is_active",
+            "product_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "product_count", "created_at", "updated_at"]
 
 
 class ProductTypeSerializer(serializers.ModelSerializer):

@@ -1000,6 +1000,18 @@ export interface ProductType {
   updated_at?: string;
 }
 
+export interface Condition {
+  id: number;
+  code: string;
+  name: string;
+  is_secondhand: boolean;
+  sort_order: number;
+  is_active: boolean;
+  product_count?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface PartTemplateItem {
   id?: number;
   name: string;
