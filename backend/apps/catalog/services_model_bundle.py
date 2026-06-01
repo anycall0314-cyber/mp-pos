@@ -223,34 +223,11 @@ def _build_bundle(tenant, payload, *, dry_run):
     if main_first_product is not None:
         model_key = compute_phone_model_key(main_first_product)
 
-    # ── Phase 2:配件 placeholder SKU(每類別 1 個,綁此機型)
-    accessory_results = []
-    for acc_name in accessory_categories:
-        full_name = f"{model_name} {acc_name}"
-        if dry_run:
-            accessory_results.append(
-                {"name": full_name, "category_label": acc_name}
-            )
-            continue
-        p = Product(
-            tenant=tenant,
-            category=accessory_category,
-            name=full_name,
-            spec=acc_name,
-            requires_serial=False,
-            accessory_type=Product.AccessoryType.PHONE_SPECIFIC,
-            warehouse_type=Product.WarehouseType.PRODUCT,
-            list_price=Decimal("0"),
-        )
-        p.save()
-        if main_first_product and model_key:
-            ProductRelation.objects.create(
-                tenant=tenant,
-                host_product=main_first_product,
-                host_model_key=model_key,
-                accessory_product=p,
-            )
-        accessory_results.append({"id": p.id, "sku": p.sku, "name": p.name})
+    # ── Phase 2:配件「相容類別槽位」記錄(不建 SKU)
+    # 設計文件第 5 節:配件是獨立商品樹(品牌 × 功能 × 顏色),
+    # 透過相容對應表掛到型號。建手機時觸發的是「相容類別槽位」,
+    # 不是直接生出配件 SKU。實際配件 SKU 走「+ 新增配件」獨立 wizard。
+    accessory_slots = list(accessory_categories or [])
 
     # ── Phase 3:維修零件 SKU
     parts_results = []
@@ -289,10 +266,9 @@ def _build_bundle(tenant, payload, *, dry_run):
         "model_name": model_name,
         "model_key": model_key,
         "main_count": len(main_results),
-        "accessory_count": len(accessory_results),
         "parts_count": len(parts_results),
+        "accessory_slots": accessory_slots,
         "main": main_results,
-        "accessories": accessory_results,
         "parts": parts_results,
     }
     return summary

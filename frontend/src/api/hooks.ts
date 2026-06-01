@@ -1790,8 +1790,9 @@ export interface PhoneModelBundleResult {
   model_name: string;
   model_key: string;
   main_count: number;
-  accessory_count: number;
   parts_count: number;
+  /** 相容配件類別槽位記錄,不會建 SKU(配件走獨立 wizard) */
+  accessory_slots: string[];
   main: Array<{
     id?: number;
     sku?: string;
@@ -1801,12 +1802,6 @@ export interface PhoneModelBundleResult {
     condition_name?: string;
     capacity?: string;
     color?: string;
-  }>;
-  accessories: Array<{
-    id?: number;
-    sku?: string;
-    name: string;
-    category_label?: string;
   }>;
   parts: Array<{
     id?: number;

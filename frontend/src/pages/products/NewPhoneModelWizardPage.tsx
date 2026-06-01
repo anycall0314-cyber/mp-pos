@@ -719,15 +719,18 @@ export function NewPhoneModelWizardPage() {
             </div>
 
             <div className="form-field">
-              <label className="form-field-label">配件類別(選填)</label>
+              <label className="form-field-label">
+                相容配件類別(僅供記錄)
+              </label>
               <ChipInput
                 value={state.accessory_categories}
                 onChange={(v) => patch("accessory_categories", v)}
                 placeholder="輸入後按 Enter,例:殼"
               />
               <div className="form-field-hint">
-                每個類別會建 1 個配件 placeholder SKU,並綁定到此機型。
-                線、充走通用配件不放這裡
+                這只是記錄「這支手機之後會配什麼類別的配件」, wizard 不會建任何配件 SKU。
+                真正配件商品(imos / HODA 各品牌變體)要走「+ 新增配件」獨立 wizard,
+                建好後在那邊勾選相容機型即可。
               </div>
             </div>
 
@@ -787,17 +790,17 @@ export function NewPhoneModelWizardPage() {
                 {expectedMain}
               </b>{" "}
               個主機 SKU
-              {state.accessory_categories.length > 0 && (
-                <>
-                  {" "}
-                  + <b>{state.accessory_categories.length}</b> 個配件 placeholder
-                </>
-              )}
               {state.parts_items.length > 0 && (
                 <>
                   {" "}
                   + <b>{state.parts_items.length}</b> 個維修零件 SKU
                 </>
+              )}
+              {state.accessory_categories.length > 0 && (
+                <span style={{ color: "var(--text-dim)" }}>
+                  {" "}
+                  (記錄 {state.accessory_categories.length} 個相容配件類別,不建 SKU)
+                </span>
               )}
               <div
                 style={{
@@ -858,29 +861,53 @@ export function NewPhoneModelWizardPage() {
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "repeat(3, 1fr)",
+                    gridTemplateColumns: "repeat(2, 1fr)",
                     gap: 12,
                     marginBottom: 16,
                   }}
                 >
                   <SummaryStat label="主機 SKU" value={preview.main_count} />
                   <SummaryStat
-                    label="配件 placeholder"
-                    value={preview.accessory_count}
-                  />
-                  <SummaryStat
                     label="維修零件 SKU"
                     value={preview.parts_count}
                   />
                 </div>
 
-                <PreviewTable items={preview.main} kind="main" />
-                {preview.accessories.length > 0 && (
-                  <PreviewTable
-                    items={preview.accessories}
-                    kind="accessory"
-                  />
+                {preview.accessory_slots.length > 0 && (
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: "var(--text-dim)",
+                      marginBottom: 14,
+                      padding: "8px 12px",
+                      background: "var(--panel-2)",
+                      borderRadius: 6,
+                    }}
+                  >
+                    記錄「相容配件類別」:
+                    {preview.accessory_slots.map((s, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          display: "inline-block",
+                          marginLeft: 6,
+                          padding: "1px 8px",
+                          borderRadius: 999,
+                          background: "var(--bg)",
+                          border: "1px solid var(--border)",
+                          color: "var(--text)",
+                        }}
+                      >
+                        {s}
+                      </span>
+                    ))}
+                    <span style={{ marginLeft: 8 }}>
+                      不會建 SKU,實際配件去「+ 新增配件」獨立建立
+                    </span>
+                  </div>
                 )}
+
+                <PreviewTable items={preview.main} kind="main" />
                 {preview.parts.length > 0 && (
                   <PreviewTable items={preview.parts} kind="parts" />
                 )}
@@ -914,7 +941,7 @@ export function NewPhoneModelWizardPage() {
                   >
                     {create.isPending
                       ? "建立中…"
-                      : `確認建立 ${preview.main_count + preview.accessory_count + preview.parts_count} 個 SKU`}
+                      : `確認建立 ${preview.main_count + preview.parts_count} 個 SKU`}
                   </button>
                 </div>
               </>
@@ -935,8 +962,14 @@ export function NewPhoneModelWizardPage() {
                 >
                   已成功建立機型「<b>{created.model_name}</b>」 ——
                   主機 <b>{created.main_count}</b> 個 SKU、
-                  配件 <b>{created.accessory_count}</b> 個、
                   維修零件 <b>{created.parts_count}</b> 個。
+                  {created.accessory_slots.length > 0 && (
+                    <>
+                      {" "}
+                      已記錄 <b>{created.accessory_slots.length}</b> 個相容配件類別,
+                      實際配件商品請走「+ 新增配件」獨立建立。
+                    </>
+                  )}{" "}
                   之後遇到全新 / 已拆封 / 中古機收購都不用再多一道「先建商品」手續,
                   直接掛序號即可。
                 </div>
