@@ -114,6 +114,7 @@ export function ProductsPage() {
   // ─── 批次新增 Modal
   const [bulkOpen, setBulkOpen] = useState(false);
   const [expanderOpen, setExpanderOpen] = useState(false);
+  const [accessoryExpanderOpen, setAccessoryExpanderOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [bulkPartsOpen, setBulkPartsOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
@@ -293,6 +294,13 @@ export function ProductsPage() {
                 title="一次建好「狀態 × 容量 × 顏色」所有 SKU 變體"
               >
                 + 新增手機型號
+              </button>
+              <button
+                className="btn"
+                onClick={() => setAccessoryExpanderOpen(true)}
+                title="建配件商品(品牌 × 功能 × 顏色),完成後勾選相容機型"
+              >
+                + 新增配件
               </button>
               <button
                 className="btn primary"
@@ -898,6 +906,16 @@ export function ProductsPage() {
         onSuccess={(count) => {
           setExpanderOpen(false);
           setBulkResult(`型號展開:成功建立 ${count} 筆商品`);
+          setTimeout(() => setBulkResult(null), 4000);
+        }}
+      />
+      <ProductExpanderModal
+        mode="accessory"
+        open={accessoryExpanderOpen}
+        onClose={() => setAccessoryExpanderOpen(false)}
+        onSuccess={(count) => {
+          setAccessoryExpanderOpen(false);
+          setBulkResult(`新增配件:成功建立 ${count} 筆配件`);
           setTimeout(() => setBulkResult(null), 4000);
         }}
       />

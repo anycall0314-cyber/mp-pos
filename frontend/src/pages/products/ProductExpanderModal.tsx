@@ -21,6 +21,14 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSuccess: (count: number) => void;
+  /**
+   * 預設情境:
+   * - "phone"(預設):建主機,軸 = 容量 × 顏色
+   * - "accessory":建機型專屬配件(imos / HODA 各品牌變體),
+   *   軸 = 功能 × 顏色,accessory_type 預設 phone_specific,
+   *   requiresSerial 預設 false
+   */
+  mode?: "phone" | "accessory";
 }
 
 interface Combo {
@@ -46,7 +54,13 @@ function deriveGeneration(model: string): string {
   return m?.[1] ?? "";
 }
 
-export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
+export function ProductExpanderModal({
+  open,
+  onClose,
+  onSuccess,
+  mode = "phone",
+}: Props) {
+  const isAccessoryMode = mode === "accessory";
   const [model, setModel] = useState("");
   const [category, setCategory] = useState<number | "">("");
   const [categoryOpt, setCategoryOpt] = useState<ComboOption<Category> | null>(
@@ -54,7 +68,9 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
   );
 
   // 商品性質(整合進主流程,決定後續欄位 + 屬性預設)
-  const [accessoryType, setAccessoryType] = useState<AccessoryType>("none");
+  const [accessoryType, setAccessoryType] = useState<AccessoryType>(
+    isAccessoryMode ? "phone_specific" : "none",
+  );
 
   // 主機資訊(Phase 1: brand/series 改用 FK id)
   const [brandId, setBrandId] = useState<number | "">("");
@@ -70,14 +86,17 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
   // 相容機型(機型配件用):key → name
   const [compat, setCompat] = useState<Map<string, string>>(new Map());
 
-  const [axis1Label, setAxis1Label] = useState("容量");
+  const [axis1Label, setAxis1Label] = useState(
+    isAccessoryMode ? "功能" : "容量",
+  );
   const [axis2Label, setAxis2Label] = useState("顏色");
   const [axis1Text, setAxis1Text] = useState("");
   const [axis2Text, setAxis2Text] = useState("");
   const [pricesText, setPricesText] = useState("");
 
   // 屬性(可隨商品性質自動調整,但仍允許使用者覆蓋)
-  const [requiresSerial, setRequiresSerial] = useState(true);
+  // accessory mode 預設不需追蹤序號
+  const [requiresSerial, setRequiresSerial] = useState(!isAccessoryMode);
   const [allowsTelecomLine, setAllowsTelecomLine] = useState(false);
   const [allowsCommission, setAllowsCommission] = useState(false);
 
@@ -252,18 +271,18 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
     setModel("");
     setCategory("");
     setCategoryOpt(null);
-    setAccessoryType("none");
+    setAccessoryType(isAccessoryMode ? "phone_specific" : "none");
     setBrandId("");
     setSeriesId("");
     setGeneration("");
     setModelSuffix("");
     setGenTouched(false);
-    setAxis1Label("容量");
+    setAxis1Label(isAccessoryMode ? "功能" : "容量");
     setAxis2Label("顏色");
     setAxis1Text("");
     setAxis2Text("");
     setPricesText("");
-    setRequiresSerial(true);
+    setRequiresSerial(!isAccessoryMode);
     setAllowsTelecomLine(false);
     setAllowsCommission(false);
     setCompat(new Map());
@@ -333,7 +352,9 @@ export function ProductExpanderModal({ open, onClose, onSuccess }: Props) {
         role="dialog"
         aria-modal="true"
       >
-        <div className="modal-title">型號展開新增</div>
+        <div className="modal-title">
+          {isAccessoryMode ? "新增配件(同款多規格展開)" : "型號展開新增"}
+        </div>
 
         {error && <Banner kind="error" message={error} />}
         {draftHelper.draft && (
