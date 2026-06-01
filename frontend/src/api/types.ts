@@ -1030,6 +1030,7 @@ export interface PartTemplate {
   default_capacities: string[];
   default_colors: string[];
   default_accessory_categories: string[];
+  default_accessory_brands: string[];
   items: PartTemplateItem[];
   created_at: string;
   updated_at: string;

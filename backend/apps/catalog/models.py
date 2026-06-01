@@ -565,6 +565,16 @@ class PartTemplate(TenantOwnedModel):
         blank=True,
         help_text="例:[\"殼\",\"貼\"];線 / 充走通用配件不綁機型,不放這裡",
     )
+    default_accessory_brands = models.JSONField(
+        "常用配件品牌",
+        default=list,
+        blank=True,
+        help_text=(
+            "例:[\"imos\",\"HODA\",\"JTLEGEND\"];"
+            "「+ 新增配件」wizard 套此範本時,會列出這些品牌讓使用者一個個建商品線。"
+            "純參考用,不直接建 SKU"
+        ),
+    )
 
     class Meta:
         constraints = [

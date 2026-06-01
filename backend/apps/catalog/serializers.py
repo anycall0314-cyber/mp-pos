@@ -136,6 +136,7 @@ class PartTemplateSerializer(serializers.ModelSerializer):
             "default_capacities",
             "default_colors",
             "default_accessory_categories",
+            "default_accessory_brands",
             "items",
             "items_input",
             "created_at",

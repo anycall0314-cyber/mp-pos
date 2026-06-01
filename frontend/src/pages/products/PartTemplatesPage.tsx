@@ -34,6 +34,7 @@ const PRESET_TEMPLATES: Record<
     capacities: string[];
     colors: string[];
     accessory_categories: string[];
+    accessory_brands: string[];
     parts: Array<{
       name: string;
       code: string;
@@ -45,6 +46,7 @@ const PRESET_TEMPLATES: Record<
     capacities: ["128GB", "256GB", "512GB", "1TB"],
     colors: ["黑", "白", "鈦原色"],
     accessory_categories: ["殼", "貼"],
+    accessory_brands: ["imos", "HODA", "JTLEGEND"],
     parts: [
       { name: "螢幕總成", code: "SCR" },
       { name: "電池", code: "BAT", shared_across_models: true },
@@ -58,6 +60,7 @@ const PRESET_TEMPLATES: Record<
     capacities: ["128GB", "256GB", "512GB", "1TB"],
     colors: ["太空灰", "銀", "金"],
     accessory_categories: ["保護套", "貼"],
+    accessory_brands: ["imos", "ESR", "Switcheasy"],
     parts: [
       { name: "螢幕總成", code: "SCR" },
       { name: "電池", code: "BAT", shared_across_models: true },
@@ -70,6 +73,7 @@ const PRESET_TEMPLATES: Record<
     capacities: ["41mm", "45mm", "49mm"],
     colors: ["黑", "銀", "金"],
     accessory_categories: ["錶帶", "保護貼"],
+    accessory_brands: ["Apple", "Spigen"],
     parts: [
       { name: "螢幕總成", code: "SCR" },
       { name: "電池", code: "BAT", shared_across_models: true },
@@ -80,6 +84,7 @@ const PRESET_TEMPLATES: Record<
     capacities: ["256GB", "512GB", "1TB", "2TB"],
     colors: ["太空灰", "銀"],
     accessory_categories: ["保護套"],
+    accessory_brands: ["Targus", "tomtoc"],
     parts: [
       { name: "螢幕總成", code: "SCR" },
       { name: "電池", code: "BAT" },
@@ -112,6 +117,7 @@ interface EditingTemplate {
   default_capacities: string[];
   default_colors: string[];
   default_accessory_categories: string[];
+  default_accessory_brands: string[];
   items: EditingItem[];
 }
 
@@ -124,6 +130,7 @@ function toEditing(t: PartTemplate): EditingTemplate {
     default_capacities: t.default_capacities ?? [],
     default_colors: t.default_colors ?? [],
     default_accessory_categories: t.default_accessory_categories ?? [],
+    default_accessory_brands: t.default_accessory_brands ?? [],
     items: t.items.map((it, idx) => ({
       id: it.id,
       name: it.name,
@@ -257,6 +264,7 @@ function emptyEditing(): EditingTemplate {
     default_capacities: [],
     default_colors: [],
     default_accessory_categories: [],
+    default_accessory_brands: [],
     items: [],
   };
 }
@@ -339,7 +347,8 @@ export function PartTemplatesPage() {
       editing.items.length > 0 ||
       editing.default_capacities.length > 0 ||
       editing.default_colors.length > 0 ||
-      editing.default_accessory_categories.length > 0;
+      editing.default_accessory_categories.length > 0 ||
+      editing.default_accessory_brands.length > 0;
     if (
       dirty &&
       !confirm(
@@ -362,6 +371,7 @@ export function PartTemplatesPage() {
       default_capacities: [...preset.capacities],
       default_colors: [...preset.colors],
       default_accessory_categories: [...preset.accessory_categories],
+      default_accessory_brands: [...preset.accessory_brands],
       items,
     });
   }
@@ -407,6 +417,7 @@ export function PartTemplatesPage() {
         default_capacities: editing.default_capacities,
         default_colors: editing.default_colors,
         default_accessory_categories: editing.default_accessory_categories,
+        default_accessory_brands: editing.default_accessory_brands,
         items_input: editing.items.map((it, idx) => ({
           id: it.id,
           name: it.name,
@@ -649,15 +660,30 @@ export function PartTemplatesPage() {
               </div>
 
               <div className="form-field">
-                <label className="form-field-label">預設配件類別</label>
+                <label className="form-field-label">相容配件類別</label>
                 <ChipInput
                   value={editing.default_accessory_categories}
                   onChange={(v) => patch("default_accessory_categories", v)}
                   placeholder="輸入後按 Enter,例:殼"
                 />
                 <div className="form-field-hint">
-                  例:殼 / 貼。線、充電器走「通用配件」不綁機型,不放這裡。
-                  Wizard 會為每個類別建一個配件 placeholder SKU 並綁定到此機型。
+                  例:殼 / 貼。線、充電器走通用配件不綁機型,不放這裡。
+                  「+ 新增手機型號」wizard 會把這些當成「相容類別槽位」記錄,
+                  但不會直接建配件 SKU,實際配件商品走「+ 新增配件」獨立建立。
+                </div>
+              </div>
+
+              <div className="form-field">
+                <label className="form-field-label">常用配件品牌</label>
+                <ChipInput
+                  value={editing.default_accessory_brands}
+                  onChange={(v) => patch("default_accessory_brands", v)}
+                  placeholder="輸入後按 Enter,例:imos"
+                />
+                <div className="form-field-hint">
+                  例:imos / HODA / JTLEGEND。
+                  「+ 新增配件」wizard 套此範本時,會顯示這些品牌讓你一個個建商品線
+                  (例:imos 抗藍光保護貼、HODA 軍規防摔殼)。純參考用,不直接建 SKU。
                 </div>
               </div>
 
