@@ -300,6 +300,31 @@ class Product(TenantOwnedModel):
         ),
     )
 
+    # 進貨識別用的結構化屬性(識別引擎的「衝突檢查」靠這三欄站穩:
+    # 容量/顏色/版本不同 → 一定是不同商品,禁止自動對應)。
+    # 舊資料留白不會出錯,只會讓比對信心變低 → 落到待確認區由人確認,永不誤對。
+    capacity = models.CharField(
+        "容量",
+        max_length=20,
+        blank=True,
+        default="",
+        help_text="結構化容量,例:128GB / 256GB / 1TB。用於避免 128G 被誤對成 256G",
+    )
+    color = models.CharField(
+        "顏色",
+        max_length=30,
+        blank=True,
+        default="",
+        help_text="結構化顏色,例:黑 / 藍 / 原色鈦金屬",
+    )
+    region_version = models.CharField(
+        "地區版本",
+        max_length=30,
+        blank=True,
+        default="",
+        help_text="例:台版 / 港版 / 美版 / 陸版。不同版本視為不同商品",
+    )
+
     # 倉別:商品倉(銷貨用)vs 零件倉(維修用),預設 product
     class WarehouseType(models.TextChoices):
         PRODUCT = "product", "商品倉"  # 一般銷售商品 / 配件

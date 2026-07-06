@@ -15,6 +15,9 @@ urlpatterns = [
     path("api/v1/", include("apps.transfers.urls")),
     path("api/v1/", include("apps.cash.urls")),
     path("api/v1/", include("apps.repairs.urls")),
+    path("api/v1/", include("apps.assistant.urls")),
+    path("api/v1/", include("apps.signals.urls")),
+    path("api/v1/", include("apps.identity.urls")),
 ]
 
 # Prod 模式:非 admin / 非 api 的請求一律交給 React SPA 的 index.html

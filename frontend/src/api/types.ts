@@ -67,6 +67,10 @@ export interface Product {
   phone_model_name?: string;
   phone_model_key?: string;
   is_variant?: boolean;
+  // 進貨識別用結構化屬性
+  capacity?: string;
+  color?: string;
+  region_version?: string;
   // (deprecated)舊版 SKU id 寫入,新版改用 related_host_keys
   related_host_ids?: number[];
   // 寫入時送機型 key 清單(以機型為單位,涵蓋同款所有 SKU 變體)
@@ -1221,4 +1225,90 @@ export interface RepairQuotePreview {
     available: number;
     short_by: number;
   }[];
+}
+
+// identity(商品識別 / 待確認入庫)
+export type AliasKind =
+  | "barcode"
+  | "vendor_sku"
+  | "vendor_name"
+  | "oem_model"
+  | "legacy_name";
+
+export interface ProductAlias {
+  id: number;
+  product: number;
+  product_name: string;
+  product_sku: string;
+  supplier: number | null;
+  supplier_name: string;
+  kind: AliasKind;
+  value: string;
+  normalized_value: string;
+  verified: boolean;
+  source: string;
+  note: string;
+  is_active: boolean;
+}
+
+export type IntakeMatchStatus =
+  | "auto_matched"
+  | "needs_review"
+  | "unknown"
+  | "conflict"
+  | "resolved"
+  | "new_product"
+  | "rejected";
+
+export interface IntakeItemCandidate {
+  product_id: number;
+  sku: string;
+  name: string;
+  capacity: string;
+  color: string;
+  score: number;
+  reason: string;
+  conflict: boolean;
+}
+
+export interface IntakeItem {
+  id: number;
+  line_no: number;
+  raw_text: string;
+  raw_barcode: string;
+  raw_vendor_sku: string;
+  raw_qty: number;
+  raw_unit_price: string;
+  raw_serials: string[];
+  matched_product: number | null;
+  matched_product_name: string;
+  matched_product_sku: string;
+  match_status: IntakeMatchStatus;
+  match_confidence: number;
+  candidates: IntakeItemCandidate[];
+  note: string;
+}
+
+export type IntakeSource = "manual_text" | "assistant" | "ocr" | "import";
+export type IntakeBatchStatus =
+  | "open"
+  | "resolved"
+  | "committed"
+  | "cancelled";
+
+export interface IntakeBatch {
+  id: number;
+  source: IntakeSource;
+  supplier: number | null;
+  supplier_name: string;
+  warehouse: number | null;
+  warehouse_name: string;
+  vendor_doc_no: string;
+  status: IntakeBatchStatus;
+  note: string;
+  committed_purchase_order_id: number | null;
+  created_at: string;
+  items: IntakeItem[];
+  /** commit 成功回應時附帶 */
+  purchase_order_no?: string;
 }

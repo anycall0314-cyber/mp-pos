@@ -9,6 +9,7 @@ import { Toolbar } from "@/components/Toolbar";
 import { BulkAddProductsModal } from "./BulkAddProductsModal";
 import { BulkCreatePartsModal } from "./BulkCreatePartsModal";
 import { BulkEditProductsModal } from "./BulkEditProductsModal";
+import { ProductAliasesPanel } from "./ProductAliasesPanel";
 import { ProductExpanderModal } from "./ProductExpanderModal";
 import { ProductForm } from "./ProductForm";
 import { ProductImportModal } from "./ProductImportModal";
@@ -92,6 +93,8 @@ export function ProductsPage() {
   const [leftTab, setLeftTab] = useState<"products" | "categories">(
     "products",
   );
+  // 右側商品詳情頁籤:基本 vs 別名
+  const [detailTab, setDetailTab] = useState<"basic" | "aliases">("basic");
 
   const selectedProduct = useMemo(() => {
     if (selection?.kind !== "product") return null;
@@ -608,38 +611,79 @@ export function ProductsPage() {
           {selectedProduct && (
             <div className="pc-detail-body">
               <h3 className="pc-detail-title">{selectedProduct.name}</h3>
-              <dl>
-                <dt>品名</dt>
-                <dd>{selectedProduct.name}</dd>
-                <dt>規格</dt>
-                <dd>{selectedProduct.spec || "—"}</dd>
-                <dt>條碼</dt>
-                <dd>{selectedProduct.barcode || "—"}</dd>
-                <dt>類別</dt>
-                <dd>
-                  {selectedProduct.category_code}{" "}
-                  {selectedProduct.category_name}
-                </dd>
-                <dt>建議零售價</dt>
-                <dd>{formatMoney(selectedProduct.list_price)}</dd>
-                <dt>加權平均成本</dt>
-                <dd>{formatMoney(selectedProduct.weighted_avg_cost)}</dd>
-                <dt>屬性</dt>
-                <dd>{flagText(selectedProduct)}</dd>
-                <dt>狀態</dt>
-                <dd>{selectedProduct.is_active ? "啟用" : "停用"}</dd>
-              </dl>
-              <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
+              <div className="tab-switcher" style={{ marginBottom: 12 }}>
                 <button
-                  className="btn primary"
-                  onClick={() => {
-                    setDrawerInitial(selectedProduct);
-                    setDrawerOpen(true);
-                  }}
+                  className={
+                    detailTab === "basic"
+                      ? "tab-switcher-item active"
+                      : "tab-switcher-item"
+                  }
+                  onClick={() => setDetailTab("basic")}
                 >
-                  編輯
+                  基本
+                </button>
+                <button
+                  className={
+                    detailTab === "aliases"
+                      ? "tab-switcher-item active"
+                      : "tab-switcher-item"
+                  }
+                  onClick={() => setDetailTab("aliases")}
+                >
+                  別名
                 </button>
               </div>
+
+              {detailTab === "basic" && (
+                <>
+                  <dl>
+                    <dt>品名</dt>
+                    <dd>{selectedProduct.name}</dd>
+                    <dt>規格</dt>
+                    <dd>{selectedProduct.spec || "—"}</dd>
+                    <dt>條碼</dt>
+                    <dd>{selectedProduct.barcode || "—"}</dd>
+                    <dt>容量 / 顏色 / 版本</dt>
+                    <dd>
+                      {[
+                        selectedProduct.capacity,
+                        selectedProduct.color,
+                        selectedProduct.region_version,
+                      ]
+                        .filter(Boolean)
+                        .join(" / ") || "—"}
+                    </dd>
+                    <dt>類別</dt>
+                    <dd>
+                      {selectedProduct.category_code}{" "}
+                      {selectedProduct.category_name}
+                    </dd>
+                    <dt>建議零售價</dt>
+                    <dd>{formatMoney(selectedProduct.list_price)}</dd>
+                    <dt>加權平均成本</dt>
+                    <dd>{formatMoney(selectedProduct.weighted_avg_cost)}</dd>
+                    <dt>屬性</dt>
+                    <dd>{flagText(selectedProduct)}</dd>
+                    <dt>狀態</dt>
+                    <dd>{selectedProduct.is_active ? "啟用" : "停用"}</dd>
+                  </dl>
+                  <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
+                    <button
+                      className="btn primary"
+                      onClick={() => {
+                        setDrawerInitial(selectedProduct);
+                        setDrawerOpen(true);
+                      }}
+                    >
+                      編輯
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {detailTab === "aliases" && (
+                <ProductAliasesPanel productId={selectedProduct.id} />
+              )}
             </div>
           )}
 

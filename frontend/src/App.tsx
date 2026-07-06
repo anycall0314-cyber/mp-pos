@@ -12,6 +12,7 @@ import { PhoneBillReceiptPage } from "@/pages/phone-bills/PhoneBillReceiptPage";
 import { CategoriesPage } from "@/pages/inventory/CategoriesPage";
 import { InventoryAlertsPage } from "@/pages/inventory/InventoryAlertsPage";
 import { InventoryQueryPage } from "@/pages/inventory/InventoryQueryPage";
+import { IntakePage } from "@/pages/intake/IntakePage";
 import { RepairEntryPage } from "@/pages/repairs/RepairEntryPage";
 import { RepairReceiptPrintPage } from "@/pages/repairs/RepairReceiptPrintPage";
 import { RepairItemsPage } from "@/pages/repairs/RepairItemsPage";
@@ -42,7 +43,13 @@ import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { SimCardsPage } from "@/pages/sim-cards/SimCardsPage";
 import { SuppliersPage } from "@/pages/suppliers/SuppliersPage";
 import { TelecomPlansPage } from "@/pages/telecom-plans/TelecomPlansPage";
-import { NavGroup, NAV_GROUPS, PLATFORM_NAV_GROUP } from "@/nav";
+import {
+  MORE_NAV,
+  NavGroup,
+  NavSection,
+  PLATFORM_NAV_GROUP,
+  PRIMARY_NAV,
+} from "@/nav";
 
 function Placeholder({ title }: { title: string }) {
   return <div className="placeholder">{title}(尚未實作)</div>;
@@ -122,6 +129,82 @@ function NavGroupMenu({ group }: { group: NavGroup }) {
             >
               {it.label}
             </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 「更多」下拉:多 sections,每個 section 有 label + items。
+ * 任一子項命中就把頂列按鈕標為 active。
+ */
+function NavMoreMenu({
+  label,
+  sections,
+}: {
+  label: string;
+  sections: NavSection[];
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const location = useLocation();
+
+  const isActive = sections.some((s) =>
+    s.items.some((it) => location.pathname.startsWith(it.to)),
+  );
+
+  useEffect(() => setOpen(false), [location.pathname]);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, []);
+
+  return (
+    <div ref={ref} className={`topnav-group${open ? " open" : ""}`}>
+      <button
+        type="button"
+        className={`topnav-link${isActive ? " active" : ""}`}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        {label}
+      </button>
+      {open && (
+        <div className="topnav-dropdown topnav-dropdown-sections" role="menu">
+          {sections.map((s, i) => (
+            <div key={s.label} className="topnav-dropdown-section">
+              {i > 0 && <div className="topnav-dropdown-divider" />}
+              <div className="topnav-dropdown-section-label">{s.label}</div>
+              {s.items.map((it) => (
+                <NavLink
+                  key={it.to}
+                  to={it.to}
+                  role="menuitem"
+                  className={({ isActive }) =>
+                    isActive
+                      ? "topnav-dropdown-item active"
+                      : "topnav-dropdown-item"
+                  }
+                >
+                  {it.label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </div>
       )}
@@ -212,12 +295,21 @@ export function App() {
           >
             首頁
           </NavLink>
-          {(user?.profile?.role === "platform_admin"
-            ? [PLATFORM_NAV_GROUP, ...NAV_GROUPS]
-            : NAV_GROUPS
-          ).map((g) => (
-            <NavGroupMenu key={g.key} group={g} />
+          {PRIMARY_NAV.map((it) => (
+            <NavLink
+              key={it.to}
+              to={it.to}
+              className={({ isActive }) =>
+                isActive ? "topnav-link active" : "topnav-link"
+              }
+            >
+              {it.label}
+            </NavLink>
           ))}
+          <NavMoreMenu label={MORE_NAV.label} sections={MORE_NAV.sections} />
+          {user?.profile?.role === "platform_admin" && (
+            <NavGroupMenu group={PLATFORM_NAV_GROUP} />
+          )}
         </nav>
         <button
           type="button"
@@ -286,6 +378,7 @@ export function App() {
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<HomePage />} />
           <Route path="/products" element={<ProductsPage />} />
+          <Route path="/intake" element={<IntakePage />} />
           <Route path="/part-templates" element={<PartTemplatesPage />} />
           <Route path="/brand-series" element={<BrandSeriesPage />} />
           <Route path="/product-types" element={<ProductTypesPage />} />

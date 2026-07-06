@@ -98,6 +98,27 @@ body { background: var(--bg); color: var(--text); }
   background: var(--accent);
 }
 
+/* 「更多 ▾」分群下拉 */
+.topnav-dropdown-sections {
+  min-width: 220px;
+  padding: 6px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+}
+.topnav-dropdown-section { display: flex; flex-direction: column; }
+.topnav-dropdown-section-label {
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.topnav-dropdown-divider {
+  display: none; /* sections 用 grid 分欄,不需要橫線 */
+}
+
 .main { overflow: hidden; }
 .placeholder { padding: 32px; color: var(--text-dim); }
 .page {
@@ -1586,6 +1607,17 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   .topnav.open .topnav-dropdown-item {
     padding: 12px 16px 12px 32px;
     font-size: 15px;
+  }
+  /* sections 在手機展開時改單欄 + 顯示分隔線 */
+  .topnav.open .topnav-dropdown-sections {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .topnav.open .topnav-dropdown-divider {
+    display: block;
+    height: 1px;
+    background: var(--border);
+    margin: 4px 16px;
   }
 
   /* user-pill 簡化:只留 username,角色資訊隱藏(預留漢堡內看?) */
@@ -5383,3 +5415,128 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   box-shadow: 0 1px 3px rgba(99, 102, 241, 0.12);
 }
 
+
+/* ─────────────────────────────────────────────────────────
+ * 商品識別 / 待確認入庫(apps.identity)
+ * ───────────────────────────────────────────────────────── */
+.btn.small { padding: 3px 10px; font-size: 13px; }
+
+/* 建立批次表單 */
+.intake-create {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.intake-textarea {
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
+  padding: 8px 10px;
+}
+.intake-create-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.intake-create-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+.intake-label { color: var(--text-dim); font-size: 12px; }
+
+/* 批次列 */
+.intake-batchbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.intake-batchmeta { color: var(--text-dim); font-size: 13px; }
+
+.intake-commit-ok {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(80, 200, 120, 0.12);
+  color: #7fd8a0;
+  border-bottom: 1px solid var(--border);
+}
+
+.intake-work { flex: 1; min-height: 0; }
+
+/* 狀態徽章 */
+.intake-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.intake-badge.ok { background: rgba(80, 200, 120, 0.18); color: #6ecf94; }
+.intake-badge.warn { background: rgba(240, 176, 96, 0.18); color: #f0b060; }
+.intake-badge.danger { background: rgba(255, 112, 112, 0.18); color: #ff8080; }
+.intake-badge.muted { background: rgba(138, 147, 166, 0.18); color: var(--text-dim); }
+
+.intake-row-done td { opacity: 0.5; }
+tr.selected .intake-badge { filter: none; }
+
+/* 明細詳情 */
+.intake-item-detail { padding: 16px; overflow: auto; }
+.intake-subhead {
+  color: var(--text-dim);
+  font-size: 13px;
+  margin: 12px 0 6px;
+}
+
+.intake-candidate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  background: var(--panel-2);
+}
+.intake-candidate.conflict { border-color: #553030; }
+.intake-candidate-name { color: var(--text); }
+.intake-candidate-attr { color: var(--text-dim); }
+.intake-candidate-sub { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
+.intake-conflict-tag { color: #ff8080; }
+
+.intake-actions {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.intake-otherpick { display: flex; flex-direction: column; gap: 4px; max-width: 360px; }
+.intake-action-btns { display: flex; gap: 8px; }
+
+/* 別名頁籤 */
+.alias-panel { display: flex; flex-direction: column; gap: 12px; }
+.alias-hint { color: var(--text-dim); font-size: 13px; line-height: 1.5; }
+.alias-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.alias-table { width: 100%; border-collapse: collapse; }
+.alias-table th, .alias-table td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.alias-table th { color: var(--text-dim); font-weight: 500; }
+.alias-table tr.inactive td { opacity: 0.45; }

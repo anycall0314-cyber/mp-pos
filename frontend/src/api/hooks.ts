@@ -34,7 +34,10 @@ import {
   PlatformUser,
   PlatformWarehouse,
   Product,
+  ProductAlias,
   ProductSerial,
+  IntakeBatch,
+  IntakeItem,
   PurchaseOrder,
   ReturnableSummary,
   SalesOrder,
@@ -1903,5 +1906,134 @@ export function useImportBrandsSeries() {
         qc.invalidateQueries({ queryKey: ["product-types"] });
       }
     },
+  });
+}
+
+// ---- identity:商品別名 ----
+
+export const useProductAliases = (product: number | null) =>
+  useQuery({
+    queryKey: ["product-aliases", product],
+    queryFn: () =>
+      list<ProductAlias>(`/identity/aliases/?product=${product}&page_size=200`),
+    enabled: product != null,
+  });
+
+export function useSaveProductAlias() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Partial<ProductAlias> & { id?: number }) => {
+      const { id, ...body } = payload;
+      const method = id ? "PATCH" : "POST";
+      const url = id ? `/identity/aliases/${id}/` : "/identity/aliases/";
+      return api<ProductAlias>(url, { method, body: JSON.stringify(body) });
+    },
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["product-aliases"] }),
+  });
+}
+
+// ---- identity:待確認入庫 ----
+
+export const useIntakeBatches = (params?: string) =>
+  useQuery({
+    queryKey: ["intake-batches", params ?? ""],
+    queryFn: () =>
+      list<IntakeBatch>(`/identity/intakes/${params ? "?" + params : ""}`),
+  });
+
+export const useIntakeBatch = (id: number | null) =>
+  useQuery({
+    queryKey: ["intake-batch", id],
+    queryFn: () => api<IntakeBatch>(`/identity/intakes/${id}/`),
+    enabled: id != null,
+  });
+
+export function useCreateIntake() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      raw_text: string;
+      supplier?: number | null;
+      warehouse?: number | null;
+      vendor_doc_no?: string;
+      source?: string;
+    }) =>
+      api<IntakeBatch>("/identity/intakes/", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["intake-batches"] }),
+  });
+}
+
+export function useCommitIntake() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<IntakeBatch>(`/identity/intakes/${id}/commit/`, { method: "POST" }),
+    onSuccess: (b) => {
+      qc.invalidateQueries({ queryKey: ["intake-batches"] });
+      qc.invalidateQueries({ queryKey: ["intake-batch", b.id] });
+    },
+  });
+}
+
+function intakeItemAction(path: string, body?: unknown) {
+  return api<IntakeItem>(path, {
+    method: "POST",
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+function invalidateIntake(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["intake-batch"] });
+  qc.invalidateQueries({ queryKey: ["intake-batches"] });
+}
+
+export function useMatchIntakeItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: number; product: number; learn_alias?: boolean }) =>
+      intakeItemAction(`/identity/intake-items/${v.id}/match/`, {
+        product: v.product,
+        learn_alias: v.learn_alias ?? true,
+      }),
+    onSuccess: () => invalidateIntake(qc),
+  });
+}
+
+export function useNewProductForIntakeItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: {
+      id: number;
+      name?: string;
+      category: number;
+      capacity?: string;
+      color?: string;
+      region_version?: string;
+      requires_serial?: boolean;
+      learn_alias?: boolean;
+    }) => {
+      const { id, ...body } = v;
+      return intakeItemAction(
+        `/identity/intake-items/${id}/new-product/`,
+        body,
+      );
+    },
+    onSuccess: () => {
+      invalidateIntake(qc);
+      qc.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+export function useRejectIntakeItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      intakeItemAction(`/identity/intake-items/${id}/reject/`),
+    onSuccess: () => invalidateIntake(qc),
   });
 }

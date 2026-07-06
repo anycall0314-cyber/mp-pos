@@ -12,6 +12,20 @@ ALLOWED_HOSTS = [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").s
 
 DEFAULT_TENANT_ID = int(os.environ.get("DEFAULT_TENANT_ID", "1"))
 
+# ── AI 指令助理(apps.assistant)──────────────────────────────
+# 預設關閉:未設定時走 DeterministicParser(規則解析,無需外部服務)。
+# 要啟用自然語言解析:設 ASSISTANT_LLM_ENABLED=true 並提供 API 金鑰。
+ASSISTANT_LLM_ENABLED = os.environ.get("ASSISTANT_LLM_ENABLED", "false").lower() == "true"
+ASSISTANT_LLM_PROVIDER = os.environ.get("ASSISTANT_LLM_PROVIDER", "anthropic")
+ASSISTANT_LLM_MODEL = os.environ.get("ASSISTANT_LLM_MODEL", "claude-sonnet-4-6")
+ASSISTANT_LLM_API_KEY = os.environ.get("ASSISTANT_LLM_API_KEY", "")
+
+# ── 商品識別 (apps.identity)──────────────────────────────
+# 進貨品名 → 商品的自動對應門檻(整數分數 0-100,不寫死在程式,可用環境變數覆寫)。
+# 分數 >= AUTO_MATCH → 自動對應;>= REVIEW → 列候選讓人選;< REVIEW → 標未知。
+IDENTITY_AUTO_MATCH_SCORE = int(os.environ.get("IDENTITY_AUTO_MATCH_SCORE", "98"))
+IDENTITY_REVIEW_SCORE = int(os.environ.get("IDENTITY_REVIEW_SCORE", "85"))
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -33,6 +47,9 @@ INSTALLED_APPS = [
     "apps.transfers",
     "apps.cash",
     "apps.repairs",
+    "apps.assistant",
+    "apps.signals",
+    "apps.identity",
 ]
 
 MIDDLEWARE = [
