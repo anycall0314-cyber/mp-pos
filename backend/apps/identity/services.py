@@ -14,10 +14,12 @@
 - **屬性衝突(容量不同)→ 禁止自動對應**,就算名字很像也擋下(絕不 128G 誤對 256G)。
 - 門檻(自動 / 待選)讀 settings,不寫死。
 """
+import json
 import re
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
+from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Case, IntegerField, Q, Value, When
 
@@ -26,7 +28,7 @@ from apps.catalog.models import Category, Product
 from apps.purchasing.serializers import PurchaseOrderSerializer
 from apps.purchasing.services import commit_purchase_order
 
-from .models import IntakeBatch, IntakeItem, ProductAlias
+from .models import IntakeBatch, IntakeDocument, IntakeItem, ProductAlias
 from .normalize import normalize, normalize_capacity
 
 
@@ -222,6 +224,20 @@ def _parse_lines(raw_text):
     return items
 
 
+def _add_item(tenant, batch, line_no, *, raw_text, qty=1, unit_price=Decimal("0"),
+              serials=None, barcode="", vendor_sku="", ocr_confidence=None):
+    """跑識別 + 落一筆 IntakeItem。貼文字 / 拍照兩條路共用。"""
+    res = match_line(tenant, batch.supplier, raw_text, raw_barcode=barcode, raw_vendor_sku=vendor_sku)
+    return IntakeItem.objects.create(
+        tenant=tenant, batch=batch, line_no=line_no, raw_text=raw_text,
+        raw_barcode=barcode, raw_vendor_sku=vendor_sku,
+        raw_qty=qty, raw_unit_price=unit_price, raw_serials=serials or [],
+        matched_product=res["matched_product"], match_status=res["status"],
+        match_confidence=res["confidence"], candidates=res["candidates"],
+        ocr_confidence=ocr_confidence or {},
+    )
+
+
 def run_intake_from_text(tenant, raw_text, source=IntakeBatch.Source.MANUAL_TEXT,
                          supplier=None, warehouse=None, vendor_doc_no="", user=None):
     """建立一個待確認批次:拆行 → 逐行識別 → 落 IntakeItem。不寫正式庫存。"""
@@ -230,14 +246,87 @@ def run_intake_from_text(tenant, raw_text, source=IntakeBatch.Source.MANUAL_TEXT
         vendor_doc_no=vendor_doc_no, raw_text=raw_text or "", created_by=user,
     )
     for idx, row in enumerate(_parse_lines(raw_text), start=1):
-        res = match_line(tenant, supplier, row["raw_text"])
-        IntakeItem.objects.create(
-            tenant=tenant, batch=batch, line_no=idx, raw_text=row["raw_text"],
-            raw_qty=row["qty"], raw_unit_price=row["unit_price"], raw_serials=row["serials"],
-            matched_product=res["matched_product"], match_status=res["status"],
-            match_confidence=res["confidence"], candidates=res["candidates"],
+        _add_item(tenant, batch, idx, raw_text=row["raw_text"], qty=row["qty"],
+                  unit_price=row["unit_price"], serials=row["serials"])
+    _refresh_batch_status(batch)
+    return batch
+
+
+def _to_int_qty(v):
+    try:
+        return max(1, int(float(str(v).strip() or 1)))
+    except (ValueError, TypeError):
+        return 1
+
+
+def _to_price(v):
+    try:
+        return Decimal(str(v).strip() or "0")
+    except (InvalidOperation, ValueError, TypeError):
+        return Decimal("0")
+
+
+def run_intake_from_lines(tenant, lines, source=IntakeBatch.Source.OCR,
+                          supplier=None, warehouse=None, vendor_doc_no="",
+                          raw_text="", user=None):
+    """拍照 / 匯入來源:已是結構化明細 → 逐行識別 → 落 IntakeItem。
+
+    lines 每筆:{raw_name, supplier_sku, barcode, qty, unit_cost, field_confidence}。
+    barcode / 料號會餵進識別階梯(條碼、廠商料號精準比),命中率比純品名高。
+    """
+    batch = IntakeBatch.objects.create(
+        tenant=tenant, source=source, supplier=supplier, warehouse=warehouse,
+        vendor_doc_no=vendor_doc_no, raw_text=raw_text or "", created_by=user,
+    )
+    line_no = 0
+    for ln in lines or []:
+        name = (ln.get("raw_name") or "").strip()
+        barcode = (ln.get("barcode") or "").strip()
+        vendor_sku = (ln.get("supplier_sku") or "").strip()
+        if not name and not barcode and not vendor_sku:
+            continue  # 整行空的跳過
+        line_no += 1
+        _add_item(
+            tenant, batch, line_no, raw_text=name, qty=_to_int_qty(ln.get("qty")),
+            unit_price=_to_price(ln.get("unit_cost")), barcode=barcode, vendor_sku=vendor_sku,
+            ocr_confidence=ln.get("field_confidence") or {},
         )
     _refresh_batch_status(batch)
+    return batch
+
+
+def run_intake_from_image(tenant, uploaded_file, supplier=None, warehouse=None, user=None):
+    """拍照入口:存原圖 → 讀圖成明細 → 建待確認批次。原圖與 OCR 結果分開留底(稽核)。
+
+    讀圖模型未設定 → 丟 OcrNotConfigured;讀圖失敗 → 標記 document 失敗並丟 OcrError。
+    """
+    from .ocr import OcrError, get_ocr_provider
+
+    provider = get_ocr_provider()  # 未設定 → OcrNotConfigured
+    data = uploaded_file.read()
+    media_type = getattr(uploaded_file, "content_type", "") or "image/jpeg"
+    filename = getattr(uploaded_file, "name", "intake.jpg")
+
+    doc = IntakeDocument(tenant=tenant, original_filename=filename, created_by=user)
+    doc.image.save(filename, ContentFile(data), save=True)
+
+    try:
+        result = provider.read(data, media_type=media_type)
+    except OcrError as exc:
+        doc.ocr_status = IntakeDocument.OcrStatus.FAILED
+        doc.ocr_message = str(exc)[:300]
+        doc.save(update_fields=["ocr_status", "ocr_message", "updated_at"])
+        raise
+
+    batch = run_intake_from_lines(
+        tenant, result.get("lines", []), supplier=supplier, warehouse=warehouse,
+        vendor_doc_no=(result.get("doc_no") or ""),
+        raw_text=json.dumps(result, ensure_ascii=False), user=user,
+    )
+    doc.batch = batch
+    doc.ocr_status = IntakeDocument.OcrStatus.DONE
+    doc.ocr_raw = result
+    doc.save(update_fields=["batch", "ocr_status", "ocr_raw", "updated_at"])
     return batch
 
 

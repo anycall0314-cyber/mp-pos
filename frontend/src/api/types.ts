@@ -1286,7 +1286,20 @@ export interface IntakeItem {
   match_status: IntakeMatchStatus;
   match_confidence: number;
   candidates: IntakeItemCandidate[];
+  /** 拍照來源:每欄的辨識信心 0-1(與 match_confidence 不同) */
+  ocr_confidence: Record<string, number>;
   note: string;
+}
+
+export type OcrStatus = "pending" | "done" | "failed";
+
+export interface IntakeDocument {
+  id: number;
+  image_url: string;
+  original_filename: string;
+  ocr_status: OcrStatus;
+  ocr_message: string;
+  created_at: string;
 }
 
 export type IntakeSource = "manual_text" | "assistant" | "ocr" | "import";
@@ -1309,6 +1322,7 @@ export interface IntakeBatch {
   committed_purchase_order_id: number | null;
   created_at: string;
   items: IntakeItem[];
+  documents: IntakeDocument[];
   /** commit 成功回應時附帶 */
   purchase_order_no?: string;
 }

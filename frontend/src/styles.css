@@ -5522,6 +5522,25 @@ tr.selected .intake-badge { filter: none; }
 .intake-otherpick { display: flex; flex-direction: column; gap: 4px; max-width: 360px; }
 .intake-action-btns { display: flex; gap: 8px; }
 
+.intake-hint { color: var(--text-dim); font-size: 13px; margin-top: 6px; }
+.intake-docs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+.intake-doc-thumb {
+  display: inline-block;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  line-height: 0;
+}
+.intake-doc-thumb img { height: 96px; width: auto; display: block; object-fit: cover; }
+.intake-ocrconf { margin: 8px 0; font-size: 13px; color: var(--text-dim); }
+.intake-ocrconf.low { color: #ff8080; }
+
 /* 別名頁籤 */
 .alias-panel { display: flex; flex-direction: column; gap: 12px; }
 .alias-hint { color: var(--text-dim); font-size: 13px; line-height: 1.5; }

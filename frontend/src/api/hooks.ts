@@ -1967,6 +1967,24 @@ export function useCreateIntake() {
   });
 }
 
+export function useCreateIntakeOcr() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: {
+      image: File;
+      supplier?: number | null;
+      warehouse?: number | null;
+    }) => {
+      const fd = new FormData();
+      fd.append("image", v.image);
+      if (v.supplier != null) fd.append("supplier", String(v.supplier));
+      if (v.warehouse != null) fd.append("warehouse", String(v.warehouse));
+      return api<IntakeBatch>("/identity/intakes/ocr/", { method: "POST", body: fd });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["intake-batches"] }),
+  });
+}
+
 export function useCommitIntake() {
   const qc = useQueryClient();
   return useMutation({

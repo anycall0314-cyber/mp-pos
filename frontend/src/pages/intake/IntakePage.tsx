@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import {
   useCommitIntake,
   useCreateIntake,
+  useCreateIntakeOcr,
   useIntakeBatch,
   useIntakeBatches,
   useMatchIntakeItem,
@@ -52,6 +53,20 @@ function money(v: string | number) {
   return Number.isFinite(n) ? Math.round(n).toLocaleString() : "—";
 }
 
+const OCR_FIELD_LABEL: Record<string, string> = {
+  raw_name: "品名",
+  qty: "數量",
+  unit_cost: "進價",
+  supplier_sku: "料號",
+  barcode: "條碼",
+};
+
+function lowConfFields(conf: Record<string, number>) {
+  return Object.entries(conf)
+    .filter(([, v]) => typeof v === "number" && v < 0.9)
+    .map(([k]) => OCR_FIELD_LABEL[k] ?? k);
+}
+
 export function IntakePage() {
   const batchesQuery = useIntakeBatches("page_size=50");
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
@@ -73,7 +88,9 @@ export function IntakePage() {
 
   const warehouses = useWarehouses();
   const createIntake = useCreateIntake();
+  const createIntakeOcr = useCreateIntakeOcr();
   const commitIntake = useCommitIntake();
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const [commitMsg, setCommitMsg] = useState<{ no: string; poId: number } | null>(
     null,
@@ -97,6 +114,23 @@ export function IntakePage() {
       setSelectedItemId(b.items[0]?.id ?? null);
       setRawText("");
       setVendorDocNo("");
+      setCommitMsg(null);
+      setCommitErr("");
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function uploadPhoto(file: File) {
+    setFormError("");
+    try {
+      const b = await createIntakeOcr.mutateAsync({
+        image: file,
+        supplier: supplierId === "" ? null : supplierId,
+        warehouse: warehouseId === "" ? null : warehouseId,
+      });
+      setSelectedBatchId(b.id);
+      setSelectedItemId(b.items[0]?.id ?? null);
       setCommitMsg(null);
       setCommitErr("");
     } catch (e) {
@@ -174,6 +208,28 @@ export function IntakePage() {
           >
             送出識別
           </button>
+          <button
+            className="btn"
+            onClick={() => fileRef.current?.click()}
+            disabled={createIntakeOcr.isPending}
+            title="拍照 / 選一張進貨單照片,自動讀成明細"
+          >
+            {createIntakeOcr.isPending ? "讀圖中…" : "上傳照片"}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*,application/pdf"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void uploadPhoto(f);
+              e.target.value = "";
+            }}
+          />
+        </div>
+        <div className="intake-hint">
+          貼文字或上傳照片都可;上傳的進貨單會存原圖、自動讀成明細後進待確認區(廠商 / 倉沿用上方選擇)。
         </div>
       </div>
 
@@ -232,7 +288,27 @@ export function IntakePage() {
       {commitErr && <Banner kind="error" message={commitErr} />}
 
       {batch ? (
-        <div className="md-layout intake-work">
+        <>
+          {batch.documents.length > 0 && (
+            <div className="intake-docs">
+              <span className="intake-label">原圖</span>
+              {batch.documents.map((d) => (
+                <a
+                  key={d.id}
+                  href={d.image_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="intake-doc-thumb"
+                  title={`${d.original_filename}${
+                    d.ocr_status === "failed" ? " · 辨識失敗" : ""
+                  }`}
+                >
+                  <img src={d.image_url} alt={d.original_filename} />
+                </a>
+              ))}
+            </div>
+          )}
+          <div className="md-layout intake-work">
           <section className="md-master">
             <div className="md-table">
               <table>
@@ -285,7 +361,8 @@ export function IntakePage() {
               </div>
             )}
           </section>
-        </div>
+          </div>
+        </>
       ) : (
         <div className="md-empty" style={{ marginTop: 40 }}>
           貼一張進貨單送出識別,或從上方選一個批次
@@ -372,6 +449,16 @@ function ItemDetail({ item }: { item: IntakeItem }) {
           </>
         )}
       </dl>
+
+      {Object.keys(item.ocr_confidence).length > 0 &&
+        (lowConfFields(item.ocr_confidence).length > 0 ? (
+          <div className="intake-ocrconf low">
+            讀圖信心偏低,請對照原圖再確認:
+            {lowConfFields(item.ocr_confidence).join("、")}
+          </div>
+        ) : (
+          <div className="intake-ocrconf">讀圖信心良好</div>
+        ))}
 
       {item.candidates.length > 0 && (
         <div className="intake-candidates">

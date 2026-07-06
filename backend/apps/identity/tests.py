@@ -198,6 +198,53 @@ class IntakeFlowTests(TestCase):
         self.assertEqual(r["matched_product"], self.product)
 
 
+class OcrIntakeTests(TestCase):
+    """拍照來源:結構化明細 → 待確認區(走條碼 / 料號比對階梯)。離線,不呼叫外部。"""
+
+    def setUp(self):
+        from apps.inventory.models import Warehouse
+        self.tenant = Tenant.objects.create(name="測試通訊行", code="demo")
+        self.wh = Warehouse.objects.create(tenant=self.tenant, code="MAIN", name="門市")
+        self.cat = Category.objects.create(tenant=self.tenant, code="PH", name="手機")
+        self.sup = Supplier.objects.create(tenant=self.tenant, name="大盤商A")
+        self.product = Product.objects.create(
+            tenant=self.tenant, category=self.cat, name="iPhone 15 128GB 黑",
+            barcode="4710001234567",
+        )
+
+    def test_lines_use_barcode_and_vendor_sku_tiers(self):
+        from .services import run_intake_from_lines
+        # 教一條廠商料號別名
+        ProductAlias.objects.create(
+            tenant=self.tenant, product=self.product, supplier=self.sup,
+            kind=ProductAlias.Kind.VENDOR_SKU, value="IP15-128-BK",
+        )
+        lines = [
+            {"raw_name": "亂七八糟品名", "barcode": "4710001234567", "qty": "2",
+             "unit_cost": "18500", "field_confidence": {"raw_name": 0.6, "qty": 0.97}},
+            {"raw_name": "也看不懂", "supplier_sku": "IP15-128-BK", "qty": 1, "unit_cost": "18000"},
+            {"raw_name": "完全沒見過的東西", "qty": 3, "unit_cost": "50"},
+            {"raw_name": "", "barcode": "", "supplier_sku": ""},  # 空行應跳過
+        ]
+        batch = run_intake_from_lines(self.tenant, lines, supplier=self.sup, warehouse=self.wh)
+        items = list(batch.items.order_by("line_no"))
+        self.assertEqual(len(items), 3)  # 空行被跳過
+        # 條碼命中 → 自動,且數量/信心有帶進來
+        self.assertEqual(items[0].match_status, IntakeItem.MatchStatus.AUTO_MATCHED)
+        self.assertEqual(items[0].matched_product, self.product)
+        self.assertEqual(items[0].raw_qty, 2)
+        self.assertEqual(items[0].ocr_confidence.get("raw_name"), 0.6)
+        # 廠商料號命中 → 自動
+        self.assertEqual(items[1].match_status, IntakeItem.MatchStatus.AUTO_MATCHED)
+        # 沒見過 → 未知
+        self.assertEqual(items[2].match_status, IntakeItem.MatchStatus.UNKNOWN)
+
+    def test_ocr_provider_disabled_by_default(self):
+        from .ocr import OcrNotConfigured, get_ocr_provider
+        with self.assertRaises(OcrNotConfigured):
+            get_ocr_provider()
+
+
 class IntakeTests(TestCase):
     def setUp(self):
         self.tenant = Tenant.objects.create(name="測試通訊行", code="demo")

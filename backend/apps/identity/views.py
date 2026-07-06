@@ -50,8 +50,18 @@ class IntakeBatchViewSet(
         return (
             IntakeBatch.objects.for_tenant(self.request.tenant)
             .select_related("supplier", "warehouse")
-            .prefetch_related("items__matched_product")
+            .prefetch_related("items__matched_product", "documents")
         )
+
+    def _lookup_supplier_warehouse(self, data):
+        supplier = warehouse = None
+        if data.get("supplier"):
+            supplier = Supplier.objects.for_tenant(self.request.tenant).filter(
+                id=data["supplier"]).first()
+        if data.get("warehouse"):
+            warehouse = Warehouse.objects.for_tenant(self.request.tenant).filter(
+                id=data["warehouse"]).first()
+        return supplier, warehouse
 
     def _user(self):
         u = getattr(self.request, "user", None)
@@ -61,16 +71,34 @@ class IntakeBatchViewSet(
         payload = IntakeCreateSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         data = payload.validated_data
-        supplier = warehouse = None
-        if data.get("supplier"):
-            supplier = Supplier.objects.for_tenant(request.tenant).filter(id=data["supplier"]).first()
-        if data.get("warehouse"):
-            warehouse = Warehouse.objects.for_tenant(request.tenant).filter(id=data["warehouse"]).first()
+        supplier, warehouse = self._lookup_supplier_warehouse(data)
         batch = services.run_intake_from_text(
             tenant=request.tenant, raw_text=data["raw_text"], source=data["source"],
             supplier=supplier, warehouse=warehouse,
             vendor_doc_no=data.get("vendor_doc_no", ""), user=self._user(),
         )
+        return Response(self.get_serializer(batch).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["post"], url_path="ocr")
+    def ocr(self, request):
+        """上傳進貨單照片 → 讀圖成明細 → 建待確認批次。"""
+        from .ocr import OcrError, OcrNotConfigured
+
+        image = request.FILES.get("image")
+        if not image:
+            return Response({"detail": "請附上圖片檔(欄位名 image)"}, status=status.HTTP_400_BAD_REQUEST)
+        supplier, warehouse = self._lookup_supplier_warehouse(request.data)
+        try:
+            batch = services.run_intake_from_image(
+                request.tenant, image, supplier=supplier, warehouse=warehouse, user=self._user()
+            )
+        except OcrNotConfigured:
+            return Response(
+                {"detail": "尚未設定讀圖模型(請先提供金鑰並開啟 OCR)"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except OcrError as exc:
+            return Response({"detail": f"讀圖失敗:{exc}"}, status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(batch).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])

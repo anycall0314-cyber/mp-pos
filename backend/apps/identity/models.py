@@ -194,6 +194,10 @@ class IntakeItem(TenantOwnedModel):
         "候選清單", default=list, blank=True,
         help_text="[{product_id, sku, name, score, reason}] 給人選",
     )
+    ocr_confidence = models.JSONField(
+        "OCR 辨識信心", default=dict, blank=True,
+        help_text="拍照來源:每欄的辨識信心(0-1);與 match_confidence 是兩回事",
+    )
     resolved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
         related_name="+", null=True, blank=True, verbose_name="處理者",
@@ -213,3 +217,37 @@ class IntakeItem(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.batch_id}#{self.line_no} {self.raw_text[:20]}"
+
+
+class IntakeDocument(TenantOwnedModel):
+    """進貨單原圖(拍照 / PDF)。原圖與 OCR 結果分開留底,供稽核與重新辨識。"""
+
+    class OcrStatus(models.TextChoices):
+        PENDING = "pending", "待辨識"
+        DONE = "done", "已辨識"
+        FAILED = "failed", "辨識失敗"
+
+    batch = models.ForeignKey(
+        IntakeBatch, on_delete=models.CASCADE, related_name="documents",
+        null=True, blank=True, verbose_name="待確認批次",
+    )
+    image = models.FileField("原圖 / 檔案", upload_to="intake_docs/%Y/%m/")
+    original_filename = models.CharField("原始檔名", max_length=200, blank=True)
+    ocr_status = models.CharField(
+        "辨識狀態", max_length=12, choices=OcrStatus.choices, default=OcrStatus.PENDING
+    )
+    ocr_raw = models.JSONField("辨識原始結果", default=dict, blank=True)
+    ocr_message = models.CharField("辨識訊息", max_length=300, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name="+", null=True, blank=True, verbose_name="上傳者",
+    )
+
+    class Meta:
+        indexes = [models.Index(fields=["tenant", "ocr_status"])]
+        ordering = ["-id"]
+        verbose_name = "進貨單原圖"
+        verbose_name_plural = "進貨單原圖"
+
+    def __str__(self) -> str:
+        return f"[{self.get_ocr_status_display()}] {self.original_filename or self.image.name}"

@@ -1,7 +1,7 @@
 """Django admin 只當 dev fallback(對齊決策:唯一前端是 React app)。"""
 from django.contrib import admin
 
-from .models import IntakeBatch, IntakeItem, ProductAlias
+from .models import IntakeBatch, IntakeDocument, IntakeItem, ProductAlias
 
 
 @admin.register(ProductAlias)
@@ -31,3 +31,10 @@ class IntakeItemAdmin(admin.ModelAdmin):
     list_filter = ("match_status",)
     search_fields = ("raw_text",)
     raw_id_fields = ("batch", "matched_product")
+
+
+@admin.register(IntakeDocument)
+class IntakeDocumentAdmin(admin.ModelAdmin):
+    list_display = ("id", "original_filename", "ocr_status", "batch", "created_at")
+    list_filter = ("ocr_status",)
+    raw_id_fields = ("batch",)

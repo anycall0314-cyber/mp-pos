@@ -26,6 +26,14 @@ ASSISTANT_LLM_API_KEY = os.environ.get("ASSISTANT_LLM_API_KEY", "")
 IDENTITY_AUTO_MATCH_SCORE = int(os.environ.get("IDENTITY_AUTO_MATCH_SCORE", "98"))
 IDENTITY_REVIEW_SCORE = int(os.environ.get("IDENTITY_REVIEW_SCORE", "85"))
 
+# ── 進貨單讀圖 (apps.identity OCR)──────────────────────────────
+# 預設關閉:未設金鑰時上傳照片會回「尚未設定讀圖模型」,其餘流程(貼文字)不受影響。
+# 準度優先、可切換:預設走視覺模型讀成結構化明細,換供應商只改這裡。
+OCR_ENABLED = os.environ.get("OCR_ENABLED", "false").lower() == "true"
+OCR_PROVIDER = os.environ.get("OCR_PROVIDER", "anthropic")
+OCR_MODEL = os.environ.get("OCR_MODEL", "claude-sonnet-4-6")
+OCR_API_KEY = os.environ.get("OCR_API_KEY", "")
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -105,6 +113,11 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# 進貨單原圖等上傳檔(存原圖供稽核 / 重新辨識)。正式環境由 Mac mini 前面的靜態服務代理。
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
