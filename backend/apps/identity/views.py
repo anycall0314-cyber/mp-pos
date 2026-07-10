@@ -2,18 +2,31 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from django.db.models import Q
+
 from apps.inventory.models import Warehouse
 from apps.parties.models import Supplier
 
 from . import services
+
+
+def _allowed_wh_ids(request):
+    """鎖倉帳號可操作的倉 id;None = 不限(tenant_admin / platform_admin)。"""
+    user = getattr(request, "user", None)
+    profile = getattr(user, "profile", None) if user and user.is_authenticated else None
+    if not profile or not profile.is_warehouse_locked:
+        return None
+    return [profile.default_warehouse_id] if profile.default_warehouse_id else []
 from .models import IntakeBatch, IntakeItem, ProductAlias
 from .serializers import (
+    CorrectIntakeItemSerializer,
     IntakeBatchSerializer,
     IntakeCreateSerializer,
     IntakeItemSerializer,
     MatchItemSerializer,
     NewProductForItemSerializer,
     ProductAliasSerializer,
+    SetHeaderSerializer,
 )
 
 
@@ -47,11 +60,16 @@ class IntakeBatchViewSet(
     ordering = ["-id"]
 
     def get_queryset(self):
-        return (
+        qs = (
             IntakeBatch.objects.for_tenant(self.request.tenant)
             .select_related("supplier", "warehouse")
             .prefetch_related("items__matched_product", "documents")
         )
+        # 鎖倉帳號只看自己倉的批次(尚未指定倉的草稿也看得到)
+        ids = _allowed_wh_ids(self.request)
+        if ids is not None:
+            qs = qs.filter(Q(warehouse_id__in=ids) | Q(warehouse__isnull=True))
+        return qs
 
     def _lookup_supplier_warehouse(self, data):
         supplier = warehouse = None
@@ -101,9 +119,34 @@ class IntakeBatchViewSet(
             return Response({"detail": f"讀圖失敗:{exc}"}, status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(batch).data, status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=["post"], url_path="set-header")
+    def set_header(self, request, pk=None):
+        batch = self.get_object()
+        body = SetHeaderSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        data = body.validated_data
+        supplier, warehouse = self._lookup_supplier_warehouse(data)
+        # 鎖倉帳號不可把批次指到別的倉
+        ids = _allowed_wh_ids(request)
+        if ids is not None and warehouse is not None and warehouse.id not in ids:
+            return Response({"detail": "不可指定到非自己門市"}, status=status.HTTP_403_FORBIDDEN)
+        kwargs = {"supplier": supplier, "warehouse": warehouse,
+                  "tax_method": data.get("tax_method"), "vendor_doc_no": data.get("vendor_doc_no")}
+        if "document_total" in data:
+            kwargs["document_total"] = data["document_total"]
+        try:
+            services.set_header(batch, **kwargs)
+        except services.IdentityError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        batch.refresh_from_db()
+        return Response(self.get_serializer(batch).data)
+
     @action(detail=True, methods=["post"])
     def commit(self, request, pk=None):
         batch = self.get_object()
+        ids = _allowed_wh_ids(request)
+        if ids is not None and batch.warehouse_id not in ids:
+            return Response({"detail": "不可過帳到非自己門市"}, status=status.HTTP_403_FORBIDDEN)
         try:
             po = services.commit_batch(batch, user=self._user())
         except services.IdentityError as exc:
@@ -154,6 +197,14 @@ class IntakeItemViewSet(
             services.resolve_item_new_product(item, body.validated_data, user=self._user())
         except services.IdentityError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(self.get_serializer(item).data)
+
+    @action(detail=True, methods=["post"])
+    def correct(self, request, pk=None):
+        item = self.get_object()
+        body = CorrectIntakeItemSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        services.correct_intake_item(item, body.validated_data, user=self._user())
         return Response(self.get_serializer(item).data)
 
     @action(detail=True, methods=["post"])

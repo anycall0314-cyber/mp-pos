@@ -1283,6 +1283,17 @@ export interface IntakeItem {
   matched_product: number | null;
   matched_product_name: string;
   matched_product_sku: string;
+  /** 人工修正值:null = 未修正(取 raw)。過帳一律看 effective_* */
+  corrected_name: string | null;
+  corrected_qty: number | null;
+  corrected_unit_price: string | null;
+  corrected_barcode: string | null;
+  corrected_vendor_sku: string | null;
+  corrected_serials: string[] | null;
+  effective_name: string;
+  effective_qty: number;
+  effective_unit_price: string;
+  effective_serials: string[];
   match_status: IntakeMatchStatus;
   match_confidence: number;
   candidates: IntakeItemCandidate[];
@@ -1290,6 +1301,8 @@ export interface IntakeItem {
   ocr_confidence: Record<string, number>;
   note: string;
 }
+
+export type IntakeTaxMethod = "taxable_included" | "taxable_excluded" | "untaxed";
 
 export type OcrStatus = "pending" | "done" | "failed";
 
@@ -1317,6 +1330,8 @@ export interface IntakeBatch {
   warehouse: number | null;
   warehouse_name: string;
   vendor_doc_no: string;
+  tax_method: IntakeTaxMethod;
+  document_total: string | null;
   status: IntakeBatchStatus;
   note: string;
   committed_purchase_order_id: number | null;

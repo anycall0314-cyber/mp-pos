@@ -2055,3 +2055,46 @@ export function useRejectIntakeItem() {
     onSuccess: () => invalidateIntake(qc),
   });
 }
+
+export function useCorrectIntakeItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: {
+      id: number;
+      name?: string;
+      qty?: number;
+      unit_price?: string;
+      barcode?: string;
+      vendor_sku?: string;
+      serials?: string[];
+    }) => {
+      const { id, ...body } = v;
+      return intakeItemAction(`/identity/intake-items/${id}/correct/`, body);
+    },
+    onSuccess: () => invalidateIntake(qc),
+  });
+}
+
+export function useSetIntakeHeader() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: {
+      id: number;
+      supplier?: number | null;
+      warehouse?: number | null;
+      tax_method?: string;
+      vendor_doc_no?: string;
+      document_total?: string | number | null;
+    }) => {
+      const { id, ...body } = v;
+      return api<IntakeBatch>(`/identity/intakes/${id}/set-header/`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+    },
+    onSuccess: (b) => {
+      qc.invalidateQueries({ queryKey: ["intake-batches"] });
+      qc.invalidateQueries({ queryKey: ["intake-batch", b.id] });
+    },
+  });
+}

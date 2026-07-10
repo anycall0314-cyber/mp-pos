@@ -19,12 +19,18 @@ ASSISTANT_LLM_ENABLED = os.environ.get("ASSISTANT_LLM_ENABLED", "false").lower()
 ASSISTANT_LLM_PROVIDER = os.environ.get("ASSISTANT_LLM_PROVIDER", "anthropic")
 ASSISTANT_LLM_MODEL = os.environ.get("ASSISTANT_LLM_MODEL", "claude-sonnet-4-6")
 ASSISTANT_LLM_API_KEY = os.environ.get("ASSISTANT_LLM_API_KEY", "")
+# 直接讓助理 confirm 建立進貨單的舊寫入路徑;預設關閉,一律改走待確認入庫(Intake)。
+ASSISTANT_DIRECT_COMMIT_ENABLED = (
+    os.environ.get("ASSISTANT_DIRECT_COMMIT_ENABLED", "false").lower() == "true"
+)
 
 # ── 商品識別 (apps.identity)──────────────────────────────
 # 進貨品名 → 商品的自動對應門檻(整數分數 0-100,不寫死在程式,可用環境變數覆寫)。
 # 分數 >= AUTO_MATCH → 自動對應;>= REVIEW → 列候選讓人選;< REVIEW → 標未知。
 IDENTITY_AUTO_MATCH_SCORE = int(os.environ.get("IDENTITY_AUTO_MATCH_SCORE", "98"))
 IDENTITY_REVIEW_SCORE = int(os.environ.get("IDENTITY_REVIEW_SCORE", "85"))
+# 明細合計與單據總額的容差(整數金額);差超過就擋 commit。
+INTAKE_TOTAL_TOLERANCE = int(os.environ.get("INTAKE_TOTAL_TOLERANCE", "1"))
 
 # ── 進貨單讀圖 (apps.identity OCR)──────────────────────────────
 # 預設關閉:未設金鑰時上傳照片會回「尚未設定讀圖模型」,其餘流程(貼文字)不受影響。
@@ -33,6 +39,8 @@ OCR_ENABLED = os.environ.get("OCR_ENABLED", "false").lower() == "true"
 OCR_PROVIDER = os.environ.get("OCR_PROVIDER", "anthropic")
 OCR_MODEL = os.environ.get("OCR_MODEL", "claude-sonnet-4-6")
 OCR_API_KEY = os.environ.get("OCR_API_KEY", "")
+# 關鍵欄位 OCR 信心低於此值 → 該行不自動對應,強制人工覆核(0-1)。
+OCR_MIN_FIELD_CONFIDENCE = float(os.environ.get("OCR_MIN_FIELD_CONFIDENCE", "0.7"))
 
 INSTALLED_APPS = [
     "django.contrib.admin",

@@ -14,6 +14,7 @@
 - **屬性衝突(容量不同)→ 禁止自動對應**,就算名字很像也擋下(絕不 128G 誤對 256G)。
 - 門檻(自動 / 待選)讀 settings,不寫死。
 """
+import hashlib
 import json
 import re
 from decimal import Decimal, InvalidOperation
@@ -54,6 +55,31 @@ def _detect_capacity(text: str) -> str:
     return normalize_capacity(m.group(0)) if m else ""
 
 
+# 地區版本關鍵字 → 標準碼(顏色因同義詞太雜,留到 P1 的 CanonicalTermAlias 再做衝突)
+_REGION_TOKENS = {
+    "台版": "TW", "臺版": "TW", "台灣版": "TW", "國際版": "INTL",
+    "港版": "HK", "美版": "US", "陸版": "CN", "中國版": "CN", "日版": "JP",
+}
+
+
+def _detect_region(text: str) -> str:
+    t = text or ""
+    for k, v in _REGION_TOKENS.items():
+        if k in t:
+            return v
+    return ""
+
+
+def _norm_region(val: str) -> str:
+    val = (val or "").strip()
+    if not val:
+        return ""
+    for k, v in _REGION_TOKENS.items():
+        if k in val:
+            return v
+    return val.lower()
+
+
 def _brief(product, score, reason, conflict=False):
     return {
         "product_id": product.id,
@@ -73,8 +99,9 @@ def _alias_lookup(tenant, supplier, key, kinds):
     """
     if not key:
         return None
+    # 只有「已確認(verified)」的別名才可用於自動對應(對齊計畫 P0-2)
     qs = ProductAlias.objects.for_tenant(tenant).filter(
-        is_active=True, kind__in=kinds, normalized_value=key
+        is_active=True, verified=True, kind__in=kinds, normalized_value=key
     ).select_related("product").filter(Q(supplier__isnull=True) | Q(supplier=supplier))
     # 有指定廠商的別名(0)優先於通用別名(1)
     return qs.annotate(
@@ -84,11 +111,14 @@ def _alias_lookup(tenant, supplier, key, kinds):
 
 
 def _tokenize(raw_text):
-    """拆詞,並把「容量詞」抽掉(容量改當結構化訊號比,不當名稱必須字)。
+    """拆詞,並把「容量詞」與「地區版本詞」抽掉(改當結構化訊號比,不當名稱必須字)。
     回傳 (比對用詞, 容量詞)。
     """
     toks = [t for t in _TOKEN_SPLIT_RE.split((raw_text or "").strip()) if t]
-    match_toks = [t for t in toks if not _CAP_TOKEN_RE.fullmatch(t)]
+    match_toks = [
+        t for t in toks
+        if not _CAP_TOKEN_RE.fullmatch(t) and t not in _REGION_TOKENS
+    ]
     return match_toks, _detect_capacity(raw_text)
 
 
@@ -155,8 +185,9 @@ def match_line(tenant, supplier, raw_text, raw_barcode="", raw_vendor_sku=""):
         return {"matched_product": exact, "status": S.AUTO_MATCHED,
                 "confidence": 98, "candidates": [_brief(exact, 98, "品號相符")]}
 
-    # ④ 屬性 + 名稱模糊 → 產候選;容量當結構化訊號:相符加分、不符標衝突
+    # ④ 屬性 + 名稱模糊 → 產候選;容量 / 地區版本當結構化訊號:相符加分、不符標衝突
     match_toks, q_cap = _tokenize(raw_text)
+    q_region = _detect_region(raw_text)
     matches = _candidate_search(tenant, match_toks, raw_text)
     if not matches:
         return {"matched_product": None, "status": S.UNKNOWN, "confidence": 0, "candidates": []}
@@ -165,15 +196,18 @@ def match_line(tenant, supplier, raw_text, raw_barcode="", raw_vendor_sku=""):
     for p in matches:
         score = _name_score(match_toks, p)
         conflict = False
-        reason = "名稱相似"
+        reasons = ["名稱相似"]
         if q_cap and p.capacity:
             if normalize_capacity(p.capacity) == q_cap:
                 score = min(96, score + 4)
-                reason = "名稱相似 + 容量相符"
+                reasons = ["名稱相似 + 容量相符"]
             else:
                 conflict = True
-                reason = f"名稱像,但容量對不上(單據 {q_cap} / 商品 {p.capacity})"
-        scored.append(_brief(p, score, reason, conflict))
+                reasons.append(f"容量對不上(單據 {q_cap} / 商品 {p.capacity})")
+        if q_region and p.region_version and _norm_region(p.region_version) != q_region:
+            conflict = True
+            reasons.append(f"版本對不上(單據 {q_region} / 商品 {p.region_version})")
+        scored.append(_brief(p, score, "、".join(reasons), conflict))
     scored.sort(key=lambda c: (c["conflict"], -c["score"]))
     candidates = scored[:6]
 
@@ -286,13 +320,29 @@ def run_intake_from_lines(tenant, lines, source=IntakeBatch.Source.OCR,
         if not name and not barcode and not vendor_sku:
             continue  # 整行空的跳過
         line_no += 1
-        _add_item(
+        conf = ln.get("field_confidence") or {}
+        serials = list(ln.get("serial_numbers") or ln.get("document_identifiers") or [])
+        item = _add_item(
             tenant, batch, line_no, raw_text=name, qty=_to_int_qty(ln.get("qty")),
-            unit_price=_to_price(ln.get("unit_cost")), barcode=barcode, vendor_sku=vendor_sku,
-            ocr_confidence=ln.get("field_confidence") or {},
+            unit_price=_to_price(ln.get("unit_cost")), serials=serials,
+            barcode=barcode, vendor_sku=vendor_sku, ocr_confidence=conf,
         )
+        # 低 OCR 信心 → 即使字串精準也降級為待覆核(對齊計畫 P0-2)
+        if item.match_status == IntakeItem.MatchStatus.AUTO_MATCHED and _low_ocr_conf(conf):
+            item.match_status = IntakeItem.MatchStatus.NEEDS_REVIEW
+            item.save(update_fields=["match_status", "updated_at"])
     _refresh_batch_status(batch)
     return batch
+
+
+def _low_ocr_conf(conf):
+    """關鍵欄位 OCR 信心低於門檻 → 視為低信心(門檻讀 settings)。"""
+    thr = getattr(settings, "OCR_MIN_FIELD_CONFIDENCE", 0.7)
+    for k in ("raw_name", "barcode", "qty", "unit_cost"):
+        v = conf.get(k)
+        if isinstance(v, (int, float)) and v < thr:
+            return True
+    return False
 
 
 def run_intake_from_image(tenant, uploaded_file, supplier=None, warehouse=None, user=None):
@@ -307,7 +357,17 @@ def run_intake_from_image(tenant, uploaded_file, supplier=None, warehouse=None, 
     media_type = getattr(uploaded_file, "content_type", "") or "image/jpeg"
     filename = getattr(uploaded_file, "name", "intake.jpg")
 
-    doc = IntakeDocument(tenant=tenant, original_filename=filename, created_by=user)
+    content_hash = hashlib.sha256(data).hexdigest()
+    # 同一檔案若已在「已過帳」批次入庫過 → 擋下(可重傳以救回失敗 / 取消的流程)
+    if IntakeDocument.objects.for_tenant(tenant).filter(
+        content_hash=content_hash, batch__status=IntakeBatch.Status.COMMITTED
+    ).exists():
+        raise IdentityError("這張單據的檔案已經入庫過了(重複防呆)")
+
+    doc = IntakeDocument(
+        tenant=tenant, original_filename=filename,
+        content_hash=content_hash, created_by=user,
+    )
     doc.image.save(filename, ContentFile(data), save=True)
 
     try:
@@ -411,39 +471,120 @@ def reject_item(item, user=None):
     return item
 
 
+def correct_intake_item(item, data, user=None):
+    """人工修正一行(品名/數量/單價/條碼/料號/序號),保留 raw 原值。
+    改到會影響「識別」的欄位(品名/條碼/料號)才重跑比對;只改量價序號不動已對應的商品。
+    """
+    if "name" in data:
+        item.corrected_name = (data["name"] or "").strip()
+    if data.get("qty") is not None:
+        item.corrected_qty = _to_int_qty(data["qty"])
+    if data.get("unit_price") is not None:
+        item.corrected_unit_price = _to_price(data["unit_price"])
+    if "barcode" in data:
+        item.corrected_barcode = (data["barcode"] or "").strip()
+    if "vendor_sku" in data:
+        item.corrected_vendor_sku = (data["vendor_sku"] or "").strip()
+    if "serials" in data:
+        item.corrected_serials = list(data["serials"] or [])
+
+    identity_changed = any(k in data for k in ("name", "barcode", "vendor_sku"))
+    if identity_changed:
+        res = match_line(
+            item.tenant, item.batch.supplier, item.effective_name,
+            raw_barcode=item.effective_barcode, raw_vendor_sku=item.effective_vendor_sku,
+        )
+        item.matched_product = res["matched_product"]
+        item.match_status = res["status"]
+        item.match_confidence = res["confidence"]
+        item.candidates = res["candidates"]
+    item.resolved_by = user
+    item.save()
+    _refresh_batch_status(item.batch)
+    return item
+
+
+_UNSET = object()
+
+
+def set_header(batch, supplier=None, warehouse=None, tax_method=None,
+               vendor_doc_no=None, document_total=_UNSET):
+    """修正批次單頭(供應商 / 倉 / 稅別 / 廠商單號 / 單據總額)。None = 該欄不動。"""
+    if batch.status in (IntakeBatch.Status.COMMITTED, IntakeBatch.Status.CANCELLED):
+        raise IdentityError("這批已結案,不可再修改")
+    fields = []
+    if supplier is not None:
+        batch.supplier = supplier
+        fields.append("supplier")
+    if warehouse is not None:
+        batch.warehouse = warehouse
+        fields.append("warehouse")
+    if tax_method is not None:
+        batch.tax_method = tax_method
+        fields.append("tax_method")
+    if vendor_doc_no is not None:
+        batch.vendor_doc_no = vendor_doc_no
+        fields.append("vendor_doc_no")
+    if document_total is not _UNSET:
+        batch.document_total = document_total
+        fields.append("document_total")
+    if fields:
+        batch.save(update_fields=fields + ["updated_at"])
+    return batch
+
+
 def commit_batch(batch, user=None):
-    """全部對應完 → 組進貨單 → 走既有 commit_purchase_order 過帳(帳本唯一入口)。"""
-    if batch.status == IntakeBatch.Status.COMMITTED:
-        raise IdentityError("這批已經過帳了")
-    if not batch.supplier_id or not batch.warehouse_id:
-        raise IdentityError("請先指定廠商與入庫倉再過帳")
-    if batch.items.filter(match_status__in=_PENDING).exists():
-        raise IdentityError("還有未確認的明細,請先逐筆處理完")
+    """全部對應完 → 組進貨單 → 走既有 commit_purchase_order 過帳(帳本唯一入口)。
 
-    rows = batch.items.filter(
-        match_status__in=_COMMITTABLE, matched_product__isnull=False
-    ).order_by("line_no")
-    payload_items = [{
-        "product": it.matched_product_id,
-        "qty": it.raw_qty,
-        "unit_price": str(it.raw_unit_price),
-        "serial_numbers": list(it.raw_serials or []),
-    } for it in rows]
-    if not payload_items:
-        raise IdentityError("沒有可過帳的明細(都被駁回了?)")
-
-    payload = {
-        "supplier": batch.supplier_id,
-        "warehouse": batch.warehouse_id,
-        "tax_method": "taxable_included",
-        "items": payload_items,
-    }
-    ser = PurchaseOrderSerializer(data=payload)
-    ser.is_valid(raise_exception=True)
+    row lock(select_for_update)防並發雙 commit:第二個請求會等到第一個結束、看到
+    已過帳而擋下。稅別用 batch.tax_method、量價序號用 effective_*(修正優先)。
+    """
     with transaction.atomic():
+        batch = IntakeBatch.objects.select_for_update().get(pk=batch.pk)
+        if batch.status == IntakeBatch.Status.COMMITTED:
+            raise IdentityError("這批已經過帳了")
+        if batch.status == IntakeBatch.Status.CANCELLED:
+            raise IdentityError("這批已取消")
+        if not batch.supplier_id or not batch.warehouse_id:
+            raise IdentityError("請先指定廠商與入庫倉再過帳")
+        if batch.items.filter(match_status__in=_PENDING).exists():
+            raise IdentityError("還有未確認的明細,請先逐筆處理完")
+
+        rows = batch.items.filter(
+            match_status__in=_COMMITTABLE, matched_product__isnull=False
+        ).order_by("line_no")
+        payload_items = [{
+            "product": it.matched_product_id,
+            "qty": it.effective_qty,
+            "unit_price": str(it.effective_unit_price),
+            "serial_numbers": list(it.effective_serials or []),
+        } for it in rows]
+        if not payload_items:
+            raise IdentityError("沒有可過帳的明細(都被駁回了?)")
+
+        # 單據總額平衡:有填 document_total 才核對,差超過容差就擋
+        if batch.document_total is not None:
+            calc = sum(
+                (Decimal(str(i["unit_price"])) * i["qty"] for i in payload_items),
+                Decimal("0"),
+            )
+            tol = Decimal(str(getattr(settings, "INTAKE_TOTAL_TOLERANCE", 1)))
+            if abs(calc - batch.document_total) > tol:
+                raise IdentityError(
+                    f"明細合計 {calc:.0f} 與單據總額 {batch.document_total:.0f} 不符,請先核對"
+                )
+
+        payload = {
+            "supplier": batch.supplier_id,
+            "warehouse": batch.warehouse_id,
+            "tax_method": batch.tax_method,
+            "items": payload_items,
+        }
+        ser = PurchaseOrderSerializer(data=payload)
+        ser.is_valid(raise_exception=True)
         ser.save(tenant=batch.tenant, created_by=user)
         commit_purchase_order(ser.instance)
-        batch.committed_purchase_order_id = ser.instance.id
+        batch.committed_purchase_order = ser.instance
         batch.status = IntakeBatch.Status.COMMITTED
-        batch.save(update_fields=["committed_purchase_order_id", "status", "updated_at"])
+        batch.save(update_fields=["committed_purchase_order", "status", "updated_at"])
     return ser.instance

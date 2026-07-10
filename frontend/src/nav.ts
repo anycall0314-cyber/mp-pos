@@ -85,3 +85,10 @@ export const PLATFORM_NAV_GROUP: NavGroup = {
   label: "平台",
   items: [{ to: "/platform/admin", label: "經銷商 / 用戶 / 倉別" }],
 };
+
+// 側邊欄:所有群組直接攤開(不再靠「更多」下拉),空間夠就全部看得到。
+// 「常用」= 首頁 + 原本頂列的主入口;其餘沿用 MORE_NAV 既有分群。
+export const SIDEBAR_NAV: NavSection[] = [
+  { label: "常用", items: [{ to: "/home", label: "首頁" }, ...PRIMARY_NAV] },
+  ...MORE_NAV.sections,
+];

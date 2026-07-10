@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { useAuth } from "@/auth/AuthContext";
@@ -43,172 +43,100 @@ import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { SimCardsPage } from "@/pages/sim-cards/SimCardsPage";
 import { SuppliersPage } from "@/pages/suppliers/SuppliersPage";
 import { TelecomPlansPage } from "@/pages/telecom-plans/TelecomPlansPage";
-import {
-  MORE_NAV,
-  NavGroup,
-  NavSection,
-  PLATFORM_NAV_GROUP,
-  PRIMARY_NAV,
-} from "@/nav";
+import { NavSection, PLATFORM_NAV_GROUP, SIDEBAR_NAV } from "@/nav";
 
 function Placeholder({ title }: { title: string }) {
   return <div className="placeholder">{title}(尚未實作)</div>;
 }
 
-function NavGroupMenu({ group }: { group: NavGroup }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const location = useLocation();
+const SIDEBAR_GROUPS_KEY = "sidebar_collapsed_groups";
 
-  // 本群任一子項命中 → 主類別 active
-  const isActive = group.items.some((it) =>
-    location.pathname.startsWith(it.to),
-  );
-
-  // 路由換頁就關
-  useEffect(() => setOpen(false), [location.pathname]);
-
-  // 點外面 / Esc 關閉
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node))
-        setOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("mousedown", onClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, []);
-
-  // 單一子項時直接視為 link,不出 dropdown
-  if (group.items.length === 1) {
-    const only = group.items[0];
-    return (
-      <NavLink
-        to={only.to}
-        className={({ isActive }) =>
-          isActive ? "topnav-link active" : "topnav-link"
-        }
-      >
-        {group.label}
-      </NavLink>
-    );
+function readCollapsedGroups(): Record<string, boolean> {
+  try {
+    return JSON.parse(localStorage.getItem(SIDEBAR_GROUPS_KEY) || "{}");
+  } catch {
+    return {};
   }
-
-  return (
-    <div
-      ref={ref}
-      className={`topnav-group${open ? " open" : ""}`}
-    >
-      <button
-        type="button"
-        className={`topnav-link${isActive ? " active" : ""}`}
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-haspopup="menu"
-      >
-        {group.label}
-      </button>
-      {open && (
-        <div className="topnav-dropdown" role="menu">
-          {group.items.map((it) => (
-            <NavLink
-              key={it.to}
-              to={it.to}
-              role="menuitem"
-              className={({ isActive }) =>
-                isActive
-                  ? "topnav-dropdown-item active"
-                  : "topnav-dropdown-item"
-              }
-            >
-              {it.label}
-            </NavLink>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 /**
- * 「更多」下拉:多 sections,每個 section 有 label + items。
- * 任一子項命中就把頂列按鈕標為 active。
+ * 側邊欄導覽:每個分類標題可點折疊(記在 localStorage,下次記得)。
+ * 預設全展開;點連結自動關閉(窄畫面的)側邊欄。
  */
-function NavMoreMenu({
-  label,
-  sections,
+function SidebarNav({
+  role,
+  onNavigate,
 }: {
-  label: string;
-  sections: NavSection[];
+  role?: string;
+  onNavigate: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const location = useLocation();
+  const sections: NavSection[] = [...SIDEBAR_NAV];
+  if (role === "platform_admin") {
+    sections.push({
+      label: PLATFORM_NAV_GROUP.label,
+      items: PLATFORM_NAV_GROUP.items,
+    });
+  }
 
-  const isActive = sections.some((s) =>
-    s.items.some((it) => location.pathname.startsWith(it.to)),
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(
+    readCollapsedGroups,
   );
 
-  useEffect(() => setOpen(false), [location.pathname]);
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node))
-        setOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("mousedown", onClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, []);
+  function toggle(label: string) {
+    setCollapsed((prev) => {
+      const next = { ...prev, [label]: !prev[label] };
+      try {
+        localStorage.setItem(SIDEBAR_GROUPS_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }
 
   return (
-    <div ref={ref} className={`topnav-group${open ? " open" : ""}`}>
-      <button
-        type="button"
-        className={`topnav-link${isActive ? " active" : ""}`}
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-haspopup="menu"
-      >
-        {label}
-      </button>
-      {open && (
-        <div className="topnav-dropdown topnav-dropdown-sections" role="menu">
-          {sections.map((s, i) => (
-            <div key={s.label} className="topnav-dropdown-section">
-              {i > 0 && <div className="topnav-dropdown-divider" />}
-              <div className="topnav-dropdown-section-label">{s.label}</div>
-              {s.items.map((it) => (
+    <nav className="sidebar-nav">
+      {sections.map((s) => {
+        const open = !collapsed[s.label];
+        return (
+          <div key={s.label} className={`sidebar-group${open ? " open" : ""}`}>
+            <button
+              type="button"
+              className="sidebar-group-label"
+              onClick={() => toggle(s.label)}
+              aria-expanded={open}
+            >
+              <span>{s.label}</span>
+              <svg
+                className="sidebar-caret"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </button>
+            {open &&
+              s.items.map((it) => (
                 <NavLink
                   key={it.to}
                   to={it.to}
-                  role="menuitem"
+                  end={it.to === "/home"}
+                  onClick={onNavigate}
                   className={({ isActive }) =>
-                    isActive
-                      ? "topnav-dropdown-item active"
-                      : "topnav-dropdown-item"
+                    isActive ? "sidebar-link active" : "sidebar-link"
                   }
                 >
                   {it.label}
                 </NavLink>
               ))}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+          </div>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -275,105 +203,86 @@ export function App() {
   return (
     <div className={`app-shell${mobileNavOpen ? " mobile-nav-open" : ""}`}>
       {!focusMode && !isPrintMode && (
-      <header className="topbar">
-        <button
-          type="button"
-          className="hamburger"
-          onClick={() => setMobileNavOpen((v) => !v)}
-          aria-label={mobileNavOpen ? "關閉選單" : "打開選單"}
-        >
-          {mobileNavOpen ? "關閉" : "選單"}
-        </button>
-        <div className="brand">MP POS</div>
-        <nav className={`topnav${mobileNavOpen ? " open" : ""}`}>
-          <NavLink
-            to="/home"
-            end
-            className={({ isActive }) =>
-              isActive ? "topnav-link active" : "topnav-link"
-            }
-          >
-            首頁
-          </NavLink>
-          {PRIMARY_NAV.map((it) => (
-            <NavLink
-              key={it.to}
-              to={it.to}
-              className={({ isActive }) =>
-                isActive ? "topnav-link active" : "topnav-link"
-              }
-            >
-              {it.label}
-            </NavLink>
-          ))}
-          <NavMoreMenu label={MORE_NAV.label} sections={MORE_NAV.sections} />
-          {user?.profile?.role === "platform_admin" && (
-            <NavGroupMenu group={PLATFORM_NAV_GROUP} />
-          )}
-        </nav>
-        <button
-          type="button"
-          className="theme-toggle"
-          onClick={() =>
-            setTheme((t) => (t === "dark" ? "light" : "dark"))
-          }
-          title={theme === "dark" ? "切換到日間模式" : "切換到夜間模式"}
-          aria-label="切換主題"
-        >
-          {theme === "dark" ? (
-            // 太陽 icon
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="4" />
-              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-            </svg>
-          ) : (
-            // 月亮 icon
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-            </svg>
-          )}
-        </button>
-        {user && (
-          <div className="user-pill">
-            <div className="user-pill-text">
-              <span className="user-pill-name">{user.username}</span>
-              <span className="user-pill-meta">
-                {user.profile?.role_label ?? "—"}
-                {user.profile?.tenant_name
-                  ? ` · ${user.profile.tenant_name}`
-                  : ""}
-                {user.profile?.default_warehouse_name
-                  ? ` · ${user.profile.default_warehouse_name}`
-                  : ""}
-              </span>
-            </div>
+        <>
+          <div className="mobile-topbar">
             <button
               type="button"
-              className="btn user-pill-logout"
-              onClick={() => logout()}
-              title="登出"
+              className="hamburger"
+              onClick={() => setMobileNavOpen((v) => !v)}
+              aria-label={mobileNavOpen ? "關閉選單" : "打開選單"}
             >
-              登出
+              {mobileNavOpen ? "關閉" : "選單"}
             </button>
+            <div className="brand">MP POS</div>
+          </div>
+          <aside className="sidebar">
+            <div className="sidebar-brand">MP POS</div>
+            <SidebarNav
+              role={user?.profile?.role}
+              onNavigate={() => setMobileNavOpen(false)}
+            />
+            <div className="sidebar-footer">
+              {user && (
+                <div className="user-pill">
+                  <div className="user-pill-text">
+                    <span className="user-pill-name">{user.username}</span>
+                    <span className="user-pill-meta">
+                      {user.profile?.role_label ?? "—"}
+                      {user.profile?.tenant_name
+                        ? ` · ${user.profile.tenant_name}`
+                        : ""}
+                      {user.profile?.default_warehouse_name
+                        ? ` · ${user.profile.default_warehouse_name}`
+                        : ""}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn user-pill-logout"
+                    onClick={() => logout()}
+                    title="登出"
+                  >
+                    登出
+                  </button>
+                </div>
+              )}
+              <button
+                type="button"
+                className="theme-toggle"
+                onClick={() =>
+                  setTheme((t) => (t === "dark" ? "light" : "dark"))
+                }
+                title={theme === "dark" ? "切換到日間模式" : "切換到夜間模式"}
+                aria-label="切換主題"
+              >
+                {theme === "dark" ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="4" />
+                    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </aside>
+          {mobileNavOpen && (
+            <div
+              className="sidebar-backdrop"
+              onClick={() => setMobileNavOpen(false)}
+            />
+          )}
+        </>
+      )}
+      <div className="app-body">
+        {focusMode && !isPrintMode && (
+          <div className="focus-banner">
+            檢視模式 — 此分頁僅供資料查看,不提供任何操作
           </div>
         )}
-      </header>
-      )}
-      {focusMode && !isPrintMode && (
-        <div
-          style={{
-            padding: "6px 16px",
-            background: "var(--panel)",
-            borderBottom: "1px solid var(--border)",
-            fontSize: 12,
-            color: "var(--text-dim)",
-            textAlign: "center",
-          }}
-        >
-          檢視模式 — 此分頁僅供資料查看,不提供任何操作
-        </div>
-      )}
-      <main className="main">
+        <main className="main">
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<HomePage />} />
@@ -497,7 +406,8 @@ export function App() {
             element={<Placeholder title="發票明細" />}
           />
         </Routes>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }

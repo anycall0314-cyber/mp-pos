@@ -109,6 +109,11 @@ class IntakeBatch(TenantOwnedModel):
         COMMITTED = "committed", "已過帳"
         CANCELLED = "cancelled", "已取消"
 
+    class TaxMethod(models.TextChoices):
+        TAXABLE_INCLUDED = "taxable_included", "應稅內含"
+        TAXABLE_EXCLUDED = "taxable_excluded", "應稅外加"
+        UNTAXED = "untaxed", "免稅"
+
     source = models.CharField(
         "來源", max_length=16, choices=Source.choices, default=Source.MANUAL_TEXT
     )
@@ -124,13 +129,24 @@ class IntakeBatch(TenantOwnedModel):
         "廠商出貨單號", max_length=60, blank=True,
         help_text="同廠商同單號不重複匯入(防重複入庫)",
     )
+    tax_method = models.CharField(
+        "課稅別", max_length=20, choices=TaxMethod.choices,
+        default=TaxMethod.TAXABLE_INCLUDED,
+        help_text="過帳時帶入進貨單;不再一律寫死應稅內含",
+    )
+    document_total = models.DecimalField(
+        "單據總額", max_digits=14, decimal_places=2, null=True, blank=True,
+        help_text="單據上印的總額;有填則過帳時與明細合計核對,差太多擋下",
+    )
     raw_text = models.TextField("原始內容", blank=True, help_text="貼上的文字 / OCR 全文")
     status = models.CharField(
         "狀態", max_length=12, choices=Status.choices, default=Status.OPEN
     )
     note = models.CharField("備註", max_length=200, blank=True)
-    committed_purchase_order_id = models.BigIntegerField(
-        "過帳後進貨單 ID", null=True, blank=True
+    committed_purchase_order = models.OneToOneField(
+        "purchasing.PurchaseOrder", on_delete=models.PROTECT,
+        related_name="intake_batch", null=True, blank=True,
+        verbose_name="過帳後進貨單",
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
@@ -198,6 +214,16 @@ class IntakeItem(TenantOwnedModel):
         "OCR 辨識信心", default=dict, blank=True,
         help_text="拍照來源:每欄的辨識信心(0-1);與 match_confidence 是兩回事",
     )
+    # 人工修正值:保留 raw 原值不覆蓋(對齊計畫「raw 與 corrected 分開」)。
+    # None = 未修正,取 raw;過帳一律用 effective_*。
+    corrected_name = models.CharField("修正品名", max_length=300, null=True, blank=True)
+    corrected_qty = models.PositiveIntegerField("修正數量", null=True, blank=True)
+    corrected_unit_price = models.DecimalField(
+        "修正進價", max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    corrected_barcode = models.CharField("修正條碼", max_length=80, null=True, blank=True)
+    corrected_vendor_sku = models.CharField("修正料號", max_length=80, null=True, blank=True)
+    corrected_serials = models.JSONField("修正序號", null=True, blank=True)
     resolved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
         related_name="+", null=True, blank=True, verbose_name="處理者",
@@ -214,6 +240,39 @@ class IntakeItem(TenantOwnedModel):
         ordering = ["batch", "line_no"]
         verbose_name = "進貨待確認明細"
         verbose_name_plural = "進貨待確認明細"
+
+    # effective_* = 有修正就用修正值,否則用 raw。過帳一律讀這組。
+    @property
+    def effective_name(self):
+        return self.corrected_name if self.corrected_name is not None else self.raw_text
+
+    @property
+    def effective_qty(self):
+        return self.corrected_qty if self.corrected_qty is not None else self.raw_qty
+
+    @property
+    def effective_unit_price(self):
+        return (
+            self.corrected_unit_price
+            if self.corrected_unit_price is not None
+            else self.raw_unit_price
+        )
+
+    @property
+    def effective_barcode(self):
+        return self.corrected_barcode if self.corrected_barcode is not None else self.raw_barcode
+
+    @property
+    def effective_vendor_sku(self):
+        return (
+            self.corrected_vendor_sku
+            if self.corrected_vendor_sku is not None
+            else self.raw_vendor_sku
+        )
+
+    @property
+    def effective_serials(self):
+        return self.corrected_serials if self.corrected_serials is not None else (self.raw_serials or [])
 
     def __str__(self) -> str:
         return f"{self.batch_id}#{self.line_no} {self.raw_text[:20]}"
@@ -233,6 +292,10 @@ class IntakeDocument(TenantOwnedModel):
     )
     image = models.FileField("原圖 / 檔案", upload_to="intake_docs/%Y/%m/")
     original_filename = models.CharField("原始檔名", max_length=200, blank=True)
+    content_hash = models.CharField(
+        "檔案雜湊", max_length=64, blank=True, db_index=True,
+        help_text="檔案內容 sha256;同一單據已入庫過就擋下(可重傳救回失敗流程)",
+    )
     ocr_status = models.CharField(
         "辨識狀態", max_length=12, choices=OcrStatus.choices, default=OcrStatus.PENDING
     )

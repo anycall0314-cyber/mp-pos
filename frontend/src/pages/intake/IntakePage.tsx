@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import {
   useCommitIntake,
+  useCorrectIntakeItem,
   useCreateIntake,
   useCreateIntakeOcr,
   useIntakeBatch,
@@ -10,6 +11,7 @@ import {
   useMatchIntakeItem,
   useNewProductForIntakeItem,
   useRejectIntakeItem,
+  useSetIntakeHeader,
   useWarehouses,
 } from "@/api/hooks";
 import { searchCategories, searchProducts, searchSuppliers } from "@/api/search";
@@ -17,6 +19,7 @@ import type {
   IntakeBatchStatus,
   IntakeItem,
   IntakeMatchStatus,
+  IntakeTaxMethod,
 } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox } from "@/components/ComboBox";
@@ -41,17 +44,18 @@ const BATCH_STATUS_LABEL: Record<IntakeBatchStatus, string> = {
   cancelled: "已取消",
 };
 
+const TAX_OPTIONS: { value: IntakeTaxMethod; label: string }[] = [
+  { value: "taxable_included", label: "應稅內含" },
+  { value: "taxable_excluded", label: "應稅外加" },
+  { value: "untaxed", label: "免稅" },
+];
+
 const RESOLVED_SET: IntakeMatchStatus[] = [
   "auto_matched",
   "resolved",
   "new_product",
   "rejected",
 ];
-
-function money(v: string | number) {
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.round(n).toLocaleString() : "—";
-}
 
 const OCR_FIELD_LABEL: Record<string, string> = {
   raw_name: "品名",
@@ -90,6 +94,7 @@ export function IntakePage() {
   const createIntake = useCreateIntake();
   const createIntakeOcr = useCreateIntakeOcr();
   const commitIntake = useCommitIntake();
+  const setHeader = useSetIntakeHeader();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [commitMsg, setCommitMsg] = useState<{ no: string; poId: number } | null>(
@@ -259,6 +264,44 @@ export function IntakePage() {
               {batch.warehouse_name || "未指定倉"} ·{" "}
               {BATCH_STATUS_LABEL[batch.status]}
             </span>
+            <label className="intake-taxpick">
+              稅別
+              <select
+                value={batch.tax_method}
+                disabled={batch.status === "committed" || setHeader.isPending}
+                onChange={(e) =>
+                  setHeader.mutate({
+                    id: batch.id,
+                    tax_method: e.target.value,
+                  })
+                }
+              >
+                {TAX_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="intake-taxpick">
+              單據總額
+              <input
+                key={`dt-${batch.id}`}
+                type="number"
+                min={0}
+                style={{ width: 90 }}
+                defaultValue={batch.document_total ?? ""}
+                disabled={batch.status === "committed"}
+                title="填了才會在過帳時和明細合計核對"
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  setHeader.mutate({
+                    id: batch.id,
+                    document_total: v === "" ? null : v,
+                  });
+                }}
+              />
+            </label>
             <button
               className="btn primary"
               onClick={commit}
@@ -337,8 +380,8 @@ export function IntakePage() {
                         onClick={() => setSelectedItemId(it.id)}
                       >
                         <td>{it.line_no}</td>
-                        <td>{it.raw_text}</td>
-                        <td className="num">{it.raw_qty}</td>
+                        <td>{it.effective_name}</td>
+                        <td className="num">{it.effective_qty}</td>
                         <td>
                           <span className={`intake-badge ${meta.cls}`}>
                             {meta.label}
@@ -354,7 +397,7 @@ export function IntakePage() {
           </section>
           <section className="md-detail">
             {selectedItem ? (
-              <ItemDetail item={selectedItem} />
+              <ItemDetail key={selectedItem.id} item={selectedItem} />
             ) : (
               <div className="md-empty" style={{ marginTop: 40 }}>
                 從左側選一行來處理
@@ -376,6 +419,27 @@ function ItemDetail({ item }: { item: IntakeItem }) {
   const matchItem = useMatchIntakeItem();
   const rejectItem = useRejectIntakeItem();
   const newProduct = useNewProductForIntakeItem();
+  const correctItem = useCorrectIntakeItem();
+
+  // 修正表單:預填目前 effective 值
+  const [corr, setCorr] = useState({
+    qty: String(item.effective_qty),
+    unit_price: item.effective_unit_price,
+    serials: item.effective_serials.join(","),
+  });
+
+  function saveCorrection() {
+    const serials = corr.serials
+      .split(/[,、\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    correctItem.mutate({
+      id: item.id,
+      qty: Number(corr.qty) || 1,
+      unit_price: corr.unit_price,
+      serials,
+    });
+  }
 
   const [otherProduct, setOtherProduct] = useState<number | "">("");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -389,7 +453,11 @@ function ItemDetail({ item }: { item: IntakeItem }) {
   });
   const [npError, setNpError] = useState("");
 
-  const busy = matchItem.isPending || rejectItem.isPending || newProduct.isPending;
+  const busy =
+    matchItem.isPending ||
+    rejectItem.isPending ||
+    newProduct.isPending ||
+    correctItem.isPending;
   const meta = STATUS_META[item.match_status];
 
   function openNewProduct() {
@@ -434,12 +502,8 @@ function ItemDetail({ item }: { item: IntakeItem }) {
         <dd>
           <span className={`intake-badge ${meta.cls}`}>{meta.label}</span>
         </dd>
-        <dt>數量</dt>
-        <dd className="num">{item.raw_qty}</dd>
-        <dt>進價</dt>
-        <dd className="num">{money(item.raw_unit_price)}</dd>
-        <dt>序號</dt>
-        <dd>{item.raw_serials.length ? item.raw_serials.join("、") : "—"}</dd>
+        <dt>原始文字</dt>
+        <dd>{item.raw_text}</dd>
         {item.matched_product && (
           <>
             <dt>已對應</dt>
@@ -449,6 +513,43 @@ function ItemDetail({ item }: { item: IntakeItem }) {
           </>
         )}
       </dl>
+
+      <div className="intake-correct">
+        <div className="intake-subhead">數量 / 進價 / 序號(可修正)</div>
+        <div className="intake-correct-row">
+          <label>
+            數量
+            <input
+              type="number"
+              min={1}
+              value={corr.qty}
+              onChange={(e) => setCorr((s) => ({ ...s, qty: e.target.value }))}
+            />
+          </label>
+          <label>
+            進價
+            <input
+              type="number"
+              min={0}
+              value={corr.unit_price}
+              onChange={(e) =>
+                setCorr((s) => ({ ...s, unit_price: e.target.value }))
+              }
+            />
+          </label>
+        </div>
+        <label className="intake-correct-serials">
+          序號 / IMEI(逗號分隔,手機逐台)
+          <input
+            value={corr.serials}
+            onChange={(e) => setCorr((s) => ({ ...s, serials: e.target.value }))}
+            placeholder="356...1,356...2"
+          />
+        </label>
+        <button className="btn small" onClick={saveCorrection} disabled={busy}>
+          儲存修正
+        </button>
+      </div>
 
       {Object.keys(item.ocr_confidence).length > 0 &&
         (lowConfFields(item.ocr_confidence).length > 0 ? (

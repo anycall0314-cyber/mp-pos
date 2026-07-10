@@ -8,7 +8,7 @@
 """
 from decimal import Decimal
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from apps.catalog.models import Category, Product
 from apps.inventory.models import ProductSerial, StockMovement
@@ -22,6 +22,7 @@ from .models import CommandLog
 from .parsers import DeterministicParser
 
 
+@override_settings(ASSISTANT_DIRECT_COMMIT_ENABLED=True)
 class AssistantPurchaseSpikeTests(TestCase):
     def setUp(self):
         self.tenant = Tenant.objects.create(name="測試通訊行", code="demo")
@@ -114,6 +115,19 @@ class AssistantPurchaseSpikeTests(TestCase):
         self.assertEqual(PurchaseOrder.objects.count(), 0)
         self.assertEqual(ProductSerial.objects.count(), 0)
         self.assertEqual(StockMovement.objects.count(), 0)
+
+    # ── 旁路預設關閉:confirm 被擋,帳本不動 ──────────────────────
+    @override_settings(ASSISTANT_DIRECT_COMMIT_ENABLED=False)
+    def test_direct_commit_disabled_by_default(self):
+        self._product("iPhone 15 Pro 256GB 黑")
+        raw = "#進貨 供應商=大盤商A 倉庫=門市\niPhone 15 Pro 256GB 黑 x1 @35000 序號=A1"
+        cmd = services.interpret(
+            self.tenant, raw, source=CommandLog.Source.PURCHASE_DOC, parser=self.parser
+        )
+        self.assertEqual(cmd.status, CommandLog.Status.AWAITING_CONFIRM)
+        with self.assertRaises(services.CommandError):
+            services.confirm(cmd)
+        self.assertEqual(PurchaseOrder.objects.count(), 0)
 
     # ── parser 單元:進貨單文字 → Intent ──────────────────────────
     def test_deterministic_parser_shape(self):

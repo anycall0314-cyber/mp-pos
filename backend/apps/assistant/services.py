@@ -167,6 +167,11 @@ _PROPOSAL_BUILDERS = {
 # ─────────────────────────── confirm ───────────────────────────
 def confirm(cmd: CommandLog, user=None) -> CommandLog:
     """使用者確認提案後,真正過帳。只有 AWAITING_CONFIRM 能確認。"""
+    from django.conf import settings
+
+    # P0 契約:預設關閉助理直接建進貨單的寫入旁路,一律改走待確認入庫(Intake)。
+    if not getattr(settings, "ASSISTANT_DIRECT_COMMIT_ENABLED", False):
+        raise CommandError("助理直接過帳已停用,請改用『待確認入庫』流程")
     if cmd.status != CommandLog.Status.AWAITING_CONFIRM:
         raise CommandError(f"此指令狀態為「{cmd.get_status_display()}」,不能確認")
 

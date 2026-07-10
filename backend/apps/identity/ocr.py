@@ -36,6 +36,7 @@ _SCHEMA_HINT = {
             "barcode": "條碼 / GTIN(沒有留空)",
             "qty": "數量(整數)",
             "unit_cost": "進價單價(數字字串,沒有填 0)",
+            "serial_numbers": "此列印在單據上的 IMEI / 序號陣列(手機常見,沒有給空陣列)",
             "field_confidence": {"raw_name": "0-1", "qty": "0-1", "unit_cost": "0-1"},
         }
     ],

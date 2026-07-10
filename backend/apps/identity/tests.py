@@ -6,6 +6,8 @@
 3. 防重複:同一條碼不能指向兩個商品;同廠商同料號不重複;停用後可再加。
 4. 待確認區同批同行不重複。
 """
+from decimal import Decimal
+
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
@@ -221,7 +223,8 @@ class OcrIntakeTests(TestCase):
         )
         lines = [
             {"raw_name": "亂七八糟品名", "barcode": "4710001234567", "qty": "2",
-             "unit_cost": "18500", "field_confidence": {"raw_name": 0.6, "qty": 0.97}},
+             "unit_cost": "18500", "serial_numbers": ["A1", "A2"],
+             "field_confidence": {"raw_name": 0.95, "qty": 0.97}},
             {"raw_name": "也看不懂", "supplier_sku": "IP15-128-BK", "qty": 1, "unit_cost": "18000"},
             {"raw_name": "完全沒見過的東西", "qty": 3, "unit_cost": "50"},
             {"raw_name": "", "barcode": "", "supplier_sku": ""},  # 空行應跳過
@@ -229,20 +232,134 @@ class OcrIntakeTests(TestCase):
         batch = run_intake_from_lines(self.tenant, lines, supplier=self.sup, warehouse=self.wh)
         items = list(batch.items.order_by("line_no"))
         self.assertEqual(len(items), 3)  # 空行被跳過
-        # 條碼命中 → 自動,且數量/信心有帶進來
+        # 條碼命中 → 自動;數量、序號、信心都有帶進來
         self.assertEqual(items[0].match_status, IntakeItem.MatchStatus.AUTO_MATCHED)
         self.assertEqual(items[0].matched_product, self.product)
         self.assertEqual(items[0].raw_qty, 2)
-        self.assertEqual(items[0].ocr_confidence.get("raw_name"), 0.6)
+        self.assertEqual(items[0].raw_serials, ["A1", "A2"])
         # 廠商料號命中 → 自動
         self.assertEqual(items[1].match_status, IntakeItem.MatchStatus.AUTO_MATCHED)
         # 沒見過 → 未知
         self.assertEqual(items[2].match_status, IntakeItem.MatchStatus.UNKNOWN)
 
+    def test_low_ocr_confidence_downgrades_automatch(self):
+        from .services import run_intake_from_lines
+        # 條碼本來會自動對應,但品名信心過低 → 降級為待覆核
+        lines = [{
+            "raw_name": "糊掉的字", "barcode": "4710001234567", "qty": 1, "unit_cost": "18000",
+            "field_confidence": {"raw_name": 0.4},
+        }]
+        batch = run_intake_from_lines(self.tenant, lines, supplier=self.sup, warehouse=self.wh)
+        self.assertEqual(
+            batch.items.get(line_no=1).match_status, IntakeItem.MatchStatus.NEEDS_REVIEW
+        )
+
     def test_ocr_provider_disabled_by_default(self):
         from .ocr import OcrNotConfigured, get_ocr_provider
         with self.assertRaises(OcrNotConfigured):
             get_ocr_provider()
+
+
+class P0AHardeningTests(TestCase):
+    """P0-A 安全核心:verified 必要、版本衝突、修正、稅別、effective 過帳。"""
+
+    def setUp(self):
+        from apps.inventory.models import Warehouse
+        self.tenant = Tenant.objects.create(name="測試通訊行", code="demo")
+        self.wh = Warehouse.objects.create(tenant=self.tenant, code="MAIN", name="門市")
+        self.cat = Category.objects.create(tenant=self.tenant, code="PH", name="手機")
+        self.sup = Supplier.objects.create(tenant=self.tenant, name="大盤商A")
+        self.product = Product.objects.create(
+            tenant=self.tenant, category=self.cat, name="iPhone 15 128GB 黑",
+        )
+
+    def test_unverified_alias_does_not_automatch(self):
+        from .services import match_line
+        ProductAlias.objects.create(
+            tenant=self.tenant, product=self.product, supplier=self.sup,
+            kind=ProductAlias.Kind.VENDOR_NAME, value="蘋果15 128 黑", verified=False,
+        )
+        r = match_line(self.tenant, self.sup, "蘋果15 128 黑")
+        self.assertNotEqual(r["status"], IntakeItem.MatchStatus.AUTO_MATCHED)
+
+    def test_region_version_conflict(self):
+        from .services import match_line
+        hk = Product.objects.create(
+            tenant=self.tenant, category=self.cat, name="iPhone 15 128GB 黑 港版",
+            region_version="港版",
+        )
+        # 單據講台版,港版那筆雖名稱相似也應標衝突、不可自動對應
+        r = match_line(self.tenant, self.sup, "iPhone 15 128GB 黑 台版")
+        conflicts = [c for c in r["candidates"] if c["conflict"]]
+        self.assertTrue(any(c["product_id"] == hk.id for c in conflicts))
+
+    def test_correct_item_qty_updates_effective_without_rematch(self):
+        from .services import correct_intake_item, run_intake_from_text
+        ProductAlias.objects.create(
+            tenant=self.tenant, product=self.product, supplier=self.sup,
+            kind=ProductAlias.Kind.VENDOR_NAME, value="IP15 128 黑",
+        )
+        batch = run_intake_from_text(self.tenant, "IP15 128 黑 x2 @35000", supplier=self.sup)
+        item = batch.items.get(line_no=1)
+        self.assertEqual(item.match_status, IntakeItem.MatchStatus.AUTO_MATCHED)
+        correct_intake_item(item, {"qty": 5, "unit_price": "34000"})
+        item.refresh_from_db()
+        self.assertEqual(item.effective_qty, 5)
+        self.assertEqual(str(item.effective_unit_price), "34000.00")
+        self.assertEqual(item.raw_qty, 2)  # raw 原值保留
+        # 只改量價不動已對應商品
+        self.assertEqual(item.match_status, IntakeItem.MatchStatus.AUTO_MATCHED)
+
+    def _accessory_batch(self, total_price):
+        """建一個配件(免序號)批次,明細合計 = 2 × total_price。"""
+        from .services import run_intake_from_text
+        acc = Product.objects.create(
+            tenant=self.tenant, category=self.cat, name="保護貼", requires_serial=False,
+        )
+        ProductAlias.objects.create(
+            tenant=self.tenant, product=acc, supplier=self.sup,
+            kind=ProductAlias.Kind.VENDOR_NAME, value="配件A",
+        )
+        return run_intake_from_text(
+            self.tenant, f"配件A x2 @{total_price}", supplier=self.sup, warehouse=self.wh,
+        )
+
+    def test_document_total_mismatch_blocks_commit(self):
+        from .services import IdentityError, commit_batch, set_header
+        batch = self._accessory_batch(100)  # 合計 200
+        set_header(batch, document_total=Decimal("999"))
+        batch.refresh_from_db()
+        with self.assertRaises(IdentityError):
+            commit_batch(batch)
+
+    def test_document_total_match_allows_commit(self):
+        from .services import commit_batch, set_header
+        batch = self._accessory_batch(100)  # 合計 200
+        set_header(batch, document_total=Decimal("200"))
+        batch.refresh_from_db()
+        po = commit_batch(batch)
+        self.assertTrue(po.no.startswith("PO-"))
+
+    def test_commit_uses_tax_method_and_effective_qty(self):
+        from apps.purchasing.models import PurchaseOrder
+        from apps.inventory.models import ProductSerial
+        from .services import commit_batch, correct_intake_item, run_intake_from_text, set_header
+        ProductAlias.objects.create(
+            tenant=self.tenant, product=self.product, supplier=self.sup,
+            kind=ProductAlias.Kind.VENDOR_NAME, value="IP15 128 黑",
+        )
+        batch = run_intake_from_text(
+            self.tenant, "IP15 128 黑 x1 @35000 序號=A1", supplier=self.sup, warehouse=self.wh,
+        )
+        set_header(batch, tax_method=IntakeBatch.TaxMethod.TAXABLE_EXCLUDED)
+        item = batch.items.get(line_no=1)
+        correct_intake_item(item, {"qty": 2, "serials": ["A1", "A2"]})
+        batch.refresh_from_db()
+        po = commit_batch(batch)
+        self.assertEqual(po.tax_method, "taxable_excluded")
+        self.assertEqual(ProductSerial.objects.filter(product=self.product).count(), 2)
+        batch.refresh_from_db()
+        self.assertEqual(batch.committed_purchase_order_id, po.id)
 
 
 class IntakeTests(TestCase):

@@ -35,12 +35,20 @@ class ProductAliasSerializer(serializers.ModelSerializer):
 class IntakeItemSerializer(serializers.ModelSerializer):
     matched_product_name = serializers.CharField(source="matched_product.name", read_only=True, default="")
     matched_product_sku = serializers.CharField(source="matched_product.sku", read_only=True, default="")
+    # effective_* = 有修正取修正、否則取 raw;前端顯示與過帳都看這組
+    effective_name = serializers.CharField(read_only=True)
+    effective_qty = serializers.IntegerField(read_only=True)
+    effective_unit_price = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    effective_serials = serializers.ListField(read_only=True)
 
     class Meta:
         model = IntakeItem
         fields = [
             "id", "line_no", "raw_text", "raw_barcode", "raw_vendor_sku",
             "raw_qty", "raw_unit_price", "raw_serials",
+            "corrected_name", "corrected_qty", "corrected_unit_price",
+            "corrected_barcode", "corrected_vendor_sku", "corrected_serials",
+            "effective_name", "effective_qty", "effective_unit_price", "effective_serials",
             "matched_product", "matched_product_name", "matched_product_sku",
             "match_status", "match_confidence", "candidates", "ocr_confidence", "note",
         ]
@@ -51,13 +59,14 @@ class IntakeBatchSerializer(serializers.ModelSerializer):
     documents = IntakeDocumentSerializer(many=True, read_only=True)
     supplier_name = serializers.CharField(source="supplier.name", read_only=True, default="")
     warehouse_name = serializers.CharField(source="warehouse.name", read_only=True, default="")
+    committed_purchase_order_id = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = IntakeBatch
         fields = [
             "id", "source", "supplier", "supplier_name", "warehouse", "warehouse_name",
-            "vendor_doc_no", "status", "note", "committed_purchase_order_id",
-            "created_at", "items", "documents",
+            "vendor_doc_no", "tax_method", "document_total", "status", "note",
+            "committed_purchase_order_id", "created_at", "items", "documents",
         ]
 
 
@@ -76,6 +85,29 @@ class MatchItemSerializer(serializers.Serializer):
     """把一行對應到一個既有商品。"""
     product = serializers.IntegerField()
     learn_alias = serializers.BooleanField(default=True)
+
+
+class CorrectIntakeItemSerializer(serializers.Serializer):
+    """人工修正一行;只帶要改的欄位。"""
+    name = serializers.CharField(required=False, allow_blank=True)
+    qty = serializers.IntegerField(required=False, min_value=1)
+    unit_price = serializers.DecimalField(required=False, max_digits=14, decimal_places=2)
+    barcode = serializers.CharField(required=False, allow_blank=True)
+    vendor_sku = serializers.CharField(required=False, allow_blank=True)
+    serials = serializers.ListField(child=serializers.CharField(), required=False)
+
+
+class SetHeaderSerializer(serializers.Serializer):
+    """修正批次單頭;只帶要改的欄位。"""
+    supplier = serializers.IntegerField(required=False, allow_null=True)
+    warehouse = serializers.IntegerField(required=False, allow_null=True)
+    tax_method = serializers.ChoiceField(
+        choices=IntakeBatch.TaxMethod.choices, required=False
+    )
+    vendor_doc_no = serializers.CharField(required=False, allow_blank=True)
+    document_total = serializers.DecimalField(
+        max_digits=14, decimal_places=2, required=False, allow_null=True
+    )
 
 
 class NewProductForItemSerializer(serializers.Serializer):
