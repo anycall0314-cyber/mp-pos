@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import {
+  useCaptureIntakeUnits,
   useCommitIntake,
   useCorrectIntakeItem,
   useCreateIntake,
@@ -420,6 +421,7 @@ function ItemDetail({ item }: { item: IntakeItem }) {
   const rejectItem = useRejectIntakeItem();
   const newProduct = useNewProductForIntakeItem();
   const correctItem = useCorrectIntakeItem();
+  const captureUnits = useCaptureIntakeUnits();
 
   // 修正表單:預填目前 effective 值
   const [corr, setCorr] = useState({
@@ -427,6 +429,33 @@ function ItemDetail({ item }: { item: IntakeItem }) {
     unit_price: item.effective_unit_price,
     serials: item.effective_serials.join(","),
   });
+
+  // 逐台序號:一列一台,預填已登記的 unit
+  const [units, setUnits] = useState<{ primary: string; imei2: string }[]>(() =>
+    Array.from({ length: item.effective_qty }, (_, i) => {
+      const u = item.received_units[i];
+      return {
+        primary: u?.identifiers.find((x) => x.is_primary)?.raw_value ?? "",
+        imei2: u?.identifiers.find((x) => x.kind === "imei2")?.raw_value ?? "",
+      };
+    }),
+  );
+
+  function saveUnits() {
+    const payload = units
+      .filter((u) => u.primary.trim())
+      .map((u) => {
+        const identifiers: {
+          kind: string;
+          value: string;
+          is_primary?: boolean;
+        }[] = [{ kind: "imei", value: u.primary.trim(), is_primary: true }];
+        if (u.imei2.trim())
+          identifiers.push({ kind: "imei2", value: u.imei2.trim() });
+        return { identifiers };
+      });
+    captureUnits.mutate({ id: item.id, units: payload });
+  }
 
   function saveCorrection() {
     const serials = corr.serials
@@ -457,7 +486,8 @@ function ItemDetail({ item }: { item: IntakeItem }) {
     matchItem.isPending ||
     rejectItem.isPending ||
     newProduct.isPending ||
-    correctItem.isPending;
+    correctItem.isPending ||
+    captureUnits.isPending;
   const meta = STATUS_META[item.match_status];
 
   function openNewProduct() {
@@ -550,6 +580,45 @@ function ItemDetail({ item }: { item: IntakeItem }) {
           儲存修正
         </button>
       </div>
+
+      {item.requires_serial && item.matched_product && (
+        <div className="intake-units">
+          <div className="intake-subhead">
+            逐台登記序號(
+            {units.filter((u) => u.primary.trim()).length}/{item.effective_qty})
+          </div>
+          {units.map((u, i) => (
+            <div key={i} className="intake-unit-row">
+              <span className="intake-unit-idx">{i + 1}</span>
+              <input
+                placeholder="主序號 / IMEI"
+                value={u.primary}
+                onChange={(e) =>
+                  setUnits((s) =>
+                    s.map((x, j) =>
+                      j === i ? { ...x, primary: e.target.value } : x,
+                    ),
+                  )
+                }
+              />
+              <input
+                placeholder="IMEI2(選填)"
+                value={u.imei2}
+                onChange={(e) =>
+                  setUnits((s) =>
+                    s.map((x, j) =>
+                      j === i ? { ...x, imei2: e.target.value } : x,
+                    ),
+                  )
+                }
+              />
+            </div>
+          ))}
+          <button className="btn small" onClick={saveUnits} disabled={busy}>
+            儲存逐台序號
+          </button>
+        </div>
+      )}
 
       {Object.keys(item.ocr_confidence).length > 0 &&
         (lowConfFields(item.ocr_confidence).length > 0 ? (

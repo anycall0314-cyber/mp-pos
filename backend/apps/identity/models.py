@@ -278,6 +278,77 @@ class IntakeItem(TenantOwnedModel):
         return f"{self.batch_id}#{self.line_no} {self.raw_text[:20]}"
 
 
+class IntakeReceivedUnit(TenantOwnedModel):
+    """序號商品的一個實體 instance(一台裝置)。實收以此為單位,不以 IMEI 數量算。"""
+
+    class Source(models.TextChoices):
+        DOCUMENT = "document", "單據預填"
+        PHYSICAL_SCAN = "physical_scan", "實物掃描"
+        MANUAL = "manual", "手動輸入"
+
+    item = models.ForeignKey(
+        IntakeItem, on_delete=models.CASCADE, related_name="received_units",
+        verbose_name="待確認明細",
+    )
+    unit_index = models.PositiveIntegerField("第幾台")
+    source = models.CharField(
+        "來源", max_length=16, choices=Source.choices, default=Source.MANUAL
+    )
+    captured_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name="+", null=True, blank=True, verbose_name="登記者",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["item", "unit_index"], name="uniq_intake_unit_index"),
+        ]
+        indexes = [models.Index(fields=["tenant", "item"])]
+        ordering = ["item", "unit_index"]
+        verbose_name = "實體收貨單位"
+        verbose_name_plural = "實體收貨單位"
+
+    @property
+    def primary_identifier(self):
+        return self.identifiers.filter(is_primary=True).first()
+
+    def __str__(self) -> str:
+        return f"{self.item_id}#unit{self.unit_index}"
+
+
+class IntakeUnitIdentifier(TenantOwnedModel):
+    """一個實體 instance 的一組識別碼(可零至多個:IMEI / IMEI2 / EID / SN)。"""
+
+    class Kind(models.TextChoices):
+        PRIMARY_SERIAL = "primary_serial", "主序號"
+        IMEI = "imei", "IMEI"
+        IMEI2 = "imei2", "IMEI2"
+        EID = "eid", "EID"
+        SN = "sn", "SN"
+
+    unit = models.ForeignKey(
+        IntakeReceivedUnit, on_delete=models.CASCADE, related_name="identifiers",
+        verbose_name="實體單位",
+    )
+    kind = models.CharField("類型", max_length=16, choices=Kind.choices)
+    raw_value = models.CharField("原始值", max_length=80)
+    normalized_value = models.CharField("比對鍵", max_length=80, db_index=True)
+    is_primary = models.BooleanField("主識別碼", default=False)
+    source = models.CharField(
+        "來源", max_length=16, choices=IntakeReceivedUnit.Source.choices,
+        default=IntakeReceivedUnit.Source.MANUAL,
+    )
+
+    class Meta:
+        indexes = [models.Index(fields=["tenant", "normalized_value"])]
+        ordering = ["unit", "-is_primary", "kind"]
+        verbose_name = "實體單位識別碼"
+        verbose_name_plural = "實體單位識別碼"
+
+    def __str__(self) -> str:
+        return f"{self.kind}:{self.raw_value}"
+
+
 class IntakeDocument(TenantOwnedModel):
     """進貨單原圖(拍照 / PDF)。原圖與 OCR 結果分開留底,供稽核與重新辨識。"""
 

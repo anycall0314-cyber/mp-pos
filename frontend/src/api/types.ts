@@ -1294,6 +1294,8 @@ export interface IntakeItem {
   effective_qty: number;
   effective_unit_price: string;
   effective_serials: string[];
+  requires_serial: boolean;
+  received_units: IntakeReceivedUnit[];
   match_status: IntakeMatchStatus;
   match_confidence: number;
   candidates: IntakeItemCandidate[];
@@ -1313,6 +1315,28 @@ export interface IntakeDocument {
   ocr_status: OcrStatus;
   ocr_message: string;
   created_at: string;
+}
+
+export type UnitIdentifierKind =
+  | "primary_serial"
+  | "imei"
+  | "imei2"
+  | "eid"
+  | "sn";
+
+export interface IntakeUnitIdentifier {
+  id: number;
+  kind: UnitIdentifierKind;
+  raw_value: string;
+  normalized_value: string;
+  is_primary: boolean;
+}
+
+export interface IntakeReceivedUnit {
+  id: number;
+  unit_index: number;
+  source: string;
+  identifiers: IntakeUnitIdentifier[];
 }
 
 export type IntakeSource = "manual_text" | "assistant" | "ocr" | "import";

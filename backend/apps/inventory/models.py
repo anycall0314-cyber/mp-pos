@@ -147,6 +147,44 @@ class ProductSerial(TenantOwnedModel):
         return self.serial_no
 
 
+class ProductSerialIdentifier(TenantOwnedModel):
+    """一台裝置的多組識別碼(IMEI / IMEI2 / EID / SN)。
+
+    `ProductSerial.serial_no` 存依政策選出的主序號;這裡保存完整識別碼清單,
+    支援雙 SIM / eSIM。整租戶內識別碼值不重複。
+    """
+
+    class Kind(models.TextChoices):
+        PRIMARY_SERIAL = "primary_serial", "主序號"
+        IMEI = "imei", "IMEI"
+        IMEI2 = "imei2", "IMEI2"
+        EID = "eid", "EID"
+        SN = "sn", "SN"
+
+    serial = models.ForeignKey(
+        ProductSerial, on_delete=models.CASCADE, related_name="identifiers",
+        verbose_name="商品序號",
+    )
+    kind = models.CharField("類型", max_length=16, choices=Kind.choices)
+    value = models.CharField("原始值", max_length=80)
+    normalized_value = models.CharField("比對鍵", max_length=80, db_index=True)
+    is_primary = models.BooleanField("主識別碼", default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "normalized_value"], name="uniq_serial_identifier_value"
+            ),
+        ]
+        indexes = [models.Index(fields=["tenant", "normalized_value"])]
+        ordering = ["serial", "-is_primary", "kind"]
+        verbose_name = "序號識別碼"
+        verbose_name_plural = "序號識別碼"
+
+    def __str__(self) -> str:
+        return f"{self.kind}:{self.value}"
+
+
 class StockBalance(TenantOwnedModel):
     """非序號商品(配件)的倉別庫存餘額。每個 (商品, 倉庫) 一筆。
 

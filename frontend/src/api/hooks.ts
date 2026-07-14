@@ -2075,6 +2075,22 @@ export function useCorrectIntakeItem() {
   });
 }
 
+export function useCaptureIntakeUnits() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: {
+      id: number;
+      units: {
+        identifiers: { kind?: string; value: string; is_primary?: boolean }[];
+      }[];
+    }) =>
+      intakeItemAction(`/identity/intake-items/${v.id}/units/`, {
+        units: v.units,
+      }),
+    onSuccess: () => invalidateIntake(qc),
+  });
+}
+
 export function useSetIntakeHeader() {
   const qc = useQueryClient();
   return useMutation({

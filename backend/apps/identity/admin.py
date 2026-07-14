@@ -1,7 +1,14 @@
 """Django admin 只當 dev fallback(對齊決策:唯一前端是 React app)。"""
 from django.contrib import admin
 
-from .models import IntakeBatch, IntakeDocument, IntakeItem, ProductAlias
+from .models import (
+    IntakeBatch,
+    IntakeDocument,
+    IntakeItem,
+    IntakeReceivedUnit,
+    IntakeUnitIdentifier,
+    ProductAlias,
+)
 
 
 @admin.register(ProductAlias)
@@ -38,3 +45,15 @@ class IntakeDocumentAdmin(admin.ModelAdmin):
     list_display = ("id", "original_filename", "ocr_status", "batch", "created_at")
     list_filter = ("ocr_status",)
     raw_id_fields = ("batch",)
+
+
+class IntakeUnitIdentifierInline(admin.TabularInline):
+    model = IntakeUnitIdentifier
+    extra = 0
+
+
+@admin.register(IntakeReceivedUnit)
+class IntakeReceivedUnitAdmin(admin.ModelAdmin):
+    list_display = ("id", "item", "unit_index", "source")
+    raw_id_fields = ("item",)
+    inlines = [IntakeUnitIdentifierInline]

@@ -5655,6 +5655,27 @@ tr.selected .intake-badge { filter: none; }
 .intake-correct input { font: inherit; }
 .intake-correct-serials { margin: 6px 0 10px; }
 .intake-correct-serials input { width: 100%; }
+.intake-units {
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+.intake-unit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+.intake-unit-idx {
+  flex: none;
+  width: 22px;
+  text-align: right;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.intake-unit-row input { flex: 1; font: inherit; min-width: 0; }
 .intake-docs {
   display: flex;
   align-items: center;

@@ -40,6 +40,15 @@ def normalize(text: str) -> str:
     return s.strip()
 
 
+def normalize_serial(text: str) -> str:
+    """序號 / IMEI 比對用正規化:去空白 / 破折號 / 點,轉大寫。
+    範例:"35 611111-1111 11" → "35611111111111"、"sn-ab.12" → "SNAB12"。
+    """
+    if not text:
+        return ""
+    return re.sub(r"[\s\-_.]+", "", str(text).strip()).upper()
+
+
 def normalize_capacity(text: str) -> str:
     """把容量欄位正規化成比對用的值,例:"128 G" / "128gb" → "128gb"。
     無法辨識就回原字的正規化結果(至少大小寫去空白統一)。

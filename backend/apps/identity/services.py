@@ -26,11 +26,19 @@ from django.db.models import Case, IntegerField, Q, Value, When
 
 from apps.assistant.parsers import _KV_RE, _PRICE_RE, _QTY_RE, _SERIAL_RE
 from apps.catalog.models import Category, Product
+from apps.inventory.models import ProductSerial, ProductSerialIdentifier
 from apps.purchasing.serializers import PurchaseOrderSerializer
 from apps.purchasing.services import commit_purchase_order
 
-from .models import IntakeBatch, IntakeDocument, IntakeItem, ProductAlias
-from .normalize import normalize, normalize_capacity
+from .models import (
+    IntakeBatch,
+    IntakeDocument,
+    IntakeItem,
+    IntakeReceivedUnit,
+    IntakeUnitIdentifier,
+    ProductAlias,
+)
+from .normalize import normalize, normalize_capacity, normalize_serial
 
 
 class IdentityError(Exception):
@@ -463,6 +471,70 @@ def resolve_item_new_product(item, data, user=None):
     return product
 
 
+def capture_units(item, units_data, user=None):
+    """逐台登記實體 unit + 識別碼(整批取代該行既有的 units)。
+
+    units_data: [ {"identifiers": [{"kind","value","is_primary"}, ...]}, ... ]
+    每台至少一個識別碼、最多一個主識別碼(沒指定就第一個當主)。
+    """
+    product = item.matched_product
+    if not product or not product.requires_serial:
+        raise IdentityError("這行不是序號商品,不需逐台登記")
+
+    seen = set()
+    parsed_units = []
+    for u in units_data or []:
+        raw_ids = u.get("identifiers") or []
+        norm_ids, primary_count = [], 0
+        for idf in raw_ids:
+            val = (idf.get("value") or "").strip()
+            if not val:
+                continue
+            nv = normalize_serial(val)
+            if nv in seen:
+                raise IdentityError(f"識別碼重複:{val}")
+            seen.add(nv)
+            is_primary = bool(idf.get("is_primary"))
+            primary_count += 1 if is_primary else 0
+            norm_ids.append({
+                "kind": idf.get("kind") or IntakeUnitIdentifier.Kind.IMEI,
+                "raw": val, "nv": nv, "is_primary": is_primary,
+            })
+        if not norm_ids:
+            raise IdentityError("每台至少要填一個識別碼")
+        if primary_count == 0:
+            norm_ids[0]["is_primary"] = True
+        elif primary_count > 1:
+            raise IdentityError("每台只能有一個主識別碼")
+        parsed_units.append(norm_ids)
+
+    # 主序號不得與系統既有序號衝突
+    primaries = [ni["nv"] for u in parsed_units for ni in u if ni["is_primary"]]
+    clash = list(
+        ProductSerial.objects.for_tenant(item.tenant)
+        .filter(serial_no__in=primaries).values_list("serial_no", flat=True)
+    )
+    if clash:
+        raise IdentityError(f"序號已存在系統:{', '.join(clash)}")
+
+    with transaction.atomic():
+        item.received_units.all().delete()
+        for idx, norm_ids in enumerate(parsed_units, start=1):
+            unit = IntakeReceivedUnit.objects.create(
+                tenant=item.tenant, item=item, unit_index=idx,
+                source=IntakeReceivedUnit.Source.MANUAL, captured_by=user,
+            )
+            IntakeUnitIdentifier.objects.bulk_create([
+                IntakeUnitIdentifier(
+                    tenant=item.tenant, unit=unit, kind=ni["kind"], raw_value=ni["raw"],
+                    normalized_value=ni["nv"], is_primary=ni["is_primary"],
+                    source=IntakeReceivedUnit.Source.MANUAL,
+                )
+                for ni in norm_ids
+            ])
+    return item
+
+
 def reject_item(item, user=None):
     item.match_status = IntakeItem.MatchStatus.REJECTED
     item.resolved_by = user
@@ -552,13 +624,32 @@ def commit_batch(batch, user=None):
 
         rows = batch.items.filter(
             match_status__in=_COMMITTABLE, matched_product__isnull=False
-        ).order_by("line_no")
-        payload_items = [{
-            "product": it.matched_product_id,
-            "qty": it.effective_qty,
-            "unit_price": str(it.effective_unit_price),
-            "serial_numbers": list(it.effective_serials or []),
-        } for it in rows]
+        ).select_related("matched_product").order_by("line_no")
+        payload_items = []
+        unit_map = {}  # 主序號(nv)→ IntakeReceivedUnit,過帳後回填識別碼
+        for it in rows:
+            serials = list(it.effective_serials or [])
+            if it.matched_product.requires_serial:
+                units = list(it.received_units.prefetch_related("identifiers"))
+                if units:
+                    # 逐台登記過 → 實收台數必須等於數量,主序號進帳
+                    if len(units) != it.effective_qty:
+                        raise IdentityError(
+                            f"第 {it.line_no} 行:已登記 {len(units)} 台,數量 {it.effective_qty},請補齊逐台序號"
+                        )
+                    serials = []
+                    for u in units:
+                        pid = u.primary_identifier
+                        if not pid:
+                            raise IdentityError(f"第 {it.line_no} 行有一台缺主序號")
+                        serials.append(pid.normalized_value)
+                        unit_map[pid.normalized_value] = u
+            payload_items.append({
+                "product": it.matched_product_id,
+                "qty": it.effective_qty,
+                "unit_price": str(it.effective_unit_price),
+                "serial_numbers": serials,
+            })
         if not payload_items:
             raise IdentityError("沒有可過帳的明細(都被駁回了?)")
 
@@ -584,6 +675,19 @@ def commit_batch(batch, user=None):
         ser.is_valid(raise_exception=True)
         ser.save(tenant=batch.tenant, created_by=user)
         commit_purchase_order(ser.instance)
+        # 逐台識別碼回填到正式序號(主序號已是 ProductSerial.serial_no,其餘存識別碼表)
+        for nv, unit in unit_map.items():
+            serial = ProductSerial.objects.for_tenant(batch.tenant).filter(serial_no=nv).first()
+            if not serial:
+                continue
+            for idf in unit.identifiers.all():
+                ProductSerialIdentifier.objects.get_or_create(
+                    tenant=batch.tenant, normalized_value=idf.normalized_value,
+                    defaults={
+                        "serial": serial, "kind": idf.kind,
+                        "value": idf.raw_value, "is_primary": idf.is_primary,
+                    },
+                )
         batch.committed_purchase_order = ser.instance
         batch.status = IntakeBatch.Status.COMMITTED
         batch.save(update_fields=["committed_purchase_order", "status", "updated_at"])

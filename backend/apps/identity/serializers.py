@@ -1,6 +1,43 @@
 from rest_framework import serializers
 
-from .models import IntakeBatch, IntakeDocument, IntakeItem, ProductAlias
+from .models import (
+    IntakeBatch,
+    IntakeDocument,
+    IntakeItem,
+    IntakeReceivedUnit,
+    IntakeUnitIdentifier,
+    ProductAlias,
+)
+
+
+class IntakeUnitIdentifierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IntakeUnitIdentifier
+        fields = ["id", "kind", "raw_value", "normalized_value", "is_primary"]
+
+
+class IntakeReceivedUnitSerializer(serializers.ModelSerializer):
+    identifiers = IntakeUnitIdentifierSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = IntakeReceivedUnit
+        fields = ["id", "unit_index", "source", "identifiers"]
+
+
+class CaptureUnitIdentifierSerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(
+        choices=IntakeUnitIdentifier.Kind.choices, required=False
+    )
+    value = serializers.CharField()
+    is_primary = serializers.BooleanField(default=False)
+
+
+class CaptureUnitSerializer(serializers.Serializer):
+    identifiers = CaptureUnitIdentifierSerializer(many=True)
+
+
+class CaptureUnitsSerializer(serializers.Serializer):
+    units = CaptureUnitSerializer(many=True)
 
 
 class IntakeDocumentSerializer(serializers.ModelSerializer):
@@ -40,6 +77,10 @@ class IntakeItemSerializer(serializers.ModelSerializer):
     effective_qty = serializers.IntegerField(read_only=True)
     effective_unit_price = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     effective_serials = serializers.ListField(read_only=True)
+    received_units = IntakeReceivedUnitSerializer(many=True, read_only=True)
+    requires_serial = serializers.BooleanField(
+        source="matched_product.requires_serial", read_only=True, default=False
+    )
 
     class Meta:
         model = IntakeItem
@@ -50,6 +91,7 @@ class IntakeItemSerializer(serializers.ModelSerializer):
             "corrected_barcode", "corrected_vendor_sku", "corrected_serials",
             "effective_name", "effective_qty", "effective_unit_price", "effective_serials",
             "matched_product", "matched_product_name", "matched_product_sku",
+            "requires_serial", "received_units",
             "match_status", "match_confidence", "candidates", "ocr_confidence", "note",
         ]
 

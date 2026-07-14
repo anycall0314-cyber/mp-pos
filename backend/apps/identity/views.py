@@ -19,6 +19,7 @@ def _allowed_wh_ids(request):
     return [profile.default_warehouse_id] if profile.default_warehouse_id else []
 from .models import IntakeBatch, IntakeItem, ProductAlias
 from .serializers import (
+    CaptureUnitsSerializer,
     CorrectIntakeItemSerializer,
     IntakeBatchSerializer,
     IntakeCreateSerializer,
@@ -63,7 +64,9 @@ class IntakeBatchViewSet(
         qs = (
             IntakeBatch.objects.for_tenant(self.request.tenant)
             .select_related("supplier", "warehouse")
-            .prefetch_related("items__matched_product", "documents")
+            .prefetch_related(
+                "items__matched_product", "items__received_units__identifiers", "documents"
+            )
         )
         # 鎖倉帳號只看自己倉的批次(尚未指定倉的草稿也看得到)
         ids = _allowed_wh_ids(self.request)
@@ -166,7 +169,7 @@ class IntakeItemViewSet(
     def get_queryset(self):
         return IntakeItem.objects.for_tenant(self.request.tenant).select_related(
             "matched_product", "batch"
-        )
+        ).prefetch_related("received_units__identifiers")
 
     def _user(self):
         u = getattr(self.request, "user", None)
@@ -205,6 +208,19 @@ class IntakeItemViewSet(
         body = CorrectIntakeItemSerializer(data=request.data)
         body.is_valid(raise_exception=True)
         services.correct_intake_item(item, body.validated_data, user=self._user())
+        return Response(self.get_serializer(item).data)
+
+    @action(detail=True, methods=["post"])
+    def units(self, request, pk=None):
+        """逐台登記實體 unit + 識別碼(序號商品用)。"""
+        item = self.get_object()
+        body = CaptureUnitsSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        try:
+            services.capture_units(item, body.validated_data["units"], user=self._user())
+        except services.IdentityError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        item.refresh_from_db()
         return Response(self.get_serializer(item).data)
 
     @action(detail=True, methods=["post"])

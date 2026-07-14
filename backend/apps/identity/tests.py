@@ -362,6 +362,77 @@ class P0AHardeningTests(TestCase):
         self.assertEqual(batch.committed_purchase_order_id, po.id)
 
 
+class UnitCaptureTests(TestCase):
+    """逐台實體 unit + 多識別碼:實收台數=數量、主序號進帳、多識別碼存 ledger。"""
+
+    def setUp(self):
+        from apps.inventory.models import Warehouse
+        self.tenant = Tenant.objects.create(name="測試通訊行", code="demo")
+        self.wh = Warehouse.objects.create(tenant=self.tenant, code="MAIN", name="門市")
+        self.cat = Category.objects.create(tenant=self.tenant, code="PH", name="手機")
+        self.sup = Supplier.objects.create(tenant=self.tenant, name="大盤商A")
+        self.product = Product.objects.create(
+            tenant=self.tenant, category=self.cat, name="iPhone 15 128GB 黑",
+        )
+        ProductAlias.objects.create(
+            tenant=self.tenant, product=self.product, supplier=self.sup,
+            kind=ProductAlias.Kind.VENDOR_NAME, value="IP15 128 黑",
+        )
+
+    def _batch(self, qty):
+        from .services import run_intake_from_text
+        return run_intake_from_text(
+            self.tenant, f"IP15 128 黑 x{qty} @35000", supplier=self.sup, warehouse=self.wh,
+        )
+
+    def test_capture_and_commit_with_multi_identifiers(self):
+        from apps.inventory.models import ProductSerial, ProductSerialIdentifier
+        from .services import capture_units, commit_batch
+        batch = self._batch(2)
+        item = batch.items.get(line_no=1)
+        capture_units(item, [
+            {"identifiers": [
+                {"kind": "imei", "value": "356 111 111 111 111", "is_primary": True},
+                {"kind": "imei2", "value": "357000000000000"},
+            ]},
+            {"identifiers": [{"kind": "imei", "value": "356222222222222"}]},
+        ])
+        item.refresh_from_db()
+        self.assertEqual(item.received_units.count(), 2)
+        commit_batch(batch)
+        serials = ProductSerial.objects.filter(product=self.product)
+        self.assertEqual(serials.count(), 2)
+        self.assertEqual(
+            set(serials.values_list("serial_no", flat=True)),
+            {"356111111111111", "356222222222222"},  # 主序號正規化(去空白)
+        )
+        # 第二支識別碼(IMEI2)存進 ledger 識別碼表
+        self.assertTrue(
+            ProductSerialIdentifier.objects.filter(normalized_value="357000000000000").exists()
+        )
+
+    def test_unit_count_must_equal_qty(self):
+        from .services import IdentityError, capture_units, commit_batch
+        batch = self._batch(2)  # 數量 2
+        item = batch.items.get(line_no=1)
+        capture_units(item, [
+            {"identifiers": [{"kind": "imei", "value": "356111111111111"}]},
+        ])  # 只登記 1 台
+        batch.refresh_from_db()
+        with self.assertRaises(IdentityError):
+            commit_batch(batch)
+
+    def test_duplicate_identifier_rejected(self):
+        from .services import IdentityError, capture_units
+        batch = self._batch(2)
+        item = batch.items.get(line_no=1)
+        with self.assertRaises(IdentityError):
+            capture_units(item, [
+                {"identifiers": [{"kind": "imei", "value": "356111111111111"}]},
+                {"identifiers": [{"kind": "imei", "value": "356-111-111-111-111"}]},  # 正規化後同一支
+            ])
+
+
 class IntakeTests(TestCase):
     def setUp(self):
         self.tenant = Tenant.objects.create(name="測試通訊行", code="demo")
