@@ -14,6 +14,7 @@ interface Editing {
   code: string;
   name: string;
   is_secondhand: boolean;
+  tracks_unit_condition: boolean;
   sort_order: number;
   is_active: boolean;
 }
@@ -43,6 +44,7 @@ export function ConditionsPage() {
       code: "",
       name: "",
       is_secondhand: false,
+      tracks_unit_condition: true,
       sort_order: (conditions.data?.length ?? 0) + 1,
       is_active: true,
     });
@@ -55,6 +57,7 @@ export function ConditionsPage() {
       code: c.code,
       name: c.name,
       is_secondhand: c.is_secondhand,
+      tracks_unit_condition: c.tracks_unit_condition,
       sort_order: c.sort_order,
       is_active: c.is_active,
     });
@@ -78,6 +81,8 @@ export function ConditionsPage() {
         ...editing,
         code,
         is_secondhand: auto_secondhand,
+        tracks_unit_condition:
+          auto_secondhand || editing.tracks_unit_condition,
       });
       setEditing(null);
     } catch (e) {
@@ -196,16 +201,44 @@ export function ConditionsPage() {
                   type="checkbox"
                   checked={editing.is_secondhand}
                   onChange={(e) =>
-                    setEditing({ ...editing, is_secondhand: e.target.checked })
+                    setEditing({
+                      ...editing,
+                      is_secondhand: e.target.checked,
+                      // 中古機一定要逐台記(成色與每台成本本來就必填)
+                      tracks_unit_condition: e.target.checked
+                        ? true
+                        : editing.tracks_unit_condition,
+                    })
                   }
                 />
                 <span className="toggle-track" />
                 視為中古機
               </label>
               <div className="form-field-hint">
-                勾選後此狀態下建立的 SKU 會自動 is_secondhand=True,
-                觸發中古機「每隻獨立 purchase_unit_cost」邏輯。
-                名稱含「中古」會自動勾起來。
+                每隻獨立成本。名稱含「中古」會自動勾起來
+              </div>
+            </div>
+
+            <div className="form-field">
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={editing.tracks_unit_condition}
+                  disabled={editing.is_secondhand}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      tracks_unit_condition: e.target.checked,
+                    })
+                  }
+                />
+                <span className="toggle-track" />
+                逐台記機況
+              </label>
+              <div className="form-field-hint">
+                {editing.is_secondhand
+                  ? "中古機必開,不可關閉"
+                  : "進貨可逐台記成色 / 電池 / 售價 / 備註"}
               </div>
             </div>
 
@@ -284,8 +317,11 @@ export function ConditionsPage() {
                 <th style={{ width: 60 }}>排序</th>
                 <th style={{ width: 160 }}>代碼</th>
                 <th>名稱</th>
-                <th style={{ width: 130, textAlign: "center" }}>
+                <th style={{ width: 110, textAlign: "center" }}>
                   視為中古機
+                </th>
+                <th style={{ width: 110, textAlign: "center" }}>
+                  逐台記機況
                 </th>
                 <th style={{ width: 100, textAlign: "center" }}>SKU 數</th>
                 <th style={{ width: 80 }}>啟用</th>
@@ -316,6 +352,13 @@ export function ConditionsPage() {
                       >
                         中古機
                       </span>
+                    ) : (
+                      <span style={{ color: "var(--text-dim)" }}>—</span>
+                    )}
+                  </td>
+                  <td style={{ textAlign: "center" }}>
+                    {c.tracks_unit_condition ? (
+                      <span style={{ color: "#4ade80" }}>是</span>
                     ) : (
                       <span style={{ color: "var(--text-dim)" }}>—</span>
                     )}

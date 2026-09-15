@@ -13,7 +13,7 @@ from django.db.models import Q
 
 from apps.core.models import TenantOwnedModel
 
-from .normalize import normalize
+from .normalize import ALIAS_VALUE_MAX, alias_key
 
 
 class ProductAlias(TenantOwnedModel):
@@ -47,7 +47,7 @@ class ProductAlias(TenantOwnedModel):
         help_text="留空 = 通用別名(我的舊品名 / 中文簡稱,不分廠商)",
     )
     kind = models.CharField("類型", max_length=16, choices=Kind.choices)
-    value = models.CharField("原始字", max_length=200)
+    value = models.CharField("原始字", max_length=ALIAS_VALUE_MAX)
     normalized_value = models.CharField(
         "比對鍵", max_length=200, db_index=True, blank=True,
         help_text="value 正規化後的字,系統自動算,別名比對用",
@@ -86,7 +86,9 @@ class ProductAlias(TenantOwnedModel):
         verbose_name_plural = "商品別名"
 
     def save(self, *args, **kwargs):
-        self.normalized_value = normalize(self.value)
+        # 比對鍵一律走 alias_key():超長時存雜湊而不是截斷,
+        # 否則不同商品會因為前 200 字相同而被併成同一條別名。
+        self.normalized_value = alias_key(self.value)
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
@@ -224,6 +226,12 @@ class IntakeItem(TenantOwnedModel):
     corrected_barcode = models.CharField("修正條碼", max_length=80, null=True, blank=True)
     corrected_vendor_sku = models.CharField("修正料號", max_length=80, null=True, blank=True)
     corrected_serials = models.JSONField("修正序號", null=True, blank=True)
+    # 確認時「沒學進去」的識別碼(條碼 / 料號已經指到別的商品)。
+    # 不塞進自由備註 note:那欄會被別的訊息佔滿而截掉,人就看不到了。
+    alias_conflicts = models.JSONField(
+        "未學入的識別碼", default=list, blank=True,
+        help_text='[{"kind","label","value","product_sku"}, ...]',
+    )
     resolved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
         related_name="+", null=True, blank=True, verbose_name="處理者",

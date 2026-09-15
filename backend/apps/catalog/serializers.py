@@ -41,6 +41,7 @@ class ConditionSerializer(serializers.ModelSerializer):
             "code",
             "name",
             "is_secondhand",
+            "tracks_unit_condition",
             "sort_order",
             "is_active",
             "product_count",
@@ -242,6 +243,16 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
     series_name = serializers.CharField(source="series.name", read_only=True, default="")
     phone_model_name = serializers.CharField(read_only=True)
     phone_model_key = serializers.CharField(read_only=True)
+    # 品況(全新 / 已拆封 / 中古機 …)。is_secondhand 只是非黑即白,
+    # 分不出「全新」跟「已拆封」,前端要靠 condition 才認得出來。
+    condition_name = serializers.CharField(
+        source="condition.name", read_only=True, default=""
+    )
+    condition_code = serializers.CharField(
+        source="condition.code", read_only=True, default=""
+    )
+    # 進貨畫面要不要開「成色 / 電池 / 售價 / 備註」那幾欄
+    tracks_unit_condition = serializers.BooleanField(read_only=True)
     last_purchase_price = serializers.DecimalField(
         max_digits=14, decimal_places=2, read_only=True, allow_null=True
     )
@@ -271,6 +282,8 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
             "capacity",
             "color",
             "region_version",
+            "style_code",
+            "phone_model",
             "category",
             "category_code",
             "category_name",
@@ -298,6 +311,10 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
             "model_suffix",
             "phone_model_name",
             "phone_model_key",
+            "condition",
+            "condition_name",
+            "condition_code",
+            "tracks_unit_condition",
             "is_variant",
             "warehouse_type",
             "is_externally_sellable",
@@ -318,6 +335,13 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
             "stock_qty",
             "category_code",
             "category_name",
+            # 品況先唯讀。改品況要走「逐台重分類」,不能直接改主檔把同 SKU
+            # 的其他新機一起變成拆封機;那條流程另外做。
+            "condition",
+            "condition_name",
+            "condition_code",
+            "tracks_unit_condition",
+            "style_code",
             "created_at",
             "updated_at",
         ]
@@ -325,10 +349,28 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
     def validate_name(self, value):
         return self._tenant_unique(Product.objects, "name", value)
 
+    def validate_phone_model(self, value):
+        """機型是 per-tenant 主檔,不能指到別的租戶的機型。
+
+        DRF 的 ModelSerializer 預設會用 `PhoneModel.objects.all()` 當 queryset,
+        不擋的話 API 可以把商品掛到別家的機型上。
+        """
+        request = self.context.get("request")
+        if value is None or request is None:
+            return value
+        if value.tenant_id != request.tenant.id:
+            raise serializers.ValidationError("找不到指定的機型")
+        return value
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         # 把目前關聯的「機型」也輸出(以 host_model_key 為單位 group)
-        rels = list(instance.host_relations.select_related("host_product").all())
+        rels = list(
+            instance.host_relations.select_related(
+                "host_product", "host_product__phone_model", "host_product__series",
+                "host_model",
+            ).all()
+        )
         seen: dict[str, dict] = {}
         for r in rels:
             key = r.host_model_key or (
@@ -382,7 +424,7 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
             Product.objects.for_tenant(tenant).filter(
                 accessory_type=Product.AccessoryType.NONE,
                 is_active=True,
-            )
+            ).select_related("phone_model", "series")
         )
         for key in target_keys:
             if key in existing:
@@ -396,6 +438,7 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
             ProductRelation.objects.create(
                 tenant=tenant,
                 host_product=sample,
+                host_model=sample.phone_model,
                 host_model_key=key,
                 accessory_product=accessory,
             )
@@ -404,6 +447,10 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
         """(legacy)接收 host SKU id 清單,內部轉成 model_key 同步。"""
         tenant = accessory.tenant
         ids = [hid for hid in host_ids if hid != accessory.id]
-        hosts = list(Product.objects.for_tenant(tenant).filter(id__in=ids))
+        hosts = list(
+            Product.objects.for_tenant(tenant)
+            .filter(id__in=ids)
+            .select_related("phone_model", "series")
+        )
         keys = [h.phone_model_key for h in hosts if h.phone_model_key]
         self._sync_host_relations_by_keys(accessory, keys)

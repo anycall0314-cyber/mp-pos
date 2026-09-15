@@ -218,6 +218,7 @@ interface WizardState {
   condition_ids: number[];
   capacities: string[];
   colors: string[];
+  region_version: string;
   accessory_categories: string[];
   parts_items: PartItem[];
 }
@@ -235,6 +236,7 @@ const INITIAL: WizardState = {
   condition_ids: [],
   capacities: [],
   colors: [],
+  region_version: "",
   accessory_categories: [],
   parts_items: [],
 };
@@ -335,6 +337,7 @@ export function NewPhoneModelWizardPage() {
       condition_ids: state.condition_ids,
       capacities: state.capacities,
       colors: state.colors,
+      region_version: state.region_version.trim(),
       accessory_categories: state.accessory_categories,
       parts_items: state.parts_items,
       dry_run,
@@ -715,6 +718,15 @@ export function NewPhoneModelWizardPage() {
                 value={state.colors}
                 onChange={(v) => patch("colors", v)}
                 placeholder="輸入後按 Enter,例:黑"
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="form-field-label">地區版本</label>
+              <input
+                value={state.region_version}
+                onChange={(e) => patch("region_version", e.target.value)}
+                placeholder="例:台版"
               />
             </div>
 

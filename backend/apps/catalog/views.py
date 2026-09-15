@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from django.contrib.postgres.search import TrigramWordSimilarity
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce, Greatest
 from django.utils import timezone
@@ -165,7 +165,11 @@ class ProductViewSet(viewsets.ModelViewSet):
         )
         qs = (
             Product.objects.for_tenant(tenant)
-            .select_related("category")
+            # brand / series / condition 都是 serializer 每筆會讀的 FK
+            # (condition 還被 tracks_unit_condition 用到),不預載就是 N+1
+            .select_related(
+                "category", "brand", "series", "condition", "phone_model"
+            )
             .annotate(
                 serial_count=Coalesce(
                     Subquery(serial_count_sq, output_field=IntegerField()),
@@ -301,7 +305,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         # group by model_key — 優先用 Product.brand FK 的 code;沒設就退回從品名推斷
         from .phone_model import infer_brand_from_name
         groups: dict[str, dict] = {}
-        for p in qs.select_related("brand", "series"):
+        for p in qs.select_related("brand", "series", "phone_model"):
             key = p.phone_model_key
             if not key:
                 continue
@@ -387,6 +391,7 @@ class ProductViewSet(viewsets.ModelViewSet):
                     is_active=True,
                     is_virtual=False,
                 )
+                .select_related("phone_model", "series")
             )
             # 依 phone_model_key match
             related_ids = [
@@ -422,7 +427,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         related_qs = (
             Product.objects.for_tenant(tenant)
             .filter(id__in=related_ids)
-            .select_related("category")
+            .select_related("category", "series", "phone_model")
             .annotate(
                 _sc=Coalesce(Subquery(serial_sq, output_field=IntegerField()), Value(0)),
                 _bc=Coalesce(Subquery(balance_sq, output_field=IntegerField()), Value(0)),
@@ -630,7 +635,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         # 2. 商品篩選
         qs = (
             Product.objects.for_tenant(tenant)
-            .select_related("category")
+            .select_related("category", "condition", "series", "phone_model")
             .filter(is_active=True)
         )
         search = request.query_params.get("search", "").strip()
@@ -656,11 +661,68 @@ class ProductViewSet(viewsets.ModelViewSet):
             if cat_ids:
                 qs = qs.filter(category_id__in=cat_ids)
 
+        # 3. 在庫數與「有沒有貨」都在 DB 端算完,再分頁。
+        #    舊版先切前 500 筆再濾零庫存,超過 500 個商品時第 501 筆以後
+        #    的在庫商品會被靜默漏掉。型號精靈會依 狀態 x 容量 x 顏色 爆出
+        #    大量 SKU,這個上限很快就會踩到。
+        serial_qty_sub = (
+            ProductSerial.objects.filter(
+                tenant=tenant,
+                product=OuterRef("pk"),
+                warehouse_id__in=warehouse_ids,
+                status=ProductSerial.Status.IN_STOCK,
+            )
+            .values("product")
+            .annotate(c=Count("id"))
+            .values("c")[:1]
+        )
+        balance_qty_sub = (
+            StockBalance.objects.filter(
+                tenant=tenant,
+                product=OuterRef("pk"),
+                warehouse_id__in=warehouse_ids,
+            )
+            .values("product")
+            .annotate(s=Sum("qty"))
+            .values("s")[:1]
+        )
+        qs = qs.annotate(
+            serial_qty=Coalesce(
+                Subquery(serial_qty_sub, output_field=IntegerField()), Value(0)
+            ),
+            balance_qty=Coalesce(
+                Subquery(balance_qty_sub, output_field=IntegerField()), Value(0)
+            ),
+        ).annotate(stock_total_agg=F("serial_qty") + F("balance_qty"))
+
+        # 虛擬商品(手續費等)沒有實體庫存,不列入庫存表
+        qs = qs.exclude(is_virtual=True)
+        in_stock_only = request.query_params.get("in_stock_only", "true") == "true"
+        if in_stock_only:
+            qs = qs.exclude(stock_total_agg=0)
+
         qs = qs.order_by("category__sort_order", "category__code", "sku")
-        products = list(qs[:500])
+
+        # 4. 分頁(預設 500 筆一頁,沿用舊行為的單頁大小)
+        total = qs.count()
+        try:
+            page_size = int(request.query_params.get("page_size", 500))
+        except (TypeError, ValueError):
+            page_size = 500
+        page_size = max(1, min(page_size, 1000))
+        page_count = max(1, -(-total // page_size))  # ceil
+        try:
+            page = int(request.query_params.get("page", 1))
+        except (TypeError, ValueError):
+            page = 1
+        # 夾在有效範圍內。不夾的話超大頁碼會讓 OFFSET 超出 PostgreSQL bigint
+        # 而丟 DataError(HTTP 500);夾住之後最壞情況只是回最後一頁。
+        page = max(1, min(page, page_count))
+        offset = (page - 1) * page_size
+        products = list(qs[offset:offset + page_size])
         product_ids = [p.id for p in products]
 
-        # 3. 批次抓「序號商品」每倉的在庫數
+        # 5. 批次抓「序號商品」每倉的在庫數
         serial_data = (
             ProductSerial.objects.filter(
                 tenant=tenant,
@@ -675,7 +737,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             (d["product_id"], d["warehouse_id"]): d["c"] for d in serial_data
         }
 
-        # 4. 批次抓「配件」每倉 balance
+        # 6. 批次抓「配件」每倉 balance
         balance_data = StockBalance.objects.filter(
             tenant=tenant,
             product_id__in=product_ids,
@@ -685,9 +747,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             (d["product_id"], d["warehouse_id"]): d["qty"] for d in balance_data
         }
 
-        in_stock_only = request.query_params.get("in_stock_only", "true") == "true"
-
-        # 5. 組裝
+        # 7. 組裝。過濾已在 DB 端做完,這裡只負責攤成每倉欄位。
         products_data = []
         for p in products:
             stock_by_wh = {}
@@ -696,18 +756,20 @@ class ProductViewSet(viewsets.ModelViewSet):
                     (p.id, wid), 0
                 )
                 stock_by_wh[str(wid)] = qty
-            total = sum(stock_by_wh.values())
-            # 虛擬商品(手續費等)沒有實體庫存,不列入庫存表
-            if p.is_virtual:
-                continue
-            if in_stock_only and total == 0:
-                continue
             products_data.append(
                 {
                     "id": p.id,
                     "sku": p.sku,
                     "name": p.name,
                     "spec": p.spec,
+                    "capacity": p.capacity,
+                    "color": p.color,
+                    "region_version": p.region_version,
+                    "condition_id": p.condition_id,
+                    "condition_name": p.condition.name if p.condition else "",
+                    "tracks_unit_condition": p.tracks_unit_condition,
+                    "phone_model_key": p.phone_model_key,
+                    "phone_model_name": p.phone_model_name,
                     "category_id": p.category_id,
                     "category_name": p.category.name if p.category else "",
                     "category_code": p.category.code if p.category else "",
@@ -716,7 +778,7 @@ class ProductViewSet(viewsets.ModelViewSet):
                     "requires_serial": p.requires_serial,
                     "is_secondhand": p.is_secondhand,
                     "stock_by_warehouse": stock_by_wh,
-                    "stock_total": total,
+                    "stock_total": sum(stock_by_wh.values()),
                 }
             )
 
@@ -724,6 +786,11 @@ class ProductViewSet(viewsets.ModelViewSet):
             {
                 "warehouses": warehouses,
                 "products": products_data,
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "page_count": page_count,
+                "has_more": offset + len(products) < total,
             }
         )
 
@@ -812,6 +879,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             condition_ids     (必,要建哪些狀態 — Condition.id list)
             capacities        (必,容量字串 list,例 ["128GB","256GB"])
             colors            (必,顏色字串 list)
+            region_version    (選,地區版本,例 "台版";整批一個值,不是維度)
             accessory_categories (選,配件類別字串 list,例 ["殼","貼"])
             accessory_category_id (選,配件 SKU 掛的類別,空白沿用 main_category_id)
             parts_category_id    (選,零件 SKU 掛的類別,空白沿用 main_category_id)
@@ -834,6 +902,16 @@ class ProductViewSet(viewsets.ModelViewSet):
             return Response(
                 {"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST
             )
+        except IntegrityError as e:
+            # service 內已先查過品名有沒有撞,但兩個人同時按「建立全部」時,
+            # 兩邊都會通過檢查、其中一邊在 save() 撞唯一鍵。整批已經回滾,
+            # 這裡翻成 409 讓前端顯示「有人剛建過了,重新整理再看一次」。
+            if "uniq_product_tenant_name" in str(e) or "uniq_product_tenant_sku" in str(e):
+                return Response(
+                    {"detail": "有人剛建立了同名商品,請重新整理後再確認一次"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            raise
         return Response(result)
 
     @action(detail=False, methods=["post"], url_path="bulk")

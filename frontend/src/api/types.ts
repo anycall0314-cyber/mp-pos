@@ -71,6 +71,12 @@ export interface Product {
   capacity?: string;
   color?: string;
   region_version?: string;
+  // 品況(全新 / 已拆封 / 中古機 …)。is_secondhand 分不出前兩者
+  condition?: number | null;
+  condition_name?: string;
+  condition_code?: string;
+  /** 進貨時要不要逐台記成色 / 電池 / 個別售價 / 備註 */
+  tracks_unit_condition?: boolean;
   // (deprecated)舊版 SKU id 寫入,新版改用 related_host_keys
   related_host_ids?: number[];
   // 寫入時送機型 key 清單(以機型為單位,涵蓋同款所有 SKU 變體)
@@ -1009,6 +1015,8 @@ export interface Condition {
   code: string;
   name: string;
   is_secondhand: boolean;
+  /** 進貨時逐台記成色 / 電池 / 個別售價 / 備註;與是否中古機分開 */
+  tracks_unit_condition: boolean;
   sort_order: number;
   is_active: boolean;
   product_count?: number;
@@ -1266,6 +1274,8 @@ export interface IntakeItemCandidate {
   name: string;
   capacity: string;
   color: string;
+  /** false = 這個品號已停售,選它等於「確認恢復舊品號」 */
+  is_active: boolean;
   score: number;
   reason: string;
   conflict: boolean;
@@ -1277,6 +1287,9 @@ export interface IntakeItem {
   raw_text: string;
   raw_barcode: string;
   raw_vendor_sku: string;
+  /** 有修正取修正、否則取 raw;會被學成別名,所以要讓人看得到也改得到 */
+  effective_barcode?: string;
+  effective_vendor_sku?: string;
   raw_qty: number;
   raw_unit_price: string;
   raw_serials: string[];
@@ -1299,6 +1312,14 @@ export interface IntakeItem {
   match_status: IntakeMatchStatus;
   match_confidence: number;
   candidates: IntakeItemCandidate[];
+  /** 確認時沒學進去的識別碼(已經指到別的商品) */
+  alias_conflicts?: {
+    kind: string;
+    label: string;
+    value: string;
+    product_sku: string;
+    product_name: string;
+  }[];
   /** 拍照來源:每欄的辨識信心 0-1(與 match_confidence 不同) */
   ocr_confidence: Record<string, number>;
   note: string;

@@ -75,7 +75,7 @@ function SerialListModal({
                         Number(s.purchase_unit_cost),
                       ).toLocaleString()}
                     </dd>
-                    {product.is_secondhand && (
+                    {product.tracks_unit_condition && (
                       <>
                         <dt>成色</dt>
                         <dd>{s.condition_grade || "—"}</dd>
@@ -106,14 +106,14 @@ function SerialListModal({
                   <th>序號</th>
                   <th>進貨日</th>
                   <th className="num">單台成本</th>
-                  {product.is_secondhand && <th>成色</th>}
-                  {product.is_secondhand && (
+                  {product.tracks_unit_condition && <th>成色</th>}
+                  {product.tracks_unit_condition && (
                     <th className="num">自定售價</th>
                   )}
-                  {product.is_secondhand && (
+                  {product.tracks_unit_condition && (
                     <th className="num">電池 %</th>
                   )}
-                  {product.is_secondhand && <th>備註</th>}
+                  {product.tracks_unit_condition && <th>備註</th>}
                   <th style={{ width: 60 }}></th>
                 </tr>
               </thead>
@@ -126,10 +126,10 @@ function SerialListModal({
                     <td className="num">
                       {Math.round(Number(s.purchase_unit_cost)).toLocaleString()}
                     </td>
-                    {product.is_secondhand && (
+                    {product.tracks_unit_condition && (
                       <td>{s.condition_grade || "—"}</td>
                     )}
-                    {product.is_secondhand && (
+                    {product.tracks_unit_condition && (
                       <td className="num">
                         {s.custom_unit_price
                           ? Math.round(
@@ -138,10 +138,10 @@ function SerialListModal({
                           : "—"}
                       </td>
                     )}
-                    {product.is_secondhand && (
+                    {product.tracks_unit_condition && (
                       <td className="num">{s.battery_health ?? "—"}</td>
                     )}
-                    {product.is_secondhand && (
+                    {product.tracks_unit_condition && (
                       <td>{s.condition_note || "—"}</td>
                     )}
                     <td>
@@ -159,7 +159,7 @@ function SerialListModal({
                 {rows.length === 0 && (
                   <tr>
                     <td
-                      colSpan={product.is_secondhand ? 9 : 5}
+                      colSpan={product.tracks_unit_condition ? 9 : 5}
                       className="md-empty"
                     >
                       —
@@ -274,6 +274,16 @@ function TransferStatusModal({
   );
 }
 
+// 一頁幾筆。舊版是「先取 500 再濾零庫存」,有貨的商品排在 500 名之後就
+// 整筆消失;現在過濾在 DB 端做完才分頁,配合下面的上一頁 / 下一頁翻到底。
+const MATRIX_PAGE_SIZE = 200;
+
+/** 品況顯示:有掛品況主檔就用它,舊資料退回中古機旗標。 */
+function conditionLabel(p: StockMatrixProduct): string {
+  if (p.condition_name) return p.condition_name;
+  return p.is_secondhand ? "中古機" : "—";
+}
+
 interface AppliedFilter {
   keyword: string;
   categoryIds: number[];
@@ -331,6 +341,8 @@ export function InventoryQueryPage() {
 
   // 已套用篩選(按查詢才會更新,跟著觸發 API)
   const [applied, setApplied] = useState<AppliedFilter | null>(null);
+  // 目前頁次(換條件時回第 1 頁)
+  const [page, setPage] = useState(1);
 
   // 點數字打開的明細
   const [serialDialog, setSerialDialog] = useState<{
@@ -351,12 +363,26 @@ export function InventoryQueryPage() {
       search: applied?.keyword,
       categoryIds: applied?.categoryIds,
       inStockOnly: true,
+      page,
+      pageSize: MATRIX_PAGE_SIZE,
     },
     { enabled: !!applied && (applied.warehouseIds.length > 0) },
   );
 
   const warehouses = matrix.data?.warehouses ?? [];
   const rawProducts = matrix.data?.products ?? [];
+  const matrixTotal = matrix.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(matrixTotal / MATRIX_PAGE_SIZE));
+
+  // 資料變少(別人賣掉 / 改條件)時頁碼可能超界,後端會夾回最後一頁,
+  // 這裡跟著它回報的頁碼校正,避免畫面停在空白頁又看不到分頁按鈕。
+  // 只在「這次回應成功」時做,載入中 data 暫空會把 pageCount 誤算成 1。
+  const servedPage = matrix.data?.page;
+  useEffect(() => {
+    if (servedPage !== undefined && servedPage !== page) {
+      setPage(servedPage);
+    }
+  }, [servedPage, page]);
 
   // 排序狀態(null = 用 API 預設順序)
   const [sort, setSort] = useState<SortState | null>(null);
@@ -427,6 +453,7 @@ export function InventoryQueryPage() {
   const grandTotal = products.reduce((s, p) => s + p.stock_total, 0);
 
   function runQuery() {
+    setPage(1);
     setApplied({
       keyword: keyword.trim(),
       categoryIds: selectedCategories.map((c) => c.id),
@@ -441,6 +468,7 @@ export function InventoryQueryPage() {
     setCategoryPickerOption(null);
     setSelectedWarehouseIds(new Set(allWarehouses.map((w) => w.id)));
     setApplied(null);
+    setPage(1);
   }
 
   function addCategory(opt: ComboOption<Category>) {
@@ -522,7 +550,7 @@ export function InventoryQueryPage() {
         </button>
         <span className="list-filterbar-count">
           {applied && !matrix.isLoading
-            ? `${products.length} 項 · 總庫存 ${grandTotal} 件`
+            ? `共 ${matrixTotal} 項 · 本頁 ${products.length} 項 · 本頁庫存 ${grandTotal} 件`
             : ""}
         </span>
       </div>
@@ -655,6 +683,7 @@ export function InventoryQueryPage() {
                   <div className="stock-card-meta">
                     {p.category_name}
                     {p.spec ? ` · ${p.spec}` : ""}
+                    {conditionLabel(p) !== "—" ? ` · ${conditionLabel(p)}` : ""}
                   </div>
                   <div className="stock-card-wh">
                     {warehouses.map((w) => {
@@ -710,7 +739,7 @@ export function InventoryQueryPage() {
             })}
             {products.length > 0 && (
               <div className="stock-card stock-card-total">
-                <div className="stock-card-meta">所有商品合計</div>
+                <div className="stock-card-meta">本頁合計</div>
                 {warehouses.map((w) => (
                   <div key={w.id} className="stock-card-wh-row">
                     <span className="stock-card-wh-name">
@@ -762,6 +791,7 @@ export function InventoryQueryPage() {
                   品名{sortIndicator({ kind: "name" })}
                 </th>
                 <th style={{ width: 150 }}>規格</th>
+                <th style={{ width: 90 }}>品況</th>
                 {warehouses.map((w) => (
                   <th
                     key={w.id}
@@ -810,6 +840,9 @@ export function InventoryQueryPage() {
                     </button>
                   </td>
                   <td style={{ color: "var(--text-dim)" }}>{p.spec || "—"}</td>
+                  <td style={{ color: "var(--text-dim)" }}>
+                    {conditionLabel(p)}
+                  </td>
                   {warehouses.map((w) => {
                     const qty = p.stock_by_warehouse[String(w.id)] ?? 0;
                     return (
@@ -856,7 +889,7 @@ export function InventoryQueryPage() {
               {products.length === 0 && (
                 <tr>
                   <td
-                    colSpan={7 + warehouses.length}
+                    colSpan={8 + warehouses.length}
                     className="md-empty"
                   >
                     查無資料
@@ -865,8 +898,8 @@ export function InventoryQueryPage() {
               )}
               {products.length > 0 && (
                 <tr className="stock-matrix-total-row">
-                  <td colSpan={4} style={{ textAlign: "right" }}>
-                    各倉合計
+                  <td colSpan={5} style={{ textAlign: "right" }}>
+                    本頁合計
                   </td>
                   {warehouses.map((w) => (
                     <td key={w.id} className="num">
@@ -898,6 +931,30 @@ export function InventoryQueryPage() {
               )}
             </tbody>
           </table>
+        )}
+
+        {applied && pageCount > 1 && (
+          <div className="inv-pager">
+            <button
+              type="button"
+              className="btn"
+              disabled={page <= 1}
+              onClick={() => setPage((n) => Math.max(1, n - 1))}
+            >
+              上一頁
+            </button>
+            <span className="inv-pager-label">
+              第 {page} / {pageCount} 頁{sort ? " · 排序限本頁" : ""}
+            </span>
+            <button
+              type="button"
+              className="btn"
+              disabled={page >= pageCount || !(matrix.data?.has_more ?? false)}
+              onClick={() => setPage((n) => Math.min(pageCount, n + 1))}
+            >
+              下一頁
+            </button>
+          </div>
         )}
       </div>
     </div>

@@ -97,8 +97,10 @@ def _resolve_host_product_ids(tenant, host_model_keys):
         is_active=True,
         is_virtual=False,
     )
-    for p in qs.only("id", "name", "spec", "brand", "series",
-                     "generation", "model_suffix"):
+    for p in qs.select_related("phone_model", "series").only(
+        "id", "name", "spec", "brand", "series", "generation", "model_suffix",
+        "phone_model", "phone_model__match_key", "series__name",
+    ):
         if p.phone_model_key in keys:
             ids.add(p.id)
     return ids

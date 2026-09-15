@@ -428,6 +428,8 @@ function ItemDetail({ item }: { item: IntakeItem }) {
     qty: String(item.effective_qty),
     unit_price: item.effective_unit_price,
     serials: item.effective_serials.join(","),
+    barcode: item.effective_barcode ?? item.raw_barcode ?? "",
+    vendor_sku: item.effective_vendor_sku ?? item.raw_vendor_sku ?? "",
   });
 
   // 逐台序號:一列一台,預填已登記的 unit
@@ -457,17 +459,57 @@ function ItemDetail({ item }: { item: IntakeItem }) {
     captureUnits.mutate({ id: item.id, units: payload });
   }
 
-  function saveCorrection() {
+  /** 畫面上的修正跟伺服器不一致時為 true(尤其是條碼 / 料號)。 */
+  function isDirty() {
+    return (
+      corr.qty !== String(item.effective_qty) ||
+      corr.unit_price !== item.effective_unit_price ||
+      corr.serials !== item.effective_serials.join(",") ||
+      corr.barcode !== (item.effective_barcode ?? item.raw_barcode ?? "") ||
+      corr.vendor_sku !==
+        (item.effective_vendor_sku ?? item.raw_vendor_sku ?? "")
+    );
+  }
+
+  // 「修正 → 對應」是兩段 await，中間可以再按一次。先選 A 慢、後選 B 快的話，
+  // A 的第二段會晚到而把 B 蓋掉。用一個同步旗標擋住整段。
+  const [picking, setPicking] = useState(false);
+
+  /** 選商品前先把畫面上的修正存起來。
+   *
+   *  不先存的話,店員清空 OCR 讀錯的條碼後直接按「選這個」,後端讀到的
+   *  還是資料庫裡的舊條碼,照樣會把錯的識別碼學成已確認的別名。
+   */
+  async function chooseProduct(productId: number) {
+    if (picking) return;
+    setPicking(true);
+    try {
+      if (isDirty()) {
+        await correctItem.mutateAsync(correctionPayload());
+      }
+      await matchItem.mutateAsync({ id: item.id, product: productId });
+    } finally {
+      setPicking(false);
+    }
+  }
+
+  function correctionPayload() {
     const serials = corr.serials
       .split(/[,、\s]+/)
-      .map((s) => s.trim())
+      .map((x) => x.trim())
       .filter(Boolean);
-    correctItem.mutate({
+    return {
       id: item.id,
       qty: Number(corr.qty) || 1,
       unit_price: corr.unit_price,
+      barcode: corr.barcode.trim(),
+      vendor_sku: corr.vendor_sku.trim(),
       serials,
-    });
+    };
+  }
+
+  function saveCorrection() {
+    correctItem.mutate(correctionPayload());
   }
 
   const [otherProduct, setOtherProduct] = useState<number | "">("");
@@ -483,6 +525,7 @@ function ItemDetail({ item }: { item: IntakeItem }) {
   const [npError, setNpError] = useState("");
 
   const busy =
+    picking ||
     matchItem.isPending ||
     rejectItem.isPending ||
     newProduct.isPending ||
@@ -508,7 +551,14 @@ function ItemDetail({ item }: { item: IntakeItem }) {
       setNpError("請選類別");
       return;
     }
+    if (picking) return;
+    setPicking(true);
     try {
+      // 跟「選這個」同理：建新品後端也會學別名，畫面上清掉的錯誤條碼 /
+      // 料號沒先存的話，還是會被學成這個新商品的已確認識別碼。
+      if (isDirty()) {
+        await correctItem.mutateAsync(correctionPayload());
+      }
       await newProduct.mutateAsync({
         id: item.id,
         name: np.name.trim() || undefined,
@@ -521,6 +571,8 @@ function ItemDetail({ item }: { item: IntakeItem }) {
       setDrawerOpen(false);
     } catch (e) {
       setNpError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPicking(false);
     }
   }
 
@@ -544,8 +596,18 @@ function ItemDetail({ item }: { item: IntakeItem }) {
         )}
       </dl>
 
+      {(item.alias_conflicts?.length ?? 0) > 0 && (
+        <div className="intake-alias-conflicts">
+          {item.alias_conflicts!.map((c, i) => (
+            <div key={i}>
+              {c.label} {c.value} 未學入,仍對應 {c.product_sku}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="intake-correct">
-        <div className="intake-subhead">數量 / 進價 / 序號(可修正)</div>
+        <div className="intake-subhead">可修正欄位</div>
         <div className="intake-correct-row">
           <label>
             數量
@@ -565,6 +627,28 @@ function ItemDetail({ item }: { item: IntakeItem }) {
               onChange={(e) =>
                 setCorr((s) => ({ ...s, unit_price: e.target.value }))
               }
+            />
+          </label>
+        </div>
+        <div className="intake-correct-row">
+          <label>
+            條碼
+            <input
+              value={corr.barcode}
+              onChange={(e) =>
+                setCorr((s) => ({ ...s, barcode: e.target.value }))
+              }
+              placeholder="讀錯就清空"
+            />
+          </label>
+          <label>
+            廠商料號
+            <input
+              value={corr.vendor_sku}
+              onChange={(e) =>
+                setCorr((s) => ({ ...s, vendor_sku: e.target.value }))
+              }
+              placeholder="讀錯就清空"
             />
           </label>
         </div>
@@ -647,6 +731,9 @@ function ItemDetail({ item }: { item: IntakeItem }) {
                       {[c.capacity, c.color].filter(Boolean).join(" / ")}
                     </span>
                   )}
+                  {c.is_active === false && (
+                    <span className="intake-inactive-tag">停售</span>
+                  )}
                 </div>
                 <div className="intake-candidate-sub">
                   {c.sku} · 分數 {c.score}
@@ -660,9 +747,7 @@ function ItemDetail({ item }: { item: IntakeItem }) {
               <button
                 className={c.conflict ? "btn small" : "btn small primary"}
                 disabled={busy}
-                onClick={() =>
-                  matchItem.mutate({ id: item.id, product: c.product_id })
-                }
+                onClick={() => chooseProduct(c.product_id)}
               >
                 選這個
               </button>
@@ -676,9 +761,10 @@ function ItemDetail({ item }: { item: IntakeItem }) {
           <span className="intake-label">改對應其他商品</span>
           <ComboBox
             value={otherProduct}
+            disabled={busy}
             onChange={(id) => {
               if (id !== "") {
-                matchItem.mutate({ id: item.id, product: id });
+                chooseProduct(id);
                 setOtherProduct("");
               }
             }}

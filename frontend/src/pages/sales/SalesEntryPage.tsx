@@ -55,6 +55,31 @@ function toIntStr(v: string | number | null | undefined): string {
   return String(Math.round(n));
 }
 
+/** 逐台定價:該台有核定售價就用它,回傳整數字串;否則 null(由呼叫端決定 fallback)。
+ *
+ * 閘門看 `tracks_unit_condition` 而不是 `is_secondhand` —— 已拆封機也會逐台
+ * 記售價,只看中古機旗標會讓已拆封機存了 16000 卻仍帶商品定價 20000。
+ * 舊商品沒有這個欄位時退回中古機旗標,行為不變。
+ */
+/** 這個商品是不是「逐台定價」(已拆封 / 中古)。舊資料退回中古機旗標。 */
+function tracksUnitCondition(
+  product: Pick<Product, "is_secondhand" | "tracks_unit_condition"> | undefined | null,
+): boolean {
+  if (!product) return false;
+  return product.tracks_unit_condition ?? product.is_secondhand ?? false;
+}
+
+function unitCustomPrice(
+  product: Pick<Product, "is_secondhand" | "tracks_unit_condition"> | undefined | null,
+  serial: { custom_unit_price?: string | null } | undefined | null,
+): string | null {
+  if (!product || !serial) return null;
+  if (!tracksUnitCondition(product)) return null;
+  const cp = serial.custom_unit_price;
+  if (cp === null || cp === undefined || !(Number(cp) > 0)) return null;
+  return toIntStr(cp);
+}
+
 interface Line {
   key: string;
   line_no: number;
@@ -488,6 +513,9 @@ function LineRow({
   const allowCommission = !!product?.allows_commission;
   const needsSerial = !!product?.requires_serial && !product?.is_virtual;
   const filledSerials = pickedSerialIds(line).length;
+  // 逐台定價(已拆封 / 中古):一列一台。同列多台會用第一台的單價乘數量,
+  // 兩台 16000 / 18000 只會收 32000。
+  const perUnitPriced = tracksUnitCondition(product);
 
   function onProductPick(
     pid: number | "",
@@ -497,18 +525,15 @@ function LineRow({
     // 選到商品時把建議零售價一次帶到單價與金額(各自獨立,之後互不同步)
     const userTypedAmount =
       Number(line.amount) !== 0 && Number(line.amount) !== Number(line.unit_price);
-    // 中古機打/掃 IMEI 命中時,優先帶該支序號的自訂售價
-    const msCustom =
-      p?.is_secondhand && p?.matched_serial?.custom_unit_price;
+    // 打 / 掃 IMEI 命中時,優先帶該台的核定售價
+    const msCustom = unitCustomPrice(p, p?.matched_serial);
     // 零件倉商品被選到:自動帶 external_sale_price(對外售價)
     const isPartsExternal =
       p?.warehouse_type === "parts" && p?.is_externally_sellable;
     const defaultPrice = toIntStr(
       isPartsExternal && Number(p?.external_sale_price ?? 0) > 0
         ? (p?.external_sale_price ?? "0")
-        : msCustom && Number(msCustom) > 0
-          ? msCustom
-          : (p?.list_price ?? "0"),
+        : (msCustom ?? p?.list_price ?? "0"),
     );
 
     // 路徑一:搜尋帶 matched_serial(打 IMEI 命中)→ 立即把該序號掛上
@@ -521,7 +546,8 @@ function LineRow({
         } as ComboOption<ProductSerial>)
       : null;
 
-    const pickedQty = autoSerial ? 1 : line.qty;
+    const pickedQty =
+      autoSerial || tracksUnitCondition(p) ? 1 : line.qty;
     update({
       product: pid,
       productOption: opt ? { ...opt, payload: opt.payload as Product } : null,
@@ -555,6 +581,13 @@ function LineRow({
           };
           // 已被使用者改過金額 → 只放提示、不覆蓋
           if (userTypedAmount) {
+            update({ lastPriceHint: hint });
+            return;
+          }
+          // 逐台定價的商品:價格來自這一台的核定售價,不是同型號另一台的
+          // 歷史成交價。這個查詢是非同步回來的,不擋住就會把剛帶好的
+          // 單台售價蓋掉(也會跟「唯一在庫自動選機」互相競賽)。
+          if (tracksUnitCondition(p)) {
             update({ lastPriceHint: hint });
             return;
           }
@@ -596,12 +629,10 @@ function LineRow({
             qty: 1,
             serialChoices: [only],
           };
-          if (p.is_secondhand) {
-            const cp = only.payload?.custom_unit_price;
-            if (cp && Number(cp) > 0) {
-              patch.unit_price = toIntStr(cp);
-              patch.amount = toIntStr(cp);
-            }
+          const cp = unitCustomPrice(p, only.payload);
+          if (cp) {
+            patch.unit_price = cp;
+            patch.amount = cp;
           }
           update(patch);
         })
@@ -671,15 +702,18 @@ function LineRow({
           type="number"
           className="num-input"
           min={1}
+          max={perUnitPriced ? 1 : undefined}
           value={line.qty}
           onChange={(e) => {
-            const q = Math.max(1, Number(e.target.value));
+            const raw = Math.max(1, Number(e.target.value));
+            const q = perUnitPriced ? 1 : raw;
             update({
               qty: q,
               amount: toIntStr(q * Number(line.unit_price || 0)),
             });
           }}
-          disabled={readonly}
+          disabled={readonly || perUnitPriced}
+          title={perUnitPriced ? "一列一台" : undefined}
         />
       </td>
       <td className="num">
@@ -1444,20 +1478,18 @@ export function SalesEntryPage() {
           return ls;
         }
         const opt = serialOptionFrom({ id: ms.id, serial_no: ms.serial_no });
-        // 中古機:優先用該支序號的自訂售價
-        const serialPrice =
-          p.is_secondhand && ms.custom_unit_price && Number(ms.custom_unit_price) > 0
-            ? toIntStr(ms.custom_unit_price)
-            : price;
-        if (existingIdx >= 0) {
+        // 優先用該台的核定售價
+        const serialPrice = unitCustomPrice(p, ms) ?? price;
+        // 逐台定價的商品一台一列。合併成一列會讓第二台沿用第一台的單價
+        // (兩台 16000 / 18000 連掃會收成 32000,少收 2000)。
+        const perUnitPriced = tracksUnitCondition(p);
+        if (existingIdx >= 0 && !perUnitPriced) {
           return ls.map((l, i) =>
             i === existingIdx
               ? {
                   ...l,
                   qty: l.qty + 1,
                   serialChoices: [...l.serialChoices, opt],
-                  // 中古機一機一價:單價沿用第一支(同型號自訂價通常一致),
-                  // 金額依數量重算
                   amount: toIntStr((l.qty + 1) * Number(l.unit_price || 0)),
                 }
               : l,
@@ -1589,12 +1621,12 @@ export function SalesEntryPage() {
         while (next.length <= idx) next.push(null);
         next[idx] = option;
         const patch: Partial<Line> = { serialChoices: next };
-        // 中古機:挑到序號就把該序號的自定售價帶入單價(只在第 0 格觸發,避免亂蓋)
+        // 挑到序號就把該台的核定售價帶入單價(只在第 0 格觸發,避免亂蓋)
         const product = l.productOption?.payload;
-        if (product?.is_secondhand && idx === 0 && option) {
-          const cp = option.payload?.custom_unit_price;
-          if (cp && Number(cp) > 0) {
-            patch.unit_price = String(cp);
+        if (idx === 0 && option) {
+          const cp = unitCustomPrice(product, option.payload);
+          if (cp) {
+            patch.unit_price = cp;
             patch.amount = toIntStr(Number(cp) * l.qty);
           }
         }

@@ -18,6 +18,9 @@ class Tenant(TimestampedModel):
     next_member_seq = models.PositiveIntegerField(
         "下一會員流水", default=1, editable=False
     )
+    next_style_seq = models.PositiveIntegerField(
+        "下一款式碼流水", default=1, editable=False
+    )
     next_expense_seq = models.PositiveIntegerField(
         "下一雜支單流水", default=1, editable=False
     )
@@ -73,6 +76,25 @@ class Tenant(TimestampedModel):
             row.save(update_fields=["next_member_seq"])
             self.next_member_seq = row.next_member_seq
             return f"M-{seq:05d}"
+
+    def issue_next_style_code(self) -> str:
+        """原子地取下一個款式碼:至少 3 位流水(例 042;超過 999 就變 4 位)。
+
+        無品牌配件很難命名,店員不用自己想:系統給一個穩定的號,
+        顯示成「透明磁吸防摔殼 042」就分得出來了。
+
+        用 `no_key=True`:一般 FOR UPDATE 會擋住別的交易對這一列做外鍵檢查,
+        而「建商品」需要對 Tenant 取 FOR KEY SHARE。兩邊交錯就會死鎖
+        (實測:精靈鎖 Category 取 SKU,建新品鎖 Tenant 取款式碼,互等)。
+        FOR NO KEY UPDATE 一樣序列化取號,但放行外鍵參照。
+        """
+        with transaction.atomic():
+            row = Tenant.objects.select_for_update(no_key=True).get(pk=self.pk)
+            seq = row.next_style_seq
+            row.next_style_seq = seq + 1
+            row.save(update_fields=["next_style_seq"])
+            self.next_style_seq = row.next_style_seq
+            return f"{seq:03d}"
 
     def issue_next_expense_no(self) -> str:
         """原子地取下一張雜支單號:`EX-{5位流水}`。"""

@@ -38,6 +38,13 @@
 | 序號生命週期 | 進貨建單 → in_stock;銷貨 → sold;銷貨作廢 → 回 in_stock;進貨作廢 → void(須全部還在 in_stock 才能作廢) |
 | 預設值連動 | 發票類型 = 免用 → 課稅別自動切免稅;選商品 → 進貨單帶上次進價 / 銷貨單帶 list_price |
 | 中古機 | `Product.is_secondhand=True`;`ProductSerial` 逐隻記 `condition_grade` (S/A/B/C/D)、`custom_unit_price`、`battery_health`、`condition_note`;銷貨選機自動帶 `custom_unit_price` |
+| 逐台記機況 ≠ 中古機 | `Condition.tracks_unit_condition` 決定進貨要不要逐台記 成色/電池/個別售價/備註;**已拆封不是中古機但一樣要記**。`Product.tracks_unit_condition` property:中古機一律 True,否則看品況,舊資料(condition=NULL)退回 `is_secondhand`。**每隻獨立成本仍只看 `is_secondhand`**,成本政策不跟著放寬。DB CheckConstraint 擋掉「中古機 + 不逐台記」 |
+| 逐台定價一列一台 | 銷貨時 `tracks_unit_condition` 的商品數量鎖 1、不併列。同列兩台會用第一台單價乘數量(16000+18000 只收 32000);`unitCustomPrice()` 是四條帶價路徑的唯一入口,會員歷史成交價不覆蓋該台核定售價 |
+| 商品品況 | `Product.condition` FK → `Condition`(全新 / 已拆封 / 中古機…)。serializer **唯讀**輸出 `condition` / `condition_name` / `tracks_unit_condition`;改品況要走逐台重分類,不能直接改主檔把同 SKU 的其他新機一起變掉 |
+| 機型主檔 | `PhoneModel`(per-tenant,`code` 可讀 slug + `match_key` 唯一)是「同一款手機」的穩定身分。`Product.phone_model` / `ProductRelation.host_model` FK。`phone_model_key` / `phone_model_name` property 有掛主檔就用主檔,沒掛退回原本算出來的字串。**`host_model_key` 等字串欄位全部保留並同步維護**,既有 key-based 查詢不動。回填只收 `series` 有填的商品(regex 那條路會把配件名解析成機型) |
+| 相容關係不被刪商品連累 | `ProductRelation.host_product` 是 `SET_NULL`(代表 SKU 只供 UI 顯示),邏輯主鍵是 `host_model` / `host_model_key` |
+| 供應商商品對照 | `SupplierProduct` 記「這家廠商的這個來源」→ 我的品號(platform / page_id / variant / vendor_sku / pack_qty / confirmed_by)。與 `ProductAlias` 分工:別名管「字串→商品」給比對用,這張管來源本身。`vendor_sku_key` / `source_name_key` 是 `alias_key()` 正規化後的比對鍵 |
+| 款式碼 | 無品牌配件在待確認區建新品時自動拿 `Product.style_code`(`Tenant.issue_next_style_code()`,至少 3 位);撞名才把號帶進品名。序號商品不給(有 IMEI)。取號用 `select_for_update(no_key=True)`,否則會跟「建商品取 SKU」死鎖 |
 | 中古機類別連動 | `Category.is_secondhand_default=True` 時,該類別下所有 product `is_secondhand` 自動帶 True(`Product.save` override)。類別 default 由 False → True 儲存時,cascade 把底下所有商品 `is_secondhand/requires_serial` 設 True、`is_virtual` 設 False;反向(True → False)不 cascade,避免誤改既有資料。前端 ProductsPage 的類別新增/編輯 form 多一個「中古機類別」勾選 |
 | 個人收購 | 「中古入庫」頁的「個人收購」tab(`SecondhandPersonalEntry`);走 `acquire_secondhand_from_member` service:同 transaction 建中古機序號 + 對應銷貨單(虛擬商品「收購二手」、`untaxed`、total 負數代表現金流出);service 依該會員 phone/name 自動找 / 建一筆 individual `Customer` 作 SO.customer,SO.member 記會員;serial 反向掛 `acquired_from_member`(指 Member)+ `acquired_via_sales_order` |
 | 舊系統消費紀錄 | `LegacyPurchase`(sales app)輕量表,只記「member / product / qty / unit_price / doc_date / source_no」;CSV 經 `manage.py import_legacy_purchases` 灌入;不還原成 SalesOrder。MembersPage 與現役單合併排序顯示(舊資料加「舊」徽章),`last-price` API 兩邊都查、取較新 |
@@ -81,7 +88,8 @@ inventory-3c/
 │   └── apps/
 │       ├── core/               TenantOwnedModel + TrigramSearchFilter
 │       ├── tenants/            Tenant + UserProfile + 平台後台 + auth(login/me/logout)+ 系統設定主檔(InvoiceType / InvoiceTrack / PaymentMethod)
-│       ├── catalog/            Product / Category
+│       ├── catalog/            Product / Category / Condition / PhoneModel / SupplierProduct / ProductRelation
+│       ├── identity/           ProductAlias 別名庫 + IntakeBatch/IntakeItem 待確認入庫(認不出就擱著,絕不亂寫正式庫存)
 │       ├── inventory/          Warehouse / ProductSerial / StockMovement
 │       ├── parties/            Supplier / Customer / Member / SalesPerson / Carrier / TelecomPlan / SimCard
 │       ├── purchasing/         PurchaseOrder + commit/void service

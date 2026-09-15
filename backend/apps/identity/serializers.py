@@ -77,6 +77,10 @@ class IntakeItemSerializer(serializers.ModelSerializer):
     effective_qty = serializers.IntegerField(read_only=True)
     effective_unit_price = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     effective_serials = serializers.ListField(read_only=True)
+    # 條碼與料號現在會被學成別名,前端必須看得到也改得到,
+    # 不然店員是看品名選商品,卻順手核准了一個他沒看過的識別碼
+    effective_barcode = serializers.CharField(read_only=True)
+    effective_vendor_sku = serializers.CharField(read_only=True)
     received_units = IntakeReceivedUnitSerializer(many=True, read_only=True)
     requires_serial = serializers.BooleanField(
         source="matched_product.requires_serial", read_only=True, default=False
@@ -90,9 +94,11 @@ class IntakeItemSerializer(serializers.ModelSerializer):
             "corrected_name", "corrected_qty", "corrected_unit_price",
             "corrected_barcode", "corrected_vendor_sku", "corrected_serials",
             "effective_name", "effective_qty", "effective_unit_price", "effective_serials",
+            "effective_barcode", "effective_vendor_sku",
             "matched_product", "matched_product_name", "matched_product_sku",
             "requires_serial", "received_units",
             "match_status", "match_confidence", "candidates", "ocr_confidence", "note",
+            "alias_conflicts",
         ]
 
 

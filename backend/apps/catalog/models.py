@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models, transaction
 
 from apps.core.models import TenantOwnedModel
@@ -148,6 +149,29 @@ class Product(TenantOwnedModel):
         help_text=(
             "全新 / 已拆封 / 中古機(保固內)/ 中古機 …"
             "由「新增手機型號」wizard 一鍵帶入;舊資料未指定為 NULL,沿用 is_secondhand 旗標判斷"
+        ),
+    )
+    style_code = models.CharField(
+        "款式碼",
+        max_length=20,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text=(
+            "無品牌配件的穩定款式編號(例:042)。店員不用自己想名字,"
+            "容易撞名的款式用「透明磁吸防摔殼 042」這樣區分"
+        ),
+    )
+    phone_model = models.ForeignKey(
+        "PhoneModel",
+        on_delete=models.PROTECT,
+        related_name="products",
+        null=True,
+        blank=True,
+        verbose_name="機型",
+        help_text=(
+            "穩定的機型身分。舊資料為 NULL 時退回 phone_model_key 那個"
+            "算出來的字串,行為不變"
         ),
     )
     counts_cash = models.BooleanField(
@@ -398,16 +422,45 @@ class Product(TenantOwnedModel):
         super().save(*args, **kwargs)
 
     @property
+    def tracks_unit_condition(self) -> bool:
+        """進貨時要不要逐台記成色 / 電池 / 個別售價 / 備註。
+
+        以品況主檔為準(全新不記,已拆封與中古都記)。舊商品沒掛品況時
+        退回舊行為(只有中古機記),既有資料的表現不變。
+
+        **中古機一律為 True**,不看品況旗標。因為中古機的成色與每台成本
+        本來就是必填,關掉會讓進貨卡死(欄位藏起來卻仍被要求填成色);
+        而且「中古機類別」會把商品自動設成 is_secondhand=True,品況卻可能
+        還掛著全新,這條 or 讓那種組合也不會出事。
+
+        注意:這只管「機況資料」。每隻獨立成本仍只看 `is_secondhand`,
+        成本政策不跟著放寬。
+        """
+        if self.is_secondhand:
+            return True
+        if self.condition_id is not None:
+            condition = self.condition
+            if condition is not None:
+                return condition.tracks_unit_condition
+        return False
+
+    @property
     def phone_model_name(self) -> str:
         """機型名稱:用於配件 - 主機相容性綁定(跨同款 SKU)。
-        實作在 phone_model.py。
+
+        掛了機型主檔就用它(穩定,改品名不會讓關聯散掉);
+        舊資料沒掛的退回 phone_model.py 那套算出來的字串,行為不變。
         """
+        if self.phone_model_id:
+            return self.phone_model.name
         from .phone_model import compute_phone_model_name
 
         return compute_phone_model_name(self)
 
     @property
     def phone_model_key(self) -> str:
+        if self.phone_model_id:
+            return self.phone_model.match_key
         from .phone_model import compute_phone_model_key
 
         return compute_phone_model_key(self)
@@ -491,6 +544,15 @@ class Condition(TenantOwnedModel):
             "觸發中古機成本邏輯(每隻獨立 purchase_unit_cost)"
         ),
     )
+    tracks_unit_condition = models.BooleanField(
+        "逐台記機況",
+        default=True,
+        help_text=(
+            "勾選後,進貨時這個狀態的每一台都可以記成色 / 電池 / 個別售價 / 備註。"
+            "與「視為中古機」分開:已拆封不是中古機,但一樣要逐台記。"
+            "成本政策仍只看「視為中古機」"
+        ),
+    )
     sort_order = models.PositiveIntegerField("排序", default=0)
     is_active = models.BooleanField("啟用", default=True)
 
@@ -502,6 +564,12 @@ class Condition(TenantOwnedModel):
             models.UniqueConstraint(
                 fields=["tenant", "name"], name="uniq_condition_tenant_name"
             ),
+            # 中古機一定要逐台記機況。save() 已經會修正,這條是最後防線
+            # (bulk_update / queryset.update / 原生 SQL 都繞不過)。
+            models.CheckConstraint(
+                check=~models.Q(is_secondhand=True, tracks_unit_condition=False),
+                name="condition_secondhand_tracks_unit",
+            ),
         ]
         ordering = ["sort_order", "code"]
         verbose_name = "商品狀態"
@@ -509,6 +577,29 @@ class Condition(TenantOwnedModel):
 
     def __str__(self) -> str:
         return self.name
+
+    def save(self, *args, **kwargs):
+        # 中古機的成色與每台成本本來就必填,不允許關掉逐台記機況,
+        # 否則進貨畫面會把欄位藏起來卻仍要求填成色,直接卡死。
+        if not (self.is_secondhand and not self.tracks_unit_condition):
+            return super().save(*args, **kwargs)
+        self.tracks_unit_condition = True
+        # save(update_fields=["is_secondhand"]) 只會寫指定欄位,不一起帶上
+        # 這個修正就不會進 DB(接著會撞 CheckConstraint)。
+        # update_fields 可能走位置參數(Django 5.1 的 save 簽章仍接受
+        # force_insert, force_update, using, update_fields 四個位置參數)。
+        positional = len(args) >= 4
+        update_fields = args[3] if positional else kwargs.get("update_fields")
+        # None = 寫全部欄位,不用動;
+        # 空集合 = 呼叫端明確表示「什麼都不要寫」,那個語意要保留,
+        #          不能擴充成非空(會變成真的去寫,未存檔物件還會拋 ValueError)。
+        if update_fields:
+            merged = set(update_fields) | {"tracks_unit_condition"}
+            if positional:
+                args = args[:3] + (merged,) + args[4:]
+            else:
+                kwargs["update_fields"] = merged
+        return super().save(*args, **kwargs)
 
 
 class PhoneSeries(TenantOwnedModel):
@@ -653,6 +744,203 @@ class PartTemplateItem(TenantOwnedModel):
         return f"{self.name} ({self.code})"
 
 
+class SupplierProduct(TenantOwnedModel):
+    """供應商商品對照 —— 「這家廠商的這個商品頁 / 這個變體」對到我的哪個品號。
+
+    跟 `identity.ProductAlias` 的分工:
+    - ProductAlias 管「一個字串(品名 / 料號 / 條碼)」→ 商品,給識別引擎比對用。
+    - 這張表管「一個來源商品」→ 商品,記的是來源本身(平台、商品頁、選到哪個
+      變體、連結、一箱幾入)。淘寶同一個網址底下會有不同機型 / 顏色 / 材質 /
+      包裝,光靠網址對不到店內商品,要連變體一起記才算數。
+
+    一個商品可以有多個已確認來源(同一顆玻璃貼跟三家買)。
+    供應商改版或重用料號時,把舊的停用、建新的,歷史留著。
+    """
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="supplier_products",
+        verbose_name="對應商品",
+    )
+    supplier = models.ForeignKey(
+        "parties.Supplier",
+        on_delete=models.PROTECT,
+        related_name="supplier_products",
+        verbose_name="供應商",
+    )
+    platform = models.CharField(
+        "平台", max_length=40, blank=True, default="",
+        help_text="例:淘寶 / 蝦皮 / 官網 / 電話下單",
+    )
+    page_id = models.CharField(
+        "商品頁 ID", max_length=120, blank=True, default="", db_index=True,
+        help_text="平台上的商品編號;同一頁可能有多個變體",
+    )
+    variant = models.CharField(
+        "選到的變體", max_length=200, blank=True, default="",
+        help_text="顏色 / 機型 / 材質 / 包裝,例:透明-iPhone15Pro-10入",
+    )
+    vendor_sku = models.CharField(
+        "廠商料號", max_length=80, blank=True, default="", db_index=True,
+        help_text="**變體層**的料號(對到一個實際可下單的規格),不是父商品料號",
+    )
+    vendor_sku_key = models.CharField(
+        "料號比對鍵", max_length=200, blank=True, default="", db_index=True,
+        help_text=(
+            "vendor_sku 正規化後的字,系統自動算。查重與唯一鍵都用它 —— "
+            "用原字的話 ABC-01 / abc-01 / ＡＢＣ－０１ 會被當成三個不同料號,"
+            "跟別名表(它用正規化鍵)對不起來"
+        ),
+    )
+    source_name_key = models.CharField(
+        "來源品名比對鍵", max_length=200, blank=True, default="", db_index=True,
+        help_text="source_name 正規化後的字,系統自動算;沒有料號時靠它去重",
+    )
+    source_name = models.CharField(
+        "來源品名", max_length=300, blank=True, default="",
+        help_text="廠商自己的叫法,原樣保留;不要拿來當店內品名",
+    )
+    url = models.URLField("連結", max_length=500, blank=True, default="")
+    pack_qty = models.PositiveIntegerField(
+        "一單位幾入", default=1,
+        help_text="來源一件等於店內幾個計量單位(一盒 10 片就填 10)",
+    )
+    note = models.CharField("備註", max_length=200, blank=True, default="")
+    is_active = models.BooleanField("啟用", default=True)
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="confirmed_supplier_products",
+        verbose_name="確認人",
+    )
+    confirmed_at = models.DateTimeField("確認時間", null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            # 同一家廠商的同一個料號不重複(只管啟用中的,停用的留著當歷史)
+            models.UniqueConstraint(
+                fields=["tenant", "supplier", "vendor_sku_key"],
+                condition=models.Q(is_active=True) & ~models.Q(vendor_sku_key=""),
+                name="uniq_supplier_product_vendor_sku",
+            ),
+            # 沒有料號也沒有商品頁的自動紀錄:同一家 + 同一個商品 + 同一個
+            # 來源品名只留一筆。先查再新增擋不住併發(尚不存在的列鎖不住),
+            # 要靠唯一鍵兜底。不套到有料號 / 有商品頁的正式來源。
+            models.UniqueConstraint(
+                fields=["tenant", "supplier", "product", "source_name_key"],
+                condition=(
+                    models.Q(is_active=True)
+                    & models.Q(vendor_sku_key="")
+                    & models.Q(page_id="")
+                    & ~models.Q(source_name_key="")
+                ),
+                name="uniq_supplier_product_auto_source",
+            ),
+            # 同一家廠商、同一個平台、同一個商品頁 + 同一個變體不重複。
+            # 一定要帶平台:page_id 只在該平台內唯一,淘寶的 123 跟蝦皮的 123
+            # 是兩回事。也一定要 variant 非空:空字串是「變體還不知道」,
+            # 不是「同一個變體」,拿它當鍵會把同頁的不同變體擋掉。
+            models.UniqueConstraint(
+                fields=["tenant", "supplier", "platform", "page_id", "variant"],
+                condition=(
+                    models.Q(is_active=True)
+                    & ~models.Q(page_id="")
+                    & ~models.Q(variant="")
+                ),
+                name="uniq_supplier_product_page_variant",
+            ),
+        ]
+        indexes = [models.Index(fields=["tenant", "product"])]
+        ordering = ["supplier", "product"]
+        verbose_name = "供應商商品對照"
+        verbose_name_plural = "供應商商品對照"
+
+    def save(self, *args, **kwargs):
+        from apps.identity.normalize import alias_key
+
+        self.vendor_sku_key = alias_key(self.vendor_sku)[:200]
+        self.source_name_key = alias_key(self.source_name)[:200]
+        # save(update_fields=["source_name"]) 只會寫指定欄位,不一起帶上
+        # 這兩個算出來的 key 就會留著舊值,查重從此對不到。
+        update_fields = kwargs.get("update_fields")
+        if update_fields:
+            merged = set(update_fields)
+            if "vendor_sku" in merged:
+                merged.add("vendor_sku_key")
+            if "source_name" in merged:
+                merged.add("source_name_key")
+            kwargs["update_fields"] = merged
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        bits = [self.supplier.name, self.vendor_sku or self.page_id or self.source_name]
+        return f"[{' '.join(b for b in bits if b)}] → {self.product_id}"
+
+
+class PhoneModel(TenantOwnedModel):
+    """機型主檔 —— 租戶內穩定的「一款手機」。
+
+    在這之前,「同一款手機」是靠 `Product.phone_model_key` 這個**算出來的字串**
+    連在一起的:有品牌系列就用「系列+世代+後綴」,沒有就 regex 解析品名。
+    字串一改(改品名、補系列、改後綴)關聯就散掉,而且沒辦法在上面掛任何東西。
+
+    這張表給它一個穩定的 id。`match_key` 保留那個算出來的字串,只當作「把舊資料
+    對進來」與「新商品自動歸位」的依據,不再是身分本身。
+
+    刻意不做的事:不在這個階段改寫任何單據的外鍵,也不動 `host_model_key`
+    那些欄位(它們會被同步維護),避免一次動太多。
+    """
+
+    code = models.SlugField("代碼", max_length=40)
+    name = models.CharField("機型名稱", max_length=128)
+    match_key = models.CharField(
+        "比對鍵",
+        max_length=128,
+        db_index=True,
+        help_text="lowercase 機型名稱;舊資料對應與新商品自動歸位用,不是身分",
+    )
+    brand = models.ForeignKey(
+        "Brand",
+        on_delete=models.PROTECT,
+        related_name="phone_models",
+        null=True,
+        blank=True,
+        verbose_name="品牌",
+    )
+    series = models.ForeignKey(
+        "PhoneSeries",
+        on_delete=models.PROTECT,
+        related_name="phone_models",
+        null=True,
+        blank=True,
+        verbose_name="系列",
+    )
+    generation = models.PositiveIntegerField("世代", null=True, blank=True)
+    model_suffix = models.CharField("型號後綴", max_length=30, blank=True, default="")
+    is_active = models.BooleanField("啟用", default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "code"], name="uniq_phone_model_tenant_code"
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "match_key"],
+                name="uniq_phone_model_tenant_match_key",
+            ),
+        ]
+        indexes = [models.Index(fields=["tenant", "is_active"])]
+        ordering = ["name"]
+        verbose_name = "機型"
+        verbose_name_plural = "機型"
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class ProductRelation(TenantOwnedModel):
     """商品關聯 — 配件 ↔ 主機機型 的對應。
 
@@ -663,12 +951,26 @@ class ProductRelation(TenantOwnedModel):
     `host_product` 保留作為代表 SKU(用於 UI 顯示某機型範例 SKU),但邏輯上以 key 為準。
     """
 
-    host_product = models.ForeignKey(
-        Product,
+    host_model = models.ForeignKey(
+        "PhoneModel",
         on_delete=models.CASCADE,
         related_name="accessory_relations",
+        null=True,
+        blank=True,
+        verbose_name="主機機型",
+        help_text="穩定的機型身分;舊資料為 NULL 時以 host_model_key 為準",
+    )
+    host_product = models.ForeignKey(
+        Product,
+        on_delete=models.SET_NULL,
+        related_name="accessory_relations",
+        null=True,
+        blank=True,
         verbose_name="主機代表 SKU",
-        help_text="該機型的代表 SKU(任一);邏輯比對以 host_model_key 為準",
+        help_text=(
+            "該機型的代表 SKU(任一),只用於 UI 顯示範例。"
+            "刪掉這支 SKU 不該讓整組相容關係跟著消失,所以是 SET_NULL 不是 CASCADE"
+        ),
     )
     host_model_key = models.CharField(
         "機型 key",
@@ -700,12 +1002,20 @@ class ProductRelation(TenantOwnedModel):
         verbose_name_plural = "商品關聯"
 
     def __str__(self):
-        return (
-            f"{self.accessory_product.name} → {self.host_model_key or self.host_product.name}"
-        )
+        # host_product 現在可以是 NULL(代表 SKU 被刪掉了),不能直接取 .name
+        host = self.host_model_key
+        if not host and self.host_model_id:
+            host = self.host_model.name
+        if not host and self.host_product_id:
+            host = self.host_product.name
+        return f"{self.accessory_product.name} → {host or '(未指定機型)'}"
 
     def save(self, *args, **kwargs):
-        # host_model_key 為空時自動從 host_product 推
-        if not self.host_model_key and self.host_product_id:
-            self.host_model_key = self.host_product.phone_model_key
+        # host_model_key 為空時自動推:優先用機型主檔(穩定),
+        # 沒有才退回代表 SKU 算出來的字串(舊行為)
+        if not self.host_model_key:
+            if self.host_model_id:
+                self.host_model_key = self.host_model.match_key
+            elif self.host_product_id:
+                self.host_model_key = self.host_product.phone_model_key
         super().save(*args, **kwargs)

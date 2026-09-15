@@ -81,13 +81,19 @@ def _validate_items(po: PurchaseOrder, items):
         only_sn = [e["sn"] for e in normalized]
         if len(set(only_sn)) != len(only_sn):
             raise PurchaseOrderError(f"第 {it.line_no} 行序號有重複")
-        if it.product.is_secondhand:
-            for e in normalized:
-                grade = (e.get("grade") or "").strip()
-                if grade and grade not in VALID_GRADES:
-                    raise PurchaseOrderError(
-                        f"第 {it.line_no} 行序號 {e['sn']} 成色等級「{grade}」無效"
-                    )
+        for e in normalized:
+            raw_grade = e.get("grade")
+            if raw_grade in (None, ""):
+                continue
+            if not isinstance(raw_grade, str):
+                raise PurchaseOrderError(
+                    f"第 {it.line_no} 行序號 {e['sn']} 成色等級格式錯誤,應為文字"
+                )
+            grade = raw_grade.strip()
+            if grade and grade not in VALID_GRADES:
+                raise PurchaseOrderError(
+                    f"第 {it.line_no} 行序號 {e['sn']} 成色等級「{grade}」無效"
+                )
         it.serial_numbers = normalized  # 寫回正規化結果,提交時使用
         all_serials.extend(only_sn)
 
@@ -133,7 +139,7 @@ def _calc_doc_tax(items, tax_method: str):
 
 def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
     """進貨單儲存即觸發,寫所有業務副作用。"""
-    items = list(po.items.select_related("product").all())
+    items = list(po.items.select_related("product", "product__condition").all())
     _validate_items(po, items)
 
     with transaction.atomic():
@@ -213,12 +219,19 @@ def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
                 ).quantize(CENTS)
             product.save(update_fields=["weighted_avg_cost"])
 
+            # 「要不要逐台記機況」與「是不是中古機」是兩件事:
+            #   - 逐台機況 / 電池 / 個別售價 / 備註 → 看 tracks_unit_condition
+            #     (已拆封不是中古機,但一樣要逐台記,否則檢測資料會被丟掉)
+            #   - 每隻獨立成本 → 仍只看 is_secondhand(成本政策不跟著放寬)
+            tracks_unit = product.tracks_unit_condition
             for entry in it.serial_numbers:
                 entry = _normalize_serial_entry(entry)
                 extra = {}
                 serial_cost_net = it.unit_landed_cost  # 預設用線平均(非中古機)
-                if product.is_secondhand:
-                    grade = (entry.get("grade") or "").strip()
+                if tracks_unit:
+                    # grade 的型別已在 _validate_items 擋過;note 是自由欄位,
+                    # 這裡用 str() 防 JSON 塞進非字串造成 AttributeError。
+                    grade = str(entry.get("grade") or "").strip()
                     if grade:
                         extra["condition_grade"] = grade
                     if entry.get("price") not in (None, "", 0, "0"):
@@ -235,9 +248,10 @@ def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
                                 extra["battery_health"] = bh
                         except Exception:
                             pass
-                    note_value = (entry.get("note") or "").strip()
+                    note_value = str(entry.get("note") or "").strip()
                     if note_value:
                         extra["condition_note"] = note_value
+                if product.is_secondhand:
                     # 中古機:每隻獨立成本(沒填用線單價 fallback),轉成未稅
                     gross = _serial_cost(entry, it.unit_price)
                     if po.tax_method == PurchaseOrder.TaxMethod.TAXABLE_INCLUDED:
@@ -356,7 +370,7 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
     if po.is_void:
         raise PurchaseOrderError("此單已作廢")
 
-    items = list(po.items.select_related("product").all())
+    items = list(po.items.select_related("product", "product__condition").all())
     serials_qs = ProductSerial.objects.for_tenant(po.tenant).filter(
         purchase_order_item__in=items
     )

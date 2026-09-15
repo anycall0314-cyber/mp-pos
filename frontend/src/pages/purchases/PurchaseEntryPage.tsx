@@ -160,17 +160,20 @@ function SerialAside({
   const product = line?.productOption?.payload;
   const needs = !!product?.requires_serial;
   const isSecondhand = !!product?.is_secondhand;
+  // 逐台機況欄位看 tracks_unit_condition(已拆封也要記);
+  // 「進貨成本」那一欄仍只有中古機才開,成本政策不跟著放寬。
+  const tracksUnit = product?.tracks_unit_condition ?? isSecondhand;
 
   return (
     <aside
       className={
-        isSecondhand ? "serial-aside serial-aside-wide" : "serial-aside"
+        tracksUnit ? "serial-aside serial-aside-wide" : "serial-aside"
       }
       ref={containerRef}
     >
       <div className="serial-aside-header">
         <span className="serial-aside-title">
-          {isSecondhand ? "中古機序號 / 成色" : "序號維護"}
+          {tracksUnit ? "序號 / 機況" : "序號維護"}
         </span>
         {line && (
           <span className="serial-aside-sub">
@@ -188,7 +191,7 @@ function SerialAside({
         {line && product && !needs && (
           <div className="serial-aside-hint">此商品不追蹤序號</div>
         )}
-        {line && needs && !isSecondhand && (
+        {line && needs && !tracksUnit && (
           <table className="serial-slot-table">
             <thead>
               <tr>
@@ -239,7 +242,7 @@ function SerialAside({
             </tbody>
           </table>
         )}
-        {line && needs && isSecondhand && (
+        {line && needs && tracksUnit && (
           <>
             <table className="serial-slot-table secondhand">
               <thead>
@@ -325,21 +328,23 @@ function SerialAside({
                     : "(尚未輸入序號)"}
                 </span>
               </div>
-              <div className="serial-detail-row">
-                <label>進貨成本</label>
-                <input
-                  type="number"
-                  className="num-input"
-                  value={line.serial_numbers[focusedIdx]?.cost ?? ""}
-                  disabled={readonly}
-                  placeholder={`留空 = 用單價 ${Math.round(
-                    Number(line.unit_price),
-                  ).toLocaleString()}`}
-                  onChange={(e) =>
-                    onUpdateSerialField(focusedIdx, "cost", e.target.value)
-                  }
-                />
-              </div>
+              {isSecondhand && (
+                <div className="serial-detail-row">
+                  <label>進貨成本</label>
+                  <input
+                    type="number"
+                    className="num-input"
+                    value={line.serial_numbers[focusedIdx]?.cost ?? ""}
+                    disabled={readonly}
+                    placeholder={`留空 = 用單價 ${Math.round(
+                      Number(line.unit_price),
+                    ).toLocaleString()}`}
+                    onChange={(e) =>
+                      onUpdateSerialField(focusedIdx, "cost", e.target.value)
+                    }
+                  />
+                </div>
+              )}
               <div className="serial-detail-row">
                 <label>自訂售價</label>
                 <input

@@ -643,6 +643,14 @@ export interface StockMatrixProduct {
   sku: string;
   name: string;
   spec: string;
+  capacity: string;
+  color: string;
+  region_version: string;
+  condition_id: number | null;
+  condition_name: string;
+  tracks_unit_condition: boolean;
+  phone_model_key: string;
+  phone_model_name: string;
   category_id: number;
   category_name: string;
   category_code: string;
@@ -656,12 +664,18 @@ export interface StockMatrixProduct {
 export interface StockMatrixResponse {
   warehouses: StockMatrixWarehouse[];
   products: StockMatrixProduct[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
 }
 export interface StockMatrixFilter {
   warehouseIds: number[];
   search?: string;
   categoryIds?: number[];
   inStockOnly?: boolean;
+  page?: number;
+  pageSize?: number;
 }
 export const useStockMatrix = (
   filter: StockMatrixFilter,
@@ -674,6 +688,8 @@ export const useStockMatrix = (
       filter.search ?? "",
       (filter.categoryIds ?? []).join(","),
       filter.inStockOnly ?? true,
+      filter.page ?? 1,
+      filter.pageSize ?? 500,
     ],
     queryFn: () => {
       const params = new URLSearchParams();
@@ -688,6 +704,8 @@ export const useStockMatrix = (
         "in_stock_only",
         filter.inStockOnly === false ? "false" : "true",
       );
+      params.set("page", String(filter.page ?? 1));
+      params.set("page_size", String(filter.pageSize ?? 500));
       return api<StockMatrixResponse>(`/products/stock-matrix/?${params}`);
     },
     enabled: opts?.enabled ?? true,
@@ -1778,6 +1796,8 @@ export interface PhoneModelBundlePayload {
   condition_ids: number[];
   capacities: string[];
   colors: string[];
+  /** 地區版本(台版 / 港版 …);整批一個值,不是維度 */
+  region_version: string;
   accessory_categories: string[];
   parts_items: Array<{
     name: string;
@@ -1802,9 +1822,11 @@ export interface PhoneModelBundleResult {
     name: string;
     spec?: string;
     is_secondhand: boolean;
+    condition_id?: number;
     condition_name?: string;
     capacity?: string;
     color?: string;
+    region_version?: string;
   }>;
   parts: Array<{
     id?: number;

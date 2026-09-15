@@ -100,11 +100,22 @@ PAYMENT_METHOD_SEED = [
 ]
 
 
+CONDITION_SEED = [
+    # (code, name, is_secondhand, tracks_unit_condition, sort_order)
+    ("brand-new", "全新", False, False, 1),
+    ("opened", "已拆封", False, True, 2),
+    ("used-warranty", "中古機(保固內)", True, True, 3),
+    ("used", "中古機", True, True, 4),
+]
+
+
 def seed_tenant_defaults(tenant):
-    """為剛建立的 tenant 補上預設發票類型與付款方式。
+    """為剛建立的 tenant 補上預設發票類型、付款方式與商品狀態。
 
     可重複呼叫,既有資料用 get_or_create 不會重複建。
     """
+    from apps.catalog.models import Condition
+
     from .models import InvoiceType, PaymentMethod
 
     for code, name, sort_order, is_default in INVOICE_TYPE_SEED:
@@ -129,4 +140,24 @@ def seed_tenant_defaults(tenant):
                 "is_active": True,
                 "is_default": is_default,
             },
+        )
+    # 商品狀態:migration 0019 / 0023 只處理當時已存在的租戶,
+    # 之後新建的租戶要靠這裡補,否則「新增手機型號」精靈沒有狀態可選,
+    # 手動補的「全新」也會拿到錯的 tracks_unit_condition 預設值。
+    for code, name, is_secondhand, tracks_unit, sort_order in CONDITION_SEED:
+        if Condition.objects.filter(tenant=tenant, code=code).exists():
+            continue
+        # 名稱也有唯一鍵。租戶可能自己用別的 code 建了同名的狀態
+        # (例:code=custom-new、name=全新),這時直接新增會撞
+        # uniq_condition_tenant_name 讓整個補種中斷,略過即可。
+        if Condition.objects.filter(tenant=tenant, name=name).exists():
+            continue
+        Condition.objects.create(
+            tenant=tenant,
+            code=code,
+            name=name,
+            is_secondhand=is_secondhand,
+            tracks_unit_condition=tracks_unit,
+            sort_order=sort_order,
+            is_active=True,
         )

@@ -94,7 +94,7 @@ def build_preview(tenant, template_id, model_keys, defaults=None):
     )
     keys_lower = {k.lower().strip() for k in model_keys}
     host_by_key: dict[str, Product] = {}
-    for p in hosts:
+    for p in hosts.select_related("phone_model", "series"):
         k = p.phone_model_key
         if k and k in keys_lower and k not in host_by_key:
             host_by_key[k] = p
@@ -203,7 +203,7 @@ def bulk_create_parts(tenant, category_id, rows):
     hosts_by_key: dict[str, Product] = {}
     for p in Product.objects.for_tenant(tenant).filter(
         accessory_type=Product.AccessoryType.NONE, is_active=True
-    ):
+    ).select_related("phone_model", "series"):
         k = p.phone_model_key
         if k and k not in hosts_by_key:
             hosts_by_key[k] = p
@@ -251,9 +251,13 @@ def bulk_create_parts(tenant, category_id, rows):
                 if host and host.id != prod.id:
                     ProductRelation.objects.get_or_create(
                         tenant=tenant,
-                        host_product=host,
                         host_model_key=mk,
                         accessory_product=prod,
+                        defaults={
+                            "host_product": host,
+                            # 代表 SKU 已掛主檔就一起接上,新關係才有穩定身分
+                            "host_model": host.phone_model,
+                        },
                     )
             created += 1
         except Exception as e:  # noqa: BLE001

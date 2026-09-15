@@ -2796,6 +2796,21 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
 .inv-field-keyword { flex-basis: 240px; }
 .inv-field-category { flex-basis: 240px; }
 
+/* 庫存查詢分頁列 */
+.inv-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.inv-pager-label {
+  color: var(--text-dim);
+  font-size: 13px;
+  min-width: 150px;
+  text-align: center;
+}
+
 /* 已選類別 chip 列(篩選列下方獨立列) */
 .inv-chip-row {
   display: flex;
@@ -5618,6 +5633,23 @@ tr.selected .intake-badge { filter: none; }
 .intake-candidate-attr { color: var(--text-dim); }
 .intake-candidate-sub { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
 .intake-conflict-tag { color: #ff8080; }
+.intake-alias-conflicts {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid #fb923c;
+  border-radius: 6px;
+  color: #fb923c;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.intake-inactive-tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid #fb923c;
+  color: #fb923c;
+  font-size: 11px;
+}
 
 .intake-actions {
   margin-top: 16px;
