@@ -340,6 +340,73 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         return Response(sorted(groups.values(), key=lambda g: g["model_name"]))
 
+    @action(detail=False, methods=["get"], url_path="by-phone-model")
+    def by_phone_model(self, request):
+        """展開某個機型底下的所有 SKU,按品況(全新 / 已拆封 / 中古)分組。
+
+        給「機型分組展開」用:機型清單一列,點開用這支載入底下 SKU,
+        全新 / 中古並排,型錄不翻倍。以 model_key 比對(跨全新中古同一機型)。
+
+        Query:
+        - model_key:機型 key(必);對 Product.phone_model_key
+        - warehouse_ids:逗號分隔倉 ID;空 → 該租戶所有 active 倉
+        """
+        tenant = request.tenant
+        key = (request.query_params.get("model_key") or "").strip().lower()
+        if not key:
+            return Response({"detail": "缺 model_key"}, status=status.HTTP_400_BAD_REQUEST)
+
+        raw_ids = request.query_params.get("warehouse_ids", "")
+        wids = [int(x) for x in raw_ids.split(",") if x.strip().isdigit()]
+        if not wids:
+            wids = list(
+                Warehouse.objects.for_tenant(tenant)
+                .filter(is_active=True).values_list("id", flat=True)
+            )
+
+        # 撈主機 SKU,client 端已有機型欄位;這裡以 phone_model_key 比對
+        cands = (
+            Product.objects.for_tenant(tenant)
+            .filter(accessory_type=Product.AccessoryType.NONE, is_active=True)
+            .select_related("category", "condition", "series", "phone_model")
+        )
+        rows = [p for p in cands if p.phone_model_key == key]
+        pids = [p.id for p in rows]
+
+        serial_map = {}
+        for d in (
+            ProductSerial.objects.filter(
+                tenant=tenant, product_id__in=pids, warehouse_id__in=wids,
+                status=ProductSerial.Status.IN_STOCK,
+            ).values("product_id").annotate(c=Count("id"))
+        ):
+            serial_map[d["product_id"]] = d["c"]
+        balance_map = {}
+        for d in (
+            StockBalance.objects.filter(
+                tenant=tenant, product_id__in=pids, warehouse_id__in=wids,
+            ).values("product_id").annotate(s=Sum("qty"))
+        ):
+            balance_map[d["product_id"]] = d["s"] or 0
+
+        # 依品況分組。sort_order 讓「全新 → 已拆封 → 中古」有固定順序。
+        groups = {}
+        for p in rows:
+            cname = p.condition.name if p.condition else ("中古機" if p.is_secondhand else "全新")
+            corder = p.condition.sort_order if p.condition else (99 if p.is_secondhand else 0)
+            g = groups.setdefault(cname, {"condition": cname, "sort": corder,
+                                          "is_secondhand": p.is_secondhand, "skus": []})
+            g["skus"].append({
+                "id": p.id, "sku": p.sku, "name": p.name,
+                "capacity": p.capacity, "color": p.color,
+                "region_version": p.region_version,
+                "list_price": str(p.list_price),
+                "stock_qty": serial_map.get(p.id, 0) + balance_map.get(p.id, 0),
+            })
+        for g in groups.values():
+            g["skus"].sort(key=lambda s: (s["capacity"], s["color"]))
+        return Response(sorted(groups.values(), key=lambda g: g["sort"]))
+
     @action(detail=True, methods=["get"], url_path="compatibility")
     def compatibility(self, request, pk=None):
         """商品相容性查詢。

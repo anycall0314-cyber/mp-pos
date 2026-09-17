@@ -1,0 +1,52 @@
+{
+  "_comment": "台灣市售 iPhone 13~17 全系列。容量/顏色依台灣 Apple 官網;售價為上市建議售價(NT$),之後可自行調整。17 系列為 2025 上市,顏色/售價以官方為準。",
+  "brands": { "apple": "Apple" },
+  "models": [
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 13, "model_suffix": "mini", "list_price": 23900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB"], "colors": ["午夜色", "星光色", "粉紅色", "藍色", "紅色", "綠色"] },
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 13, "model_suffix": "", "list_price": 25900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB"], "colors": ["午夜色", "星光色", "粉紅色", "藍色", "紅色", "綠色"] },
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 13, "model_suffix": "Pro", "list_price": 32900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB", "1TB"], "colors": ["石墨色", "金色", "銀色", "天峰藍色", "遠峰藍色", "阿爾卑斯綠色"] },
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 13, "model_suffix": "Pro Max", "list_price": 36900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB", "1TB"], "colors": ["石墨色", "金色", "銀色", "天峰藍色", "遠峰藍色", "阿爾卑斯綠色"] },
+
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 14, "model_suffix": "", "list_price": 27900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB"], "colors": ["午夜色", "星光色", "紫色", "藍色", "紅色", "黃色"] },
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 14, "model_suffix": "Plus", "list_price": 30900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB"], "colors": ["午夜色", "星光色", "紫色", "藍色", "紅色", "黃色"] },
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 14, "model_suffix": "Pro", "list_price": 34900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB", "1TB"], "colors": ["太空黑色", "銀色", "金色", "深紫色"] },
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 14, "model_suffix": "Pro Max", "list_price": 38900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB", "1TB"], "colors": ["太空黑色", "銀色", "金色", "深紫色"] },
+
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 15, "model_suffix": "", "list_price": 29900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB"], "colors": ["黑色", "藍色", "綠色", "黃色", "粉紅色"] },
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 15, "model_suffix": "Plus", "list_price": 32900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB"], "colors": ["黑色", "藍色", "綠色", "黃色", "粉紅色"] },
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 15, "model_suffix": "Pro", "list_price": 36900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB", "1TB"], "colors": ["原色鈦金屬", "藍色鈦金屬", "白色鈦金屬", "黑色鈦金屬"] },
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 15, "model_suffix": "Pro Max", "list_price": 44900, "region_version": "台版",
+      "capacities": ["256GB", "512GB", "1TB"], "colors": ["原色鈦金屬", "藍色鈦金屬", "白色鈦金屬", "黑色鈦金屬"] },
+
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 16, "model_suffix": "", "list_price": 29900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB"], "colors": ["黑色", "白色", "粉紅色", "藍綠色", "群青色"] },
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 16, "model_suffix": "Plus", "list_price": 32900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB"], "colors": ["黑色", "白色", "粉紅色", "藍綠色", "群青色"] },
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 16, "model_suffix": "Pro", "list_price": 36900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB", "1TB"], "colors": ["黑色鈦金屬", "白色鈦金屬", "原色鈦金屬", "沙漠色鈦金屬"] },
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 16, "model_suffix": "Pro Max", "list_price": 44900, "region_version": "台版",
+      "capacities": ["256GB", "512GB", "1TB"], "colors": ["黑色鈦金屬", "白色鈦金屬", "原色鈦金屬", "沙漠色鈦金屬"] },
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "model_suffix": "16e", "list_price": 21900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB"], "colors": ["黑色", "白色"] },
+
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 17, "model_suffix": "", "list_price": 29900, "region_version": "台版",
+      "capacities": ["256GB", "512GB"], "colors": ["黑色", "白色", "薰衣草紫色", "霧藍色", "鼠尾草綠色"] },
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 17, "model_suffix": "Air", "list_price": 36900, "region_version": "台版",
+      "capacities": ["256GB", "512GB", "1TB"], "colors": ["太空黑色", "雲白色", "淺金色", "天藍色"] },
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 17, "model_suffix": "Pro", "list_price": 39900, "region_version": "台版",
+      "capacities": ["256GB", "512GB", "1TB"], "colors": ["深墨藍色", "銀色", "宇宙橘色"] },
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 17, "model_suffix": "Pro Max", "list_price": 44900, "region_version": "台版",
+      "capacities": ["256GB", "512GB", "1TB", "2TB"], "colors": ["深墨藍色", "銀色", "宇宙橘色"] }
+  ]
+}

@@ -1854,6 +1854,61 @@ export function useCreatePhoneModelBundle() {
   });
 }
 
+// ─── 機型分組瀏覽(型錄不翻倍:一機型一列,展開看底下全新/中古 SKU)───
+
+export interface PhoneModelRow {
+  model_key: string;
+  model_name: string;
+  sku_count: number;
+  total_stock: number;
+  brand_code: string;
+  brand_name: string;
+  series: string;
+}
+
+export const usePhoneModels = (search?: string) =>
+  useQuery({
+    queryKey: ["phone-models", search ?? ""],
+    queryFn: () => {
+      const p = new URLSearchParams();
+      if (search) p.set("search", search);
+      return api<PhoneModelRow[]>(`/products/phone-models/?${p}`);
+    },
+  });
+
+export interface PhoneModelSkuGroup {
+  condition: string;
+  sort: number;
+  is_secondhand: boolean;
+  skus: {
+    id: number;
+    sku: string;
+    name: string;
+    capacity: string;
+    color: string;
+    region_version: string;
+    list_price: string;
+    stock_qty: number;
+  }[];
+}
+
+export const useProductsByPhoneModel = (
+  modelKey: string | null,
+  warehouseIds?: number[],
+) =>
+  useQuery({
+    queryKey: ["by-phone-model", modelKey ?? "", (warehouseIds ?? []).join(",")],
+    queryFn: () => {
+      const p = new URLSearchParams();
+      p.set("model_key", modelKey ?? "");
+      if (warehouseIds && warehouseIds.length > 0) {
+        p.set("warehouse_ids", warehouseIds.join(","));
+      }
+      return api<PhoneModelSkuGroup[]>(`/products/by-phone-model/?${p}`);
+    },
+    enabled: !!modelKey,
+  });
+
 // ─── Condition master(商品狀態:全新 / 已拆封 / 中古機 …)───
 
 export const useConditions = () =>

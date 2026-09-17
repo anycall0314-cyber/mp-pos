@@ -1,0 +1,48 @@
+{
+  "_comment": "台灣市售 iPad(平板)與 Apple Watch(手錶)近五年。容量/顏色/尺寸依台灣 Apple 官網;售價為上市建議售價。iPad 的 WiFi/行動網路版與 Watch 的 GPS/行動網路版差異這裡不拆(可日後於單台或變體處理),先以容量/顏色/尺寸為主。",
+  "brands": { "apple": "Apple" },
+  "models": [
+    { "brand": "apple", "kind": "平板", "series": "iPad", "generation": 9, "model_suffix": "", "list_price": 10900, "region_version": "台版",
+      "capacities": ["64GB", "256GB"], "colors": ["太空灰色", "銀色"] },
+    { "brand": "apple", "kind": "平板", "series": "iPad", "generation": 10, "model_suffix": "", "list_price": 14900, "region_version": "台版",
+      "capacities": ["64GB", "256GB"], "colors": ["銀色", "藍色", "粉紅色", "黃色"] },
+    { "brand": "apple", "kind": "平板", "series": "iPad", "generation": 11, "model_suffix": "(A16)", "list_price": 11900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB"], "colors": ["銀色", "藍色", "粉紅色", "黃色"] },
+
+    { "brand": "apple", "kind": "平板", "series": "iPad mini", "generation": 6, "model_suffix": "", "list_price": 16900, "region_version": "台版",
+      "capacities": ["64GB", "256GB"], "colors": ["太空灰色", "星光色", "粉紅色", "紫色"] },
+    { "brand": "apple", "kind": "平板", "series": "iPad mini", "generation": 7, "model_suffix": "(A17 Pro)", "list_price": 15900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB"], "colors": ["太空灰色", "星光色", "藍色", "紫色"] },
+
+    { "brand": "apple", "kind": "平板", "series": "iPad Air", "generation": 5, "model_suffix": "(M1)", "list_price": 19900, "region_version": "台版",
+      "capacities": ["64GB", "256GB"], "colors": ["太空灰色", "星光色", "粉紅色", "紫色", "藍色"] },
+    { "brand": "apple", "kind": "平板", "series": "iPad Air", "model_suffix": "11吋 (M2)", "list_price": 18900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB", "1TB"], "colors": ["太空灰色", "星光色", "藍色", "紫色"] },
+    { "brand": "apple", "kind": "平板", "series": "iPad Air", "model_suffix": "13吋 (M2)", "list_price": 24900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB", "1TB"], "colors": ["太空灰色", "星光色", "藍色", "紫色"] },
+    { "brand": "apple", "kind": "平板", "series": "iPad Air", "model_suffix": "11吋 (M3)", "list_price": 18900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB", "1TB"], "colors": ["太空灰色", "星光色", "藍色", "紫色"] },
+    { "brand": "apple", "kind": "平板", "series": "iPad Air", "model_suffix": "13吋 (M3)", "list_price": 24900, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB", "1TB"], "colors": ["太空灰色", "星光色", "藍色", "紫色"] },
+
+    { "brand": "apple", "kind": "平板", "series": "iPad Pro", "model_suffix": "11吋 (M4)", "list_price": 33900, "region_version": "台版",
+      "capacities": ["256GB", "512GB", "1TB", "2TB"], "colors": ["太空黑色", "銀色"] },
+    { "brand": "apple", "kind": "平板", "series": "iPad Pro", "model_suffix": "13吋 (M4)", "list_price": 42900, "region_version": "台版",
+      "capacities": ["256GB", "512GB", "1TB", "2TB"], "colors": ["太空黑色", "銀色"] },
+
+    { "brand": "apple", "kind": "手錶", "series": "Apple Watch", "model_suffix": "SE 第2代 40mm", "list_price": 7900, "region_version": "台版",
+      "capacities": ["GPS", "GPS+行動網路"], "colors": ["午夜色", "星光色", "銀色"] },
+    { "brand": "apple", "kind": "手錶", "series": "Apple Watch", "model_suffix": "SE 第2代 44mm", "list_price": 8900, "region_version": "台版",
+      "capacities": ["GPS", "GPS+行動網路"], "colors": ["午夜色", "星光色", "銀色"] },
+    { "brand": "apple", "kind": "手錶", "series": "Apple Watch", "generation": 9, "model_suffix": "41mm", "list_price": 12900, "region_version": "台版",
+      "capacities": ["GPS", "GPS+行動網路"], "colors": ["午夜色", "星光色", "銀色", "粉紅色", "紅色"] },
+    { "brand": "apple", "kind": "手錶", "series": "Apple Watch", "generation": 9, "model_suffix": "45mm", "list_price": 13900, "region_version": "台版",
+      "capacities": ["GPS", "GPS+行動網路"], "colors": ["午夜色", "星光色", "銀色", "粉紅色", "紅色"] },
+    { "brand": "apple", "kind": "手錶", "series": "Apple Watch", "generation": 10, "model_suffix": "42mm", "list_price": 13900, "region_version": "台版",
+      "capacities": ["GPS", "GPS+行動網路"], "colors": ["噴射黑色", "玫瑰金色", "銀色"] },
+    { "brand": "apple", "kind": "手錶", "series": "Apple Watch", "generation": 10, "model_suffix": "46mm", "list_price": 14900, "region_version": "台版",
+      "capacities": ["GPS", "GPS+行動網路"], "colors": ["噴射黑色", "玫瑰金色", "銀色"] },
+    { "brand": "apple", "kind": "手錶", "series": "Apple Watch Ultra", "generation": 2, "model_suffix": "49mm", "list_price": 26900, "region_version": "台版",
+      "capacities": ["GPS+行動網路"], "colors": ["原色鈦金屬", "黑色鈦金屬"] }
+  ]
+}

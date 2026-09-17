@@ -1,0 +1,52 @@
+{
+  "_comment": "台灣市售 OPPO / vivo / realme / ASUS / Sony 近五年主流機型。長尾品牌的行銷色名可能有出入,之後以實際販售清單校正。",
+  "brands": {
+    "oppo": "OPPO", "vivo": "vivo", "realme": "realme", "asus": "ASUS", "sony": "Sony"
+  },
+  "models": [
+    { "brand": "oppo", "kind": "手機", "series": "Reno", "generation": 11, "model_suffix": "", "list_price": 13990, "region_version": "台版",
+      "capacities": ["256GB"], "colors": ["星海藍", "月石灰"] },
+    { "brand": "oppo", "kind": "手機", "series": "Reno", "generation": 12, "model_suffix": "", "list_price": 15990, "region_version": "台版",
+      "capacities": ["256GB", "512GB"], "colors": ["星幕黑", "雲錦粉"] },
+    { "brand": "oppo", "kind": "手機", "series": "Reno", "generation": 13, "model_suffix": "", "list_price": 16990, "region_version": "台版",
+      "capacities": ["256GB", "512GB"], "colors": ["蝶影紫", "星曜藍", "月夜黑"] },
+    { "brand": "oppo", "kind": "手機", "series": "Find", "model_suffix": "X8", "list_price": 27990, "region_version": "台版",
+      "capacities": ["256GB", "512GB"], "colors": ["曜夜黑", "微風藍", "暮光粉"] },
+    { "brand": "oppo", "kind": "手機", "series": "A", "generation": 5, "model_suffix": "Pro", "list_price": 7990, "region_version": "台版",
+      "capacities": ["256GB"], "colors": ["星曜黑", "湖光綠"] },
+
+    { "brand": "vivo", "kind": "手機", "series": "X", "generation": 100, "model_suffix": "", "list_price": 24990, "region_version": "台版",
+      "capacities": ["256GB", "512GB"], "colors": ["璀璨藍", "傳奇黑"] },
+    { "brand": "vivo", "kind": "手機", "series": "X", "generation": 200, "model_suffix": "Pro", "list_price": 33990, "region_version": "台版",
+      "capacities": ["512GB"], "colors": ["天青藍", "蔡司黑"] },
+    { "brand": "vivo", "kind": "手機", "series": "V", "generation": 40, "model_suffix": "", "list_price": 13990, "region_version": "台版",
+      "capacities": ["256GB", "512GB"], "colors": ["鈦灰", "月光白", "翡冷翠"] },
+    { "brand": "vivo", "kind": "手機", "series": "Y", "generation": 39, "model_suffix": "", "list_price": 7990, "region_version": "台版",
+      "capacities": ["128GB", "256GB"], "colors": ["曜石黑", "晨曦金"] },
+
+    { "brand": "realme", "kind": "手機", "series": "realme", "generation": 12, "model_suffix": "Pro+", "list_price": 12990, "region_version": "台版",
+      "capacities": ["256GB", "512GB"], "colors": ["飛速藍", "領航者"] },
+    { "brand": "realme", "kind": "手機", "series": "realme", "generation": 13, "model_suffix": "Pro+", "list_price": 13990, "region_version": "台版",
+      "capacities": ["256GB", "512GB"], "colors": ["曙光金", "深空紫", "冰川綠"] },
+    { "brand": "realme", "kind": "手機", "series": "realme", "generation": 14, "model_suffix": "Pro+", "list_price": 14990, "region_version": "台版",
+      "capacities": ["256GB", "512GB"], "colors": ["競速紫", "極光白"] },
+    { "brand": "realme", "kind": "手機", "series": "realme", "generation": 14, "model_suffix": "C", "list_price": 4990, "region_version": "台版",
+      "capacities": ["128GB", "256GB"], "colors": ["曜石黑", "海洋綠"] },
+
+    { "brand": "asus", "kind": "手機", "series": "Zenfone", "generation": 10, "model_suffix": "", "list_price": 21990, "region_version": "台版",
+      "capacities": ["128GB", "256GB", "512GB"], "colors": ["午夜黑", "極光綠", "彗星白", "星空藍"] },
+    { "brand": "asus", "kind": "手機", "series": "Zenfone", "generation": 11, "model_suffix": "Ultra", "list_price": 29990, "region_version": "台版",
+      "capacities": ["256GB", "512GB"], "colors": ["永恆黑", "曠世藍", "拂曉灰", "誤導白"] },
+    { "brand": "asus", "kind": "手機", "series": "ROG Phone", "generation": 8, "model_suffix": "", "list_price": 32990, "region_version": "台版",
+      "capacities": ["256GB", "512GB"], "colors": ["幻影黑", "曙光白"] },
+    { "brand": "asus", "kind": "手機", "series": "ROG Phone", "generation": 9, "model_suffix": "", "list_price": 34990, "region_version": "台版",
+      "capacities": ["256GB", "512GB", "1TB"], "colors": ["曜石黑", "幻影白"] },
+
+    { "brand": "sony", "kind": "手機", "series": "Xperia", "generation": 1, "model_suffix": "VI", "list_price": 36990, "region_version": "台版",
+      "capacities": ["256GB", "512GB"], "colors": ["黑色", "白金色", "卡其綠", "紅色"] },
+    { "brand": "sony", "kind": "手機", "series": "Xperia", "generation": 5, "model_suffix": "V", "list_price": 30990, "region_version": "台版",
+      "capacities": ["128GB", "256GB"], "colors": ["黑色", "白金色", "藍色"] },
+    { "brand": "sony", "kind": "手機", "series": "Xperia", "generation": 10, "model_suffix": "VI", "list_price": 12990, "region_version": "台版",
+      "capacities": ["128GB"], "colors": ["黑色", "白色", "藍色"] }
+  ]
+}

@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { useCategories, useProducts, useSaveCategory } from "@/api/hooks";
+import {
+  useCategories,
+  usePhoneModels,
+  useProducts,
+  useProductsByPhoneModel,
+  useSaveCategory,
+} from "@/api/hooks";
 import type { Product } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
@@ -31,6 +37,7 @@ type Selection =
   | { kind: "product"; id: number }
   | { kind: "category"; id: number }
   | { kind: "new_category" }
+  | { kind: "model"; key: string; name: string }
   | null;
 
 interface CategoryEditState {
@@ -89,8 +96,8 @@ export function ProductsPage() {
 
   // ─── 選擇與右側面板
   const [selection, setSelection] = useState<Selection>(null);
-  // 左側欄頁籤:商品列表 vs 類別管理
-  const [leftTab, setLeftTab] = useState<"products" | "categories">(
+  // 左側欄頁籤:商品列表 / 機型 / 類別管理
+  const [leftTab, setLeftTab] = useState<"products" | "models" | "categories">(
     "products",
   );
   // 右側商品詳情頁籤:基本 vs 別名
@@ -340,6 +347,20 @@ export function ProductsPage() {
           <button
             type="button"
             className={
+              leftTab === "models"
+                ? "tab-switcher-item active"
+                : "tab-switcher-item"
+            }
+            onClick={() => {
+              setLeftTab("models");
+              setSelection(null);
+            }}
+          >
+            機型
+          </button>
+          <button
+            type="button"
+            className={
               leftTab === "categories"
                 ? "tab-switcher-item active"
                 : "tab-switcher-item"
@@ -497,6 +518,14 @@ export function ProductsPage() {
           </section>
           )}
 
+          {/* ─── 機型區(一機型一列,右側展開看底下全新/中古 SKU) ─── */}
+          {leftTab === "models" && (
+            <ModelBrowser
+              selectedKey={selection?.kind === "model" ? selection.key : null}
+              onPick={(key, name) => setSelection({ kind: "model", key, name })}
+            />
+          )}
+
           {/* ─── 類別區 ─── */}
           {leftTab === "categories" && (
           <section className="pc-section pc-section-categories category-mgr">
@@ -604,8 +633,14 @@ export function ProductsPage() {
         <main className="pc-detail">
           {!selection && (
             <div className="md-empty" style={{ marginTop: 60 }}>
-              從左側選擇商品或類別以檢視 / 編輯
+              {leftTab === "models"
+                ? "從左側選擇機型,看底下全新 / 中古各有哪些"
+                : "從左側選擇商品或類別以檢視 / 編輯"}
             </div>
+          )}
+
+          {selection?.kind === "model" && (
+            <ModelSkuPanel modelKey={selection.key} modelName={selection.name} />
           )}
 
           {selectedProduct && (
@@ -978,6 +1013,170 @@ export function ProductsPage() {
           setTimeout(() => setBulkResult(null), 4000);
         }}
       />
+    </div>
+  );
+}
+
+// ─── 機型瀏覽:左側一機型一列(品牌分組),點選右側展開 ───
+function ModelBrowser({
+  selectedKey,
+  onPick,
+}: {
+  selectedKey: string | null;
+  onPick: (key: string, name: string) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [applied, setApplied] = useState("");
+  const models = usePhoneModels(applied || undefined);
+  const rows = models.data ?? [];
+
+  // 依品牌分組(品牌名 → 機型清單)
+  const byBrand = useMemo(() => {
+    const m = new Map<string, typeof rows>();
+    for (const r of rows) {
+      const b = r.brand_name || "其他";
+      if (!m.has(b)) m.set(b, []);
+      m.get(b)!.push(r);
+    }
+    return Array.from(m.entries());
+  }, [rows]);
+
+  return (
+    <section className="pc-section">
+      <div className="pc-section-header">機型</div>
+      <div className="pc-section-search">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") setApplied(q.trim());
+          }}
+          placeholder="搜尋機型 / 系列,按 Enter"
+        />
+        <button className="btn primary" onClick={() => setApplied(q.trim())}>
+          搜尋
+        </button>
+        {applied && (
+          <button
+            className="btn"
+            onClick={() => {
+              setQ("");
+              setApplied("");
+            }}
+          >
+            清除
+          </button>
+        )}
+      </div>
+      <div className="pc-section-body">
+        {models.isLoading && <div className="md-empty">載入中…</div>}
+        {!models.isLoading && rows.length === 0 && (
+          <div className="md-empty">尚無機型</div>
+        )}
+        {byBrand.map(([brand, list]) => (
+          <div key={brand}>
+            <div
+              style={{
+                padding: "6px 12px",
+                fontSize: 12,
+                fontWeight: 600,
+                color: "var(--text-dim)",
+                background: "var(--panel-2)",
+                borderBottom: "1px solid var(--border)",
+              }}
+            >
+              {brand}
+            </div>
+            <table className="pc-list-table">
+              <tbody>
+                {list.map((r) => (
+                  <tr
+                    key={r.model_key}
+                    onClick={() => onPick(r.model_key, r.model_name)}
+                    className={selectedKey === r.model_key ? "selected" : ""}
+                  >
+                    <td>{r.model_name}</td>
+                    <td className="num" style={{ width: 60 }}>
+                      {r.sku_count} 款
+                    </td>
+                    <td className="num" style={{ width: 50 }}>
+                      {r.total_stock}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ─── 機型展開:右側顯示底下 SKU,按「全新 / 已拆封 / 中古」分組並排 ───
+function ModelSkuPanel({
+  modelKey,
+  modelName,
+}: {
+  modelKey: string;
+  modelName: string;
+}) {
+  const groups = useProductsByPhoneModel(modelKey);
+  const data = groups.data ?? [];
+  return (
+    <div className="pc-detail-body">
+      <h3 className="pc-detail-title">{modelName}</h3>
+      {groups.isLoading && <div className="md-empty">載入中…</div>}
+      {!groups.isLoading && data.length === 0 && (
+        <div className="md-empty">這個機型底下還沒有商品</div>
+      )}
+      {data.map((g) => (
+        <div key={g.condition} style={{ marginBottom: 18 }}>
+          <div
+            style={{
+              fontWeight: 600,
+              marginBottom: 6,
+              color: g.is_secondhand ? "#fb923c" : "var(--text)",
+            }}
+          >
+            {g.condition}
+            <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>
+              {" "}
+              · {g.skus.length} 款
+            </span>
+          </div>
+          <table className="pc-list-table">
+            <thead>
+              <tr>
+                <th>容量 / 顏色</th>
+                <th style={{ width: 80 }}>地區</th>
+                <th className="num" style={{ width: 80 }}>
+                  售價
+                </th>
+                <th className="num" style={{ width: 50 }}>
+                  在庫
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {g.skus.map((s) => (
+                <tr key={s.id}>
+                  <td>
+                    {s.capacity} {s.color}
+                  </td>
+                  <td style={{ color: "var(--text-dim)" }}>
+                    {s.region_version || "—"}
+                  </td>
+                  <td className="num">
+                    {Math.round(Number(s.list_price)).toLocaleString()}
+                  </td>
+                  <td className="num">{s.stock_qty}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
     </div>
   );
 }
