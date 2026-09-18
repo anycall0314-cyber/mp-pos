@@ -47,6 +47,11 @@
     { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 17, "model_suffix": "Pro", "list_price": 39900, "region_version": "台版",
       "capacities": ["256GB", "512GB", "1TB"], "colors": ["深墨藍色", "銀色", "宇宙橘色"] },
     { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 17, "model_suffix": "Pro Max", "list_price": 44900, "region_version": "台版",
-      "capacities": ["256GB", "512GB", "1TB", "2TB"], "colors": ["深墨藍色", "銀色", "宇宙橘色"] }
+      "capacities": ["256GB", "512GB", "1TB", "2TB"], "colors": ["深墨藍色", "銀色", "宇宙橘色"] },
+
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 18, "model_suffix": "Pro", "list_price": 44900, "region_version": "台版",
+      "capacities": ["256GB", "512GB", "1TB", "2TB"], "colors": ["勃根地紅色", "冰川藍色", "銀色", "黑色"] },
+    { "brand": "apple", "kind": "手機", "series": "iPhone", "generation": 18, "model_suffix": "Pro Max", "list_price": 49900, "region_version": "台版",
+      "capacities": ["256GB", "512GB", "1TB", "2TB"], "colors": ["勃根地紅色", "冰川藍色", "銀色", "黑色"] }
   ]
 }
