@@ -1,3 +1,5 @@
+import uuid
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
@@ -9,6 +11,12 @@ class Tenant(TimestampedModel):
     name = models.CharField("名稱", max_length=120)
     code = models.SlugField("代碼", max_length=40, unique=True)
     is_active = models.BooleanField("啟用", default=True)
+    # 公司的穩定身分,備份檔靠它認「這是哪一家的資料」。名稱與代碼可以改、
+    # 數字 id 換一台伺服器就不一樣,所以另外給一個不會變的。一般畫面不能改它。
+    # 注意:uuid 相同只代表「是同一家的備份」,不是授權證明。
+    backup_uuid = models.UUIDField(
+        "公司識別碼", default=uuid.uuid4, unique=True, editable=False
+    )
     next_supplier_seq = models.PositiveIntegerField(
         "下一供應商流水", default=1, editable=False
     )
@@ -261,6 +269,30 @@ class PaymentMethod(TenantOwnedModel):
         return f"{self.code} {self.name}"
 
 
+class DocNumberFloor(TenantOwnedModel):
+    """單號的「已用過到幾號」下限。
+
+    進貨 / 銷貨 / 銷退 / 調撥的單號是「這家公司最後一張單的號碼 + 1」。把資料
+    還原到較早的備份時,備份之後開過的單會消失,下一張就會重用已經給過客人的
+    號碼。還原前把當時用到的最大號記在這裡,取號時不會低於它。
+    """
+
+    prefix = models.CharField("單號字首", max_length=8)
+    floor = models.PositiveIntegerField("已用過的最大流水", default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "prefix"], name="uniq_doc_number_floor"
+            ),
+        ]
+        verbose_name = "單號下限"
+        verbose_name_plural = "單號下限"
+
+    def __str__(self) -> str:
+        return f"{self.prefix}>{self.floor}"
+
+
 class UserProfile(TimestampedModel):
     """Django User 的延伸:綁定 tenant + 角色 + 預設倉。
 
@@ -307,6 +339,11 @@ class UserProfile(TimestampedModel):
         "鎖定門市",
         default=True,
         help_text="True 時只能操作 default_warehouse;管理員角色預設 False",
+    )
+    # 這個帳號不會變的識別碼。公司備份用它認「是不是同一個人」:帳號名稱可以改、
+    # 也可以被別人拿去用,數字 id 換一台伺服器就不同,兩個都不能拿來認人。
+    account_uuid = models.UUIDField(
+        "帳號識別碼", default=uuid.uuid4, unique=True, editable=False
     )
 
     class Meta:

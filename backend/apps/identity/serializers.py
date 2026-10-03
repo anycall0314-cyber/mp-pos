@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rest_framework.exceptions import APIException
 
 from .models import (
     IntakeBatch,
@@ -8,6 +9,7 @@ from .models import (
     IntakeUnitIdentifier,
     ProductAlias,
 )
+from .normalize import alias_key
 
 
 class IntakeUnitIdentifierSerializer(serializers.ModelSerializer):
@@ -55,18 +57,74 @@ class IntakeDocumentSerializer(serializers.ModelSerializer):
         return request.build_absolute_uri(url) if request else url
 
 
+class AliasConflict(APIException):
+    status_code = 409
+    default_detail = "這個叫法已經指到別的商品"
+    default_code = "alias_conflict"
+
+
 class ProductAliasSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     supplier_name = serializers.CharField(source="supplier.name", read_only=True, default="")
+    created_by_name = serializers.CharField(
+        source="created_by.username", read_only=True, default=""
+    )
+    updated_by_name = serializers.CharField(
+        source="updated_by.username", read_only=True, default=""
+    )
 
     class Meta:
         model = ProductAlias
         fields = [
             "id", "product", "product_name", "product_sku", "supplier", "supplier_name",
             "kind", "value", "normalized_value", "verified", "source", "note", "is_active",
+            "created_by_name", "updated_by_name", "created_at", "updated_at",
         ]
-        read_only_fields = ["normalized_value"]
+        read_only_fields = ["normalized_value", "created_at", "updated_at"]
+
+    def _own(self, obj, label):
+        """外鍵必須是自己公司的。ModelSerializer 預設用 `.objects.all()`,
+        不擋的話可以把別名掛到別家的商品 / 廠商上。"""
+        request = self.context.get("request")
+        if obj is not None and request is not None and obj.tenant_id != request.tenant.id:
+            raise serializers.ValidationError(f"找不到指定的{label}")
+        return obj
+
+    def validate_product(self, value):
+        return self._own(value, "商品")
+
+    def validate_supplier(self, value):
+        return self._own(value, "廠商")
+
+    def validate(self, attrs):
+        """同一句話已經確認指到別的商品 → 明確回衝突,不靠資料庫噴 500。"""
+        inst = self.instance
+        get = lambda k, d=None: attrs[k] if k in attrs else (getattr(inst, k) if inst else d)  # noqa: E731
+        if not get("is_active", True) or not get("verified", True):
+            return attrs
+        request = self.context.get("request")
+        kind, supplier, product = get("kind"), get("supplier"), get("product")
+        key = alias_key(get("value", ""))
+        if request is None or not key:
+            return attrs
+        qs = ProductAlias.objects.for_tenant(request.tenant).filter(
+            is_active=True, verified=True, normalized_value=key,
+        )
+        qs = qs.filter(kind="barcode") if kind == "barcode" else qs.filter(
+            kind=kind, supplier=supplier
+        )
+        if inst is not None:
+            qs = qs.exclude(pk=inst.pk)
+        other = qs.select_related("product").first()
+        if other is not None:
+            if other.product_id == product.id:
+                raise serializers.ValidationError("這個叫法已經記在這個商品上了")
+            raise AliasConflict(
+                f"這個叫法已經指到「{other.product.name}」。"
+                "要改指請管理員先把那一筆停用"
+            )
+        return attrs
 
 
 class IntakeItemSerializer(serializers.ModelSerializer):
@@ -133,6 +191,20 @@ class MatchItemSerializer(serializers.Serializer):
     """把一行對應到一個既有商品。"""
     product = serializers.IntegerField()
     learn_alias = serializers.BooleanField(default=True)
+    # 選到已停用的商品時,要明確帶 restore=true 才會恢復(且限公司管理員)
+    restore = serializers.BooleanField(default=False)
+    # 這行的叫法已經確認指到別的商品時,要明確帶 repoint=true 才會改指
+    # (且限公司管理員);沒帶就記成衝突,不動原本的對應
+    repoint = serializers.BooleanField(default=False)
+
+
+class RememberPhraseSerializer(serializers.Serializer):
+    """「記住這個叫法」:把一句話記到一個既有商品上。"""
+    product = serializers.IntegerField()
+    value = serializers.CharField(max_length=500)
+    supplier = serializers.IntegerField(required=False, allow_null=True)
+    # 這句話已經確認指到別的商品時,明確要求改指(限公司管理員)
+    repoint = serializers.BooleanField(default=False)
 
 
 class CorrectIntakeItemSerializer(serializers.Serializer):
@@ -167,3 +239,7 @@ class NewProductForItemSerializer(serializers.Serializer):
     region_version = serializers.CharField(required=False, allow_blank=True, default="")
     requires_serial = serializers.BooleanField(default=True)
     learn_alias = serializers.BooleanField(default=True)
+    # 系統說可能重複時,要寫下哪裡不同才能建
+    distinct_reason = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=200
+    )

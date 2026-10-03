@@ -6,7 +6,8 @@
     ① 條碼(GTIN)精準            → 100,自動
     ② 廠商料號精準              → 99,自動
     ③ 已核准別名 / SKU / 品名精準 → 97,自動(這是「教過一次就自動」的路)
-    ④ 品牌 / 容量 / 顏色 + 名稱模糊 → 產候選 + 分數(名稱相似最高封頂 96,不讓它單獨自動)
+    ④ 機型 / 顏色 / 款式特徵相符   → 產候選 + 分數(最高封頂 96,不讓它單獨自動)
+       這一級與進貨搜尋、新增前防重複共用 `product_match.find_candidates`
     ⑤ AI 語意                   → 這版不做
 
 紀律:
@@ -39,12 +40,20 @@ from .models import (
     IntakeUnitIdentifier,
     ProductAlias,
 )
+from .dedup import guard_new_product, record_distinct_decision
 from .normalize import (
     ALIAS_VALUE_MAX,
     alias_key,
-    normalize,
     normalize_capacity,
     normalize_serial,
+)
+from .product_match import (
+    COVERS,
+    EXACT,
+    MatchResult,
+    build_terms,
+    find_candidates,
+    is_broad_phrase,
 )
 
 
@@ -53,7 +62,6 @@ class IdentityError(Exception):
 
 # 從純文字裡抓容量 token(128g / 256GB / 1tb),用於衝突檢查。
 _CAP_TOKEN_RE = re.compile(r"\d+\s*(?:gb|g|tb|t)\b", re.I)
-_TOKEN_SPLIT_RE = re.compile(r"[\s,/、]+")
 
 
 def _auto_score():
@@ -128,50 +136,16 @@ def _alias_lookup(tenant, supplier, key, kinds):
     ).order_by("_generic").first()
 
 
-def _tokenize(raw_text):
-    """拆詞,並把「容量詞」與「地區版本詞」抽掉(改當結構化訊號比,不當名稱必須字)。
-    回傳 (比對用詞, 容量詞)。
-    """
-    toks = [t for t in _TOKEN_SPLIT_RE.split((raw_text or "").strip()) if t]
-    match_toks = [
-        t for t in toks
-        if not _CAP_TOKEN_RE.fullmatch(t) and t not in _REGION_TOKENS
-    ]
-    return match_toks, _detect_capacity(raw_text)
-
-
-def _candidate_search(tenant, match_toks, raw_text, limit=8):
-    """名稱模糊:逐詞 AND icontains(沿用既有 resolver 精神,DB 可攜)。
-
-    停售 / 封存的商品也要撈出來:商品賣完後被停用、過一陣子再進貨是常態,
-    只查 is_active=True 會讓人以為是新品而重複建一個品號。
-    啟用的排前面,停售的排後面,由人確認要不要恢復。
-    """
-    base = Product.objects.for_tenant(tenant).annotate(
-        _inactive=Case(
-            When(is_active=True, then=Value(0)),
-            default=Value(1),
-            output_field=IntegerField(),
-        )
-    ).order_by("_inactive", "sku")  # 啟用的排前面(不是庫存數,這裡不看庫存)
-    if match_toks:
-        cond = Q()
-        for tk in match_toks:
-            cond &= Q(name__icontains=tk)
-        matches = list(base.filter(cond)[:limit])
-        if matches:
-            return matches
-    # 退回:整串 icontains
-    return list(base.filter(name__icontains=(raw_text or "").strip())[:limit])
-
-
-def _name_score(match_toks, product):
-    """名稱涵蓋率分數(0-92)。名稱相似永遠低於自動門檻,不讓它單獨自動對應。"""
-    if not match_toks:
-        return 0
-    name_norm = normalize(product.name)
-    hit = sum(1 for tk in match_toks if normalize(tk) and normalize(tk) in name_norm)
-    return int((hit / len(match_toks)) * 92)
+def _identifier_confidence(reasons):
+    """可靠識別的信心分數:條碼 100 > 廠商料號 99 > 品號 98 > 已確認的叫法 97。"""
+    text = "、".join(reasons)
+    if "條碼" in text:
+        return 100
+    if "廠商料號" in text:
+        return 99
+    if "品號" in text:
+        return 98
+    return 97
 
 
 def _exact_hit(product, confidence, reason):
@@ -200,89 +174,65 @@ def match_line(tenant, supplier, raw_text, raw_barcode="", raw_vendor_sku=""):
     """對一行進貨做識別。回傳 dict(matched_product / status / confidence / candidates)。"""
     S = IntakeItem.MatchStatus
 
-    # ① 條碼精準(Product.barcode 或 別名 kind=barcode)
-    bkey = alias_key(raw_barcode)
-    if bkey:
-        by_field = Product.objects.for_tenant(tenant).filter(
-            barcode=raw_barcode.strip()
-        ).order_by("-is_active", "sku").first()
-        alias = _alias_lookup(tenant, supplier, bkey, [ProductAlias.Kind.BARCODE])
-        by_alias = alias.product if alias else None
-        if by_field and by_alias and by_field.id != by_alias.id:
-            # 主檔條碼指 A、人學過的別名指 B。舊版永遠選主檔,人工改指等於白改。
-            # 兩邊都可能是對的(條碼打錯 / 主檔沒更新),交給人看一眼。
-            return {
-                "matched_product": None,
-                "status": S.CONFLICT,
-                "confidence": 0,
-                "candidates": [
-                    _brief(by_alias, 100, "條碼相符(人工確認過的對應)"),
-                    _brief(by_field, 100, "條碼相符(商品主檔的條碼)"),
-                ],
-            }
-        hit = by_alias or by_field
-        if hit:
-            return _exact_hit(hit, 100, "條碼相符")
-
-    # ② 廠商料號精準
-    vkey = alias_key(raw_vendor_sku)
-    if vkey:
-        alias = _alias_lookup(tenant, supplier, vkey, [ProductAlias.Kind.VENDOR_SKU])
-        if alias:
-            return _exact_hit(alias.product, 99, "廠商料號相符")
-
-    # ③ 已核准別名 / SKU / 品名精準
-    tkey = alias_key(raw_text)
-    alias = _alias_lookup(
-        tenant, supplier, tkey,
-        [ProductAlias.Kind.VENDOR_NAME, ProductAlias.Kind.LEGACY_NAME, ProductAlias.Kind.OEM_MODEL],
+    # ①②③ 可靠識別(條碼 / 廠商料號 / 已確認別名 / 品號)與 ④ 特徵候選都交給
+    # 共用的 find_candidates。它會把**所有**命中的商品收齊:兩個商品共用同一個
+    # 條碼、別名表與來源表對同一個料號各指各的,都會回衝突讓人看。這裡以前是
+    # 逐階段 `.first()`,遇到那種資料會靜默挑一筆自動對應,貨就入錯了。
+    found = find_candidates(
+        tenant, raw_text, supplier=supplier,
+        barcode=raw_barcode, vendor_sku=raw_vendor_sku, limit=8,
     )
-    if alias:
-        return _exact_hit(alias.product, 97, "已學過的別名相符")
-    exact = Product.objects.for_tenant(tenant).filter(
-        sku__iexact=raw_text.strip()
-    ).order_by("-is_active").first()
-    if exact:
-        return _exact_hit(exact, 98, "品號相符")
-
-    # ④ 屬性 + 名稱模糊 → 產候選;容量 / 地區版本當結構化訊號:相符加分、不符標衝突
-    match_toks, q_cap = _tokenize(raw_text)
-    q_region = _detect_region(raw_text)
-    matches = _candidate_search(tenant, match_toks, raw_text)
-    if not matches:
+    products = {
+        p.id: p
+        for p in Product.objects.for_tenant(tenant).filter(id__in=found.product_ids)
+    }
+    if found.status == MatchResult.EXISTING:
+        c = found.candidates[0]
+        return _exact_hit(
+            products[c.product_id], _identifier_confidence(c.reasons),
+            "、".join(c.reasons),
+        )
+    if found.status == MatchResult.CONFLICT:
+        return {
+            "matched_product": None, "status": S.CONFLICT, "confidence": 0,
+            "candidates": [
+                _brief(products[c.product_id], 100, "、".join(c.reasons), True)
+                for c in found.candidates
+            ],
+        }
+    if not found.candidates:
         return {"matched_product": None, "status": S.UNKNOWN, "confidence": 0, "candidates": []}
 
+    # 容量 / 地區版本用商品的結構化欄位再把關一次:品名沒寫容量但欄位有填的,
+    # 比對特徵時看不到,這裡補上(絕不 128G 誤對 256G)。
+    q_cap = _detect_capacity(raw_text)
+    q_region = _detect_region(raw_text)
     scored = []
-    for p in matches:
-        score = _name_score(match_toks, p)
-        conflict = False
-        reasons = ["名稱相似"]
-        if q_cap and p.capacity:
-            if normalize_capacity(p.capacity) == q_cap:
-                score = min(96, score + 4)
-                reasons = ["名稱相似 + 容量相符"]
-            else:
-                conflict = True
-                reasons.append(f"容量對不上(單據 {q_cap} / 商品 {p.capacity})")
+    for c in found.candidates:
+        p = products[c.product_id]
+        conflict = c.conflict
+        notes = list(c.reasons) + list(c.differences)
+        if q_cap and p.capacity and normalize_capacity(p.capacity) != q_cap:
+            conflict = True
+            notes.append(f"容量對不上(單據 {q_cap} / 商品 {p.capacity})")
         if q_region and p.region_version and _norm_region(p.region_version) != q_region:
             conflict = True
-            reasons.append(f"版本對不上(單據 {q_region} / 商品 {p.region_version})")
-        scored.append(_brief(p, score, "、".join(reasons), conflict))
+            notes.append(f"版本對不上(單據 {q_region} / 商品 {p.region_version})")
+        # 已確認的叫法但現在有別款也符合時,它會以「識別」等級排在候選第一個;
+        # 分數封頂 96,不讓它看起來像可以自動對應
+        scored.append(_brief(p, min(c.score, 96), "、".join(notes), conflict))
     scored.sort(key=lambda c: (c["conflict"], not c["is_active"], -c["score"]))
     candidates = scored[:6]
 
     non_conflict = [c for c in candidates if not c["conflict"]]
     best = non_conflict[0] if non_conflict else None
 
-    # 名稱模糊永遠不夠格「自動」(封頂 96 < 自動門檻),一律進待確認。
+    # 特徵相符永遠不夠格「自動」(封頂 96 < 自動門檻),一律進待確認。
     if best is None:
-        # 有相似候選但全部容量衝突 → 明確標「屬性衝突」提醒人看
-        status = S.CONFLICT if candidates else S.UNKNOWN
-        return {"matched_product": None, "status": status, "confidence": 0, "candidates": candidates}
-    if best["score"] >= _review_score():
-        status = S.NEEDS_REVIEW
-    else:
-        status = S.UNKNOWN
+        # 有相似候選但全部衝突 → 明確標「屬性衝突」提醒人看
+        return {"matched_product": None, "status": S.CONFLICT, "confidence": 0,
+                "candidates": candidates}
+    status = S.NEEDS_REVIEW if best["score"] >= _review_score() else S.UNKNOWN
     return {"matched_product": None, "status": status,
             "confidence": best["score"], "candidates": candidates}
 
@@ -463,8 +413,158 @@ _COMMITTABLE = [
 ]
 
 
-def _upsert_alias(tenant, supplier, kind, value, product, allow_repoint=True):
+def _phrase_can_auto_match(tenant, supplier, value, product):
+    """這個叫法夠不夠格當「下次直接對應」的別名。
+
+    不夠格的兩種:
+    - 太籠統:只寫機型 / 只寫類別 / 只寫顏色(`reno16`、`皮套`、`藍`)。
+    - 同一句話還有別款也符合(`reno16 皮套 藍` 同時符合側翻款與掀蓋款)。
+
+    不夠格的仍然會記下來,但只當搜尋關鍵字(verified=False):找得到候選,
+    不會自動對應,也不會佔住唯一鍵讓別款記不進來。
+    """
+    terms = build_terms(
+        Category.objects.for_tenant(tenant).values_list("name", flat=True)
+    )
+    if is_broad_phrase(value, terms):
+        return False
+    found = find_candidates(tenant, value, supplier=supplier, limit=10, with_related=False)
+    mine = next((c for c in found.candidates if c.product_id == product.id), None)
+    # 這句話只是商品品名的一部分(品名是「Reno16 側翻皮套 藍」,叫法是「reno16 藍」):
+    # 現在只有一款符合,不代表以後也是。少講的那幾項正是用來分辨同系列別款的,
+    # 所以不給自動對應資格。(用特徵本來就搜得到它,記成關鍵字不吃虧。)
+    if mine is not None and mine.level == COVERS:
+        return False
+    for c in found.candidates:
+        if c.product_id == product.id or not c.is_active:
+            continue
+        if c.level == EXACT or (c.level == COVERS and (mine is None or mine.level != EXACT)):
+            return False
+    return True
+
+
+def _upsert_keyword(tenant, supplier, kind, value, key, product, user=None):
+    """記成搜尋關鍵字(不取得自動對應資格)。同一句話可以掛在多個商品上。"""
+    existing = (
+        ProductAlias.objects.for_tenant(tenant)
+        .filter(is_active=True, kind=kind, normalized_value=key,
+                supplier=supplier, product=product)
+        .order_by().first()
+    )
+    if existing is not None:
+        return existing, "kept"
+    alias = ProductAlias.objects.create(
+        tenant=tenant, supplier=supplier, kind=kind, value=value, product=product,
+        source=ProductAlias.Source.LEARNED, verified=False,
+        created_by=user, updated_by=user,
+    )
+    return alias, "keyword"
+
+
+class _Owner:
+    """某個識別目前的擁有者(來源不是同類別名時用;介面跟 ProductAlias 一樣有
+    `.product` / `.value`,呼叫端不用分辨是哪一種)。"""
+
+    def __init__(self, product, value):
+        self.product = product
+        self.value = value
+
+
+def _advisory_lock(payload: str):
+    """交易層級的 advisory lock(交易結束自動釋放)。非 PostgreSQL 跳過。"""
+    if connection.vendor != "postgresql":
+        return
+    n = int.from_bytes(
+        hashlib.sha256(payload.encode("utf-8")).digest()[:8], "big", signed=True
+    )
+    with connection.cursor() as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(%s)", [n])
+
+
+def _identifier_payload(tenant, supplier, kind, key, value):
+    """一個識別對應的鎖名。同一類識別用同一把鎖。"""
+    if kind == ProductAlias.Kind.BARCODE:
+        # 跟新增商品時鎖條碼用的是同一把(見 dedup._lock_barcode)
+        return f"product-barcode:{tenant.id}:{value}"
+    if kind == ProductAlias.Kind.VENDOR_SKU:
+        # 跟 _lock_vendor_sku 同一把
+        return f"{tenant.id}:{supplier.id if supplier is not None else 0}:{key}"
+    return f"alias-name:{tenant.id}:{supplier.id if supplier else 0}:{key}"
+
+
+def _lock_identifier(tenant, supplier, kind, key, value):
+    """「認領一個識別」整段序列化。
+
+    查詢端(`identifier_hits`)是跨來源一起看的:商品自己的條碼欄與條碼別名、
+    別名表與來源表的料號、各種名稱類別名。寫入端如果各鎖各的,兩個人就能同時
+    把同一個識別寫到不同來源、指到不同商品。同一類識別用同一把鎖。
+    """
+    if connection.vendor == "postgresql" and key:
+        _advisory_lock(_identifier_payload(tenant, supplier, kind, key, value))
+
+
+def lock_identifiers(tenant, supplier, *, name="", vendor_sku="", barcode=""):
+    """一筆輸入會用到的名稱 / 料號 / 條碼鎖,**一次收齊、照固定順序取**。
+
+    分開取的話順序會因流程而異:「建新品」先鎖條碼、後面學別名才鎖名稱;
+    「對應既有商品」則是名稱 → 料號 → 條碼。兩筆同時處理同一個名稱與條碼時
+    就會互等,PostgreSQL 砍掉其中一筆、使用者看到 500。同一個交易裡重複取同一把
+    advisory lock 沒有副作用,所以之後各步驟自己再取一次也沒關係。
+    """
+    payloads = set()
+    for kind, raw, scope in (
+        (ProductAlias.Kind.VENDOR_NAME, name, supplier),
+        (ProductAlias.Kind.VENDOR_SKU, vendor_sku, supplier),
+        (ProductAlias.Kind.BARCODE, barcode, None),
+    ):
+        value = (str(raw) if raw is not None else "").strip()[:ALIAS_VALUE_MAX]
+        key = alias_key(value)
+        if key:
+            payloads.add(_identifier_payload(tenant, scope, kind, key, value))
+    if connection.vendor == "postgresql":
+        for payload in sorted(payloads):
+            _advisory_lock(payload)
+
+
+def _other_source_owner(tenant, supplier, kind, key, value, exclude_alias_id=None):
+    """這個識別在「別的來源」是不是已經屬於某個商品。
+
+    同類別名彼此的衝突由 `_upsert_alias` 自己處理(可以改指);這裡看的是它
+    看不到的那些:商品主檔的條碼欄、供應商來源表的料號、別種名稱類別名。
+    這些都不能靠停用一條別名來改指,所以一律回衝突。
+    """
+    if kind == ProductAlias.Kind.BARCODE:
+        owner = (
+            Product.objects.for_tenant(tenant).filter(barcode=value)
+            .order_by("-is_active", "sku").first()
+        )
+        return _Owner(owner, value) if owner is not None else None
+    if kind == ProductAlias.Kind.VENDOR_SKU:
+        if supplier is None:
+            return None
+        from apps.catalog.models import SupplierProduct
+
+        sp = (
+            SupplierProduct.objects.for_tenant(tenant)
+            .filter(is_active=True, supplier=supplier, vendor_sku_key=key)
+            .order_by().select_related("product").first()
+        )
+        return _Owner(sp.product, sp.vendor_sku) if sp is not None else None
+    other = (
+        ProductAlias.objects.for_tenant(tenant)
+        .filter(is_active=True, verified=True, kind__in=_NAME_KINDS,
+                normalized_value=key, supplier=supplier)
+        .exclude(kind=kind).exclude(pk=exclude_alias_id)
+        .order_by().select_related("product").first()
+    )
+    return other
+
+
+def _upsert_alias(tenant, supplier, kind, value, product, allow_repoint=True,
+                  verified=True, user=None):
     """學一條別名。同一個講法已經指到別的商品時,把舊的停用再建新的。
+
+    `verified=False`:只記成搜尋關鍵字,見 `_upsert_keyword`。
 
     舊版用 `get_or_create`,學錯的對應會一直沿用 —— 人這次明明選了別的商品,
     下一批進貨還是會被帶回錯的品號,而且看不出哪裡錯。
@@ -474,7 +574,7 @@ def _upsert_alias(tenant, supplier, kind, value, product, allow_repoint=True):
     去把別人正確的對應改掉。這種情況只學新的 key,已有對應就原封不動。
 
     回傳 (alias, action):
-    created / repointed / kept / skipped / conflict。
+    created / repointed / kept / keyword / skipped / conflict。
     """
     # 先截斷再算比對鍵。反過來(用完整字串算 key、存進去卻被 save() 用
     # 截斷後的值重算)會讓查詢永遠找不到、再學一次又撞唯一鍵變成 500。
@@ -482,6 +582,13 @@ def _upsert_alias(tenant, supplier, kind, value, product, allow_repoint=True):
     key = alias_key(value)
     if not key:
         return None, "skipped"
+
+    # 條碼是 GTIN,同一個租戶內跨廠唯一(uniq_alias_barcode 不看 supplier),
+    # 所以查重與存檔都不分廠商。
+    alias_supplier = None if kind == ProductAlias.Kind.BARCODE else supplier
+
+    if not verified and kind != ProductAlias.Kind.BARCODE:
+        return _upsert_keyword(tenant, alias_supplier, kind, value, key, product, user)
 
     def _match_qs():
         # order_by() 清掉 Meta.ordering。Meta.ordering 含 "product",Django 會為了
@@ -491,12 +598,10 @@ def _upsert_alias(tenant, supplier, kind, value, product, allow_repoint=True):
             is_active=True, kind=kind, normalized_value=key
         ).order_by()
         if kind != ProductAlias.Kind.BARCODE:
-            qs = qs.filter(supplier=alias_supplier)
+            # 只有「已確認」的那一筆才是這句話的擁有者;關鍵字可以有很多筆、
+            # 各指各的商品,拿它們來判斷「已經指到別人」會誤報衝突。
+            qs = qs.filter(supplier=alias_supplier, verified=True)
         return qs
-
-    # 條碼是 GTIN,同一個租戶內跨廠唯一(uniq_alias_barcode 不看 supplier),
-    # 所以查重與存檔都不分廠商。
-    alias_supplier = None if kind == ProductAlias.Kind.BARCODE else supplier
 
     def _keep(existing):
         """命中同商品:補齊該補的欄位再回傳。
@@ -514,8 +619,15 @@ def _upsert_alias(tenant, supplier, kind, value, product, allow_repoint=True):
             existing.supplier = None
             fields.append("supplier")
         if fields:
-            existing.save(update_fields=fields + ["updated_at"])
+            existing.updated_by = user
+            existing.save(update_fields=fields + ["updated_by", "updated_at"])
         return existing, "kept"
+
+    # 先鎖再查:同一個識別的認領要一個一個來。然後看別的來源有沒有人已經認領。
+    _lock_identifier(tenant, alias_supplier, kind, key, value)
+    elsewhere = _other_source_owner(tenant, alias_supplier, kind, key, value)
+    if elsewhere is not None and elsewhere.product.id != product.id:
+        return elsewhere, "conflict"
 
     hit = _match_qs().select_for_update().first()
     if hit is not None:
@@ -529,9 +641,23 @@ def _upsert_alias(tenant, supplier, kind, value, product, allow_repoint=True):
         old_note = f"改對應:{hit.product_id} → {product.id}"
         hit.is_active = False
         hit.note = (f"{hit.note} / {old_note}" if hit.note else old_note)[:200]
-        hit.save(update_fields=["is_active", "note", "updated_at"])
+        hit.updated_by = user
+        hit.save(update_fields=["is_active", "note", "updated_by", "updated_at"])
 
     def _create():
+        # 這個商品先前把同一句話記成關鍵字的,直接升級那一筆,不另外多建一筆
+        if kind != ProductAlias.Kind.BARCODE:
+            keyword = (
+                ProductAlias.objects.for_tenant(tenant)
+                .filter(is_active=True, kind=kind, normalized_value=key,
+                        supplier=alias_supplier, product=product, verified=False)
+                .order_by().first()
+            )
+            if keyword is not None:
+                keyword.verified = True
+                keyword.updated_by = user
+                keyword.save(update_fields=["verified", "updated_by", "updated_at"])
+                return keyword
         return ProductAlias.objects.create(
             tenant=tenant,
             supplier=alias_supplier,
@@ -540,6 +666,8 @@ def _upsert_alias(tenant, supplier, kind, value, product, allow_repoint=True):
             product=product,
             source=ProductAlias.Source.LEARNED,
             verified=True,
+            created_by=user,
+            updated_by=user,
         )
 
     try:
@@ -686,7 +814,7 @@ def _record_supplier_product(item, product, user=None):
         ).first()
 
 
-def _learn_alias(item, product):
+def _learn_alias(item, product, user=None, can_repoint=False):
     """人確認後,把這行的三種講法都學起來:品名、廠商料號、條碼。
 
     舊版只學品名,所以供應商改了品名(料號沒變)下次就整個對不回來。
@@ -696,18 +824,27 @@ def _learn_alias(item, product):
     - 沒指定廠商的批次不學廠商層別名。查詢端會把 supplier 為空的別名
       套用到**所有**廠商,把「還不知道是哪一家」當成「跨廠通用」,
       會讓別家的同號碼被誤對到這個商品。
-    - 只有品名可以「改指」。品名就是店員眼前那行字,他改選商品等於
-      對那行字下判斷;條碼與料號多半是 OCR 讀的、畫面上看不到,
-      不能讓它們去把別人正確的對應改掉。衝突就記下來讓人處理。
+    - 只有品名可以「改指」,而且只有公司管理員可以(`can_repoint`)。
+      同一句話已經確認指到別的商品,一般店員再選別款不會靜默改掉它,
+      而是記成衝突讓人處理。條碼與料號多半是 OCR 讀的、畫面上看不到,
+      任何人都不能靠它們去把別人正確的對應改掉。
+    - 太籠統、或同一句話有好幾款都符合的品名,只記成搜尋關鍵字,
+      不取得下次自動對應的資格(見 `_phrase_can_auto_match`)。
     """
     supplier = item.batch.supplier
+    lock_identifiers(
+        item.tenant, supplier,
+        name=item.effective_name if supplier is not None else "",
+        vendor_sku=item.effective_vendor_sku if supplier is not None else "",
+        barcode=item.effective_barcode,
+    )
     results = {}
     plans = [
         (ProductAlias.Kind.BARCODE, item.effective_barcode, False),
     ]
     if supplier is not None:
         plans = [
-            (ProductAlias.Kind.VENDOR_NAME, item.effective_name, True),
+            (ProductAlias.Kind.VENDOR_NAME, item.effective_name, can_repoint),
             (ProductAlias.Kind.VENDOR_SKU, item.effective_vendor_sku, False),
         ] + plans
     conflicts = []
@@ -728,9 +865,12 @@ def _learn_alias(item, product):
                     "product_name": owner.name,
                 })
                 continue
+        verified = True
+        if kind == ProductAlias.Kind.VENDOR_NAME and value:
+            verified = _phrase_can_auto_match(item.tenant, supplier, value, product)
         alias, action = _upsert_alias(
             item.tenant, supplier, kind, value, product,
-            allow_repoint=allow_repoint,
+            allow_repoint=allow_repoint, verified=verified, user=user,
         )
         results[kind] = action
         if action == "conflict" and alias is not None:
@@ -758,15 +898,19 @@ def _refresh_batch_status(batch):
 
 
 @transaction.atomic
-def resolve_item_match(item, product, learn_alias=True, user=None):
+def resolve_item_match(item, product, learn_alias=True, user=None,
+                       restore_inactive=False, can_repoint=False):
     """把一行對應到既有商品(選候選 / 手動指定)。
 
     學別名會「停用舊的 + 建新的」兩步,要在同一個 transaction 內完成,
     否則中途失敗會留下沒有任何 active 別名的空窗。
+
+    `restore_inactive`:商品已停用時,呼叫端要明確說「恢復它」才會恢復,
+    而且要先確認操作者有這個權限(view 負責擋)。選用本身不會偷偷把商品復活。
     """
-    # 人挑了一個停售商品 = 明確表示「就是這個舊品號,再進貨」→ 恢復它。
-    # 不恢復的話會過帳進一個停售商品,之後在商品清單與庫存查詢都看不到。
     if not product.is_active:
+        if not restore_inactive:
+            raise IdentityError("這個商品已停用,請先由管理員恢復再入庫")
         product.is_active = True
         product.save(update_fields=["is_active", "updated_at"])
     item.matched_product = product
@@ -774,7 +918,7 @@ def resolve_item_match(item, product, learn_alias=True, user=None):
     item.resolved_by = user
     item.save(update_fields=["matched_product", "match_status", "resolved_by", "updated_at"])
     if learn_alias:
-        _learn_alias(item, product)
+        _learn_alias(item, product, user=user, can_repoint=can_repoint)
     # 來源記錄跟「要不要學別名」是兩件事:別名是給比對用的,來源是「上次
     # 從哪買的」這個事實。關掉學習不代表不想記來源。
     _record_supplier_product(item, product, user=user)
@@ -793,6 +937,22 @@ def resolve_item_new_product(item, data, user=None):
     name_max = Product._meta.get_field("name").max_length
     if len(name) > name_max:
         raise IdentityError(f"品名超過 {name_max} 字上限")
+    # 這一行等一下會用到的鎖先一次收齊(關卡要鎖條碼、學別名要鎖名稱與料號),
+    # 順序跟「對應既有商品」那條路一致,兩邊才不會互等。
+    lock_identifiers(
+        item.tenant, item.batch.supplier,
+        name=item.effective_name if item.batch.supplier is not None else "",
+        vendor_sku=item.effective_vendor_sku if item.batch.supplier is not None else "",
+        barcode=item.effective_barcode,
+    )
+    # 防重複關卡:待確認區「建新品」跟商品頁新增走同一道。擋下時丟
+    # DuplicateProduct(view 轉 409);放行回「已說明不同」的相似商品。
+    reason = data.get("distinct_reason", "")
+    similar = guard_new_product(
+        item.tenant, name=name, capacity=data.get("capacity", ""),
+        color=data.get("color", ""), barcode=item.effective_barcode or "",
+        is_secondhand=cat.is_secondhand_default, distinct_reason=reason,
+    )
     # 無品牌配件容易撞名(「透明殼」「鋼化膜」滿街都是),給它一個穩定款式碼,
     # 店員不用自己想名字也分得出來。序號商品(手機)有 IMEI,不需要。
     style_code = ""
@@ -823,15 +983,132 @@ def resolve_item_new_product(item, data, user=None):
         style_code=style_code,
         requires_serial=data.get("requires_serial", True),
     )
+    record_distinct_decision(item.tenant, product, similar, reason, user)
     item.matched_product = product
     item.match_status = IntakeItem.MatchStatus.NEW_PRODUCT
     item.resolved_by = user
     item.save(update_fields=["matched_product", "match_status", "resolved_by", "updated_at"])
     if data.get("learn_alias", True):
-        _learn_alias(item, product)
+        _learn_alias(item, product, user=user)
     _record_supplier_product(item, product, user=user)
     _refresh_batch_status(item.batch)
     return product
+
+
+_NAME_KINDS = (
+    ProductAlias.Kind.VENDOR_NAME,
+    ProductAlias.Kind.LEGACY_NAME,
+    ProductAlias.Kind.OEM_MODEL,
+)
+
+
+@transaction.atomic
+def create_alias(tenant, product, kind, value, supplier=None, verified=True,
+                 note="", user=None):
+    """別名管理畫面(或直接打 API)手動加一條別名。
+
+    跟「記住這個叫法」走同一套規則:名稱類的別名,太籠統或同時符合多款的
+    一律降為關鍵字;同一句話已確認指到別的商品就回衝突,不改指。
+    之前這條路是直接存檔,`verified` 預設 True,等於任何人都能把「皮套」
+    加成某個商品的唯一別名。
+    """
+    if kind in _NAME_KINDS and verified:
+        verified = _phrase_can_auto_match(tenant, supplier, value, product)
+    alias, action = _upsert_alias(
+        tenant, supplier, kind, value, product,
+        allow_repoint=False, verified=verified, user=user,
+    )
+    if alias is not None and action in ("created", "keyword"):
+        alias.source = ProductAlias.Source.MANUAL
+        alias.note = (note or "")[:200]
+        alias.save(update_fields=["source", "note", "updated_at"])
+    return alias, action
+
+
+_ALIAS_EDITABLE = {"is_active", "verified", "note"}
+
+
+@transaction.atomic
+def update_alias(alias, changes, user=None):
+    """別名管理畫面修改一條別名。只能改「啟用 / 已確認 / 備註」。
+
+    內容、商品、廠商、類型不能直接改:那等於換了一條別名,原本那條代表過什麼
+    就查不到了。要改指就停用這一筆、再新增一筆。
+
+    變成「啟用中 + 已確認」的那一刻(重新啟用、或把關鍵字升級),跟新增一樣要
+    過完整的規則:籠統的不能確認、已經有別的商品認領的回衝突。
+    """
+    extra = set(changes) - _ALIAS_EDITABLE
+    if extra:
+        raise IdentityError("別名的內容、商品、廠商、類型不能直接修改;要改指請停用這一筆再新增")
+    # 先取識別鎖,再鎖這一列並重讀。呼叫端手上的物件是交易外讀的,可能已經舊了:
+    # 兩個管理員同時改(一個停用、一個只改備註),不重讀的話後者會拿舊狀態判斷、
+    # 再把整列寫回去,前者的停用就悄悄被蓋掉。內容 / 類型 / 廠商不可改,用它們
+    # 算鎖名不會過期。
+    key = alias.normalized_value
+    scope = None if alias.kind == ProductAlias.Kind.BARCODE else alias.supplier
+    _lock_identifier(alias.tenant, scope, alias.kind, key, alias.value.strip())
+    fresh = ProductAlias.objects.select_for_update().order_by().get(pk=alias.pk)
+    for name in ("is_active", "verified", "note"):
+        setattr(alias, name, getattr(fresh, name))
+    active = changes.get("is_active", alias.is_active)
+    verified = changes.get("verified", alias.verified)
+    becoming_owner = active and verified and not (alias.is_active and alias.verified)
+    if becoming_owner:
+        if alias.kind in _NAME_KINDS and not _phrase_can_auto_match(
+            alias.tenant, alias.supplier, alias.value, alias.product
+        ):
+            raise IdentityError("這個叫法太籠統或同時符合好幾款,只能當搜尋關鍵字")
+        owner = _other_source_owner(
+            alias.tenant, scope, alias.kind, key, alias.value.strip(),
+            exclude_alias_id=alias.pk,
+        )
+        if owner is None:
+            same = ProductAlias.objects.for_tenant(alias.tenant).filter(
+                is_active=True, verified=True, kind=alias.kind, normalized_value=key,
+            ).exclude(pk=alias.pk).order_by()
+            if alias.kind != ProductAlias.Kind.BARCODE:
+                same = same.filter(supplier=alias.supplier)
+            owner = same.select_related("product").first()
+        if owner is not None and owner.product.id != alias.product_id:
+            raise AliasOwnedElsewhere(owner.product)
+    for name, value in changes.items():
+        setattr(alias, name, value)
+    alias.updated_by = user if getattr(user, "is_authenticated", False) else None
+    try:
+        with transaction.atomic():
+            # 只寫這次要改的欄位,不把整列(可能是舊的)寫回去
+            alias.save(update_fields=[*changes, "updated_by", "updated_at"])
+    except IntegrityError:
+        raise AliasOwnedElsewhere(None)
+    return alias
+
+
+class AliasOwnedElsewhere(IdentityError):
+    """這個識別已經確認屬於別的商品。"""
+
+    def __init__(self, product):
+        self.product = product
+        name = f"「{product.name}」" if product is not None else "別的商品"
+        super().__init__(f"這個叫法已經確認指到{name}")
+
+
+@transaction.atomic
+def remember_phrase(tenant, product, value, supplier=None, user=None, can_repoint=False):
+    """店員按「記住這個叫法」:把一句話記到一個既有商品上。
+
+    沒指定廠商 = 店內自己的叫法(通用別名);有指定 = 那家廠商的品名。
+    回傳 (alias, action, owner):action 同 `_upsert_alias`;`owner` 是衝突時
+    目前擁有這句話的商品(讓畫面能講清楚「已經指到哪一個」)。
+    """
+    kind = ProductAlias.Kind.VENDOR_NAME if supplier is not None else ProductAlias.Kind.LEGACY_NAME
+    verified = _phrase_can_auto_match(tenant, supplier, value, product)
+    alias, action = _upsert_alias(
+        tenant, supplier, kind, value, product,
+        allow_repoint=can_repoint, verified=verified, user=user,
+    )
+    owner = alias.product if action == "conflict" and alias is not None else None
+    return alias, action, owner
 
 
 def capture_units(item, units_data, user=None):

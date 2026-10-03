@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { api } from "@/api/client";
-import { searchProducts } from "@/api/search";
-import type { Paginated, Product } from "@/api/types";
+import { resolveProducts, searchProductsForPurchase } from "@/api/search";
+import type { Product } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
+import { pickActiveProduct } from "@/pages/products/pickActiveProduct";
 
 /**
  * 解析後尚未經過商品比對的原始一行
@@ -28,7 +28,8 @@ export interface MatchedRow {
   unit_price: string;
   serials: string[];
   selected: boolean;
-  matchStatus: "exact" | "fuzzy" | "none";
+  /** exact=可靠識別或人工指定;fuzzy=只有一筆夠像,待人確認;ambiguous=好幾筆都像 */
+  matchStatus: "exact" | "fuzzy" | "ambiguous" | "none";
 }
 
 /**
@@ -94,8 +95,12 @@ function makeKey(): string {
 }
 
 /**
- * 用單一品名 / 品號 / 條碼字串呼叫後端搜尋,挑出最佳匹配。
- * 規則:exact sku → exact barcode → exact name → 否則回第一筆(模糊命中)
+ * 一行品名 / 品號 / 條碼 → 既有商品。
+ *
+ * 只有可靠識別(條碼 / 品號 / 已確認的叫法)才算「確定」;品名一字不差也只是
+ * 候選 —— 後端刻意不把它當成可靠識別,前端不能自己升級。
+ * 特徵相似的只預填、不預先勾選,要人看過才會進進貨單;好幾筆都像就不預填。
+ * 舊版會直接取搜尋結果第一筆並勾選,搜尋放寬之後那樣會把貨入到別款上。
  */
 async function matchOne(
   query: string,
@@ -104,29 +109,18 @@ async function matchOne(
   const q = query.trim();
   if (!q) return { product: null, status: "none" };
 
-  const secondhandFilter =
-    mode === "secondhand-vendor"
-      ? "&is_secondhand=true"
-      : "&is_secondhand=false";
-  // 用既有 /products/?search 端點,後端已涵蓋 sku/name/spec/barcode 比對
-  const data = await api<Paginated<Product>>(
-    `/products/?search=${encodeURIComponent(q)}&page_size=10&is_active=true${secondhandFilter}`,
-  );
-  const results = data.results;
-  if (results.length === 0) return { product: null, status: "none" };
-
-  // 嚴格相符優先
-  const lower = q.toLowerCase();
-  const exact = results.find(
-    (p) =>
-      p.sku.toLowerCase() === lower ||
-      p.name.toLowerCase() === lower ||
-      (p.barcode && p.barcode.toLowerCase() === lower),
-  );
-  if (exact) return { product: exact, status: "exact" };
-
-  // 模糊命中,取第一筆
-  return { product: results[0], status: "fuzzy" };
+  const found = await resolveProducts(q, {
+    secondhand: mode === "secondhand-vendor",
+    limit: 10,
+  });
+  // 已停用的不預填(要先由管理員恢復)
+  const usable = found.candidates.filter((c) => c.selectable);
+  if (found.status === "existing" && usable.length === 1) {
+    return { product: usable[0].product, status: "exact" };
+  }
+  const close = usable.filter((c) => c.level === "exact" || c.level === "covers");
+  if (close.length === 1) return { product: close[0].product, status: "fuzzy" };
+  return { product: null, status: close.length > 1 ? "ambiguous" : "none" };
 }
 
 // 下載 CSV 範例(Excel 可直接開啟編輯)
@@ -221,7 +215,8 @@ export function PurchaseBatchPasteModal({
             qty: r.qty,
             unit_price: r.unit_price,
             serials: r.serials,
-            selected: !!product,
+            // 只有確定的才預先勾選;待確認的要人自己勾
+            selected: status === "exact",
             matchStatus: status,
           } as MatchedRow;
         }),
@@ -234,6 +229,9 @@ export function PurchaseBatchPasteModal({
       setMatching(false);
     }
   }
+
+  // 每一列「第幾次選商品」,用來丟掉過期的非同步回應
+  const pickSeq = useRef<Record<string, number>>({});
 
   function patchRow(key: string, patch: Partial<MatchedRow>) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -261,8 +259,11 @@ export function PurchaseBatchPasteModal({
 
   function toggleAll(sel: boolean) {
     setRows((prev) =>
+      // 全選不帶「待確認」的列:那些要一筆一筆看過
       prev.map((r) =>
-        r.productOption ? { ...r, selected: sel } : r,
+        r.productOption && r.matchStatus !== "fuzzy"
+          ? { ...r, selected: sel }
+          : r,
       ),
     );
   }
@@ -437,7 +438,19 @@ PH-000023\t1\t29000\t356121234567000`}
                                   marginLeft: 4,
                                 }}
                               >
-                                模糊
+                                待確認
+                              </span>
+                            )
+                          : r.matchStatus === "ambiguous"
+                          ? (
+                              <span
+                                style={{
+                                  fontSize: 13,
+                                  color: "#f0c050",
+                                  marginLeft: 4,
+                                }}
+                              >
+                                多筆相似
                               </span>
                             )
                           : (
@@ -475,20 +488,43 @@ PH-000023\t1\t29000\t356121234567000`}
                                 <ComboBox<Product>
                                   value={r.productOption?.id ?? ""}
                                   selectedOption={r.productOption}
-                                  onChange={(_id, opt) =>
+                                  onChange={async (_id, opt) => {
+                                    let p = opt?.payload;
+                                    // 恢復停用商品要等伺服器回應;這期間如果又選了
+                                    // 別的,舊的回應回來時不能把新的選擇蓋掉
+                                    const seq = (pickSeq.current[r.key] ?? 0) + 1;
+                                    pickSeq.current[r.key] = seq;
+                                    if (p) {
+                                      try {
+                                        const usable = await pickActiveProduct(p);
+                                        if (pickSeq.current[r.key] !== seq) return;
+                                        if (!usable) return;
+                                        p = usable;
+                                      } catch (e) {
+                                        setError(
+                                          e instanceof Error
+                                            ? e.message
+                                            : "恢復失敗",
+                                        );
+                                        return;
+                                      }
+                                    }
                                     patchRow(r.key, {
-                                      productOption: opt ?? null,
+                                      productOption: opt
+                                        ? { ...opt, payload: p }
+                                        : null,
                                       selected: !!opt,
                                       matchStatus: opt ? "exact" : "none",
-                                    })
-                                  }
+                                    });
+                                  }}
                                   fetchOptions={(q) =>
-                                    searchProducts(q, {
-                                      activeOnly: true,
-                                      secondhandOnly:
-                                        mode === "secondhand-vendor",
-                                      excludeSecondhand: mode === "regular",
-                                    })
+                                    searchProductsForPurchase(
+                                      q || r.rawProductText,
+                                      {
+                                        secondhand:
+                                          mode === "secondhand-vendor",
+                                      },
+                                    )
                                   }
                                   placeholder={
                                     r.rawProductText

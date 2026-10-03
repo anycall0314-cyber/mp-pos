@@ -10,6 +10,8 @@
 export interface NavItem {
   to: string;
   label: string;
+  /** 只給公司管理員看的項目(例:備份與還原) */
+  adminOnly?: boolean;
 }
 
 export interface NavSection {
@@ -74,7 +76,10 @@ export const MORE_NAV: { label: string; sections: NavSection[] } = {
     },
     {
       label: "設定",
-      items: [{ to: "/settings", label: "發票 / 付款 / 門市" }],
+      items: [
+        { to: "/settings", label: "發票 / 付款 / 門市" },
+        { to: "/settings/backup", label: "備份與還原", adminOnly: true },
+      ],
     },
   ],
 };

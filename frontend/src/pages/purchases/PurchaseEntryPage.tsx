@@ -10,10 +10,11 @@ import {
   useVoidPurchaseOrder,
 } from "@/api/hooks";
 import {
-  searchProducts,
+  searchProductsForPurchase,
   searchSuppliers,
   searchWarehouses,
 } from "@/api/search";
+import { pickActiveProduct } from "@/pages/products/pickActiveProduct";
 import type {
   ConditionGrade,
   InvoiceForm,
@@ -536,6 +537,8 @@ export function PurchaseEntryPage({
   });
   const [selectedLineKey, setSelectedLineKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 每一列「第幾次選商品」,用來丟掉過期的非同步回應
+  const pickSeq = useRef<Record<string, number>>({});
   const [showConfirm, setShowConfirm] = useState(false);
   const serialPanelRef = useRef<HTMLDivElement>(null);
 
@@ -1192,11 +1195,26 @@ export function PurchaseEntryPage({
                     <ComboBox<Product>
                       value={l.product}
                       selectedOption={l.productOption}
-                      onChange={(pid, opt) => {
-                        const p = opt?.payload;
+                      onChange={async (pid, opt) => {
+                        let p = opt?.payload;
+                        // 恢復停用商品要等伺服器回應;這期間如果又選了別的,
+                        // 舊的回應回來時不能把新的選擇蓋掉
+                        const seq = (pickSeq.current[l.key] ?? 0) + 1;
+                        pickSeq.current[l.key] = seq;
+                        if (p) {
+                          try {
+                            const usable = await pickActiveProduct(p);
+                            if (pickSeq.current[l.key] !== seq) return;
+                            if (!usable) return;
+                            p = usable;
+                          } catch (e) {
+                            setError(e instanceof Error ? e.message : "恢復失敗");
+                            return;
+                          }
+                        }
                         const patch: Partial<Line> = {
                           product: pid,
-                          productOption: opt ?? null,
+                          productOption: opt ? { ...opt, payload: p } : null,
                         };
                         // 選到商品有上一次進價就帶入;沒有的話留原值不動
                         const lastPrice = p?.last_purchase_price;
@@ -1206,10 +1224,10 @@ export function PurchaseEntryPage({
                         updateLine(l.key, patch);
                       }}
                       fetchOptions={(q) =>
-                        searchProducts(q, {
-                          activeOnly: true,
-                          secondhandOnly: isSecondhandVendor,
-                          excludeSecondhand: !isSecondhandVendor,
+                        searchProductsForPurchase(q, {
+                          secondhand: isSecondhandVendor,
+                          supplierId: supplier,
+                          warehouseId: warehouse,
                         })
                       }
                       disabled={readonly}

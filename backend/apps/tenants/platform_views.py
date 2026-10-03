@@ -14,6 +14,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.backup.auth import BlocksCompanyUnderMaintenance
 from apps.inventory.models import Warehouse
 from apps.parties.models import SalesPerson
 
@@ -63,7 +64,7 @@ class PlatformTenantViewSet(viewsets.ModelViewSet):
     使用者 / 門市仍須用 /platform/users/ 跟 /platform/warehouses/ 補。
     """
 
-    permission_classes = [IsAuthenticated, IsPlatformAdmin]
+    permission_classes = [IsAuthenticated, IsPlatformAdmin, BlocksCompanyUnderMaintenance]
     serializer_class = PlatformTenantSerializer
     queryset = Tenant.objects.all().order_by("id")
     search_fields = ["code", "name"]
@@ -259,7 +260,7 @@ class PlatformUserSerializer(serializers.ModelSerializer):
 
 
 class PlatformUserViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated, IsPlatformAdmin]
+    permission_classes = [IsAuthenticated, IsPlatformAdmin, BlocksCompanyUnderMaintenance]
     serializer_class = PlatformUserSerializer
     search_fields = ["username", "first_name", "last_name", "email"]
     filterset_fields = {
@@ -321,7 +322,7 @@ class PlatformWarehouseSerializer(serializers.ModelSerializer):
 
 
 class PlatformWarehouseViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated, IsPlatformAdmin]
+    permission_classes = [IsAuthenticated, IsPlatformAdmin, BlocksCompanyUnderMaintenance]
     serializer_class = PlatformWarehouseSerializer
     search_fields = ["code", "name", "address", "phone"]
     filterset_fields = ["tenant", "is_active"]

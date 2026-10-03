@@ -164,16 +164,23 @@ def preview_phone_model_bundle(tenant, payload):
     return _build_bundle(tenant, payload, dry_run=True)
 
 
-def create_phone_model_bundle(tenant, payload):
+def create_phone_model_bundle(tenant, payload, user=None):
     """真的建立 — 寫入 DB,回傳建好的 SKU 摘要。"""
-    return _build_bundle(tenant, payload, dry_run=False)
+    return _build_bundle(tenant, payload, dry_run=False, user=user)
 
 
 @transaction.atomic
-def _build_bundle(tenant, payload, *, dry_run):
+def _build_bundle(tenant, payload, *, dry_run, user=None):
     """核心邏輯。dry_run=True 時 atomic 外殼仍會用,確保 raise 都會回滾;
     但只要不 raise、不 save,就不會有任何寫入。
     """
+    from apps.identity.dedup import BatchGuard
+
+    # 防重複:預覽時把可能重複的列出來;正式建立時每一筆各自帶理由
+    # (distinct_reasons = {品名: 哪裡不同})才放行
+    guard = BatchGuard(
+        tenant, payload.get("distinct_reasons"), dry_run=dry_run, user=user
+    )
     # ── 基本資料(必填)
     brand_id = payload.get("brand_id")
     if not brand_id:
@@ -331,6 +338,8 @@ def _build_bundle(tenant, payload, *, dry_run):
                 bits.append(cond.name)
                 spec = _check_len("spec", " ".join(bits), "規格")
                 name = _check_len("name", f"{model_name} {' '.join(bits)}", "品名")
+                if not guard.allow(name, is_secondhand=cond.is_secondhand):
+                    continue
                 if dry_run:
                     main_results.append(
                         {
@@ -366,6 +375,7 @@ def _build_bundle(tenant, payload, *, dry_run):
                     warehouse_type=Product.WarehouseType.PRODUCT,
                 )
                 p.save()
+                guard.created(p)
                 main_results.append(
                     {
                         "id": p.id,
@@ -418,6 +428,10 @@ def _build_bundle(tenant, payload, *, dry_run):
         existing = Product.objects.for_tenant(tenant).filter(name=full_name).first()
         if existing is not None:
             _assert_reusable_part(existing, parts_category, part_spec)
+        # 新零件在預覽時就過防重複關卡(同名可重用的不算新零件,照舊沿用)。
+        # 只在正式建立才檢查的話,預覽沒有地方填理由,按下建立才被擋。
+        if existing is None and not guard.allow(full_name):
+            continue
         if dry_run:
             parts_results.append(
                 {
@@ -442,6 +456,7 @@ def _build_bundle(tenant, payload, *, dry_run):
                 list_price=Decimal("0"),
             )
             p.save()
+            guard.created(p)
         if model_key and (phone_model or main_first_product):
             ProductRelation.objects.get_or_create(
                 tenant=tenant,
@@ -456,9 +471,12 @@ def _build_bundle(tenant, payload, *, dry_run):
             {"id": p.id, "sku": p.sku, "name": p.name, "reused": reused}
         )
 
+    guard.finish()
     summary = {
         "model_name": model_name,
         "model_key": model_key,
+        # 預覽時:可能跟既有商品重複的清單(正式建立要帶 distinct_reason)
+        "possible_duplicates": guard.found,
         "main_count": len(main_results),
         "parts_count": len(parts_results),
         "accessory_slots": accessory_slots,

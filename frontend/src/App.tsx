@@ -39,6 +39,7 @@ import { SalesReturnEntryPage } from "@/pages/sales/SalesReturnEntryPage";
 import { CustomersPage } from "@/pages/customers/CustomersPage";
 import { MembersPage } from "@/pages/members/MembersPage";
 import { SalesPersonsPage } from "@/pages/sales-persons/SalesPersonsPage";
+import { BackupPage } from "@/pages/backup/BackupPage";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { SimCardsPage } from "@/pages/sim-cards/SimCardsPage";
 import { SuppliersPage } from "@/pages/suppliers/SuppliersPage";
@@ -120,7 +121,9 @@ function SidebarNav({
               </svg>
             </button>
             {open &&
-              s.items.map((it) => (
+              s.items
+                .filter((it) => !it.adminOnly || role === "tenant_admin")
+                .map((it) => (
                 <NavLink
                   key={it.to}
                   to={it.to}
@@ -327,6 +330,7 @@ export function App() {
           />
           <Route path="/members" element={<MembersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/backup" element={<BackupPage />} />
           <Route
             path="/platform/admin"
             element={

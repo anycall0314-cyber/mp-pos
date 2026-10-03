@@ -9,6 +9,8 @@ import type {
   Product,
   ProductSerial,
   PurchaseOrderCategory,
+  ResolveCandidate,
+  ResolveResult,
   SalesPerson,
   SimCard,
   Supplier,
@@ -77,6 +79,88 @@ export async function searchProducts(
       : [p.sku, p.category_name].filter(Boolean).join(" / "),
     payload: p,
   }));
+}
+
+/**
+ * 一句叫法 → 可能是它的既有商品。零庫存與已停用的都會列出來,
+ * 每筆附符合原因與差異。
+ */
+export async function resolveProducts(
+  query: string,
+  opts?: {
+    supplierId?: number | "";
+    warehouseId?: number | "";
+    /** true=只找中古機;false=排除中古機;不給=不限 */
+    secondhand?: boolean;
+    barcode?: string;
+    vendorSku?: string;
+    limit?: number;
+  },
+): Promise<ResolveResult> {
+  return api<ResolveResult>(
+    `/products/resolve/?${qs({
+      q: query,
+      supplier: opts?.supplierId === "" ? undefined : opts?.supplierId,
+      warehouse: opts?.warehouseId === "" ? undefined : opts?.warehouseId,
+      is_secondhand:
+        opts?.secondhand === undefined ? undefined : String(opts.secondhand),
+      barcode: opts?.barcode,
+      vendor_sku: opts?.vendorSku,
+      limit: opts?.limit,
+    })}`,
+  );
+}
+
+/** 候選的一行說明:已停用 / 庫存 / 符合原因 / 差異 */
+export function candidateSummary(c: ResolveCandidate): string {
+  return [
+    c.is_active ? "" : "已停用",
+    `庫存 ${c.product.stock_qty ?? 0}`,
+    c.reasons.join("、"),
+    c.differences.join(";"),
+  ]
+    .filter(Boolean)
+    .join(" / ");
+}
+
+/**
+ * 進貨選商品用:先列共用比對的候選(換個寫法、用別名、零庫存、已停用都找得到),
+ * 再補上原本的搜尋結果(品號 / 條碼片段)。同一商品只出現一次。
+ * 已停用的看得到;一般店員不能選,管理員選了由呼叫端先確認恢復。
+ */
+export async function searchProductsForPurchase(
+  query: string,
+  opts?: {
+    secondhand?: boolean;
+    supplierId?: number | "";
+    warehouseId?: number | "";
+  },
+): Promise<ComboOption<Product>[]> {
+  const plain = searchProducts(query, {
+    activeOnly: true,
+    secondhandOnly: opts?.secondhand === true,
+    excludeSecondhand: opts?.secondhand === false,
+    warehouseId: opts?.warehouseId,
+  });
+  if (!query.trim()) return plain;
+  const [resolved, rest] = await Promise.all([
+    resolveProducts(query, { ...opts, limit: LIMIT }),
+    plain,
+  ]);
+  const options: ComboOption<Product>[] = resolved.candidates.map((c) => ({
+    id: c.product.id,
+    label: c.product.name,
+    secondary: candidateSummary(c),
+    payload: c.product,
+    disabled: !c.selectable && !c.can_restore,
+  }));
+  const seen = new Set(options.map((o) => o.id));
+  return options.concat(rest.filter((o) => !seen.has(o.id)));
+}
+
+/** 恢復已停用的商品(限管理員);回傳恢復後的商品 */
+export function restoreProduct(id: number): Promise<Product> {
+  return api<Product>(`/products/${id}/restore/`, { method: "POST" });
 }
 
 function lifecycleLabel(s?: string): string {

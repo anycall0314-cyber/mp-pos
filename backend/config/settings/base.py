@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     "apps.assistant",
     "apps.signals",
     "apps.identity",
+    "apps.backup",
 ]
 
 MIDDLEWARE = [
@@ -78,6 +79,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.tenants.middleware.TenantMiddleware",
+    # 有公司在還原時,Django 管理後台暫時不能修改(見 apps/backup/auth.py)
+    "apps.backup.auth.AdminMaintenanceGuard",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -126,6 +129,18 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# 公司備份檔與還原暫存。**不可**放在 MEDIA_ROOT 或任何會被網頁伺服器直接送出的
+# 目錄底下:備份裡有會員與維修資料,只能經過有權限檢查的下載端點取得。
+BACKUP_ROOT = Path(os.environ.get("MPPOS_BACKUP_DIR", BASE_DIR / "backup_store"))
+# 伺服器上的備份檔保留多久(小時)。到期只清伺服器這份,店家下載走的檔不受影響。
+BACKUP_RETENTION_HOURS = int(os.environ.get("MPPOS_BACKUP_RETENTION_HOURS", "72"))
+# 還原上傳的大小上限,以及解開後的總量上限(擋壓縮炸彈)
+BACKUP_MAX_UPLOAD_BYTES = int(os.environ.get("MPPOS_BACKUP_MAX_UPLOAD_MB", "2048")) * 1024 * 1024
+BACKUP_MAX_UNPACKED_BYTES = int(os.environ.get("MPPOS_BACKUP_MAX_UNPACKED_MB", "8192")) * 1024 * 1024
+# 還原上維護鎖之後,等幾秒才開始取代資料。上鎖前一刻已經放行的請求要嘛做完、要嘛
+# 被網頁伺服器逾時砍掉,所以**要比網頁伺服器的請求逾時長**(gunicorn 設 60 秒)。
+BACKUP_RESTORE_GRACE_SECONDS = int(os.environ.get("MPPOS_BACKUP_RESTORE_GRACE_SECONDS", "75"))
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
@@ -139,8 +154,9 @@ REST_FRAMEWORK = {
     # 認證走 TokenAuthentication(/auth/login 取 token,後續 API 帶
     # `Authorization: Token xxx`)。刻意不放 SessionAuthentication 避免
     # CSRF / cookie 問題。
+    # 在 TokenAuthentication 上多一道「公司維護鎖」:還原進行中的公司一律擋下
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.TokenAuthentication",
+        "apps.backup.auth.MaintenanceAwareTokenAuthentication",
     ],
     # 預設要登入才能呼叫 API;個別 view 用 @permission_classes([AllowAny])
     # 覆寫(例如 /auth/login/)。

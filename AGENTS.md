@@ -72,6 +72,15 @@
 | 銷貨可選清單 | `?sales_pickable=true` 過濾:庫存 > 0 OR `is_virtual=True`(虛擬商品永遠可選,實體 0 庫存擋下)|
 | IMEI 搜尋安全閥 | ProductViewSet.`get_search_fields` 動態化:**只有純數字 6 碼以上才把 `serials__serial_no` 加進 search_fields**,避免「18 pro 256」誤命中含 18 的 IMEI |
 | 搜尋權重(中文 vs 英數)| `get_search_fields` 偵測查詢字串是否含中日韓漢字(U+4E00–U+9FFF):**含中文 → 只搜描述欄 `name/spec/category__name`**(不碰品號/條碼/IMEI,避免「中古 11」被 SKU `AA-000011` 誤帶出);**純英數 → 搜完整代碼欄位**(sku/name/spec/barcode/category),純數字 6 碼以上才再加 IMEI |
+| 商品叫法比對 | `apps/identity/product_match.py`:品名與查詢走同一支 `parse_features()`,拆成型號 / 顏色 / 其他詞再比(`exact` / `covers` / `related`)。進貨搜尋、`?search=`、待確認入庫、新增查重**共用**。特徵比對只出候選;`existing` 只來自條碼 / 廠商料號 / 已確認別名 / 品號。`GET /products/resolve/?q=` 回候選 + 符合原因 + 差異,零庫存與停用都列 |
+| 別名:已確認 vs 關鍵字 | `ProductAlias.verified=True` 才能自動對應且同範圍唯一(通用別名另有 `uniq_alias_generic`);`False` 是搜尋關鍵字,可多筆。籠統 / 只是品名一部分 / 同時符合多款的叫法自動降為關鍵字。已確認的叫法命中時會重看有沒有別款也符合。改指、停用限管理員;`POST /identity/aliases/remember/` 記住叫法 |
+| 停用商品 | 搜尋與候選看得到(標「已停用」),**選用不會恢復**。恢復限 tenant_admin / platform_admin:`POST /products/{id}/restore/` 或待確認入庫帶 `restore=true` |
+| 新增商品防重複 | `apps/identity/dedup.py` `guard_new_product()`:所有建新品入口都過。條碼 / 已確認叫法相同 → 409 硬擋;特徵相似 → 409,帶 `distinct_reason`(寫哪裡不同)才放行,存 `ProductDistinctDecision`。批次每列各自說明,匯入列進略過。新增入口要建 Product 一定要呼叫它 |
+| 公司備份 | `apps/backup/`:一次備份 = 一家公司全部門市 + 附件,加密成 `.mppos-backup`。只有該公司的 tenant_admin 能用(店員與平台管理員都不行)。背景 worker `manage.py run_backup_worker` 執行;狀態在 `BackupJob`。要進備份的表在 `registry.py` **逐張登記**,新增 model 沒登記 → 備份拒絕執行、測試會紅。帶檔案的欄位登記在 `FILE_FIELDS`。備份檔放 `BACKUP_ROOT`(不在 media 底下)。格式與操作見 `docs/備份與還原_格式與操作手冊.md` |
+| 復原憑證 | `BackupKey`:每家公司一組 `MP-XXXX-…`,管理員抄下保管;伺服器存 `SECRET_KEY` 包過的密文。不寫進日誌 / 備份 / 操作紀錄 |
+| 還原 | 整家公司為單位:上傳 → 預檢(不改資料)→ 輸入「還原」確認(**當下就上維護鎖**)→ 等寬限時間 → 安全備份 → 一個交易內:`FOR UPDATE` 鎖公司那一列(擋住所有新增)→ 再比一次資料指紋 → 整批取代(新主鍵、外鍵重對、不重播交易)→ 逐列核對 → 解鎖。版本(全部 migration)要完全相同。單據的經手帳號用 `UserProfile.account_uuid` 對人(不看帳號名稱、不看數字 id)。新環境復原走指令 `restore_company_backup` |
+| 公司維護鎖 | `TenantMaintenance.active` 時,該公司所有 API 回 503(`apps/backup/auth.py`,掛在全域的登入驗證上;`/auth/`、`/backup/` 例外)。**只擋網頁**,管理指令不經過它。鎖看的是「請求實際會落在哪一家公司」(`tenants/middleware.py` 的 `effective_tenant_id`,規則要跟 `_resolve_tenant_from_request` 一致:沒有公司的帳號不帶 `?tenant=` 會落到預設公司)。Django 管理後台由 `AdminMaintenanceGuard` 處理:任何公司在還原時只能看。平台後台(`/platform/*`)不帶 `?tenant=`,另外靠 `BlocksCompanyUnderMaintenance` 照實際要改的那一筆擋;新增會改某家公司資料的平台端點要掛它。還原被中斷時不自動解鎖;「中斷」看的是有沒有行程還握著工作的 advisory lock,不是看時間 |
+| 單號下限 | 進貨 / 銷貨 / 銷退 / 調撥單號 = `last_doc_seq()`(`apps/core/numbering.py`):最後一張單的流水與 `DocNumberFloor` 取大者。還原到舊備份時把已用過的最大號記進下限,不重用給過客人的號碼 |
 
 ## 程式碼定位
 
@@ -82,12 +91,14 @@ inventory-3c/
 │       ├── core/               TenantOwnedModel + TrigramSearchFilter
 │       ├── tenants/            Tenant + UserProfile + 平台後台 + auth(login/me/logout)+ 系統設定主檔(InvoiceType / InvoiceTrack / PaymentMethod)
 │       ├── catalog/            Product / Category
+│       ├── identity/           ProductAlias 別名庫 + 叫法比對(product_match)+ 新增防重複關卡(dedup)+ IntakeBatch/IntakeItem 待確認入庫
 │       ├── inventory/          Warehouse / ProductSerial / StockMovement
 │       ├── parties/            Supplier / Customer / Member / SalesPerson / Carrier / TelecomPlan / SimCard
 │       ├── purchasing/         PurchaseOrder + commit/void service
 │       ├── sales/              SalesOrder + commit/void/payment service + SalesReturn(銷退單)+ LegacyPurchase(舊系統匯入紀錄)
 │       ├── transfers/          TransferOrder + commit/void service
-│       └── cash/               PettyExpense 雜支單 + CashAdjustment 現金調整 + PhoneBillCollection 代收話費 + 營業日報 service
+│       ├── cash/               PettyExpense 雜支單 + CashAdjustment 現金調整 + PhoneBillCollection 代收話費 + 營業日報 service
+│       └── backup/             公司備份與還原(registry / container 加密 / export / jobs / restore)+ 維護鎖
 │
 └── frontend/
     └── src/

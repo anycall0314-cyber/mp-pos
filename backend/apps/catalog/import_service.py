@@ -21,6 +21,9 @@ from typing import Any
 from django.db import transaction
 from openpyxl import load_workbook
 
+from apps.identity.dedup import check_new_product
+from apps.identity.product_match import MatchContext
+
 from .models import Category, Product
 
 # 標題列關鍵字 → 內部欄位
@@ -159,6 +162,7 @@ def import_products_from_file(tenant, file_obj, filename: str, dry_run: bool = T
     success_rows: list[dict] = []
     skip_rows: list[dict] = []
     created_categories: list[str] = []
+    match_context = MatchContext(tenant)
 
     sid = transaction.savepoint()
 
@@ -200,6 +204,23 @@ def import_products_from_file(tenant, file_obj, filename: str, dry_run: bool = T
             )
             continue
 
+        # 防重複:匯入不替人按「不同款」。可能重複的列先不建,列出來讓人
+        # 到商品頁單筆新增、看過候選再決定。
+        dup = check_new_product(
+            tenant, name=name, barcode=(str(norm.get("barcode") or "")).strip(),
+            context=match_context,
+        )
+        if dup is not None:
+            skip_rows.append(
+                {
+                    "row_no": idx,
+                    "sku": sku,
+                    "name": name,
+                    "reason": dup.message + "(要建請到商品頁單筆新增並說明差異)",
+                }
+            )
+            continue
+
         # 類別:先試代碼(精確)、再試名稱;都找不到 → 建立
         cat = cat_by_code.get(category_raw.lower()) or cat_by_name.get(category_raw)
         if cat is None:
@@ -229,6 +250,7 @@ def import_products_from_file(tenant, file_obj, filename: str, dry_run: bool = T
             is_active=True,
         )
         p.save()
+        match_context.add(p)
 
         existing_skus.add(sku)
         existing_names.add(name)

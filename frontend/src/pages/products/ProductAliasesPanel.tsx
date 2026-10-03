@@ -5,6 +5,7 @@ import type { AliasKind } from "@/api/types";
 import { ComboBox } from "@/components/ComboBox";
 import { Banner } from "@/components/Banner";
 import { searchSuppliers } from "@/api/search";
+import { useCurrentUser } from "@/auth/AuthContext";
 
 const KIND_LABELS: Record<AliasKind, string> = {
   barcode: "條碼(GTIN/EAN/UPC)",
@@ -25,6 +26,9 @@ const KIND_ORDER: AliasKind[] = [
 export function ProductAliasesPanel({ productId }: { productId: number }) {
   const { data: aliases, isLoading } = useProductAliases(productId);
   const save = useSaveProductAlias();
+  // 改掉或停用別名等於改「這句話指到哪個商品」,限管理員
+  const role = useCurrentUser()?.profile?.role;
+  const isAdmin = role === "tenant_admin" || role === "platform_admin";
 
   const [kind, setKind] = useState<AliasKind>("vendor_name");
   const [value, setValue] = useState("");
@@ -51,7 +55,12 @@ export function ProductAliasesPanel({ productId }: { productId: number }) {
   }
 
   async function toggle(id: number, isActive: boolean) {
-    await save.mutateAsync({ id, is_active: !isActive });
+    setError("");
+    try {
+      await save.mutateAsync({ id, is_active: !isActive });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }
 
   const rows = aliases ?? [];
@@ -120,15 +129,19 @@ export function ProductAliasesPanel({ productId }: { productId: number }) {
                 <td>{a.value}</td>
                 <td>{KIND_LABELS[a.kind]}</td>
                 <td>{a.supplier_name || "通用"}</td>
-                <td>{a.is_active ? "啟用" : "停用"}</td>
                 <td>
-                  <button
-                    className="btn small"
-                    onClick={() => toggle(a.id, a.is_active)}
-                    disabled={save.isPending}
-                  >
-                    {a.is_active ? "停用" : "啟用"}
-                  </button>
+                  {a.is_active ? (a.verified ? "啟用" : "關鍵字") : "停用"}
+                </td>
+                <td>
+                  {isAdmin && (
+                    <button
+                      className="btn small"
+                      onClick={() => toggle(a.id, a.is_active)}
+                      disabled={save.isPending}
+                    >
+                      {a.is_active ? "停用" : "啟用"}
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

@@ -68,7 +68,7 @@ export function PurchaseProductPickerModal({
     api<Paginated<Product>>(
       `/products/?search=${encodeURIComponent(
         appliedSearch,
-      )}&page_size=50&is_active=true${secondhandFilter}`,
+      )}&page_size=50${secondhandFilter}`,
     )
       .then((data) => {
         if (cancelled) return;
@@ -78,7 +78,11 @@ export function PurchaseProductPickerModal({
           return data.results.map((p) => {
             const existed = prevMap.get(p.id);
             return existed
-              ? { product: p, selected: existed.selected, qty: existed.qty }
+              ? {
+                  product: p,
+                  selected: existed.selected && p.is_active,
+                  qty: existed.qty,
+                }
               : { product: p, selected: false, qty: 1 };
           });
         });
@@ -100,7 +104,10 @@ export function PurchaseProductPickerModal({
   }
 
   function toggleAll(sel: boolean) {
-    setRows((prev) => prev.map((r) => ({ ...r, selected: sel })));
+    // 已停用的不能勾(要先由管理員恢復),全選也不帶它
+    setRows((prev) =>
+      prev.map((r) => ({ ...r, selected: sel && r.product.is_active })),
+    );
   }
 
   function toggleOne(id: number, sel: boolean) {
@@ -239,12 +246,18 @@ export function PurchaseProductPickerModal({
                         <input
                           type="checkbox"
                           checked={r.selected}
+                          disabled={!r.product.is_active}
                           onChange={(e) =>
                             toggleOne(r.product.id, e.target.checked)
                           }
                         />
                       </td>
-                      <td>{r.product.name}</td>
+                      <td>
+                        {r.product.name}
+                        {!r.product.is_active && (
+                          <span className="intake-inactive-tag">已停用</span>
+                        )}
+                      </td>
                       <td>{r.product.sku}</td>
                       <td>{r.product.category_name}</td>
                       <td className="num">

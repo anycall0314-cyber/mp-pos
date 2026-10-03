@@ -2,20 +2,35 @@ from datetime import timedelta
 
 from django.contrib.postgres.search import TrigramWordSimilarity
 from django.db import IntegrityError, transaction
-from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum, Value
+from django.db.models import (
+    Case,
+    Count,
+    F,
+    IntegerField,
+    OuterRef,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+    When,
+)
 from django.db.models.functions import Coalesce, Greatest
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.filters import SearchFilter
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.filters import _is_postgres
+from apps.identity.dedup import DuplicateProduct
+from apps.identity.product_match import MatchResult, find_candidates
 from apps.inventory.models import ProductSerial, StockBalance, Warehouse
+from apps.parties.models import Supplier
 from apps.purchasing.models import PurchaseOrderItem
 from apps.sales.models import SalesOrderItem
-from apps.tenants.permissions import IsPlatformAdmin
+from apps.tenants.permissions import IsPlatformAdmin, is_tenant_admin
 from apps.transfers.models import TransferOrder, TransferOrderItem
 
 from .brand_import import import_brands_series
@@ -107,19 +122,45 @@ class ProductViewSet(viewsets.ModelViewSet):
         用 TrigramWordSimilarity 對查詢字串重新排序,最符合的排前面,品號作為次要排序。
         只作用在商品,供應商 / 客戶等其他 viewset 不受影響。
         """
-        qs = super().filter_queryset(queryset)
         q = self.request.query_params.get("search", "").strip()
+        # 共用比對找到的商品:寫法不同(reno-16 / reno16、側翻藍 / 側翻 藍)
+        # 或用別名叫的。只收「輸入的每一項都對得上」的,不收只是相關的。
+        # 這條路只看品名特徵與別名,不碰品號 / IMEI,下面兩個安全閥不受影響。
+        extra_ids = (
+            find_candidates(
+                self.request.tenant, q, limit=200, with_related=False
+            ).product_ids
+            if q else []
+        )
+        qs = queryset
+        for backend in list(self.filter_backends):
+            if extra_ids and issubclass(backend, SearchFilter):
+                # 其他篩選(啟用 / 類別 / 可銷貨)照常套在兩邊,這裡只把
+                # 「文字搜尋命中」放寬成「文字命中 或 共用比對命中」。
+                searched = backend().filter_queryset(self.request, qs, self)
+                qs = qs.filter(
+                    Q(pk__in=searched.order_by().values("pk")) | Q(pk__in=extra_ids)
+                )
+            else:
+                qs = backend().filter_queryset(self.request, qs, self)
         explicit_ordering = self.request.query_params.get("ordering")
-        if not q or explicit_ordering or not _is_postgres():
+        if not q or explicit_ordering:
             return qs
+        resolved = Case(
+            When(pk__in=extra_ids, then=Value(0)),
+            default=Value(1),
+            output_field=IntegerField(),
+        )
+        if not _is_postgres():
+            return qs.annotate(_resolved=resolved).order_by("_resolved", "sku")
         plain_fields = [
             f[1:] if f and f[0] in {"^", "=", "$", "@"} else f
             for f in self.get_search_fields()
         ]
         sim_exprs = [TrigramWordSimilarity(q, f) for f in plain_fields]
         max_sim = sim_exprs[0] if len(sim_exprs) == 1 else Greatest(*sim_exprs)
-        return qs.annotate(_relevance=max_sim).order_by(
-            F("_relevance").desc(nulls_last=True), "sku"
+        return qs.annotate(_relevance=max_sim, _resolved=resolved).order_by(
+            "_resolved", F("_relevance").desc(nulls_last=True), "sku"
         )
 
     def get_queryset(self):
@@ -136,7 +177,9 @@ class ProductViewSet(viewsets.ModelViewSet):
         # 庫存統計:可選 ?warehouse=N 限定倉別
         # serial_count / balance_total 都用 Subquery 避免被 search 的 JOIN 干擾
         # (例如打 IMEI 時若 Count 走主 queryset 的 JOIN 會被過濾掉算錯)
-        warehouse_id = self.request.query_params.get("warehouse")
+        warehouse_id = getattr(self, "_warehouse_override", None) or (
+            self.request.query_params.get("warehouse")
+        )
         serial_filter = Q(
             product=OuterRef("pk"),
             status=ProductSerial.Status.IN_STOCK,
@@ -204,8 +247,116 @@ class ProductViewSet(viewsets.ModelViewSet):
             qs = qs.filter(accessory_type=Product.AccessoryType.NONE)
         return qs
 
+    def create(self, request, *args, **kwargs):
+        # 防重複關卡的條碼鎖是交易層級的,整個新增要包在同一個交易裡
+        try:
+            with transaction.atomic():
+                return super().create(request, *args, **kwargs)
+        except DuplicateProduct as dup:
+            return Response(dup.as_dict(), status=status.HTTP_409_CONFLICT)
+        except IntegrityError as e:
+            # 兩個人同時建同名商品(或同一個請求被重送):兩邊都通過「品名沒人用」
+            # 的檢查,後到的在寫入時撞唯一鍵。資料庫已經擋住重複,這裡只是把
+            # 500 翻成看得懂的回應。
+            if "uniq_product_tenant_name" in str(e):
+                return Response(
+                    {"detail": "有人剛建立了同名商品,請重新搜尋後再確認"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            raise
+
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.tenant)
+
+    def update(self, request, *args, **kwargs):
+        # 改品名 / 條碼也過防重複關卡:不然可以先用無關的名字建檔,
+        # 再改成跟別的商品一樣,整道關卡就被繞過了。
+        try:
+            with transaction.atomic():
+                return super().update(request, *args, **kwargs)
+        except DuplicateProduct as dup:
+            return Response(dup.as_dict(), status=status.HTTP_409_CONFLICT)
+        except IntegrityError as e:
+            if "uniq_product_tenant_name" in str(e):
+                return Response(
+                    {"detail": "已經有同名的商品"}, status=status.HTTP_409_CONFLICT
+                )
+            raise
+
+    @action(detail=False, methods=["get"], url_path="resolve")
+    def resolve(self, request):
+        """一句叫法 → 可能是它的既有商品(進貨搜尋、新增前防重複共用)。
+
+        跟 `?search=` 的差別:
+        - 零庫存與**已停用**的都會列出來(零庫存不代表沒建檔)。
+        - 每筆附「符合原因」與「差異」,讓人判斷是不是同一款。
+        - `status` 只有在條碼 / 廠商料號 / 已確認別名 / 品號命中單一商品時
+          才是 `existing`;特徵再像也只是 `candidates`,由人選。
+
+        參數:q、supplier、barcode、vendor_sku、warehouse、is_secondhand、limit
+        """
+        params = request.query_params
+        tenant = request.tenant
+        supplier = None
+        if params.get("supplier", "").isdigit():
+            supplier = Supplier.objects.for_tenant(tenant).filter(
+                id=int(params["supplier"])
+            ).first()
+        secondhand = {"true": True, "false": False}.get(params.get("is_secondhand", ""))
+        try:
+            limit = max(1, min(int(params.get("limit", 20)), 50))
+        except ValueError:
+            limit = 20
+        found = find_candidates(
+            tenant, params.get("q", ""), supplier=supplier,
+            barcode=params.get("barcode", ""), vendor_sku=params.get("vendor_sku", ""),
+            is_secondhand=secondhand, limit=limit,
+        )
+        # 鎖倉帳號的「本店庫存」一律算自己那一倉,不能靠帶別的 warehouse 參數
+        # 去看他店庫存 —— 防重複搜尋不放寬鎖倉權限。
+        profile = getattr(request.user, "profile", None)
+        if profile and profile.is_warehouse_locked:
+            # 鎖倉但沒設門市的帳號:不能因此就採信它帶來的 warehouse 參數。
+            # 給一個不存在的倉 → 庫存一律顯示 0。
+            self._warehouse_override = str(profile.default_warehouse_id or 0)
+        products = {
+            p.id: p for p in self.get_queryset().filter(pk__in=found.product_ids)
+        }
+        admin = is_tenant_admin(request.user)
+        ctx = self.get_serializer_context()
+        rows = []
+        for c in found.candidates:
+            p = products.get(c.product_id)
+            if p is None:
+                continue
+            rows.append({
+                "product": ProductSerializer(p, context=ctx).data,
+                "level": c.level,
+                "score": c.score,
+                "reasons": c.reasons,
+                "differences": c.differences,
+                "conflict": c.conflict,
+                "is_active": p.is_active,
+                # 已停用的看得到但不能直接選;要先由管理員恢復
+                "selectable": p.is_active,
+                "can_restore": admin and not p.is_active,
+            })
+        status_out = found.status if rows else MatchResult.NONE
+        return Response({"status": status_out, "candidates": rows})
+
+    @action(detail=True, methods=["post"], url_path="restore")
+    def restore(self, request, pk=None):
+        """恢復已停用的商品(限公司管理員)。"""
+        if not is_tenant_admin(request.user):
+            return Response(
+                {"detail": "恢復已停用的商品需要管理員權限"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        product = self.get_object()
+        if not product.is_active:
+            product.is_active = True
+            product.save(update_fields=["is_active", "updated_at"])
+        return Response(self.get_serializer(self.get_queryset().get(pk=product.pk)).data)
 
     @action(
         detail=False,
@@ -917,7 +1068,15 @@ class ProductViewSet(viewsets.ModelViewSet):
                         context={"request": request},
                     )
                     if ser.is_valid():
-                        ser.save()
+                        try:
+                            with transaction.atomic():
+                                ser.save()
+                        except DuplicateProduct as dup:
+                            # 例:把同一個條碼批次套到好幾個商品上
+                            errors.append(
+                                {"id": p.id, "name": p.name, "errors": dup.message}
+                            )
+                            continue
                         updated_ids.append(p.id)
                     else:
                         errors.append(
@@ -964,7 +1123,11 @@ class ProductViewSet(viewsets.ModelViewSet):
             if dry_run:
                 result = preview_phone_model_bundle(request.tenant, payload)
             else:
-                result = create_phone_model_bundle(request.tenant, payload)
+                result = create_phone_model_bundle(
+                    request.tenant, payload, user=request.user
+                )
+        except DuplicateProduct as dup:
+            return Response(dup.as_dict(), status=status.HTTP_409_CONFLICT)
         except ValueError as e:
             return Response(
                 {"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST
@@ -1003,6 +1166,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         created = []
         errors = []
+        has_duplicate = False
         # 預先抓 category 名稱對應(per-tenant),per-row category_name 用到
         tenant = request.tenant
         cat_by_name = {
@@ -1030,7 +1194,28 @@ class ProductViewSet(viewsets.ModelViewSet):
                         data=payload, context={"request": request}
                     )
                     if serializer.is_valid():
-                        instance = serializer.save(tenant=tenant)
+                        try:
+                            # savepoint:被擋下的那一列不影響同批其他列繼續檢查
+                            with transaction.atomic():
+                                instance = serializer.save(tenant=tenant)
+                        except DuplicateProduct as dup:
+                            # 每一列各自說明;不能整批一次按「不同款」
+                            has_duplicate = True
+                            errors.append({
+                                "line": idx, "name": payload.get("name", ""),
+                                "errors": dup.message, "duplicate": dup.as_dict(),
+                            })
+                            continue
+                        except IntegrityError as e:
+                            # 有人同時建了同名的商品:資料庫擋住了,這裡回看得懂的錯
+                            if "uniq_product_tenant_name" not in str(e):
+                                raise
+                            has_duplicate = True
+                            errors.append({
+                                "line": idx, "name": payload.get("name", ""),
+                                "errors": "有人剛建立了同名商品,請重新確認",
+                            })
+                            continue
                         created.append(ProductSerializer(instance).data)
                     else:
                         errors.append({"line": idx, "errors": serializer.errors})
@@ -1039,7 +1224,10 @@ class ProductViewSet(viewsets.ModelViewSet):
         except ValueError:
             return Response(
                 {"detail": "部分品項失敗,已全部復原", "errors": errors},
-                status=status.HTTP_400_BAD_REQUEST,
+                status=(
+                    status.HTTP_409_CONFLICT if has_duplicate
+                    else status.HTTP_400_BAD_REQUEST
+                ),
             )
         return Response(
             {"created": created, "count": len(created)},
@@ -1224,5 +1412,5 @@ class PartTemplateViewSet(viewsets.ModelViewSet):
                 {"detail": "rows 為空,沒有要建立的項目"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        result = bulk_create_parts(request.tenant, category_id, rows)
+        result = bulk_create_parts(request.tenant, category_id, rows, user=request.user)
         return Response(result)

@@ -1257,6 +1257,54 @@ export interface ProductAlias {
   source: string;
   note: string;
   is_active: boolean;
+  created_by_name?: string;
+  updated_by_name?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** 一句叫法對到的既有商品(進貨搜尋 / 新增前防重複共用) */
+export interface ResolveCandidate {
+  product: Product;
+  /** identifier=條碼/料號/已確認叫法;exact=特徵完全相符;covers=輸入的都符合但商品還有別的特徵;related=同機型但有差異 */
+  level: "identifier" | "exact" | "covers" | "related";
+  score: number;
+  reasons: string[];
+  differences: string[];
+  conflict: boolean;
+  is_active: boolean;
+  /** 已停用的看得到但不能直接選 */
+  selectable: boolean;
+  /** 目前登入者可不可以恢復這個已停用的商品 */
+  can_restore: boolean;
+}
+
+/** 新增商品被防重複關卡擋下時,後端 409 回的內容 */
+export interface DuplicateCandidate {
+  id: number;
+  sku: string;
+  name: string;
+  category_name: string;
+  is_active: boolean;
+  level: string;
+  reasons: string[];
+  differences: string[];
+}
+
+export interface DuplicateBody {
+  detail: string;
+  code: "duplicate_product";
+  /** identifier=條碼 / 已確認叫法相同,不能繞過;similar=看起來同一款,寫下差異才能建 */
+  kind: "identifier" | "similar";
+  candidates: DuplicateCandidate[];
+  /** 批次入口:哪一筆對到哪些既有商品 */
+  items?: Array<{ name: string; kind: string; candidates: DuplicateCandidate[] }>;
+}
+
+export interface ResolveResult {
+  /** existing 只會來自可靠識別;特徵再像也只是 candidates */
+  status: "existing" | "candidates" | "conflict" | "none";
+  candidates: ResolveCandidate[];
 }
 
 export type IntakeMatchStatus =

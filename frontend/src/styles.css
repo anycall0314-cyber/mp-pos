@@ -1192,6 +1192,7 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
 }
 .combobox-option:last-child { border-bottom: 0; }
 .combobox-option.active { background: var(--accent); color: white; }
+.combobox-option.disabled { opacity: 0.55; cursor: not-allowed; }
 .combobox-option.active .combobox-option-secondary { color: rgba(255,255,255,0.8); }
 .combobox-option-create {
   background: rgba(96, 165, 250, 0.06);
@@ -5077,6 +5078,10 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   background: #f3f4f6 !important;
   color: #1f2937 !important;
 }
+/* 底色改淺之後,副標還是原本的白字就看不見了(庫存 / 符合原因都在副標) */
+:root[data-theme="light"] .combobox-option.active .combobox-option-secondary {
+  color: #6b7280;
+}
 :root[data-theme="light"] .combobox-option-create .combobox-option-label {
   color: #1f2937;
 }
@@ -5592,6 +5597,11 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
 }
 
 .intake-work { flex: 1; min-height: 0; }
+/* 這一頁的左右兩欄都只有一塊內容。沿用 .md-master(40px 工具列 + 表格)與
+   .md-detail(標題 + 內容 + 按鈕列)的多列版型時,內容會被塞進第一列那幾十 px,
+   只看得到表頭 / 標題,明細與候選全部被裁掉。 */
+.intake-work .md-master,
+.intake-work .md-detail { grid-template-rows: minmax(0, 1fr); }
 
 /* 狀態徽章 */
 .intake-badge {
@@ -5744,3 +5754,75 @@ tr.selected .intake-badge { filter: none; }
 }
 .alias-table th { color: var(--text-dim); font-weight: 500; }
 .alias-table tr.inactive td { opacity: 0.45; }
+
+/* ─── 新增商品防重複:「可能已經建過」面板 ─────────────── */
+.dup-panel {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #fb923c;
+  border-radius: 6px;
+  background: var(--panel);
+}
+.dup-title { font-weight: 600; margin-bottom: 8px; }
+.dup-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+.dup-row-main { min-width: 0; flex: 1; }
+.dup-row-sub { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
+.dup-row input { flex: 0 0 200px; }
+.dup-proceed {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.dup-proceed input { flex: 1; min-width: 0; }
+.dup-remember { margin: -4px 0 12px; font-size: 13px; }
+
+/* ─── 備份與還原 ─────────────────────────────────────── */
+.backup-page { max-width: 880px; }
+.backup-card {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.backup-card .section-head { margin-bottom: 10px; }
+.backup-facts {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 6px 12px;
+  margin: 0 0 10px;
+}
+.backup-facts dt { color: var(--text-dim); }
+.backup-facts dd { margin: 0; }
+.backup-credential {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid #fb923c;
+  border-radius: 6px;
+}
+.backup-credential code {
+  display: block;
+  font-size: 18px;
+  letter-spacing: 1px;
+  word-break: break-all;
+  user-select: all;
+}
+.backup-credential p { margin: 8px 0; color: var(--text-dim); font-size: 13px; }
+.backup-table { margin-top: 12px; width: 100%; }
+.backup-sub { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
+.backup-bad { color: #ef4444; white-space: pre-wrap; }
+.backup-good { color: #16a34a; }
+/* 不用 flex:td 變成 flex 之後就不是表格儲存格,底線會對不齊 */
+.backup-actions { text-align: right; white-space: nowrap; }
+.backup-actions .btn + .btn { margin-left: 6px; }
+.backup-upload { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.backup-upload input[type="text"], .backup-upload input:not([type]) { flex: 1; min-width: 180px; }
+.backup-report { margin-bottom: 12px; }

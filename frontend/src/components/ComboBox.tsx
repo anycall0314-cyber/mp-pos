@@ -13,6 +13,8 @@ export interface ComboOption<T = unknown> {
   label: string;
   secondary?: string;
   payload?: T;
+  /** 看得到但不能選(例:已停用的商品,要讓人認得它已經建過檔) */
+  disabled?: boolean;
 }
 
 interface ComboBoxProps<T = unknown> {
@@ -76,7 +78,9 @@ export function ComboBox<T = unknown>({
         const results = await fetchOptions(q);
         if (seq !== requestSeq.current) return;
         setOptions(results);
-        setHighlightIdx(0);
+        // 預設反白第一個「能選的」;第一筆若是不能選的(已停用)就往下找
+        const first = results.findIndex((o) => !o.disabled);
+        setHighlightIdx(first < 0 ? 0 : first);
       } finally {
         if (seq === requestSeq.current) setLoading(false);
       }
@@ -110,6 +114,7 @@ export function ComboBox<T = unknown>({
   }
 
   function pickOption(opt: ComboOption<T>) {
+    if (opt.disabled) return;
     onChange(opt.id, opt);
     setOpen(false);
     setQuery("");
@@ -151,12 +156,22 @@ export function ComboBox<T = unknown>({
       return;
     }
     const len = options.length + (onCreateNew && query.trim() ? 1 : 0);
+    // 上下鍵跳過不能選的選項(最多繞一圈)
+    const step = (i: number, delta: number) => {
+      if (len === 0) return 0;
+      let next = i;
+      for (let n = 0; n < len; n++) {
+        next = (next + delta + len) % len;
+        if (!options[next]?.disabled) return next;
+      }
+      return i;
+    };
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setHighlightIdx((i) => (len === 0 ? 0 : (i + 1) % len));
+      setHighlightIdx((i) => step(i, 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setHighlightIdx((i) => (len === 0 ? 0 : (i - 1 + len) % len));
+      setHighlightIdx((i) => step(i, -1));
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (highlightIdx < options.length) {
@@ -229,13 +244,16 @@ export function ComboBox<T = unknown>({
                 <li
                   key={opt.id}
                   role="option"
-                  aria-selected={idx === highlightIdx}
-                  className={`combobox-option${idx === highlightIdx ? " active" : ""}`}
+                  aria-selected={opt.disabled ? undefined : idx === highlightIdx}
+                  aria-disabled={opt.disabled || undefined}
+                  className={`combobox-option${idx === highlightIdx ? " active" : ""}${opt.disabled ? " disabled" : ""}`}
                   onMouseDown={(e) => {
                     e.preventDefault();
                     pickOption(opt);
                   }}
-                  onMouseEnter={() => setHighlightIdx(idx)}
+                  onMouseEnter={() => {
+                    if (!opt.disabled) setHighlightIdx(idx);
+                  }}
                 >
                   <span className="combobox-option-label">{opt.label}</span>
                   {opt.secondary && (

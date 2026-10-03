@@ -15,12 +15,21 @@ import {
   useSetIntakeHeader,
   useWarehouses,
 } from "@/api/hooks";
-import { searchCategories, searchProducts, searchSuppliers } from "@/api/search";
+import {
+  searchCategories,
+  searchProductsForPurchase,
+  searchSuppliers,
+} from "@/api/search";
+import { asDuplicate } from "@/api/client";
+import { useCurrentUser } from "@/auth/AuthContext";
+import { DuplicatePanel } from "@/pages/products/DuplicatePanel";
 import type {
+  DuplicateBody,
   IntakeBatchStatus,
   IntakeItem,
   IntakeMatchStatus,
   IntakeTaxMethod,
+  Product,
 } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox } from "@/components/ComboBox";
@@ -417,6 +426,9 @@ export function IntakePage() {
 }
 
 function ItemDetail({ item }: { item: IntakeItem }) {
+  const role = useCurrentUser()?.profile?.role;
+  const isAdmin = role === "tenant_admin" || role === "platform_admin";
+  const [pickError, setPickError] = useState("");
   const matchItem = useMatchIntakeItem();
   const rejectItem = useRejectIntakeItem();
   const newProduct = useNewProductForIntakeItem();
@@ -480,14 +492,25 @@ function ItemDetail({ item }: { item: IntakeItem }) {
    *  不先存的話,店員清空 OCR 讀錯的條碼後直接按「選這個」,後端讀到的
    *  還是資料庫裡的舊條碼,照樣會把錯的識別碼學成已確認的別名。
    */
-  async function chooseProduct(productId: number) {
+  async function chooseProduct(productId: number, inactiveName = "") {
     if (picking) return;
+    // 已停用的商品不會因為被選到就悄悄恢復:要管理員明確點頭
+    if (inactiveName && !confirm(`「${inactiveName}」已停用,要恢復並入庫嗎?`)) {
+      return;
+    }
     setPicking(true);
+    setPickError("");
     try {
       if (isDirty()) {
         await correctItem.mutateAsync(correctionPayload());
       }
-      await matchItem.mutateAsync({ id: item.id, product: productId });
+      await matchItem.mutateAsync({
+        id: item.id,
+        product: productId,
+        restore: !!inactiveName,
+      });
+    } catch (e) {
+      setPickError(e instanceof Error ? e.message : "對應失敗");
     } finally {
       setPicking(false);
     }
@@ -523,6 +546,9 @@ function ItemDetail({ item }: { item: IntakeItem }) {
     requires_serial: true,
   });
   const [npError, setNpError] = useState("");
+  // 防重複:後端說「可能已經建過」時的候選,以及使用者寫的差異
+  const [npDup, setNpDup] = useState<DuplicateBody | null>(null);
+  const [npReason, setNpReason] = useState("");
 
   const busy =
     picking ||
@@ -543,6 +569,8 @@ function ItemDetail({ item }: { item: IntakeItem }) {
       requires_serial: true,
     });
     setNpError("");
+    setNpDup(null);
+    setNpReason("");
     setDrawerOpen(true);
   }
 
@@ -567,10 +595,17 @@ function ItemDetail({ item }: { item: IntakeItem }) {
         color: np.color.trim(),
         region_version: np.region_version.trim(),
         requires_serial: np.requires_serial,
+        ...(npDup && npReason.trim() ? { distinct_reason: npReason.trim() } : {}),
       });
       setDrawerOpen(false);
     } catch (e) {
-      setNpError(e instanceof Error ? e.message : String(e));
+      const found = asDuplicate(e);
+      if (found) {
+        setNpDup(found);
+        setNpError("");
+      } else {
+        setNpError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
       setPicking(false);
     }
@@ -732,7 +767,7 @@ function ItemDetail({ item }: { item: IntakeItem }) {
                     </span>
                   )}
                   {c.is_active === false && (
-                    <span className="intake-inactive-tag">停售</span>
+                    <span className="intake-inactive-tag">已停用</span>
                   )}
                 </div>
                 <div className="intake-candidate-sub">
@@ -746,29 +781,46 @@ function ItemDetail({ item }: { item: IntakeItem }) {
               </div>
               <button
                 className={c.conflict ? "btn small" : "btn small primary"}
-                disabled={busy}
-                onClick={() => chooseProduct(c.product_id)}
+                disabled={busy || (c.is_active === false && !isAdmin)}
+                title={
+                  c.is_active === false && !isAdmin
+                    ? "已停用,需由管理員恢復"
+                    : undefined
+                }
+                onClick={() =>
+                  chooseProduct(
+                    c.product_id,
+                    c.is_active === false ? c.name : "",
+                  )
+                }
               >
-                選這個
+                {c.is_active === false
+                  ? isAdmin
+                    ? "恢復選用"
+                    : "已停用"
+                  : "選這個"}
               </button>
             </div>
           ))}
         </div>
       )}
 
+      {pickError && <Banner kind="error" message={pickError} />}
+
       <div className="intake-actions">
         <div className="intake-otherpick">
           <span className="intake-label">改對應其他商品</span>
-          <ComboBox
+          <ComboBox<Product>
             value={otherProduct}
             disabled={busy}
-            onChange={(id) => {
+            onChange={(id, opt) => {
               if (id !== "") {
-                chooseProduct(id);
+                const p = opt?.payload;
+                chooseProduct(id, p && p.is_active === false ? p.name : "");
                 setOtherProduct("");
               }
             }}
-            fetchOptions={(q) => searchProducts(q, { activeOnly: true })}
+            fetchOptions={(q) => searchProductsForPurchase(q)}
             placeholder="搜尋商品品名 / 品號"
           />
         </div>
@@ -792,6 +844,20 @@ function ItemDetail({ item }: { item: IntakeItem }) {
         onClose={() => setDrawerOpen(false)}
       >
         {npError && <Banner kind="error" message={npError} />}
+        {npDup && (
+          <DuplicatePanel
+            dup={npDup}
+            reason={npReason}
+            onReasonChange={setNpReason}
+            onUseExisting={(c) => {
+              // 就是這個 → 不建新品,這一行直接對到既有商品入庫
+              setDrawerOpen(false);
+              chooseProduct(c.id, c.is_active ? "" : c.name);
+            }}
+            onProceed={submitNewProduct}
+            busy={busy}
+          />
+        )}
         <Field label="品名" required>
           <input
             value={np.name}

@@ -9,6 +9,12 @@ from decimal import Decimal
 
 from django.db import transaction
 
+from apps.identity.dedup import (
+    DuplicateProduct,
+    guard_new_product,
+    record_distinct_decision,
+)
+
 from .models import (
     Category,
     PartTemplate,
@@ -193,7 +199,7 @@ def build_preview(tenant, template_id, model_keys, defaults=None):
 
 
 @transaction.atomic
-def bulk_create_parts(tenant, category_id, rows):
+def bulk_create_parts(tenant, category_id, rows, user=None):
     """批次建立零件 Product + ProductRelation。
 
     每筆 row: {model_key, name, sku, cost, safety_stock}
@@ -220,45 +226,61 @@ def bulk_create_parts(tenant, category_id, rows):
         if Product.objects.for_tenant(tenant).filter(sku=sku).exists():
             skipped.append(sku)
             continue
+        name = (r.get("name") or sku).strip()
         try:
-            prod = Product.objects.create(
-                tenant=tenant,
-                category=category,
-                sku=sku,
-                name=(r.get("name") or sku).strip(),
-                accessory_type=Product.AccessoryType.PHONE_SPECIFIC,
-                warehouse_type=Product.WarehouseType.PARTS,
-                requires_serial=False,
-                is_virtual=False,
-                is_secondhand=False,
-                lifecycle_status=Product.LifecycleStatus.ACTIVE,
-                safety_stock=int(r.get("safety_stock") or 0),
-                weighted_avg_cost=Decimal(str(r.get("cost") or "0")),
-            )
-            # 支援單機型 or 跨機型共用兩種 row:
-            # - shared rows: r["model_keys"] 為 list,逐一建關聯
-            # - 一般 rows: 用 r["model_key"]
-            target_keys: list[str] = []
-            mk_list = r.get("model_keys")
-            if isinstance(mk_list, list) and mk_list:
-                target_keys = [str(x).lower().strip() for x in mk_list if x]
-            else:
-                single = (r.get("model_key") or "").lower().strip()
-                if single:
-                    target_keys = [single]
-            for mk in target_keys:
-                host = hosts_by_key.get(mk)
-                if host and host.id != prod.id:
-                    ProductRelation.objects.get_or_create(
-                        tenant=tenant,
-                        host_model_key=mk,
-                        accessory_product=prod,
-                        defaults={
-                            "host_product": host,
-                            # 代表 SKU 已掛主檔就一起接上,新關係才有穩定身分
-                            "host_model": host.phone_model,
-                        },
-                    )
+            # 每一列各自過防重複關卡;要建就在那一列帶 distinct_reason
+            with transaction.atomic():
+                similar = guard_new_product(
+                    tenant, name=name, distinct_reason=r.get("distinct_reason", "")
+                )
+        except DuplicateProduct as dup:
+            errors.append({"sku": sku, "error": dup.message, "duplicate": dup.as_dict()})
+            continue
+        try:
+            # 每一列包一層 savepoint。少了它,其中一列撞唯一鍵會把整個交易弄壞:
+            # 後面每一列都失敗、最後整批回滾,回傳卻還寫著「建了 N 筆」。
+            with transaction.atomic():
+                prod = Product.objects.create(
+                    tenant=tenant,
+                    category=category,
+                    sku=sku,
+                    name=(r.get("name") or sku).strip(),
+                    accessory_type=Product.AccessoryType.PHONE_SPECIFIC,
+                    warehouse_type=Product.WarehouseType.PARTS,
+                    requires_serial=False,
+                    is_virtual=False,
+                    is_secondhand=False,
+                    lifecycle_status=Product.LifecycleStatus.ACTIVE,
+                    safety_stock=int(r.get("safety_stock") or 0),
+                    weighted_avg_cost=Decimal(str(r.get("cost") or "0")),
+                )
+                # 支援單機型 or 跨機型共用兩種 row:
+                # - shared rows: r["model_keys"] 為 list,逐一建關聯
+                # - 一般 rows: 用 r["model_key"]
+                target_keys: list[str] = []
+                mk_list = r.get("model_keys")
+                if isinstance(mk_list, list) and mk_list:
+                    target_keys = [str(x).lower().strip() for x in mk_list if x]
+                else:
+                    single = (r.get("model_key") or "").lower().strip()
+                    if single:
+                        target_keys = [single]
+                for mk in target_keys:
+                    host = hosts_by_key.get(mk)
+                    if host and host.id != prod.id:
+                        ProductRelation.objects.get_or_create(
+                            tenant=tenant,
+                            host_model_key=mk,
+                            accessory_product=prod,
+                            defaults={
+                                "host_product": host,
+                                # 代表 SKU 已掛主檔就一起接上,新關係才有穩定身分
+                                "host_model": host.phone_model,
+                            },
+                        )
+                record_distinct_decision(
+                    tenant, prod, similar, r.get("distinct_reason", ""), user
+                )
             created += 1
         except Exception as e:  # noqa: BLE001
             errors.append({"sku": sku, "error": str(e)})

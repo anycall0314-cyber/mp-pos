@@ -14,6 +14,12 @@ import { DraftBanner } from "@/components/DraftBanner";
 import { Checkbox, Field } from "@/components/Field";
 import { useModalDraft } from "@/hooks/useModalDraft";
 
+import {
+  BulkDuplicateRows,
+  type FlaggedRow,
+  flaggedRows,
+} from "./BulkDuplicateRows";
+
 const DRAFT_KEY = "modal-draft:bulk-add-products";
 
 interface Props {
@@ -70,6 +76,10 @@ export function BulkAddProductsModal({ open, onClose, onSuccess }: Props) {
     Array<{ line: number; errors: unknown }>
   >([]);
 
+  // 被防重複關卡擋下的列,以及每一列各自寫的差異(以品名為鍵)
+  const [flagged, setFlagged] = useState<FlaggedRow[]>([]);
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+
   const bulk = useBulkCreateProducts();
 
   const rows = useMemo(() => parseRows(raw), [raw]);
@@ -118,6 +128,7 @@ export function BulkAddProductsModal({ open, onClose, onSuccess }: Props) {
   async function submit() {
     setError(null);
     setLineErrors([]);
+    setFlagged([]);
     if (rows.length === 0) {
       setError("尚未貼上品名");
       return;
@@ -139,7 +150,14 @@ export function BulkAddProductsModal({ open, onClose, onSuccess }: Props) {
     };
     if (category) common.category = category as number;
     try {
-      const res = await bulk.mutateAsync({ common, items: rows });
+      const res = await bulk.mutateAsync({
+        common,
+        items: rows.map((r) =>
+          reasons[r.name]?.trim()
+            ? { ...r, distinct_reason: reasons[r.name].trim() }
+            : r,
+        ),
+      });
       draftHelper.markSavedAndClear();
       onSuccess(res.count);
       reset();
@@ -147,9 +165,11 @@ export function BulkAddProductsModal({ open, onClose, onSuccess }: Props) {
       if (e instanceof ApiHttpError) {
         const body = e.body;
         if (typeof body === "object" && body && "errors" in body) {
-          setLineErrors(
-            (body as { errors: Array<{ line: number; errors: unknown }> }).errors,
-          );
+          const errs = (
+            body as { errors: Array<{ line: number; errors: unknown }> }
+          ).errors;
+          setLineErrors(errs);
+          setFlagged(flaggedRows(errs));
           setError("部分品項失敗,請修正後重送");
         } else if (typeof body === "object" && body && "detail" in body) {
           setError(String((body as { detail: unknown }).detail));
@@ -166,6 +186,8 @@ export function BulkAddProductsModal({ open, onClose, onSuccess }: Props) {
     setRaw("");
     setError(null);
     setLineErrors([]);
+    setFlagged([]);
+    setReasons({});
   }
 
   function handleClose() {
@@ -184,6 +206,11 @@ export function BulkAddProductsModal({ open, onClose, onSuccess }: Props) {
         <div className="modal-title">批次新增商品</div>
         <div className="modal-body">
           {error && <Banner kind="error" message={error} />}
+          <BulkDuplicateRows
+            rows={flagged}
+            reasons={reasons}
+            onChange={(name, v) => setReasons((s) => ({ ...s, [name]: v }))}
+          />
           {draftHelper.draft && (
             <DraftBanner
               savedAt={draftHelper.draft.savedAt}
@@ -308,7 +335,11 @@ export function BulkAddProductsModal({ open, onClose, onSuccess }: Props) {
                           )}
                         </td>
                         <td style={{ color: "#ff7070", fontSize: 12 }}>
-                          {err ? JSON.stringify(err.errors) : ""}
+                          {err
+                            ? typeof err.errors === "string"
+                              ? err.errors
+                              : JSON.stringify(err.errors)
+                            : ""}
                         </td>
                       </tr>
                     );

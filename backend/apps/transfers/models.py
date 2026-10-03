@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db import models, transaction
 
 from apps.core.models import TenantOwnedModel
+from apps.core.numbering import last_doc_seq
 
 
 class TransferOrder(TenantOwnedModel):
@@ -77,18 +78,7 @@ class TransferOrder(TenantOwnedModel):
     def save(self, *args, **kwargs):
         if not self.no:
             with transaction.atomic():
-                last = (
-                    TransferOrder.objects.filter(tenant=self.tenant)
-                    .order_by("-id")
-                    .first()
-                )
-                if last and last.no:
-                    try:
-                        last_seq = int(last.no.split("-")[-1])
-                    except (ValueError, IndexError):
-                        last_seq = 0
-                else:
-                    last_seq = 0
+                last_seq = last_doc_seq(TransferOrder, self.tenant, "TR")
                 self.no = f"TR-{last_seq + 1:06d}"
         super().save(*args, **kwargs)
 

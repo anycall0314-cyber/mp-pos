@@ -8,6 +8,7 @@ import {
   useBulkCreateProducts,
   usePhoneSeriesList,
 } from "@/api/hooks";
+import { ApiHttpError } from "@/api/client";
 import { searchCategories } from "@/api/search";
 import type { Brand, Category, PhoneSeries } from "@/api/types";
 import { Banner } from "@/components/Banner";
@@ -16,6 +17,12 @@ import { DraftBanner } from "@/components/DraftBanner";
 import { Checkbox, Field } from "@/components/Field";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { useModalDraft } from "@/hooks/useModalDraft";
+
+import {
+  BulkDuplicateRows,
+  type FlaggedRow,
+  flaggedRows,
+} from "./BulkDuplicateRows";
 
 interface Props {
   open: boolean;
@@ -104,6 +111,9 @@ export function ProductExpanderModal({
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useBulkCreateProducts();
+  // 被防重複關卡擋下的列,以及每一列各自寫的差異(以品名為鍵)
+  const [flagged, setFlagged] = useState<FlaggedRow[]>([]);
+  const [reasons, setReasons] = useState<Record<string, string>>({});
 
   const axis1Values = useMemo(() => splitList(axis1Text), [axis1Text]);
   const axis2Values = useMemo(() => splitList(axis2Text), [axis2Text]);
@@ -288,6 +298,8 @@ export function ProductExpanderModal({
     setCompat(new Map());
     setCombos([]);
     setError(null);
+    setFlagged([]);
+    setReasons({});
   }
 
   async function handleCreate() {
@@ -301,10 +313,14 @@ export function ProductExpanderModal({
       setError("沒有勾選任何商品");
       return;
     }
+    setFlagged([]);
     const items: BulkProductRow[] = toCreate.map((c) => ({
       name: c.name,
       spec: c.spec,
       list_price: c.list_price || "0",
+      ...(reasons[c.name]?.trim()
+        ? { distinct_reason: reasons[c.name].trim() }
+        : {}),
     }));
     try {
       const res = await mutation.mutateAsync({
@@ -334,6 +350,9 @@ export function ProductExpanderModal({
       onSuccess(res.count);
       reset();
     } catch (e: unknown) {
+      if (e instanceof ApiHttpError && e.body && typeof e.body === "object") {
+        setFlagged(flaggedRows((e.body as { errors?: unknown }).errors));
+      }
       setError(e instanceof Error ? e.message : "建立失敗");
     }
   }
@@ -357,6 +376,11 @@ export function ProductExpanderModal({
         </div>
 
         {error && <Banner kind="error" message={error} />}
+        <BulkDuplicateRows
+          rows={flagged}
+          reasons={reasons}
+          onChange={(name, v) => setReasons((s) => ({ ...s, [name]: v }))}
+        />
         {draftHelper.draft && (
           <DraftBanner
             savedAt={draftHelper.draft.savedAt}

@@ -14,6 +14,7 @@ import {
 } from "@/api/hooks";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { hasRealReason } from "./DuplicatePanel";
 
 /**
  * 「新增手機型號」3 步 wizard。
@@ -249,6 +250,10 @@ export function NewPhoneModelWizardPage() {
   const [state, setState] = useState<WizardState>(INITIAL);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<PhoneModelBundleResult | null>(null);
+  // 預覽列出「可能已經建過」的 SKU 時,每一筆各自寫下差異才能建
+  const [distinctReasons, setDistinctReasons] = useState<Record<string, string>>(
+    {},
+  );
   const [created, setCreated] = useState<PhoneModelBundleResult | null>(null);
   const [templateApplied, setTemplateApplied] = useState<number | null>(null);
   const [conditionsSeeded, setConditionsSeeded] = useState(false);
@@ -340,6 +345,7 @@ export function NewPhoneModelWizardPage() {
       region_version: state.region_version.trim(),
       accessory_categories: state.accessory_categories,
       parts_items: state.parts_items,
+      distinct_reasons: distinctReasons,
       dry_run,
     };
   }
@@ -354,6 +360,11 @@ export function NewPhoneModelWizardPage() {
     try {
       const res = await create.mutateAsync(buildPayload(true));
       setPreview(res);
+      // 重新預覽後,只留下這次仍然被標出來的那幾筆的理由
+      const flagged = new Set((res.possible_duplicates ?? []).map((d) => d.name));
+      setDistinctReasons((s) =>
+        Object.fromEntries(Object.entries(s).filter(([name]) => flagged.has(name))),
+      );
       setStep(3);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -919,6 +930,38 @@ export function NewPhoneModelWizardPage() {
                   </div>
                 )}
 
+                {(preview.possible_duplicates ?? []).length > 0 && (
+                  <div className="dup-panel">
+                    <div className="dup-title">可能已經建過</div>
+                    {(preview.possible_duplicates ?? []).map((d) => (
+                      <div key={d.name} className="dup-row">
+                        <div className="dup-row-main">
+                          <div>{d.name}</div>
+                          <div className="dup-row-sub">
+                            既有:{d.candidates.map((c) => c.name).join("、")}
+                          </div>
+                        </div>
+                        {d.kind === "similar" ? (
+                          <input
+                            value={distinctReasons[d.name] ?? ""}
+                            onChange={(e) =>
+                              setDistinctReasons((s) => ({
+                                ...s,
+                                [d.name]: e.target.value,
+                              }))
+                            }
+                            placeholder="哪裡不同"
+                            maxLength={200}
+                          />
+                        ) : (
+                          <span className="dup-row-sub">
+                            條碼 / 叫法相同,請回去調整
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <PreviewTable items={preview.main} kind="main" />
                 {preview.parts.length > 0 && (
                   <PreviewTable items={preview.parts} kind="parts" />
@@ -949,7 +992,14 @@ export function NewPhoneModelWizardPage() {
                     type="button"
                     className="btn primary btn-save"
                     onClick={commitCreate}
-                    disabled={create.isPending}
+                    disabled={
+                      create.isPending ||
+                      (preview.possible_duplicates ?? []).some(
+                        (d) =>
+                          d.kind !== "similar" ||
+                          !hasRealReason(distinctReasons[d.name]),
+                      )
+                    }
                   >
                     {create.isPending
                       ? "建立中…"

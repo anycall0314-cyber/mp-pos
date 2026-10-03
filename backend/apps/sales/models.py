@@ -5,6 +5,7 @@ from django.conf import settings
 from django.db import models, transaction
 
 from apps.core.models import TenantOwnedModel
+from apps.core.numbering import last_doc_seq
 
 
 class SalesOrder(TenantOwnedModel):
@@ -148,18 +149,7 @@ class SalesOrder(TenantOwnedModel):
     def save(self, *args, **kwargs):
         if not self.no:
             with transaction.atomic():
-                last = (
-                    SalesOrder.objects.filter(tenant=self.tenant)
-                    .order_by("-id")
-                    .first()
-                )
-                if last and last.no:
-                    try:
-                        last_seq = int(last.no.split("-")[-1])
-                    except (ValueError, IndexError):
-                        last_seq = 0
-                else:
-                    last_seq = 0
+                last_seq = last_doc_seq(SalesOrder, self.tenant, "SO")
                 self.no = f"SO-{last_seq + 1:06d}"
         super().save(*args, **kwargs)
 
@@ -469,18 +459,7 @@ class SalesReturn(TenantOwnedModel):
     def save(self, *args, **kwargs):
         if not self.no:
             with transaction.atomic():
-                last = (
-                    SalesReturn.objects.filter(tenant=self.tenant)
-                    .order_by("-id")
-                    .first()
-                )
-                if last and last.no:
-                    try:
-                        last_seq = int(last.no.split("-")[-1])
-                    except (ValueError, IndexError):
-                        last_seq = 0
-                else:
-                    last_seq = 0
+                last_seq = last_doc_seq(SalesReturn, self.tenant, "SR")
                 self.no = f"SR-{last_seq + 1:06d}"
         super().save(*args, **kwargs)
 

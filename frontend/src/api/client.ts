@@ -1,3 +1,5 @@
+import type { DuplicateBody } from "./types";
+
 // 預設走相對路徑(前後端同 host,Django serve dist)。
 // 若 build 時設了 VITE_API_BASE 則用絕對 URL(前端獨立部署到 CDN 情境)。
 const BASE = import.meta.env.VITE_API_BASE || "/api/v1";
@@ -33,6 +35,20 @@ export class ApiHttpError extends Error {
     this.status = status;
     this.body = body;
   }
+}
+
+/** 這個錯誤是不是「新增商品被防重複關卡擋下」;是的話回傳後端給的候選 */
+export function asDuplicate(e: unknown): DuplicateBody | null {
+  if (
+    e instanceof ApiHttpError &&
+    e.status === 409 &&
+    e.body &&
+    typeof e.body === "object" &&
+    (e.body as { code?: unknown }).code === "duplicate_product"
+  ) {
+    return e.body as DuplicateBody;
+  }
+  return null;
 }
 
 // 收到 401 時通知 AuthContext 清掉 token 並導去 login。

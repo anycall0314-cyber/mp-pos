@@ -54,13 +54,25 @@ class ProductAlias(TenantOwnedModel):
     )
     verified = models.BooleanField(
         "已確認", default=True,
-        help_text="人工確認過的別名(從待確認區學來的都算);自動猜的可設 False",
+        help_text=(
+            "True = 這個叫法只指這一個商品,下次可以直接對應。"
+            "False = 只是搜尋用的關鍵字(太籠統、或同一句話有好幾款),"
+            "找得到候選但不會自動對應,同一句話可以掛在多個商品上"
+        ),
     )
     source = models.CharField(
         "來源", max_length=12, choices=Source.choices, default=Source.MANUAL
     )
     note = models.CharField("備註", max_length=200, blank=True)
     is_active = models.BooleanField("啟用", default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        related_name="+", null=True, blank=True, verbose_name="建立者",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        related_name="+", null=True, blank=True, verbose_name="最後修改者",
+    )
 
     class Meta:
         constraints = [
@@ -70,11 +82,20 @@ class ProductAlias(TenantOwnedModel):
                 condition=Q(kind="barcode", is_active=True),
                 name="uniq_alias_barcode",
             ),
-            # 同一廠商、同一料號 / 品名,不重複。
+            # 同一廠商、同一料號 / 品名,「已確認」的對應只能有一個。
+            # 只是關鍵字(verified=False)的不受限,同一句話可以掛多個商品。
             models.UniqueConstraint(
                 fields=["tenant", "supplier", "kind", "normalized_value"],
-                condition=Q(is_active=True),
+                condition=Q(is_active=True, verified=True),
                 name="uniq_alias_vendor_ref",
+            ),
+            # 通用別名(不分廠商)另外一條。上面那條在 supplier 為 NULL 時擋不住:
+            # PostgreSQL 把 NULL 視為彼此不相等,同一句話可以重複建好幾筆、
+            # 各指各的商品,查詢端再 `.first()` 任選一個。
+            models.UniqueConstraint(
+                fields=["tenant", "kind", "normalized_value"],
+                condition=Q(supplier__isnull=True, is_active=True, verified=True),
+                name="uniq_alias_generic",
             ),
         ]
         indexes = [
@@ -94,6 +115,37 @@ class ProductAlias(TenantOwnedModel):
     def __str__(self) -> str:
         who = self.supplier.name if self.supplier_id else "通用"
         return f"[{who}] {self.value} → {self.product_id}"
+
+
+class ProductDistinctDecision(TenantOwnedModel):
+    """新增商品時「系統說可能重複,人說是不同款」的那次決定。
+
+    名稱相似不等於同一個實物(不同材質 / 品牌 / 包裝),所以不強制合併;
+    但要寫下哪裡不同才能建。留下來是為了之後回頭看得出「當時為什麼建了兩個」。
+    """
+
+    product = models.ForeignKey(
+        "catalog.Product", on_delete=models.CASCADE,
+        related_name="distinct_decisions", verbose_name="新建的商品",
+    )
+    similar_products = models.JSONField(
+        "當時相似的既有商品", default=list,
+        help_text='[{"id","sku","name"}, ...] 當下的快照,不跟著之後改名',
+    )
+    reason = models.CharField("哪裡不同", max_length=200)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        related_name="+", null=True, blank=True, verbose_name="決定者",
+    )
+
+    class Meta:
+        indexes = [models.Index(fields=["tenant", "product"])]
+        ordering = ["-id"]
+        verbose_name = "不同款決定"
+        verbose_name_plural = "不同款決定"
+
+    def __str__(self) -> str:
+        return f"{self.product_id}:{self.reason[:20]}"
 
 
 class IntakeBatch(TenantOwnedModel):

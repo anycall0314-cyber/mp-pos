@@ -40,6 +40,25 @@ def _resolve_tenant_from_request(request):
     return _get_default_tenant()
 
 
+def effective_tenant_id(request, user):
+    """這個請求實際會落在哪一家公司(只回 id、不建資料)。
+
+    規則必須跟上面的 `_resolve_tenant_from_request` 一模一樣:公司維護鎖用它判斷
+    「這個請求會不會動到維護中的公司」。兩邊不一致的話,沒有自己公司的帳號
+    (平台管理員)不帶 ?tenant= 時會落到預設公司,鎖卻看不到。改一邊要改另一邊
+    (apps/backup 的測試會比對兩者)。
+    """
+    from apps.tenants.models import Tenant
+
+    profile = getattr(user, "profile", None)
+    if profile and profile.tenant_id:
+        return profile.tenant_id
+    raw = request.GET.get("tenant") or request.headers.get("X-Tenant-ID")
+    if raw and str(raw).isdigit() and Tenant.objects.filter(pk=int(raw)).exists():
+        return int(raw)
+    return settings.DEFAULT_TENANT_ID
+
+
 class TenantMiddleware:
     """從登入帳號的 UserProfile 解析 tenant;未登入回 DEFAULT_TENANT_ID。
 

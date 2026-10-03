@@ -1,12 +1,13 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 
-import { ApiHttpError } from "@/api/client";
+import { ApiHttpError, asDuplicate } from "@/api/client";
 import {
   useBrands,
   usePhoneSeriesList,
   useSaveBrand,
   useSaveCategory,
   useSavePhoneSeries,
+  useRememberPhrase,
   useSaveProduct,
 } from "@/api/hooks";
 import { searchCategories } from "@/api/search";
@@ -14,6 +15,8 @@ import type {
   AccessoryType,
   Brand,
   Category,
+  DuplicateBody,
+  DuplicateCandidate,
   LifecycleStatus,
   PhoneSeries,
   Product,
@@ -24,6 +27,8 @@ import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Checkbox, Field } from "@/components/Field";
+
+import { DuplicatePanel } from "./DuplicatePanel";
 import { useModalDraft } from "@/hooks/useModalDraft";
 
 /** 比對兩個 form state 是否不同(用於 dirty 判斷) */
@@ -49,6 +54,8 @@ interface ProductFormProps {
   initial?: Product | null;
   onClose: () => void;
   onSaved?: (p: Product) => void;
+  /** 新增時發現已經建過,使用者選了「就是這個」 */
+  onUseExisting?: (productId: number, note?: string) => void;
 }
 
 interface FormState {
@@ -176,7 +183,13 @@ export function ProductForm({
   initial,
   onClose,
   onSaved,
+  onUseExisting,
 }: ProductFormProps) {
+  // 防重複:後端說「可能已經建過」時的候選,以及使用者寫的差異
+  const [dup, setDup] = useState<DuplicateBody | null>(null);
+  const [distinctReason, setDistinctReason] = useState("");
+  const [rememberName, setRememberName] = useState(true);
+  const rememberPhrase = useRememberPhrase();
   const [state, setState] = useState<FormState>(toState(initial));
   const [categoryOption, setCategoryOption] =
     useState<ComboOption<Category> | null>(null);
@@ -233,6 +246,9 @@ export function ProductForm({
       );
       setError(null);
       setFieldErrors({});
+      setDup(null);
+      setDistinctReason("");
+      setRememberName(true);
       setShowNewCategory(false);
       setNewCategory({ code: "", name: "", sort_order: "" });
       setClosePromptOpen(false);
@@ -280,8 +296,29 @@ export function ProductForm({
     }
   }
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  // 品名或條碼改了,先前那批候選就不算數,下次儲存重新檢查
+  useEffect(() => {
+    setDup(null);
+  }, [state.name, state.barcode]);
+
+  /** 「就是這個」:不新增,改用既有商品;勾了就順便記住剛剛打的叫法 */
+  async function useExisting(c: DuplicateCandidate) {
+    let note: string | undefined;
+    if (rememberName && state.name.trim()) {
+      try {
+        await rememberPhrase.mutateAsync({ product: c.id, value: state.name.trim() });
+      } catch (e) {
+        // 沒記住不影響「改用既有商品」,但要讓人知道(例:這句話已指到別的商品)
+        note = "叫法沒有記住:" + (e instanceof Error ? e.message : String(e));
+      }
+    }
+    draftHelper.markSavedAndClear();
+    onUseExisting?.(c.id, note);
+    onClose();
+  }
+
+  async function submit(e?: FormEvent) {
+    e?.preventDefault();
     setError(null);
     setFieldErrors({});
     if (!state.category) {
@@ -320,12 +357,20 @@ export function ProductForm({
         external_sale_price: state.external_sale_price || "0",
         min_sale_price: state.min_sale_price || "0",
         is_active: state.is_active,
+        ...(dup && distinctReason.trim()
+          ? { distinct_reason: distinctReason.trim() }
+          : {}),
       });
       // 儲存成功 → 清掉草稿 + 阻止 unmount flush 再寫回
       if (!isEdit) draftHelper.markSavedAndClear();
       onSaved?.(saved);
       onClose();
     } catch (e) {
+      const found = asDuplicate(e);
+      if (found) {
+        setDup(found);
+        return;
+      }
       if (e instanceof ApiHttpError && e.body && typeof e.body === "object") {
         const body = e.body as Record<string, string[] | string>;
         const fe: Record<string, string[]> = {};
@@ -399,6 +444,28 @@ export function ProductForm({
       }
     >
       {error && <Banner kind="error" message={error} />}
+      {dup && (
+        <>
+          <DuplicatePanel
+            dup={dup}
+            reason={distinctReason}
+            onReasonChange={setDistinctReason}
+            onUseExisting={isEdit ? undefined : useExisting}
+            onProceed={() => submit()}
+            busy={saveProduct.isPending || rememberPhrase.isPending}
+          />
+          {!isEdit && (
+            <label className="checkbox dup-remember">
+              <input
+                type="checkbox"
+                checked={rememberName}
+                onChange={(e) => setRememberName(e.target.checked)}
+              />
+              記住這個叫法
+            </label>
+          )}
+        </>
+      )}
       {draftHelper.draft && !isEdit && (
         <div className="pf-draft-banner">
           <span>

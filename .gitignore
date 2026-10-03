@@ -23,6 +23,8 @@ coverage.xml
 db.sqlite3
 db.sqlite3-journal
 media/
+# 公司備份檔與還原暫存(含會員 / 維修資料,絕不進版控)
+backup_store/
 staticfiles/
 *.log
 # Node

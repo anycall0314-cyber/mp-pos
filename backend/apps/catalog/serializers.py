@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 
 from .models import (
     Brand,
@@ -263,6 +264,10 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
         write_only=True,
         help_text="(deprecated)請用 related_host_keys 改以機型 key 為單位",
     )
+    # 防重複關卡說「可能相同」時,要寫下哪裡不同才能建(見 identity/dedup.py)
+    distinct_reason = serializers.CharField(
+        required=False, allow_blank=True, write_only=True, max_length=200,
+    )
     # (新)配件 → 機型 key 清單,以機型為單位涵蓋該款所有 SKU 變體
     related_host_keys = serializers.ListField(
         child=serializers.CharField(allow_blank=False),
@@ -322,6 +327,7 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
             "min_sale_price",
             "related_host_ids",
             "related_host_keys",
+            "distinct_reason",
             "is_active",
             "stock_qty",
             "created_at",
@@ -346,8 +352,8 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
             "updated_at",
         ]
 
-    def validate_name(self, value):
-        return self._tenant_unique(Product.objects, "name", value)
+    # 品名同名不在這裡擋:交給防重複關卡(identity/dedup.py),它會指出是哪一筆
+    # 既有商品並回候選;資料庫的唯一約束仍然是最後一道。
 
     def validate_phone_model(self, value):
         """機型是 per-tenant 主檔,不能指到別的租戶的機型。
@@ -390,9 +396,33 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
+        from apps.identity.dedup import guard_new_product, record_distinct_decision
+
         host_keys = validated_data.pop("related_host_keys", None)
         host_ids = validated_data.pop("related_host_ids", None)
+        reason = validated_data.pop("distinct_reason", "")
+        # 所有走這個 serializer 的新增(單筆 / 批次 / 直接打 API)都過同一道關卡。
+        # 擋下時丟 DuplicateProduct,由 view 轉成 409 + 候選。
+        tenant = validated_data["tenant"]
+        category = validated_data.get("category")
+        similar = guard_new_product(
+            tenant,
+            name=validated_data.get("name", ""),
+            spec=validated_data.get("spec", ""),
+            color=validated_data.get("color", ""),
+            capacity=validated_data.get("capacity", ""),
+            barcode=validated_data.get("barcode", ""),
+            is_secondhand=bool(
+                validated_data.get("is_secondhand")
+                or (category is not None and category.is_secondhand_default)
+            ),
+            distinct_reason=reason,
+        )
         instance = super().create(validated_data)
+        request = self.context.get("request")
+        record_distinct_decision(
+            tenant, instance, similar, reason, getattr(request, "user", None)
+        )
         if host_keys is not None:
             self._sync_host_relations_by_keys(instance, host_keys)
         elif host_ids is not None:
@@ -400,9 +430,47 @@ class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
         return instance
 
     def update(self, instance, validated_data):
+        # 恢復已停用的商品限公司管理員。停用後再啟用等於讓它重新出現在
+        # 進貨 / 銷貨可選清單,不能由任何人順手勾回來。
+        if validated_data.get("is_active") and not instance.is_active:
+            from apps.tenants.permissions import is_tenant_admin
+
+            request = self.context.get("request")
+            if request is not None and not is_tenant_admin(request.user):
+                raise PermissionDenied("恢復已停用的商品需要管理員權限")
+        from apps.identity.dedup import guard_new_product, record_distinct_decision
+
         host_keys = validated_data.pop("related_host_keys", None)
         host_ids = validated_data.pop("related_host_ids", None)
+        reason = validated_data.pop("distinct_reason", "")
+        # 改到「這是哪個商品」的欄位才檢查(改售價、狀態不會多問)。
+        # 自己不算;條碼只在有改條碼時查。
+        new = lambda k: validated_data.get(k, getattr(instance, k))  # noqa: E731
+        identity_changed = any(
+            k in validated_data and validated_data[k] != getattr(instance, k)
+            for k in ("name", "spec", "color", "capacity")
+        )
+        barcode_changed = (
+            "barcode" in validated_data and validated_data["barcode"] != instance.barcode
+        )
+        similar = []
+        if identity_changed or barcode_changed:
+            similar = guard_new_product(
+                instance.tenant,
+                name=new("name") if identity_changed else "",
+                spec=new("spec") if identity_changed else "",
+                color=new("color") if identity_changed else "",
+                capacity=new("capacity") if identity_changed else "",
+                barcode=new("barcode") if barcode_changed else "",
+                is_secondhand=bool(new("is_secondhand")),
+                distinct_reason=reason,
+                exclude_id=instance.id,
+            )
         instance = super().update(instance, validated_data)
+        request = self.context.get("request")
+        record_distinct_decision(
+            instance.tenant, instance, similar, reason, getattr(request, "user", None)
+        )
         if host_keys is not None:
             self._sync_host_relations_by_keys(instance, host_keys)
         elif host_ids is not None:

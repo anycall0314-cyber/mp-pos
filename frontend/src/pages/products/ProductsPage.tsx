@@ -8,6 +8,7 @@ import {
   useProductsByPhoneModel,
   useSaveCategory,
 } from "@/api/hooks";
+import { api } from "@/api/client";
 import type { Product } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
@@ -960,6 +961,19 @@ export function ProductsPage() {
         open={drawerOpen}
         initial={drawerInitial}
         onClose={() => setDrawerOpen(false)}
+        onUseExisting={(id, note) => {
+          if (note) {
+            setBulkResult(note);
+            setTimeout(() => setBulkResult(null), 6000);
+          }
+          // 用品號把那筆找出來並選起來,讓人直接看到既有的那一筆
+          api<Product>(`/products/${id}/`).then((p) => {
+            setProductQuery(p.sku);
+            setAppliedProductQuery(p.sku);
+            setLeftTab("products");
+            setSelection({ kind: "product", id });
+          });
+        }}
       />
       <BulkAddProductsModal
         open={bulkOpen}

@@ -7,6 +7,7 @@ import {
   ClearancePressureResponse,
   CompatibilityResponse,
   Customer,
+  DuplicateCandidate,
   HomeSummary,
   InventoryAlertsResponse,
   InvoiceTrack,
@@ -755,6 +756,8 @@ export interface BulkProductRow {
   list_price?: string;
   /** 每行可選的類別名稱,後端依名稱比對 Category;空白 → 使用 common.category */
   category_name?: string;
+  /** 這一列被判定可能重複時,寫下哪裡不同才能建 */
+  distinct_reason?: string;
 }
 export interface BulkProductCommon {
   category?: number;
@@ -818,7 +821,13 @@ export function useBulkCreateProducts() {
 export function useSaveProduct() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: Partial<Product> & { id?: number }) => {
+    mutationFn: (
+      payload: Partial<Product> & {
+        id?: number;
+        /** 系統說可能重複時,寫下哪裡不同才能建 */
+        distinct_reason?: string;
+      },
+    ) => {
       const { id, ...body } = payload;
       const method = id ? "PATCH" : "POST";
       const url = id ? `/products/${id}/` : "/products/";
@@ -1798,6 +1807,8 @@ export interface PhoneModelBundlePayload {
   colors: string[];
   /** 地區版本(台版 / 港版 …);整批一個值,不是維度 */
   region_version: string;
+  /** 預覽列出可能重複時,每一筆各自寫哪裡不同:{品名: 理由} */
+  distinct_reasons?: Record<string, string>;
   accessory_categories: string[];
   parts_items: Array<{
     name: string;
@@ -1812,6 +1823,12 @@ export interface PhoneModelBundlePayload {
 export interface PhoneModelBundleResult {
   model_name: string;
   model_key: string;
+  /** 可能跟既有商品重複的 SKU(預覽時列出) */
+  possible_duplicates?: Array<{
+    name: string;
+    kind: string;
+    candidates: DuplicateCandidate[];
+  }>;
   main_count: number;
   parts_count: number;
   /** 相容配件類別槽位記錄,不會建 SKU(配件走獨立 wizard) */
@@ -1996,6 +2013,25 @@ export const useProductAliases = (product: number | null) =>
     enabled: product != null,
   });
 
+/** 「記住這個叫法」:把一句話記到一個既有商品上 */
+export function useRememberPhrase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: {
+      product: number;
+      value: string;
+      supplier?: number | null;
+      /** 這句話已指到別的商品時明確要求改指(限管理員) */
+      repoint?: boolean;
+    }) =>
+      api<{ action: string; alias: ProductAlias | null }>(
+        "/identity/aliases/remember/",
+        { method: "POST", body: JSON.stringify(v) },
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["product-aliases"] }),
+  });
+}
+
 export function useSaveProductAlias() {
   const qc = useQueryClient();
   return useMutation({
@@ -2089,10 +2125,17 @@ function invalidateIntake(qc: ReturnType<typeof useQueryClient>) {
 export function useMatchIntakeItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { id: number; product: number; learn_alias?: boolean }) =>
+    mutationFn: (v: {
+      id: number;
+      product: number;
+      learn_alias?: boolean;
+      /** 商品已停用時,明確要求恢復(限管理員) */
+      restore?: boolean;
+    }) =>
       intakeItemAction(`/identity/intake-items/${v.id}/match/`, {
         product: v.product,
         learn_alias: v.learn_alias ?? true,
+        restore: v.restore ?? false,
       }),
     onSuccess: () => invalidateIntake(qc),
   });
@@ -2110,6 +2153,7 @@ export function useNewProductForIntakeItem() {
       region_version?: string;
       requires_serial?: boolean;
       learn_alias?: boolean;
+      distinct_reason?: string;
     }) => {
       const { id, ...body } = v;
       return intakeItemAction(
