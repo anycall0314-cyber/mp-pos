@@ -5826,3 +5826,39 @@ tr.selected .intake-badge { filter: none; }
 .backup-upload { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .backup-upload input[type="text"], .backup-upload input:not([type]) { flex: 1; min-width: 180px; }
 .backup-report { margin-bottom: 12px; }
+
+/* ---- 舊 POS 紀錄(會員頁)與舊系統對照頁 ---- */
+.legacy-filters { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.legacy-filters input, .legacy-filters select { min-width: 0; width: 130px; }
+.legacy-tag {
+  margin-left: 6px; font-size: 10px; padding: 1px 4px;
+  border: 1px solid var(--text-dim); border-radius: 3px; color: var(--text-dim);
+}
+.legacy-sub { color: var(--text-dim); font-size: 12px; }
+.legacy-links { margin: 6px 0 10px; display: grid; gap: 6px; }
+.legacy-candidate {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+}
+.legacy-pager { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin-top: 8px; }
+.legacy-doc-modal { width: min(960px, calc(100vw - 32px)); max-width: none; }
+.legacy-doc-modal th { white-space: nowrap; }
+.legacy-doc-modal td.num, .legacy-doc-modal th.num { text-align: right; white-space: nowrap; }
+.legacy-doc-modal td:nth-child(6) { white-space: nowrap; }
+.legacy-doc-modal .modal-body { overflow-x: auto; }
+.legacy-page { max-width: 1100px; }
+.legacy-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.legacy-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.legacy-toolbar input { width: 220px; max-width: 100%; }
+.legacy-actions { white-space: nowrap; text-align: right; }
+.legacy-actions .btn + .btn { margin-left: 6px; }
+.legacy-pick { display: grid; gap: 6px; padding: 8px; background: var(--surface-2, transparent); }
+.legacy-raw { white-space: pre-wrap; font-size: 12px; max-height: 240px; overflow: auto; }
+@media (max-width: 640px) {
+  .legacy-filters input, .legacy-filters select { width: calc(50% - 6px); }
+  .legacy-candidate { flex-direction: column; align-items: flex-start; }
+}
+.legacy-table-wrap { overflow-x: auto; }
+.legacy-table-wrap table { min-width: 560px; }
+.legacy-table-wrap th, .legacy-table-wrap td { padding: 6px 8px; }
+.legacy-table-wrap th.num, .legacy-table-wrap td.num { text-align: right; }

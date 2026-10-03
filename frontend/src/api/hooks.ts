@@ -50,6 +50,14 @@ import {
   TelecomPlan,
   TransferOrder,
   Warehouse,
+  LegacyCandidate,
+  LegacyException,
+  LegacyHistoryDocDetail,
+  LegacyHistoryPage,
+  LegacyMapKind,
+  LegacyMapsPage,
+  LegacyMemberRow,
+  LegacyMembersPage,
 } from "./types";
 
 // 通用：把分頁 results 攤平回傳（MVP 一頁 50 筆夠用）
@@ -2235,3 +2243,86 @@ export function useSetIntakeHeader() {
     },
   });
 }
+
+// ---- 舊 POS(歐睿)十年會員消費 ----
+export interface LegacyHistoryFilters {
+  date_from?: string;
+  date_to?: string;
+  store?: string;
+  doc_type?: string;
+  doc_no?: string;
+}
+
+function legacyQuery(params: Record<string, string | number | undefined>) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== "") q.set(k, String(v));
+  }
+  return q.toString();
+}
+
+/** 某位會員的舊 POS 單據(分頁);summary 是後端算的完整篩選範圍合計 */
+export const useLegacyHistory = (
+  memberId: number | null,
+  filters: LegacyHistoryFilters,
+  page: number,
+) =>
+  useQuery({
+    queryKey: ["legacy-history", memberId, filters, page],
+    queryFn: () =>
+      api<LegacyHistoryPage>(
+        `/legacy/history/?${legacyQuery({ member: memberId ?? "", page, page_size: 20, ...filters })}`,
+      ),
+    enabled: memberId != null,
+  });
+
+export const useLegacyDocument = (id: number | null, memberId: number) =>
+  useQuery({
+    queryKey: ["legacy-document", id, memberId],
+    queryFn: () =>
+      api<LegacyHistoryDocDetail>(`/legacy/history/${id}/?member=${memberId}`),
+    enabled: id != null,
+  });
+
+/** 這位會員可能對應的舊 POS 會員(管理員) */
+export const useLegacyCandidates = (memberId: number | null, enabled: boolean) =>
+  useQuery({
+    queryKey: ["legacy-candidates", memberId],
+    queryFn: () =>
+      api<{ results: LegacyMemberRow[] }>(`/legacy/candidates/?member=${memberId}`).then(
+        (d) => d.results,
+      ),
+    enabled: enabled && memberId != null,
+  });
+
+export const useLegacyMembers = (params: Record<string, string | number | undefined>) =>
+  useQuery({
+    queryKey: ["legacy-members", params],
+    queryFn: () => api<LegacyMembersPage>(`/legacy/members/?${legacyQuery(params)}`),
+  });
+
+export const useLegacyMaps = (
+  kind: LegacyMapKind,
+  params: Record<string, string | number | undefined>,
+) =>
+  useQuery({
+    queryKey: ["legacy-maps", kind, params],
+    queryFn: () => api<LegacyMapsPage>(`/legacy/maps/${kind}/?${legacyQuery(params)}`),
+  });
+
+export const useLegacyMapCandidates = (kind: LegacyMapKind, id: number | null) =>
+  useQuery({
+    queryKey: ["legacy-map-candidates", kind, id],
+    queryFn: () =>
+      api<{ results: LegacyCandidate[] }>(`/legacy/maps/${kind}/${id}/candidates/`).then(
+        (d) => d.results,
+      ),
+    enabled: id != null,
+  });
+
+export const useLegacyExceptions = () =>
+  useQuery({
+    queryKey: ["legacy-exceptions"],
+    queryFn: () =>
+      api<{ results: LegacyException[] }>(`/legacy/exceptions/`).then((d) => d.results),
+  });

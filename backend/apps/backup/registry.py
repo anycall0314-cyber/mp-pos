@@ -66,6 +66,12 @@ REGISTRY: dict[str, Entry] = {
         # 指令助理紀錄、需求訊號
         "assistant.CommandLog",
         "signals.MarketSignal", "signals.SubjectAlias", "signals.DemandAlert",
+        # 舊系統資料:十年會員消費(含原始快照與版本)、舊→新對照
+        "legacy.HistoryImportBatch", "legacy.LegacyStoreMap", "legacy.LegacyProductMap",
+        "legacy.LegacySalespersonMap", "legacy.LegacyMember", "legacy.LegacyMappingLog",
+        "legacy.LegacyMemberListSnapshot", "legacy.LegacySourceSnapshot",
+        "legacy.LegacyDocument", "legacy.LegacyDocumentVersion", "legacy.LegacyItem",
+        "legacy.LegacySourceException",
     ),
     "auth.User": Entry(ACCOUNT, "只留帳號名稱等對照資訊;不含密碼"),
     "tenants.UserProfile": Entry(ACCOUNT, "角色、預設門市、鎖倉;還原時依對照處理"),

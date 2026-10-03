@@ -81,6 +81,7 @@
 | 還原 | 整家公司為單位:上傳 → 預檢(不改資料)→ 輸入「還原」確認(**當下就上維護鎖**)→ 等寬限時間 → 安全備份 → 一個交易內:`FOR UPDATE` 鎖公司那一列(擋住所有新增)→ 再比一次資料指紋 → 整批取代(新主鍵、外鍵重對、不重播交易)→ 逐列核對 → 解鎖。版本(全部 migration)要完全相同。單據的經手帳號用 `UserProfile.account_uuid` 對人(不看帳號名稱、不看數字 id)。新環境復原走指令 `restore_company_backup` |
 | 公司維護鎖 | `TenantMaintenance.active` 時,該公司所有 API 回 503(`apps/backup/auth.py`,掛在全域的登入驗證上;`/auth/`、`/backup/` 例外)。**只擋網頁**,管理指令不經過它。鎖看的是「請求實際會落在哪一家公司」(`tenants/middleware.py` 的 `effective_tenant_id`,規則要跟 `_resolve_tenant_from_request` 一致:沒有公司的帳號不帶 `?tenant=` 會落到預設公司)。Django 管理後台由 `AdminMaintenanceGuard` 處理:任何公司在還原時只能看。平台後台(`/platform/*`)不帶 `?tenant=`,另外靠 `BlocksCompanyUnderMaintenance` 照實際要改的那一筆擋;新增會改某家公司資料的平台端點要掛它。還原被中斷時不自動解鎖;「中斷」看的是有沒有行程還握著工作的 advisory lock,不是看時間 |
 | 單號下限 | 進貨 / 銷貨 / 銷退 / 調撥單號 = `last_doc_seq()`(`apps/core/numbering.py`):最後一張單的流水與 `DocNumberFloor` 取大者。還原到舊備份時把已用過的最大號記進下限,不重用給過客人的號碼 |
+| 舊系統資料(歐睿) | `apps/legacy/`:十年會員消費封存匯入(`manage.py import_legacy_history`,預設試算、寫入要 `--confirm`,有來源差異要 `--reconciled-only`,可 `--rollback`)。**原文不改**(編號空白 / Tab / 前導零、空白單價存 NULL、帶正負號金額),金額以「分」整數存,原始額與淨額(單別正負 `NET_SIGN`)分開。舊店名 / 品號 / 業務員 / 會員 → MP 門市 / 商品 / 業務員 / 會員的**對照由人確認**(`LegacyStoreMap` / `LegacyProductMap` / `LegacySalespersonMap` / `LegacyMember.member`,決定記在 `LegacyMappingLog`);明細透過 `store_map` / `product_map` / `salesperson_map`(不佔欄位的 ForeignObject)串到對照,改對照不改明細。只供查詢,不過帳、不參與上次成交價。品號對照與之後的庫存搬家共用。手冊 `docs/舊POS十年會員歷史_匯入與對照手冊.md` |
 
 ## 程式碼定位
 
@@ -98,7 +99,8 @@ inventory-3c/
 │       ├── sales/              SalesOrder + commit/void/payment service + SalesReturn(銷退單)+ LegacyPurchase(舊系統匯入紀錄)
 │       ├── transfers/          TransferOrder + commit/void service
 │       ├── cash/               PettyExpense 雜支單 + CashAdjustment 現金調整 + PhoneBillCollection 代收話費 + 營業日報 service
-│       └── backup/             公司備份與還原(registry / container 加密 / export / jobs / restore)+ 維護鎖
+│       ├── backup/             公司備份與還原(registry / container 加密 / export / jobs / restore)+ 維護鎖
+│       └── legacy/             舊系統資料:十年會員消費封存(archive / importer)+ 舊→新對照(mapping)+ 查詢 API
 │
 └── frontend/
     └── src/

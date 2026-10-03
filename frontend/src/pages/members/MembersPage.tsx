@@ -12,6 +12,8 @@ import type { Member } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 
+import { LegacyHistorySection } from "./LegacyHistorySection";
+
 type Selection = { kind: "member"; id: number } | { kind: "new" } | null;
 
 interface FormState {
@@ -533,6 +535,7 @@ export function MembersPage() {
                   </div>
                 </div>
               )}
+              {isEditing && selected && <LegacyHistorySection memberId={selected.id} />}
             </div>
           )}
         </div>

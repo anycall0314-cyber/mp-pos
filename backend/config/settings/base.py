@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     "apps.signals",
     "apps.identity",
     "apps.backup",
+    "apps.legacy",
 ]
 
 MIDDLEWARE = [

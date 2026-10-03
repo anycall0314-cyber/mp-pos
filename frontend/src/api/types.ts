@@ -1436,3 +1436,120 @@ export interface IntakeBatch {
   /** commit 成功回應時附帶 */
   purchase_order_no?: string;
 }
+
+// ---- 舊 POS(歐睿)十年會員消費 ----
+// 金額單位是「分」的整數;display 是後端排好的字串(沒有角分就不顯示小數)
+export interface LegacyMoney {
+  minor: number;
+  display: string;
+}
+
+export interface LegacyHistoryDoc {
+  id: number;
+  source: string;
+  document_date: string;
+  store: string;
+  document_type: string;
+  document_number: string;
+  item_count: number;
+  amount: LegacyMoney;
+  net_amount: LegacyMoney;
+  legacy_member: string;
+}
+
+export interface LegacyHistoryItem {
+  ordinal: number;
+  product_code: string;
+  product_name: string;
+  quantity: string;
+  unit_price: LegacyMoney | null;
+  amount: LegacyMoney;
+  net_amount: LegacyMoney;
+  salesperson: string;
+  customer_name: string;
+  remarks: string;
+  promotion: string;
+  points: string;
+  /** 報表列原文,只有管理員拿得到 */
+  source_row?: string;
+}
+
+export interface LegacyHistoryDocDetail extends LegacyHistoryDoc {
+  items: LegacyHistoryItem[];
+}
+
+export interface LegacyHistoryPage extends Paginated<LegacyHistoryDoc> {
+  summary: {
+    documents: number;
+    items: number;
+    amount: LegacyMoney;
+    net_amount: LegacyMoney;
+    linked_legacy_members: string[];
+  };
+  pending: { count: number; documents: number; items: number };
+}
+
+export interface LegacyMemberRow {
+  id: number;
+  source_member_id: string;
+  source_member_id_exact: string;
+  name: string;
+  phone: string;
+  status: "unmapped" | "confirmed";
+  member: { id: number; code: string; name: string } | null;
+  method: string;
+  confirmed_at: string | null;
+  documents?: number;
+  net_amount?: LegacyMoney;
+  last_date?: string | null;
+  reason?: string;
+}
+
+export interface LegacyMembersPage extends Paginated<LegacyMemberRow> {
+  summary: { total: number; confirmed: number; unmapped: number; open_exceptions: number };
+}
+
+export type LegacyMapKind = "stores" | "products" | "salespersons";
+
+export interface LegacyMapRow {
+  id: number;
+  key: string;
+  key_exact: string;
+  status: "unmapped" | "confirmed";
+  method: string;
+  target: { id: number; label: string } | null;
+  confirmed_at: string | null;
+  name_seen?: string;
+  items?: number;
+  net_amount?: LegacyMoney;
+}
+
+export interface LegacyMapsPage extends Paginated<LegacyMapRow> {
+  summary: { total: number; confirmed: number; unmapped: number };
+}
+
+export interface LegacyCandidate {
+  id: number;
+  label: string;
+  reason: string;
+}
+
+export interface LegacyException {
+  id: number;
+  batch: number;
+  legacy_member: string;
+  reason: string;
+  list_amount: LegacyMoney;
+  detail_net_amount: LegacyMoney;
+  detail_amount: LegacyMoney;
+  difference: LegacyMoney;
+  documents: number;
+  items: number;
+  status: "open" | "resolved";
+  resolved_at: string | null;
+  resolved_by: string;
+  resolution_note: string;
+  resolution_evidence: string;
+  rows_json?: string;
+  validation_error?: string;
+}
