@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd plist:公司備份 / 還原的背景程式(manage.py run_backup_worker)。
+  開機自動啟動、掛掉自動重啟。
+
+  deploy.sh 會自動安裝(第一次部署時把 {{USER}} 換成本機使用者並 load),
+  之後每次部署會重啟它。手動安裝:
+    sed "s/{{USER}}/$(whoami)/g" ops/com.mppos.backup-worker.plist > ~/Library/LaunchAgents/com.mppos.backup-worker.plist
+    launchctl load -w ~/Library/LaunchAgents/com.mppos.backup-worker.plist
+
+  之後:
+    重啟: launchctl kickstart -k gui/$(id -u)/com.mppos.backup-worker
+    停止: launchctl unload ~/Library/LaunchAgents/com.mppos.backup-worker.plist
+    log : tail -f ~/MP_POS系統/logs/backup-worker.out  (與 .err)
+
+  注意:有公司正在「還原」時不要部署。重啟會讓那次還原中斷(資料不會壞,
+  但公司會停在維護中,要管理員到備份頁確認後解除)。
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.mppos.backup-worker</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/{{USER}}/MP_POS系統/ops/run-backup-worker.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/{{USER}}/MP_POS系統</string>
+
+  <key>StandardOutPath</key>
+  <string>/Users/{{USER}}/MP_POS系統/logs/backup-worker.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/{{USER}}/MP_POS系統/logs/backup-worker.err</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+</dict>
+</plist>

@@ -194,6 +194,21 @@ tail -f ~/MP_POS系統/logs/gunicorn.err
 
 ---
 
+
+### 8.1 公司備份的背景程式
+
+公司備份 / 還原由另一支背景程式執行(`ops/run-backup-worker.sh`,launchd 標籤
+`com.mppos.backup-worker`)。**不用手動裝**:`./deploy.sh` 第一次跑時會自動安裝,之後
+每次部署自動重啟。確認它有在跑:
+
+```bash
+launchctl list | grep com.mppos.backup-worker   # 有一列、第一欄是數字(PID)就是在跑
+tail -20 ~/MP_POS系統/logs/backup-worker.err
+```
+
+有公司正在「還原」時不要部署:重啟會讓那次還原中斷(資料不會壞,但那家公司會停在
+維護中,要管理員到「設定 → 備份與還原」確認後按「解除維護」)。
+
 ## 9. Cloudflare Tunnel(對外暴露 + HTTPS)
 
 ### 9.1 登入 Cloudflare

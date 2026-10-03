@@ -7,7 +7,7 @@
 #  1. git pull 最新 main
 #  2. backend:同步 requirements、跑 migration、collectstatic
 #  3. frontend:同步 npm 套件、npm run build
-#  4. 重啟 launchd 服務
+#  4. 重啟 launchd 服務(網站 + 備份背景程式;備份背景程式第一次會自動安裝)
 # ─────────────────────────────────────────────────────────
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -62,6 +62,25 @@ if [ -f "$PLIST" ]; then
 else
   echo "⚠ 找不到 $PLIST(尚未首次安裝?)"
   echo "  首次部署:依手冊把 plist 放到 ~/Library/LaunchAgents/ 並 launchctl load"
+fi
+
+echo ""
+echo "── 6/6 備份背景程式 ──────────────────────────"
+# 公司備份 / 還原由這支背景程式執行;沒在跑的話備份會一直停在「排隊中」。
+# 第一次部署自動安裝,之後每次部署重啟(要在 migrate 之後,新版程式才對得上資料表)。
+WLABEL="com.mppos.backup-worker"
+WPLIST="$HOME/Library/LaunchAgents/$WLABEL.plist"
+mkdir -p logs
+if [ ! -f "$WPLIST" ]; then
+  sed "s/{{USER}}/$(whoami)/g" ops/com.mppos.backup-worker.plist > "$WPLIST"
+  launchctl load -w "$WPLIST"
+  echo "✓ 已安裝並啟動 $WLABEL"
+elif launchctl kickstart -k "gui/$(id -u)/$WLABEL" 2>/dev/null; then
+  echo "✓ 已重啟 $WLABEL"
+else
+  launchctl unload "$WPLIST" 2>/dev/null || true
+  launchctl load -w "$WPLIST"
+  echo "✓ 已重新 load $WLABEL"
 fi
 
 echo ""
