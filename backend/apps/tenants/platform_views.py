@@ -182,6 +182,23 @@ class PlatformUserSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"tenant": "此角色必須指定 tenant"}
                 )
+        # 預設門市必須是這個帳號所屬公司的門市。綁到別家公司的門市,那家公司
+        # 還原時會刪不掉那間門市(整個還原失敗),備份也會出現跨公司的參照。
+        if {"tenant", "role", "default_warehouse"} & set(attrs):
+            profile = getattr(self.instance, "profile", None) if self.instance else None
+            eff_role = attrs.get("role") or (profile.role if profile else None)
+            eff_tenant = attrs["tenant"] if "tenant" in attrs else (
+                profile.tenant if profile else None
+            )
+            if eff_role == UserProfile.Role.PLATFORM_ADMIN:
+                eff_tenant = None
+            store = attrs["default_warehouse"] if "default_warehouse" in attrs else (
+                profile.default_warehouse if profile else None
+            )
+            if store is not None and (eff_tenant is None or store.tenant_id != eff_tenant.pk):
+                raise serializers.ValidationError(
+                    {"default_warehouse": "預設門市必須是同一家公司的門市"}
+                )
         return attrs
 
     @transaction.atomic
@@ -319,6 +336,12 @@ class PlatformWarehouseSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "tenant_name", "created_at", "updated_at"]
+
+    def validate_tenant(self, value):
+        # 門市底下有庫存、單據、帳號,只改門市這一列的公司會讓它們分屬兩家公司
+        if self.instance is not None and value != self.instance.tenant:
+            raise serializers.ValidationError("門市建立後不能換公司")
+        return value
 
 
 class PlatformWarehouseViewSet(viewsets.ModelViewSet):

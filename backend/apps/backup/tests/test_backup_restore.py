@@ -996,6 +996,59 @@ class RollbackTests(_Base):
         self.assertEqual(ops.post(add_user, form).status_code, 302)
         self.assertTrue(get_user_model().objects.filter(username="made-in-admin").exists())
 
+    def test_platform_console_keeps_stores_inside_their_company(self):
+        """平台後台不能把帳號綁到別家公司的門市、也不能把門市換到別家公司 ——
+        那會讓那家公司的還原刪不掉門市(整個失敗),備份也出現跨公司的參照。"""
+        from django.contrib.auth import get_user_model
+        root = get_user_model().objects.create_user("platform-root", password="pw-12345")
+        UserProfile.objects.create(user=root, role="platform_admin", is_warehouse_locked=False)
+        platform = Company.client(root)
+        b_clerk = self.b.clerk_user.pk
+        r = platform.patch(f"/api/v1/platform/users/{b_clerk}/",
+                           {"default_warehouse": self.a.wh.pk}, format="json")
+        self.assertEqual(r.status_code, 400, r.content)
+        r = platform.post("/api/v1/platform/users/", {
+            "username": "new-b", "password": "pw-12345", "role": "tenant_user",
+            "tenant": self.b.tenant.pk, "default_warehouse": self.a.wh.pk,
+        }, format="json")
+        self.assertEqual(r.status_code, 400, r.content)
+        r = platform.patch(f"/api/v1/platform/users/{b_clerk}/",
+                           {"tenant": self.a.tenant.pk}, format="json")    # 換公司卻留著舊門市
+        self.assertEqual(r.status_code, 400, r.content)
+        # 代碼刻意取乙公司沒有的,才不會被「同公司代碼重複」先擋掉、測不到這一道
+        only_a = Warehouse.objects.create(tenant=self.a.tenant, code="w7", name="甲獨有")
+        r = platform.patch(f"/api/v1/platform/warehouses/{only_a.pk}/",
+                           {"tenant": self.b.tenant.pk}, format="json")
+        self.assertEqual(r.status_code, 400, r.content)
+        self.assertIn("不能換公司", r.content.decode())
+        only_a.refresh_from_db()
+        self.assertEqual(only_a.tenant_id, self.a.tenant.pk)
+        # 同一家公司裡照常
+        r = platform.patch(f"/api/v1/platform/users/{b_clerk}/",
+                           {"default_warehouse": self.b.warehouses[1].pk}, format="json")
+        self.assertEqual(r.status_code, 200, r.content)
+        r = platform.patch(f"/api/v1/platform/warehouses/{self.a.wh.pk}/",
+                           {"tenant": self.a.tenant.pk, "name": "甲改名"}, format="json")
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(UserProfile.objects.get(user_id=b_clerk).default_warehouse.tenant_id,
+                         self.b.tenant.pk)
+        # 甲在還原:把任何帳號綁到甲的門市都擋(看的是門市屬於哪家,不只看帳號)
+        staged = restore.stage_upload(self.a.tenant, self.upload(self.saved), self.a.admin_user)
+        restore.confirm(staged, self.a.admin_user)
+        r = platform.patch(f"/api/v1/platform/users/{b_clerk}/",
+                           {"default_warehouse": self.a.wh.pk}, format="json")
+        self.assertEqual(r.status_code, 503, r.content)
+
+    def test_store_held_by_another_company_stops_the_precheck(self):
+        """舊資料裡已經有別家公司的帳號綁著這家公司的門市:預檢就擋下來並列出是誰,
+        不要等鎖了公司、做完安全備份,才在刪門市那一步整個失敗。"""
+        UserProfile.objects.filter(user=self.b.clerk_user).update(default_warehouse=self.a.wh)
+        staged = restore.stage_upload(self.a.tenant, self.upload(self.saved), self.a.admin_user)
+        self.assertEqual(staged.status, RestoreJob.Status.REJECTED)
+        self.assertIn("別家公司的帳號綁著這家公司的門市", staged.report["problems"][0])
+        self.assertIn("b-clerk", staged.report["problems"][0])
+        self.assertFalse(jobs.in_maintenance(self.a.tenant))
+
     def test_data_changed_after_confirmation_stops_the_restore(self):
         """上鎖之後資料還是變了(繞過網頁的管理指令、上鎖前一刻放行的請求):
         動手前再比一次,對不上就不還原 —— 不然那筆變動會無聲消失。"""
@@ -1383,6 +1436,16 @@ class RejectionTests(_Base):
                 self.assert_rejected(self.path(self.job), needle)
         self.assertEqual(os.listdir(os.path.join(self.tmp, "backup_store", "staging")), [])
 
+    def test_backup_bigger_than_this_server_allows(self):
+        """預檢與還原要把每張表的編號放在記憶體裡:資料量有上限。超過的在預檢就拒絕,
+        而且備份完成時的自我檢查就會失敗,不會等到真的要還原那天。"""
+        with override_settings(BACKUP_MAX_ROWS=10):
+            self.assert_rejected(self.path(self.job), "超過這台伺服器允許的上限")
+            job, _ = jobs.request_backup(self.a.tenant, self.a.admin_user)
+            job = jobs.run_backup(jobs.claim_next())
+        self.assertEqual(job.status, BackupJob.Status.FAILED)
+        self.assertIn("超過這台伺服器允許的上限", job.error)
+
     def test_unexpected_error_while_checking_still_ends_as_rejected(self):
         with mock.patch.object(restore, "validate", side_effect=ZeroDivisionError("boom")):
             staged = restore.stage_upload(
@@ -1589,6 +1652,22 @@ class FailureInjectionTests(_Base):
         self.assertIsNone(restore.claim_next())
         claimed.refresh_from_db()
         self.assertEqual(claimed.status, RestoreJob.Status.NEEDS_ATTENTION)
+
+    def test_releasing_a_dead_restore_directly_still_writes_a_full_record(self):
+        """背景程式還沒把它整理成「需要處理」,管理員就直接解除:紀錄一樣要寫完整。"""
+        staged = restore.stage_upload(self.a.tenant, self.upload(self.saved), self.a.admin_user)
+        restore.confirm(staged, self.a.admin_user)
+        claimed = restore.claim_next()
+        RestoreJob.objects.filter(pk=claimed.pk).update(
+            started_at=timezone.now() - timedelta(minutes=10))
+        restore.release_after_interruption(self.a.tenant, self.a.admin_user)
+        claimed.refresh_from_db()
+        self.assertEqual(claimed.status, RestoreJob.Status.FAILED)
+        self.assertIn("中斷", claimed.error)
+        self.assertIsNotNone(claimed.finished_at)
+        self.assertIsNone(claimed.lease_until)
+        self.assertEqual(claimed.staged_file, "")
+        self.assertFalse(jobs.in_maintenance(self.a.tenant))
 
     def test_job_marked_interrupted_cannot_finish_afterwards(self):
         """已經被標成中斷(管理員可能已經解除維護、店裡恢復開單)的還原,

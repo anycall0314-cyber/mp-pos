@@ -45,7 +45,15 @@ class BlocksCompanyUnderMaintenance(BasePermission):
         if request.method in SAFE_METHODS:
             return True
         data = request.data if hasattr(request.data, "get") else {}
-        if _locked([data.get("tenant")]):       # 新增 / 把人或門市指到維護中的公司
+        targets = [data.get("tenant")]          # 新增 / 把人或門市指到維護中的公司
+        store = data.get("default_warehouse")   # 把帳號綁到維護中公司的門市
+        if store is not None and str(store).isdigit():
+            from apps.inventory.models import Warehouse
+
+            targets.append(
+                Warehouse.objects.filter(pk=int(store)).values_list("tenant_id", flat=True).first()
+            )
+        if _locked(targets):
             raise CompanyUnderMaintenance()
         return True
 

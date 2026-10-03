@@ -140,6 +140,9 @@ BACKUP_MAX_UNPACKED_BYTES = int(os.environ.get("MPPOS_BACKUP_MAX_UNPACKED_MB", "
 # 還原上維護鎖之後,等幾秒才開始取代資料。上鎖前一刻已經放行的請求要嘛做完、要嘛
 # 被網頁伺服器逾時砍掉,所以**要比網頁伺服器的請求逾時長**(gunicorn 設 60 秒)。
 BACKUP_RESTORE_GRACE_SECONDS = int(os.environ.get("MPPOS_BACKUP_RESTORE_GRACE_SECONDS", "75"))
+# 一份備份最多幾筆資料。預檢與還原要把每張表的編號對照放在記憶體裡,兩百萬筆
+# 約需幾百 MB。超過的備份在「備份完成時的自我檢查」就會失敗,不會等到要還原那天。
+BACKUP_MAX_ROWS = int(os.environ.get("MPPOS_BACKUP_MAX_ROWS", "2000000"))
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

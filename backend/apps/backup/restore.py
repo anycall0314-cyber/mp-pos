@@ -195,6 +195,11 @@ class Package:
             and all(_is_int(v) and v >= 0 for v in tables.values()),
             "各表筆數",
         )
+        if sum(tables.values()) > settings.BACKUP_MAX_ROWS:
+            raise RestoreError(
+                f"備份的資料量({sum(tables.values())} 筆)超過這台伺服器允許的上限"
+                f"({settings.BACKUP_MAX_ROWS} 筆),請聯絡維護人員"
+            )
         names = set(self.zf.namelist())
         for label in labels:
             if f"data/{label}.jsonl" not in names:
@@ -464,8 +469,12 @@ def validate(tenant, pkg, mode) -> dict:
         file_cols = set(FILE_FIELDS.get(label, []))
         uniques = [(cols, set()) for cols in _unique_sets(model)]
         pks, n = set(), 0
+        declared = m["tables"][label]
         for row in pkg.rows(label):
             n += 1
+            if n > declared:
+                # 比清單上寫的多:不再往下讀(清單的總數有上限,記憶體用量就有上限)
+                break
             if set(row) != expected:
                 problems.append(f"{label}:欄位跟這個版本不一致")
                 break
@@ -564,6 +573,18 @@ def validate(tenant, pkg, mode) -> dict:
     mapping, unmapped = _account_map(tenant, pkg.accounts)
     current = _current_state(tenant)
     if mode == RestoreJob.Mode.ROLLBACK:
+        from apps.tenants.models import UserProfile
+
+        strangers = list(
+            UserProfile.objects.exclude(tenant=tenant)
+            .filter(default_warehouse__tenant=tenant)
+            .values_list("user__username", flat=True)[:10]
+        )
+        if strangers:
+            problems.append(
+                "別家公司的帳號綁著這家公司的門市,還原會刪不掉那些門市,請先到平台後台改掉:"
+                + "、".join(strangers)
+            )
         if unmapped:
             warnings.append(
                 "備份裡這些帳號現在不在這家公司,相關單據的經手帳號會留空:"
@@ -1398,8 +1419,17 @@ def release_after_interruption(tenant, user):
             raise RestoreError("還原還在進行中,不能解除維護")
         if job.status in (RestoreJob.Status.RUNNING, RestoreJob.Status.NEEDS_ATTENTION):
             staged, job.staged_file = job.staged_file, ""
+            if job.status == RestoreJob.Status.RUNNING:
+                # 還沒被背景程式整理成「需要處理」就解除:紀錄一樣要寫完整
+                job.error = job.error or (
+                    "還原在執行途中被中斷。資料庫的變更沒有提交,公司資料維持還原前的狀態。"
+                )
+                job.finished_at = job.finished_at or timezone.now()
+                job.lease_until = None
             job.status = RestoreJob.Status.FAILED
-            job.save(update_fields=["status", "staged_file", "updated_at"])
+            job.save(update_fields=[
+                "status", "staged_file", "error", "finished_at", "lease_until", "updated_at",
+            ])
             if staged:
                 _remove(jobs.backup_root() / staged)     # 要再還原得重新上傳
     unlock(tenant)

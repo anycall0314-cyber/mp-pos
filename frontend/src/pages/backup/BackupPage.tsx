@@ -463,13 +463,11 @@ export function BackupPage() {
                 accept=".mppos-backup"
                 onChange={(e) => setRestoreFile(e.target.files?.[0] ?? null)}
               />
-              {!keyReady && (
-                <input
-                  value={restoreCredential}
-                  onChange={(e) => setRestoreCredential(e.target.value)}
-                  placeholder="復原憑證 MP-XXXX-…"
-                />
-              )}
+              <input
+                value={restoreCredential}
+                onChange={(e) => setRestoreCredential(e.target.value)}
+                placeholder={keyReady ? "其他憑證(選填)" : "復原憑證 MP-XXXX-…"}
+              />
               <button
                 className="btn"
                 onClick={uploadRestore}
