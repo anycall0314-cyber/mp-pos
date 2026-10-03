@@ -46,6 +46,7 @@ interface CategoryEditState {
   name: string;
   is_active: boolean;
   is_secondhand_default: boolean;
+  needs_host_model: boolean;
 }
 
 interface CategoryNewState {
@@ -54,6 +55,7 @@ interface CategoryNewState {
   sort_order: string;
   is_active: boolean;
   is_secondhand_default: boolean;
+  needs_host_model: boolean;
 }
 
 const EMPTY_NEW_CAT: CategoryNewState = {
@@ -62,6 +64,7 @@ const EMPTY_NEW_CAT: CategoryNewState = {
   sort_order: "",
   is_active: true,
   is_secondhand_default: false,
+  needs_host_model: true,
 };
 
 export function ProductsPage() {
@@ -141,6 +144,7 @@ export function ProductsPage() {
     name: "",
     is_active: true,
     is_secondhand_default: false,
+    needs_host_model: true,
   });
   const [catError, setCatError] = useState<string | null>(null);
   const [catSavedFlash, setCatSavedFlash] = useState(false);
@@ -157,6 +161,7 @@ export function ProductsPage() {
       name: selectedCategory.name,
       is_active: selectedCategory.is_active,
       is_secondhand_default: selectedCategory.is_secondhand_default,
+      needs_host_model: selectedCategory.needs_host_model,
     });
     setCatError(null);
     setCatSavedFlash(false);
@@ -171,6 +176,7 @@ export function ProductsPage() {
         name: catEdit.name.trim(),
         is_active: catEdit.is_active,
         is_secondhand_default: catEdit.is_secondhand_default,
+        needs_host_model: catEdit.needs_host_model,
       });
       setCatError(null);
       setCatSavedFlash(true);
@@ -208,6 +214,7 @@ export function ProductsPage() {
         sort_order,
         is_active: catNew.is_active,
         is_secondhand_default: catNew.is_secondhand_default,
+        needs_host_model: catNew.needs_host_model,
       });
       // 留在新增畫面、清空輸入,方便連續新增
       setCatNew(EMPTY_NEW_CAT);
@@ -839,6 +846,30 @@ export function ProductsPage() {
                     </span>
                   </label>
                 </dd>
+                <dt>需要掛相容機型</dt>
+                <dd>
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      gap: 6,
+                      alignItems: "center",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={catNew.needs_host_model}
+                      onChange={(e) =>
+                        setCatNew((s) => ({
+                          ...s,
+                          needs_host_model: e.target.checked,
+                        }))
+                      }
+                    />
+                    <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
+                      關掉代表這類商品跟機型無關(線材 / 吊飾 / 家電),不列入待補相容機型
+                    </span>
+                  </label>
+                </dd>
               </dl>
               <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
                 <button
@@ -939,6 +970,30 @@ export function ProductsPage() {
                     <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
                       勾起並儲存時,會把底下所有商品同步標為中古機
                       (反向取消不會還原既有商品)
+                    </span>
+                  </label>
+                </dd>
+                <dt>需要掛相容機型</dt>
+                <dd>
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      gap: 6,
+                      alignItems: "center",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={catEdit.needs_host_model}
+                      onChange={(e) =>
+                        setCatEdit((s) => ({
+                          ...s,
+                          needs_host_model: e.target.checked,
+                        }))
+                      }
+                    />
+                    <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
+                      關掉代表這類商品跟機型無關(線材 / 吊飾 / 家電),不列入待補相容機型
                     </span>
                   </label>
                 </dd>

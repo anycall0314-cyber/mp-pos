@@ -221,6 +221,7 @@ class CategorySerializer(_TenantUniqueMixin, serializers.ModelSerializer):
             "sort_order",
             "is_active",
             "is_secondhand_default",
+            "needs_host_model",
             "next_sku_seq",
             "created_at",
             "updated_at",

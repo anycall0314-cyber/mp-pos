@@ -1,0 +1,369 @@
+{
+  "_comment": [
+    "機型主檔補充清單:只有「機型身分」,沒有價格 / 容量 / 顏色。",
+    "給 `manage.py sync_phone_models --extra` 用,只建 PhoneModel,不建商品。",
+    "",
+    "為什麼要這一份:taiwan_catalog 那五個檔是給新客戶「一次建好整份型錄」用的,",
+    "所以只收現役主力機,而且每一款都要帶容量顏色才能展開成商品 SKU。",
+    "但配件要掛相容機型時,對到的是十年份的機海——`IP6` 在真實配件品名裡出現 52 次、",
+    "`IP11P` 26 次。這些機早就不賣了,不需要建商品,但需要在主檔裡有個身分可以掛。",
+    "",
+    "清單怎麼來的:跑 `manage.py match_accessory_models --tenant X --show-unresolved 80`,",
+    "把「對不到的片段」排行裡真的是機型的那些,照主檔既有命名慣例補進來。",
+    "不是憑印象列的,每一筆後面都有真實配件在指它。",
+    "",
+    "命名慣例沿用既有主檔:iPhone XS 寫成「iPhone 10 S」、iPhone 6s 寫成「iPhone 6 s」、",
+    "Galaxy S24+ 的後綴是「+」(組字時 + 不加空格)。"
+  ],
+  "brands": {
+    "apple": {
+      "code": "apple",
+      "name": "Apple"
+    },
+    "samsung": {
+      "code": "samsung",
+      "name": "Samsung"
+    },
+    "oppo": {
+      "code": "oppo",
+      "name": "OPPO"
+    }
+  },
+  "models": [
+    {
+      "_why": "IP5 14 次、5S 5 次",
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 5,
+      "model_suffix": ""
+    },
+    {
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 5,
+      "model_suffix": "s"
+    },
+    {
+      "_why": "IP6 52 次、IP6+ 26、IP6P 11、IP6S 7",
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 6,
+      "model_suffix": ""
+    },
+    {
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 6,
+      "model_suffix": "Plus"
+    },
+    {
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 6,
+      "model_suffix": "s"
+    },
+    {
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 6,
+      "model_suffix": "s Plus"
+    },
+    {
+      "_why": "IP7 18 次、IP7P 10",
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 7,
+      "model_suffix": ""
+    },
+    {
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 7,
+      "model_suffix": "Plus"
+    },
+    {
+      "_why": "IP8 17 次、IP8P 8",
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 8,
+      "model_suffix": ""
+    },
+    {
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 8,
+      "model_suffix": "Plus"
+    },
+    {
+      "_why": "IPX 21 次、XS 14、IPXR 11、XR 7、IPXSM 6、IPXSMAX 5",
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 10,
+      "model_suffix": ""
+    },
+    {
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 10,
+      "model_suffix": "R"
+    },
+    {
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 10,
+      "model_suffix": "S"
+    },
+    {
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 10,
+      "model_suffix": "S Max"
+    },
+    {
+      "_why": "IP11P 26 次、IP11 17、IP11PM 16",
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 11,
+      "model_suffix": ""
+    },
+    {
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 11,
+      "model_suffix": "Pro"
+    },
+    {
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 11,
+      "model_suffix": "Pro Max"
+    },
+    {
+      "_why": "IP12PM 17 次、IP12 13、IP12P 13、IP12MINI 5",
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 12,
+      "model_suffix": ""
+    },
+    {
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 12,
+      "model_suffix": "mini"
+    },
+    {
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 12,
+      "model_suffix": "Pro"
+    },
+    {
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": 12,
+      "model_suffix": "Pro Max"
+    },
+    {
+      "_why": "SE3 11 次、SE2 10、SE 8",
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": null,
+      "model_suffix": "SE"
+    },
+    {
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": null,
+      "model_suffix": "SE 2"
+    },
+    {
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": null,
+      "model_suffix": "SE 3"
+    },
+    {
+      "_why": "S26U 9 次、S26 8、S26+ 8 —— 現役機,taiwan_catalog 還沒更新",
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 26,
+      "model_suffix": ""
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 26,
+      "model_suffix": "+"
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 26,
+      "model_suffix": "Ultra"
+    },
+    {
+      "_why": "S24+ 5 次、S25+ 5 —— 主檔只有本體與 Ultra,少了 Plus",
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 24,
+      "model_suffix": "+"
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 25,
+      "model_suffix": "+"
+    },
+    {
+      "_why": "A57 8 次 —— 現役機",
+      "brand": "samsung",
+      "series": "Galaxy A",
+      "generation": 57,
+      "model_suffix": "5G"
+    },
+    {
+      "_why": "S8 8 次、S20U 5、S5 5、S6 5、S4 5、S4-MINI 5",
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 4,
+      "model_suffix": ""
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 4,
+      "model_suffix": "mini"
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 5,
+      "model_suffix": ""
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 6,
+      "model_suffix": ""
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 8,
+      "model_suffix": ""
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 20,
+      "model_suffix": "Ultra"
+    },
+    {
+      "_why": "NOTE 7 次、NOTE2 6、NOTE3 6、NOTE4 5、NOTE10 5",
+      "brand": "samsung",
+      "series": "Galaxy Note",
+      "generation": 2,
+      "model_suffix": ""
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy Note",
+      "generation": 3,
+      "model_suffix": ""
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy Note",
+      "generation": 4,
+      "model_suffix": ""
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy Note",
+      "generation": 8,
+      "model_suffix": ""
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy Note",
+      "generation": 10,
+      "model_suffix": ""
+    },
+    {
+      "_why": "RENO15 4 次 —— 現役機,taiwan_catalog 還沒更新",
+      "brand": "oppo",
+      "series": "Reno",
+      "generation": 15,
+      "model_suffix": ""
+    },
+    {
+      "brand": "oppo",
+      "series": "Reno",
+      "generation": 13,
+      "model_suffix": "Pro"
+    },
+    {
+      "_why": "S23+ 8 次、S20+ 4、S10+ 4、S9+ 4、S8+ 3、S22+ 2 —— 主檔本來只有本體與 Ultra",
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 8,
+      "model_suffix": "+"
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 9,
+      "model_suffix": "+"
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 10,
+      "model_suffix": "+"
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 20,
+      "model_suffix": "+"
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 22,
+      "model_suffix": "+"
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 23,
+      "model_suffix": "+"
+    },
+    {
+      "_why": "S9 / S10 / S20 本體也缺",
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 9,
+      "model_suffix": ""
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 10,
+      "model_suffix": ""
+    },
+    {
+      "brand": "samsung",
+      "series": "Galaxy S",
+      "generation": 20,
+      "model_suffix": ""
+    },
+    {
+      "_why": "17E 8 次;照主檔既有的 iPhone 16e 寫法(世代留空、後綴整串),避免組出「iPhone 17 e」",
+      "brand": "apple",
+      "series": "iPhone",
+      "generation": null,
+      "model_suffix": "17e"
+    }
+  ]
+}

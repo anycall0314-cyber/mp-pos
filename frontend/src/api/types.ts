@@ -21,6 +21,8 @@ export interface Category {
   is_active: boolean;
   /** 勾起時,本類別下所有商品自動標為中古機 */
   is_secondhand_default: boolean;
+  /** 這類商品要不要掛相容機型;主機本身與線材 / 吊飾 / 家電這種跟機型無關的關掉 */
+  needs_host_model: boolean;
   next_sku_seq: number;
   created_at: string;
   updated_at: string;

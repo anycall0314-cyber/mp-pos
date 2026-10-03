@@ -21,6 +21,15 @@ class Category(TenantOwnedModel):
         help_text="勾起時,本類別下所有新增/編輯的商品自動標為中古機(逐隻記成色 / 電池 / 自定售價)",
     )
 
+    needs_host_model = models.BooleanField(
+        "需要掛相容機型",
+        default=True,
+        help_text=(
+            "這個類別的商品要不要掛「相容哪些機型」(ProductRelation)。"
+            "主機本身(手機 / 平板 / 手錶)不用掛;線材、吊飾、家電這種跟機型無關的也不用。"
+            "關掉之後這類商品不會出現在「待補相容機型」的待辦裡"
+        ),
+    )
     next_sku_seq = models.PositiveIntegerField(
         "下一流水號",
         default=1,
