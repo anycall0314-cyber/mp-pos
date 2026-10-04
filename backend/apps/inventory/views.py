@@ -13,15 +13,26 @@ from django.db.models import (
 )
 from django.db.models.functions import Coalesce
 from django.utils import timezone
+from rest_framework import status as http_status
 from rest_framework import viewsets
 from rest_framework.decorators import action, api_view
+from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 
 from apps.core.warehouse_scoping import report_warehouse_id
+from apps.identity.normalize import normalize_serial
+from apps.tenants.permissions import is_tenant_admin
 from apps.catalog.models import Product, ProductRelation
 from apps.sales.models import SalesOrder, SalesOrderItem, SalesOrderItemSerial
 
-from .models import ProductSerial, StockBalance, StockMovement, Warehouse
+from .identifiers import IdentifierDenied, IdentifierError, find_serial_ids, set_codes
+from .models import (
+    ProductSerial,
+    ProductSerialIdentifier,
+    StockBalance,
+    StockMovement,
+    Warehouse,
+)
 from .serializers import (
     ProductSerialSerializer,
     StockBalanceSerializer,
@@ -45,13 +56,14 @@ class WarehouseViewSet(viewsets.ModelViewSet):
 
 
 class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
-    """序號目前只開讀取;新增由進貨過帳產生,狀態改由維護介面（之後做）。"""
+    """序號只開讀取;新增由進貨 / 收購產生。唯一能改的是這一台的碼(`codes`:補登或修改 IMEI / SN)。"""
 
     serializer_class = ProductSerialSerializer
     search_fields = ["serial_no", "product__sku", "product__name"]
     ordering_fields = ["created_at", "serial_no", "received_at"]
     ordering = ["-id"]
     filterset_fields = ["status", "warehouse", "product"]
+    CODE_SEARCH_MIN = 3
 
     def get_queryset(self):
         return (
@@ -62,7 +74,82 @@ class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
                 "acquired_from_member",
                 "acquired_via_sales_order",
             )
+            .prefetch_related("identifiers")
         )
+
+    def filter_queryset(self, queryset):
+        """搜尋除了主碼 / 品號 / 品名,也比對這一台登記的每一個碼:刷 IMEI 或刷 SN 都找得到同一台。
+
+        碼的比對去掉空白 / 破折號、不分大小寫,打一部分(末幾碼)也可以。
+        有碼對得上時不走「打錯字也找得到」的相似度比對:刷條碼要的是那一台,不是長得像的。
+        """
+        # ?code= 是「刷到的碼是哪一台」:只認完全相同(去空白 / 破折號、不分大小寫)。
+        # 刷條碼自動掛序號要用這個,不能用下面的包含比對 —— 同商品另一台的碼剛好包含這串字時會掛錯實機。
+        code = self.request.query_params.get("code", "").strip()
+        if code:
+            queryset = queryset.filter(pk__in=find_serial_ids(self.request.tenant, code))
+        nv = normalize_serial(self.request.query_params.get("search", ""))
+        by_code = None
+        if len(nv) >= self.CODE_SEARCH_MIN:
+            hits = ProductSerialIdentifier.objects.filter(
+                tenant=self.request.tenant, normalized_value__contains=nv)
+            if hits.exists():
+                by_code = Q(pk__in=hits.order_by().values("serial_id"))
+        qs = queryset
+        for backend in list(self.filter_backends):
+            if by_code is not None and issubclass(backend, SearchFilter):
+                plain = SearchFilter().filter_queryset(self.request, qs, self)
+                qs = qs.filter(Q(pk__in=plain.order_by().values("pk")) | by_code)
+            else:
+                qs = backend().filter_queryset(self.request, qs, self)
+        return qs
+
+    @staticmethod
+    def _store_of(serial):
+        """這一台算哪個門市的:在門市裡的看所在門市;已售出的(不掛在任何門市)看賣出它的那張
+        銷貨單的門市 —— 賣出後才發現碼打錯,發現的通常就是賣的那家店。調撥中的不屬於任何一家。"""
+        if serial.warehouse_id:
+            return serial.warehouse_id
+        if serial.status == ProductSerial.Status.SOLD:
+            # 最新的那一筆就是把它賣出去的那張單(之前的銷貨不是被銷退、就是被作廢,才可能再賣一次)
+            return (
+                SalesOrderItemSerial.objects
+                .filter(tenant_id=serial.tenant_id, serial=serial)
+                .order_by("-id").values_list("item__so__warehouse_id", flat=True).first()
+            )
+        return None
+
+    @action(detail=True, methods=["post"], url_path="codes")
+    def codes(self, request, pk=None):
+        """補登或修改這一台的 IMEI / SN。body: {"imei": "...", "sn": "..."}(沒有的那一格給空字串)。
+
+        店員只能把空的那一格補上;已經登記的碼只有管理員能改。鎖在自己門市的帳號只能動自己門市的設備
+        (已售出的 = 自己門市賣出去的)。每一次改動都留紀錄。
+        """
+        serial = self.get_object()
+        profile = getattr(request.user, "profile", None)
+
+        def own_store(locked):
+            # 鎖住這一台之後才看它在哪:先看再鎖的話,中間被調走 / 賣掉,原門市還是改得到
+            if profile and profile.is_warehouse_locked and (
+                not profile.default_warehouse_id
+                or self._store_of(locked) != profile.default_warehouse_id
+            ):
+                raise IdentifierDenied("只能修改自己門市的設備")
+
+        data = request.data if isinstance(request.data, dict) else {}
+        imei, sn = data.get("imei", ""), data.get("sn", "")
+        if not isinstance(imei, str) or not isinstance(sn, str):
+            return Response({"detail": "IMEI 與 SN 要是文字"}, status=http_status.HTTP_400_BAD_REQUEST)
+        try:
+            serial, _ = set_codes(
+                serial, imei=imei, sn=sn, user=request.user,
+                may_change=is_tenant_admin(request.user), check=own_store)
+        except IdentifierDenied as exc:
+            return Response({"detail": str(exc)}, status=http_status.HTTP_403_FORBIDDEN)
+        except IdentifierError as exc:
+            return Response({"detail": str(exc)}, status=http_status.HTTP_400_BAD_REQUEST)
+        return Response(ProductSerialSerializer(self.get_queryset().get(pk=serial.pk)).data)
 
     @action(detail=True, methods=["get"], url_path="history")
     def history(self, request, pk=None):
@@ -164,12 +251,27 @@ class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
             for s in sales_events
         ]
 
+        # 這一台的碼被補登 / 修改過的紀錄(誰、何時、從什麼改成什麼)
+        code_changes = [
+            {
+                "id": c.id,
+                "created_at": c.created_at,
+                "changed_by": c.changed_by,
+                "before_imei": c.before_imei,
+                "before_sn": c.before_sn,
+                "after_imei": c.after_imei,
+                "after_sn": c.after_sn,
+            }
+            for c in serial.code_changes.all()
+        ]
+
         return Response(
             {
                 "serial": ProductSerialSerializer(serial).data,
                 "acquisition": acquisition,
                 "movements": movement_data,
                 "sales": sales_data,
+                "code_changes": code_changes,
             }
         )
 

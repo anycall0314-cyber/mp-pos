@@ -411,6 +411,73 @@ class UnitCaptureTests(TestCase):
             ProductSerialIdentifier.objects.filter(normalized_value="357000000000000").exists()
         )
 
+    def test_every_identifier_must_be_free_not_just_the_primary(self):
+        """每一個識別碼(IMEI2、SN 也算)都不能跟系統裡別台的碼相同:入庫後拿任何一個碼去找都只能是這一台。"""
+        from apps.inventory.identifiers import find_serial_ids
+        from apps.inventory.models import ProductSerial
+        from .services import IdentityError, capture_units, commit_batch
+        batch = self._batch(1)
+        capture_units(batch.items.get(line_no=1), [{"identifiers": [
+            {"kind": "imei", "value": "356111111111111", "is_primary": True},
+            {"kind": "imei2", "value": "357000000000000"},
+            {"kind": "sn", "value": "F2L-XK1ABCD"},
+        ]}])
+        commit_batch(batch)
+        unit = ProductSerial.objects.get(product=self.product)
+        for code in ("356111111111111", "357000000000000", "f2lxk1abcd"):
+            self.assertEqual(find_serial_ids(self.tenant, code), [unit.pk], code)
+        # 第二批:主序號是新的,但第二個碼跟上面那一台相同 → 登記時就擋
+        item = self._batch(1).items.get(line_no=1)
+        for kind, value in (("imei2", "357000000000000"), ("sn", "F2LXK1ABCD"), ("sn", "356111111111111")):
+            with self.assertRaises(IdentityError) as ctx:
+                capture_units(item, [{"identifiers": [
+                    {"kind": "imei", "value": "356222222222222", "is_primary": True},
+                    {"kind": kind, "value": value},
+                ]}])
+            self.assertIn("已存在", str(ctx.exception))
+        self.assertEqual(ProductSerial.objects.filter(product=self.product).count(), 1)
+
+    def test_one_unit_has_at_most_one_code_of_each_kind(self):
+        """同一台同一種識別碼只能有一個:有兩個的話入庫後畫面只顯示得出一個,另一個看不到卻佔著那個碼。"""
+        from .services import IdentityError, capture_units
+        item = self._batch(1).items.get(line_no=1)
+        for extra in ({"kind": "sn", "value": "SECOND-SN"}, {"kind": "imei", "value": "356938035643809"}):
+            with self.assertRaises(IdentityError) as ctx:
+                capture_units(item, [{"identifiers": [
+                    {"kind": "imei", "value": "490154203237518", "is_primary": True},
+                    {"kind": "sn", "value": "F2LXK1ABCD"},
+                    extra,
+                ]}])
+            self.assertIn("同一台不能有兩個同一種識別碼", str(ctx.exception))
+        # 第二個 IMEI 標成 IMEI2 就可以
+        capture_units(item, [{"identifiers": [
+            {"kind": "imei", "value": "490154203237518", "is_primary": True},
+            {"kind": "imei2", "value": "356938035643809"},
+            {"kind": "sn", "value": "F2LXK1ABCD"},
+        ]}])
+        self.assertEqual(item.received_units.count(), 1)
+
+    def test_main_code_is_the_imei_and_kinds_are_kept_as_said(self):
+        """主碼 = 有 IMEI 用 IMEI(不看哪一個被標成主識別碼);登記時講是 SN 的就是 SN,不重新猜。"""
+        from apps.inventory.identifiers import codes_of
+        from apps.inventory.models import ProductSerial
+        from .services import capture_units, commit_batch
+        batch = self._batch(2)
+        capture_units(batch.items.get(line_no=1), [
+            {"identifiers": [                                   # SN 被標成主識別碼
+                {"kind": "sn", "value": "F2L-XK1ABCD", "is_primary": True},
+                {"kind": "imei", "value": "490154203237518"},
+            ]},
+            {"identifiers": [                                   # 講明是 SN,但長得像 IMEI(15 碼、檢查碼正確)
+                {"kind": "sn", "value": "356938035643809", "is_primary": True},
+            ]},
+        ])
+        commit_batch(batch)
+        units = {s.serial_no: s for s in ProductSerial.objects.filter(product=self.product)}
+        self.assertEqual(set(units), {"490154203237518", "356938035643809"})
+        self.assertEqual(codes_of(units["490154203237518"]), {"imei": "490154203237518", "sn": "F2LXK1ABCD"})
+        self.assertEqual(codes_of(units["356938035643809"]), {"imei": "", "sn": "356938035643809"})
+
     def test_unit_count_must_equal_qty(self):
         from .services import IdentityError, capture_units, commit_batch
         batch = self._batch(2)  # 數量 2

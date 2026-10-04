@@ -554,6 +554,19 @@ export const useInStockSerials = (productId?: number, warehouseId?: number) => {
   });
 };
 
+/** 這個碼是哪一台(完全相同;整家公司、不管門市與狀態)。庫存查詢用它講「刷到的那一台現在在哪」。 */
+export const useDevicesByCode = (code: string) => {
+  const q = code.trim();
+  return useQuery({
+    queryKey: ["serials", "by-code", q],
+    queryFn: () =>
+      list<ProductSerial>(
+        `/serials/?${new URLSearchParams({ code: q, page_size: "10" }).toString()}`,
+      ),
+    enabled: q.replace(/[\s\-_.]+/g, "").length > 0,
+  });
+};
+
 export interface PendingTransfer {
   transfer_no: string;
   doc_date: string;
@@ -1124,7 +1137,9 @@ export interface SecondhandAcquisitionPayload {
   member: number;
   warehouse: number;
   product: number;
-  serial_no: string;
+  /** 這一台的碼:IMEI、SN 可以都給,也可以只給一個 */
+  imei: string;
+  sn: string;
   condition_grade: string;
   custom_unit_price?: string | null;
   battery_health?: number | null;
@@ -1152,6 +1167,22 @@ export function useSecondhandAcquisition() {
       qc.invalidateQueries({ queryKey: ["sales-orders"] });
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["serials"] });
+    },
+  });
+}
+
+/** 補登或修改一台設備的 IMEI / SN(店員只能補空的那一格,管理員才能改已登記的)。 */
+export function useSetSerialCodes() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { id: number; imei: string; sn: string }) =>
+      api<ProductSerial>(`/serials/${args.id}/codes/`, {
+        method: "POST",
+        body: JSON.stringify({ imei: args.imei, sn: args.sn }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["serials"] });
+      qc.invalidateQueries({ queryKey: ["serial-history"] });
     },
   });
 }
@@ -1207,11 +1238,23 @@ export interface SerialHistorySale {
   amount: string;
 }
 
+export interface SerialCodeChange {
+  id: number;
+  created_at: string;
+  changed_by: string;
+  before_imei: string;
+  before_sn: string;
+  after_imei: string;
+  after_sn: string;
+}
+
 export interface SerialHistory {
   serial: ProductSerial;
   acquisition: SerialHistoryAcquisition | null;
   movements: SerialHistoryMovement[];
   sales: SerialHistorySale[];
+  /** 這一台的 IMEI / SN 被補登或修改過的紀錄(新的在前) */
+  code_changes: SerialCodeChange[];
 }
 
 // ---- StockBalance ----

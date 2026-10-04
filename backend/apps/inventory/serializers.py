@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
 
+from .identifiers import codes_of
 from .models import ProductSerial, StockBalance, StockMovement, Warehouse
 
 
@@ -57,6 +58,21 @@ class ProductSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelS
     acquired_via_sales_order_no = serializers.CharField(
         source="acquired_via_sales_order.no", read_only=True, default=""
     )
+    # 這一台的兩個碼(可能只有一個);serial_no 是主碼(有 IMEI 用 IMEI,沒有才用 SN)
+    imei = serializers.SerializerMethodField()
+    sn = serializers.SerializerMethodField()
+
+    def _codes(self, obj):
+        cached = getattr(obj, "_codes_cache", None)
+        if cached is None:
+            cached = obj._codes_cache = codes_of(obj)
+        return cached
+
+    def get_imei(self, obj):
+        return self._codes(obj)["imei"]
+
+    def get_sn(self, obj):
+        return self._codes(obj)["sn"]
 
     class Meta:
         model = ProductSerial
@@ -67,6 +83,8 @@ class ProductSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelS
             "product_name",
             "product_is_secondhand",
             "serial_no",
+            "imei",
+            "sn",
             "warehouse",
             "warehouse_code",
             "status",

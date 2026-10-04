@@ -45,8 +45,8 @@ REGISTRY: dict[str, Entry] = {
         "catalog.PartTemplate", "catalog.PartTemplateItem",
         # 門市與庫存(零庫存、停用的商品也在 Product 裡;帳本與成本快照不可重算)
         "inventory.Warehouse", "inventory.ProductSerial",
-        "inventory.ProductSerialIdentifier", "inventory.StockBalance",
-        "inventory.StockMovement",
+        "inventory.ProductSerialIdentifier", "inventory.ProductSerialCodeChange",
+        "inventory.StockBalance", "inventory.StockMovement",
         # 單據
         "purchasing.PurchaseOrderCategory", "purchasing.PurchaseOrder",
         "purchasing.PurchaseOrderItem",

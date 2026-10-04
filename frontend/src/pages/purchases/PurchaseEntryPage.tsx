@@ -26,6 +26,15 @@ import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Field } from "@/components/Field";
 import { Toolbar } from "@/components/Toolbar";
+import {
+  CodeField,
+  DeviceCodes,
+  looksLikeImei,
+  mainCode,
+  normalizeCode,
+  routeCodes,
+  splitCode,
+} from "@/lib/deviceCodes";
 
 import {
   BatchPasteResult,
@@ -44,8 +53,7 @@ function toIntStr(v: string | number | null | undefined): string {
   return String(Math.round(n));
 }
 
-interface SerialEntry {
-  sn: string;
+interface SerialEntry extends DeviceCodes {
   grade?: ConditionGrade;
   cost?: string;
   price?: string;
@@ -77,11 +85,18 @@ function newLine(line_no: number): Line {
   };
 }
 
+const blankEntry = (): SerialEntry => ({ imei: "", sn: "" });
+const PAIR_MODE_KEY = "mp_pos_serial_pair_mode";
+
 function normalizeSerialEntry(raw: unknown): SerialEntry {
-  if (typeof raw === "string") return { sn: raw };
+  if (typeof raw === "string") return splitCode(raw);
   if (raw && typeof raw === "object") {
     const r = raw as Record<string, unknown>;
-    const entry: SerialEntry = { sn: String(r.sn ?? "") };
+    // 有 imei 這個鍵 = 兩格都是明講的;沒有 = 舊格式(sn 就是「那個序號」),像 IMEI 就放 IMEI 那一格
+    const entry: SerialEntry =
+      "imei" in r
+        ? { imei: String(r.imei ?? ""), sn: String(r.sn ?? "") }
+        : splitCode(String(r.sn ?? ""));
     if (r.grade) entry.grade = String(r.grade) as ConditionGrade;
     if (r.cost !== undefined && r.cost !== null && r.cost !== "")
       entry.cost = String(r.cost);
@@ -92,13 +107,30 @@ function normalizeSerialEntry(raw: unknown): SerialEntry {
     if (r.note) entry.note = String(r.note);
     return entry;
   }
-  return { sn: "" };
+  return blankEntry();
 }
 
+/**
+ * 有填碼的設備(IMEI、SN 至少一個);兩格都送出去,後端照寫的放。
+ * 只看畫面上有的那幾台(數量以內):數量改小之後,多出來那幾台看不到也刪不掉,不能算進去。
+ */
 function filledSerials(line: Line): SerialEntry[] {
   return line.serial_numbers
-    .map((e) => ({ ...e, sn: (e.sn ?? "").trim() }))
-    .filter((e) => e.sn);
+    .slice(0, Math.max(0, line.qty))
+    .map((e) => ({ ...e, imei: (e.imei ?? "").trim(), sn: (e.sn ?? "").trim() }))
+    .filter((e) => e.imei || e.sn);
+}
+
+function setCode(
+  line: Line,
+  idx: number,
+  field: CodeField,
+  value: string,
+): SerialEntry[] {
+  const next = [...line.serial_numbers];
+  while (next.length <= idx) next.push(blankEntry());
+  next[idx] = { ...next[idx], [field]: value };
+  return next;
 }
 
 const GRADE_OPTIONS: { value: ConditionGrade; label: string }[] = [
@@ -128,8 +160,7 @@ interface SerialAsideProps {
   line: Line | null;
   readonly: boolean;
   containerRef: React.RefObject<HTMLDivElement>;
-  onUpdateSerial: (idx: number, value: string) => void;
-  onPasteSerials: (startIdx: number, list: string[]) => void;
+  onSetSerials: (entries: SerialEntry[]) => void;
   onUpdateSerialField: (
     idx: number,
     field: "grade" | "cost" | "price" | "battery" | "note",
@@ -142,12 +173,28 @@ function SerialAside({
   line,
   readonly,
   containerRef,
-  onUpdateSerial,
-  onPasteSerials,
+  onSetSerials,
   onUpdateSerialField,
   onApplyToAll,
 }: SerialAsideProps) {
   const [focusedIdx, setFocusedIdx] = useState(0);
+  // 刷的碼比數量多、放不下時提醒一下
+  const [overflow, setOverflow] = useState(false);
+  // 因為「這一台還缺另一格」而沒放的碼(多半是盒上的 IMEI2)
+  const [refused, setRefused] = useState<string | null>(null);
+  useEffect(() => {
+    setOverflow(false);
+    setRefused(null);
+  }, [line?.key, line?.qty]);
+  // 每台刷幾個碼。盒上有 IMEI、IMEI2、SN 好幾個條碼,光看碼分不出「下一台」還是「同一台的另一個」,
+  // 所以要店家自己講;記在這台電腦上,下次不用再選。
+  const [pairMode, setPairMode] = useState(
+    () => localStorage.getItem(PAIR_MODE_KEY) === "1",
+  );
+  const togglePairMode = (on: boolean) => {
+    setPairMode(on);
+    localStorage.setItem(PAIR_MODE_KEY, on ? "1" : "0");
+  };
   // 切到不同明細列時把 focus 收回第 0 隻
   useEffect(() => {
     setFocusedIdx(0);
@@ -165,10 +212,108 @@ function SerialAside({
   // 「進貨成本」那一欄仍只有中古機才開,成本政策不跟著放寬。
   const tracksUnit = product?.tracks_unit_condition ?? isSecondhand;
 
+  // 每一格在游標進去那一刻的內容:刷錯格時用來還原,不讓原本的碼被蓋掉
+  const beforeRef = useRef<Record<string, string>>({});
+  // 游標要「當下」就移過去(每一格本來就都在畫面上,不用等重畫):
+  // 條碼槍下一刷可能緊接著來,晚一步移,下一個碼就會接在這一格後面。
+  const focusSlot = (target: { idx: number; field: CodeField } | null) => {
+    const el = target
+      ? containerRef.current?.querySelector(
+          `[data-serial-slot="${line?.key}-${target.idx}-${target.field}"]`,
+        )
+      : null;
+    if (el) (el as HTMLInputElement).focus();
+    // 沒有下一格(都刷滿了):游標離開,多刷的碼才不會接在最後一格後面
+    else (document.activeElement as HTMLElement | null)?.blur();
+  };
+  // 刷到 / 貼上的碼照種類放到該放的那一格(IMEI 或 SN),再跳到下一個該刷的位置
+  const place = (
+    idx: number,
+    typed: { field: CodeField; before: string } | null,
+    codes: string[],
+  ) => {
+    if (!line) return;
+    const r = routeCodes(
+      line.serial_numbers,
+      line.qty,
+      idx,
+      typed,
+      codes,
+      blankEntry,
+      pairMode,
+    );
+    onSetSerials(r.entries);
+    setOverflow(r.dropped > 0);
+    setRefused(
+      r.refused
+        ? `沒放:${r.refused.code}(這一台還缺 ${r.refused.missing === "sn" ? "SN" : "IMEI"})`
+        : null,
+    );
+    focusSlot(r.focus);
+  };
+  // 每台兩格:IMEI、SN。可以都填,也可以只填一格。
+  const codeCells = (i: number, trackFocus = false) => {
+    if (!line) return null;
+    const entry = line.serial_numbers[i] ?? blankEntry();
+    return (["imei", "sn"] as CodeField[]).map((field) => {
+      const slot = `${line.key}-${i}-${field}`;
+      return (
+      <td key={field}>
+        <input
+          data-serial-slot={slot}
+          className={
+            field === "imei" && entry.imei.trim() && !looksLikeImei(entry.imei)
+              ? "warn"
+              : undefined
+          }
+          value={entry[field] ?? ""}
+          disabled={readonly}
+          onChange={(e) => onSetSerials(setCode(line, i, field, e.target.value))}
+          onFocus={(e) => {
+            beforeRef.current[slot] = entry[field] ?? "";
+            e.target.select();
+            if (trackFocus) setFocusedIdx(i);
+          }}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
+            const typed = (entry[field] ?? "").trim();
+            // 條碼槍刷完送的可能是 Enter,也可能是 Tab:有內容時兩個都照同一套分格
+            const isTab = e.key === "Tab" && !e.shiftKey && !!typed;
+            if (e.key !== "Enter" && !isTab) return;
+            e.preventDefault();
+            if (typed) {
+              place(i, { field, before: beforeRef.current[slot] ?? "" }, [typed]);
+            } else if (field === "imei") focusSlot({ idx: i, field: "sn" });
+            else focusSlot({ idx: i + 1, field: "imei" });
+          }}
+          onPaste={(e) => {
+            const list = e.clipboardData
+              .getData("text")
+              .split(/[\s,;]+/)
+              .map((x) => x.trim())
+              .filter(Boolean);
+            if (list.length > 1) {
+              e.preventDefault();
+              place(i, null, list);
+            }
+          }}
+        />
+      </td>
+      );
+    });
+  };
+  const imeiWarn =
+    !!line &&
+    line.serial_numbers
+      .slice(0, line.qty)
+      .some((e) => (e.imei ?? "").trim() && !looksLikeImei(e.imei));
+
   return (
     <aside
       className={
-        tracksUnit ? "serial-aside serial-aside-wide" : "serial-aside"
+        tracksUnit
+          ? "serial-aside serial-aside-wide serial-aside-codes"
+          : "serial-aside serial-aside-codes"
       }
       ref={containerRef}
     >
@@ -192,51 +337,42 @@ function SerialAside({
         {line && product && !needs && (
           <div className="serial-aside-hint">此商品不追蹤序號</div>
         )}
+        {line && needs && !readonly && (
+          <label className="serial-pair-toggle">
+            <input
+              type="checkbox"
+              checked={pairMode}
+              onChange={(e) => togglePairMode(e.target.checked)}
+            />
+            每台刷 IMEI 與 SN
+          </label>
+        )}
+        {line && needs && imeiWarn && (
+          <div className="serial-aside-hint warn">仍可送出:IMEI 檢查碼不對</div>
+        )}
+        {line && needs && overflow && (
+          <div className="serial-aside-hint warn">數量已滿,多的碼沒放進去</div>
+        )}
+        {line && needs && refused && (
+          <div className="serial-aside-hint warn">{refused}</div>
+        )}
         {line && needs && !tracksUnit && (
           <table className="serial-slot-table">
             <thead>
               <tr>
-                <th style={{ width: 50 }}>序</th>
-                <th>IMEI / 序號</th>
+                <th style={{ width: 44 }}>序</th>
+                <th>IMEI</th>
+                <th>SN</th>
               </tr>
             </thead>
             <tbody>
               {Array.from({ length: line.qty }).map((_, i) => {
-                const value = line.serial_numbers[i]?.sn ?? "";
                 return (
                   <tr key={i}>
                     <td className="serial-slot-no">
                       {(i + 1).toString().padStart(4, "0")}
                     </td>
-                    <td>
-                      <input
-                        data-serial-slot={`${line.key}-${i}`}
-                        value={value}
-                        disabled={readonly}
-                        onChange={(e) => onUpdateSerial(i, e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            const next = containerRef.current?.querySelector(
-                              `[data-serial-slot="${line.key}-${i + 1}"]`,
-                            );
-                            if (next)
-                              (next as HTMLInputElement).focus();
-                          }
-                        }}
-                        onPaste={(e) => {
-                          const text = e.clipboardData.getData("text");
-                          const list = text
-                            .split(/[\s,;]+/)
-                            .map((s) => s.trim())
-                            .filter(Boolean);
-                          if (list.length > 1) {
-                            e.preventDefault();
-                            onPasteSerials(i, list);
-                          }
-                        }}
-                      />
-                    </td>
+                    {codeCells(i)}
                   </tr>
                 );
               })}
@@ -249,13 +385,14 @@ function SerialAside({
               <thead>
                 <tr>
                   <th style={{ width: 36 }}>序</th>
-                  <th>IMEI / 序號</th>
+                  <th>IMEI</th>
+                  <th>SN</th>
                   <th style={{ width: 70 }}>成色</th>
                 </tr>
               </thead>
               <tbody>
                 {Array.from({ length: line.qty }).map((_, i) => {
-                  const entry = line.serial_numbers[i] ?? { sn: "" };
+                  const entry = line.serial_numbers[i] ?? blankEntry();
                   return (
                     <tr
                       key={i}
@@ -265,36 +402,7 @@ function SerialAside({
                       <td className="serial-slot-no">
                         {(i + 1).toString().padStart(2, "0")}
                       </td>
-                      <td>
-                        <input
-                          data-serial-slot={`${line.key}-${i}`}
-                          value={entry.sn ?? ""}
-                          disabled={readonly}
-                          onChange={(e) => onUpdateSerial(i, e.target.value)}
-                          onFocus={() => setFocusedIdx(i)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              const next = containerRef.current?.querySelector(
-                                `[data-serial-slot="${line.key}-${i + 1}"]`,
-                              );
-                              if (next)
-                                (next as HTMLInputElement).focus();
-                            }
-                          }}
-                          onPaste={(e) => {
-                            const text = e.clipboardData.getData("text");
-                            const list = text
-                              .split(/[\s,;]+/)
-                              .map((s) => s.trim())
-                              .filter(Boolean);
-                            if (list.length > 1) {
-                              e.preventDefault();
-                              onPasteSerials(i, list);
-                            }
-                          }}
-                        />
-                      </td>
+                      {codeCells(i, true)}
                       <td>
                         <select
                           value={entry.grade ?? ""}
@@ -324,9 +432,8 @@ function SerialAside({
                   第 <b>{(focusedIdx + 1).toString().padStart(2, "0")}</b> 隻 詳細
                 </span>
                 <span>
-                  {line.serial_numbers[focusedIdx]?.sn
-                    ? line.serial_numbers[focusedIdx].sn
-                    : "(尚未輸入序號)"}
+                  {mainCode(line.serial_numbers[focusedIdx] ?? {}) ||
+                    "(尚未輸入序號)"}
                 </span>
               </div>
               {isSecondhand && (
@@ -528,9 +635,13 @@ export function PurchaseEntryPage({
   const [lines, setLines] = useState<Line[]>(() => {
     if (draft?.lines && draft.lines.length > 0) {
       // 舊草稿可能存了「100.00」格式,還原時統一轉整數
+      // 舊草稿的序號只有一格(sn),還原時照新的兩格整理
       return draft.lines.map((l) => ({
         ...l,
         unit_price: toIntStr(l.unit_price),
+        serial_numbers: ((l.serial_numbers ?? []) as unknown[]).map(
+          normalizeSerialEntry,
+        ),
       }));
     }
     return [newLine(1)];
@@ -720,7 +831,7 @@ export function PurchaseEntryPage({
           qty: r.qty,
           billed_qty: r.qty,
           unit_price: String(Math.round(Number(r.unit_price) || 0)),
-          serial_numbers: r.serial_numbers.map((sn) => ({ sn })),
+          serial_numbers: r.serial_numbers.map((code) => splitCode(code)),
         };
       });
       // 若原本只有一筆空白(default newLine),替換掉;否則 append
@@ -763,31 +874,9 @@ export function PurchaseEntryPage({
     });
     setPickerOpen(false);
   }
-  function updateSerialAt(lineKey: string, idx: number, value: string) {
+  function setSerialsAt(lineKey: string, entries: SerialEntry[]) {
     setLines((ls) =>
-      ls.map((l) => {
-        if (l.key !== lineKey) return l;
-        const next = [...l.serial_numbers];
-        while (next.length <= idx) next.push({ sn: "" });
-        next[idx] = { ...next[idx], sn: value };
-        return { ...l, serial_numbers: next };
-      }),
-    );
-  }
-  function pasteSerialsAt(lineKey: string, startIdx: number, list: string[]) {
-    setLines((ls) =>
-      ls.map((l) => {
-        if (l.key !== lineKey) return l;
-        const next = [...l.serial_numbers];
-        list.forEach((s, i) => {
-          const pos = startIdx + i;
-          if (pos < l.qty) {
-            while (next.length <= pos) next.push({ sn: "" });
-            next[pos] = { ...next[pos], sn: s };
-          }
-        });
-        return { ...l, serial_numbers: next };
-      }),
+      ls.map((l) => (l.key === lineKey ? { ...l, serial_numbers: entries } : l)),
     );
   }
   function updateSerialFieldAt(
@@ -800,7 +889,7 @@ export function PurchaseEntryPage({
       ls.map((l) => {
         if (l.key !== lineKey) return l;
         const next = [...l.serial_numbers];
-        while (next.length <= idx) next.push({ sn: "" });
+        while (next.length <= idx) next.push(blankEntry());
         const trimmed = value.trim();
         const updated = { ...next[idx] };
         if (trimmed === "") {
@@ -834,7 +923,7 @@ export function PurchaseEntryPage({
               }
             : e,
         );
-        while (next.length < l.qty) next.push({ sn: "" });
+        while (next.length < l.qty) next.push(blankEntry());
         return { ...l, serial_numbers: next };
       }),
     );
@@ -867,10 +956,14 @@ export function PurchaseEntryPage({
           return `第 ${l.line_no} 行序號(${serials.length})不符數量(${l.qty})`;
         }
         for (const s of serials) {
-          if (seen.has(s.sn)) return `序號重複:${s.sn}`;
-          seen.add(s.sn);
+          // IMEI 與 SN 一起比:同一個碼不能出現兩次(不管在哪一格)
+          for (const code of [s.imei, s.sn].filter(Boolean)) {
+            const k = normalizeCode(code);
+            if (seen.has(k)) return `序號重複:${code}`;
+            seen.add(k);
+          }
           if (product.is_secondhand && !s.grade) {
-            return `第 ${l.line_no} 行序號 ${s.sn} 未選成色等級`;
+            return `第 ${l.line_no} 行序號 ${mainCode(s)} 未選成色等級`;
           }
           if (product.is_secondhand) {
             const ownCost = Number(s.cost);
@@ -879,7 +972,7 @@ export function PurchaseEntryPage({
               !(Number.isFinite(ownCost) && ownCost > 0) &&
               !(Number.isFinite(fallback) && fallback > 0)
             ) {
-              return `第 ${l.line_no} 行序號 ${s.sn} 沒有進貨成本(請填單價或該隻自己的進貨成本)`;
+              return `第 ${l.line_no} 行序號 ${mainCode(s)} 沒有進貨成本(請填單價或該隻自己的進貨成本)`;
             }
           }
         }
@@ -1013,6 +1106,17 @@ export function PurchaseEntryPage({
                 }
               >
                 列印標籤
+              </button>
+            )}
+            {!isNew && existing.data && !isVoid && !isSecondhandVendor && (
+              <button
+                className="btn"
+                type="button"
+                onClick={() =>
+                  navigate(`/transfers/new?from_po=${existing.data!.id}`)
+                }
+              >
+                整張調撥
               </button>
             )}
             {!isNew && !isVoid && (
@@ -1355,11 +1459,8 @@ export function PurchaseEntryPage({
              line={sel ?? null}
              readonly={readonly}
              containerRef={serialPanelRef}
-             onUpdateSerial={(idx, v) =>
-               selectedLineKey && updateSerialAt(selectedLineKey, idx, v)
-             }
-             onPasteSerials={(idx, list) =>
-               selectedLineKey && pasteSerialsAt(selectedLineKey, idx, list)
+             onSetSerials={(entries) =>
+               selectedLineKey && setSerialsAt(selectedLineKey, entries)
              }
              onUpdateSerialField={(idx, field, v) =>
                selectedLineKey &&

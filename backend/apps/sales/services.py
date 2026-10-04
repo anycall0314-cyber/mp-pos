@@ -18,6 +18,7 @@ from django.utils import timezone
 from apps.catalog.models import Category, Product
 from apps.core.tenant_fields import same_company as _same_company
 from apps.inventory.locking import lock_stock_rows, locked_balance as _locked_balance
+from apps.inventory.identifiers import IdentifierError, create_serial, main_code, split_codes, taken
 from apps.inventory.models import ProductSerial, StockBalance, StockMovement
 from apps.parties.models import Customer, SimCard, TelecomPlan
 from apps.tenants.services import InvoiceTrackError, assign_invoice_no
@@ -475,7 +476,7 @@ def acquire_secondhand_from_member(
     member,
     warehouse,
     secondhand_product: Product,
-    serial_no: str,
+    serial_no: str = "",
     condition_grade: str,
     custom_unit_price,
     acquisition_price,
@@ -484,11 +485,15 @@ def acquire_secondhand_from_member(
     condition_note: str = "",
     doc_date=None,
     note: str = "",
+    imei: str = "",
+    sn: str = "",
 ):
     """個人會員收購中古機:一個 transaction 內同時建立序號 + 收購二手銷貨單。
 
     記帳方向:銷貨單 total 為負數(現金流出),與一般銷貨(正數現金流入)在報表自然相加。
     銷貨單 customer 自動帶該會員對應的個人 Customer(查無則新建),member 欄位記會員本身。
+
+    這一台的碼:imei / sn 可以都給、也可以只給一個;serial_no 是「沒講是哪一種」的單一個碼(舊寫法)。
     """
     if not _same_company(tenant.id, member, warehouse, secondhand_product):
         raise SecondhandIntakeError("會員 / 門市 / 商品不屬於這家公司")
@@ -496,14 +501,14 @@ def acquire_secondhand_from_member(
         raise SecondhandIntakeError(
             f"商品 {secondhand_product.sku} 不是中古機(is_secondhand=False)"
         )
-    if not serial_no:
-        raise SecondhandIntakeError("序號為必填")
-    if (
-        ProductSerial.objects.for_tenant(tenant)
-        .filter(serial_no=serial_no)
-        .exists()
-    ):
-        raise SecondhandIntakeError(f"序號 {serial_no} 已存在")
+    try:
+        imei, sn = split_codes(imei, sn, serial_no)
+    except IdentifierError as exc:
+        raise SecondhandIntakeError(str(exc))
+    serial_no = main_code(imei, sn)
+    clash = taken(tenant, [imei, sn])
+    if clash:
+        raise SecondhandIntakeError(f"序號 {', '.join(clash)} 已存在")
     if condition_grade not in ProductSerial.ConditionGrade.values:
         raise SecondhandIntakeError(f"成色等級 {condition_grade} 無效")
     price = Decimal(str(acquisition_price)).quantize(CENTS)
@@ -515,20 +520,24 @@ def acquire_secondhand_from_member(
     with transaction.atomic():
         customer = _get_or_create_customer_for_member(tenant, member)
 
-        serial = ProductSerial.objects.create(
-            tenant=tenant,
-            product=secondhand_product,
-            serial_no=serial_no,
-            warehouse=warehouse,
-            status=ProductSerial.Status.IN_STOCK,
-            purchase_unit_cost=price,
-            condition_grade=condition_grade,
-            custom_unit_price=custom_unit_price,
-            battery_health=battery_health,
-            condition_note=condition_note,
-            acquired_from_member=member,
-            received_at=timezone.now(),
-        )
+        try:
+            serial = create_serial(
+                tenant=tenant,
+                product=secondhand_product,
+                imei=imei,
+                sn=sn,
+                warehouse=warehouse,
+                status=ProductSerial.Status.IN_STOCK,
+                purchase_unit_cost=price,
+                condition_grade=condition_grade,
+                custom_unit_price=custom_unit_price,
+                battery_health=battery_health,
+                condition_note=condition_note,
+                acquired_from_member=member,
+                received_at=timezone.now(),
+            )
+        except IdentifierError as exc:
+            raise SecondhandIntakeError(str(exc))
 
         so = SalesOrder.objects.create(
             tenant=tenant,

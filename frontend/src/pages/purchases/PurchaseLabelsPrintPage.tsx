@@ -27,8 +27,11 @@ export function PurchaseLabelsPrintPage() {
       if (it.serial_numbers && it.serial_numbers.length > 0) {
         // 追序號:每個序號一張(可能是字串或物件)
         it.serial_numbers.forEach((entry, i) => {
+          // 標籤印主碼:有 IMEI 印 IMEI,沒有才印 SN
           const sn =
-            typeof entry === "string" ? entry : (entry?.sn ?? "");
+            typeof entry === "string"
+              ? entry
+              : entry?.imei || entry?.sn || "";
           out.push({ key: `${it.id}-${i}-${sn}`, item: it, serial: sn });
         });
       } else {

@@ -26,7 +26,13 @@ from rest_framework.response import Response
 from apps.core.filters import _is_postgres
 from apps.identity.dedup import DuplicateProduct
 from apps.identity.product_match import MatchResult, find_candidates
-from apps.inventory.models import ProductSerial, StockBalance, Warehouse
+from apps.inventory.identifiers import find_serial_ids
+from apps.inventory.models import (
+    ProductSerial,
+    ProductSerialIdentifier,
+    StockBalance,
+    Warehouse,
+)
 from apps.parties.models import Supplier
 from apps.purchasing.models import PurchaseOrderItem
 from apps.sales.models import SalesOrderItem
@@ -132,6 +138,14 @@ class ProductViewSet(viewsets.ModelViewSet):
             ).product_ids
             if q else []
         )
+        # 刷到的是某一台設備的碼(IMEI 或 SN):那一台的商品要出現。
+        # 只收「完全相同」的碼,不做部分比對,所以不會像「18 pro 256」那樣誤中別台的 IMEI。
+        code_ids = (
+            list(ProductSerial.objects.filter(pk__in=find_serial_ids(self.request.tenant, q))
+                 .values_list("product_id", flat=True))
+            if q else []
+        )
+        extra_ids = [*code_ids, *[i for i in extra_ids if i not in set(code_ids)]]
         qs = queryset
         for backend in list(self.filter_backends):
             if extra_ids and issubclass(backend, SearchFilter):
@@ -153,9 +167,12 @@ class ProductViewSet(viewsets.ModelViewSet):
         )
         if not _is_postgres():
             return qs.annotate(_resolved=resolved).order_by("_resolved", "sku")
+        # 相關度不看序號:序號那一欄要接到設備表,一個商品有幾台就會變成幾列(同一個商品重複出現);
+        # 刷到碼的商品已經由上面的 _resolved 排在最前面。
         plain_fields = [
             f[1:] if f and f[0] in {"^", "=", "$", "@"} else f
             for f in self.get_search_fields()
+            if not f.startswith("serials__")
         ]
         sim_exprs = [TrigramWordSimilarity(q, f) for f in plain_fields]
         max_sim = sim_exprs[0] if len(sim_exprs) == 1 else Greatest(*sim_exprs)
@@ -858,14 +875,24 @@ class ProductViewSet(viewsets.ModelViewSet):
         )
         search = request.query_params.get("search", "").strip()
         if search:
-            qs = qs.filter(
+            cond = (
                 Q(sku__icontains=search)
                 | Q(name__icontains=search)
                 | Q(spec__icontains=search)
                 | Q(barcode__icontains=search)
                 | Q(category__name__icontains=search)
                 | Q(category__code__icontains=search)
+                # 刷到的是某一台設備的碼(IMEI 或 SN,完全相同)→ 那一台的商品
+                | Q(pk__in=ProductSerial.objects.filter(
+                    pk__in=find_serial_ids(tenant, search)).values("product_id"))
             )
+            # 純數字 6 碼以上:也比對碼的一部分(只記得 IMEI 末幾碼時);
+            # 太短或有英文字的不比,免得「18 pro 256」這種字誤中別台的碼
+            if search.isdigit() and len(search) >= 6:
+                cond |= Q(pk__in=ProductSerialIdentifier.objects.filter(
+                    tenant=tenant, normalized_value__contains=search,
+                ).values("serial__product_id"))
+            qs = qs.filter(cond)
         # category 單選(舊版相容);category_ids 多選 CSV
         category_id = request.query_params.get("category")
         if category_id and category_id.isdigit():

@@ -28,6 +28,7 @@ from django.utils import timezone
 
 from apps.assistant.parsers import _KV_RE, _PRICE_RE, _QTY_RE, _SERIAL_RE
 from apps.catalog.models import Category, Product
+from apps.inventory.identifiers import main_code, taken
 from apps.inventory.models import ProductSerial, ProductSerialIdentifier
 from apps.purchasing.serializers import PurchaseOrderSerializer
 from apps.purchasing.services import commit_purchase_order
@@ -1126,6 +1127,7 @@ def capture_units(item, units_data, user=None):
     for u in units_data or []:
         raw_ids = u.get("identifiers") or []
         norm_ids, primary_count = [], 0
+        kinds_seen = set()
         for idf in raw_ids:
             val = (idf.get("value") or "").strip()
             if not val:
@@ -1136,8 +1138,14 @@ def capture_units(item, units_data, user=None):
             seen.add(nv)
             is_primary = bool(idf.get("is_primary"))
             primary_count += 1 if is_primary else 0
+            # 一台每一種識別碼只能有一個(第二個 IMEI 要標成 IMEI2):
+            # 同一種有兩個的話,入庫後畫面上只顯示得出一個,另一個看不到卻佔著那個碼。
+            kind = idf.get("kind") or IntakeUnitIdentifier.Kind.IMEI
+            if kind in kinds_seen:
+                raise IdentityError(f"同一台不能有兩個同一種識別碼:{val}")
+            kinds_seen.add(kind)
             norm_ids.append({
-                "kind": idf.get("kind") or IntakeUnitIdentifier.Kind.IMEI,
+                "kind": kind,
                 "raw": val, "nv": nv, "is_primary": is_primary,
             })
         if not norm_ids:
@@ -1148,12 +1156,9 @@ def capture_units(item, units_data, user=None):
             raise IdentityError("每台只能有一個主識別碼")
         parsed_units.append(norm_ids)
 
-    # 主序號不得與系統既有序號衝突
-    primaries = [ni["nv"] for u in parsed_units for ni in u if ni["is_primary"]]
-    clash = list(
-        ProductSerial.objects.for_tenant(item.tenant)
-        .filter(serial_no__in=primaries).values_list("serial_no", flat=True)
-    )
+    # 每一個識別碼(不只主序號)都不能跟系統裡別台設備的碼相同:
+    # 入庫之後拿任何一個碼去找,都只能找到這一台
+    clash = taken(item.tenant, [ni["raw"] for u in parsed_units for ni in u])
     if clash:
         raise IdentityError(f"序號已存在系統:{', '.join(clash)}")
 
@@ -1322,8 +1327,19 @@ def commit_batch(batch, user=None):
                         pid = u.primary_identifier
                         if not pid:
                             raise IdentityError(f"第 {it.line_no} 行有一台缺主序號")
-                        serials.append(pid.normalized_value)
-                        unit_map[pid.normalized_value] = u
+                        # 照登記時講的種類交給進貨(不讓進貨再猜一次):主碼 = 有 IMEI 用 IMEI,沒有才用 SN,
+                        # 不看哪一個被標成主識別碼。這一台沒有 IMEI 也沒有 SN(只登記了別種碼)時才拿主識別碼去猜。
+                        # 碼沿用拍照入庫原本的做法:存去掉空白 / 破折號後的值。
+                        kinds = {}
+                        for idf in u.identifiers.all():
+                            kinds.setdefault(idf.kind, idf.normalized_value)
+                        imei, sn = kinds.get("imei", ""), kinds.get("sn", "")
+                        if imei or sn:
+                            serials.append({"imei": imei, "sn": sn})
+                            unit_map[main_code(imei, sn)] = u
+                        else:
+                            serials.append(pid.normalized_value)
+                            unit_map[pid.normalized_value] = u
             payload_items.append({
                 "product": it.matched_product_id,
                 "qty": it.effective_qty,
@@ -1361,13 +1377,15 @@ def commit_batch(batch, user=None):
             if not serial:
                 continue
             for idf in unit.identifiers.all():
-                ProductSerialIdentifier.objects.get_or_create(
+                row, _ = ProductSerialIdentifier.objects.get_or_create(
                     tenant=batch.tenant, normalized_value=idf.normalized_value,
                     defaults={
                         "serial": serial, "kind": idf.kind,
                         "value": idf.raw_value, "is_primary": idf.is_primary,
                     },
                 )
+                if row.serial_id != serial.id:      # 登記之後、過帳之前被別台用掉了
+                    raise IdentityError(f"識別碼 {idf.raw_value} 已經登記在別台設備")
         batch.committed_purchase_order = ser.instance
         batch.status = IntakeBatch.Status.COMMITTED
         batch.save(update_fields=["committed_purchase_order", "status", "updated_at"])

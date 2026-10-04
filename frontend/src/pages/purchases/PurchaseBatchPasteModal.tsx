@@ -290,6 +290,21 @@ export function PurchaseBatchPasteModal({
       setError("沒有勾選任何有效列");
       return;
     }
+    // 這裡一個序號就是一台。有貼序號、但個數跟數量不一樣時不能帶回去:
+    // 多的會被藏起來、少的會變成缺序號,而且一台的 IMEI 與 SN 會被拆成兩台。
+    // 完全沒貼序號是可以的(只帶商品與數量,序號回主畫面再刷;沒刷齊存檔時會擋)。
+    const bad = final.find(
+      (r) =>
+        r.product.requires_serial &&
+        r.serial_numbers.length > 0 &&
+        r.serial_numbers.length !== r.qty,
+    );
+    if (bad) {
+      setError(
+        `「${bad.product.name}」序號 ${bad.serial_numbers.length} 個、數量 ${bad.qty}:一個序號算一台`,
+      );
+      return;
+    }
     onConfirm(final);
   }
 

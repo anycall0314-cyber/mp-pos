@@ -7,6 +7,7 @@ import {
   useHomeSummary,
   useInStockSerials,
   usePendingTransfers,
+  useDevicesByCode,
   useStockMatrix,
   useWarehouses,
 } from "@/api/hooks";
@@ -15,6 +16,7 @@ import type { Category } from "@/api/types";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { CompatibilityModal } from "@/components/CompatibilityModal";
 import { SerialHistoryModal } from "@/components/SerialHistoryModal";
+import { codesLabel } from "@/lib/deviceCodes";
 import { Toolbar } from "@/components/Toolbar";
 import { useIsMobile } from "@/hooks/useIsMobile";
 
@@ -56,7 +58,7 @@ function SerialListModal({
                 <div key={s.id} className="serial-card">
                   <div className="serial-card-head">
                     <span className="serial-card-no">
-                      #{i + 1} {s.serial_no}
+                      #{i + 1} {codesLabel(s)}
                     </span>
                     <button
                       type="button"
@@ -103,7 +105,8 @@ function SerialListModal({
               <thead>
                 <tr>
                   <th style={{ width: 40 }}>#</th>
-                  <th>序號</th>
+                  <th>IMEI</th>
+                  <th>SN</th>
                   <th>進貨日</th>
                   <th className="num">單台成本</th>
                   {product.tracks_unit_condition && <th>成色</th>}
@@ -121,7 +124,8 @@ function SerialListModal({
                 {rows.map((s, i) => (
                   <tr key={s.id}>
                     <td>{i + 1}</td>
-                    <td>{s.serial_no}</td>
+                    <td>{s.imei || "—"}</td>
+                    <td>{s.sn || "—"}</td>
                     <td>{s.received_at?.slice(0, 10) ?? "—"}</td>
                     <td className="num">
                       {Math.round(Number(s.purchase_unit_cost)).toLocaleString()}
@@ -159,7 +163,7 @@ function SerialListModal({
                 {rows.length === 0 && (
                   <tr>
                     <td
-                      colSpan={product.tracks_unit_condition ? 9 : 5}
+                      colSpan={product.tracks_unit_condition ? 10 : 6}
                       className="md-empty"
                     >
                       —
@@ -356,6 +360,11 @@ export function InventoryQueryPage() {
     productId: number;
     productName: string;
   } | null>(null);
+
+  // 關鍵字剛好是某一台設備的碼(IMEI 或 SN)時,把那一台現在的狀態與門市講出來:
+  // 下面的表是「同款商品」的在庫數,刷到的那一台可能已經賣掉、或在別的門市。
+  const devices = useDevicesByCode(applied?.keyword ?? "");
+  const [deviceHistoryId, setDeviceHistoryId] = useState<number | null>(null);
 
   const matrix = useStockMatrix(
     {
@@ -647,6 +656,32 @@ export function InventoryQueryPage() {
             productId={compatibilityDialog.productId}
             productName={compatibilityDialog.productName}
             onClose={() => setCompatibilityDialog(null)}
+          />
+        )}
+        {(devices.data ?? []).length > 0 && (
+          <div className="inv-device-hits">
+            {(devices.data ?? []).map((d) => (
+              <div key={d.id} className="inv-device-hit">
+                <span>
+                  {codesLabel(d)} · {d.product_name} · <b>{d.status_label}</b>
+                  {d.warehouse_code ? ` · ${d.warehouse_code}` : ""}
+                </span>
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ fontSize: 12, padding: "2px 6px" }}
+                  onClick={() => setDeviceHistoryId(d.id)}
+                >
+                  履歷
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {deviceHistoryId != null && (
+          <SerialHistoryModal
+            serialId={deviceHistoryId}
+            onClose={() => setDeviceHistoryId(null)}
           />
         )}
         {applied && !matrix.isLoading && !matrix.isError && isMobile && (

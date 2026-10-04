@@ -30,6 +30,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from apps.catalog.models import Category, Product
+from apps.inventory.identifiers import create_serial
 from apps.inventory.models import (
     ProductSerial,
     StockBalance,
@@ -305,11 +306,11 @@ class Command(BaseCommand):
                 is_active=True,
             )
             p.save()
-            ProductSerial.objects.create(
+            create_serial(
                 tenant=tenant,
                 product=p,
+                code=r["code"],
                 warehouse=wh_map[r["store"]],
-                serial_no=r["code"],
                 status=ProductSerial.Status.IN_STOCK,
                 condition_note=r["name"],
             )

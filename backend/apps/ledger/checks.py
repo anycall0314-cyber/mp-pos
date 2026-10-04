@@ -11,7 +11,13 @@ from decimal import Decimal
 from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 
-from apps.inventory.models import ProductSerial, StockBalance, StockMovement
+from apps.identity.normalize import normalize_serial
+from apps.inventory.models import (
+    ProductSerial,
+    ProductSerialIdentifier,
+    StockBalance,
+    StockMovement,
+)
 from apps.sales.models import (
     SalesOrder,
     SalesOrderItem,
@@ -168,7 +174,13 @@ def check_serials(tenant):
     ).values_list("serial_id", flat=True):
         sold[sid] -= 1
         returned[sid] += 1
-    place, record = [], []
+    # 每一台的主碼都要登記在識別碼表:「一個碼只屬於一台」靠那張表把關,沒登記的那一台,
+    # 別台就可以再用同一個碼
+    registered = set(
+        ProductSerialIdentifier.objects.filter(tenant=tenant)
+        .values_list("serial_id", "normalized_value").iterator(chunk_size=5000))
+    taken_codes = {nv for _, nv in registered}
+    place, record, codes = [], [], []
     S = ProductSerial.Status
     for sid, raw_no, sku, status, warehouse_id in ProductSerial.objects.filter(
         tenant=tenant
@@ -176,6 +188,12 @@ def check_serials(tenant):
         "id", "serial_no", "product__sku", "status", "warehouse_id"
     ).iterator(chunk_size=5000):
         serial_no = f"{sku} {_serial_tail(raw_no)}"
+        key = normalize_serial(raw_no)
+        if (sid, key) not in registered:
+            # 沒登記多半是因為去掉空白 / 破折號後跟另一台相同:刷這個碼會對到兩台,銷貨會擋下來不讓賣
+            codes.append(
+                f"{serial_no}:主序號沒有登記"
+                + ("(跟另一台設備的碼相同,刷這個碼會對到兩台)" if key in taken_codes else ""))
         if status in (S.IN_STOCK, S.RETURNED) and warehouse_id is None:
             place.append(f"{serial_no}:{S(status).label}卻沒有門市")
         if status in (S.SOLD, S.IN_TRANSIT) and warehouse_id is not None:
@@ -194,6 +212,7 @@ def check_serials(tenant):
     return [
         _result("serial_place", "序號:狀態與所在門市一致", place),
         _result("serial_record", "序號:狀態與銷貨 / 銷退紀錄一致", record),
+        _result("serial_codes", "序號:每一台的碼都有登記", codes),
     ]
 
 

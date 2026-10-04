@@ -125,7 +125,10 @@ export interface ProductSerial {
   product_sku: string;
   product_name: string;
   product_is_secondhand: boolean;
+  /** 主碼:有 IMEI 用 IMEI,沒有才用 SN */
   serial_no: string;
+  imei: string;
+  sn: string;
   warehouse: number | null;
   warehouse_code: string | null;
   status: SerialStatus;
@@ -179,6 +182,30 @@ export interface TransferOrderItem {
 }
 
 export type TransferStatus = "dispatched" | "confirmed";
+
+/** 整張調撥:一張進貨單的東西現在還有哪些留在進貨門市 */
+export interface PurchaseTransferableLine {
+  product: number;
+  product_sku: string;
+  product_name: string;
+  requires_serial: boolean;
+  /** 這張單進了幾個 */
+  purchased: number;
+  /** 現在還能調幾個(序號商品 = serials 的數量;配件不超過門市現有庫存) */
+  qty: number;
+  serials: { id: number; serial_no: string; imei: string; sn: string }[];
+  /** 已經賣掉 / 調走 / 退回 / 作廢,不在進貨門市的 */
+  gone: { serial_no: string; status_label: string; warehouse_name: string }[];
+}
+
+export interface PurchaseTransferable {
+  purchase_order: number;
+  no: string;
+  warehouse: number;
+  warehouse_code: string;
+  warehouse_name: string;
+  lines: PurchaseTransferableLine[];
+}
 
 export interface TransferOrder {
   id: number;
@@ -449,6 +476,8 @@ export interface PurchaseOrderCategory {
 }
 
 export interface PurchaseSerialEntry {
+  /** 有 imei 這個鍵 = 兩格都是明講的;舊資料沒有,sn 就是「那個序號」 */
+  imei?: string;
   sn: string;
   grade?: ConditionGrade;
   price?: string;

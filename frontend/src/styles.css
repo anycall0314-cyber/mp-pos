@@ -493,6 +493,28 @@ body { background: var(--bg); color: var(--text); }
 }
 /* 中古機選到時側欄微寬,容納列表 + 下方詳細區 */
 .serial-aside-wide { width: 380px; }
+/* 每台兩格(IMEI / SN):側欄再寬一點,15 碼 IMEI 才不會被切掉 */
+.serial-aside-codes { width: 420px; }
+.serial-aside-wide.serial-aside-codes { width: 490px; }
+.serial-slot-table input.warn { border-color: #f0b060; }
+/* 序號履歷裡補登 / 修改 IMEI、SN 的那一排 */
+.serial-codes-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 4px; }
+.serial-codes-row label { display: flex; flex-direction: column; gap: 2px; color: var(--text-dim); font-size: 13px; }
+.serial-codes-row input {
+  width: 190px; padding: 3px 6px; height: 28px; box-sizing: border-box;
+  background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 3px; font-size: 14px;
+}
+.serial-codes-row input.warn { border-color: #f0b060; }
+.serial-codes-row input:disabled { opacity: 0.7; }
+.serial-codes-error { color: #e5484d; font-size: 13px; }
+.serial-aside-hint.warn { color: #f0b060; }
+.serial-pair-toggle { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 13px; color: var(--text-dim); }
+/* 庫存查詢:刷到的那一台現在的狀態與門市 */
+.inv-device-hits { margin: 8px 0; display: flex; flex-direction: column; gap: 4px; }
+.inv-device-hit {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--panel-2); font-size: 14px;
+}
 .serial-detail-panel {
   border-top: 1px solid var(--border);
   background: var(--panel);

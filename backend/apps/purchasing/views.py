@@ -13,6 +13,7 @@ from .serializers import (
 from .services import (
     PurchaseOrderError,
     commit_purchase_order,
+    transferable_from_purchase,
     void_purchase_order,
 )
 
@@ -83,3 +84,24 @@ class PurchaseOrderViewSet(
             )
         po = self.get_queryset().get(pk=po.pk)
         return Response(self.get_serializer(po).data)
+
+    @action(detail=True, methods=["get"])
+    def transferable(self, request, pk=None):
+        """整張調撥用:這張進貨單的東西現在還有哪些留在進貨門市(畫面拿去帶好一張調撥單)。只讀。
+
+        鎖在自己門市的帳號只看得到自己門市的進貨單(跟進貨單清單同一套範圍)。
+        """
+        po = self.get_object()
+        if po.is_void:
+            return Response(
+                {"detail": "這張進貨單已作廢,沒有東西可以調撥"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({
+            "purchase_order": po.id,
+            "no": po.no,
+            "warehouse": po.warehouse_id,
+            "warehouse_code": po.warehouse.code,
+            "warehouse_name": po.warehouse.name,
+            "lines": transferable_from_purchase(po),
+        })

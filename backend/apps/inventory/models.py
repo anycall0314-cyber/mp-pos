@@ -185,6 +185,33 @@ class ProductSerialIdentifier(TenantOwnedModel):
         return f"{self.kind}:{self.value}"
 
 
+class ProductSerialCodeChange(TenantOwnedModel):
+    """設備的 IMEI / SN 事後被補登或修改的紀錄(誰、什麼時候、從什麼改成什麼)。
+
+    只增不改。改碼等於改這一台「是哪一台」,沒有紀錄的話換機、冒用查不出來。
+    操作的人存當下的帳號名稱(不是外鍵):帳號之後被刪、或還原到別的環境,紀錄都還看得懂。
+    """
+
+    serial = models.ForeignKey(
+        ProductSerial, on_delete=models.CASCADE, related_name="code_changes",
+        verbose_name="商品序號",
+    )
+    before_imei = models.CharField("原 IMEI", max_length=80, blank=True)
+    before_sn = models.CharField("原 SN", max_length=80, blank=True)
+    after_imei = models.CharField("新 IMEI", max_length=80, blank=True)
+    after_sn = models.CharField("新 SN", max_length=80, blank=True)
+    changed_by = models.CharField("操作帳號", max_length=150, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [models.Index(fields=["serial", "-created_at"])]
+        verbose_name = "序號修改紀錄"
+        verbose_name_plural = "序號修改紀錄"
+
+    def __str__(self) -> str:
+        return f"{self.serial_id}:{self.before_imei}/{self.before_sn}→{self.after_imei}/{self.after_sn}"
+
+
 class StockBalance(TenantOwnedModel):
     """非序號商品(配件)的倉別庫存餘額。每個 (商品, 倉庫) 一筆。
 

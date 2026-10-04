@@ -21,6 +21,7 @@ import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
+import { looksLikeImei } from "@/lib/deviceCodes";
 
 const GRADE_OPTIONS: { value: ConditionGrade; label: string }[] = [
   { value: "S", label: "S 媲美新機 / 拆封未使用" },
@@ -62,7 +63,8 @@ export function SecondhandPersonalEntry() {
   const [productOption, setProductOption] = useState<ComboOption<Product> | null>(
     null,
   );
-  const [serialNo, setSerialNo] = useState("");
+  const [imei, setImei] = useState("");
+  const [sn, setSn] = useState("");
   const [grade, setGrade] = useState<ConditionGrade>("A");
   const [customPrice, setCustomPrice] = useState("");
   const [batteryHealth, setBatteryHealth] = useState("");
@@ -87,7 +89,8 @@ export function SecondhandPersonalEntry() {
     setMemberStatus("idle");
     setProduct("");
     setProductOption(null);
-    setSerialNo("");
+    setImei("");
+    setSn("");
     setGrade("A");
     setCustomPrice("");
     setBatteryHealth("");
@@ -101,7 +104,7 @@ export function SecondhandPersonalEntry() {
     if (!member) return "請輸入收購來源會員電話(查無請新增)";
     if (!warehouse) return "請選擇入庫倉";
     if (!product) return "請選擇中古機商品";
-    if (!serialNo.trim()) return "請輸入序號 (IMEI)";
+    if (!imei.trim() && !sn.trim()) return "IMEI 與 SN 至少要填一個";
     if (!grade) return "請選擇成色等級";
     if (!acquisitionPrice || Number(acquisitionPrice) <= 0)
       return "請輸入有效的收購金額";
@@ -167,7 +170,8 @@ export function SecondhandPersonalEntry() {
         member: member!.id,
         warehouse: warehouse as number,
         product: product as number,
-        serial_no: serialNo.trim(),
+        imei: imei.trim(),
+        sn: sn.trim(),
         condition_grade: grade,
         custom_unit_price: customPrice || null,
         battery_health: batteryHealth ? Number(batteryHealth) : null,
@@ -281,11 +285,25 @@ export function SecondhandPersonalEntry() {
               placeholder="搜尋中古機型號"
             />
           </Field>
-          <Field label="序號 (IMEI)" required>
+          <Field
+            label="IMEI"
+            hint={
+              imei.trim() && !looksLikeImei(imei)
+                ? "仍可送出:IMEI 檢查碼不對"
+                : undefined
+            }
+          >
             <input
-              value={serialNo}
-              onChange={(e) => setSerialNo(e.target.value)}
+              value={imei}
+              onChange={(e) => setImei(e.target.value)}
               placeholder="例:354123456789012"
+              maxLength={80}
+            />
+          </Field>
+          <Field label="SN">
+            <input
+              value={sn}
+              onChange={(e) => setSn(e.target.value)}
               maxLength={80}
             />
           </Field>

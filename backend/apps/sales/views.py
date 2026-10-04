@@ -33,7 +33,10 @@ class SecondhandAcquisitionInputSerializer(TenantScopedRelatedFieldsMixin, seria
     member = serializers.PrimaryKeyRelatedField(queryset=Member.objects.all())
     warehouse = serializers.PrimaryKeyRelatedField(queryset=Warehouse.objects.all())
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
-    serial_no = serializers.CharField(max_length=80)
+    # 這一台的碼:imei / sn 可以都給、也可以只給一個;serial_no 是沒講哪一種的舊寫法
+    serial_no = serializers.CharField(max_length=80, required=False, allow_blank=True, default="")
+    imei = serializers.CharField(max_length=80, required=False, allow_blank=True, default="")
+    sn = serializers.CharField(max_length=80, required=False, allow_blank=True, default="")
     condition_grade = serializers.CharField(max_length=2)
     custom_unit_price = serializers.DecimalField(
         max_digits=14, decimal_places=2, required=False, allow_null=True
@@ -233,7 +236,9 @@ class SalesOrderViewSet(
                 member=member,
                 warehouse=warehouse,
                 secondhand_product=product,
-                serial_no=data["serial_no"].strip(),
+                serial_no=data.get("serial_no", "").strip(),
+                imei=data.get("imei", "").strip(),
+                sn=data.get("sn", "").strip(),
                 condition_grade=data["condition_grade"],
                 custom_unit_price=data.get("custom_unit_price"),
                 acquisition_price=data["acquisition_price"],

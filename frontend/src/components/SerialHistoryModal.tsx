@@ -1,4 +1,9 @@
-import { useSerialHistory } from "@/api/hooks";
+import { useEffect, useState } from "react";
+
+import { ApiHttpError } from "@/api/client";
+import { useSerialHistory, useSetSerialCodes } from "@/api/hooks";
+import { useCurrentUser } from "@/auth/AuthContext";
+import { codesLabel, looksLikeImei, normalizeCode } from "@/lib/deviceCodes";
 
 interface Props {
   serialId: number;
@@ -8,6 +13,32 @@ interface Props {
 export function SerialHistoryModal({ serialId, onClose }: Props) {
   const history = useSerialHistory(serialId);
   const data = history.data;
+  // 這一台的兩個碼:空的那一格誰都可以補;已經登記的只有管理員能改
+  const role = useCurrentUser()?.profile?.role;
+  const isAdmin = role === "tenant_admin" || role === "platform_admin";
+  const saveCodes = useSetSerialCodes();
+  const savedImei = data?.serial.imei ?? "";
+  const savedSn = data?.serial.sn ?? "";
+  const [imei, setImei] = useState("");
+  const [sn, setSn] = useState("");
+  const [codeError, setCodeError] = useState<string | null>(null);
+  useEffect(() => {
+    setImei(savedImei);
+    setSn(savedSn);
+    setCodeError(null);
+  }, [serialId, savedImei, savedSn]);
+  const codesChanged =
+    normalizeCode(imei) !== normalizeCode(savedImei) ||
+    normalizeCode(sn) !== normalizeCode(savedSn);
+  const canEditCodes = !!data && data.serial.status !== "void";
+  async function submitCodes() {
+    setCodeError(null);
+    try {
+      await saveCodes.mutateAsync({ id: serialId, imei: imei.trim(), sn: sn.trim() });
+    } catch (e) {
+      setCodeError(e instanceof ApiHttpError ? e.message : "儲存失敗");
+    }
+  }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -36,6 +67,39 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
                   目前狀態:<b>{data.serial.status_label}</b> · 倉別:
                   {data.serial.warehouse_code ?? "—"}
                 </div>
+                <div className="serial-codes-row">
+                  <label>
+                    IMEI
+                    <input
+                      value={imei}
+                      maxLength={80}
+                      disabled={!canEditCodes || (!isAdmin && !!savedImei)}
+                      className={
+                        imei.trim() && !looksLikeImei(imei) ? "warn" : undefined
+                      }
+                      onChange={(e) => setImei(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    SN
+                    <input
+                      value={sn}
+                      maxLength={80}
+                      disabled={!canEditCodes || (!isAdmin && !!savedSn)}
+                      onChange={(e) => setSn(e.target.value)}
+                    />
+                  </label>
+                  {codesChanged && (
+                    <button
+                      className="btn primary"
+                      disabled={saveCodes.isPending}
+                      onClick={submitCodes}
+                    >
+                      儲存
+                    </button>
+                  )}
+                </div>
+                {codeError && <div className="serial-codes-error">{codeError}</div>}
                 {data.serial.product_is_secondhand && (
                   <>
                     <div>
@@ -134,6 +198,36 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
                     ))}
                   </tbody>
                 </table>
+              )}
+
+              {data.code_changes.length > 0 && (
+                <>
+                  <div className="bulk-preview-head">序號修改</div>
+                  <table className="line-table" style={{ marginBottom: 12 }}>
+                    <thead>
+                      <tr>
+                        <th>時間</th>
+                        <th>帳號</th>
+                        <th>原本</th>
+                        <th>改成</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.code_changes.map((c) => (
+                        <tr key={c.id}>
+                          <td>{c.created_at.slice(0, 16).replace("T", " ")}</td>
+                          <td>{c.changed_by || "—"}</td>
+                          <td>
+                            {codesLabel({ imei: c.before_imei, sn: c.before_sn }) || "—"}
+                          </td>
+                          <td>
+                            {codesLabel({ imei: c.after_imei, sn: c.after_sn }) || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
               )}
 
               <div className="bulk-preview-head">異動軌跡</div>

@@ -18,6 +18,7 @@ import {
   searchCustomers,
   searchInStockSerials,
   searchMembers,
+  findDevicesByCode,
   searchProductsForSales,
   searchSalesPersons,
   searchSimCards,
@@ -46,6 +47,7 @@ import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
 import { Toolbar } from "@/components/Toolbar";
+import { codesLabel } from "@/lib/deviceCodes";
 
 /** 把資料庫的 "100.00" / number 統一轉成整數字串(四捨五入,空 / NaN 還原成 "0")。 */
 function toIntStr(v: string | number | null | undefined): string {
@@ -1558,21 +1560,63 @@ export function SalesEntryPage() {
     }
     setScanning(true);
     try {
+      // 先看刷到的是不是某一台設備(IMEI 或 SN 完全相同):
+      // - 對到兩台以上(舊資料的碼撞在一起):不知道是哪一台,不能隨便加一台。
+      // - 那一台不在這個出貨倉、或不是在庫:講出它在哪,不要加一行空的讓人挑同款的別台。
+      const devices = await findDevicesByCode(code);
+      if (devices.length > 1) {
+        setScanMsg({
+          ok: false,
+          text: `${code} 對到 ${devices.length} 台設備,請先到每日對帳處理`,
+        });
+        return;
+      }
+      const device = devices[0];
+      if (
+        device &&
+        (device.status !== "in_stock" || device.warehouse !== warehouse)
+      ) {
+        setScanMsg({
+          ok: false,
+          text: `這一台${device.status_label}${
+            device.warehouse_code ? `,在 ${device.warehouse_code}` : ""
+          },不能在這裡賣`,
+        });
+        return;
+      }
       const results = await searchProductsForSales(code, {
         warehouseId: warehouse,
       });
+      // 刷到的是某一台設備,就只能加那一台。它的商品不在可銷貨的清單裡(已停用…)時直接講,
+      // 不能退回去用條碼 / 品號 / 第一筆加進別的商品。
+      if (
+        device &&
+        !results.some((r) => r.payload?.matched_serial?.id === device.id)
+      ) {
+        setScanMsg({
+          ok: false,
+          text: `這一台的商品目前不能銷貨:${device.product_name}`,
+        });
+        return;
+      }
       if (results.length === 0) {
         setScanMsg({ ok: false, text: `查無:${code}` });
         return;
       }
-      // 優先:IMEI 完全命中 → 條碼/品號完全命中 → 第一筆
+      // 優先:刷到的就是某一台設備的碼(IMEI 或 SN 完全相同)→ 條碼 / 品號完全命中 → 第一筆。
+      // 設備的碼排在商品條碼前面:刷到 SN 時不能因為別的商品品號剛好一樣就加錯商品。
       const best =
-        results.find((r) => r.payload?.matched_serial?.serial_no === code) ??
+        results.find((r) => r.payload?.matched_serial?.exact) ??
         results.find(
           (r) => r.payload?.barcode === code || r.payload?.sku === code,
         ) ??
         results[0];
-      const p = best.payload as SalesProductHit;
+      // 刷條碼只在「碼完全相同」時自動掛序號。只對到一部分的(下拉裡打末幾碼用的)不算:
+      // 刷到的整個碼不等於任何一台,卻剛好被某一台的碼包含,掛上去就是賣錯實機。
+      const hit = best.payload as SalesProductHit;
+      const p: SalesProductHit = hit.matched_serial?.exact
+        ? hit
+        : { ...hit, matched_serial: undefined };
       const isSerial = !!p.requires_serial && !p.is_virtual;
 
       if (
@@ -1595,7 +1639,7 @@ export function SalesEntryPage() {
       } else if (isSerial && p.matched_serial) {
         setScanMsg({
           ok: true,
-          text: `已加入 ${p.name} · IMEI ${p.matched_serial.serial_no}`,
+          text: `已加入 ${p.name} · ${codesLabel(p.matched_serial)}`,
         });
       } else {
         setScanMsg({ ok: true, text: `已加入 ${p.name}` });

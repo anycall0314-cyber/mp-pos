@@ -17,6 +17,15 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.tenant_fields import same_company
+from apps.identity.normalize import normalize_serial
+from apps.inventory.identifiers import (
+    IdentifierError,
+    create_serial,
+    looks_like_imei,
+    main_code,
+    split_codes,
+    taken,
+)
 from apps.inventory.locking import lock_document, lock_stock_rows, locked_balance
 from apps.inventory.models import ProductSerial, StockBalance, StockMovement
 
@@ -34,17 +43,29 @@ VALID_GRADES = set(ProductSerial.ConditionGrade.values)
 
 
 def _normalize_serial_entry(raw):
-    """把進貨序號項目正規化:接受純字串或 dict 形式。
+    """進貨的一台設備 → {"imei": …, "sn": …, 其他欄位照舊}。兩格可以都填,也可以只填一格。
 
-    傳入:
-        "IMEI123"  → {"sn": "IMEI123"}
-        {"sn": "IMEI123", "grade": "A", "cost": "10000", ...}  → 原樣回傳(加 strip)
+    三種寫法:
+        "356…"                              沒講是哪一種:像 IMEI(15 碼、檢查碼正確)放 IMEI,否則放 SN
+        {"sn": "X", "grade": "A", …}        舊格式(沒有 imei 這個鍵):sn 就是「那個序號」,同上
+        {"imei": "356…", "sn": "F2L…", …}   有 imei 這個鍵:照寫的放,不改判
     """
     if isinstance(raw, dict):
         out = dict(raw)
-        out["sn"] = str(out.get("sn", "")).strip()
-        return out
-    return {"sn": str(raw).strip()}
+        explicit = "imei" in out
+        imei = str(out.get("imei") or "").strip()
+        sn = str(out.get("sn") or "").strip()
+    else:
+        out, explicit, imei, sn = {}, False, "", str(raw if raw is not None else "").strip()
+    if not explicit and looks_like_imei(sn):
+        imei, sn = sn, ""
+    out["imei"], out["sn"] = imei, sn
+    return out
+
+
+def _entry_code(entry):
+    """這一台的主碼(訊息與主序號用):有 IMEI 用 IMEI,沒有才用 SN。"""
+    return main_code(entry["imei"], entry["sn"])
 
 
 def _serial_cost(entry: dict, fallback_unit_price: Decimal) -> Decimal:
@@ -83,10 +104,16 @@ def _validate_items(po: PurchaseOrder, items):
             raise PurchaseOrderError(
                 f"第 {it.line_no} 行序號數量({len(normalized)})不符進貨數量({it.qty})"
             )
-        if any((not e["sn"]) for e in normalized):
-            raise PurchaseOrderError(f"第 {it.line_no} 行有空白序號")
-        only_sn = [e["sn"] for e in normalized]
-        if len(set(only_sn)) != len(only_sn):
+        codes = []
+        for e in normalized:
+            try:
+                split_codes(e["imei"], e["sn"])
+            except IdentifierError as exc:
+                raise PurchaseOrderError(f"第 {it.line_no} 行:{exc}")
+            codes += [c for c in (e["imei"], e["sn"]) if c]
+        # IMEI 與 SN 一起比:同一個碼不能出現兩次(不管是哪一格)
+        keys = [normalize_serial(c) for c in codes]
+        if len(set(keys)) != len(keys):
             raise PurchaseOrderError(f"第 {it.line_no} 行序號有重複")
         for e in normalized:
             raw_grade = e.get("grade")
@@ -94,24 +121,22 @@ def _validate_items(po: PurchaseOrder, items):
                 continue
             if not isinstance(raw_grade, str):
                 raise PurchaseOrderError(
-                    f"第 {it.line_no} 行序號 {e['sn']} 成色等級格式錯誤,應為文字"
+                    f"第 {it.line_no} 行序號 {_entry_code(e)} 成色等級格式錯誤,應為文字"
                 )
             grade = raw_grade.strip()
             if grade and grade not in VALID_GRADES:
                 raise PurchaseOrderError(
-                    f"第 {it.line_no} 行序號 {e['sn']} 成色等級「{grade}」無效"
+                    f"第 {it.line_no} 行序號 {_entry_code(e)} 成色等級「{grade}」無效"
                 )
         it.serial_numbers = normalized  # 寫回正規化結果,提交時使用
-        all_serials.extend(only_sn)
+        all_serials.extend(codes)
 
-    if len(set(all_serials)) != len(all_serials):
+    all_keys = [normalize_serial(c) for c in all_serials]
+    if len(set(all_keys)) != len(all_keys):
         raise PurchaseOrderError("整單序號內出現重複")
 
-    existing = list(
-        ProductSerial.objects.for_tenant(po.tenant)
-        .filter(serial_no__in=all_serials)
-        .values_list("serial_no", flat=True)
-    )
+    # 已經被這家公司別台設備用掉的碼(IMEI、SN 都算)
+    existing = taken(po.tenant, all_serials)
     if existing:
         raise PurchaseOrderError(f"序號已存在於系統:{', '.join(existing[:5])}")
 
@@ -280,17 +305,21 @@ def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
                         ).quantize(CENTS)
                     else:
                         serial_cost_net = gross.quantize(CENTS)
-                serial = ProductSerial.objects.create(
-                    tenant=po.tenant,
-                    product=product,
-                    serial_no=entry["sn"],
-                    warehouse=po.warehouse,
-                    status=ProductSerial.Status.IN_STOCK,
-                    purchase_unit_cost=serial_cost_net,
-                    purchase_order_item=it,
-                    received_at=now,
-                    **extra,
-                )
+                try:
+                    serial = create_serial(
+                        tenant=po.tenant,
+                        product=product,
+                        imei=entry["imei"],
+                        sn=entry["sn"],
+                        warehouse=po.warehouse,
+                        status=ProductSerial.Status.IN_STOCK,
+                        purchase_unit_cost=serial_cost_net,
+                        purchase_order_item=it,
+                        received_at=now,
+                        **extra,
+                    )
+                except IdentifierError as exc:
+                    raise PurchaseOrderError(f"第 {it.line_no} 行:{exc}")
                 StockMovement.objects.create(
                     tenant=po.tenant,
                     serial=serial,
@@ -481,3 +510,57 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
         po.save(update_fields=["is_void"])
 
     return po
+
+
+def transferable_from_purchase(po: PurchaseOrder):
+    """這張進貨單進來的東西,現在還有哪些留在進貨門市、可以整張調撥出去。只讀,不改任何資料。
+
+    - 序號商品:這張單進來的每一台,還在進貨門市而且在庫的才能調;已經賣掉 / 調走 / 退回 / 作廢的列在 gone。
+    - 配件:數量 = 這張單進的數量,但不超過進貨門市現在的庫存(配件不分批,賣掉的分不出是哪一張單進的)。
+    - 同一個商品在單上有好幾行時併成一行(調撥單一個商品一行)。虛擬商品不能調撥,不列。
+
+    這裡只是「帶出建議的內容」;真正能不能調,存調撥單時由調撥那一邊鎖住庫存再檢查。
+    """
+    from apps.inventory.identifiers import codes_of
+
+    lines = {}
+    for it in po.items.select_related("product").order_by("line_no", "id"):
+        product = it.product
+        if product.is_virtual:
+            continue
+        line = lines.setdefault(product.id, {
+            "product": product.id, "product_sku": product.sku, "product_name": product.name,
+            "requires_serial": product.requires_serial,
+            "purchased": 0, "qty": 0, "serials": [], "gone": [],
+        })
+        line["purchased"] += it.qty
+
+    serials = (
+        ProductSerial.objects.for_tenant(po.tenant)
+        .filter(purchase_order_item__po=po, product_id__in=list(lines))
+        .select_related("warehouse").prefetch_related("identifiers").order_by("pk")
+    )
+    for serial in serials:
+        line = lines[serial.product_id]
+        here = (serial.status == ProductSerial.Status.IN_STOCK
+                and serial.warehouse_id == po.warehouse_id)
+        if here:
+            line["serials"].append({"id": serial.id, "serial_no": serial.serial_no, **codes_of(serial)})
+        else:
+            line["gone"].append({
+                "serial_no": serial.serial_no,
+                "status_label": serial.get_status_display(),
+                "warehouse_name": serial.warehouse.name if serial.warehouse_id else "",
+            })
+
+    balances = dict(
+        StockBalance.objects.for_tenant(po.tenant)
+        .filter(warehouse_id=po.warehouse_id, product_id__in=list(lines))
+        .values_list("product_id", "qty")
+    )
+    for product_id, line in lines.items():
+        if line["requires_serial"]:
+            line["qty"] = len(line["serials"])
+        else:
+            line["qty"] = max(0, min(line["purchased"], balances.get(product_id, 0)))
+    return list(lines.values())

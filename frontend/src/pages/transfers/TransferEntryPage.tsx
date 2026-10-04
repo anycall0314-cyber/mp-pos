@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
-import { ApiHttpError } from "@/api/client";
+import { api, ApiHttpError } from "@/api/client";
 import {
   useConfirmTransferOrder,
   useCreateTransferOrder,
@@ -13,7 +13,13 @@ import {
   searchProducts,
   searchWarehouses,
 } from "@/api/search";
-import type { Product, ProductSerial, Warehouse } from "@/api/types";
+import type {
+  Product,
+  ProductSerial,
+  PurchaseTransferable,
+  Warehouse,
+} from "@/api/types";
+import { codesLabel } from "@/lib/deviceCodes";
 import { useDefaultWarehouse } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
@@ -40,6 +46,49 @@ function newLine(line_no: number): Line {
     serialChoices: [],
     note: "",
   };
+}
+
+/**
+ * 這一行已經挑好的序號。只看畫面上有的那幾格(數量以內):數量改小之後,
+ * 多出來那幾台看不到也拿不掉,不能算進去(整張調撥帶好 3 台、改成 2 台就會遇到)。
+ */
+function pickedSerials(line: Line): ComboOption<ProductSerial>[] {
+  return line.serialChoices
+    .slice(0, Math.max(0, line.qty))
+    .filter(Boolean) as ComboOption<ProductSerial>[];
+}
+
+/** 只知道編號 / 品號 / 品名時,湊出明細列要用的商品資料(其餘欄位這一頁用不到)。 */
+function productStub(
+  id: number,
+  sku: string,
+  name: string,
+  requiresSerial: boolean,
+): Product {
+  return {
+    id,
+    sku,
+    name,
+    spec: "",
+    barcode: "",
+    category: 0,
+    category_code: "",
+    category_name: "",
+    weighted_avg_cost: "0",
+    list_price: "0",
+    last_purchase_price: null,
+    requires_serial: requiresSerial,
+    allows_telecom_line: false,
+    allows_commission: false,
+    is_virtual: false,
+    is_secondhand: false,
+    counts_cash: true,
+    counts_margin: true,
+    is_active: true,
+    stock_qty: 0,
+    created_at: "",
+    updated_at: "",
+  } as Product;
 }
 
 interface SerialAsideProps {
@@ -136,6 +185,8 @@ export function TransferEntryPage() {
   const { id } = useParams<{ id: string }>();
   const isNew = id === "new";
   const toId = isNew ? null : Number(id);
+  const [searchParams] = useSearchParams();
+  const fromPo = isNew ? Number(searchParams.get("from_po")) || null : null;
 
   const defaultWarehouse = useDefaultWarehouse();
   const existing = useTransferOrder(toId);
@@ -167,6 +218,9 @@ export function TransferEntryPage() {
   const [lines, setLines] = useState<Line[]>([newLine(1)]);
   const [selectedLineKey, setSelectedLineKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 整張調撥時被略過的東西(已經不在進貨門市)
+  const [skipped, setSkipped] = useState<string | null>(null);
+  const [poLoaded, setPoLoaded] = useState(false);
   const initialized = useRef(false);
 
   const readonly = !isNew;
@@ -198,30 +252,12 @@ export function TransferEntryPage() {
             id: it.product,
             label: it.product_name,
             secondary: it.product_sku,
-            payload: {
-              id: it.product,
-              sku: it.product_sku,
-              name: it.product_name,
-              spec: "",
-              barcode: "",
-              category: 0,
-              category_code: "",
-              category_name: "",
-              weighted_avg_cost: "0",
-              list_price: "0",
-              last_purchase_price: null,
-              requires_serial: it.product_requires_serial,
-              allows_telecom_line: false,
-              allows_commission: false,
-              is_virtual: false,
-              is_secondhand: false,
-              counts_cash: true,
-              counts_margin: true,
-              is_active: true,
-              stock_qty: 0,
-              created_at: "",
-              updated_at: "",
-            },
+            payload: productStub(
+              it.product,
+              it.product_sku,
+              it.product_name,
+              it.product_requires_serial,
+            ),
           },
           qty: it.qty,
           serialChoices: (it.serials ?? []).map((s) => ({
@@ -234,6 +270,76 @@ export function TransferEntryPage() {
       );
     }
   }, [existing.data, isNew]);
+
+  // 整張調撥:從進貨單頁按過來(?from_po=編號),把那張單還留在進貨門市的東西一次帶好,
+  // 只要選目的倉就能送出。已經賣掉 / 調走的自動略過,並講出來。
+  useEffect(() => {
+    if (!fromPo) return;
+    let alive = true;
+    api<PurchaseTransferable>(`/purchase-orders/${fromPo}/transferable/`)
+      .then((d) => {
+        if (!alive) return;
+        setFromWarehouse(d.warehouse);
+        setFromWarehouseOption({
+          id: d.warehouse,
+          label: d.warehouse_name,
+          secondary: d.warehouse_code,
+        });
+        setNote(`進貨單 ${d.no} 整張調撥`);
+        const usable = d.lines.filter((l) => l.qty > 0);
+        const prefilled: Line[] = usable.map((l, i) => ({
+          key: crypto.randomUUID(),
+          line_no: i + 1,
+          product: l.product,
+          productOption: {
+            id: l.product,
+            label: l.product_name,
+            secondary: l.product_sku,
+            payload: productStub(
+              l.product,
+              l.product_sku,
+              l.product_name,
+              l.requires_serial,
+            ),
+          },
+          qty: l.qty,
+          serialChoices: l.serials.map((s) => ({
+            id: s.id,
+            label: s.serial_no,
+            secondary: codesLabel(s),
+          })),
+          note: "",
+        }));
+        setLines(prefilled.length > 0 ? prefilled : [newLine(1)]);
+        setSelectedLineKey(prefilled[0]?.key ?? null);
+        const notes: string[] = [];
+        for (const l of d.lines) {
+          if (l.requires_serial && l.gone.length > 0) {
+            notes.push(
+              `${l.product_name} ${l.gone.length} 台(${l.gone
+                .map((g) => `${g.serial_no} ${g.status_label}`)
+                .join("、")})`,
+            );
+          } else if (!l.requires_serial && l.qty < l.purchased) {
+            notes.push(`${l.product_name} 進 ${l.purchased} 現有 ${l.qty}`);
+          }
+        }
+        setPoLoaded(true);
+        setSkipped(
+          prefilled.length === 0
+            ? "這張進貨單的東西都不在進貨門市了"
+            : notes.length > 0
+              ? `已略過:${notes.join(";")}`
+              : null,
+        );
+      })
+      .catch((e) => {
+        if (alive) setError(e instanceof ApiHttpError ? e.message : String(e));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [fromPo]);
 
   function updateLine(key: string, patch: Partial<Line>) {
     setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -279,7 +385,7 @@ export function TransferEntryPage() {
       if (l.qty <= 0) return `第 ${l.line_no} 行數量需 > 0`;
       const product = l.productOption?.payload;
       if (product?.requires_serial) {
-        const picked = l.serialChoices.filter(Boolean) as ComboOption<ProductSerial>[];
+        const picked = pickedSerials(l);
         if (picked.length !== l.qty) {
           return `第 ${l.line_no} 行序號(${picked.length})不符數量(${l.qty})`;
         }
@@ -310,9 +416,7 @@ export function TransferEntryPage() {
           product: l.product as number,
           qty: Number(l.qty),
           note: l.note,
-          serial_ids: l.serialChoices
-            .filter(Boolean)
-            .map((s) => s!.id),
+          serial_ids: pickedSerials(l).map((s) => s.id),
         })),
       } as Parameters<typeof createMutation.mutateAsync>[0]);
       navigate(`/transfers/${result.id}`);
@@ -383,6 +487,10 @@ export function TransferEntryPage() {
   if (!isNew && existing.isLoading) {
     return <div className="md-empty">載入中…</div>;
   }
+  // 整張調撥:進貨單的內容帶好之前先不給操作,不然先選的目的倉 / 改的明細會被帶進來的內容蓋掉
+  if (fromPo && !poLoaded && !error) {
+    return <div className="md-empty">載入中…</div>;
+  }
 
   const isVoid = existing.data?.is_void ?? false;
   const currentStatus = existing.data?.status;
@@ -442,6 +550,7 @@ export function TransferEntryPage() {
       <div className="entry-body-split">
         <div className="entry-body">
           {error && <Banner kind="error" message={error} />}
+          {skipped && <Banner kind="info" message={skipped} />}
 
           <div className="entry-header" style={{ marginBottom: 12 }}>
             <div className="field-row-3">
@@ -519,7 +628,7 @@ export function TransferEntryPage() {
               {lines.map((l, idx) => {
                 const product = l.productOption?.payload;
                 const needsSerial = !!product?.requires_serial;
-                const filled = l.serialChoices.filter(Boolean).length;
+                const filled = pickedSerials(l).length;
                 const isActive = l.key === selectedLineKey;
                 return (
                   <tr

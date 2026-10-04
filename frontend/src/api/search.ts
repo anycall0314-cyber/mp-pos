@@ -1,5 +1,6 @@
 import { api } from "./client";
 import type { ComboOption } from "@/components/ComboBox";
+import { codesLabel, normalizeCode } from "@/lib/deviceCodes";
 import type {
   Carrier,
   Category,
@@ -225,8 +226,24 @@ export interface SalesProductHit extends Product {
   matched_serial?: {
     id: number;
     serial_no: string;
+    imei: string;
+    sn: string;
     custom_unit_price?: string | null;
+    /** 輸入的字跟這一台登記的碼完全相同(刷條碼刷到的就是這一台) */
+    exact: boolean;
   };
+}
+
+/**
+ * 刷到的碼是哪一台:只認「完全相同」(去空白 / 破折號、不分大小寫;IMEI、SN 都算)。
+ * 整家公司一起找,不管在哪個門市、什麼狀態 —— 要先知道這個碼是不是只有一台、那一台現在在哪。
+ * 通常 0 或 1 台;2 台以上 = 舊資料的碼去掉符號後撞在一起,不知道是哪一台。
+ */
+export async function findDevicesByCode(code: string): Promise<ProductSerial[]> {
+  if (!normalizeCode(code)) return [];
+  return fetchPaginated<ProductSerial>(
+    `/serials/?${qs({ code: code.trim(), page_size: 10 })}`,
+  );
 }
 
 export async function searchProductsForSales(
@@ -254,9 +271,15 @@ export async function searchProductsForSales(
     })}`,
   );
 
-  // IMEI 偵測:>=6 字、含數字 → 平行查 in_stock 的序號,知道是哪一支命中
+  // 刷到的碼是哪一台:只認「完全相同」。
+  // 同商品另一台的碼剛好「包含」這串字時,用包含比對自動掛會賣錯實機。
+  // 不能拿下面那種「包含」比對來自動掛序號(見 findDevicesByCode)。
+  // 對到兩台以上就不知道是哪一台,不自動掛。
+  const exactP = findDevicesByCode(q);
+  // 只記得一部分(例如 IMEI 末幾碼)時用「包含」找:>=6 字、含數字才找;
+  // 而且那個商品只有一台符合才自動掛,兩台以上就讓人自己挑。
   const isImeiLike = /^[\w-]{6,}$/.test(q) && /\d/.test(q);
-  const serialsP: Promise<ProductSerial[]> = isImeiLike
+  const partialP: Promise<ProductSerial[]> = isImeiLike
     ? fetchPaginated<ProductSerial>(
         `/serials/?${qs({
           search: q,
@@ -267,18 +290,40 @@ export async function searchProductsForSales(
       )
     : Promise.resolve([]);
 
-  const [products, serials] = await Promise.all([productsP, serialsP]);
+  const [products, exact, partial] = await Promise.all([
+    productsP,
+    exactP,
+    partialP,
+  ]);
+
+  // 剛好只對到一台,而且那一台在庫、在這個出貨倉,才算「刷到這一台」
+  const conflict = exact.length > 1;
+  const only = exact.length === 1 ? exact[0] : undefined;
+  const sellable =
+    only &&
+    only.status === "in_stock" &&
+    (warehouseParam === undefined || only.warehouse === warehouseParam)
+      ? only
+      : undefined;
 
   // 為每個商品挑出命中的序號(若有)
   const result: ComboOption<SalesProductHit>[] = products.map((p) => {
-    const matched = serials.find((s) => s.product === p.id);
+    const exactHit = sellable && sellable.product === p.id ? sellable : undefined;
+    // 碼完全相同的那一台(不管能不能賣)不再用「包含」去掛別台;碼重複時也不掛
+    const partialHits =
+      conflict || only ? [] : partial.filter((s) => s.product === p.id);
+    const matched =
+      exactHit ?? (partialHits.length === 1 ? partialHits[0] : undefined);
     const hit: SalesProductHit = matched
       ? {
           ...p,
           matched_serial: {
             id: matched.id,
             serial_no: matched.serial_no,
+            imei: matched.imei,
+            sn: matched.sn,
             custom_unit_price: matched.custom_unit_price,
+            exact: !!exactHit,
           },
         }
       : (p as SalesProductHit);
@@ -288,7 +333,7 @@ export async function searchProductsForSales(
       label: p.name,
       secondary: matched
         ? [
-            `IMEI ${matched.serial_no}`,
+            codesLabel(matched),
             p.sku,
             stockLabel,
           ]
@@ -301,12 +346,10 @@ export async function searchProductsForSales(
     };
   });
 
-  // 把帶 matched_serial 的選項排到最前面(IMEI 命中通常是使用者意圖)
-  result.sort((a, b) => {
-    const am = a.payload?.matched_serial ? 1 : 0;
-    const bm = b.payload?.matched_serial ? 1 : 0;
-    return bm - am;
-  });
+  // 刷到某一台的排最前面,其次是只對到一部分的(命中序號通常是使用者意圖)
+  const rank = (o: ComboOption<SalesProductHit>) =>
+    o.payload?.matched_serial ? (o.payload.matched_serial.exact ? 2 : 1) : 0;
+  result.sort((a, b) => rank(b) - rank(a));
 
   return result;
 }
@@ -508,6 +551,8 @@ export async function searchInStockSerials(
         parts.push(`售價 ${Number(s.custom_unit_price).toLocaleString()}`);
       if (s.battery_health != null) parts.push(`電池 ${s.battery_health}%`);
     }
+    // 主碼是 IMEI 時把 SN 也寫出來:刷 SN 找到的那一台才認得出來
+    if (s.imei && s.sn) parts.unshift(`SN ${s.sn}`);
     return {
       id: s.id,
       label: s.serial_no,
