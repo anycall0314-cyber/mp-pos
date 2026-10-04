@@ -58,6 +58,7 @@ import {
   LegacyMapsPage,
   LegacyMemberRow,
   LegacyMembersPage,
+  LedgerOverview,
 } from "./types";
 
 // 通用：把分頁 results 攤平回傳（MVP 一頁 50 筆夠用）
@@ -2325,4 +2326,10 @@ export const useLegacyExceptions = () =>
     queryKey: ["legacy-exceptions"],
     queryFn: () =>
       api<{ results: LegacyException[] }>(`/legacy/exceptions/`).then((d) => d.results),
+  });
+
+export const useLedgerChecks = () =>
+  useQuery({
+    queryKey: ["ledger-checks"],
+    queryFn: () => api<LedgerOverview>(`/ledger/checks/`),
   });

@@ -72,6 +72,8 @@ REGISTRY: dict[str, Entry] = {
         "legacy.LegacyMemberListSnapshot", "legacy.LegacySourceSnapshot",
         "legacy.LegacyDocument", "legacy.LegacyDocumentVersion", "legacy.LegacyItem",
         "legacy.LegacySourceException",
+        # 每日庫存快照:過去的庫存事後算不回來,一定要備份
+        "ledger.StockSnapshot", "ledger.StockSnapshotDay",
     ),
     "auth.User": Entry(ACCOUNT, "只留帳號名稱等對照資訊;不含密碼"),
     "tenants.UserProfile": Entry(ACCOUNT, "角色、預設門市、鎖倉;還原時依對照處理"),
@@ -88,6 +90,7 @@ REGISTRY: dict[str, Entry] = {
     "backup.RestoreJob": Entry(EXCLUDED, "還原工作紀錄留在原地"),
     "backup.TenantMaintenance": Entry(EXCLUDED, "維護鎖是伺服器當下狀態"),
     "backup.BackupAuditLog": Entry(EXCLUDED, "操作紀錄留在原地,不隨資料回溯"),
+    "ledger.LedgerCheckRun": Entry(EXCLUDED, "對帳紀錄是當時資料的檢查結果,留在原地"),
 }
 
 # 帶檔案的欄位:{表: [欄位]}。只存路徑不算備份,檔案本體要一起打包。

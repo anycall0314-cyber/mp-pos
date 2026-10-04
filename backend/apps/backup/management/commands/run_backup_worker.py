@@ -4,6 +4,8 @@
     python manage.py run_backup_worker --once     # 做完目前排隊的就結束(排程或手動用)
 
 工作狀態都在資料庫,這支可以隨時停掉重啟:做到一半的工作租約到期後會被重新接手。
+
+順便每分鐘看一次要不要做「每日庫存快照 + 對帳」(apps/ledger/daily.py,過了收店時間才做)。
 """
 import time
 
@@ -21,8 +23,16 @@ class Command(BaseCommand):
 
     def handle(self, *args, **opts):
         from apps.backup import restore
+        from apps.ledger import daily
 
+        next_daily = 0.0
         while True:
+            if time.monotonic() >= next_daily:
+                next_daily = time.monotonic() + 60
+                try:
+                    daily.run_due(log=self.stdout.write)
+                except Exception as exc:  # 每日對帳出錯不能讓備份 / 還原停擺
+                    self.stdout.write(f"每日對帳失敗 {type(exc).__name__}: {exc}")
             worked = False
             job = jobs.claim_next()
             if job is not None:

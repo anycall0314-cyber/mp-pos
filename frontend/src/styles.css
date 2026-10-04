@@ -5826,6 +5826,10 @@ tr.selected .intake-badge { filter: none; }
 .backup-upload { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .backup-upload input[type="text"], .backup-upload input:not([type]) { flex: 1; min-width: 180px; }
 .backup-report { margin-bottom: 12px; }
+.ledger-table th { text-align: left; }
+.ledger-table td { vertical-align: top; }
+.ledger-table th.num, .ledger-table td.num { text-align: right; }
+.ledger-info { color: var(--text-dim); }
 
 /* ---- 舊 POS 紀錄(會員頁)與舊系統對照頁 ---- */
 .legacy-filters { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }

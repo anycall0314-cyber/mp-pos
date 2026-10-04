@@ -99,6 +99,7 @@ class SalesOrderViewSet(
             if getattr(self.request, "user", None) and self.request.user.is_authenticated
             else None
         )
+        self.check_create_warehouse(serializer)
         with transaction.atomic():
             serializer.save(tenant=self.request.tenant, created_by=user)
             try:
@@ -323,6 +324,7 @@ class SalesReturnViewSet(
             if getattr(self.request, "user", None) and self.request.user.is_authenticated
             else None
         )
+        self.check_create_warehouse(serializer)
         with transaction.atomic():
             serializer.save(tenant=self.request.tenant, created_by=user)
             try:

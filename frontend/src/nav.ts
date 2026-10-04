@@ -80,6 +80,7 @@ export const MORE_NAV: { label: string; sections: NavSection[] } = {
         { to: "/settings", label: "發票 / 付款 / 門市" },
         { to: "/settings/backup", label: "備份與還原", adminOnly: true },
         { to: "/settings/legacy", label: "舊系統對照", adminOnly: true },
+        { to: "/settings/ledger", label: "每日對帳", adminOnly: true },
       ],
     },
   ],

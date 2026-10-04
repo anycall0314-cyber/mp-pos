@@ -2,6 +2,7 @@ from datetime import date
 
 from rest_framework import serializers
 
+from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
 from apps.inventory.models import ProductSerial
 
 from .models import (
@@ -64,7 +65,7 @@ class SalesOrderItemSerialSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "serial_no"]
 
 
-class SalesOrderItemSerializer(serializers.ModelSerializer):
+class SalesOrderItemSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_requires_serial = serializers.BooleanField(
@@ -132,6 +133,8 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
             "serials",
             "serial_ids",
             "cost_at_post",
+            "untaxed_amount",
+            "tax_amount",
             "sim_card",
             "sim_card_no",
             "msisdn",
@@ -146,6 +149,8 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "cost_at_post",
+            "untaxed_amount",
+            "tax_amount",
             "product_sku",
             "product_name",
             "product_requires_serial",
@@ -158,7 +163,7 @@ class SalesOrderItemSerializer(serializers.ModelSerializer):
         ]
 
 
-class SalesOrderSerializer(serializers.ModelSerializer):
+class SalesOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     items = SalesOrderItemSerializer(many=True, required=False)
     payments = SalesOrderPaymentSerializer(many=True, required=False)
     customer_phone = serializers.CharField(source="customer.phone", read_only=True)
@@ -280,7 +285,7 @@ class SalesOrderSerializer(serializers.ModelSerializer):
         return so
 
 
-class LegacyPurchaseSerializer(serializers.ModelSerializer):
+class LegacyPurchaseSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     member_name = serializers.CharField(source="member.name", read_only=True)
     member_phone = serializers.CharField(source="member.phone", read_only=True)
     product_sku = serializers.CharField(source="product.sku", read_only=True)
@@ -331,7 +336,7 @@ class SalesReturnItemSerialSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "serial_no"]
 
 
-class SalesReturnItemSerializer(serializers.ModelSerializer):
+class SalesReturnItemSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_requires_serial = serializers.BooleanField(
@@ -362,12 +367,20 @@ class SalesReturnItemSerializer(serializers.ModelSerializer):
             "qty",
             "unit_price",
             "amount",
+            "untaxed_amount",
+            "tax_amount",
+            "cost_at_post",
             "serials",
             "serial_ids",
         ]
+        # 單價一律等於原銷貨行;畫面不送,create() 從原行帶入
+        extra_kwargs = {"unit_price": {"required": False}}
         read_only_fields = [
             "id",
             "amount",
+            "untaxed_amount",
+            "tax_amount",
+            "cost_at_post",
             "product",
             "product_sku",
             "product_name",
@@ -376,7 +389,7 @@ class SalesReturnItemSerializer(serializers.ModelSerializer):
         ]
 
 
-class SalesReturnSerializer(serializers.ModelSerializer):
+class SalesReturnSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     items = SalesReturnItemSerializer(many=True, required=False)
     original_so_no = serializers.CharField(source="original_so.no", read_only=True)
     original_so_doc_date = serializers.DateField(
@@ -417,7 +430,11 @@ class SalesReturnSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+        # 退回門市沒給就用原銷貨單的門市(在 validate() 補,門市鎖檢查才看得到)
+        extra_kwargs = {"warehouse": {"required": False}}
         read_only_fields = [
+            "customer",
+            "member",
             "id",
             "no",
             "original_so_no",
@@ -435,6 +452,12 @@ class SalesReturnSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if "original_so" in attrs and not attrs.get("warehouse"):
+            attrs["warehouse"] = attrs["original_so"].warehouse
+        return attrs
+
     def create(self, validated_data):
         from datetime import date
 
@@ -442,8 +465,9 @@ class SalesReturnSerializer(serializers.ModelSerializer):
         items_data = validated_data.pop("items", [])
         # 由 original_so 自動帶 customer/member/warehouse 預設值,讓前端只送 original_so id 即可
         original_so = validated_data["original_so"]
-        validated_data.setdefault("customer", original_so.customer)
-        validated_data.setdefault("member", original_so.member)
+        # 客戶 / 會員一律跟原銷貨單一樣(欄位唯讀,呼叫端送什麼都不採用)
+        validated_data["customer"] = original_so.customer
+        validated_data["member"] = original_so.member
         validated_data.setdefault("warehouse", original_so.warehouse)
 
         sr = SalesReturn.objects.create(**validated_data)

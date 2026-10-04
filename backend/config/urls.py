@@ -20,6 +20,7 @@ urlpatterns = [
     path("api/v1/", include("apps.identity.urls")),
     path("api/v1/", include("apps.backup.urls")),
     path("api/v1/", include("apps.legacy.urls")),
+    path("api/v1/", include("apps.ledger.urls")),
 ]
 
 # dev 模式:由 Django 直接 serve 上傳的原圖(進貨單照片);prod 由前面的靜態服務代理

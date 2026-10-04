@@ -37,9 +37,20 @@ class SalesOrderError(Exception):
     """銷貨業務錯誤;由 view 轉成 400 回應。"""
 
 
+def _same_company(tenant_id, *objs):
+    """單據掛到的每一個東西都要是同一家公司的(None 略過)。"""
+    return all(o is None or o.tenant_id == tenant_id for o in objs)
+
+
 def _validate_items(so: SalesOrder, items):
     if not items:
         raise SalesOrderError("無明細,無法過帳")
+    if not _same_company(so.tenant_id, so.warehouse, so.customer, so.member, so.sales_person):
+        raise SalesOrderError("門市 / 客戶 / 會員 / 業務員不屬於這家公司")
+    for it in items:
+        serials = [sos.serial for sos in it.serials.select_related("serial")]
+        if not _same_company(so.tenant_id, it.product, it.sim_card, it.telecom_plan, *serials):
+            raise SalesOrderError(f"第 {it.line_no} 行的商品 / 序號 / 卡片 / 方案不屬於這家公司")
 
     all_serial_ids = []
     for it in items:
@@ -163,6 +174,47 @@ def _calc_tax(subtotal_raw: Decimal, tax_method: str):
     return subtotal, Decimal("0.00"), subtotal
 
 
+def split_tax_by_line(amounts, tax_method: str, subtotal: Decimal, tax: Decimal):
+    """把單頭的未稅小計 / 稅額分到每一行。
+
+    每行先照稅別各自算;四捨五入的零頭補在金額絕對值最大的那一行(同大取第一行),
+    讓整單加總正好等於單頭。單頭不是「明細加總照稅別算出來的那個數」時,代表單頭跟
+    明細本來就對不上,回傳 None,不硬塞(否則含稅行的 未稅 + 稅額 會不等於金額)。
+    """
+    if _calc_tax(sum(amounts, Decimal("0")), tax_method)[:2] != (subtotal, tax):
+        return None
+    lines = []
+    for a in amounts:
+        if tax_method == SalesOrder.TaxMethod.TAXABLE_INCLUDED:
+            u = (a / (Decimal("1") + TAX_RATE)).quantize(CENTS)
+            t = a - u
+        elif tax_method == SalesOrder.TaxMethod.TAXABLE_EXCLUDED:
+            u = a
+            t = (a * TAX_RATE).quantize(CENTS)
+        else:
+            u, t = a, Decimal("0.00")
+        lines.append([u, t])
+    if not lines:
+        return []
+    du = subtotal - sum(u for u, _ in lines)
+    dt = tax - sum(t for _, t in lines)
+    if abs(du) > CENTS * len(lines) or abs(dt) > CENTS * len(lines):
+        return None
+    k = max(range(len(lines)), key=lambda i: (abs(amounts[i]), -i))
+    lines[k][0] += du
+    lines[k][1] += dt
+    return [(u, t) for u, t in lines]
+
+
+def _store_line_tax(items, tax_method, subtotal, tax, model):
+    split = split_tax_by_line([it.amount for it in items], tax_method, subtotal, tax)
+    if split is None:
+        raise SalesOrderError("未稅 / 稅額分到每一行時對不起來")
+    for it, (u, t) in zip(items, split):
+        it.untaxed_amount, it.tax_amount = u, t
+    model.objects.bulk_update(items, ["untaxed_amount", "tax_amount"])
+
+
 def _validate_payments(so: SalesOrder, total: Decimal):
     """付款總額需等於含稅總額;若 total = 0(全免費贈送)允許無付款。"""
     payments = list(so.payments.all())
@@ -184,10 +236,11 @@ def _validate_payments(so: SalesOrder, total: Decimal):
 
 def commit_sales_order(so: SalesOrder) -> SalesOrder:
     """銷貨單儲存即觸發。"""
+    # 行號一樣時用建立順序決定先後(零頭補在哪一行要固定,回填也是這個順序)
     items = list(
         so.items.select_related("product")
         .prefetch_related("serials__serial")
-        .all()
+        .order_by("line_no", "id")
     )
     _validate_items(so, items)
 
@@ -302,6 +355,7 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
         so.subtotal = subtotal
         so.tax_amount = tax_amount
         so.total = total
+        _store_line_tax(items, so.tax_method, subtotal, tax_amount, SalesOrderItem)
 
         # 驗證付款金額 sum == 含稅總額
         _validate_payments(so, total)
@@ -576,6 +630,8 @@ def _validate_sales_return(sr: SalesReturn):
     4. 序號商品:每行的 serials 都屬於 original_item 的 serials,且未被先前的銷退退過
     """
     so = sr.original_so
+    if not _same_company(sr.tenant_id, so, sr.warehouse, sr.customer, sr.member):
+        raise SalesReturnError("原銷貨單 / 門市 / 客戶 / 會員不屬於這家公司")
     if so.is_void:
         raise SalesReturnError(f"原銷貨單 {so.no} 已作廢,不能銷退")
 
@@ -619,6 +675,17 @@ def _validate_sales_return(sr: SalesReturn):
     )
 
     for it in items:
+        if it.original_item.so_id != so.id or it.product_id != it.original_item.product_id:
+            raise SalesReturnError(f"第 {it.line_no} 行不是原銷貨單 {so.no} 的明細")
+
+    # 同一張銷退單裡同一行只能出現一次;否則每列各自檢查「還能退多少」會一起通過而超退
+    seen = set()
+    for it in items:
+        if it.original_item_id in seen:
+            raise SalesReturnError(f"第 {it.line_no} 行跟前面退的是同一行原銷貨明細,請合併成一行")
+        seen.add(it.original_item_id)
+
+    for it in items:
         oi = it.original_item
         remaining = oi.qty - prior_returned.get(oi.id, 0)
         if it.qty > remaining:
@@ -656,6 +723,34 @@ def _validate_sales_return(sr: SalesReturn):
                     )
 
 
+def _return_line_cost(it: SalesReturnItem, sr: SalesReturn) -> Decimal:
+    """沖回成本:跟銷貨當下記的成本同一套算法。
+
+    - 虛擬:0
+    - 序號:退回那幾台的 purchase_unit_cost(銷貨時也是這樣加總)
+    - 配件:原行成本按數量比例;這次退完最後一個時用「原行成本 − 先前已沖回」,
+      分幾次退完,沖回的總和正好等於原行成本
+    """
+    product = it.product
+    if product.is_virtual:
+        return Decimal("0.00")
+    if product.requires_serial:
+        return sum(
+            (sos.serial.purchase_unit_cost for sos in it.serials.select_related("serial")),
+            Decimal("0"),
+        ).quantize(CENTS)
+    oi = it.original_item
+    prior = list(
+        SalesReturnItem.objects.filter(original_item=oi, sr__is_void=False)
+        .exclude(sr_id=sr.id)
+        .values_list("qty", "cost_at_post")
+    )
+    prior_qty = sum(q for q, _ in prior)
+    if prior_qty + it.qty >= oi.qty:
+        return (oi.cost_at_post - sum((c for _, c in prior), Decimal("0"))).quantize(CENTS)
+    return (oi.cost_at_post * it.qty / oi.qty).quantize(CENTS)
+
+
 def commit_sales_return(sr: SalesReturn) -> SalesReturn:
     """銷退單儲存即觸發。
 
@@ -665,21 +760,26 @@ def commit_sales_return(sr: SalesReturn) -> SalesReturn:
     - 計算 subtotal/tax/total(沿用原單 tax_method)
     - void_original_invoice=True 時把 SO.invoice_voided 標 True(冪等)
     """
-    _validate_sales_return(sr)
-    so = sr.original_so
-    items = list(
-        sr.items.select_related("product", "original_item")
-        .prefetch_related("serials__serial")
-        .all()
-    )
-
     with transaction.atomic():
+        # 先鎖原銷貨單:同一張單的兩張銷退同時送出時,一張做完另一張才檢查「還能退多少」
+        if SalesOrder.objects.select_for_update().filter(
+            pk=sr.original_so_id, tenant_id=sr.tenant_id
+        ).first() is None:
+            raise SalesReturnError("原銷貨單不屬於這家公司")
+        _validate_sales_return(sr)
+        so = sr.original_so
+        items = list(
+            sr.items.select_related("product", "original_item")
+            .prefetch_related("serials__serial")
+            .order_by("line_no", "id")
+        )
         subtotal_raw = Decimal("0")
 
         for it in items:
             product = it.product
             it.amount = (Decimal(it.qty) * it.unit_price).quantize(CENTS)
-            it.save(update_fields=["amount"])
+            it.cost_at_post = _return_line_cost(it, sr)
+            it.save(update_fields=["amount", "cost_at_post"])
             subtotal_raw += it.amount
 
             # 序號狀態 → returned,warehouse 回到銷退倉
@@ -726,6 +826,10 @@ def commit_sales_return(sr: SalesReturn) -> SalesReturn:
         sr.subtotal = subtotal
         sr.tax_amount = tax_amount
         sr.total = total
+        try:
+            _store_line_tax(items, so.tax_method, subtotal, tax_amount, SalesReturnItem)
+        except SalesOrderError as exc:
+            raise SalesReturnError(str(exc))
         sr.save(update_fields=["subtotal", "tax_amount", "total"])
 
         if sr.void_original_invoice and not so.invoice_voided:

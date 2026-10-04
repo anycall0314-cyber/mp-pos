@@ -41,6 +41,7 @@ import { MembersPage } from "@/pages/members/MembersPage";
 import { SalesPersonsPage } from "@/pages/sales-persons/SalesPersonsPage";
 import { BackupPage } from "@/pages/backup/BackupPage";
 import { LegacyMappingPage } from "@/pages/legacy/LegacyMappingPage";
+import { LedgerChecksPage } from "@/pages/ledger/LedgerChecksPage";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { SimCardsPage } from "@/pages/sim-cards/SimCardsPage";
 import { SuppliersPage } from "@/pages/suppliers/SuppliersPage";
@@ -333,6 +334,7 @@ export function App() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/backup" element={<BackupPage />} />
           <Route path="/settings/legacy" element={<LegacyMappingPage />} />
+          <Route path="/settings/ledger" element={<LedgerChecksPage />} />
           <Route
             path="/platform/admin"
             element={

@@ -263,6 +263,10 @@ export interface SalesReturnItem {
   qty: number;
   unit_price: string;
   amount: string;
+  untaxed_amount: string;
+  tax_amount: string;
+  /** 沖回成本 */
+  cost_at_post: string;
   serials: SalesReturnItemSerial[];
 }
 
@@ -556,6 +560,9 @@ export interface SalesOrderItem {
   /** write-only: 建單時送序號 id 陣列;讀回來看 serials */
   serial_ids?: number[];
   cost_at_post: string;
+  /** 過帳當下存死的未稅金額 / 稅額;整單加總 = 單頭 */
+  untaxed_amount: string;
+  tax_amount: string;
   sim_card: number | null;
   sim_card_no: string;
   msisdn: string;
@@ -1552,4 +1559,32 @@ export interface LegacyException {
   resolution_evidence: string;
   rows_json?: string;
   validation_error?: string;
+}
+
+// ── 每日對帳(apps/ledger) ──
+export interface LedgerCheckResult {
+  key: string;
+  label: string;
+  level: "error" | "info";
+  ok: boolean;
+  count: number;
+  detail: string;
+  samples: string[];
+}
+
+export interface LedgerRun {
+  id: number;
+  business_date: string;
+  finished_at: string | null;
+  ok: boolean;
+  problem_count: number;
+  /** 這筆對帳之後公司被還原過 */
+  before_restore: boolean;
+  results?: LedgerCheckResult[];
+}
+
+export interface LedgerOverview {
+  latest: LedgerRun | null;
+  history: LedgerRun[];
+  snapshot: { business_date: string; qty: number; cost_value: string | number } | null;
 }

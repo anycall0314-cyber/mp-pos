@@ -43,7 +43,8 @@ class WarehouseScopedMixin:
             qs = qs.filter(**{f"{self.warehouse_field}_id__in": ids})
         return qs
 
-    def perform_create(self, serializer):
+    def check_create_warehouse(self, serializer):
+        """鎖倉帳號只能在自己門市建單。子類覆寫 perform_create 時要自己呼叫這個。"""
         ids = self._allowed_warehouse_ids()
         if ids is not None:
             wh = serializer.validated_data.get(self.warehouse_field)
@@ -52,6 +53,9 @@ class WarehouseScopedMixin:
                 raise PermissionDenied(
                     "不可在非自己門市建立資料"
                 )
+
+    def perform_create(self, serializer):
+        self.check_create_warehouse(serializer)
         return super().perform_create(serializer)
 
     def perform_update(self, serializer):

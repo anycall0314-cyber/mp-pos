@@ -18,15 +18,9 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/**
- * 金額(含稅)→ 未稅。
- * taxable_included:除 1.05
- * 其他(taxable_excluded / untaxed / 以及舊資料 tax_free / zero_tax):amount 已是未稅
- */
-function itemUntaxedAmount(it: SalesOrderItem, taxMethod: string): number {
-  const amount = Number(it.amount);
-  if (taxMethod === "taxable_included") return amount / 1.05;
-  return amount;
+/** 未稅金額:過帳當下由後端存死(整單加總 = 單頭未稅小計),報表不再自己回推稅別。 */
+function itemUntaxedAmount(it: SalesOrderItem): number {
+  return Number(it.untaxed_amount);
 }
 
 /**
@@ -37,9 +31,9 @@ function itemCountsMargin(it: SalesOrderItem): boolean {
   return it.product_counts_margin !== false;
 }
 
-function itemGrossProfit(it: SalesOrderItem, taxMethod: string): number {
+function itemGrossProfit(it: SalesOrderItem): number {
   if (!itemCountsMargin(it)) return 0;
-  return itemUntaxedAmount(it, taxMethod) - Number(it.cost_at_post);
+  return itemUntaxedAmount(it) - Number(it.cost_at_post);
 }
 
 function fmtMoney(v: number): string {
@@ -133,14 +127,14 @@ export function SalesDailyReportPage() {
           partsAmount += Number(it.amount);
           if (itemCountsMargin(it)) {
             partsCost += Number(it.cost_at_post);
-            partsProfit += itemGrossProfit(it, o.tax_method);
+            partsProfit += itemGrossProfit(it);
           }
         } else {
           lines += 1;
           amountIncl += Number(it.amount);
           if (itemCountsMargin(it)) {
             cost += Number(it.cost_at_post);
-            profit += itemGrossProfit(it, o.tax_method);
+            profit += itemGrossProfit(it);
           }
         }
       }
@@ -214,7 +208,7 @@ export function SalesDailyReportPage() {
           String(Math.round(Number(it.amount))),
           countsMargin ? String(Math.round(Number(it.cost_at_post))) : "",
           countsMargin
-            ? String(Math.round(itemGrossProfit(it, o.tax_method)))
+            ? String(Math.round(itemGrossProfit(it)))
             : "",
           "",
           voidFlag ? "Y" : "",
@@ -491,7 +485,7 @@ function SalesReportMobileList({ orders, voided }: ReportTableProps) {
       {orders.map((o) => {
         const hasMarginItem = o.items.some(itemCountsMargin);
         const orderProfit = o.items.reduce(
-          (s, it) => s + itemGrossProfit(it, o.tax_method),
+          (s, it) => s + itemGrossProfit(it),
           0,
         );
         const orderAmount = o.items.reduce(
@@ -524,7 +518,7 @@ function SalesReportMobileList({ orders, voided }: ReportTableProps) {
             <div className="report-card-items">
               {o.items.map((it) => {
                 const countsMargin = itemCountsMargin(it);
-                const profit = itemGrossProfit(it, o.tax_method);
+                const profit = itemGrossProfit(it);
                 const serials = serialList(it);
                 return (
                   <div key={it.id} className="report-card-item">
@@ -618,7 +612,7 @@ function SalesReportTable({ orders, voided }: ReportTableProps) {
         {orders.map((o) => {
           const hasMarginItem = o.items.some(itemCountsMargin);
           const orderProfit = o.items.reduce(
-            (s, it) => s + itemGrossProfit(it, o.tax_method),
+            (s, it) => s + itemGrossProfit(it),
             0,
           );
           return (
@@ -649,7 +643,7 @@ function ReportOrderGroup({
       {order.items.map((it, idx) => {
         const first = idx === 0;
         const countsMargin = itemCountsMargin(it);
-        const profit = itemGrossProfit(it, order.tax_method);
+        const profit = itemGrossProfit(it);
         return (
           <tr
             key={it.id}

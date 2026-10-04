@@ -43,7 +43,7 @@
 | 舊系統消費紀錄 | `LegacyPurchase`(sales app)輕量表,只記「member / product / qty / unit_price / doc_date / source_no」;CSV 經 `manage.py import_legacy_purchases` 灌入;不還原成 SalesOrder。MembersPage 與現役單合併排序顯示(舊資料加「舊」徽章),`last-price` API 兩邊都查、取較新 |
 | 舊資料匯入指令 | `manage.py import_legacy_inventory`(catalog)= 商品 / 序號 / 庫存;`manage.py import_legacy_members`(parties)= 會員主檔,phone 為 dedup 鍵,`--update-existing` 可同 phone 更新;`manage.py import_legacy_purchases`(sales)= 會員消費紀錄。所有 import 預設 dry-run,加 `--confirm` 才寫入。CSV 樣本放 `docs/legacy-*-sample.csv` |
 | 上次成交價自動帶 | `GET /api/v1/sales-orders/last-price/?member=X&product=Y`:跨 `SalesOrderItem`(未作廢、unit_price>0)+ `LegacyPurchase`(unit_price>0)取最近;銷貨建單時新增明細自動帶價,並在單價下顯示「前次 $XXX (日期)」 |
-| 銷退單 | `SalesReturn`(SR-{6位})必指定一張原 `SalesOrder`,line-level **部分退**、可分多次退完。退款方式必須為原單付款方式之一(`SalesOrder.payments.method` 之中)。提交時序號 `sold → returned`、warehouse 回退回倉、配件 `StockBalance.qty +=`;`void_original_invoice=True` 時把 `SalesOrder.invoice_voided` 標 True(冪等)。`GET /sales-returns/returnable/?sales_order=X` 回每行剩可退量 + 可退序號清單供前端錄入。`POST /sales-returns/{id}/void/` 作廢銷退單會把序號退回 `sold`、配件再扣回去 |
+| 銷退單 | `SalesReturn`(SR-{6位})必指定一張原 `SalesOrder`,line-level **部分退**、可分多次退完。退款方式必須為原單付款方式之一(`SalesOrder.payments.method` 之中)。提交時序號 `sold → returned`、warehouse 回退回倉、配件 `StockBalance.qty +=`;`void_original_invoice=True` 時把 `SalesOrder.invoice_voided` 標 True(冪等)。`GET /sales-returns/returnable/?sales_order=X` 回每行剩可退量 + 可退序號清單供前端錄入。`POST /sales-returns/{id}/void/` 作廢銷退單會把序號退回 `sold`、配件再扣回去。畫面只送原單 / 退款方式 / 明細:退回門市沒給就用原單門市、單價一律等於原行、客戶 / 會員唯讀且一律跟原單一樣;同一張銷退單同一行原明細只能出現一次;存檔時先鎖原銷貨單再檢查可退量 |
 | 序號退回後續處理 | 銷退完成的序號狀態 = `returned`(已隔離),不會出現在「可銷貨」清單;需店員手動轉回 `in_stock` 才能再賣(避免有瑕疵的退貨機被誤再賣) |
 | 廠商收購中古 | 「中古入庫」頁的「廠商收購」tab,內嵌 `PurchaseEntryPage mode="secondhand-vendor"`;走一般進貨單流程但商品搜尋限定 `is_secondhand=true`;進貨側欄多 4 欄(成色/售價/電池/備註)+「套用到下面所有」按鈕;儲存後不離頁,bump remount key 重置表單 + 顯示成功訊息 |
 | 一般進貨單擋下中古機 | `PurchaseEntryPage` 預設 `mode="regular"`,商品 ComboBox / PickerModal / BatchPasteModal 都帶 `is_secondhand=false`;新增進貨單時挑不到中古品。檢視 / 作廢既有中古進貨單仍走 `/purchases/:id` |
@@ -82,6 +82,9 @@
 | 公司維護鎖 | `TenantMaintenance.active` 時,該公司所有 API 回 503(`apps/backup/auth.py`,掛在全域的登入驗證上;`/auth/`、`/backup/` 例外)。**只擋網頁**,管理指令不經過它。鎖看的是「請求實際會落在哪一家公司」(`tenants/middleware.py` 的 `effective_tenant_id`,規則要跟 `_resolve_tenant_from_request` 一致:沒有公司的帳號不帶 `?tenant=` 會落到預設公司)。Django 管理後台由 `AdminMaintenanceGuard` 處理:任何公司在還原時只能看。平台後台(`/platform/*`)不帶 `?tenant=`,另外靠 `BlocksCompanyUnderMaintenance` 照實際要改的那一筆擋;新增會改某家公司資料的平台端點要掛它。還原被中斷時不自動解鎖;「中斷」看的是有沒有行程還握著工作的 advisory lock,不是看時間 |
 | 單號下限 | 進貨 / 銷貨 / 銷退 / 調撥單號 = `last_doc_seq()`(`apps/core/numbering.py`):最後一張單的流水與 `DocNumberFloor` 取大者。還原到舊備份時把已用過的最大號記進下限,不重用給過客人的號碼 |
 | 舊系統資料(歐睿) | `apps/legacy/`:十年會員消費封存匯入(`manage.py import_legacy_history`,預設試算、寫入要 `--confirm`,有來源差異要 `--reconciled-only`,可 `--rollback`)。**原文不改**(編號空白 / Tab / 前導零、空白單價存 NULL、帶正負號金額),金額以「分」整數存,原始額與淨額(單別正負 `NET_SIGN`)分開。舊店名 / 品號 / 業務員 / 會員 → MP 門市 / 商品 / 業務員 / 會員的**對照由人確認**(`LegacyStoreMap` / `LegacyProductMap` / `LegacySalespersonMap` / `LegacyMember.member`,決定記在 `LegacyMappingLog`);明細透過 `store_map` / `product_map` / `salesperson_map`(不佔欄位的 ForeignObject)串到對照,改對照不改明細。只供查詢,不過帳、不參與上次成交價。品號對照與之後的庫存搬家共用。手冊 `docs/舊POS十年會員歷史_匯入與對照手冊.md` |
+| 每行未稅 / 沖回成本 | 銷貨 / 銷退明細存檔當下存死 `untaxed_amount` / `tax_amount`(`split_tax_by_line`:零頭補在金額最大那一行,整單加總 = 單頭)。銷退明細存 `cost_at_post` = 沖回成本(序號 = 退回那幾台的 `purchase_unit_cost`;配件按數量比例,最後一次退用餘數)。**報表要未稅金額一律讀這兩欄,不要再除 1.05** |
+| 每日庫存快照與對帳 | `apps/ledger/`:每天過了 `LEDGER_DAILY_AT`(預設 23:30)由備份背景程式順便做:拍 `StockSnapshot`(門市 × 商品 × 狀態:在庫 / 退回待處理 / 維修中 / 調撥中,調撥中記在目的門市)→ 跑 `checks.py` 存 `LedgerCheckRun`。只拍今天,漏拍不補。對帳只講出來不自動修。配件庫存對異動時**調撥派發只扣來源、確認才加目的**(兩筆都寫了來源與目的當路線)。手動:`manage.py run_daily_ledger --now [--tenant X --again]`。頁面「設定 → 每日對帳」(公司管理員) |
+| 關聯欄位只認自己公司 | `apps/core/tenant_fields.py` 的 `TenantScopedRelatedFieldsMixin`:序列化器(含巢狀明細)的外鍵欄位限縮到 `request.tenant`,猜到別家編號會被欄位本身擋下。service 另外再核對一次(`sales/services.py` 的 `_same_company`)。覆寫 `perform_create` 的 viewset **要自己呼叫 `check_create_warehouse()`**,否則鎖倉店員能在別家門市建單。**目前只有銷貨 / 銷退掛上;進貨、調撥、雜支、現金調整、代收話費、維修還沒(待補)** |
 
 ## 程式碼定位
 
@@ -100,7 +103,8 @@ inventory-3c/
 │       ├── transfers/          TransferOrder + commit/void service
 │       ├── cash/               PettyExpense 雜支單 + CashAdjustment 現金調整 + PhoneBillCollection 代收話費 + 營業日報 service
 │       ├── backup/             公司備份與還原(registry / container 加密 / export / jobs / restore)+ 維護鎖
-│       └── legacy/             舊系統資料:十年會員消費封存(archive / importer)+ 舊→新對照(mapping)+ 查詢 API
+│       ├── legacy/             舊系統資料:十年會員消費封存(archive / importer)+ 舊→新對照(mapping)+ 查詢 API
+│       └── ledger/             帳本健檢:每日庫存快照(snapshot)+ 每日對帳(checks)+ 收店後自動執行(daily)
 │
 └── frontend/
     └── src/

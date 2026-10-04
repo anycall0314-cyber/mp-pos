@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     "apps.identity",
     "apps.backup",
     "apps.legacy",
+    "apps.ledger",
 ]
 
 MIDDLEWARE = [
@@ -144,6 +145,9 @@ BACKUP_RESTORE_GRACE_SECONDS = int(os.environ.get("MPPOS_BACKUP_RESTORE_GRACE_SE
 # 一份備份最多幾筆資料。預檢與還原要把每張表的編號對照放在記憶體裡,兩百萬筆
 # 約需幾百 MB。超過的備份在「備份完成時的自我檢查」就會失敗,不會等到要還原那天。
 BACKUP_MAX_ROWS = int(os.environ.get("MPPOS_BACKUP_MAX_ROWS", "2000000"))
+
+# 每日庫存快照 + 對帳:過了這個時間(台灣時間 HH:MM)由備份背景程式自動做(apps/ledger/daily.py)
+LEDGER_DAILY_AT = os.environ.get("MPPOS_LEDGER_DAILY_AT", "23:30")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

@@ -187,6 +187,13 @@ class SalesOrderItem(TenantOwnedModel):
         editable=False,
         help_text="過帳時鎖定為 Product.weighted_avg_cost,供毛利報表用",
     )
+    # 過帳當下把未稅 / 稅額存死,報表不再回推單頭稅別。整單加總 = 單頭 subtotal / tax_amount。
+    untaxed_amount = models.DecimalField(
+        "未稅金額", max_digits=14, decimal_places=2, default=0, editable=False
+    )
+    tax_amount = models.DecimalField(
+        "稅額", max_digits=14, decimal_places=2, default=0, editable=False
+    )
 
     # 電信業欄位(MVP UI 折疊;Phase 2 才上線真正邏輯)
     sim_card = models.ForeignKey(
@@ -499,6 +506,16 @@ class SalesReturnItem(TenantOwnedModel):
         max_digits=14,
         decimal_places=2,
         editable=False,
+    )
+    # 過帳當下存死(同銷貨明細):未稅 / 稅額加總 = 單頭;沖回成本 = 退回那幾台 / 那幾個當初的成本
+    untaxed_amount = models.DecimalField(
+        "未稅金額", max_digits=14, decimal_places=2, default=0, editable=False
+    )
+    tax_amount = models.DecimalField(
+        "稅額", max_digits=14, decimal_places=2, default=0, editable=False
+    )
+    cost_at_post = models.DecimalField(
+        "沖回成本", max_digits=14, decimal_places=2, default=0, editable=False
     )
 
     class Meta:
