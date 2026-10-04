@@ -27,6 +27,7 @@ import { PurchasesPage } from "@/pages/purchases/PurchasesPage";
 import { PurchaseEntryPage } from "@/pages/purchases/PurchaseEntryPage";
 import { PurchaseLabelsPrintPage } from "@/pages/purchases/PurchaseLabelsPrintPage";
 import { BusinessDailyReportPage } from "@/pages/reports/BusinessDailyReport";
+import { ExploreReportPage } from "@/pages/reports/ExploreReportPage";
 import { PartsUsageReportPage } from "@/pages/reports/PartsUsageReportPage";
 import { SalesDailyReportPage } from "@/pages/reports/SalesDailyReport";
 import { SecondhandAcquisitionPage } from "@/pages/secondhand-acquisition/SecondhandAcquisitionPage";
@@ -405,6 +406,7 @@ export function App() {
             path="/reports/parts-usage"
             element={<PartsUsageReportPage />}
           />
+          <Route path="/reports/explore" element={<ExploreReportPage />} />
           <Route
             path="/reports/margin-summary"
             element={<Placeholder title="毛利彙總" />}

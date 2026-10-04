@@ -5872,3 +5872,148 @@ tr.selected .intake-badge { filter: none; }
 .legacy-table-wrap table { min-width: 560px; }
 .legacy-table-wrap th, .legacy-table-wrap td { padding: 6px 8px; }
 .legacy-table-wrap th.num, .legacy-table-wrap td.num { text-align: right; }
+
+/* ─────────────────────────────────────────────────────────
+ * 報表 → 自由組合
+ * ───────────────────────────────────────────────────────── */
+.ex-builder {
+  display: grid;
+  gap: 6px;
+  padding: 8px 16px 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.ex-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+}
+.ex-line-label {
+  flex: 0 0 34px;
+  color: var(--text-dim);
+}
+.ex-select,
+.ex-date {
+  height: 30px;
+  padding: 3px 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 14px;
+  max-width: 100%;
+}
+.ex-select:disabled { opacity: 0.45; }
+.ex-add { color: var(--text-dim); width: 110px; }
+.ex-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 30px;
+  max-width: 100%;
+  padding: 0 2px 0 10px;
+  background: var(--row-selected);
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  color: var(--text);
+}
+.ex-chip button {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+}
+.ex-chip button:hover { color: var(--text); }
+.ex-chip .ex-chip-text {
+  color: var(--text);
+  font-size: 14px;
+  padding: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: min(60vw, 420px);
+}
+.ex-actions { padding-left: 40px; padding-top: 2px; }
+.ex-result {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.ex-result > .banner { margin: 10px 16px 0; }
+.ex-period {
+  padding: 8px 16px 0;
+  font-size: 13px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.ex-summary { background: transparent; border-bottom: none; }
+.ex-delta {
+  margin-top: 4px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.ex-up { color: #22a55a; }
+.ex-down { color: #ef4444; }
+.ex-table-wrap { padding: 0 16px 16px; overflow-x: auto; }
+.ex-grid th { position: static; }
+.ex-grid td.dim, .ex-grid .dim { color: var(--text-dim); }
+.ex-grid tfoot td {
+  font-weight: 700;
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+  background: var(--panel);
+}
+.ex-sort {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.ex-sort:hover { color: var(--text); }
+.ex-note { padding: 8px 2px 0; font-size: 13px; color: var(--text-dim); }
+.ex-modal { width: min(420px, calc(100vw - 32px)); min-width: 0; }
+.ex-modal .modal-body > input:not([type="checkbox"]) {
+  height: 32px;
+  padding: 4px 8px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 15px;
+}
+.ex-options {
+  display: grid;
+  gap: 2px;
+  max-height: 46vh;
+  overflow-y: auto;
+  margin-top: 6px;
+}
+.ex-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.ex-option:hover { background: var(--row-hover); }
+.ex-option input { width: 16px; height: 16px; flex: 0 0 auto; }
+@media (max-width: 640px) {
+  .ex-line-label { flex-basis: 100%; }
+  .ex-actions { padding-left: 0; }
+  .ex-builder { padding: 8px 12px 10px; }
+  .ex-table-wrap { padding: 0 12px 12px; }
+}

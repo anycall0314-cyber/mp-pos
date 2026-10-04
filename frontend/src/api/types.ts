@@ -1597,3 +1597,85 @@ export interface LedgerOverview {
   history: LedgerRun[];
   snapshot: { business_date: string; qty: number; cost_value: string | number } | null;
 }
+
+// ── 自由組合報表(apps/analytics)──────────────────────────────────────────
+export type AnalyticsValue = number | string | boolean | null;
+
+export interface AnalyticsOption {
+  value: AnalyticsValue;
+  label: string;
+}
+
+export interface AnalyticsMeasure {
+  key: string;
+  label: string;
+  format: "money" | "int" | "pct";
+  group: string;
+  dimensions: string[];
+}
+
+export interface AnalyticsCatalog {
+  measures: AnalyticsMeasure[];
+  dimensions: { key: string; label: string; kind: "date" | "ref" | "choice" | "flag" }[];
+  groups: string[];
+  grains: { key: string; label: string }[];
+  presets: { key: string; label: string }[];
+  limits: { dimensions: number; measures: number; rows: number };
+}
+
+export interface AnalyticsSpec {
+  measures: string[];
+  dimensions: string[];
+  period: { preset?: string; from?: string; to?: string; grain?: string };
+  filters?: Record<string, AnalyticsValue[]>;
+  compare?: "previous" | "last_year" | null;
+  sort?: string;
+  limit?: number;
+}
+
+export interface AnalyticsFilterShown {
+  dimension: string;
+  label: string;
+  values: AnalyticsOption[];
+}
+
+export type AnalyticsNumbers = Record<string, string | number | null>;
+
+export interface AnalyticsRow {
+  dims: AnalyticsOption[];
+  values: AnalyticsNumbers;
+  previous?: AnalyticsNumbers;
+}
+
+export interface AnalyticsResult {
+  columns: {
+    dimensions: { key: string; label: string }[];
+    measures: { key: string; label: string; format: "money" | "int" | "pct" }[];
+  };
+  rows: AnalyticsRow[];
+  row_count: number;
+  truncated: boolean;
+  totals: AnalyticsNumbers;
+  totals_previous?: AnalyticsNumbers;
+  applied: {
+    period: { from: string; to: string };
+    grain: string | null;
+    filters: AnalyticsFilterShown[];
+    compare: string | null;
+    compare_period?: { from: string; to: string };
+  };
+}
+
+export interface SavedReport {
+  id: number;
+  name: string;
+  spec: AnalyticsSpec;
+  filters: AnalyticsFilterShown[];
+  missing: string[];
+  error: string;
+  shared: boolean;
+  mine: boolean;
+  editable: boolean;
+  owner: string;
+  updated_at: string;
+}

@@ -58,7 +58,12 @@ import {
   LegacyMapsPage,
   LegacyMemberRow,
   LegacyMembersPage,
+  AnalyticsCatalog,
+  AnalyticsOption,
+  AnalyticsResult,
+  AnalyticsSpec,
   LedgerOverview,
+  SavedReport,
 } from "./types";
 
 // 通用：把分頁 results 攤平回傳（MVP 一頁 50 筆夠用）
@@ -2328,3 +2333,70 @@ export const useLedgerChecks = () =>
     queryKey: ["ledger-checks"],
     queryFn: () => api<LedgerOverview>(`/ledger/checks/`),
   });
+
+// ── 自由組合報表 ────────────────────────────────────────────────────────────
+export const useAnalyticsCatalog = () =>
+  useQuery({
+    queryKey: ["analytics-catalog"],
+    queryFn: () => api<AnalyticsCatalog>(`/analytics/catalog/`),
+    staleTime: Infinity,
+  });
+
+export const useAnalyticsQuery = (spec: AnalyticsSpec | null) =>
+  useQuery({
+    queryKey: ["analytics-query", spec],
+    queryFn: () =>
+      api<AnalyticsResult>(`/analytics/query/`, {
+        method: "POST",
+        body: JSON.stringify(spec),
+      }),
+    enabled: !!spec,
+    placeholderData: (prev) => prev,
+    retry: false,
+  });
+
+export const useAnalyticsOptions = (dimension: string | null, q: string) =>
+  useQuery({
+    queryKey: ["analytics-options", dimension, q],
+    queryFn: () =>
+      api<{ results: AnalyticsOption[] }>(
+        `/analytics/options/?dimension=${encodeURIComponent(dimension ?? "")}&q=${encodeURIComponent(q)}`,
+      ).then((r) => r.results),
+    enabled: !!dimension,
+    placeholderData: (prev) => prev,
+  });
+
+export const useSavedReports = () =>
+  useQuery({
+    queryKey: ["analytics-reports"],
+    queryFn: () =>
+      api<{ results: SavedReport[] }>(`/analytics/reports/`).then((r) => r.results),
+  });
+
+export function useSaveReport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      id?: number;
+      name: string;
+      spec: AnalyticsSpec;
+      shared: boolean;
+    }) => {
+      const { id, ...body } = payload;
+      return api<SavedReport>(id ? `/analytics/reports/${id}/` : `/analytics/reports/`, {
+        method: id ? "PATCH" : "POST",
+        body: JSON.stringify(body),
+      });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["analytics-reports"] }),
+  });
+}
+
+export function useDeleteReport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<void>(`/analytics/reports/${id}/`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["analytics-reports"] }),
+  });
+}

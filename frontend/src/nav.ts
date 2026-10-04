@@ -69,6 +69,7 @@ export const MORE_NAV: { label: string; sections: NavSection[] } = {
       label: "報表",
       items: [
         { to: "/reports/sales-daily", label: "銷貨日報" },
+        { to: "/reports/explore", label: "自由組合" },
         { to: "/reports/parts-usage", label: "零件耗用報表" },
         { to: "/expenses", label: "店頭雜支" },
         { to: "/cash-adjustments", label: "現金調整" },

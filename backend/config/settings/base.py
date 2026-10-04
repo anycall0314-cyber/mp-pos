@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     "apps.backup",
     "apps.legacy",
     "apps.ledger",
+    "apps.analytics",
 ]
 
 MIDDLEWARE = [

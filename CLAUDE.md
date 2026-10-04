@@ -93,8 +93,11 @@
 | 公司維護鎖 | `TenantMaintenance.active` 時,該公司所有 API 回 503(`apps/backup/auth.py`,掛在全域的登入驗證上;`/auth/`、`/backup/` 例外)。**只擋網頁**,管理指令不經過它。鎖看的是「請求實際會落在哪一家公司」(`tenants/middleware.py` 的 `effective_tenant_id`,規則要跟 `_resolve_tenant_from_request` 一致:沒有公司的帳號不帶 `?tenant=` 會落到預設公司)。Django 管理後台由 `AdminMaintenanceGuard` 處理:任何公司在還原時只能看。平台後台(`/platform/*`)不帶 `?tenant=`,另外靠 `BlocksCompanyUnderMaintenance` 照實際要改的那一筆擋;新增會改某家公司資料的平台端點要掛它。還原被中斷時不自動解鎖;「中斷」看的是有沒有行程還握著工作的 advisory lock,不是看時間 |
 | 單號下限 | 進貨 / 銷貨 / 銷退 / 調撥單號 = `last_doc_seq()`(`apps/core/numbering.py`):最後一張單的流水與 `DocNumberFloor` 取大者。還原到舊備份時把已用過的最大號記進下限,不重用給過客人的號碼 |
 | 舊系統資料(歐睿) | `apps/legacy/`:十年會員消費封存匯入(`manage.py import_legacy_history`,預設試算、寫入要 `--confirm`,有來源差異要 `--reconciled-only`,可 `--rollback`)。**原文不改**(編號空白 / Tab / 前導零、空白單價存 NULL、帶正負號金額),金額以「分」整數存,原始額與淨額(單別正負 `NET_SIGN`)分開。舊店名 / 品號 / 業務員 / 會員 → MP 門市 / 商品 / 業務員 / 會員的**對照由人確認**(`LegacyStoreMap` / `LegacyProductMap` / `LegacySalespersonMap` / `LegacyMember.member`,決定記在 `LegacyMappingLog`);明細透過 `store_map` / `product_map` / `salesperson_map`(不佔欄位的 ForeignObject)串到對照,改對照不改明細。只供查詢,不過帳、不參與上次成交價。品號對照與之後的庫存搬家共用。手冊 `docs/舊POS十年會員歷史_匯入與對照手冊.md` |
-| 每行未稅 / 沖回成本 | 銷貨明細存檔當下存死 `untaxed_amount` / `tax_amount`(`split_tax_by_line`:零頭補在金額最大那一行,整單加總 = 單頭;單頭算不起來不硬塞)。銷退(只能整張退)每行的金額 / 未稅 / 稅額 / `cost_at_post`(沖回成本)與單頭**全部照抄原單**,不重算。「序號取那幾台成本、配件按比例、最後一次拿餘數」只用在 migration 0016 回填舊的部分退資料。**報表要未稅金額一律讀這兩欄,不要再除 1.05**。**先鎖再檢查**:銷貨 / 銷退 / 作廢在交易內先用 `_lock_rows()` 照固定順序鎖住這張單會動到的序號、SIM 卡、庫存餘額(序號 → 卡 → 餘額,各照編號),鎖完才檢查狀態、才改數量 —— 否則同一支 IMEI 會被兩張同時送出的單各賣一次、庫存會少算一次、商品順序相反的兩張單會死結。調撥派發也先鎖序號。進貨 / 調撥 / 維修的庫存餘額還是沒鎖(待補) |
+| 每行未稅 / 沖回成本 | 銷貨明細存檔當下存死 `untaxed_amount` / `tax_amount`(`split_tax_by_line`:零頭補在金額最大那一行,整單加總 = 單頭;單頭算不起來不硬塞)。銷退(只能整張退)每行的金額 / 未稅 / 稅額 / `cost_at_post`(沖回成本)與單頭**全部照抄原單**,不重算。「序號取那幾台成本、配件按比例、最後一次拿餘數」只用在 migration 0016 回填舊的部分退資料。**報表要未稅金額一律讀這兩欄,不要再除 1.05** |
+| 先鎖再檢查、再改 | `apps/inventory/locking.py`,銷貨 / 銷退 / 進貨 / 調撥 / 維修共用。**每一個會改庫存或序號狀態的動作都照這三步、而且都在交易內**:(1) `lock_document()` 鎖單據自己那一列並重讀,才判斷是不是已作廢 / 已確認 / 已完工;(2) `lock_stock_rows()` 照固定順序鎖這張單會動到的東西:商品(要改加權平均成本時)→ 序號 → SIM 卡 → 庫存餘額(照門市、商品編號);(3) 鎖完才檢查在不在庫、夠不夠扣,才改。不這樣做:同一支 IMEI 會被兩張單各賣一次、庫存會少算一次、同一張單會被確認 / 作廢兩次、明細順序相反的兩張單會死結。商品 / 序號 / SIM 卡用 `no_key=True`(不擋別張單新增指向它的列)。改數量一律經 `locked_balance()`,不要直接 `StockBalance.objects.get()` 再加減 |
+| 維修單與庫存 | 只有 `complete` / `reopen` 會動庫存,其他入口不能繞過:`status` 唯讀(只能走 `set-status` / `complete` / `reopen`);已完工或已作廢的單不能修改、不能換狀態;已作廢不能完工;已完工要先重開(歸還零件)才能作廢;維修單不能刪除只能作廢。這些判斷都在鎖住單據之後才做(`services.py` 的 `set_repair_status` / `void_repair_order` / `ensure_editable`)。缺料也能完工(帳可能落後現場):領用照實記全部數量(`repair_usage`),帳上不夠的差額另記一筆 `adjust` 入庫(`ref_doc_type="repair_order_shortage"`),庫存數量 = 異動加總。重開歸還的是**異動紀錄裡實際領出去、還沒還的**(`_outstanding_usage`),還到當初領料的門市,不看單上現在寫的門市 / 零件 |
 | 每日庫存快照與對帳 | `apps/ledger/`:每天過了 `LEDGER_DAILY_AT`(預設 23:30)由備份背景程式順便做:拍 `StockSnapshot`(門市 × 商品 × 狀態:在庫 / 退回待處理 / 維修中 / 調撥中,調撥中記在目的門市)→ 跑 `checks.py` 存 `LedgerCheckRun`。只拍今天,漏拍不補。對帳只講出來不自動修。配件庫存對異動時**調撥派發只扣來源、確認才加目的**(兩筆都寫了來源與目的當路線)。手動:`manage.py run_daily_ledger --now [--tenant X --again]`。頁面「設定 → 每日對帳」(公司管理員) |
+| 報表只有一套定義(自由組合) | `apps/analytics/`:`catalog.py` 是**指標與角度的唯一定義**(事實表:銷貨 / 銷退 / 進貨 / 收款 / 退款 / 庫存快照 / 舊 POS;指標 = 直接加總的 `Base` + 由別的指標算出來的 `Derived`)。報表畫面與之後的自然語言都只能送**查詢單**(`engine.py`:指標 × 分組最多 3 個 × 期間 × 條件 × 比較),後端照定義驗證,指標不能用那個角度切就回白話錯誤、不默默給 0;沒有任何入口接受資料庫指令或欄位名稱。**新的報表需求 = 加指標或加角度,不是寫新的報表頁、新的查詢**。「銷售」類指標只算計入毛利的明細(收購二手另外一欄),所以 銷售額 − 成本 = 毛利 是同一批明細。庫存是「期間內最後一次快照」,不跨日加總;「最後一次是哪一天」看 `StockSnapshotDay`(那天有沒有拍過),**不是看明細**:賣到 0 的東西沒有明細,看明細會退回去報最後一次有貨的數量。舊 POS 的門市 / 商品 / 業務員走對照表,沒對到的歸「未對照」;舊系統的「未稅額」欄位語意不一致,不採用。合計另外算(不受筆數上限影響,單數不重複算)。存起來的報表(`SavedReport`)條件存**代碼**不存編號(還原備份後編號會換),打開時換回現在的編號,找不到的講出來。付款方式可選的代碼 = 現在的主檔 + 單據上用過的(主檔已刪的顯示「代碼(已刪除)」):刪掉用過的付款方式,歷史的錢照樣篩得到。報表權限目前不鎖(店員也看得到全公司與毛利);要鎖時填 `Base.roles` / `Derived.roles`。API:`analytics/catalog/`、`query/`、`options/`、`reports/` |
 | 關聯欄位只認自己公司 | `apps/core/tenant_fields.py` 的 `TenantScopedRelatedFieldsMixin`:序列化器(含巢狀明細)的外鍵欄位限縮到 `request.tenant`,猜到別家編號會被欄位本身擋下。**所有 app 的 serializers.py 每一個序列化器都要掛**(平台後台 `tenants/platform_views.py` 例外,它本來就跨公司);`apps/core/test_tenant_fields.py` 會掃全部序列化器,漏掛就紅。用原始編號的輸入(ListField / DictField,例如維修的 `parts_input`)mixin 管不到,要自己對公司驗證。service 另外再核對一次(`same_company()`:銷貨、銷退、進貨、調撥、維修完工)。有門市鎖的 viewset 覆寫 `perform_create` 時**要自己呼叫 `check_create_warehouse()`**(同一支測試會檢查),否則鎖倉店員能在別家門市建單 |
 | 不靠送編號也不能看到別家 | API 只回 JSON(`DEFAULT_RENDERER_CLASSES`):DRF 的 API 瀏覽頁(`?format=api`)會把篩選與表單下拉整張表列出來,**不可再打開**。外鍵篩選(`?customer=` …)走 `apps/core/tenant_filters.py` 的 `TenantDjangoFilterBackend`,別家編號跟不存在的編號一樣回 400。指向帳號表的 `created_by` 一律唯讀(由 view 設定)。沒綁公司的帳號只有 platform_admin / superuser 能用 `?tenant=` / `X-Tenant-ID` 指定公司(`tenants/middleware.py` 的 `may_switch_company`),其他沒綁公司的帳號在登入驗證就 403 |
 
@@ -116,7 +119,8 @@ inventory-3c/
 │       ├── cash/               PettyExpense 雜支單 + CashAdjustment 現金調整 + PhoneBillCollection 代收話費 + 營業日報 service
 │       ├── backup/             公司備份與還原(registry / container 加密 / export / jobs / restore)+ 維護鎖
 │       ├── legacy/             舊系統資料:十年會員消費封存(archive / importer)+ 舊→新對照(mapping)+ 查詢 API
-│       └── ledger/             帳本健檢:每日庫存快照(snapshot)+ 每日對帳(checks)+ 收店後自動執行(daily)
+│       ├── ledger/             帳本健檢:每日庫存快照(snapshot)+ 每日對帳(checks)+ 收店後自動執行(daily)
+│       └── analytics/          報表語意層:指標與角度的唯一定義(catalog)+ 查詢單引擎(engine)+ 存起來的報表(saved)
 │
 └── frontend/
     └── src/
@@ -128,7 +132,7 @@ inventory-3c/
         │   ├── sales/           SalesPage(tabs:銷貨單 / 銷退單)+ SalesEntryPage(IMEI 自動掛序號 / 單一在庫自動掛 / 中文 IME 安全)+ SalesPrintPage + SalesReturnEntryPage(搜尋原單 → 整張退,明細唯讀)
         │   ├── customers/       CustomersPage(客戶管理;tabs:全部/個人/同業/企業/其他;Detail 下半顯示該客戶銷售紀錄)
         │   ├── members/         MembersPage(會員獨立主檔;欄位姓名/電話/身分證/生日/地址/備註;Detail 下半顯示該會員銷售紀錄)
-        │   ├── reports/         SalesDailyReport(銷貨日報,按單分組純表格 + 作廢區塊 + CSV 匯出;收購二手不計毛利)
+        │   ├── reports/         SalesDailyReport(銷貨日報,按單分組純表格 + 作廢區塊 + CSV 匯出;收購二手不計毛利) + ExploreReportPage(自由組合:挑指標 × 分組 × 條件 × 期間 × 比較,可存成我的報表)
         │   ├── settings/        SettingsPage(發票類型 / 字軌 / 付款方式)
         │   ├── sim-cards/       SimCardsPage + SimCardForm
         │   ├── telecom-plans/   TelecomPlansPage + TelecomPlanForm

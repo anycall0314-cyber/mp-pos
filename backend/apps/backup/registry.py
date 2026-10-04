@@ -74,6 +74,8 @@ REGISTRY: dict[str, Entry] = {
         "legacy.LegacySourceException",
         # 每日庫存快照:過去的庫存事後算不回來,一定要備份
         "ledger.StockSnapshot", "ledger.StockSnapshotDay",
+        # 存起來的報表(查詢單)
+        "analytics.SavedReport",
     ),
     "auth.User": Entry(ACCOUNT, "只留帳號名稱等對照資訊;不含密碼"),
     "tenants.UserProfile": Entry(ACCOUNT, "角色、預設門市、鎖倉;還原時依對照處理"),
