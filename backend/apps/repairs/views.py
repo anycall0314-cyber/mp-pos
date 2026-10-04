@@ -1,4 +1,5 @@
-from rest_framework import status, viewsets
+from django.db import transaction
+from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -10,8 +11,11 @@ from .services import (
     complete_repair_order,
     compute_in_house_quote,
     compute_margin,
+    ensure_editable,
     parts_with_insufficient_stock,
     reopen_repair_order,
+    set_repair_status,
+    void_repair_order,
 )
 
 
@@ -78,6 +82,20 @@ class RepairOrderViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
         self.check_create_warehouse(serializer)
         serializer.save(tenant=self.request.tenant)
 
+    def perform_update(self, serializer):
+        # 鎖住並重讀之後才改:已完工 / 已作廢的不能改(同時有人按完工也不會被這次修改蓋掉)
+        with transaction.atomic():
+            try:
+                ensure_editable(serializer.instance)
+            except ValueError as exc:
+                raise serializers.ValidationError({"detail": str(exc)})
+            super().perform_update(serializer)
+
+    def destroy(self, request, *args, **kwargs):
+        return Response(
+            {"detail": "維修單不能刪除,請用作廢"}, status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
+
     @action(detail=True, methods=["post"], url_path="set-status")
     def set_status(self, request, pk=None):
         """切換狀態(pending/quoting/in_repair/sent_external/ready_pickup)。
@@ -90,8 +108,10 @@ class RepairOrderViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
                 {"detail": f"狀態 {new_status} 不在允許範圍"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        order.status = new_status
-        order.save(update_fields=["status"])
+        try:
+            set_repair_status(order, new_status)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(order).data)
 
     @action(detail=True, methods=["post"], url_path="complete")
@@ -144,8 +164,10 @@ class RepairOrderViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="void")
     def void(self, request, pk=None):
         order = self.get_object()
-        order.is_void = True
-        order.save(update_fields=["is_void"])
+        try:
+            void_repair_order(order)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(order).data)
 
     @action(detail=False, methods=["get"], url_path="history-by-phone")

@@ -496,27 +496,53 @@ class StockLockTests(TransactionTestCase):
         self.assertIn("不可銷貨", str(r.json()))
         self.assertEqual(SalesOrder.objects.count(), 0)
 
-    def test_phone_being_sold_cannot_be_transferred_at_the_same_moment(self):
-        from django.db import OperationalError, connection, connections
+    def in_another_session(self, statements, hold=1.0):
+        """另一個人同時在做:開另一條連線、執行這些 SQL(會鎖住那幾列),停一下再存檔。
+        回傳後那條連線已經握著鎖;存檔在背景發生。"""
+        import threading
+        import time
 
+        from django.db import connections
+
+        holding = threading.Event()
+
+        def work():
+            other = connections.create_connection("default")
+            try:
+                other.ensure_connection()
+                other.set_autocommit(False)
+                with other.cursor() as cur:
+                    for sql, params in statements:
+                        cur.execute(sql, params)
+                holding.set()
+                time.sleep(hold)
+                other.commit()
+            finally:
+                other.close()
+
+        t = threading.Thread(target=work)
+        t.start()
+        self.addCleanup(t.join)
+        self.assertTrue(holding.wait(5))
+        return t
+
+    def test_phone_being_sold_cannot_be_transferred_at_the_same_moment(self):
         self.c.purchase(phone_serials=["甲P2"])
         phone = ProductSerial.objects.get(serial_no="甲P2")
-        other = connections.create_connection("default")
-        other.ensure_connection()
-        self.addCleanup(other.close)
-        other.set_autocommit(False)
-        with other.cursor() as cur:
-            cur.execute("SELECT 1 FROM inventory_productserial WHERE id = %s FOR KEY SHARE", [phone.pk])
-        with connection.cursor() as cur:
-            cur.execute("SET lock_timeout = '300ms'")
-        self.addCleanup(lambda: connection.cursor().execute("SET lock_timeout = 0"))
-        with self.assertRaises(OperationalError):
-            self.c.admin.post("/api/v1/transfer-orders/", {
-                "from_warehouse": self.c.warehouses[0].id, "to_warehouse": self.c.warehouses[1].id,
-                "items": [{"product": self.c.phone.id, "qty": 1, "serial_ids": [phone.pk]}],
-            }, format="json")
+        t = self.in_another_session([
+            ("SELECT 1 FROM inventory_productserial WHERE id = %s FOR NO KEY UPDATE", [phone.pk]),
+            ("UPDATE inventory_productserial SET status = 'sold', warehouse_id = NULL WHERE id = %s",
+             [phone.pk]),
+        ])
+        r = self.c.admin.post("/api/v1/transfer-orders/", {
+            "from_warehouse": self.c.warehouses[0].id, "to_warehouse": self.c.warehouses[1].id,
+            "items": [{"product": self.c.phone.id, "qty": 1, "serial_ids": [phone.pk]}],
+        }, format="json")
+        t.join()
+        self.assertEqual(r.status_code, 400, r.content)
+        self.assertIn("不可調撥", str(r.json()))
         phone.refresh_from_db()
-        self.assertEqual(phone.status, "in_stock")
+        self.assertEqual(phone.status, "sold")
 
     def test_stock_rows_are_locked_in_a_fixed_order(self):
         """兩張單的商品順序相反時不能互相等到死結:不管明細順序,一律照商品編號上鎖。"""

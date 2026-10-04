@@ -261,6 +261,7 @@ class RepairOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSer
             "updated_at",
         ]
         read_only_fields = [
+            "status",
             "id",
             "no",
             "completed_at",

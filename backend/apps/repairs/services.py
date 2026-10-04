@@ -5,6 +5,7 @@ from django.db import transaction
 
 from apps.catalog.models import Product
 from apps.core.tenant_fields import same_company
+from apps.inventory.locking import lock_document, lock_stock_rows, locked_balance
 from apps.inventory.models import StockBalance, StockMovement
 
 from .models import RepairOrder, RepairOrderPart
@@ -116,91 +117,137 @@ def complete_repair_order(repair_order: RepairOrder) -> None:
     """維修單轉「完成」狀態:扣零件倉庫存 + 寫 StockMovement。
 
     商品倉的序號商品不在此扣;只扣零件倉的批量庫存(StockBalance)。
+
+    - 整個動作在一個交易內;先鎖這張維修單再看狀態(兩個人同時按完成只會扣一次料),
+      再鎖要扣的庫存餘額(規則見 apps/inventory/locking.py)。
+    - 缺料也能完工(帳上數量可能落後現場)。帳要對得起來:領用照實記全部數量,
+      帳上不夠的差額另外記一筆「盤點調整」入庫(等於承認現場其實有這些料)。
+      這樣庫存數量 = 異動加總,耗用報表的數字也是實際用掉的。
     """
-    if repair_order.status == RepairOrder.Status.COMPLETED:
-        return  # 已完工的不重扣
-
-    tenant = repair_order.tenant
-    wh = repair_order.warehouse
-    lines = list(repair_order.parts.select_related("part_product"))
-    parts = [line.part_product for line in lines]
-    if not same_company(tenant.pk, wh, repair_order.customer, repair_order.sales_person,
-                        repair_order.technician, repair_order.repair_item,
-                        repair_order.external_vendor, *lines, *parts):
-        raise ValueError("維修單掛到的門市 / 客戶 / 人員 / 項目 / 廠商 / 零件不屬於這家公司")
-
-    # 自修:依 RepairOrderPart 扣零件倉庫存
-    if repair_order.mode == RepairOrder.Mode.IN_HOUSE:
-        for line in repair_order.parts.select_related("part_product").all():
-            part = line.part_product
-            # snapshot 當下成本(若未填過)
-            if not line.unit_cost:
-                line.unit_cost = part.weighted_avg_cost or Decimal("0")
-                line.save(update_fields=["unit_cost"])
-            # 扣 StockBalance
-            balance, _ = StockBalance.objects.get_or_create(
-                tenant=tenant,
-                product=part,
-                warehouse=wh,
-                defaults={"qty": 0},
-            )
-            balance.qty = max(balance.qty - line.qty, 0)
-            balance.save(update_fields=["qty"])
-            # 寫異動
-            StockMovement.objects.create(
-                tenant=tenant,
-                product=part,
-                qty=line.qty,
-                movement_type=StockMovement.MovementType.REPAIR_USAGE,
-                from_warehouse=wh,
-                ref_doc_type="repair_order",
-                ref_doc_id=repair_order.id,
-                note=f"{repair_order.no} 維修領用",
-            )
-
-    # 自修毛利重算 suggested_quote(完工時 snapshot 當下成本)
-    if repair_order.mode == RepairOrder.Mode.IN_HOUSE:
-        repair_order.suggested_quote = compute_in_house_quote(repair_order)
-
-    repair_order.status = RepairOrder.Status.COMPLETED
     from django.utils import timezone
 
-    repair_order.completed_at = timezone.now()
-    repair_order.save(
-        update_fields=["status", "completed_at", "suggested_quote"]
-    )
+    with transaction.atomic():
+        if lock_document(repair_order) is None:
+            raise ValueError("找不到這張維修單")
+        if repair_order.is_void:
+            raise ValueError("此維修單已作廢,不能完工")
+        if repair_order.status == RepairOrder.Status.COMPLETED:
+            return  # 已完工的不重扣
+
+        tenant = repair_order.tenant
+        wh = repair_order.warehouse
+        lines = list(repair_order.parts.select_related("part_product").order_by("id"))
+        parts = [line.part_product for line in lines]
+        if not same_company(tenant.pk, wh, repair_order.customer, repair_order.sales_person,
+                            repair_order.technician, repair_order.repair_item,
+                            repair_order.external_vendor, *lines, *parts):
+            raise ValueError("維修單掛到的門市 / 客戶 / 人員 / 項目 / 廠商 / 零件不屬於這家公司")
+
+        # 自修:依 RepairOrderPart 扣零件倉庫存
+        if repair_order.mode == RepairOrder.Mode.IN_HOUSE:
+            # 零件(商品)也鎖:成本快照要讀鎖到之後的加權平均(同一瞬間可能有進貨在改它)
+            shared = {}
+            for line in lines:
+                line.part_product = shared.setdefault(line.part_product_id, line.part_product)
+            lock_stock_rows(
+                tenant, products=shared.values(),
+                balances=[(part, wh) for part in shared.values()], create=True,
+            )
+            for line in lines:
+                part = line.part_product
+                # snapshot 當下成本(若未填過)
+                if not line.unit_cost:
+                    line.unit_cost = part.weighted_avg_cost or Decimal("0")
+                    line.save(update_fields=["unit_cost"])
+                balance = locked_balance(tenant, part, wh, create=True)
+                short = line.qty - balance.qty
+                if short > 0:
+                    StockMovement.objects.create(
+                        tenant=tenant,
+                        product=part,
+                        qty=short,
+                        movement_type=StockMovement.MovementType.ADJUST,
+                        to_warehouse=wh,
+                        ref_doc_type="repair_order_shortage",
+                        ref_doc_id=repair_order.id,
+                        note=f"{repair_order.no} 維修領用時帳上不足,補差 {short}",
+                    )
+                    balance.qty += short
+                balance.qty -= line.qty
+                balance.save(update_fields=["qty"])
+                StockMovement.objects.create(
+                    tenant=tenant,
+                    product=part,
+                    qty=line.qty,
+                    movement_type=StockMovement.MovementType.REPAIR_USAGE,
+                    from_warehouse=wh,
+                    ref_doc_type="repair_order",
+                    ref_doc_id=repair_order.id,
+                    note=f"{repair_order.no} 維修領用",
+                )
+            # 自修毛利重算 suggested_quote(完工時 snapshot 當下成本)
+            repair_order.suggested_quote = compute_in_house_quote(repair_order)
+
+        repair_order.status = RepairOrder.Status.COMPLETED
+        repair_order.completed_at = timezone.now()
+        repair_order.save(
+            update_fields=["status", "completed_at", "suggested_quote"]
+        )
 
 
-@transaction.atomic
+def _outstanding_usage(repair_order: RepairOrder) -> dict:
+    """這張維修單「領出去、還沒歸還」的零件:{(商品 id, 門市 id): 數量}。
+
+    直接看異動紀錄(領用 − 先前重開時歸還的),不看單上現在寫的門市 / 零件 ——
+    單上的資料之後可能被改過,歸還要還到當初實際領料的地方、還當初實際領的數量。
+    """
+    out = {}
+    moves = StockMovement.objects.filter(tenant=repair_order.tenant, ref_doc_id=repair_order.id)
+    for pid, wid, qty in moves.filter(
+        ref_doc_type="repair_order", movement_type=StockMovement.MovementType.REPAIR_USAGE,
+    ).values_list("product_id", "from_warehouse_id", "qty"):
+        out[(pid, wid)] = out.get((pid, wid), 0) + qty
+    for pid, wid, qty in moves.filter(
+        ref_doc_type="repair_order_reopen", movement_type=StockMovement.MovementType.ADJUST,
+    ).values_list("product_id", "to_warehouse_id", "qty"):
+        out[(pid, wid)] = out.get((pid, wid), 0) - qty
+    return {key: qty for key, qty in out.items() if qty > 0 and None not in key}
+
+
 def reopen_repair_order(repair_order: RepairOrder) -> None:
     """重開已完成的維修單:歸還零件庫存 + 清完工時間 + 狀態退回待取件。
 
     僅在 status=completed 時有效;呼叫端負責權限檢查。
-    回退邏輯與 complete_repair_order 對稱:
-    - 自修:每筆 RepairOrderPart 把 qty 加回 StockBalance,寫 ADJUST 異動
-    - 委外:無庫存異動,純改狀態
+    歸還的是「當初實際領出去、還沒還」的零件(看異動紀錄,見 _outstanding_usage),
+    還到當初領料的門市;委外單沒有領料,純改狀態。
+    先鎖這張維修單再看狀態(兩個人同時按重開只會歸還一次),再鎖庫存餘額。
     """
-    if repair_order.status != RepairOrder.Status.COMPLETED:
-        return
+    from apps.inventory.models import Warehouse
 
-    tenant = repair_order.tenant
-    wh = repair_order.warehouse
+    with transaction.atomic():
+        if lock_document(repair_order) is None:
+            raise ValueError("找不到這張維修單")
+        if repair_order.status != RepairOrder.Status.COMPLETED:
+            return
 
-    if repair_order.mode == RepairOrder.Mode.IN_HOUSE:
-        for line in repair_order.parts.select_related("part_product").all():
-            part = line.part_product
-            balance, _ = StockBalance.objects.get_or_create(
-                tenant=tenant,
-                product=part,
-                warehouse=wh,
-                defaults={"qty": 0},
-            )
-            balance.qty = balance.qty + line.qty
+        tenant = repair_order.tenant
+        owed = _outstanding_usage(repair_order)
+        products = {p.pk: p for p in Product.objects.filter(
+            tenant=tenant, pk__in={pid for pid, _ in owed})}
+        stores = {w.pk: w for w in Warehouse.objects.filter(
+            tenant=tenant, pk__in={wid for _, wid in owed})}
+        lock_stock_rows(
+            tenant, balances=[(products[pid], stores[wid]) for pid, wid in owed], create=True
+        )
+        for (pid, wid), qty in sorted(owed.items()):
+            part, wh = products[pid], stores[wid]
+            balance = locked_balance(tenant, part, wh, create=True)
+            balance.qty = balance.qty + qty
             balance.save(update_fields=["qty"])
             StockMovement.objects.create(
                 tenant=tenant,
                 product=part,
-                qty=line.qty,
+                qty=qty,
                 movement_type=StockMovement.MovementType.ADJUST,
                 to_warehouse=wh,
                 ref_doc_type="repair_order_reopen",
@@ -208,9 +255,47 @@ def reopen_repair_order(repair_order: RepairOrder) -> None:
                 note=f"{repair_order.no} 重開維修單,歸還零件",
             )
 
-    repair_order.status = RepairOrder.Status.READY_PICKUP
-    repair_order.completed_at = None
-    repair_order.save(update_fields=["status", "completed_at"])
+        repair_order.status = RepairOrder.Status.READY_PICKUP
+        repair_order.completed_at = None
+        repair_order.save(update_fields=["status", "completed_at"])
+
+
+def set_repair_status(repair_order: RepairOrder, new_status: str) -> None:
+    """切換進度(待處理 / 報價 / 維修中 / 送修 / 待取件)。完工走 complete、已完工要改回來走 reopen。
+    鎖住單據之後才看狀態:不能把剛完工(已扣料)的單改回別的狀態,否則下次完工會再扣一次。"""
+    with transaction.atomic():
+        if lock_document(repair_order) is None:
+            raise ValueError("找不到這張維修單")
+        if repair_order.is_void:
+            raise ValueError("此維修單已作廢")
+        if repair_order.status == RepairOrder.Status.COMPLETED:
+            raise ValueError("已完工的維修單要先重開才能改狀態")
+        repair_order.status = new_status
+        repair_order.save(update_fields=["status"])
+
+
+def void_repair_order(repair_order: RepairOrder) -> None:
+    """作廢。已完工(已扣料)的單要先重開把零件歸還,才能作廢。"""
+    with transaction.atomic():
+        if lock_document(repair_order) is None:
+            raise ValueError("找不到這張維修單")
+        if repair_order.is_void:
+            raise ValueError("此維修單已作廢")
+        if repair_order.status == RepairOrder.Status.COMPLETED:
+            raise ValueError("已完工的維修單要先重開(歸還零件)才能作廢")
+        repair_order.is_void = True
+        repair_order.save(update_fields=["is_void"])
+
+
+def ensure_editable(repair_order: RepairOrder) -> None:
+    """修改維修單之前(交易內):鎖住並重讀;已完工 / 已作廢的不能改。
+    已完工的單改了門市或零件,之後的庫存就對不回去。"""
+    if lock_document(repair_order) is None:
+        raise ValueError("找不到這張維修單")
+    if repair_order.is_void:
+        raise ValueError("此維修單已作廢,不能修改")
+    if repair_order.status == RepairOrder.Status.COMPLETED:
+        raise ValueError("已完工的維修單要先重開才能修改")
 
 
 def parts_with_insufficient_stock(

@@ -22,9 +22,10 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.tenant_fields import same_company
+from apps.inventory.locking import lock_document, lock_stock_rows, locked_balance
 from apps.inventory.models import ProductSerial, StockBalance, StockMovement
 
-from .models import TransferOrder
+from .models import TransferOrder, TransferOrderItemSerial
 
 CENTS = Decimal("0.01")
 
@@ -41,6 +42,17 @@ def _check_company(to: TransferOrder, items):
         serials = [s.serial for s in links]
         if not same_company(to.tenant_id, it, it.product, *links, *serials):
             raise TransferOrderError(f"第 {it.line_no} 行的商品 / 序號不屬於這家公司")
+
+
+def _serial_ids(to: TransferOrder):
+    return list(
+        TransferOrderItemSerial.objects.filter(item__to=to).values_list("serial_id", flat=True)
+    )
+
+
+def _stock_items(items):
+    """走「庫存餘額」的明細(配件:不逐支記)。"""
+    return [it for it in items if not it.product.requires_serial and not it.product.is_virtual]
 
 
 def _validate_dispatch(to: TransferOrder, items):
@@ -110,14 +122,12 @@ def dispatch_transfer_order(to: TransferOrder) -> TransferOrder:
     )
 
     with transaction.atomic():
-        # 先把這張單的序號照編號順序鎖住,再檢查是不是還在來源門市的庫存裡
-        # (跟銷貨同一套規則:同一支 IMEI 同時被銷貨與調撥選到,只會有一邊成功)
-        from .models import TransferOrderItemSerial
-
-        list(
-            ProductSerial.objects.select_for_update()
-            .filter(pk__in=TransferOrderItemSerial.objects.filter(item__to=to).values_list("serial_id", flat=True))
-            .order_by("pk").values_list("pk", flat=True)
+        # 先鎖再檢查、再改(規則見 apps/inventory/locking.py):這張單的序號、來源門市的庫存餘額。
+        # 同一支 IMEI 同時被銷貨與調撥選到,只會有一邊成功。
+        lock_document(to)
+        lock_stock_rows(
+            to.tenant, serial_ids=_serial_ids(to),
+            balances=[(it.product, to.from_warehouse) for it in _stock_items(items)],
         )
         _validate_dispatch(to, items)
         for it in items:
@@ -139,11 +149,13 @@ def dispatch_transfer_order(to: TransferOrder) -> TransferOrder:
                         note=f"調撥單 {to.no} 派發 第 {it.line_no} 行",
                     )
             else:
-                src = StockBalance.objects.get(
-                    tenant=to.tenant,
-                    product=product,
-                    warehouse=to.from_warehouse,
-                )
+                src = locked_balance(to.tenant, product, to.from_warehouse)
+                if src is None or src.qty < it.qty:
+                    # 同一個商品在這張單出現好幾行時,前面幾行已經扣掉一部分
+                    raise TransferOrderError(
+                        f"第 {it.line_no} 行 {product.sku} 在 {to.from_warehouse.code} "
+                        f"現有 {src.qty if src else 0},不足調撥 {it.qty}"
+                    )
                 it.unit_cost_at_dispatch = src.weighted_avg_cost
                 it.save(update_fields=["unit_cost_at_dispatch"])
                 src.qty -= it.qty
@@ -168,20 +180,29 @@ def dispatch_transfer_order(to: TransferOrder) -> TransferOrder:
 
 
 def confirm_transfer_order(to: TransferOrder, user=None) -> TransferOrder:
-    """目的倉確認入庫。"""
-    if to.is_void:
-        raise TransferOrderError("此單已作廢,無法確認")
-    if to.status != TransferOrder.Status.DISPATCHED:
-        raise TransferOrderError("此單非派發中狀態,無法確認")
+    """目的倉確認入庫。
 
-    items = list(
-        to.items.select_related("product")
-        .prefetch_related("serials__serial")
-        .all()
-    )
-    _check_company(to, items)
-
+    鎖住這張調撥單之後才看它是不是還在「派發中」:兩個人同時按確認只會入庫一次。
+    """
     with transaction.atomic():
+        if lock_document(to) is None:
+            raise TransferOrderError("找不到這張調撥單")
+        if to.is_void:
+            raise TransferOrderError("此單已作廢,無法確認")
+        if to.status != TransferOrder.Status.DISPATCHED:
+            raise TransferOrderError("此單非派發中狀態,無法確認")
+
+        items = list(
+            to.items.select_related("product")
+            .prefetch_related("serials__serial")
+            .all()
+        )
+        _check_company(to, items)
+        lock_stock_rows(
+            to.tenant, serial_ids=_serial_ids(to),
+            balances=[(it.product, to.to_warehouse) for it in _stock_items(items)],
+            create=True,
+        )
         now = timezone.now()
         for it in items:
             product = it.product
@@ -206,11 +227,7 @@ def confirm_transfer_order(to: TransferOrder, user=None) -> TransferOrder:
                         note=f"調撥單 {to.no} 確認 第 {it.line_no} 行",
                     )
             else:
-                dst, _ = StockBalance.objects.get_or_create(
-                    tenant=to.tenant,
-                    product=product,
-                    warehouse=to.to_warehouse,
-                )
+                dst = locked_balance(to.tenant, product, to.to_warehouse, create=True)
                 new_qty = dst.qty + it.qty
                 if new_qty > 0:
                     old_value = Decimal(dst.qty) * dst.weighted_avg_cost
@@ -243,40 +260,50 @@ def void_transfer_order(to: TransferOrder) -> TransferOrder:
     """智能回滾。
     - 派發中:序號 in_transit → in_stock 回來源倉;配件 balance 回補來源倉
     - 已完成:序號從目的倉移回來源倉(必須仍 in_stock);配件目的倉扣、來源倉加
+
+    鎖住這張調撥單之後才看它是「派發中」還是「已完成」、是不是已經作廢:
+    作廢與確認同時按、或兩個人同時按作廢,都只會照其中一個先後順序做一次。
     """
-    if to.is_void:
-        raise TransferOrderError("此單已作廢")
+    with transaction.atomic():
+        if lock_document(to) is None:
+            raise TransferOrderError("找不到這張調撥單")
+        if to.is_void:
+            raise TransferOrderError("此單已作廢")
 
-    items = list(
-        to.items.select_related("product")
-        .prefetch_related("serials__serial")
-        .all()
-    )
-    is_confirmed = to.status == TransferOrder.Status.CONFIRMED
+        items = list(
+            to.items.select_related("product")
+            .prefetch_related("serials__serial")
+            .all()
+        )
+        is_confirmed = to.status == TransferOrder.Status.CONFIRMED
+        stock_items = _stock_items(items)
+        lock_stock_rows(
+            to.tenant, serial_ids=_serial_ids(to),
+            balances=[(it.product, to.from_warehouse) for it in stock_items]
+            + ([(it.product, to.to_warehouse) for it in stock_items] if is_confirmed else []),
+            create=True,
+        )
 
-    # 預檢
-    # 序號商品:不再因序號狀態不符而擋下作廢。
-    #   序號若已脫離本單掌控(被其他流程動走,例如又被別張單調走 / 銷貨 / 手動改),
-    #   作廢時會「跳過該序號回滾」(不硬搬,避免弄亂已在別處正常使用的序號),
-    #   只記一筆 audit。這樣派發中 / 已完成的單都不會變成無法作廢的死鎖單。
-    #   配件(非序號)在「已完成」作廢時仍須檢查目的倉數量足夠,否則會變負庫存。
-    for it in items:
-        product = it.product
-        if not product.requires_serial:
-            if is_confirmed:
-                bal = StockBalance.objects.filter(
-                    tenant=to.tenant,
-                    product=product,
-                    warehouse=to.to_warehouse,
-                ).first()
+        # 預檢(鎖到之後)
+        # 序號商品:不再因序號狀態不符而擋下作廢。
+        #   序號若已脫離本單掌控(被其他流程動走,例如又被別張單調走 / 銷貨 / 手動改),
+        #   作廢時會「跳過該序號回滾」(不硬搬,避免弄亂已在別處正常使用的序號),
+        #   只記一筆 audit。這樣派發中 / 已完成的單都不會變成無法作廢的死鎖單。
+        #   配件(非序號)在「已完成」作廢時仍須檢查目的倉數量足夠,否則會變負庫存
+        #   (同一個商品在這張單出現好幾行時要加總)。
+        if is_confirmed:
+            need = {}
+            for it in stock_items:
+                need[it.product_id] = need.get(it.product_id, 0) + it.qty
+            for it in stock_items:
+                bal = locked_balance(to.tenant, it.product, to.to_warehouse)
                 current = bal.qty if bal else 0
-                if current < it.qty:
+                if current < need[it.product_id]:
                     raise TransferOrderError(
-                        f"商品 {product.sku} 在目的倉 {to.to_warehouse.code} "
-                        f"現有 {current},無法退回本單的 {it.qty} 件"
+                        f"商品 {it.product.sku} 在目的倉 {to.to_warehouse.code} "
+                        f"現有 {current},無法退回本單的 {need[it.product_id]} 件"
                     )
 
-    with transaction.atomic():
         for it in items:
             product = it.product
             if product.requires_serial:
@@ -328,22 +355,14 @@ def void_transfer_order(to: TransferOrder) -> TransferOrder:
                         )
             else:
                 if is_confirmed:
-                    dst = StockBalance.objects.get(
-                        tenant=to.tenant,
-                        product=product,
-                        warehouse=to.to_warehouse,
-                    )
+                    dst = locked_balance(to.tenant, product, to.to_warehouse)
                     dst.qty -= it.qty
                     if dst.qty == 0:
                         dst.weighted_avg_cost = Decimal("0")
                     dst.save(update_fields=["qty", "weighted_avg_cost"])
 
                 # 回補來源倉
-                src, _ = StockBalance.objects.get_or_create(
-                    tenant=to.tenant,
-                    product=product,
-                    warehouse=to.from_warehouse,
-                )
+                src = locked_balance(to.tenant, product, to.from_warehouse, create=True)
                 # 加權平均:用 unit_cost_at_dispatch 還原
                 new_qty = src.qty + it.qty
                 if new_qty > 0:

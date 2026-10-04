@@ -17,6 +17,7 @@ from django.utils import timezone
 
 from apps.catalog.models import Category, Product
 from apps.core.tenant_fields import same_company as _same_company
+from apps.inventory.locking import lock_stock_rows, locked_balance as _locked_balance
 from apps.inventory.models import ProductSerial, StockBalance, StockMovement
 from apps.parties.models import Customer, SimCard, TelecomPlan
 from apps.tenants.services import InvoiceTrackError, assign_invoice_no
@@ -38,41 +39,13 @@ class SalesOrderError(Exception):
     """銷貨業務錯誤;由 view 轉成 400 回應。"""
 
 
-
-
-def _locked_balance(tenant, product, warehouse, create=False):
-    """鎖住「這個門市這個商品」的庫存餘額再讀。
-
-    庫存數量是「讀出來 → 加減 → 存回去」;不先鎖的話,兩張單同時動同一個商品(就算是不同的
-    銷貨單 / 銷退單)會各自讀到同一個舊數字,最後只算到一次。要在交易內呼叫。
-    """
-    if create:
-        StockBalance.objects.get_or_create(
-            tenant=tenant, product=product, warehouse=warehouse,
-            defaults={"qty": 0, "weighted_avg_cost": Decimal("0")},
-        )
-    return (
-        StockBalance.objects.select_for_update()
-        .filter(tenant=tenant, product=product, warehouse=warehouse)
-        .first()
-    )
-
-
 def _lock_rows(tenant, warehouse, serial_ids=(), sim_ids=(), products=(), create=False):
-    """這張單會動到的序號、SIM 卡、庫存餘額,先照固定順序鎖住(序號 → 卡 → 餘額,各自照編號)。
-
-    - 不鎖的話,兩張單同時選到同一支 IMEI / 同一張卡,會各自看到「在庫」而都賣出去。
-    - 順序固定:兩張單的商品順序相反時才不會互相等到死結。
-    要在交易內呼叫;鎖完之後再檢查狀態。
-    """
-    if serial_ids:
-        list(ProductSerial.objects.select_for_update().filter(pk__in=list(serial_ids))
-             .order_by("pk").values_list("pk", flat=True))
-    if sim_ids:
-        list(SimCard.objects.select_for_update().filter(pk__in=list(sim_ids))
-             .order_by("pk").values_list("pk", flat=True))
-    for product in sorted({p.pk: p for p in products}.values(), key=lambda p: p.pk):
-        _locked_balance(tenant, product, warehouse, create=create)
+    """這張單會動到的序號、SIM 卡、這家門市的庫存餘額,先照固定順序鎖住再檢查。
+    規則與原因見 apps/inventory/locking.py(銷貨、進貨、調撥、維修共用)。"""
+    lock_stock_rows(
+        tenant, serial_ids=serial_ids, sim_ids=sim_ids,
+        balances=[(p, warehouse) for p in products], create=create,
+    )
 
 
 def _stock_products(items):

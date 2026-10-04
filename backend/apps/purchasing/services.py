@@ -17,6 +17,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.tenant_fields import same_company
+from apps.inventory.locking import lock_document, lock_stock_rows, locked_balance
 from apps.inventory.models import ProductSerial, StockBalance, StockMovement
 
 from .models import PurchaseOrder, PurchaseOrderItem
@@ -146,9 +147,22 @@ def _calc_doc_tax(items, tax_method: str):
 def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
     """進貨單儲存即觸發,寫所有業務副作用。"""
     items = list(po.items.select_related("product", "product__condition").all())
-    _validate_items(po, items)
+    # 同一個商品出現在好幾行時共用同一個物件(加權平均成本一行一行往下算,不能各算各的)
+    shared = {}
+    for it in items:
+        it.product = shared.setdefault(it.product_id, it.product)
 
     with transaction.atomic():
+        # 先鎖再檢查、再改(規則見 apps/inventory/locking.py):這張單要改成本的商品、要加數量的庫存餘額
+        lock_document(po)
+        lock_stock_rows(
+            po.tenant,
+            products=[it.product for it in items if not it.product.is_virtual],
+            balances=[(it.product, po.warehouse) for it in items
+                      if not it.product.requires_serial and not it.product.is_virtual],
+            create=True,
+        )
+        _validate_items(po, items)
         # 1. 每筆明細:
         #    - billed_qty 未填 → 預設等於 qty
         #    - 一般商品:amount = billed_qty × unit_price(贈品不計價),
@@ -301,11 +315,7 @@ def _update_balance_on_purchase(po, it, product):
     """配件進貨:把該倉的 StockBalance 加上去並重算加權平均。
     同時重算 Product.weighted_avg_cost(跨倉聚合,供報表)。
     """
-    balance, _ = StockBalance.objects.get_or_create(
-        tenant=po.tenant,
-        product=product,
-        warehouse=po.warehouse,
-    )
+    balance = locked_balance(po.tenant, product, po.warehouse, create=True)
     batch_net_total = it.unit_landed_cost * Decimal(it.qty)
     new_qty = balance.qty + it.qty
     if new_qty > 0:
@@ -372,46 +382,70 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
     """整單作廢:
     - 序號商品:該單建的序號全須仍 in_stock 才能作廢
     - 配件:該倉 StockBalance 數量需 >= 本單進量(賣掉/調走的不能還回去)
+
+    全部在交易內、上鎖之後才檢查(兩個人同時按作廢只會做一次;檢查完到扣庫存之間
+    不會被別張單插進來)。
     """
-    if po.is_void:
-        raise PurchaseOrderError("此單已作廢")
-
-    items = list(po.items.select_related("product", "product__condition").all())
-    serials_qs = ProductSerial.objects.for_tenant(po.tenant).filter(
-        purchase_order_item__in=items
-    )
-    not_in_stock = serials_qs.exclude(status=ProductSerial.Status.IN_STOCK)
-    if not_in_stock.exists():
-        sample = list(not_in_stock.values_list("serial_no", flat=True)[:3])
-        raise PurchaseOrderError(
-            f"序號已動用,無法作廢:{', '.join(sample)}"
-        )
-
-    # 預先驗證配件庫存夠不夠扣
-    for it in items:
-        product = it.product
-        if product.requires_serial or product.is_virtual:
-            continue
-        balance = StockBalance.objects.filter(
-            tenant=po.tenant, product=product, warehouse=po.warehouse
-        ).first()
-        if not balance or balance.qty < it.qty:
-            current = balance.qty if balance else 0
-            raise PurchaseOrderError(
-                f"商品 {product.sku} 在 {po.warehouse.code} 現有 {current},"
-                f"無法回退本單的 {it.qty} 件(部分已售出/調撥)"
-            )
+    from apps.catalog.models import Product
 
     with transaction.atomic():
+        if lock_document(po) is None:
+            raise PurchaseOrderError("找不到這張進貨單")
+        if po.is_void:
+            raise PurchaseOrderError("此單已作廢")
+
+        items = list(po.items.select_related("product", "product__condition").all())
+        stock_items = [
+            it for it in items if not it.product.requires_serial and not it.product.is_virtual
+        ]
+        serial_ids = list(
+            ProductSerial.objects.for_tenant(po.tenant)
+            .filter(purchase_order_item__in=items).values_list("pk", flat=True)
+        )
+        lock_stock_rows(
+            po.tenant,
+            products=[it.product for it in items if not it.product.is_virtual],
+            serial_ids=serial_ids,
+            balances=[(it.product, po.warehouse) for it in stock_items],
+        )
+
+        serials = list(ProductSerial.objects.filter(pk__in=serial_ids).order_by("pk"))
+        # 要還在這張單進貨的門市、而且在庫:已經賣掉、調走(就算在別家門市是在庫)都算動用過
+        moved = [
+            x.serial_no for x in serials
+            if x.status != ProductSerial.Status.IN_STOCK or x.warehouse_id != po.warehouse_id
+        ]
+        if moved:
+            raise PurchaseOrderError(
+                f"序號已動用,無法作廢:{', '.join(moved[:3])}"
+            )
+
+        # 配件庫存夠不夠扣(同一個商品在這張單出現好幾行時要加總)
+        need = {}
+        for it in stock_items:
+            need[it.product_id] = need.get(it.product_id, 0) + it.qty
+        balances = {}
+        for it in stock_items:
+            if it.product_id in balances:
+                continue
+            balance = locked_balance(po.tenant, it.product, po.warehouse)
+            current = balance.qty if balance else 0
+            if current < need[it.product_id]:
+                raise PurchaseOrderError(
+                    f"商品 {it.product.sku} 在 {po.warehouse.code} 現有 {current},"
+                    f"無法回退本單的 {need[it.product_id]} 件(部分已售出/調撥)"
+                )
+            balances[it.product_id] = balance
+
         affected_product_ids = set()
-        for s in serials_qs:
-            affected_product_ids.add(s.product_id)
-            s.status = ProductSerial.Status.VOID
-            s.warehouse = None
-            s.save(update_fields=["status", "warehouse"])
+        for x in serials:
+            affected_product_ids.add(x.product_id)
+            x.status = ProductSerial.Status.VOID
+            x.warehouse = None
+            x.save(update_fields=["status", "warehouse"])
             StockMovement.objects.create(
                 tenant=po.tenant,
-                serial=s,
+                serial=x,
                 movement_type=StockMovement.MovementType.VOID,
                 from_warehouse=po.warehouse,
                 ref_doc_type="purchase_order",
@@ -420,14 +454,10 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
             )
 
         # 配件:從本倉 balance 扣掉本單進貨量
-        for it in items:
+        for it in stock_items:
             product = it.product
-            if product.requires_serial or product.is_virtual:
-                continue
             affected_product_ids.add(product.id)
-            balance = StockBalance.objects.get(
-                tenant=po.tenant, product=product, warehouse=po.warehouse
-            )
+            balance = balances[product.id]
             balance.qty -= it.qty
             if balance.qty == 0:
                 balance.weighted_avg_cost = Decimal("0")
@@ -444,11 +474,8 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
             )
 
         # 重算加權平均(受影響商品)
-        from apps.catalog.models import Product
-
-        for pid in affected_product_ids:
-            product = Product.objects.get(pk=pid)
-            _recompute_product_avg_cost(po.tenant, product)
+        for pid in sorted(affected_product_ids):
+            _recompute_product_avg_cost(po.tenant, Product.objects.get(pk=pid))
 
         po.is_void = True
         po.save(update_fields=["is_void"])
