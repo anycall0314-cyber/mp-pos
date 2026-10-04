@@ -8,7 +8,7 @@ from django.http import HttpResponse
 from django.urls import NoReverseMatch, reverse
 from rest_framework import status
 from rest_framework.authentication import TokenAuthentication
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from .models import TenantMaintenance
@@ -79,12 +79,16 @@ class MaintenanceAwareTokenAuthentication(TokenAuthentication):
         user, _token = result
         if request.path.startswith(_EXEMPT_PREFIXES):
             return result
-        from apps.tenants.middleware import effective_tenant_id
+        from apps.tenants.middleware import effective_tenant_id, may_switch_company
 
         profile = getattr(user, "profile", None)
         has_company = bool(profile is not None and profile.tenant_id)
         if not has_company and request.path.startswith(_PLATFORM_PREFIX):
             return result
+        # 沒綁公司、又不是平台管理員的帳號,不能用任何公司的資料
+        # (否則會落到預設公司,或靠 ?tenant= 切到任何一家)
+        if not has_company and not may_switch_company(user):
+            raise PermissionDenied("這個帳號沒有綁定公司")
         # 看的是「這個請求實際會落在哪一家公司」,跟 TenantMiddleware 同一套規則:
         # 沒有自己公司的帳號不帶 ?tenant=(或帶了不存在的編號)會落到預設公司,
         # 預設公司在維護中就要擋。

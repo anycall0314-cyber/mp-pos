@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.catalog.models import Product
+from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
 
 from .models import (
     RepairItem,
@@ -11,7 +12,15 @@ from .models import (
 )
 
 
-class RepairItemPartSerializer(serializers.ModelSerializer):
+def _own_parts(tenant, ids):
+    """parts_input 是原始編號(不是關聯欄位):這裡確認每一個零件都是這家公司的商品。"""
+    found = {p.pk: p for p in Product.objects.filter(tenant=tenant, pk__in=list(ids))}
+    if set(ids) - set(found):
+        raise serializers.ValidationError({"parts_input": "零件不屬於這家公司"})
+    return found
+
+
+class RepairItemPartSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     part_name = serializers.CharField(source="part_product.name", read_only=True)
     part_sku = serializers.CharField(source="part_product.sku", read_only=True)
 
@@ -20,7 +29,7 @@ class RepairItemPartSerializer(serializers.ModelSerializer):
         fields = ["id", "part_product", "part_name", "part_sku", "default_qty"]
 
 
-class RepairItemSerializer(serializers.ModelSerializer):
+class RepairItemSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     parts = RepairItemPartSerializer(many=True, read_only=True)
     model_keys = serializers.ListField(
         child=serializers.CharField(),
@@ -97,6 +106,7 @@ class RepairItemSerializer(serializers.ModelSerializer):
             for r in parts_input
             if r.get("part_product")
         }
+        _own_parts(tenant, wanted)
         existing = {p.part_product_id: p for p in item.parts.all()}
         for pid, row in existing.items():
             if pid not in wanted:
@@ -114,7 +124,7 @@ class RepairItemSerializer(serializers.ModelSerializer):
                 )
 
 
-class RepairOrderPartSerializer(serializers.ModelSerializer):
+class RepairOrderPartSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     part_name = serializers.CharField(source="part_product.name", read_only=True)
     part_sku = serializers.CharField(source="part_product.sku", read_only=True)
 
@@ -131,7 +141,7 @@ class RepairOrderPartSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "part_name", "part_sku", "unit_cost"]
 
 
-class RepairOrderSerializer(serializers.ModelSerializer):
+class RepairOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     parts = RepairOrderPartSerializer(many=True, read_only=True)
     parts_input = serializers.ListField(
         child=serializers.DictField(),
@@ -301,6 +311,7 @@ class RepairOrderSerializer(serializers.ModelSerializer):
             wanted[pid] = {
                 "qty": int(r.get("qty") or 1),
             }
+        own = _own_parts(tenant, wanted)
         existing = {p.part_product_id: p for p in order.parts.all()}
         for pid, row in existing.items():
             if pid not in wanted:
@@ -312,7 +323,7 @@ class RepairOrderSerializer(serializers.ModelSerializer):
             if pid not in existing:
                 # snapshot 當下成本(完工時會再 refresh 一次)
                 from decimal import Decimal
-                part = Product.objects.for_tenant(tenant).get(pk=pid)
+                part = own[pid]
                 RepairOrderPart.objects.create(
                     tenant=tenant,
                     repair_order=order,

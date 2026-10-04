@@ -18,6 +18,21 @@ destination 都算自己倉)。
 from rest_framework.exceptions import PermissionDenied
 
 
+def report_warehouse_id(request):
+    """報表 / 首頁摘要用的門市範圍。
+
+    鎖倉帳號 → 自己門市;鎖倉卻沒有設定門市(設定不完整)→ 403,不能因此變成看全公司;
+    沒鎖倉 → 網址的 ?warehouse=(沒帶就是 None = 全公司)。
+    """
+    profile = getattr(request.user, "profile", None)
+    if profile and profile.is_warehouse_locked:
+        if not profile.default_warehouse_id:
+            raise PermissionDenied("這個帳號鎖定門市但還沒有設定門市")
+        return profile.default_warehouse_id
+    raw = request.query_params.get("warehouse")
+    return int(raw) if raw and raw.isdigit() else None
+
+
 class WarehouseScopedMixin:
     warehouse_field = "warehouse"
 
@@ -94,11 +109,15 @@ class TransferWarehouseScopedMixin(WarehouseScopedMixin):
             )
         return qs
 
-    def perform_create(self, serializer):
+    def check_create_warehouse(self, serializer):
+        """調撥:鎖倉帳號只能從自己門市調出。"""
         ids = self._allowed_warehouse_ids()
         if ids is not None:
             src = serializer.validated_data.get(self.source_field)
             src_id = getattr(src, "id", src)
             if src_id not in ids:
                 raise PermissionDenied("不可從非自己門市調出")
+
+    def perform_create(self, serializer):
+        self.check_create_warehouse(serializer)
         return super(WarehouseScopedMixin, self).perform_create(serializer)

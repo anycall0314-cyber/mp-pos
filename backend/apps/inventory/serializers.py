@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
+
 from .models import ProductSerial, StockBalance, StockMovement, Warehouse
 
 
@@ -16,7 +18,7 @@ class _TenantUniqueMixin:
         return value
 
 
-class WarehouseSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
+class WarehouseSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
     class Meta:
         model = Warehouse
         fields = [
@@ -35,7 +37,7 @@ class WarehouseSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
         return self._tenant_unique(Warehouse.objects, "code", value)
 
 
-class ProductSerialSerializer(serializers.ModelSerializer):
+class ProductSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_is_secondhand = serializers.BooleanField(
@@ -103,7 +105,7 @@ class ProductSerialSerializer(serializers.ModelSerializer):
         ]
 
 
-class StockBalanceSerializer(serializers.ModelSerializer):
+class StockBalanceSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
     warehouse_code = serializers.CharField(source="warehouse.code", read_only=True)
@@ -137,7 +139,7 @@ class StockBalanceSerializer(serializers.ModelSerializer):
         ]
 
 
-class StockMovementSerializer(serializers.ModelSerializer):
+class StockMovementSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     serial_no = serializers.CharField(source="serial.serial_no", read_only=True)
     type_label = serializers.CharField(source="get_movement_type_display", read_only=True)
 

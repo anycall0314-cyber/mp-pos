@@ -12,6 +12,15 @@ def _get_default_tenant():
     return tenant
 
 
+def may_switch_company(user) -> bool:
+    """沒有自己公司的帳號裡,只有平台管理員(與系統 superuser)可以用 ?tenant= / X-Tenant-ID
+    指定要看哪一家公司。其他沒綁公司的帳號不行(登入驗證那一層會直接擋下,見 backup/auth.py)。"""
+    if not user or not user.is_authenticated:
+        return False
+    profile = getattr(user, "profile", None)
+    return bool(user.is_superuser or (profile and profile.role == "platform_admin"))
+
+
 def _resolve_tenant_from_request(request):
     """登入後從 user.profile.tenant 取;否則 fallback 到 DEFAULT_TENANT_ID。
 
@@ -29,8 +38,8 @@ def _resolve_tenant_from_request(request):
         profile = getattr(user, "profile", None)
         if profile and profile.tenant_id:
             return profile.tenant
-        tenant_id = request.GET.get("tenant") or request.headers.get(
-            "X-Tenant-ID"
+        tenant_id = may_switch_company(user) and (
+            request.GET.get("tenant") or request.headers.get("X-Tenant-ID")
         )
         if tenant_id and str(tenant_id).isdigit():
             try:
@@ -53,7 +62,9 @@ def effective_tenant_id(request, user):
     profile = getattr(user, "profile", None)
     if profile and profile.tenant_id:
         return profile.tenant_id
-    raw = request.GET.get("tenant") or request.headers.get("X-Tenant-ID")
+    raw = may_switch_company(user) and (
+        request.GET.get("tenant") or request.headers.get("X-Tenant-ID")
+    )
     if raw and str(raw).isdigit() and Tenant.objects.filter(pk=int(raw)).exists():
         return int(raw)
     return settings.DEFAULT_TENANT_ID

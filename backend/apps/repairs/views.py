@@ -75,6 +75,7 @@ class RepairOrderViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
+        self.check_create_warehouse(serializer)
         serializer.save(tenant=self.request.tenant)
 
     @action(detail=True, methods=["post"], url_path="set-status")
@@ -97,7 +98,10 @@ class RepairOrderViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
     def complete(self, request, pk=None):
         """轉「完成」狀態:扣零件倉庫存 + 寫異動。"""
         order = self.get_object()
-        complete_repair_order(order)
+        try:
+            complete_repair_order(order)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(order).data)
 
     @action(detail=True, methods=["post"], url_path="reopen")

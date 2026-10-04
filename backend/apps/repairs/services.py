@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.db import transaction
 
 from apps.catalog.models import Product
+from apps.core.tenant_fields import same_company
 from apps.inventory.models import StockBalance, StockMovement
 
 from .models import RepairOrder, RepairOrderPart
@@ -121,6 +122,12 @@ def complete_repair_order(repair_order: RepairOrder) -> None:
 
     tenant = repair_order.tenant
     wh = repair_order.warehouse
+    lines = list(repair_order.parts.select_related("part_product"))
+    parts = [line.part_product for line in lines]
+    if not same_company(tenant.pk, wh, repair_order.customer, repair_order.sales_person,
+                        repair_order.technician, repair_order.repair_item,
+                        repair_order.external_vendor, *lines, *parts):
+        raise ValueError("維修單掛到的門市 / 客戶 / 人員 / 項目 / 廠商 / 零件不屬於這家公司")
 
     # 自修:依 RepairOrderPart 扣零件倉庫存
     if repair_order.mode == RepairOrder.Mode.IN_HOUSE:

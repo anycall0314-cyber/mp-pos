@@ -17,7 +17,7 @@ from .models import (
 )
 
 
-class SalesOrderPaymentSerializer(serializers.ModelSerializer):
+class SalesOrderPaymentSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     method_label = serializers.SerializerMethodField()
     method_kind = serializers.SerializerMethodField()
 
@@ -56,7 +56,7 @@ class SalesOrderPaymentSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "method_label", "method_kind"]
 
 
-class SalesOrderItemSerialSerializer(serializers.ModelSerializer):
+class SalesOrderItemSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     serial_no = serializers.CharField(source="serial.serial_no", read_only=True)
 
     class Meta:
@@ -224,6 +224,7 @@ class SalesOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSeri
             "updated_at",
         ]
         read_only_fields = [
+            "created_by",
             "id",
             "no",
             "customer_phone",
@@ -327,7 +328,7 @@ class LegacyPurchaseSerializer(TenantScopedRelatedFieldsMixin, serializers.Model
         ]
 
 
-class SalesReturnItemSerialSerializer(serializers.ModelSerializer):
+class SalesReturnItemSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     serial_no = serializers.CharField(source="serial.serial_no", read_only=True)
 
     class Meta:
@@ -390,7 +391,8 @@ class SalesReturnItemSerializer(TenantScopedRelatedFieldsMixin, serializers.Mode
 
 
 class SalesReturnSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
-    items = SalesReturnItemSerializer(many=True, required=False)
+    # 銷退只能整張退:明細由系統照原銷貨單每一行、每一台帶入,呼叫端不送
+    items = SalesReturnItemSerializer(many=True, read_only=True)
     original_so_no = serializers.CharField(source="original_so.no", read_only=True)
     original_so_doc_date = serializers.DateField(
         source="original_so.doc_date", read_only=True
@@ -430,11 +432,15 @@ class SalesReturnSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSer
             "created_at",
             "updated_at",
         ]
-        # 退回門市沒給就用原銷貨單的門市(在 validate() 補,門市鎖檢查才看得到)
-        extra_kwargs = {"warehouse": {"required": False}}
+        # 總額 0 的銷貨單(贈品)沒有付款方式,退的時候可以不填
+        extra_kwargs = {"payment_method": {"required": False, "allow_blank": True}}
         read_only_fields = [
+            "created_by",
             "customer",
             "member",
+            # 退回門市一律 = 原銷貨單的門市,不讓呼叫端指定(否則鎖倉店員指定自己門市
+            # 就能退別家門市的銷貨)。在 validate() 放進 attrs,門市鎖檢查看的就是原單門市
+            "warehouse",
             "id",
             "no",
             "original_so_no",
@@ -454,41 +460,40 @@ class SalesReturnSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSer
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
-        if "original_so" in attrs and not attrs.get("warehouse"):
-            attrs["warehouse"] = attrs["original_so"].warehouse
+        so = attrs.get("original_so")
+        if so is not None:
+            if so.is_void:
+                raise serializers.ValidationError({"detail": f"原銷貨單 {so.no} 已作廢,不能銷退"})
+            if SalesReturn.objects.filter(original_so=so, is_void=False).exists():
+                raise serializers.ValidationError({"detail": f"銷貨單 {so.no} 已經退過"})
+            attrs["warehouse"] = so.warehouse
+            if not attrs.get("payment_method") and so.total != 0:
+                raise serializers.ValidationError({"payment_method": "請選退款方式"})
+            attrs.setdefault("payment_method", "")
         return attrs
 
     def create(self, validated_data):
         from datetime import date
 
         validated_data["doc_date"] = date.today()
-        items_data = validated_data.pop("items", [])
         # 由 original_so 自動帶 customer/member/warehouse 預設值,讓前端只送 original_so id 即可
         original_so = validated_data["original_so"]
         # 客戶 / 會員一律跟原銷貨單一樣(欄位唯讀,呼叫端送什麼都不採用)
         validated_data["customer"] = original_so.customer
         validated_data["member"] = original_so.member
-        validated_data.setdefault("warehouse", original_so.warehouse)
+        validated_data["warehouse"] = original_so.warehouse
 
         sr = SalesReturn.objects.create(**validated_data)
-        for idx, item_data in enumerate(items_data, start=1):
-            serial_ids = item_data.pop("serial_ids", [])
-            oi = item_data["original_item"]
-            item_data.setdefault("product", oi.product)
-            item_data.setdefault("unit_price", oi.unit_price)
-            item_data.setdefault("line_no", idx)
-            # amount 在 commit 時計算
+        # 整張退:原單每一行、全部數量、每一台序號(金額在 commit 時照原行實收金額算)
+        for idx, oi in enumerate(
+            original_so.items.select_related("product").order_by("line_no", "id"), start=1
+        ):
             item = SalesReturnItem.objects.create(
-                sr=sr,
-                tenant=sr.tenant,
-                amount=0,
-                **item_data,
+                sr=sr, tenant=sr.tenant, original_item=oi, product=oi.product,
+                qty=oi.qty, unit_price=oi.unit_price, line_no=idx, amount=0,
             )
-            for pos, s in enumerate(serial_ids, start=1):
+            for pos, link in enumerate(oi.serials.order_by("line_pos", "id"), start=1):
                 SalesReturnItemSerial.objects.create(
-                    item=item,
-                    tenant=sr.tenant,
-                    serial=s,
-                    line_pos=pos,
+                    item=item, tenant=sr.tenant, serial_id=link.serial_id, line_pos=pos,
                 )
         return sr

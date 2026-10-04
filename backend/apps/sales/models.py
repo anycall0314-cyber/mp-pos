@@ -372,9 +372,10 @@ class LegacyPurchase(TenantOwnedModel):
 
 
 class SalesReturn(TenantOwnedModel):
-    """銷退單(單頭)。指定一張原銷貨單,line-level 部分退,可分多次退完。
+    """銷退單(單頭)。指定一張原銷貨單,**只能整張退**(2026-10-04 起;明細、金額、稅額、成本
+    全部照抄原單)。舊資料裡可能有當時允許的部分退貨,資料結構為了相容保留一對多的明細。
 
-    - 退款方式必須是原銷貨單實際付款方式之一(service 驗證)
+    - 退款方式必須是原銷貨單實際付款方式之一(service 驗證;原單總額 0 時不用)
     - 提交時把退貨品項的序號回到 returned 狀態 / 配件回 StockBalance
     - void_original_invoice=True 時把原 SalesOrder.invoice_voided 標 True(只標第一次)
     """
@@ -472,7 +473,8 @@ class SalesReturn(TenantOwnedModel):
 
 
 class SalesReturnItem(TenantOwnedModel):
-    """銷退單明細;一筆對一行 SalesOrderItem,可只退原行的一部分數量。"""
+    """銷退單明細;一筆對一行 SalesOrderItem。現在一律整行退(數量 = 原行數量);
+    舊資料可能只退了原行的一部分。"""
 
     sr = models.ForeignKey(
         SalesReturn,

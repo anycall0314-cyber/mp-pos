@@ -16,6 +16,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_fields import same_company
 from apps.inventory.models import ProductSerial, StockBalance, StockMovement
 
 from .models import PurchaseOrder, PurchaseOrderItem
@@ -59,6 +60,11 @@ def _serial_cost(entry: dict, fallback_unit_price: Decimal) -> Decimal:
 def _validate_items(po: PurchaseOrder, items):
     if not items:
         raise PurchaseOrderError("無明細,無法過帳")
+    if not same_company(po.tenant_id, po.supplier, po.warehouse, po.category, po.payment_method):
+        raise PurchaseOrderError("供應商 / 門市 / 進貨類別 / 付款方式不屬於這家公司")
+    for it in items:
+        if not same_company(po.tenant_id, it, it.product):
+            raise PurchaseOrderError(f"第 {it.line_no} 行的商品不屬於這家公司")
 
     all_serials = []
     for it in items:

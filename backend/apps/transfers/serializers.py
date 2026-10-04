@@ -1,11 +1,13 @@
 from rest_framework import serializers
 
+from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
+
 from apps.inventory.models import ProductSerial
 
 from .models import TransferOrder, TransferOrderItem, TransferOrderItemSerial
 
 
-class TransferOrderItemSerialSerializer(serializers.ModelSerializer):
+class TransferOrderItemSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     serial_no = serializers.CharField(source="serial.serial_no", read_only=True)
 
     class Meta:
@@ -14,7 +16,7 @@ class TransferOrderItemSerialSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "serial_no"]
 
 
-class TransferOrderItemSerializer(serializers.ModelSerializer):
+class TransferOrderItemSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_requires_serial = serializers.BooleanField(
@@ -50,7 +52,7 @@ class TransferOrderItemSerializer(serializers.ModelSerializer):
         ]
 
 
-class TransferOrderSerializer(serializers.ModelSerializer):
+class TransferOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     items = TransferOrderItemSerializer(many=True, required=False)
     from_warehouse_code = serializers.CharField(
         source="from_warehouse.code", read_only=True
@@ -92,6 +94,7 @@ class TransferOrderSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = [
+            "created_by",
             "id",
             "no",
             "from_warehouse_code",

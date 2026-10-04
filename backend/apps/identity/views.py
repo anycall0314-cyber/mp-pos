@@ -177,14 +177,23 @@ class IntakeBatchViewSet(
         return qs
 
     def _lookup_supplier_warehouse(self, data):
-        supplier = warehouse = None
-        if data.get("supplier"):
-            supplier = Supplier.objects.for_tenant(self.request.tenant).filter(
-                id=data["supplier"]).first()
-        if data.get("warehouse"):
-            warehouse = Warehouse.objects.for_tenant(self.request.tenant).filter(
-                id=data["warehouse"]).first()
-        return supplier, warehouse
+        """供應商 / 門市是原始編號:有送就一定要是這家公司的,找不到回 400(不靜默當成空白)。"""
+        from rest_framework.exceptions import ValidationError
+
+        found = {}
+        for field, model in (("supplier", Supplier), ("warehouse", Warehouse)):
+            raw = data.get(field)
+            if not raw:
+                found[field] = None
+                continue
+            obj = (
+                model.objects.for_tenant(self.request.tenant).filter(id=raw).first()
+                if str(raw).isdigit() else None
+            )
+            if obj is None:
+                raise ValidationError({field: "找不到這筆資料"})
+            found[field] = obj
+        return found["supplier"], found["warehouse"]
 
     def _user(self):
         u = getattr(self.request, "user", None)

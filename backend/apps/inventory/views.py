@@ -17,6 +17,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
+from apps.core.warehouse_scoping import report_warehouse_id
 from apps.catalog.models import Product, ProductRelation
 from apps.sales.models import SalesOrder, SalesOrderItem, SalesOrderItemSerial
 
@@ -408,15 +409,8 @@ def inventory_alerts(request):
       replacing_review / clearance_remain
     """
     tenant = request.tenant
-    profile = getattr(request.user, "profile", None)
 
-    wid = None
-    if profile and profile.is_warehouse_locked and profile.default_warehouse_id:
-        wid = profile.default_warehouse_id
-    else:
-        q_wh = request.query_params.get("warehouse")
-        if q_wh and q_wh.isdigit():
-            wid = int(q_wh)
+    wid = report_warehouse_id(request)
 
     serial_sq, balance_sq = _build_stock_annotation(tenant, wid)
 
@@ -557,15 +551,8 @@ def clearance_pressure(request):
     日均 = 0 時用 999 表示「無銷售紀錄」(極端高壓力)。
     """
     tenant = request.tenant
-    profile = getattr(request.user, "profile", None)
 
-    wid = None
-    if profile and profile.is_warehouse_locked and profile.default_warehouse_id:
-        wid = profile.default_warehouse_id
-    else:
-        q_wh = request.query_params.get("warehouse")
-        if q_wh and q_wh.isdigit():
-            wid = int(q_wh)
+    wid = report_warehouse_id(request)
 
     serial_sq, balance_sq = _build_stock_annotation(tenant, wid)
 
@@ -673,7 +660,6 @@ def parts_usage_report(request):
     from datetime import date as date_cls
 
     tenant = request.tenant
-    profile = getattr(request.user, "profile", None)
 
     today = date_cls.today()
     from_str = request.query_params.get("from", "").strip()
@@ -686,13 +672,7 @@ def parts_usage_report(request):
     except ValueError:
         return Response({"detail": "日期格式錯誤(YYYY-MM-DD)"}, status=400)
 
-    wid = None
-    if profile and profile.is_warehouse_locked and profile.default_warehouse_id:
-        wid = profile.default_warehouse_id
-    else:
-        q_wh = request.query_params.get("warehouse")
-        if q_wh and q_wh.isdigit():
-            wid = int(q_wh)
+    wid = report_warehouse_id(request)
 
     # 撈這段期間內所有 repair_usage / parts_transfer 的異動
     mv_qs = (

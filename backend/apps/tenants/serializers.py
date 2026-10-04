@@ -1,16 +1,18 @@
 from rest_framework import serializers
 
+from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
+
 from .models import InvoiceTrack, InvoiceType, PaymentMethod
 
 
-class InvoiceTypeSerializer(serializers.ModelSerializer):
+class InvoiceTypeSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = InvoiceType
         fields = ["id", "code", "name", "sort_order", "is_active", "is_default"]
         read_only_fields = ["id", "code"]
 
 
-class InvoiceTrackSerializer(serializers.ModelSerializer):
+class InvoiceTrackSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     invoice_type_code = serializers.CharField(
         source="invoice_type.code", read_only=True
     )
@@ -71,7 +73,7 @@ class InvoiceTrackSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
-class PaymentMethodSerializer(serializers.ModelSerializer):
+class PaymentMethodSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     kind_label = serializers.CharField(source="get_kind_display", read_only=True)
     # 未指定 code → 自動產生(pm_xxxxxx);使用者只認 name
     code = serializers.CharField(max_length=20, required=False, allow_blank=True)

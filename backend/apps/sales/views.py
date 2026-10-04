@@ -1,9 +1,11 @@
 from django.db import transaction
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from apps.catalog.models import Product
+from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
 from apps.core.warehouse_scoping import WarehouseScopedMixin
 from apps.inventory.models import Warehouse
 from apps.inventory.serializers import ProductSerialSerializer
@@ -27,7 +29,7 @@ from .services import (
 )
 
 
-class SecondhandAcquisitionInputSerializer(serializers.Serializer):
+class SecondhandAcquisitionInputSerializer(TenantScopedRelatedFieldsMixin, serializers.Serializer):
     member = serializers.PrimaryKeyRelatedField(queryset=Member.objects.all())
     warehouse = serializers.PrimaryKeyRelatedField(queryset=Warehouse.objects.all())
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
@@ -199,9 +201,15 @@ class SalesOrderViewSet(
     def secondhand_acquisition(self, request):
         """個人收購入庫:一個 transaction 內建立中古機序號 + 收購二手銷貨單。"""
         tenant = request.tenant
-        in_ser = SecondhandAcquisitionInputSerializer(data=request.data)
+        in_ser = SecondhandAcquisitionInputSerializer(
+            data=request.data, context={"request": request}
+        )
         in_ser.is_valid(raise_exception=True)
         data = in_ser.validated_data
+        # 鎖倉店員只能在自己門市收購
+        allowed = self._allowed_warehouse_ids()
+        if allowed is not None and data["warehouse"].id not in allowed:
+            raise PermissionDenied("不可在非自己門市建立資料")
 
         member = data["member"]
         warehouse = data["warehouse"]
@@ -326,6 +334,11 @@ class SalesReturnViewSet(
         )
         self.check_create_warehouse(serializer)
         with transaction.atomic():
+            # 建立銷退單之前就先鎖原銷貨單。建立銷退時資料庫會替原單上一把較弱的鎖,
+            # 兩張同時送出若都先建立再升級成排他鎖,會互相等到死結。
+            SalesOrder.objects.select_for_update().filter(
+                pk=serializer.validated_data["original_so"].pk, tenant=self.request.tenant
+            ).first()
             serializer.save(tenant=self.request.tenant, created_by=user)
             try:
                 commit_sales_return(serializer.instance)
@@ -410,6 +423,7 @@ class SalesReturnViewSet(
                 "already_returned": already,
                 "remaining": remaining,
                 "unit_price": str(it.unit_price),
+                "amount": str(it.amount),
                 "available_serials": available_serials,
             })
 
@@ -418,9 +432,19 @@ class SalesReturnViewSet(
             so.payments.values_list("method", flat=True).distinct()
         )
 
+        # 銷退只能整張退:已經有有效銷退的單不能再退;收購單不能退
+        returned_by = (
+            SalesReturn.objects.filter(original_so=so, is_void=False)
+            .values_list("no", flat=True).first()
+        )
         return Response({
             "sales_order_id": so.id,
             "sales_order_no": so.no,
+            "total": str(so.total),
+            "subtotal": str(so.subtotal),
+            "tax_amount": str(so.tax_amount),
+            "returned_by": returned_by or "",
+            "is_buyback": so.total < 0,
             "doc_date": so.doc_date,
             "tax_method": so.tax_method,
             "invoice_voided": so.invoice_voided,

@@ -21,6 +21,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
+from apps.core.tenant_fields import same_company
 from apps.inventory.models import ProductSerial, StockBalance, StockMovement
 
 from .models import TransferOrder
@@ -32,9 +33,20 @@ class TransferOrderError(Exception):
     """調撥業務錯誤;view 轉成 400。"""
 
 
+def _check_company(to: TransferOrder, items):
+    if not same_company(to.tenant_id, to.from_warehouse, to.to_warehouse):
+        raise TransferOrderError("來源 / 目的門市不屬於這家公司")
+    for it in items:
+        links = list(it.serials.all())
+        serials = [s.serial for s in links]
+        if not same_company(to.tenant_id, it, it.product, *links, *serials):
+            raise TransferOrderError(f"第 {it.line_no} 行的商品 / 序號不屬於這家公司")
+
+
 def _validate_dispatch(to: TransferOrder, items):
     if not items:
         raise TransferOrderError("無明細,無法過帳")
+    _check_company(to, items)
     if to.from_warehouse_id == to.to_warehouse_id:
         raise TransferOrderError("來源倉與目的倉不可相同")
 
@@ -96,9 +108,18 @@ def dispatch_transfer_order(to: TransferOrder) -> TransferOrder:
         .prefetch_related("serials__serial")
         .all()
     )
-    _validate_dispatch(to, items)
 
     with transaction.atomic():
+        # 先把這張單的序號照編號順序鎖住,再檢查是不是還在來源門市的庫存裡
+        # (跟銷貨同一套規則:同一支 IMEI 同時被銷貨與調撥選到,只會有一邊成功)
+        from .models import TransferOrderItemSerial
+
+        list(
+            ProductSerial.objects.select_for_update()
+            .filter(pk__in=TransferOrderItemSerial.objects.filter(item__to=to).values_list("serial_id", flat=True))
+            .order_by("pk").values_list("pk", flat=True)
+        )
+        _validate_dispatch(to, items)
         for it in items:
             product = it.product
             if product.requires_serial:
@@ -158,6 +179,7 @@ def confirm_transfer_order(to: TransferOrder, user=None) -> TransferOrder:
         .prefetch_related("serials__serial")
         .all()
     )
+    _check_company(to, items)
 
     with transaction.atomic():
         now = timezone.now()

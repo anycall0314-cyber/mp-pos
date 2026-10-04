@@ -1079,11 +1079,6 @@ export interface CreateSalesReturnPayload {
   payment_method: string;
   void_original_invoice: boolean;
   note?: string;
-  items: {
-    original_item: number;
-    qty: number;
-    serial_ids?: number[];
-  }[];
 }
 
 export function useCreateSalesReturn() {

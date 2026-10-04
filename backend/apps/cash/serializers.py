@@ -1,9 +1,11 @@
 from rest_framework import serializers
 
+from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
+
 from .models import CashAdjustment, PettyExpense, PhoneBillCollection
 
 
-class PettyExpenseSerializer(serializers.ModelSerializer):
+class PettyExpenseSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     category_label = serializers.CharField(
         source="get_category_display", read_only=True
     )
@@ -71,7 +73,7 @@ class PettyExpenseSerializer(serializers.ModelSerializer):
         ]
 
 
-class CashAdjustmentSerializer(serializers.ModelSerializer):
+class CashAdjustmentSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     direction_label = serializers.CharField(
         source="get_direction_display", read_only=True
     )
@@ -128,7 +130,7 @@ class CashAdjustmentSerializer(serializers.ModelSerializer):
         ]
 
 
-class PhoneBillCollectionSerializer(serializers.ModelSerializer):
+class PhoneBillCollectionSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     warehouse_code = serializers.CharField(
         source="warehouse.code", read_only=True
     )

@@ -152,8 +152,14 @@ LEDGER_DAILY_AT = os.environ.get("MPPOS_LEDGER_DAILY_AT", "23:30")
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
+    # 只回 JSON。DRF 內建的「API 瀏覽頁」(?format=api)會把篩選與表單的下拉選單整張表列出來,
+    # 多家公司共用資料庫時等於把別家的客戶 / 供應商 / 序號列給任何登入的人看。唯一的畫面是前端。
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+    ],
     "DEFAULT_FILTER_BACKENDS": [
-        "django_filters.rest_framework.DjangoFilterBackend",
+        # 外鍵篩選(?customer= …)只認自己公司的編號
+        "apps.core.tenant_filters.TenantDjangoFilterBackend",
         "rest_framework.filters.OrderingFilter",
         "apps.core.filters.TrigramSearchFilter",
     ],

@@ -11,6 +11,7 @@ import type {
   PurchaseOrderCategory,
   ResolveCandidate,
   ResolveResult,
+  SalesOrder,
   SalesPerson,
   SimCard,
   Supplier,
@@ -514,4 +515,20 @@ export async function searchInStockSerials(
       payload: s,
     };
   });
+}
+
+// 銷退單「原銷貨單」欄位用:用單號 / 客戶 / 電話 / 發票號碼找未作廢的銷貨單
+// (不載整頁清單,舊單也找得到)
+export async function searchSalesOrdersForReturn(
+  query: string,
+): Promise<ComboOption<SalesOrder>[]> {
+  const data = await fetchPaginated<SalesOrder>(
+    `/sales-orders/?${qs({ search: query, is_void: false, page_size: LIMIT })}`,
+  );
+  return data.map((so) => ({
+    id: so.id,
+    label: so.no,
+    secondary: [so.doc_date, so.customer_name || "(散客)"].join(" / "),
+    payload: so,
+  }));
 }

@@ -1,4 +1,6 @@
 from rest_framework import serializers
+
+from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
 from rest_framework.exceptions import PermissionDenied
 
 from .models import (
@@ -14,7 +16,7 @@ from .models import (
 )
 
 
-class BrandSerializer(serializers.ModelSerializer):
+class BrandSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     series_count = serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -32,7 +34,7 @@ class BrandSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "series_count", "created_at", "updated_at"]
 
 
-class ConditionSerializer(serializers.ModelSerializer):
+class ConditionSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     product_count = serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -52,7 +54,7 @@ class ConditionSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "product_count", "created_at", "updated_at"]
 
 
-class ProductTypeSerializer(serializers.ModelSerializer):
+class ProductTypeSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     series_count = serializers.IntegerField(read_only=True)
 
     class Meta:
@@ -70,7 +72,7 @@ class ProductTypeSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "series_count", "created_at", "updated_at"]
 
 
-class PhoneSeriesSerializer(serializers.ModelSerializer):
+class PhoneSeriesSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     brand_code = serializers.CharField(source="brand.code", read_only=True)
     brand_name = serializers.CharField(source="brand.name", read_only=True)
     product_type_code = serializers.CharField(
@@ -108,7 +110,7 @@ class PhoneSeriesSerializer(serializers.ModelSerializer):
         ]
 
 
-class PartTemplateItemSerializer(serializers.ModelSerializer):
+class PartTemplateItemSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = PartTemplateItem
         fields = [
@@ -122,7 +124,7 @@ class PartTemplateItemSerializer(serializers.ModelSerializer):
         ]
 
 
-class PartTemplateSerializer(serializers.ModelSerializer):
+class PartTemplateSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     items = PartTemplateItemSerializer(many=True, read_only=True)
     items_input = serializers.ListField(
         child=serializers.DictField(), required=False, write_only=True
@@ -211,7 +213,7 @@ class _TenantUniqueMixin:
         return value
 
 
-class CategorySerializer(_TenantUniqueMixin, serializers.ModelSerializer):
+class CategorySerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
     class Meta:
         model = Category
         fields = [
@@ -235,7 +237,7 @@ class CategorySerializer(_TenantUniqueMixin, serializers.ModelSerializer):
         return self._tenant_unique(Category.objects, "name", value)
 
 
-class ProductSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
+class ProductSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
     stock_qty = serializers.IntegerField(read_only=True)
     category_code = serializers.CharField(source="category.code", read_only=True)
     category_name = serializers.CharField(source="category.name", read_only=True)

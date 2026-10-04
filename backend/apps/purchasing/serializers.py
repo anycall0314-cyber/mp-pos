@@ -2,16 +2,18 @@ from datetime import date
 
 from rest_framework import serializers
 
+from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
+
 from .models import PurchaseOrder, PurchaseOrderCategory, PurchaseOrderItem
 
 
-class PurchaseOrderCategorySerializer(serializers.ModelSerializer):
+class PurchaseOrderCategorySerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = PurchaseOrderCategory
         fields = ["id", "code", "name", "sort_order", "is_active"]
 
 
-class PurchaseOrderItemSerializer(serializers.ModelSerializer):
+class PurchaseOrderItemSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_list_price = serializers.DecimalField(
@@ -52,7 +54,7 @@ class PurchaseOrderItemSerializer(serializers.ModelSerializer):
         ]
 
 
-class PurchaseOrderSerializer(serializers.ModelSerializer):
+class PurchaseOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     items = PurchaseOrderItemSerializer(many=True, required=False)
     supplier_code = serializers.CharField(source="supplier.code", read_only=True)
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
@@ -112,6 +114,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = [
+            "created_by",
             "id",
             "no",
             "supplier_code",

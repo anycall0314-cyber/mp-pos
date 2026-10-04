@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
+
 from .models import Carrier, Customer, Member, SalesPerson, SimCard, Supplier, TelecomPlan
 
 
@@ -16,7 +18,7 @@ class _TenantUniqueMixin:
         return value
 
 
-class SupplierSerializer(serializers.ModelSerializer):
+class SupplierSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = Supplier
         fields = [
@@ -37,7 +39,7 @@ class SupplierSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "code", "created_at", "updated_at"]
 
 
-class CustomerSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
+class CustomerSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
     kind_label = serializers.CharField(source="get_kind_display", read_only=True)
 
     class Meta:
@@ -59,7 +61,7 @@ class CustomerSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
         read_only_fields = ["id", "code", "kind_label", "created_at", "updated_at"]
 
 
-class MemberSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
+class MemberSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
     class Meta:
         model = Member
         fields = [
@@ -78,7 +80,7 @@ class MemberSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
         read_only_fields = ["id", "code", "created_at", "updated_at"]
 
 
-class SalesPersonSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
+class SalesPersonSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
     class Meta:
         model = SalesPerson
         fields = [
@@ -97,7 +99,7 @@ class SalesPersonSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
         return self._tenant_unique(SalesPerson.objects, "code", value)
 
 
-class CarrierSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
+class CarrierSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
     class Meta:
         model = Carrier
         fields = ["id", "code", "name", "is_active", "created_at", "updated_at"]
@@ -107,7 +109,7 @@ class CarrierSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
         return self._tenant_unique(Carrier.objects, "code", value)
 
 
-class SimCardSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
+class SimCardSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
     vendor_code = serializers.CharField(source="vendor.code", read_only=True)
     vendor_name = serializers.CharField(source="vendor.name", read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
@@ -147,7 +149,7 @@ class SimCardSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
         return self._tenant_unique(SimCard.objects, "card_no", value)
 
 
-class TelecomPlanSerializer(_TenantUniqueMixin, serializers.ModelSerializer):
+class TelecomPlanSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
     carrier_code = serializers.CharField(source="carrier.code", read_only=True)
     carrier_name = serializers.CharField(source="carrier.name", read_only=True)
     kind_label = serializers.CharField(source="get_kind_display", read_only=True)

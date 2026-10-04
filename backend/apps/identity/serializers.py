@@ -1,4 +1,6 @@
 from rest_framework import serializers
+
+from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
 from rest_framework.exceptions import APIException
 
 from .models import (
@@ -12,13 +14,13 @@ from .models import (
 from .normalize import alias_key
 
 
-class IntakeUnitIdentifierSerializer(serializers.ModelSerializer):
+class IntakeUnitIdentifierSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = IntakeUnitIdentifier
         fields = ["id", "kind", "raw_value", "normalized_value", "is_primary"]
 
 
-class IntakeReceivedUnitSerializer(serializers.ModelSerializer):
+class IntakeReceivedUnitSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     identifiers = IntakeUnitIdentifierSerializer(many=True, read_only=True)
 
     class Meta:
@@ -26,7 +28,7 @@ class IntakeReceivedUnitSerializer(serializers.ModelSerializer):
         fields = ["id", "unit_index", "source", "identifiers"]
 
 
-class CaptureUnitIdentifierSerializer(serializers.Serializer):
+class CaptureUnitIdentifierSerializer(TenantScopedRelatedFieldsMixin, serializers.Serializer):
     kind = serializers.ChoiceField(
         choices=IntakeUnitIdentifier.Kind.choices, required=False
     )
@@ -34,15 +36,15 @@ class CaptureUnitIdentifierSerializer(serializers.Serializer):
     is_primary = serializers.BooleanField(default=False)
 
 
-class CaptureUnitSerializer(serializers.Serializer):
+class CaptureUnitSerializer(TenantScopedRelatedFieldsMixin, serializers.Serializer):
     identifiers = CaptureUnitIdentifierSerializer(many=True)
 
 
-class CaptureUnitsSerializer(serializers.Serializer):
+class CaptureUnitsSerializer(TenantScopedRelatedFieldsMixin, serializers.Serializer):
     units = CaptureUnitSerializer(many=True)
 
 
-class IntakeDocumentSerializer(serializers.ModelSerializer):
+class IntakeDocumentSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -63,7 +65,7 @@ class AliasConflict(APIException):
     default_code = "alias_conflict"
 
 
-class ProductAliasSerializer(serializers.ModelSerializer):
+class ProductAliasSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     supplier_name = serializers.CharField(source="supplier.name", read_only=True, default="")
@@ -127,7 +129,7 @@ class ProductAliasSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class IntakeItemSerializer(serializers.ModelSerializer):
+class IntakeItemSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     matched_product_name = serializers.CharField(source="matched_product.name", read_only=True, default="")
     matched_product_sku = serializers.CharField(source="matched_product.sku", read_only=True, default="")
     # effective_* = 有修正取修正、否則取 raw;前端顯示與過帳都看這組
@@ -160,7 +162,7 @@ class IntakeItemSerializer(serializers.ModelSerializer):
         ]
 
 
-class IntakeBatchSerializer(serializers.ModelSerializer):
+class IntakeBatchSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     items = IntakeItemSerializer(many=True, read_only=True)
     documents = IntakeDocumentSerializer(many=True, read_only=True)
     supplier_name = serializers.CharField(source="supplier.name", read_only=True, default="")
@@ -176,7 +178,7 @@ class IntakeBatchSerializer(serializers.ModelSerializer):
         ]
 
 
-class IntakeCreateSerializer(serializers.Serializer):
+class IntakeCreateSerializer(TenantScopedRelatedFieldsMixin, serializers.Serializer):
     """建立待確認批次:貼一段文字 + 選(選填)廠商 / 倉。"""
     raw_text = serializers.CharField()
     source = serializers.ChoiceField(
@@ -187,7 +189,7 @@ class IntakeCreateSerializer(serializers.Serializer):
     vendor_doc_no = serializers.CharField(required=False, allow_blank=True, default="")
 
 
-class MatchItemSerializer(serializers.Serializer):
+class MatchItemSerializer(TenantScopedRelatedFieldsMixin, serializers.Serializer):
     """把一行對應到一個既有商品。"""
     product = serializers.IntegerField()
     learn_alias = serializers.BooleanField(default=True)
@@ -198,7 +200,7 @@ class MatchItemSerializer(serializers.Serializer):
     repoint = serializers.BooleanField(default=False)
 
 
-class RememberPhraseSerializer(serializers.Serializer):
+class RememberPhraseSerializer(TenantScopedRelatedFieldsMixin, serializers.Serializer):
     """「記住這個叫法」:把一句話記到一個既有商品上。"""
     product = serializers.IntegerField()
     value = serializers.CharField(max_length=500)
@@ -207,7 +209,7 @@ class RememberPhraseSerializer(serializers.Serializer):
     repoint = serializers.BooleanField(default=False)
 
 
-class CorrectIntakeItemSerializer(serializers.Serializer):
+class CorrectIntakeItemSerializer(TenantScopedRelatedFieldsMixin, serializers.Serializer):
     """人工修正一行;只帶要改的欄位。"""
     name = serializers.CharField(required=False, allow_blank=True)
     qty = serializers.IntegerField(required=False, min_value=1)
@@ -217,7 +219,7 @@ class CorrectIntakeItemSerializer(serializers.Serializer):
     serials = serializers.ListField(child=serializers.CharField(), required=False)
 
 
-class SetHeaderSerializer(serializers.Serializer):
+class SetHeaderSerializer(TenantScopedRelatedFieldsMixin, serializers.Serializer):
     """修正批次單頭;只帶要改的欄位。"""
     supplier = serializers.IntegerField(required=False, allow_null=True)
     warehouse = serializers.IntegerField(required=False, allow_null=True)
@@ -230,7 +232,7 @@ class SetHeaderSerializer(serializers.Serializer):
     )
 
 
-class NewProductForItemSerializer(serializers.Serializer):
+class NewProductForItemSerializer(TenantScopedRelatedFieldsMixin, serializers.Serializer):
     """從一行建立新商品並對應。"""
     name = serializers.CharField(required=False, allow_blank=True, default="")
     category = serializers.IntegerField()

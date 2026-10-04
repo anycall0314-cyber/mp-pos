@@ -7,7 +7,7 @@ from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
 from apps.catalog.models import Product
-from apps.core.warehouse_scoping import WarehouseScopedMixin
+from apps.core.warehouse_scoping import WarehouseScopedMixin, report_warehouse_id
 from apps.inventory.models import ProductSerial, StockBalance, Warehouse
 from apps.purchasing.models import PurchaseOrder
 from apps.sales.models import SalesOrder, SalesOrderPayment
@@ -41,6 +41,7 @@ class PettyExpenseViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
+        self.check_create_warehouse(serializer)
         serializer.save(tenant=self.request.tenant)
 
     @action(detail=True, methods=["post"])
@@ -75,6 +76,7 @@ class PhoneBillCollectionViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
+        self.check_create_warehouse(serializer)
         serializer.save(tenant=self.request.tenant)
 
     @action(detail=True, methods=["post"])
@@ -109,6 +111,7 @@ class CashAdjustmentViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
+        self.check_create_warehouse(serializer)
         serializer.save(tenant=self.request.tenant)
 
     @action(detail=True, methods=["post"])
@@ -534,15 +537,8 @@ def home_summary(request):
     - 鎖倉帳號自動限定自己門市;非鎖倉若帶 ?warehouse=N 限定那個倉,否則全公司
     """
     tenant = request.tenant
-    profile = getattr(request.user, "profile", None)
 
-    wid = None
-    if profile and profile.is_warehouse_locked and profile.default_warehouse_id:
-        wid = profile.default_warehouse_id
-    else:
-        q_wh = request.query_params.get("warehouse")
-        if q_wh and q_wh.isdigit():
-            wid = int(q_wh)
+    wid = report_warehouse_id(request)
 
     today = date_cls.today()
     yesterday = today - timedelta(days=1)

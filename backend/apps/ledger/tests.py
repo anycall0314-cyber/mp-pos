@@ -107,10 +107,7 @@ class CheckTests(TestCase):
     def test_normal_business_is_all_consistent(self):
         so = SalesOrder.objects.get(tenant=self.t)
         line = SalesOrderItem.objects.get(so=so, product=self.c.case)
-        self.c._post("/api/v1/sales-returns/", {
-            "original_so": so.id, "warehouse": self.c.wh.id, "payment_method": "cash",
-            "items": [{"original_item": line.id, "qty": 1, "unit_price": str(line.unit_price)}],
-        })
+        self.c._post("/api/v1/sales-returns/", {"original_so": so.id, "payment_method": "cash"})
         take_snapshot(self.t)
         run = run_checks(self.t)
         self.assertTrue(run.ok, [r for r in run.results if not r["ok"]])
@@ -118,12 +115,7 @@ class CheckTests(TestCase):
 
     def test_each_kind_of_damage_is_caught(self):
         so = SalesOrder.objects.get(tenant=self.t)
-        case_line = SalesOrderItem.objects.get(so=so, product=self.c.case)
-        back = self.c._post("/api/v1/sales-returns/", {
-            "original_so": so.id, "warehouse": self.c.wh.id, "payment_method": "cash",
-            "items": [{"original_item": case_line.id, "qty": 1,
-                       "unit_price": str(case_line.unit_price)}],
-        })
+        back = self.c._post("/api/v1/sales-returns/", {"original_so": so.id, "payment_method": "cash"})
         take_snapshot(self.t)
         self.assertTrue(run_checks(self.t).ok)
 
@@ -132,7 +124,7 @@ class CheckTests(TestCase):
         SalesReturn.objects.filter(pk=sr.pk).update(subtotal=sr.subtotal + 1)
         self.assertIn(sr.no, self.assert_only_problem("return_header", "return_line_tax")["samples"][0])
         SalesReturn.objects.filter(pk=sr.pk).update(subtotal=sr.subtotal)
-        ri = SalesReturnItem.objects.get(sr=sr)
+        ri = SalesReturnItem.objects.get(sr=sr, product=self.c.case)
         SalesReturnItem.objects.filter(pk=ri.pk).update(tax_amount=ri.tax_amount + 1)
         self.assert_only_problem("return_line_tax")
         SalesReturnItem.objects.filter(pk=ri.pk).update(tax_amount=ri.tax_amount)
@@ -156,7 +148,7 @@ class CheckTests(TestCase):
         StockBalance.objects.filter(pk=bal.pk).update(qty=bal.qty + 5)
         res = self.results()
         self.assertFalse(res["stock_balance"]["ok"])
-        self.assertIn("庫存 10,異動合計 5", res["stock_balance"]["samples"][0])
+        self.assertIn("庫存 11,異動合計 6", res["stock_balance"]["samples"][0])
         StockBalance.objects.filter(pk=bal.pk).update(qty=bal.qty)
 
         phone = ProductSerial.objects.get(tenant=self.t, serial_no="甲IMEI2")
@@ -183,10 +175,7 @@ class CheckTests(TestCase):
     def test_return_reversing_more_cost_than_was_booked_is_caught(self):
         so = SalesOrder.objects.get(tenant=self.t)
         line = SalesOrderItem.objects.get(so=so, product=self.c.case)
-        self.c._post("/api/v1/sales-returns/", {
-            "original_so": so.id, "warehouse": self.c.wh.id, "payment_method": "cash",
-            "items": [{"original_item": line.id, "qty": 1, "unit_price": str(line.unit_price)}],
-        })
+        self.c._post("/api/v1/sales-returns/", {"original_so": so.id, "payment_method": "cash"})
         SalesReturnItem.objects.update(cost_at_post=line.cost_at_post + 1)
         self.assert_only_problem("return_over")
 

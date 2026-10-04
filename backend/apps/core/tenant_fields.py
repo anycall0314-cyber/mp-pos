@@ -21,6 +21,11 @@ def _limit(field, tenant):
         target.queryset = qs.filter(tenant=tenant)
 
 
+def same_company(tenant_id, *objs):
+    """單據掛到的每一個東西都要是同一家公司的(None 略過)。service 層的第二道防線。"""
+    return all(o is None or o.tenant_id == tenant_id for o in objs)
+
+
 class TenantScopedRelatedFieldsMixin:
     def get_fields(self):
         fields = super().get_fields()

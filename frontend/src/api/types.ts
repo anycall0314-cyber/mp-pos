@@ -308,12 +308,21 @@ export interface ReturnableLine {
   already_returned: number;
   remaining: number;
   unit_price: string;
+  /** 原行實收金額(整張退就是退這個數) */
+  amount: string;
   available_serials: { id: number; serial_no: string }[];
 }
 
 export interface ReturnableSummary {
   sales_order_id: number;
   sales_order_no: string;
+  total: string;
+  subtotal: string;
+  tax_amount: string;
+  /** 已經有有效銷退時是那張銷退單號,沒有是空字串(只能整張退,退過就不能再退) */
+  returned_by: string;
+  /** 收購單(總額為負)不能銷退 */
+  is_buyback: boolean;
   doc_date: string;
   tax_method: TaxMethod;
   invoice_voided: boolean;

@@ -5831,6 +5831,12 @@ tr.selected .intake-badge { filter: none; }
 .ledger-table th.num, .ledger-table td.num { text-align: right; }
 .ledger-info { color: var(--text-dim); }
 
+/* 銷退單明細(整張退,唯讀) */
+.sr-lines { width: 100%; }
+.sr-lines th { text-align: left; }
+.sr-lines th.num, .sr-lines td.num { text-align: right; width: 110px; }
+.sr-lines td:last-child, .sr-lines th:last-child { padding-left: 24px; }
+
 /* ---- 舊 POS 紀錄(會員頁)與舊系統對照頁 ---- */
 .legacy-filters { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
 .legacy-filters input, .legacy-filters select { min-width: 0; width: 130px; }

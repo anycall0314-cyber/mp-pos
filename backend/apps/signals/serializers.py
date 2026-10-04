@@ -1,9 +1,11 @@
 from rest_framework import serializers
 
+from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
+
 from .models import DemandAlert
 
 
-class DemandAlertSerializer(serializers.ModelSerializer):
+class DemandAlertSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     direction_label = serializers.CharField(source="get_direction_display", read_only=True)
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
