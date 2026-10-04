@@ -23,8 +23,10 @@ from apps.inventory.identifiers import (
     create_serial,
     looks_like_imei,
     main_code,
+    release_codes,
     split_codes,
     taken,
+    twin_ids,
 )
 from apps.inventory.locking import lock_document, lock_stock_rows, locked_balance
 from apps.inventory.models import ProductSerial, StockBalance, StockMovement
@@ -434,7 +436,9 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
         lock_stock_rows(
             po.tenant,
             products=[it.product for it in items if not it.product.is_virtual],
-            serial_ids=serial_ids,
+            # 作廢時這幾台的碼會釋放;可能要接手那些碼的設備(同碼的舊資料)一起鎖,
+            # 跟這張單的設備照同一個順序鎖,兩張作廢單才不會互相等到死結
+            serial_ids=[*serial_ids, *twin_ids(serial_ids)],
             balances=[(it.product, po.warehouse) for it in stock_items],
         )
 
@@ -481,6 +485,8 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
                 ref_doc_id=po.id,
                 note=f"進貨單 {po.no} 作廢",
             )
+        # 作廢的設備不佔碼:打錯整張作廢之後,同一批貨要能用同樣的 IMEI / SN 重新入庫
+        release_codes(serial_ids)
 
         # 配件:從本倉 balance 扣掉本單進貨量
         for it in stock_items:

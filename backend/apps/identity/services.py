@@ -1373,7 +1373,10 @@ def commit_batch(batch, user=None):
         commit_purchase_order(ser.instance)
         # 逐台識別碼回填到正式序號(主序號已是 ProductSerial.serial_no,其餘存識別碼表)
         for nv, unit in unit_map.items():
-            serial = ProductSerial.objects.for_tenant(batch.tenant).filter(serial_no=nv).first()
+            serial = (
+                ProductSerial.objects.for_tenant(batch.tenant).filter(serial_no=nv)
+                .exclude(status=ProductSerial.Status.VOID).first()      # 同一個碼可能有作廢過的舊紀錄
+            )
             if not serial:
                 continue
             for idf in unit.identifiers.all():

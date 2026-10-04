@@ -49,6 +49,11 @@ class ProductSerial(TenantOwnedModel):
         verbose_name="商品",
     )
     serial_no = models.CharField("序號 (IMEI/SN)", max_length=80)
+    serial_key = models.CharField(
+        "比對用的主碼", max_length=80, blank=True, default="", editable=False,
+        help_text="serial_no 去掉空白 / 破折號 / 底線 / 點、轉大寫;存檔時自動算。"
+                  "用碼找設備、檢查碼有沒有被用掉都比這一欄,不比原文",
+    )
     warehouse = models.ForeignKey(
         Warehouse,
         on_delete=models.PROTECT,
@@ -133,18 +138,35 @@ class ProductSerial(TenantOwnedModel):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["tenant", "serial_no"], name="uniq_serial_tenant_no"),
+            # 作廢的設備不佔碼:進貨單打錯整張作廢之後,同一批貨要能用同樣的碼重新入庫。
+            # (作廢的那一筆留著 serial_no 當紀錄,識別碼表裡的登記在作廢時就拿掉了。)
+            models.UniqueConstraint(
+                fields=["tenant", "serial_no"], condition=~models.Q(status="void"),
+                name="uniq_serial_tenant_no",
+            ),
         ]
         ordering = ["-id"]
         indexes = [
             models.Index(fields=["product", "status"]),
             models.Index(fields=["warehouse", "status"]),
+            models.Index(fields=["tenant", "serial_key"]),
         ]
         verbose_name = "商品序號"
         verbose_name_plural = "商品序號"
 
     def __str__(self) -> str:
         return self.serial_no
+
+    def save(self, *args, **kwargs):
+        # serial_key 永遠跟著 serial_no:同一個碼不管寫成 AB12、ab-12 還是 A.B_12,比對時都是同一個。
+        # (改主碼一律走 save();不要用 queryset.update(serial_no=…),那樣 serial_key 不會跟著變。)
+        from apps.identity.normalize import normalize_serial
+
+        self.serial_key = normalize_serial(self.serial_no)
+        fields = kwargs.get("update_fields")
+        if fields is not None and "serial_no" in fields and "serial_key" not in fields:
+            kwargs["update_fields"] = [*fields, "serial_key"]
+        super().save(*args, **kwargs)
 
 
 class ProductSerialIdentifier(TenantOwnedModel):

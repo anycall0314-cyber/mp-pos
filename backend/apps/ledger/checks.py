@@ -189,7 +189,8 @@ def check_serials(tenant):
     ).iterator(chunk_size=5000):
         serial_no = f"{sku} {_serial_tail(raw_no)}"
         key = normalize_serial(raw_no)
-        if (sid, key) not in registered:
+        # 作廢的設備不佔碼(作廢時登記就拿掉了),不用登記
+        if status != S.VOID and (sid, key) not in registered:
             # 沒登記多半是因為去掉空白 / 破折號後跟另一台相同:刷這個碼會對到兩台,銷貨會擋下來不讓賣
             codes.append(
                 f"{serial_no}:主序號沒有登記"

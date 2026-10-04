@@ -67,6 +67,50 @@ class _Concurrent(TransactionTestCase):
         ])
 
 
+class ReleaseCodesLockTests(_Concurrent):
+    def test_the_heir_is_looked_at_after_it_is_locked(self):
+        """作廢釋放碼時,要接手登記的那一台如果正好有人在改它的碼:等他改完才看。
+        先看再鎖的話,會把舊的碼掛回一台已經改成別的碼的設備上(刷舊碼找到錯的設備,真正的新貨也入不了庫)。"""
+        from apps.inventory.models import ProductSerialIdentifier
+
+        po = self.c.purchase(phone_serials=["AB12CD34"])
+        twin = ProductSerial.objects.create(          # 舊資料:同一個碼、寫法不同、沒登記到的那一台
+            tenant=self.c.tenant, product=self.c.phone, serial_no="AB-12-CD34", warehouse=self.w1)
+        t = self.meanwhile([
+            ("SELECT 1 FROM inventory_productserial WHERE id = %s FOR NO KEY UPDATE", [twin.pk]),
+            ("UPDATE inventory_productserial SET serial_no = 'ZZ99', serial_key = 'ZZ99' WHERE id = %s",
+             [twin.pk]),
+        ])
+        r = self.c.admin.post(f"/api/v1/purchase-orders/{po['id']}/void/")
+        self.assertEqual(r.status_code, 200, r.content.decode())
+        t.join()
+        twin.refresh_from_db()
+        self.assertEqual(twin.serial_no, "ZZ99")
+        self.assertFalse(ProductSerialIdentifier.objects.filter(serial=twin).exists())
+        self.assertFalse(ProductSerialIdentifier.objects.filter(normalized_value="AB12CD34").exists())
+
+
+    def test_possible_heirs_are_locked_together_with_the_voided_units(self):
+        """兩張作廢單各自的設備剛好互為對方的接手者時,先鎖自己的、再鎖對方的會互相等到死結。
+        所以作廢一開始就把「這張單的設備 + 可能接手的設備」放在同一次、照編號順序鎖,而且在改任何設備之前。"""
+        import re
+
+        po = self.c.purchase(phone_serials=["LK33MN44"])
+        unit = ProductSerial.objects.get(tenant=self.c.tenant, serial_no="LK33MN44")
+        twin = ProductSerial.objects.create(
+            tenant=self.c.tenant, product=self.c.phone, serial_no="LK-33-MN44", warehouse=self.w1)
+        with CaptureQueriesContext(connection) as ctx:
+            r = self.c.admin.post(f"/api/v1/purchase-orders/{po['id']}/void/")
+        self.assertEqual(r.status_code, 200, r.content.decode())
+        sqls = [q["sql"] for q in ctx.captured_queries]
+        locks = [i for i, sql in enumerate(sqls)
+                 if 'FROM "inventory_productserial"' in sql and "FOR NO KEY UPDATE" in sql]
+        first_change = next(i for i, sql in enumerate(sqls) if sql.startswith('UPDATE "inventory_productserial"'))
+        self.assertTrue(locks and locks[0] < first_change, sqls[locks[0]] if locks else "沒有鎖")
+        locked = {int(x) for x in re.findall(r"\d+", sqls[locks[0]].split(" IN ", 1)[1].split(")")[0])}
+        self.assertLessEqual({unit.pk, twin.pk}, locked)                 # 同一次就把兩台都鎖住
+
+
 class PurchaseLockTests(_Concurrent):
     def test_purchase_does_not_lose_a_change_made_at_the_same_moment(self):
         t = self.someone_adds_ten()

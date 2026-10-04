@@ -8,8 +8,10 @@
 
 - **每一個會新增設備的入口都要走 `create_serial()`**,不要直接 `ProductSerial.objects.create()`。
   直接建的那一台沒有登記碼,別台就可以再用同一個碼(`test_identifiers.py` 掃全專案把關)。
-- 用碼找設備一律走 `find_serial_ids()` / `code_filter()`:完全相同才算,不做模糊比對。
+- 用碼找設備一律走 `find_serial_ids()`:完全相同才算,不做模糊比對。
 - 事後補登 / 修改走 `set_codes()`:會鎖住那一台、留下修改紀錄(`ProductSerialCodeChange`)。
+- **作廢的設備不佔碼**(進貨單作廢時 `release_codes()`):它的碼可以再給新的設備用,用碼找設備也不會找到它;
+  作廢的那一筆留著 `serial_no` 當紀錄(序號清單用關鍵字還是查得到,狀態是作廢)。
 """
 from django.db import IntegrityError, transaction
 from django.db.models import Q
@@ -91,23 +93,17 @@ def taken(tenant, codes, exclude_serial_id=None):
     if not keys:
         return []
     ids = ProductSerialIdentifier.objects.filter(tenant=tenant, normalized_value__in=list(keys))
-    # 主碼也比一次:識別碼表萬一漏登記(回填時撞在一起沒登記的舊設備),主碼至少還擋得住。
-    # 主碼存的是原文,所以把常見的寫法(原文 / 大寫 / 小寫 / 去掉符號)都拿去比。
+    # 主碼也比一次(比 serial_key,去掉符號後的值):識別碼表萬一漏登記
+    # (回填時撞在一起沒登記到的舊設備),主碼照樣擋得住,不管它當初寫成 AB-12 還是 A.B_12。
     mains = ProductSerial.objects.filter(
-        tenant=tenant, serial_no__in=[v for raw in keys.values() for v in _spellings(raw)])
+        tenant=tenant, serial_key__in=list(keys),
+    ).exclude(status=ProductSerial.Status.VOID)          # 作廢的不佔碼
     if exclude_serial_id is not None:
         ids = ids.exclude(serial_id=exclude_serial_id)
         mains = mains.exclude(pk=exclude_serial_id)
     hit = set(ids.values_list("normalized_value", flat=True))
-    hit |= {normalize_serial(v) for v in mains.values_list("serial_no", flat=True)}
+    hit |= set(mains.values_list("serial_key", flat=True))
     return [keys[k] for k in keys if k in hit]
-
-
-def _spellings(raw):
-    """同一個碼的幾種常見寫法(主碼存原文、不能在資料庫裡正規化比對時用)。"""
-    raw = str(raw or "").strip()
-    nv = normalize_serial(raw)
-    return sorted({raw, raw.upper(), raw.lower(), nv, nv.lower()} - {""})
 
 
 def _identifier_rows(serial, imei, sn):
@@ -160,23 +156,88 @@ def codes_of(serial):
     return {"imei": imei, "sn": sn}
 
 
-def code_filter(code, prefix=""):
-    """「這個碼是哪一台」的查詢條件(完全相同才算)。prefix = 從別張表走到設備的路徑,例如 "serials__"。"""
-    raw = str(code or "").strip()
-    nv = normalize_serial(raw)
-    if not nv:
-        return None
-    return (Q(**{f"{prefix}identifiers__normalized_value": nv})
-            | Q(**{f"{prefix}serial_no__in": _spellings(raw)}))
-
-
 def find_serial_ids(tenant, code):
-    """刷到的碼是這家公司的哪一台(通常 0 或 1 台)。"""
-    cond = code_filter(code)
-    if cond is None:
+    """刷到的碼是這家公司的哪一台(完全相同才算;通常 0 或 1 台)。作廢的設備不算(它的碼已經釋放)。
+
+    比的是去掉符號後的值:登記的每一個碼(識別碼表)加上主碼(serial_key)。兩台舊設備的碼去掉符號後相同時,
+    兩台都會回來 —— 呼叫的人看到不只一台就不能自動挑一台。
+    """
+    nv = normalize_serial(code)
+    if not nv:
         return []
+    live = ProductSerial.objects.filter(tenant=tenant).exclude(status=ProductSerial.Status.VOID)
     return sorted(set(
-        ProductSerial.objects.filter(tenant=tenant).filter(cond).values_list("pk", flat=True)))
+        live.filter(Q(identifiers__normalized_value=nv) | Q(serial_key=nv))
+        .values_list("pk", flat=True)))
+
+
+def _keys_of(serial_ids):
+    """這幾台設備佔著哪些碼:{公司: {去掉符號後的碼}}(登記的每一個碼,加上主碼)。"""
+    keys = {}
+    for tenant_id, key in ProductSerialIdentifier.objects.filter(
+            serial_id__in=serial_ids).values_list("tenant_id", "normalized_value"):
+        keys.setdefault(tenant_id, set()).add(key)
+    for tenant_id, key in ProductSerial.objects.filter(
+            pk__in=serial_ids).values_list("tenant_id", "serial_key"):
+        if key:
+            keys.setdefault(tenant_id, set()).add(key)
+    return keys
+
+
+def twin_ids(serial_ids):
+    """這幾台作廢之後,可能要接手它們的碼的設備:同一家公司、沒作廢、主碼去掉符號後跟其中一個碼相同的別台。
+
+    作廢之前要把這些跟要作廢的設備**一起照編號順序鎖住**(交給 lock_stock_rows):兩張作廢單各自的設備
+    剛好互為對方的接手者時,先鎖自己的、再鎖對方的會互相等到死結。
+    """
+    serial_ids = list(serial_ids)
+    found = set()
+    for tenant_id, keys in _keys_of(serial_ids).items():
+        found |= set(
+            ProductSerial.objects.filter(tenant_id=tenant_id, serial_key__in=list(keys))
+            .exclude(status=ProductSerial.Status.VOID).exclude(pk__in=serial_ids)
+            .values_list("pk", flat=True))
+    return sorted(found)
+
+
+def release_codes(serial_ids):
+    """這幾台作廢了:把它們登記的碼拿掉,同樣的碼才能再給新的設備用。
+    `serial_no` 不動(留著當紀錄;資料庫的唯一限制不算作廢的)。
+
+    呼叫前要在交易裡,而且已經把這幾台連同 `twin_ids()` 一起鎖住。
+
+    拿掉之後如果某個碼沒有人登記了,而同一家公司還有一台在用的設備主碼就是它(去掉符號後相同),登記要交給那一台
+    (舊資料才會有 —— 以前作廢過的碼不能再用,店員只好加個破折號重新入庫;升級時兩筆被當成同一個碼,只登記到其中一筆)。
+    不然那一台沒有任何保護:別台可以再用同一個碼。碼還有別台登記著的時候不用交(那一台就是它的主人)。
+    """
+    serial_ids = list(serial_ids)
+    freed = _keys_of(serial_ids)
+    ProductSerialIdentifier.objects.filter(serial_id__in=serial_ids).delete()
+    heirs = []
+    for tenant_id, keys in freed.items():
+        # 還登記在別台身上的碼不是空缺
+        owned = set(
+            ProductSerialIdentifier.objects.filter(tenant_id=tenant_id, normalized_value__in=list(keys))
+            .values_list("normalized_value", flat=True))
+        candidates = (
+            ProductSerial.objects.select_for_update(no_key=True)      # 呼叫的人已經鎖過;這裡拿到的是鎖住之後的現況
+            .filter(tenant_id=tenant_id, serial_key__in=list(keys))
+            .exclude(status=ProductSerial.Status.VOID).exclude(pk__in=serial_ids)
+            .order_by("pk")
+        )
+        for serial in candidates:
+            if serial.serial_key in keys and serial.serial_key not in owned:
+                owned.add(serial.serial_key)         # 一個碼只登記給一台(最舊的那台)
+                heirs.append(serial)
+    ProductSerialIdentifier.objects.bulk_create([
+        ProductSerialIdentifier(
+            tenant_id=serial.tenant_id, serial=serial, value=serial.serial_no,
+            normalized_value=serial.serial_key,
+            # 它如果已經有別的碼被標成主識別碼(拍照入庫的舊資料),不要再多一個
+            is_primary=not serial.identifiers.filter(is_primary=True).exists(),
+            kind=Kind.IMEI if looks_like_imei(serial.serial_no) else Kind.SN,
+        ) for serial in heirs
+    ])
 
 
 def _same(a, b):

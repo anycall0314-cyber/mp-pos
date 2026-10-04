@@ -85,7 +85,9 @@
 | received_at | DateTime nullable | 進貨時間 |
 | sold_at | DateTime nullable | 銷售時間 |
 
-**約束**：`(tenant, serial_no)` unique。
+**約束**：`(tenant, serial_no)` unique，**只算沒作廢的**（`status != void`）。作廢的設備不佔碼：進貨單作廢後同樣的碼可以重新入庫，所以同一個 `serial_no` 可以有多筆作廢的舊紀錄加最多一筆在用的。不要改回全量唯一（已經重新入庫過的公司 migrate 會失敗）。一台的 IMEI / SN 另外登記在 `ProductSerialIdentifier`（同公司 `normalized_value` 唯一），規則見 `apps/inventory/identifiers.py`。
+
+`serial_key`：`serial_no` 去掉空白 / 破折號 / 底線 / 點、轉大寫，`save()` 自動算（`(tenant, serial_key)` 有索引、沒有唯一限制）。用碼找設備、檢查碼有沒有被用掉都比這一欄，不比原文。
 
 ### `inventory.StockMovement`
 

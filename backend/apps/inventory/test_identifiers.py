@@ -300,6 +300,8 @@ class EditCodesTests(_Shop):
         self.assertEqual((r.status_code, r.json()["serial_no"]), (200, IMEI_B))
         self.assertEqual(find_serial_ids(self.t, IMEI_A), [])        # 舊的碼不再指到任何一台
         self.assertEqual(self.unit(IMEI_B).pk, self.phone.pk)
+        self.phone.refresh_from_db()
+        self.assertEqual((self.phone.serial_no, self.phone.serial_key), (IMEI_B, IMEI_B))   # 比對用的主碼跟著換
         # 管理員可以清掉一格,但至少要留一個
         self.assertEqual(self.edit(self.phone, self.c.admin, imei="", sn=SN_A).json()["serial_no"], SN_A)
         r = self.edit(self.phone, self.c.admin, imei="", sn="")
@@ -478,11 +480,183 @@ class OldDataTests(_Shop):
         lower = self.old_unit("ab12cd")
         self.assertEqual(find_serial_ids(self.t, "AB12CD"), [lower.pk])
         self.assertEqual(self.buy([{"imei": IMEI_A, "sn": "AB-12CD"}], ok=False).status_code, 400)
+        # 不管當初怎麼寫(連續的破折號、點、底線),去掉符號後相同就是同一個碼:找得到、也擋得住
+        odd = self.old_unit("Q7--W8.E9_R0")
+        for code in ("Q7W8E9R0", "q7-w8-e9-r0", "Q7.W8_E9 R0"):
+            self.assertEqual(find_serial_ids(self.t, code), [odd.pk], code)
+            self.assertEqual(self.buy([{"imei": "", "sn": code}], ok=False).status_code, 400, code)
+        self.assertEqual(odd.serial_key, "Q7W8E9R0")
+
+    def test_two_old_units_with_the_same_code_are_both_found(self):
+        """兩台在用的舊設備,碼去掉符號後相同:用哪一種寫法找都是兩台(呼叫的人看到不只一台就不自動挑)。"""
+        a, b = self.old_unit("AB12"), self.old_unit("AB--12")
+        ProductSerialIdentifier.objects.create(tenant=self.t, serial=a, kind="sn", value="AB12",
+                                               normalized_value="AB12", is_primary=True)   # 只登記到一台
+        for code in ("AB12", "ab-12", "A.B_12", "AB--12"):
+            self.assertEqual(find_serial_ids(self.t, code), sorted([a.pk, b.pk]), code)
+        found = self.c.admin.get("/api/v1/serials/", {"code": "AB12"}).json()["results"]
+        self.assertEqual(sorted(s["id"] for s in found), sorted([a.pk, b.pk]))
 
     def test_new_units_are_always_registered(self):
         self.buy([{"imei": IMEI_A, "sn": SN_A}, SN_B])
         result = check_serials(self.t)[2]
         self.assertEqual((result["ok"], result["count"]), (True, 0))
+
+
+class VoidReleasesCodesTests(_Shop):
+    """進貨單打錯整張作廢之後,同一批貨要能用同樣的碼重新入庫;作廢的那一筆留著當紀錄,但不再佔碼。"""
+
+    def void(self, po):
+        r = self.c.admin.post(f"/api/v1/purchase-orders/{po['id']}/void/")
+        self.assertEqual(r.status_code, 200, r.content.decode())
+
+    def test_voided_order_frees_its_codes_for_re_entry(self):
+        po = self.buy([{"imei": IMEI_A, "sn": SN_A}, {"imei": "", "sn": SN_B}]).json()
+        first = self.unit(IMEI_A)
+        self.void(po)
+        first.refresh_from_db()
+        self.assertEqual((first.status, first.serial_no), ("void", IMEI_A))     # 紀錄還在
+        self.assertEqual(ProductSerialIdentifier.objects.filter(tenant=self.t).count(), 0)
+        for code in (IMEI_A, SN_A, SN_B):                                       # 用碼找不到作廢的
+            self.assertEqual(find_serial_ids(self.t, code), [], code)
+            self.assertEqual(self.c.admin.get("/api/v1/serials/", {"code": code}).json()["results"], [])
+        # 同樣的碼重新入庫(順便把打錯的那一台改對:SN_B 這次配上 IMEI)
+        self.buy([{"imei": IMEI_A, "sn": SN_A}, {"imei": IMEI_B, "sn": SN_B}])
+        again = self.unit(IMEI_A)
+        self.assertNotEqual(again.pk, first.pk)
+        self.assertEqual((again.status, codes_of(again)), ("in_stock", {"imei": IMEI_A, "sn": SN_A}))
+        self.assertEqual(self.unit(SN_A).pk, again.pk)
+        self.assertEqual(codes_of(self.unit(SN_B)), {"imei": IMEI_B, "sn": SN_B})
+        # 刷條碼只會對到現在這一台(不會因為有作廢的舊紀錄變成「對到兩台」)
+        found = self.c.admin.get("/api/v1/serials/", {"code": SN_A}).json()["results"]
+        self.assertEqual([s["id"] for s in found], [again.pk])
+        # 用關鍵字查序號清單,作廢的舊紀錄還看得到
+        listed = self.c.admin.get("/api/v1/serials/", {"search": IMEI_A}).json()["results"]
+        self.assertEqual(sorted((s["id"], s["status"]) for s in listed),
+                         sorted([(first.pk, "void"), (again.pk, "in_stock")]))
+        # 每日對帳:作廢的不用登記,不算問題
+        self.assertEqual((check_serials(self.t)[2]["ok"], check_serials(self.t)[2]["count"]), (True, 0))
+
+    def test_only_voided_units_give_up_their_codes(self):
+        self.buy([{"imei": IMEI_A, "sn": SN_A}])
+        keep = self.buy([{"imei": IMEI_B, "sn": SN_B}]).json()
+        # 沒作廢的碼照樣不能重複:存檔前擋、資料庫也擋
+        self.assertEqual(self.buy([{"imei": IMEI_B, "sn": ""}], ok=False).status_code, 400)
+        from django.db import IntegrityError, transaction
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ProductSerial.objects.create(tenant=self.t, product=self.c.phone, serial_no=IMEI_B)
+        # 作廢一張單只放掉那張單的碼
+        self.void(keep)
+        self.assertEqual(find_serial_ids(self.t, SN_B), [])
+        self.assertEqual(len(find_serial_ids(self.t, SN_A)), 1)
+        # 作廢過兩次的同一個碼:作廢的紀錄可以有很多筆,在用的只有一台
+        again = self.buy([{"imei": IMEI_B, "sn": SN_B}]).json()
+        self.void(again)
+        self.buy([{"imei": IMEI_B, "sn": SN_B}])
+        self.assertEqual(ProductSerial.objects.filter(tenant=self.t, serial_no=IMEI_B).count(), 3)
+        self.assertEqual(len(find_serial_ids(self.t, IMEI_B)), 1)
+
+    def test_a_live_twin_takes_over_the_code_when_the_registered_one_is_voided(self):
+        """舊資料:作廢過的碼以前不能再用,店員只好加個破折號重新入庫。兩筆其實是同一個碼,只登記到其中一筆。
+        登記的那一筆作廢、碼放掉時,還在用的那一台要接手登記 —— 不然它沒有保護,別台可以再用同一個碼。"""
+        po = self.buy([{"imei": "", "sn": "AB12CD34"}]).json()
+        twin = ProductSerial.objects.create(                      # 模擬升級前就存在、沒登記到的那一台
+            tenant=self.t, product=self.c.phone, serial_no="AB-12-CD34", warehouse=self.c.wh)
+        # 它身上有別的碼(拍照入庫登記過 IMEI2)也一樣要接手:缺的是主碼的登記
+        ProductSerialIdentifier.objects.create(tenant=self.t, serial=twin, kind="imei2", value=IMEI_C,
+                                               normalized_value=IMEI_C, is_primary=False)
+        self.void(po)
+        self.assertEqual(
+            sorted(ProductSerialIdentifier.objects.filter(tenant=self.t)
+                   .values_list("serial_id", "kind", "value", "normalized_value", "is_primary")),
+            sorted([(twin.pk, "sn", "AB-12-CD34", "AB12CD34", True),
+                    (twin.pk, "imei2", IMEI_C, IMEI_C, False)]))
+        for code in ("AB12CD34", "ab12cd34", "AB-12-CD34"):
+            self.assertEqual(find_serial_ids(self.t, code), [twin.pk], code)
+        r = self.buy([{"imei": "", "sn": "AB12CD34"}], ok=False)   # 乾淨寫法不能再入一台
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(check_serials(self.t)[2]["ok"], True)
+
+    def test_only_the_oldest_twin_takes_over(self):
+        """同一個碼有兩台在用的舊設備都沒登記:作廢照樣成功,碼登記給最舊的那一台,另一台由每日對帳講出來。"""
+        po = self.buy([{"imei": "", "sn": "KK55LL66"}]).json()
+        first = ProductSerial.objects.create(tenant=self.t, product=self.c.phone, serial_no="KK-55-LL66",
+                                             warehouse=self.c.wh)
+        second = ProductSerial.objects.create(tenant=self.t, product=self.c.phone, serial_no="KK.55.LL66",
+                                              warehouse=self.c.wh)
+        self.void(po)
+        self.assertEqual(list(ProductSerialIdentifier.objects.filter(tenant=self.t)
+                              .values_list("serial_id", "normalized_value")), [(first.pk, "KK55LL66")])
+        self.assertEqual(find_serial_ids(self.t, "KK55LL66"), sorted([first.pk, second.pk]))
+        result = check_serials(self.t)[2]
+        self.assertEqual((result["ok"], result["count"]), (False, 1))
+        self.assertIn("刷這個碼會對到兩台", result["samples"][0])
+
+    def test_voiding_the_unregistered_twin_leaves_the_registered_one_alone(self):
+        """兩台在用的舊設備同一個碼,只登記到其中一台。作廢的是沒登記的那一台時,碼本來就還有主人:
+        不用交接(也不能再登記一次 —— 那會撞唯一限制、整張作廢失敗)。"""
+        self.buy([{"imei": "", "sn": "TW11NS22"}])
+        owner = self.unit("TW11NS22")
+        po = self.buy([{"imei": "", "sn": "OTHER999"}]).json()
+        twin = self.unit("OTHER999")
+        # 模擬升級前的樣子:第二台其實是同一個碼(多了破折號),回填時沒登記到
+        ProductSerialIdentifier.objects.filter(serial=twin).delete()
+        ProductSerial.objects.filter(pk=twin.pk).update(serial_no="TW-11-NS22", serial_key="TW11NS22")
+        self.assertEqual(find_serial_ids(self.t, "TW11NS22"), sorted([owner.pk, twin.pk]))
+        self.void(po)
+        twin.refresh_from_db()
+        self.assertEqual(twin.status, "void")
+        self.assertEqual(
+            list(ProductSerialIdentifier.objects.filter(tenant=self.t).values_list("serial_id", "normalized_value")),
+            [(owner.pk, "TW11NS22")])
+        self.assertEqual(find_serial_ids(self.t, "tw-11-ns22"), [owner.pk])     # 現在只剩一台
+        self.assertEqual(check_serials(self.t)[2]["ok"], True)
+
+    def test_voided_unit_cannot_be_edited_back_into_a_clash(self):
+        po = self.buy([{"imei": IMEI_A, "sn": ""}]).json()
+        gone = self.unit(IMEI_A)
+        self.void(po)
+        self.buy([{"imei": IMEI_A, "sn": ""}])
+        r = self.c.admin.post(f"/api/v1/serials/{gone.pk}/codes/", {"imei": IMEI_A, "sn": SN_A}, format="json")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("已經作廢", r.content.decode())
+
+    def test_existing_voided_units_are_released_by_the_migration(self):
+        module = importlib.import_module("apps.inventory.migrations.0014_void_units_release_codes")
+        self.buy([{"imei": IMEI_A, "sn": SN_A}, {"imei": IMEI_B, "sn": ""}])
+        old_void = self.unit(IMEI_A)
+        ProductSerial.objects.filter(pk=old_void.pk).update(status="void", warehouse=None)   # 升級前作廢的:登記還在
+        self.assertEqual(ProductSerialIdentifier.objects.filter(serial=old_void).count(), 2)
+        # 升級前作廢過、後來加破折號重新入庫的那一台:0012 只登記到作廢的那一筆,在用的沒登記
+        gone = ProductSerial.objects.create(tenant=self.t, product=self.c.phone, serial_no="ZX99KK11",
+                                            status="void")
+        ProductSerialIdentifier.objects.create(tenant=self.t, serial=gone, kind="sn", value="ZX99KK11",
+                                               normalized_value="ZX99KK11", is_primary=True)
+        twin = ProductSerial.objects.create(tenant=self.t, product=self.c.phone, serial_no="ZX-99-KK11",
+                                            warehouse=self.c.wh)
+        ProductSerial.objects.filter(pk=twin.pk).update(serial_key="")           # 升級前沒有這一欄
+        module.fill_keys_and_release_void(django_apps, None)
+        twin.refresh_from_db()
+        self.assertEqual(twin.serial_key, "ZX99KK11")                            # 每一台補上比對用的主碼
+        self.assertEqual(ProductSerialIdentifier.objects.filter(serial=old_void).count(), 0)
+        self.assertEqual(len(find_serial_ids(self.t, IMEI_B)), 1)                # 沒作廢的不受影響
+        self.buy([{"imei": IMEI_A, "sn": SN_A}])                                # 釋放之後可以重新入庫
+        # 在用的那一台接手登記:乾淨寫法找得到它,也不能再入一台
+        self.assertEqual(find_serial_ids(self.t, "ZX99KK11"), [twin.pk])
+        self.assertEqual(self.buy([{"imei": "", "sn": "ZX99KK11"}], ok=False).status_code, 400)
+        module.fill_keys_and_release_void(django_apps, None)                     # 再跑一次不會多出東西
+        self.assertEqual(ProductSerialIdentifier.objects.filter(serial=twin).count(), 1)
+
+
+class AdminTests(TestCase):
+    def test_devices_cannot_be_added_or_deleted_in_the_admin(self):
+        """後台新增設備不會登記碼(也填不了序號);刪除會弄壞單據紀錄。狀態與序號也不能直接改。"""
+        from django.contrib import admin
+
+        model_admin = admin.site._registry[ProductSerial]
+        self.assertFalse(model_admin.has_add_permission(None))
+        self.assertFalse(model_admin.has_delete_permission(None))
+        self.assertLessEqual({"status", "serial_no"}, set(model_admin.readonly_fields))
 
 
 class EveryEntranceTests(TestCase):
