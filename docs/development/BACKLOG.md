@@ -10,17 +10,7 @@
 
 ## 進行中(工作目錄裡已經動工、還沒提交)
 
-(A. 進貨、銷貨開單頁那一批已經在 2026-10-06 上線,見 `COMPLETED.md`。)
-
-### B. 商品照片與手機拍照直傳(規格 A / B / C 階段)—— 做到一半
-- 規格:`MP-POS-商品圖片備註與手機拍照直傳規格.md`(owner 2026-10-06 給的)。
-- 做好的:後端整塊(新的 `backend/apps/photos/`:照片、暫存、手機配對、隨商品存檔、清理;商品 API 帶照片張數與縮圖;
-  備份登記;35 個測試過)。前端只有共用零件(`api/photos.ts`、`lib/{imageShrink,qr}.ts`、`components/photos/usePhotoDraft.ts`)。
-- 還沒做:商品表單裡的照片區、手機拍照頁、QR Code 配對畫面、點品名看照片(商品 / 庫存 / 進貨 / 銷貨)、文件、紅隊與複審。
-- 會多兩個安裝項目:後端 `Pillow`、`pillow-heif`(已寫進 `requirements.txt`),前端 `qrcode-generator`(已寫進 `package.json`)。
-- 狀態:**停著**,排第二件,等 owner 確認才接著做。
-- 注意:B 的後端已經接在商品 API 與設定檔上(`config/settings/base.py`、`config/urls.py`、`apps/catalog/{views,serializers}.py`、
-  `apps/backup/registry.py`、`requirements.txt`、`frontend/package*.json`),這幾個檔現在在工作目錄裡是改過、沒提交的狀態。
+(目前沒有。進貨、銷貨開單頁與商品照片兩批都在 2026-10-06 上線,見 `COMPLETED.md`。)
 
 ---
 
@@ -35,7 +25,8 @@
 
 ## P1 核心操作流程
 
-- 商品照片與手機拍照直傳(見進行中 B)
+- 商品照片:規格 D 階段(依分類 / 適用機型瀏覽的照片列表、新增商品前的相似候選帶照片;A / B / C 已上線)
+- 每日的資料庫備份把照片檔也帶上(現在只有資料庫;公司備份才含照片)
 - 門號合約到期的統計與提醒(到期日 2026-10-06 起開始記)
 - 銷貨:掛單、定購、實收找零
 - 借出單、不良品流程(`docs/roadmap.md` 1.5、1.6;尚未動工)
