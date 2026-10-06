@@ -10,17 +10,7 @@
 
 ## 進行中(工作目錄裡已經動工、還沒提交)
 
-這兩件是訂這套流程之前就開工的,現在都**停著**,等 owner 決定先收哪一件(建議見 `CURRENT_TASK.md`)。
-
-### A. 進貨、銷貨開單頁(商品明細優先)+ 建單防重複 + 門號合約日期 —— 做完,等第二輪複審
-- 內容:進貨 / 銷貨拆成清單頁 + 開單頁;建單認得 `Idempotency-Key`;門號欄位接在商品下方;
-  合約從續約日 / 生效日起算、到期日存檔當下算好、存了之後可以改日期;進貨計價數量 0 = 整行贈品。
-- 狀態:本機整條驗過;後端 550 個、前端 65 個測試過;Grok 紅隊兩輪意見已修;
-  Codex 第一輪「還不能上線(必修 2 項)」,兩項都修了,**還沒送第二輪**。
-- 資料庫:`core.0002`(建單鑰匙)、`sales.0017`(合約日期)、`purchasing.0008`(計價數量可空)。
-- 主要檔案:`frontend/src/pages/sales/Sales{Workbench,List}Page.tsx`、`pages/purchases/Purchase{Workbench,List}Page.tsx`、
-  `SerialSlots.tsx`、`serials.ts`、`components/workbench/{MoreMenu,QtyInput}.tsx`、`lib/{deviceCodes,dates}.ts`、`nav.ts`、`styles.css`、
-  `backend/apps/core/{idempotency,dates}.py`、`apps/sales/`、`apps/purchasing/`、`docs/`。
+(A. 進貨、銷貨開單頁那一批已經在 2026-10-06 上線,見 `COMPLETED.md`。)
 
 ### B. 商品照片與手機拍照直傳(規格 A / B / C 階段)—— 做到一半
 - 規格:`MP-POS-商品圖片備註與手機拍照直傳規格.md`(owner 2026-10-06 給的)。
@@ -28,15 +18,15 @@
   備份登記;35 個測試過)。前端只有共用零件(`api/photos.ts`、`lib/{imageShrink,qr}.ts`、`components/photos/usePhotoDraft.ts`)。
 - 還沒做:商品表單裡的照片區、手機拍照頁、QR Code 配對畫面、點品名看照片(商品 / 庫存 / 進貨 / 銷貨)、文件、紅隊與複審。
 - 會多兩個安裝項目:後端 `Pillow`、`pillow-heif`(已寫進 `requirements.txt`),前端 `qrcode-generator`(已寫進 `package.json`)。
+- 狀態:**停著**,排第二件,等 owner 確認才接著做。
 - 注意:B 的後端已經接在商品 API 與設定檔上(`config/settings/base.py`、`config/urls.py`、`apps/catalog/{views,serializers}.py`、
-  `apps/backup/registry.py`、`requirements.txt`、`frontend/package*.json`)。**A 要單獨提交時,這幾個檔要分開處理**
-  (`registry.py` 兩批都有改)。
+  `apps/backup/registry.py`、`requirements.txt`、`frontend/package*.json`),這幾個檔現在在工作目錄裡是改過、沒提交的狀態。
 
 ---
 
 ## P0 核心資料正確性
 
-- 調撥單、個人收購建單防重複送單(進貨、銷貨已做;見 A)
+- 調撥單、個人收購建單防重複送單(進貨、銷貨已做)
 - 帳務概念分開:商品營業額 / 服務收入 / 佣金收入 / 成本 / 毛利 / 應收 / 現金流 / 資金移轉,不混成一個「營業額」
   (現況:報表語意層已經把「銷售」限定為計入毛利的明細、收購二手另列;佣金存在銷貨明細上;還沒有應收與資金移轉)
 - 門號佣金應收與撥款對帳(`docs/roadmap.md` Phase 2:佣金對帳單)
@@ -46,7 +36,7 @@
 ## P1 核心操作流程
 
 - 商品照片與手機拍照直傳(見進行中 B)
-- 門號合約到期的統計與提醒(日期在 A 裡開始記)
+- 門號合約到期的統計與提醒(到期日 2026-10-06 起開始記)
 - 銷貨:掛單、定購、實收找零
 - 借出單、不良品流程(`docs/roadmap.md` 1.5、1.6;尚未動工)
 - 條碼列印機(Argox OS-2130D)
