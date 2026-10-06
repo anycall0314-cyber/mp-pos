@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
+from .label_views import label_data
 from .views import (
     ProductSerialViewSet,
     StockBalanceViewSet,
@@ -18,6 +19,7 @@ router.register(r"stock-balances", StockBalanceViewSet, basename="stock-balance"
 router.register(r"stock-movements", StockMovementViewSet, basename="stock-movement")
 
 urlpatterns = router.urls + [
+    path("labels/", label_data, name="labels"),
     path("inventory-alerts/", inventory_alerts, name="inventory-alerts"),
     path(
         "clearance-pressure/",

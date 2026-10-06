@@ -12,6 +12,7 @@ import {
   useVoidPurchaseOrder,
 } from "@/api/hooks";
 import type { PurchaseOrder } from "@/api/types";
+import { openPurchaseLabels } from "@/components/labels/openLabelPrint";
 import { ArmButton } from "@/components/workbench/ArmButton";
 import { apiErrorText } from "@/components/workbench/errors";
 import { toast } from "@/components/workbench/toast";
@@ -154,9 +155,7 @@ export function PurchaseListPage() {
             <button
               type="button"
               className="wb-btn small"
-              onClick={() =>
-                window.open(`/purchases/${t.id}/print/labels`, "_blank")
-              }
+              onClick={() => openPurchaseLabels(t.id)}
             >
               列印標籤
             </button>

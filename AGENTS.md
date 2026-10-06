@@ -82,7 +82,7 @@
 | 配件庫存 | 非序號商品(`requires_serial=False`、非 virtual)走 `StockBalance(product, warehouse)`,進貨累計、銷貨扣減、調撥搬移;`Product.weighted_avg_cost` 跨倉聚合 |
 | 配件不足擋下 | 銷貨單若該倉 balance 不足,`commit_sales_order` 拋錯 400,不允許負庫存 |
 | 調撥 | `TransferOrder` 兩階段:`dispatched`(來源倉派發,序號 → in_transit、配件 balance 扣掉)→ `confirmed`(目的倉確認,序號 → in_stock 在目的倉、目的倉 balance 加上)。`unit_cost_at_dispatch` 在派發時快照來源倉成本,確認時用以重算目的倉加權平均(避免後續異動干擾)。`void` 智能回滾,依當下狀態決定 |
-| 標籤條碼優先序 | 有序號 → IMEI;否則 有原廠條碼(`Product.barcode`)→ 用原廠條碼;都沒有 → fallback SKU。bar code 下方顯示可讀值方便對照 |
+| 商品標籤(條碼列印機) | Argox OS-2130D(熱感 203 dpi、一公釐 8 個點、最寬 72 mm),標籤紙 **50 × 30 mm**;**用瀏覽器列印**(每台電腦裝原廠驅動、設一次紙張),不直接對印表機下指令。安裝與設定見 `docs/條碼列印機_安裝與設定.md`。**要印什麼的規則只有後端 `apps/inventory/labels.py` 一份**(唯讀端點 `GET /labels/?po=` / `?serials=1,2,3` / `?product=&copies=`,三種擇一;只看得到自己公司的;門市不另外鎖,跟序號清單一樣):條碼內容 = 有序號印主碼(有 IMEI 是 IMEI,沒有才是 SN)→ 沒有序號印原廠條碼 → 都沒有印品號;售價 = 逐台定價的商品(中古機、已拆封)印那一台自己的售價,沒有才印建議售價,沒有價錢(0)不印;成色只有逐台記機況的才印;進貨單號與日期 = 那一台當初進貨的單,個人收購進來的印收購那一張單,配件補印不印(不猜);作廢的進貨單、作廢的設備不能印;進貨單的配件一行一筆、張數 = 進貨數量(上限 500),序號商品每一台一張(一張單超過 300 台不給印,請分批);**那一行是不是逐台印,看的是這一行底下有沒有設備,不是商品現在的「需追蹤序號」**(進貨之後改過設定,舊單的每一台還是各印各的碼);虛擬商品不印;個別售價是 0 或負的 = 沒填(跟銷貨開單帶價同一條規則,`> 0` 才用);序號頭尾的空白不算碼的一部分。回應另外帶 `notes`(要講給人知道的事:哪一行少印了幾台、哪一行的張數被壓到上限),列印頁會顯示。編號 / 張數只收一般的數字(全形、太長的回 400)。**畫面只負責排版與畫條碼**(`pages/labels/LabelPrintPage.tsx`、`components/labels/LabelTile.tsx`):**條碼的每一條線是印表機的整數個點**(`lib/labels.ts` 的 `layoutBars`:一個單位 3 點,放不下用 2 點,兩邊各留 10 個單位空白;編碼用 jsbarcode、畫自己畫)——把條碼圖拉寬貼滿標籤的話線寬不是整數點,熱感印出來是糊的、槍刷不到;2 點還放不下:原廠條碼改印品號的條碼(`printableCode`),序號不能換、只印文字(那個碼印大一點、可以折行),列印頁上面會講。**條碼跟下面的字一定是同一個字串**:頭尾空白在 `printableCode` 去一次、兩邊都用它;碼中間連續的空白照原樣印(樣式用 `white-space: pre`,預設會把兩個空白併成一個);`code128Bits` 給什麼編什麼、不偷偷修,有換行 / Tab / 全形字就不編。標籤尺寸只寫在 `lib/labels.ts` 的 `LABEL` 與 `.label-*` 樣式(還不是每家公司的設定);字用 mm、純黑(熱感沒有灰)。紙張尺寸用**有名字的頁面**(`@page label` + `page: label`):全站樣式裡別的列印頁各有沒有名字的 `@page`,會互相蓋掉(最後一條是 A4)。每一張的高度是 29.5 mm(比紙矮一點:驅動回報的可印高度常比紙小,剛好 30 mm 會每張多吐一張空白);換頁寫在「第二張起每一張之前」。入口:進貨單清單「列印標籤」(`/purchases/:id/print/labels`)、庫存查詢展開列的「標籤」(某一台)與「列印標籤」(配件、打張數)、個人收購存完的「列印標籤」、系統設定「列印測試標籤」(`/labels/print?test=1`:一張四邊有框線看有沒有被切、一張真的樣子);列印頁上面可以改配件的張數(0 = 不印;一筆最多 500、整批超過 1000 張不畫也不印);這一頁自己捲(`.label-page`,外層版面不能捲),上面那一排第一行固定是張數 / 列印 / 關閉,配件再多行也看得到;載入之後內容固定,不在背後重抓。**自己跳列印視窗只在資料第一次到的那一刻決定一次**(`shouldAutoPrint`:100 張以內、沒有提醒、沒有 `auto=0`);那一刻沒跳,之後提醒消失、張數改小都不會突然自己印;人自己按「列印」會取消還在等的那一次(不會印兩份)。被擋下來的請求(4xx)馬上顯示原因與「重試 / 關閉」,不重試;還沒拿到資料時顯示載入中或網路沒回應,不會說成「沒有東西要印」。開列印頁一律走 `components/labels/openLabelPrint` / `openPurchaseLabels`(新分頁被瀏覽器擋掉會講)。配件補印不管按 Enter 還是按「列印」,印的都是框裡現在看到的數字(範圍外不送);個人收購的按鈕寫著是哪一台(序末 5 碼)。**實機(印出來的位置、條碼刷不刷得到)只能由 owner 在接印表機的那台電腦驗** |
 | 銷貨商品搜尋 | `searchProductsForSales` 支援 品名 / 品號 / 條碼 / IMEI 任一;打 IMEI 命中時 matched_serial 也預掛該行,且該倉只有 1 隻在庫時自動掛唯一序號(中古機同步帶 custom_unit_price)|
 | 銷貨可選清單 | `?sales_pickable=true` 過濾:庫存 > 0 OR `is_virtual=True`(虛擬商品永遠可選,實體 0 庫存擋下)|
 | IMEI 搜尋安全閥 | ProductViewSet.`get_search_fields` 動態化:**只有純數字 6 碼以上才把 `serials__serial_no` 加進 search_fields**,避免「18 pro 256」誤命中含 18 的 IMEI |
@@ -117,7 +117,7 @@ inventory-3c/
 │       ├── tenants/            Tenant + UserProfile + 平台後台 + auth(login/me/logout)+ 系統設定主檔(InvoiceType / InvoiceTrack / PaymentMethod)
 │       ├── catalog/            Product / Category
 │       ├── identity/           ProductAlias 別名庫 + 叫法比對(product_match)+ 新增防重複關卡(dedup)+ IntakeBatch/IntakeItem 待確認入庫
-│       ├── inventory/          Warehouse / ProductSerial / StockMovement
+│       ├── inventory/          Warehouse / ProductSerial / StockMovement + 商品標籤要印什麼(labels / label_views)
 │       ├── parties/            Supplier / Customer / Member / SalesPerson / Carrier / TelecomPlan / SimCard
 │       ├── purchasing/         PurchaseOrder + commit/void service
 │       ├── sales/              SalesOrder + commit/void/payment service + SalesReturn(銷退單)+ LegacyPurchase(舊系統匯入紀錄)
@@ -136,7 +136,7 @@ inventory-3c/
         │   └── workbench/      工作台版型的零件:ScanBox(掃碼框,條碼排隊處理;沒加進去的碼怎麼記在 `lib/scanMissed.ts`,有測試)/ toast(訊息條,可帶復原)/ ArmButton(兩段式按鈕)/ MoreMenu(開單頁頁首的「更多」)/ QtyInput(打到一半不會被改掉的數量框)/ errors
         ├── pages/
         │   ├── products/        ProductsPage(合併商品 + 類別管理,左側兩段:商品搜尋 / 類別拖拉排序)+ ProductForm + ProductExpanderModal(型號展開,軸標籤可自訂)+ BulkAddProductsModal
-        │   ├── purchases/       PurchaseListPage(進貨單清單:點一列展開、列印標籤 / 整張調撥 / 作廢;`/purchases/編號` 展開那一張)+ PurchaseWorkbenchPage(開單頁 `/purchases/new`:商品明細優先;序號格子 SerialSlots / serials.ts)+ PurchaseLabelsPrintPage(條碼優先序 IMEI > 原廠 > SKU)+ PurchaseBatchPasteModal(批次貼上,模糊比對預覽)+ PurchaseProductPickerModal(勾選商品);後兩個在工作台裡是放在頁面裡的面板(`inline`),不是彈出視窗
+        │   ├── purchases/       PurchaseListPage(進貨單清單:點一列展開、列印標籤 / 整張調撥 / 作廢;`/purchases/編號` 展開那一張)+ PurchaseWorkbenchPage(開單頁 `/purchases/new`:商品明細優先;序號格子 SerialSlots / serials.ts)+ PurchaseBatchPasteModal(批次貼上,模糊比對預覽)+ PurchaseProductPickerModal(勾選商品);後兩個在工作台裡是放在頁面裡的面板(`inline`),不是彈出視窗
         │   ├── sales/           SalesListPage(銷貨單清單:點一列展開、列印 / 整張銷退 / 作廢;`/sales/編號` 展開那一張)+ SalesWorkbenchPage(開單頁 `/sales/new`:商品明細優先;單據資訊、結帳、新增客戶 / 會員在右邊的抽屜;門號欄位接在商品正下方)+ SalesPage(只剩銷退單清單 `SalesReturnsPage`,`/sales/returns`)+ SalesPrintPage + SalesReturnEntryPage(搜尋原單 → 整張退,明細唯讀;`?so=編號` 直接帶好原單)
         │   ├── customers/       CustomersPage(客戶管理;tabs:全部/個人/同業/企業/其他;Detail 下半顯示該客戶銷售紀錄)
         │   ├── members/         MembersPage(會員獨立主檔;欄位姓名/電話/身分證/生日/地址/備註;Detail 下半顯示該會員銷售紀錄)
@@ -146,6 +146,7 @@ inventory-3c/
         │   ├── telecom-plans/   TelecomPlansPage + TelecomPlanForm
         │   ├── secondhand-acquisition/  SecondhandAcquisitionPage(hub:tabs 切換)+ SecondhandPersonalEntry(個人收購表單;廠商收購直接內嵌 PurchaseWorkbenchPage)
         │   ├── inventory/       InventoryQueryPage(工作台版型:每家分店一欄 + 點一列就地展開每台序號 + 常用類別 + 欄位排序)+ CategoriesPage(舊獨立頁,nav 已隱藏但路由仍在)
+        │   ├── labels/          LabelPrintPage(商品標籤列印頁 50 × 30 mm:進貨單整張 / 幾台 / 配件幾張 / 測試標籤;不套外框)
         │   ├── transfers/       TransferWorkbenchPage(工作台版型:新增、最近調撥、待入庫都在同一頁;`/transfers/編號` 展開那一張)
         │   ├── cash/            PettyExpensesPage 店頭雜支(列表 + Drawer 新增,連續模式)+ CashAdjustmentsPage
         │   ├── phone-bills/     PhoneBillsPage 代收話費(列表 + Drawer 兩步確認 + 電話會員 lookup)+ PhoneBillReceiptPage 80mm 熱感收據

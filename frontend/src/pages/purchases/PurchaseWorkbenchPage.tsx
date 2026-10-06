@@ -22,6 +22,7 @@ import type {
   TaxMethod,
 } from "@/api/types";
 import { useCurrentUser, useDefaultWarehouse } from "@/auth/AuthContext";
+import { openPurchaseLabels } from "@/components/labels/openLabelPrint";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { MoneyInput } from "@/components/MoneyInput";
@@ -957,8 +958,7 @@ export function PurchaseWorkbenchPage({
         ms: 7000,
         action: {
           label: "列印標籤",
-          fn: () =>
-            window.open(`/purchases/${created.id}/print/labels`, "_blank"),
+          fn: () => openPurchaseLabels(created.id),
         },
       });
       if (left > 0) {

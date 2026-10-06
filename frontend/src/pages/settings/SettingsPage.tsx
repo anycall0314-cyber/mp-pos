@@ -16,6 +16,7 @@ import {
 } from "@/api/hooks";
 import type { InvoiceTrack, PaymentMethod, PaymentMethodKind } from "@/api/types";
 import { Banner } from "@/components/Banner";
+import { openLabelPrint } from "@/components/labels/openLabelPrint";
 import { Toolbar } from "@/components/Toolbar";
 import { apiErrorText } from "@/components/workbench/errors";
 import { toast } from "@/components/workbench/toast";
@@ -186,6 +187,17 @@ export function SettingsPage() {
             }
           >
             {saveTenantSettings.isPending ? "儲存中…" : "儲存"}
+          </button>
+        </div>
+
+        <h3>標籤</h3>
+        <div style={{ marginBottom: 24 }}>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => openLabelPrint("test=1")}
+          >
+            列印測試標籤
           </button>
         </div>
 

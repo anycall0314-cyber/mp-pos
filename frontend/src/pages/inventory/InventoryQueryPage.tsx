@@ -17,6 +17,8 @@ import { searchCategories } from "@/api/search";
 import type { Category } from "@/api/types";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { CompatibilityModal } from "@/components/CompatibilityModal";
+import { AccessoryLabelButton } from "@/components/labels/AccessoryLabelButton";
+import { openLabelPrint } from "@/components/labels/openLabelPrint";
 import { PhotoName, usePhotoPeek } from "@/components/photos/PhotoName";
 import { SerialHistoryModal } from "@/components/SerialHistoryModal";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -148,6 +150,17 @@ function UnitsOfStore({
           >
             履歷
           </button>
+          <button
+            type="button"
+            className="wb-link"
+            title="印這一台的標籤"
+            onClick={(e) => {
+              e.stopPropagation();
+              openLabelPrint(`serials=${s.id}`);
+            }}
+          >
+            標籤
+          </button>
         </div>
       ))}
       {!serials.isLoading && rows.length < qty && rows.length > 0 && (
@@ -239,6 +252,8 @@ function ProductDetail({
         >
           相容機型
         </button>
+        {/* 配件:打張數補印。序號商品一台一張,在上面每一台那一列按「標籤」 */}
+        {!product.requires_serial && <AccessoryLabelButton productId={product.id} />}
       </div>
     </div>
   );

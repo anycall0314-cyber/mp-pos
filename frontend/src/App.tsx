@@ -26,7 +26,7 @@ import { ProductTypesPage } from "@/pages/products/ProductTypesPage";
 import { ProductsPage } from "@/pages/products/ProductsPage";
 import { PurchaseListPage } from "@/pages/purchases/PurchaseListPage";
 import { PurchaseWorkbenchPage } from "@/pages/purchases/PurchaseWorkbenchPage";
-import { PurchaseLabelsPrintPage } from "@/pages/purchases/PurchaseLabelsPrintPage";
+import { LabelPrintPage } from "@/pages/labels/LabelPrintPage";
 import { BusinessDailyReportPage } from "@/pages/reports/BusinessDailyReport";
 import { ExploreReportPage } from "@/pages/reports/ExploreReportPage";
 import { PartsUsageReportPage } from "@/pages/reports/PartsUsageReportPage";
@@ -233,8 +233,9 @@ export function App() {
           <Route path="/purchases/:id" element={<PurchaseListPage />} />
           <Route
             path="/purchases/:id/print/labels"
-            element={<PurchaseLabelsPrintPage />}
+            element={<LabelPrintPage />}
           />
+          <Route path="/labels/print" element={<LabelPrintPage />} />
           <Route
             path="/secondhand-acquisition"
             element={<SecondhandAcquisitionPage />}

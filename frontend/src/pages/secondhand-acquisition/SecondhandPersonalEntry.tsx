@@ -18,6 +18,7 @@ import type {
   Warehouse,
 } from "@/api/types";
 import { Banner } from "@/components/Banner";
+import { openLabelPrint } from "@/components/labels/openLabelPrint";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
@@ -77,6 +78,12 @@ export function SecondhandPersonalEntry() {
   const [note, setNote] = useState("");
 
   const [success, setSuccess] = useState<string | null>(null);
+  /**
+   * 最後收進來的那一台(可以直接印它的標籤)。
+   * 留到下一台存成功才換掉:下一筆存失敗時,上一台的列印入口不能跟著不見(它已經入庫、可能還沒貼)。
+   * 按鈕上寫著是哪一台(序號末 5 碼),不會跟正在填的下一筆搞混。
+   */
+  const [savedSerial, setSavedSerial] = useState<{ id: number; last5: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -186,6 +193,7 @@ export function SecondhandPersonalEntry() {
       setSuccess(
         `收購完成:序號 ${res.serial.serial_no},對應銷貨單 ${res.sales_order.no},付款 ${money(acquisitionPrice)} 元給 ${member?.name ?? "會員"}`,
       );
+      setSavedSerial({ id: res.serial.id, last5: res.serial.serial_no.slice(-5) });
       reset();
     } catch (e) {
       if (e instanceof ApiHttpError) {
@@ -204,6 +212,17 @@ export function SecondhandPersonalEntry() {
   return (
     <div className="entry-body">
       {success && <Banner kind="success" message={success} />}
+      {savedSerial !== null && (
+        <div style={{ margin: "8px 0 16px" }}>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => openLabelPrint(`serials=${savedSerial.id}`)}
+          >
+            列印標籤(序末 {savedSerial.last5})
+          </button>
+        </div>
+      )}
       {error && <Banner kind="error" message={error} />}
 
       <div className="entry-header" style={{ marginBottom: 12 }}>
