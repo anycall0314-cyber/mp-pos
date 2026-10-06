@@ -327,3 +327,38 @@ cd ~/MP_POS系統
 - 設個 UPS(不斷電系統),避免停電資料庫掛掉
 - 監控:寫個 cron 每 10 分鐘 curl `/admin/` 不通就 LINE Notify 通知
 - 想搬上雲端:DATABASE_URL 改成雲端 PG、code push 到雲端機器,就是 30 分鐘的事
+
+---
+
+## 測試站(pos-test.mptw-system.com)
+
+給門市練習與驗證用的另一個站,**資料不是真的**;正式站(pos.mptw-system.com)的資料不會被它碰到。
+
+| 項目 | 內容 |
+|---|---|
+| 網址 | `https://pos-test.mptw-system.com`(mptw 通道,`~/.cloudflared/mptw.yml` 裡多一條規則 → `localhost:8001`) |
+| 程式 | 跟正式站同一份(`~/MP_POS系統`),所以版本永遠一樣 |
+| 資料庫 | `mppos_test`(2026-10-05 從正式資料庫複製;公司名稱都加上【測試】) |
+| 設定 | `~/mppos-test/`:`env`(環境變數)、`mppos_test_settings.py`(上傳檔另外放 `~/mppos-test/media`)、`run-backend.sh`、`logs/` |
+| 服務 | launchd `com.mppos.test.backend`;啟動時先 `migrate` 測試資料庫再開 gunicorn(2 個 worker) |
+| 部署 | `./deploy.sh` 最後會重啟它(有裝才做) |
+| 沒有的 | 備份背景程式(測試站的公司備份與每日對帳不會自動跑) |
+
+測試公司 `TEST`(【測試】測試通訊行)的庫存是從歐睿「庫存明細表」匯入的。要重新匯入最新的庫存:
+
+```bash
+cd ~/MP_POS系統/backend
+set -a; source ~/mppos-test/env; set +a
+export PYTHONPATH=~/mppos-test:~/mppos-test/pylib      # pylib 裡是讀 Excel 用的套件,只有匯入要用
+# 先預覽(不寫入),數字對了再加 --confirm。--tenant 一定要是測試公司的編號(~/mppos-test/test_tenant_id)
+.venv/bin/python manage.py import_legacy_inventory \
+  --xls ~/mppos-test/data/庫存明細表.xls --mapping ~/mppos-test/data/庫存匯入_類別對照表.xlsx \
+  --tenant "$(cat ~/mppos-test/test_tenant_id)"
+```
+
+**這支匯入會先清空那一家公司的商品、庫存與單據。只能對測試資料庫的測試公司跑**;下指令前先確認 `DATABASE_URL` 指到 `mppos_test`。
+舊系統中古機的品號是「IMEI 15 碼 + I」:匯入後要把 15 碼登記成 IMEI、舊品號登記成 SN(2026-10-05 是匯入後另外補的,還沒寫進匯入指令)。
+
+整個不要了:`launchctl unload ~/Library/LaunchAgents/com.mppos.test.backend.plist`、`dropdb mppos_test`、
+把 `mptw.yml` 裡 pos-test 那條規則拿掉並重啟通道、到 Cloudflare 刪掉 `pos-test` 的 DNS 紀錄。
+

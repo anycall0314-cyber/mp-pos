@@ -8,6 +8,7 @@
 #  2. backend:同步 requirements、跑 migration、collectstatic
 #  3. frontend:同步 npm 套件、npm run build
 #  4. 重啟 launchd 服務(網站 + 備份背景程式;備份背景程式第一次會自動安裝)
+#  5. 有裝測試站(~/mppos-test/)的話一併重啟
 # ─────────────────────────────────────────────────────────
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -81,6 +82,22 @@ else
   launchctl unload "$WPLIST" 2>/dev/null || true
   launchctl load -w "$WPLIST"
   echo "✓ 已重新 load $WLABEL"
+fi
+
+echo ""
+echo "── 測試站(有裝才做)────────────────────────"
+# 測試站 pos-test.mptw-system.com:同一份程式、另一個資料庫(mppos_test),設定在 ~/mppos-test/。
+# 它的啟動腳本每次啟動都會先把測試資料庫升到跟程式一樣的版本,所以這裡只要重啟它。
+# 不重啟的話,測試站會拿舊程式配新畫面,資料庫也少了新的欄位。
+TLABEL="com.mppos.test.backend"
+if [ -f "$HOME/Library/LaunchAgents/$TLABEL.plist" ]; then
+  if launchctl kickstart -k "gui/$(id -u)/$TLABEL" 2>/dev/null; then
+    echo "✓ 已重啟 $TLABEL"
+  else
+    echo "⚠ 測試站重啟失敗(不影響正式站);之後手動:launchctl kickstart -k gui/$(id -u)/$TLABEL"
+  fi
+else
+  echo "  沒有安裝測試站,略過"
 fi
 
 echo ""
