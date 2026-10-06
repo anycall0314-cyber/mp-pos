@@ -91,6 +91,13 @@ def _validate_items(po: PurchaseOrder, items):
         if not same_company(po.tenant_id, it, it.product):
             raise PurchaseOrderError(f"第 {it.line_no} 行的商品不屬於這家公司")
 
+    for it in items:
+        # 計價數量不能比進貨數量多(多出來的那幾個沒有東西可以攤成本)
+        if it.billed_qty is not None and it.billed_qty > it.qty:
+            raise PurchaseOrderError(
+                f"第 {it.line_no} 行計價數量 {it.billed_qty} 大於進貨數量 {it.qty}"
+            )
+
     all_serials = []
     for it in items:
         sn = it.serial_numbers
@@ -193,14 +200,14 @@ def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
         )
         _validate_items(po, items)
         # 1. 每筆明細:
-        #    - billed_qty 未填 → 預設等於 qty
+        #    - billed_qty 未填(None)→ 預設等於 qty;0 = 整行贈品,不計價
         #    - 一般商品:amount = billed_qty × unit_price(贈品不計價),
         #      unit_landed_cost = (未稅 billed_amount) / qty
         #    - 中古機(is_secondhand):每隻序號可帶自己的 cost,
         #      amount = sum(每隻 cost,空值 fallback 為 unit_price),
         #      unit_landed_cost = 未稅 amount / qty(僅供加權平均報表參考)
         for it in items:
-            if not it.billed_qty:
+            if it.billed_qty is None:
                 it.billed_qty = it.qty
             billed_dec = Decimal(it.billed_qty)
             qty_dec = Decimal(it.qty)

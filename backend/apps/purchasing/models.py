@@ -166,10 +166,13 @@ class PurchaseOrderItem(TenantOwnedModel):
         "進貨數量",
         help_text="實際入庫數量(含贈品)",
     )
+    # 空的(None)= 沒填,存檔時等於進貨數量;**0 是明講的 0**(整行贈品 / 試用品,不計價)
     billed_qty = models.PositiveIntegerField(
         "計價數量",
-        default=0,
-        help_text="實際計價的數量(贈品/試用品不計價);未設定 → 等於進貨數量",
+        null=True,
+        blank=True,
+        default=None,
+        help_text="實際計價的數量(贈品/試用品不計價);沒填 → 等於進貨數量;填 0 = 整行不計價",
     )
     unit_price = models.DecimalField("單價", max_digits=14, decimal_places=2)
     amount = models.DecimalField(
@@ -206,8 +209,8 @@ class PurchaseOrderItem(TenantOwnedModel):
         return f"{self.po.no} #{self.line_no} {self.product_id}"
 
     def save(self, *args, **kwargs):
-        # billed_qty 預設 = qty(無贈品的常態)
-        if not self.billed_qty:
+        # 沒填計價數量 = 等於進貨數量(無贈品的常態)。0 是明講的「整行不計價」,不能當成沒填
+        if self.billed_qty is None:
             self.billed_qty = self.qty
         # 金額一律整數元(規則見 apps/core/money.py);過帳之後再存一次也不會把零頭帶回來
         self.amount = round_money(self.billed_qty * self.unit_price)

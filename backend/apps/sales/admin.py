@@ -19,9 +19,12 @@ class SalesOrderItemInline(admin.TabularInline):
         "telecom_plan",
         "commission",
         "activation_date",
+        "prev_contract_end",
+        "contract_months",
+        "contract_end",
         "note",
     )
-    readonly_fields = ("amount", "cost_at_post")
+    readonly_fields = ("amount", "cost_at_post", "contract_months", "contract_end")
 
 
 @admin.register(SalesOrder)

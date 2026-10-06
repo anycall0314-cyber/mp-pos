@@ -56,7 +56,7 @@ export function codesLabel(
 }
 
 /** 長得像 IMEI(14~16 碼數字)但檢查碼不一定對:多半是 IMEI 打錯,不是 SN。 */
-function imeiShaped(text: string): boolean {
+export function imeiShaped(text: string): boolean {
   return /^[0-9]{14,16}$/.test(normalizeCode(text));
 }
 
@@ -86,6 +86,8 @@ export function routeCodes<T extends DeviceCodes>(
   codes: string[],
   blank: () => T,
   pair: boolean,
+  /** 14~16 碼數字一律當 IMEI(檢查碼不對也是):掃碼框刷進來的碼用,誤讀的 IMEI 不會佔掉 SN 那一格 */
+  shapedAsImei = false,
 ): {
   entries: T[];
   focus: { idx: number; field: CodeField } | null;
@@ -106,7 +108,8 @@ export function routeCodes<T extends DeviceCodes>(
     const code = raw.trim();
     if (!code) continue;
     const field: CodeField =
-      looksLikeImei(code) || (typed?.field === "imei" && imeiShaped(code))
+      looksLikeImei(code) ||
+      ((shapedAsImei || typed?.field === "imei") && imeiShaped(code))
         ? "imei"
         : "sn";
     let pos = row;
@@ -164,4 +167,89 @@ export function routeCodes<T extends DeviceCodes>(
     }
   }
   return { entries: next, focus: null, dropped, refused };
+}
+
+/** 這一台刷完了沒:每台刷兩個碼(pair)時兩格都要有,否則有一格就算 */
+export function unitComplete(
+  e: Partial<DeviceCodes> | undefined,
+  pair: boolean,
+): boolean {
+  const imei = (e?.imei ?? "").trim();
+  const sn = (e?.sn ?? "").trim();
+  return pair ? !!imei && !!sn : !!imei || !!sn;
+}
+
+/** 數量以內的這幾台有沒有這個碼(IMEI、SN 一起比,去掉符號、不分大小寫) */
+export function hasDeviceCode(
+  entries: Partial<DeviceCodes>[],
+  qty: number,
+  code: string,
+): boolean {
+  const nv = normalizeCode(code);
+  if (!nv) return false;
+  return entries
+    .slice(0, Math.max(0, qty))
+    .some((e) => normalizeCode(e.imei) === nv || normalizeCode(e.sn) === nv);
+}
+
+/**
+ * 掃碼框刷進來的一個設備碼,放進這一行(進貨的工作台版型:游標一直在掃碼框,不用先點格子)。
+ * 先補還沒刷完的那一台;都刷完了就多一台(數量 +1)。放哪一格、每台刷幾個碼的規則就是 `routeCodes`。
+ * refused = 沒放進去的原因(每台刷兩個碼時,同一種碼又來一個 —— 多半是盒上的 IMEI2)。
+ */
+export function placeScannedCode<T extends DeviceCodes>(
+  entries: T[],
+  qty: number,
+  code: string,
+  pair: boolean,
+  blank: () => T,
+): { entries: T[]; qty: number; refused: string | null } {
+  const shown = entries.slice(0, Math.max(0, qty));
+  let start = 0;
+  while (start < qty && unitComplete(shown[start], pair)) start++;
+  const nextQty = start >= qty ? qty + 1 : qty;
+  const r = routeCodes(shown, nextQty, start, null, [code], blank, pair, true);
+  if (r.refused) {
+    return {
+      entries,
+      qty,
+      refused: `這一台還缺 ${r.refused.missing === "sn" ? "SN" : "IMEI"}`,
+    };
+  }
+  if (r.dropped > 0) return { entries, qty, refused: "放不下" };
+  return { entries: r.entries, qty: nextQty, refused: null };
+}
+
+/** 拿掉第 idx 台:數量跟著少一;至少留一台的空位 */
+export function removeUnitAt<T extends DeviceCodes>(
+  entries: T[],
+  qty: number,
+  idx: number,
+  blank: () => T,
+): { entries: T[]; qty: number } {
+  const next = entries.slice(0, Math.max(0, qty));
+  next.splice(idx, 1);
+  const nextQty = Math.max(1, qty - 1);
+  while (next.length < nextQty) next.push(blank());
+  return { entries: next, qty: nextQty };
+}
+
+/**
+ * 把數量改成 want:**已經刷了碼的那幾台一台都不丟**(要少一台請按那一台的 ✕)。
+ * 想改得比已刷的台數還少 → 數量停在已刷的台數;被拿掉的只會是空的格子(從最後面的空格開始拿)。
+ * 所以清單永遠剛好是「數量」那麼多台,不會有看不到、卻還留在資料裡的碼。
+ */
+export function resizeUnits<T extends DeviceCodes>(
+  entries: T[],
+  want: number,
+  blank: () => T,
+): { entries: T[]; qty: number } {
+  const hasCode = (e: T) => !!((e.imei ?? "").trim() || (e.sn ?? "").trim());
+  const next = [...entries];
+  const qty = Math.max(1, Math.floor(want) || 0, next.filter(hasCode).length);
+  for (let i = next.length - 1; i >= 0 && next.length > qty; i--) {
+    if (!hasCode(next[i])) next.splice(i, 1);
+  }
+  while (next.length < qty) next.push(blank());
+  return { entries: next, qty };
 }

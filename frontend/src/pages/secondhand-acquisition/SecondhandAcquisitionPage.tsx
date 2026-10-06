@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 
-import { PurchaseEntryPage } from "../purchases/PurchaseEntryPage";
+import { PurchaseWorkbenchPage } from "../purchases/PurchaseWorkbenchPage";
 import { SecondhandPersonalEntry } from "./SecondhandPersonalEntry";
 
 type Tab = "personal" | "vendor";
@@ -26,12 +26,12 @@ const TABS: { value: Tab; label: string; hint: string }[] = [
  * - 個人收購:單筆會員出機,走 acquire_secondhand_from_member service,
  *   同步開銷貨負單作為現金流出。
  * - 廠商收購:多筆批量,走一般進貨單流程,但商品只能選中古機,
- *   直接內嵌 PurchaseEntryPage with mode="secondhand-vendor"。
+ *   直接內嵌進貨的工作台(PurchaseWorkbenchPage)with mode="secondhand-vendor"。
  *   儲存成功後不離開頁面,而是 bump key 重置表單 + 顯示成功訊息。
  */
 export function SecondhandAcquisitionPage() {
   const [tab, setTab] = useState<Tab>("personal");
-  // 廠商收購儲存成功後 bump 強制 PurchaseEntryPage 重建(清空所有 state)
+  // 廠商收購儲存成功後 bump 強制進貨工作台重建(清空所有 state)
   const [vendorKey, setVendorKey] = useState(0);
   const [vendorSuccess, setVendorSuccess] = useState<string | null>(null);
 
@@ -75,7 +75,7 @@ export function SecondhandAcquisitionPage() {
               <Banner kind="success" message={vendorSuccess} />
             </div>
           )}
-          <PurchaseEntryPage
+          <PurchaseWorkbenchPage
             key={`vendor-${vendorKey}`}
             mode="secondhand-vendor"
             onAfterCreated={handleVendorCreated}

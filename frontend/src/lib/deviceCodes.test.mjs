@@ -5,11 +5,16 @@ import test from "node:test";
 
 import {
   codesLabel,
+  hasDeviceCode,
   looksLikeImei,
   mainCode,
   normalizeCode,
+  placeScannedCode,
+  removeUnitAt,
+  resizeUnits,
   routeCodes,
   splitCode,
+  unitComplete,
 } from "./deviceCodes.ts";
 
 const A1 = "490154203237518"; // 手機 A 的 IMEI
@@ -140,4 +145,104 @@ test("一次貼上一串", () => {
   const r = routeCodes(rows(2), 2, 0, null, [A1, A2], blank, true);
   assert.deepEqual(codes(r.entries), [[A1, ""], ["", ""]]);
   assert.deepEqual(r.refused, { code: A2, missing: "sn" });
+});
+
+// ─── 掃碼框直接刷設備碼(進貨的工作台版型) ───
+const IMEI_A = "356938035643809";
+const IMEI_B = "490154203237518";
+const IMEI_C = "352099001761481";
+const unit = () => ({ imei: "", sn: "" });
+
+test("一個碼一台:先補空的那一台,滿了就多一台", () => {
+  let r = placeScannedCode([unit()], 1, IMEI_A, false, unit);
+  assert.deepEqual([r.qty, r.refused, r.entries.map((e) => e.imei)], [1, null, [IMEI_A]]);
+  r = placeScannedCode(r.entries, r.qty, IMEI_B, false, unit);
+  assert.deepEqual([r.qty, r.entries.map((e) => e.imei)], [2, [IMEI_A, IMEI_B]]);
+  // SN 也是一台
+  r = placeScannedCode(r.entries, r.qty, "F2LXK0ABCD", false, unit);
+  assert.deepEqual([r.qty, r.entries[2]], [3, { imei: "", sn: "F2LXK0ABCD" }]);
+});
+
+test("先把數量改成 3:照順序補空位,不會多出第 4 台", () => {
+  let r = { entries: [unit(), unit(), unit()], qty: 3 };
+  for (const code of [IMEI_A, IMEI_B, IMEI_C]) {
+    r = placeScannedCode(r.entries, r.qty, code, false, unit);
+  }
+  assert.equal(r.qty, 3);
+  assert.deepEqual(r.entries.map((e) => e.imei), [IMEI_A, IMEI_B, IMEI_C]);
+});
+
+test("每台刷 IMEI 與 SN:補齊這一台才換下一台;同一種碼又來一個不放", () => {
+  let r = placeScannedCode([unit()], 1, IMEI_A, true, unit);
+  assert.deepEqual(r.entries, [{ imei: IMEI_A, sn: "" }]);
+  // 盒上的 IMEI2:這一台還缺 SN,不放、數量不變
+  const second = placeScannedCode(r.entries, r.qty, IMEI_B, true, unit);
+  assert.equal(second.refused, "這一台還缺 SN");
+  assert.deepEqual([second.qty, second.entries], [1, r.entries]);
+  r = placeScannedCode(r.entries, r.qty, "F2LXK0ABCD", true, unit);
+  assert.deepEqual(r.entries, [{ imei: IMEI_A, sn: "F2LXK0ABCD" }]);
+  // 這一台齊了,下一個 IMEI 才是下一台
+  r = placeScannedCode(r.entries, r.qty, IMEI_B, true, unit);
+  assert.deepEqual([r.qty, r.entries[1]], [2, { imei: IMEI_B, sn: "" }]);
+});
+
+test("數量以外的舊資料不算、也不會被帶回來", () => {
+  // 數量從 2 改回 1:第 2 台看不到了,再刷一個碼是「多一台」,放在第 2 台(蓋掉看不到的那筆)
+  const r = placeScannedCode(
+    [{ imei: IMEI_A, sn: "" }, { imei: IMEI_B, sn: "" }], 1, IMEI_C, false, unit,
+  );
+  assert.deepEqual([r.qty, r.entries.map((e) => e.imei)], [2, [IMEI_A, IMEI_C]]);
+});
+
+test("這張單有沒有這個碼:去掉符號、不分大小寫,只看數量以內", () => {
+  const list = [{ imei: IMEI_A, sn: "f2lx-k0ab" }, { imei: IMEI_B, sn: "" }];
+  assert.equal(hasDeviceCode(list, 2, "F2LXK0AB"), true);
+  assert.equal(hasDeviceCode(list, 2, IMEI_B), true);
+  assert.equal(hasDeviceCode(list, 1, IMEI_B), false);
+  assert.equal(hasDeviceCode(list, 2, ""), false);
+});
+
+test("拿掉一台:數量少一,最少留一個空位", () => {
+  const two = [{ imei: IMEI_A, sn: "" }, { imei: IMEI_B, sn: "" }];
+  assert.deepEqual(removeUnitAt(two, 2, 0, unit), { entries: [{ imei: IMEI_B, sn: "" }], qty: 1 });
+  assert.deepEqual(removeUnitAt([{ imei: IMEI_A, sn: "" }], 1, 0, unit), { entries: [unit()], qty: 1 });
+});
+
+test("刷完了沒", () => {
+  assert.equal(unitComplete({ imei: IMEI_A, sn: "" }, false), true);
+  assert.equal(unitComplete({ imei: IMEI_A, sn: "" }, true), false);
+  assert.equal(unitComplete({ imei: IMEI_A, sn: "X1" }, true), true);
+  assert.equal(unitComplete(undefined, false), false);
+});
+
+test("掃碼框刷到檢查碼不對的 15 碼:放 IMEI 格,不佔掉 SN", () => {
+  const bad = "352099001761480";
+  let r = placeScannedCode([unit()], 1, bad, true, unit);
+  assert.deepEqual(r.entries, [{ imei: bad, sn: "" }]);
+  // 接著刷真正的 SN:放得進去(以前誤讀的那一串佔在 SN,真的 SN 反而被擋)
+  r = placeScannedCode(r.entries, r.qty, "F2LXK0ABCD", true, unit);
+  assert.equal(r.refused, null);
+  assert.deepEqual(r.entries, [{ imei: bad, sn: "F2LXK0ABCD" }]);
+});
+
+test("改數量:刷過碼的一台都不丟,少掉的只會是空格", () => {
+  const three = [
+    { imei: IMEI_A, sn: "" },
+    unit(),
+    { imei: IMEI_B, sn: "" },
+  ];
+  // 3 → 2:拿掉中間那個空格,兩台都還在
+  assert.deepEqual(resizeUnits(three, 2, unit), {
+    entries: [{ imei: IMEI_A, sn: "" }, { imei: IMEI_B, sn: "" }],
+    qty: 2,
+  });
+  // 想改成 1,但已經刷了 2 台:停在 2
+  assert.equal(resizeUnits(three, 1, unit).qty, 2);
+  // 改大:補空格
+  const grown = resizeUnits(three, 5, unit);
+  assert.equal(grown.qty, 5);
+  assert.equal(grown.entries.length, 5);
+  assert.deepEqual(grown.entries[2], { imei: IMEI_B, sn: "" });
+  // 清單長度永遠等於數量:沒有藏在後面的碼
+  assert.equal(resizeUnits(three, 2, unit).entries.length, 2);
 });

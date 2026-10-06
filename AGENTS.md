@@ -7,6 +7,16 @@
 3C / 通訊行進銷存系統,後端 Django + DRF + PostgreSQL,前端 React + Vite + TypeScript。
 取代舊系統「歐睿手機玩家 + 歐睿創意 POS」。MVP 單租戶,多租戶架構已就緒(`tenant_id` 全表帶,API 走 `for_tenant`)。
 
+## 開發流程(改程式之前先讀)
+
+2026-10-06 起照 `docs/development/README.md`:**想法 → 待辦 → 目前任務 → 施工 → 測試 → 複審 → 提交**。
+
+- **只有 `docs/development/CURRENT_TASK.md` 裡的那一件才是現在要做的**;同一時間只有一件,它寫了可以改 / 不可以改的範圍。
+- 新想法、順便想到的改進 → 記進 `docs/development/IDEAS.md`,**不動程式**;`BACKLOG.md` 裡的也不代表可以做。
+- 做到一半冒出新需求不插隊(例外:會掉資料、資料嚴重錯誤、資安、現有功能壞掉、目前任務做不下去)。
+- 發現技術債先記在 `BACKLOG.md`,不順手改;不做不相干的重構。商業邏輯不確定就問 owner,不猜。
+- 做完回報:完成內容 / 改了哪些檔 / 資料庫 / 測試 / 風險 / 沒動的地方 / 建議下一件;提交後寫進 `COMPLETED.md`。
+
 ## 核心 stack
 
 | 層 | 用 |
@@ -22,10 +32,10 @@
 - **庫存以序號為單位**:`ProductSerial` 一台一筆,狀態 in_stock / sold / void / returned / rma / in_transit
 - **成本走加權平均(全公司,不分倉)**:`Product.weighted_avg_cost` 跨倉聚合;**目的是避免「店員挑低成本機賣→虛幻獎金」**。庫存查詢的單倉視窗不顯示「該倉成本」,只顯示在庫數。中古機例外:每隻獨立 `purchase_unit_cost`,賣出時用該隻自己的成本(因為每台是獨立商品)
 - **計入現金 / 計入毛利雙旗標**:`Product.counts_cash` / `counts_margin`。收購二手虛擬商品 `counts_cash=True, counts_margin=False`,讓收購單在報表上「算現金流出但不汙染毛利」
-- **四種頁面版型**:錄入頁(進貨 / 銷貨)、Master-Detail(主檔)、報表頁、**工作台**(調撥、庫存查詢;2026-10-05 起,owner 習慣的「一個畫面、掃一下加一行、不開彈出視窗」,進貨 / 銷貨之後照這一套改)。細節見 `docs/ui-patterns.md`
+- **四種頁面版型**:錄入頁(維修單、銷退單)、Master-Detail(主檔)、報表頁、**工作台**(調撥、庫存查詢、進貨、銷貨;2026-10-05 起,owner 習慣的「掃一下加一行、不開彈出視窗」)。拿條碼槍連續做的單據一律走工作台。進貨與銷貨明細多,拆成**清單頁 + 開單頁**(`/sales/new`、`/purchases/new`:**商品明細優先** —— 交易對象與倉庫常駐、其餘單據資訊收進右邊的抽屜、掃碼框在明細上方、總額與唯一的主要按鈕固定在最下面、明細吃掉剩下的高度;字不縮、列高約 48px,1370×656 看得到 8 列)。細節見 `docs/ui-patterns.md`
 - **唯一前端**:不開 Django admin 給使用者用,Django admin 只當 dev fallback
 - **單一 React app + 角色控制**:Platform Admin / Tenant Admin / Tenant User 共用 SPA(MVP 還沒實作登入)
-- **導覽結構**(2026-10-06 改版,唯一的一份設定在 `frontend/src/nav.ts`):側邊欄只有「今日總覽 + 8 個業務入口」,系統設定固定在最下面;**入口名稱一律 4 個字**(owner 要求字數一致)。點入口直接進它的預設頁;同一個入口的其他頁在頁面上方的分頁切換(`components/shell/ModuleBar`),低頻的設定頁收在分頁列右邊的具名選單(商品設定 / 作業設定)。路由一條都沒改,舊網址照用;改名的頁面把舊名字留在 `aliases`,側邊欄上面的功能搜尋(Ctrl / Cmd + K)打舊名字找得到。「目前這一頁」取網址對得上且最長的那一頁(`matchNav`),同一層只會有一個。新增頁面要掛進 `nav.ts`(`nav.test.mjs` 會檢查改版前的 32 個入口都還在、名稱字數、管理員頁面)
+- **導覽結構**(2026-10-06 改版,唯一的一份設定在 `frontend/src/nav.ts`):側邊欄只有「今日總覽 + 8 個業務入口」,系統設定固定在最下面;**入口名稱一律 4 個字**(owner 要求字數一致)。點入口直接進它的預設頁;同一個入口的其他頁在頁面上方的分頁切換(`components/shell/ModuleBar`),低頻的設定頁收在分頁列右邊的具名選單(商品設定 / 作業設定)。路由一條都沒改,舊網址照用;改名的頁面把舊名字留在 `aliases`,側邊欄上面的功能搜尋(Ctrl / Cmd + K)打舊名字找得到。「目前這一頁」取網址對得上且最長的那一頁(`matchNav`),同一層只會有一個。新增頁面要掛進 `nav.ts`(`nav.test.mjs` 會檢查改版前的 32 個入口都還在、名稱字數、管理員頁面)。開單頁(`isWorkspacePath`:`/sales/new`、`/purchases/new`、`/sales/returns/new`)不放頁面上方那一排分頁,頁首有「返回列表」
 
 ## 業務規則速查
 
@@ -33,7 +43,9 @@
 |---|---|
 | 課稅別 | 應稅內含 / 應稅外加 / 免稅 / 零稅;含稅金額 ÷ 1.05 = 未稅 |
 | 金額一律整數元 | 2026-10-06 起,**單據上的金額(明細金額、未稅小計、稅額、含稅總額)存檔就是整數元、四捨五入**(剛好一半進位,負數往離 0 遠的那一邊)。規則只有一份:後端 `apps/core/money.py`(`round_money` / `money_int` / `money_text`),前端 `frontend/src/lib/money.ts`(`money()` 顯示、`intStr()` 輸入框與送出、`roundInt()`、`splitTax()` 試算,跟後端 `_calc_tax` 同一套算法)。含稅:未稅 = 加總 ÷ 1.05 四捨五入,稅額 = 總額 − 未稅;外加:稅額 = 加總 × 5% 四捨五入(以前算到分,110 外加的總額是 115.50,畫面只收整數,這種單存不進去)。**成本不收整數**(落地成本、加權平均、`cost_at_post` 照舊算到分,只在畫面顯示成整數;95.24 的線材收成 95 進 1000 條會差 240 元)。**以前存的單不改寫**:每日對帳用 `matches_tax_rule()`,新舊兩種算法符合一種就算一致;`split_tax_by_line` 也認得舊單。畫面不要自己 `Math.round` / `Number(x).toLocaleString()`(`money.test.mjs` 會掃全專案),金額輸入框用 `components/MoneyInput`(小數點打不進去、貼上小數會四捨五入、沒有上下箭頭);報表加總不要用 `int()`(無條件捨去)。營業日報:個人收購付出去的現金(現金付款是負的銷貨單)列在「收購現金支出」,當天的結餘 = 隔天的期初。賣出速度(件 / 日)、比率不是金額,照舊有小數 |
-| 進貨成本 | `unit_landed_cost` = 未稅單價(含稅單會自動除 1.05);贈品由 `billed_qty < qty` 表示,平均成本被稀釋 |
+| 同一份建單只成立一次 | 進貨單、銷貨單的建單端點認得 `Idempotency-Key`(`apps/core/idempotency.py` 的 `IdempotentCreateMixin`,紀錄在 `core.IdempotencyKey`):畫面每開一張新單自己產生一把鑰匙,送出時帶著;連線中斷不知道有沒有成立時拿同一把再送 —— 已經成立就回那一張(HTTP 200、`Idempotent-Replay: true`),不會開第二張、不會收兩次錢。第一次被擋(4xx)鑰匙不會留下,改一改用同一把再送是一次新的建單。鑰匙記的是單號(還原備份後編號會換、單號不會),只留 7 天,不進公司備份。沒帶鑰匙的請求跟以前一樣。工作台的送出規則:4xx = 沒成立;斷線 / 5xx = 不知道 → 整張單鎖住,只能「再送一次」(同一把鑰匙)或「取消」。**鑰匙、「送出去了還不知道結果」、付款方式都跟著草稿存**(sessionStorage):重新整理或切到別頁再回來還是同一把、而且鎖著;放棄之後不給復原(放回來再送會用新鑰匙)。同一把鑰匙送回來的是已作廢的單 → 講出來、明細留著、換新鑰匙。新的建單端點要防重複就把 mixin 放在繼承清單最前面、填 `idempotency_scope`(調撥與個人收購還沒接) |
+| 門號合約日期 | 銷貨明細(`SalesOrderItem`)記門號合約:**新辦、攜碼才要卡號;續約只要門號與方案**;有方案的那一行一定要有門號、數量只能是 1;門號商品(虛擬、可以填門號)一定要有方案 —— 這幾條伺服器都擋,不只畫面擋。**合約一律從「起算日」算**(存在 `activation_date`):新辦 = **單據日期,由伺服器存檔時決定、不看送來的值**;攜碼 = 人填的**合約生效日**;續約 = **續約日**(預設開單當天:遠傳、台哥大當天續約;**中華電信等手機到貨才續約,先入帳、續約日往後** —— 開單時可以往後填,**存了之後在銷貨單清單那一行按「改日期」也能改**,`POST /sales-orders/{id}/contract-dates/`,只動日期與合約到期日,不動金額 / 庫存 / 佣金;作廢的單、新辦不能改)。**綁約月數存檔當下從方案抄到明細上**(`contract_months`);`contract_end`(合約到期日)= 起算日 + 那個月數(`apps/core/dates.py` 的 `add_months`,前端試算 `lib/dates.ts` 同一套;沒有起算日就是空的、不猜;唯讀、有索引)。**方案主檔之後改月數,已經開出去的合約不跟著變,事後改日期也是用當初抄下來的月數重算**。作廢時清掉 `contract_end`。之後的「合約快到期」統計與提醒直接查這一欄。`prev_contract_end`(原合約到期日)是續約選填的記錄,不拿來算新約(不是續約填了會被擋)。畫面上攜碼沒填生效日不能結帳(伺服器不強制:舊單沒有)。migration 0017 把以前的門號明細補上月數,沒作廢、有起算日的補上到期日 |
+| 進貨成本 | `unit_landed_cost` = 未稅單價(含稅單會自動除 1.05);贈品由 `billed_qty < qty` 表示,平均成本被稀釋。`billed_qty` 沒填(null)= 等於進貨數量;**0 是明講的 0**(整行贈品,金額與成本都是 0;以前 0 被當成沒填、改回全數計價);不能大於進貨數量 |
 | 發票自動取號 | 銷貨單儲存時,依 `invoice_form` 從 `InvoiceTrack` 字軌 `SELECT FOR UPDATE` 取下一張號碼,寫入 `invoice_no` |
 | 結帳 | 銷貨單 N 筆 `SalesOrderPayment`(現金/匯款/非現金),`sum(amount) == total` 才能存 |
 | 序號生命週期 | 進貨建單 → in_stock;銷貨 → sold;銷貨作廢 → 回 in_stock;進貨作廢 → void(須全部還在 in_stock 才能作廢)。**作廢的設備不佔碼**:作廢時把它登記的 IMEI / SN 釋放(`release_codes()`),同樣的碼可以重新入庫(打錯整張作廢重開);作廢的那一筆留著 `serial_no` 當紀錄,`serial_no` 的唯一限制不算作廢的,用碼找設備(`find_serial_ids` / `?code=`)也不會找到它。釋放時如果還有一台「沒作廢、主碼去掉符號後相同、卻沒登記這個碼」的設備(舊資料),碼改登記給它(先鎖住那一台再判斷)。Django 後台不能新增 / 刪除設備,狀態與序號唯讀 |
@@ -46,8 +58,8 @@
 | 上次成交價自動帶 | `GET /api/v1/sales-orders/last-price/?member=X&product=Y`:跨 `SalesOrderItem`(未作廢、unit_price>0)+ `LegacyPurchase`(unit_price>0)取最近;銷貨建單時新增明細自動帶價,並在單價下顯示「前次 $XXX (日期)」 |
 | 銷退單 | `SalesReturn`(SR-{6位})必指定一張原 `SalesOrder`,**只能整張退**(2026-10-04 起):畫面只送原單 / 退款方式 / 是否作廢原發票 / 備註,明細由後端照原單每一行、全部數量、每一台序號帶入(`items` 唯讀)。每行的金額 / 未稅 / 稅額 / 成本與單頭的小計 / 稅額 / 總額**全部照抄原單**(不重算),銷退跟原銷貨單完全對沖。一張銷貨單同時只能有一張有效銷退(退過不能再退,作廢銷退後才能重退);收購單(總額為負)不能退。有有效銷退的銷貨單不能作廢(要先作廢銷退);建立銷退、作廢銷退、作廢銷貨都先鎖原銷貨單那一列。退款方式必須為原單付款方式之一(原單總額 0、沒有付款時不用填)。退回門市 / 客戶 / 會員都唯讀、一律跟原單一樣(鎖倉店員不能退別家門市的銷貨)。存檔時先鎖原銷貨單再檢查。提交時序號 `sold → returned`、warehouse 回退回倉、配件 `StockBalance.qty +=`;`void_original_invoice=True` 時把 `SalesOrder.invoice_voided` 標 True(冪等)。`GET /sales-returns/returnable/?sales_order=X` 回原單每行 + `returned_by`(已被哪張銷退退過)+ `is_buyback` 供畫面用。`POST /sales-returns/{id}/void/` 作廢銷退單會把序號退回 `sold`、配件再扣回去;退回來的機器已經不是「已退」狀態(被轉回在庫 / 再賣 / 調走)就不能作廢。畫面的原銷貨單用搜尋挑(`searchSalesOrdersForReturn`),不載整頁清單。舊資料裡的部分退貨照舊保留 |
 | 序號退回後續處理 | 銷退完成的序號狀態 = `returned`(已隔離),不會出現在「可銷貨」清單;需店員手動轉回 `in_stock` 才能再賣(避免有瑕疵的退貨機被誤再賣) |
-| 廠商收購中古 | 「中古入庫」頁的「廠商收購」tab,內嵌 `PurchaseEntryPage mode="secondhand-vendor"`;走一般進貨單流程但商品搜尋限定 `is_secondhand=true`;進貨側欄多 4 欄(成色/售價/電池/備註)+「套用到下面所有」按鈕;儲存後不離頁,bump remount key 重置表單 + 顯示成功訊息 |
-| 一般進貨單擋下中古機 | `PurchaseEntryPage` 預設 `mode="regular"`,商品 ComboBox / PickerModal / BatchPasteModal 都帶 `is_secondhand=false`;新增進貨單時挑不到中古品。檢視 / 作廢既有中古進貨單仍走 `/purchases/:id` |
+| 廠商收購中古 | 「中古收購」頁的「廠商收購」tab,內嵌 `PurchaseWorkbenchPage mode="secondhand-vendor"`(進貨的工作台);走一般進貨單流程但商品搜尋限定 `is_secondhand=true`;每一台在那一行底下多成色 / 成本 / 售價 / 電池 / 備註 +「套到下面」;存完不離頁 |
+| 一般進貨單擋下中古機 | `PurchaseWorkbenchPage` 預設 `mode="regular"`,掃碼框 / 勾選商品 / 批次貼上都帶 `is_secondhand=false`;新增進貨單時挑不到中古品(刷到中古機的品號會講「請到中古收購進」,不會當成序號放進格子)。檢視 / 作廢既有中古進貨單走 `/purchases/:id`(進貨單清單頁展開那一張) |
 | 中古機履歷 | `GET /api/v1/serials/{id}/history/` 回傳:收購來源 (購進 or 個人收購)、所有銷貨/退貨、StockMovement 軌跡 |
 | 客戶識別 | `Customer.code` 系統自動產生 (C-{5 位流水},Tenant 持有 next_customer_seq);前端不顯示也不輸入。`phone` 選填(同行/企業可不填);`lookup?phone=` 多筆回最舊。客戶表只放「歸屬」類型(個人/同業/企業/其他),不再帶會員身分 |
 | 會員主檔(獨立) | `Member` 是獨立 model(M-{5 位流水},Tenant 持有 next_member_seq);欄位姓名/電話/身分證/生日/地址/備註/啟用;前端 `/members` MembersPage CRUD;`searchMembers` / `lookupMember` 走 `/members/` API |
@@ -119,18 +131,18 @@ inventory-3c/
         ├── api/                client.ts + hooks.ts + search.ts(searchProductsForSales 等) + types.ts
         ├── components/         ComboBox(支援 onEnterAfterValue / autoFocus / IME 偵測)/ Drawer / Field / Toolbar / Banner
         │   ├── shell/          外框:Sidebar(側邊欄)/ ModuleBar(頁面上方的分頁與設定選單)/ NavSearch(功能搜尋)
-        │   └── workbench/      工作台版型的零件:ScanBox(掃碼框,條碼排隊處理;沒加進去的碼怎麼記在 `lib/scanMissed.ts`,有測試)/ toast(訊息條,可帶復原)/ ArmButton(兩段式按鈕)/ errors
+        │   └── workbench/      工作台版型的零件:ScanBox(掃碼框,條碼排隊處理;沒加進去的碼怎麼記在 `lib/scanMissed.ts`,有測試)/ toast(訊息條,可帶復原)/ ArmButton(兩段式按鈕)/ MoreMenu(開單頁頁首的「更多」)/ QtyInput(打到一半不會被改掉的數量框)/ errors
         ├── pages/
         │   ├── products/        ProductsPage(合併商品 + 類別管理,左側兩段:商品搜尋 / 類別拖拉排序)+ ProductForm + ProductExpanderModal(型號展開,軸標籤可自訂)+ BulkAddProductsModal
-        │   ├── purchases/       PurchasesPage + PurchaseEntryPage(規格獨立欄、Enter 跳下一筆)+ PurchaseLabelsPrintPage(條碼優先序 IMEI > 原廠 > SKU)+ PurchaseBatchPasteModal(模糊比對預覽)+ PurchaseProductPickerModal(勾選多商品入庫)
-        │   ├── sales/           SalesPage(tabs:銷貨單 / 銷退單)+ SalesEntryPage(IMEI 自動掛序號 / 單一在庫自動掛 / 中文 IME 安全)+ SalesPrintPage + SalesReturnEntryPage(搜尋原單 → 整張退,明細唯讀)
+        │   ├── purchases/       PurchaseListPage(進貨單清單:點一列展開、列印標籤 / 整張調撥 / 作廢;`/purchases/編號` 展開那一張)+ PurchaseWorkbenchPage(開單頁 `/purchases/new`:商品明細優先;序號格子 SerialSlots / serials.ts)+ PurchaseLabelsPrintPage(條碼優先序 IMEI > 原廠 > SKU)+ PurchaseBatchPasteModal(批次貼上,模糊比對預覽)+ PurchaseProductPickerModal(勾選商品);後兩個在工作台裡是放在頁面裡的面板(`inline`),不是彈出視窗
+        │   ├── sales/           SalesListPage(銷貨單清單:點一列展開、列印 / 整張銷退 / 作廢;`/sales/編號` 展開那一張)+ SalesWorkbenchPage(開單頁 `/sales/new`:商品明細優先;單據資訊、結帳、新增客戶 / 會員在右邊的抽屜;門號欄位接在商品正下方)+ SalesPage(只剩銷退單清單 `SalesReturnsPage`,`/sales/returns`)+ SalesPrintPage + SalesReturnEntryPage(搜尋原單 → 整張退,明細唯讀;`?so=編號` 直接帶好原單)
         │   ├── customers/       CustomersPage(客戶管理;tabs:全部/個人/同業/企業/其他;Detail 下半顯示該客戶銷售紀錄)
         │   ├── members/         MembersPage(會員獨立主檔;欄位姓名/電話/身分證/生日/地址/備註;Detail 下半顯示該會員銷售紀錄)
         │   ├── reports/         SalesDailyReport(銷貨日報,按單分組純表格 + 作廢區塊 + CSV 匯出;收購二手不計毛利) + ExploreReportPage(自由組合:挑指標 × 分組 × 條件 × 期間 × 比較,可存成我的報表)
         │   ├── settings/        SettingsPage(發票類型 / 字軌 / 付款方式)
         │   ├── sim-cards/       SimCardsPage + SimCardForm
         │   ├── telecom-plans/   TelecomPlansPage + TelecomPlanForm
-        │   ├── secondhand-acquisition/  SecondhandAcquisitionPage(hub:tabs 切換)+ SecondhandPersonalEntry(個人收購表單;廠商收購直接內嵌 PurchaseEntryPage)
+        │   ├── secondhand-acquisition/  SecondhandAcquisitionPage(hub:tabs 切換)+ SecondhandPersonalEntry(個人收購表單;廠商收購直接內嵌 PurchaseWorkbenchPage)
         │   ├── inventory/       InventoryQueryPage(工作台版型:每家分店一欄 + 點一列就地展開每台序號 + 常用類別 + 欄位排序)+ CategoriesPage(舊獨立頁,nav 已隱藏但路由仍在)
         │   ├── transfers/       TransferWorkbenchPage(工作台版型:新增、最近調撥、待入庫都在同一頁;`/transfers/編號` 展開那一張)
         │   ├── cash/            PettyExpensesPage 店頭雜支(列表 + Drawer 新增,連續模式)+ CashAdjustmentsPage
@@ -153,7 +165,7 @@ inventory-3c/
 - **前端 hook**:所有 API 呼叫包成 `useXxx` / `useSaveXxx` / `useVoidXxx`,放 `api/hooks.ts`
 - **搜尋 / 下拉**:萬筆級別都用 `ComboBox` + `api/search.ts` 裡面的 `searchXxx`,**不要**載入整張表
 - **自動產生欄位**:`sku` / `code` / `no` 系統產生,前端**不顯示也不輸入**
-- **儲存草稿**:`/sales/new` 與 `/purchases/new` 自動 debounce 寫 sessionStorage,儲存成功後清空
+- **儲存草稿**:`/sales/new` 與 `/purchases/new` 自動 debounce 寫 sessionStorage(離開頁面那一刻再存一次),儲存成功後清空;草稿裡帶著這張單的鑰匙與付款方式
 - **migration 涉及資料改動**:在 migration 內寫 `RunPython` 一併處理(例如 billed_qty 預設帶 qty、seed PaymentMethod)
 - **不可預測的字串(IMEI、卡號)**:存原值,前端顯示時取末 N 碼
 - **金額**:顯示一律 `money()`、輸入框一律 `<MoneyInput>`(都在 `frontend/src/lib/money.ts` / `components/MoneyInput.tsx`);表單載入時把資料庫原本的字串放進 state、不要先收成整數(沒動過的欄位要原樣送回去);看已存的單直接顯示存下來的數字、不重算;後端算金額用 `apps/core/money.py` 的 `round_money()`,不要自己 `quantize`

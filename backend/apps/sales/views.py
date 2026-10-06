@@ -5,6 +5,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from apps.catalog.models import Product
+from apps.core.idempotency import IdempotentCreateMixin
 from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
 from apps.core.warehouse_scoping import WarehouseScopedMixin
 from apps.inventory.models import Warehouse
@@ -24,9 +25,18 @@ from .services import (
     acquire_secondhand_from_member,
     commit_sales_order,
     commit_sales_return,
+    update_contract_dates,
     void_sales_order,
     void_sales_return,
 )
+
+
+class ContractDatesInputSerializer(serializers.Serializer):
+    """改門號合約日期的輸入。item 是這張單上的明細編號(在 service 裡對這張單核對)。"""
+
+    item = serializers.IntegerField()
+    activation_date = serializers.DateField()
+    prev_contract_end = serializers.DateField(required=False, allow_null=True)
 
 
 class SecondhandAcquisitionInputSerializer(TenantScopedRelatedFieldsMixin, serializers.Serializer):
@@ -56,6 +66,7 @@ class SecondhandAcquisitionInputSerializer(TenantScopedRelatedFieldsMixin, seria
 
 
 class SalesOrderViewSet(
+    IdempotentCreateMixin,
     WarehouseScopedMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
@@ -64,6 +75,7 @@ class SalesOrderViewSet(
 ):
     """銷貨單:儲存即生效;不開放 update / delete,要取消請用 void action。"""
 
+    idempotency_scope = "sales-order"
     serializer_class = SalesOrderSerializer
     search_fields = [
         "no",
@@ -193,6 +205,27 @@ class SalesOrderViewSet(
         so = self.get_object()
         try:
             void_sales_order(so)
+        except SalesOrderError as exc:
+            return Response(
+                {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
+            )
+        so = self.get_queryset().get(pk=so.pk)
+        return Response(self.get_serializer(so).data)
+
+    @action(detail=True, methods=["post"], url_path="contract-dates")
+    def contract_dates(self, request, pk=None):
+        """單存了之後改某一行門號合約的日期(續約日往後延、當初打錯);合約到期日跟著重算。
+
+        body: {"item": 明細編號, "activation_date": "YYYY-MM-DD", "prev_contract_end": "YYYY-MM-DD" 或 null}
+        """
+        so = self.get_object()
+        in_ser = ContractDatesInputSerializer(data=request.data)
+        in_ser.is_valid(raise_exception=True)
+        data = in_ser.validated_data
+        try:
+            update_contract_dates(
+                so, data["item"], data["activation_date"], data.get("prev_contract_end")
+            )
         except SalesOrderError as exc:
             return Response(
                 {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST

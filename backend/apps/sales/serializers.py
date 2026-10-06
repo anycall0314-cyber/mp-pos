@@ -145,10 +145,15 @@ class SalesOrderItemSerializer(TenantScopedRelatedFieldsMixin, serializers.Model
             "telecom_plan_display",
             "commission",
             "activation_date",
+            "prev_contract_end",
+            "contract_months",
+            "contract_end",
             "note",
         ]
         read_only_fields = [
             "id",
+            "contract_months",
+            "contract_end",
             "cost_at_post",
             "untaxed_amount",
             "tax_amount",

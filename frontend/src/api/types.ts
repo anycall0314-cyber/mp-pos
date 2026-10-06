@@ -610,6 +610,12 @@ export interface SalesOrderItem {
   telecom_plan_display: string;
   commission: string;
   activation_date: string | null;
+  /** 續約才有:原本那份合約哪一天到期 */
+  prev_contract_end?: string | null;
+  /** 這份合約綁幾個月(存檔當下從方案抄下來) */
+  contract_months?: number | null;
+  /** 這份合約哪一天到期(存檔當下算好) */
+  contract_end?: string | null;
   note: string;
 }
 

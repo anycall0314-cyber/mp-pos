@@ -994,10 +994,12 @@ export async function lookupMemberLastPrice(
 export function useCreatePurchaseOrder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: Partial<PurchaseOrder>) =>
+    // key = 這一張新單的鑰匙(Idempotency-Key):同一把重送不會開第二張
+    mutationFn: (vars: { payload: Partial<PurchaseOrder>; key?: string }) =>
       api<PurchaseOrder>("/purchase-orders/", {
         method: "POST",
-        body: JSON.stringify(payload),
+        headers: vars.key ? { "Idempotency-Key": vars.key } : undefined,
+        body: JSON.stringify(vars.payload),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["purchase-orders"] });
@@ -1024,15 +1026,42 @@ export function useVoidPurchaseOrder() {
 export function useCreateSalesOrder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: Partial<SalesOrder>) =>
+    // key = 這一張新單的鑰匙(Idempotency-Key):同一把重送不會開第二張、不會收兩次錢
+    mutationFn: (vars: { payload: Partial<SalesOrder>; key?: string }) =>
       api<SalesOrder>("/sales-orders/", {
         method: "POST",
-        body: JSON.stringify(payload),
+        headers: vars.key ? { "Idempotency-Key": vars.key } : undefined,
+        body: JSON.stringify(vars.payload),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sales-orders"] });
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["serials"] });
+    },
+  });
+}
+
+/** 單存了之後改某一行門號合約的日期(續約日往後延、當初打錯);合約到期日由伺服器重算 */
+export function useUpdateContractDates() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: {
+      soId: number;
+      item: number;
+      activation_date: string;
+      prev_contract_end: string | null;
+    }) =>
+      api<SalesOrder>(`/sales-orders/${vars.soId}/contract-dates/`, {
+        method: "POST",
+        body: JSON.stringify({
+          item: vars.item,
+          activation_date: vars.activation_date,
+          prev_contract_end: vars.prev_contract_end,
+        }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sales-orders"] });
+      qc.invalidateQueries({ queryKey: ["sales-order"] });
     },
   });
 }

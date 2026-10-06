@@ -41,6 +41,19 @@ export function SalesReturnEntryPage() {
   useEffect(() => {
     if (!isNew && existing.data) setOriginalSOId(existing.data.original_so);
   }, [isNew, existing.data]);
+  // 從銷貨工作台那一張單上按「整張銷退」過來(?so=編號&no=單號):原銷貨單直接帶好
+  useEffect(() => {
+    const so = Number(searchParams.get("so"));
+    if (!isNew || !(so > 0)) return;
+    setOriginalSOId(so);
+    setOriginalSO({
+      id: so,
+      label: searchParams.get("no") || `#${so}`,
+      secondary: "",
+    } as ComboOption<SalesOrder>);
+    // 只在進頁面時帶一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const returnable = useReturnableForSO(isNew ? originalSOId : null);
 
@@ -141,7 +154,7 @@ export function SalesReturnEntryPage() {
         actions={
           focusMode ? null : (
             <>
-              <button className="btn" onClick={() => navigate("/sales?tab=returns")}>
+              <button className="btn" onClick={() => navigate("/sales/returns")}>
                 回列表
               </button>
               {!isNew && sr && !sr.is_void && (

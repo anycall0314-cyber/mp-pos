@@ -60,7 +60,10 @@ test("目前這一頁只有一個:取網址對得上、而且最長的那一頁"
   assert.equal(at("/repairs/12"), "/repairs");
   assert.equal(at("/inventory/alerts"), "/inventory/alerts");
   assert.equal(at("/sales/new"), "/sales");
-  assert.equal(at("/sales/returns/new"), "/sales");
+  // 銷退單有自己的分頁(2026-10-06 起銷貨單清單併進銷貨工作台)
+  assert.equal(at("/sales/returns/new"), "/sales/returns");
+  assert.equal(at("/sales/returns"), "/sales/returns");
+  assert.equal(at("/sales/12"), "/sales");
   assert.equal(at("/sales-persons"), "/sales-persons");
   assert.equal(at("/purchases/5"), "/purchases");
   assert.equal(at("/transfers/12"), "/transfers");

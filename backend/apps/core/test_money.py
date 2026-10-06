@@ -70,6 +70,38 @@ class DocumentTests(TestCase):
         self.assertEqual(self.header(self.buy("taxable_excluded", "90")),
                          (D("90"), D("5"), D("95")))
 
+    def test_billed_quantity_zero_means_the_whole_line_is_free(self):
+        # 計價數量 0 = 整行贈品。以前 0 被當成「沒填」改回進貨數量,畫面上 0 元的那一行存檔變成全額入帳
+        po = self.c._post("/api/v1/purchase-orders/", {
+            "supplier": self.c.supplier.id, "warehouse": self.c.wh.id, "tax_method": "untaxed",
+            "items": [
+                {"product": self.c.case.id, "qty": 5, "billed_qty": 0, "unit_price": "100"},
+            ],
+        })
+        item = PurchaseOrderItem.objects.get(po_id=po["id"])
+        self.assertEqual((item.qty, item.billed_qty, item.amount), (5, 0, D("0")))
+        self.assertEqual(item.unit_landed_cost, D("0"))
+        self.assertEqual(D(po["total_cost"]), D("0"))
+
+    def test_billed_quantity_left_out_still_means_all_of_them(self):
+        po = self.buy("untaxed", "100", qty=5)
+        item = PurchaseOrderItem.objects.get(po_id=po["id"])
+        self.assertEqual((item.billed_qty, item.amount), (5, D("500")))
+        # 送 null 也是「沒填」
+        po = self.c._post("/api/v1/purchase-orders/", {
+            "supplier": self.c.supplier.id, "warehouse": self.c.wh.id, "tax_method": "untaxed",
+            "items": [{"product": self.c.case.id, "qty": 3, "billed_qty": None, "unit_price": "100"}],
+        })
+        self.assertEqual(PurchaseOrderItem.objects.get(po_id=po["id"]).billed_qty, 3)
+
+    def test_billed_quantity_cannot_exceed_what_came_in(self):
+        resp = self.c.admin.post("/api/v1/purchase-orders/", {
+            "supplier": self.c.supplier.id, "warehouse": self.c.wh.id, "tax_method": "untaxed",
+            "items": [{"product": self.c.case.id, "qty": 2, "billed_qty": 3, "unit_price": "100"}],
+        }, format="json")
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.assertIn("大於進貨數量", resp.content.decode())
+
     def test_purchase_cost_keeps_its_cents(self):
         # 成本是平均值:收成整數會越算越偏,照舊算到分(只在畫面上顯示成整數)
         po = self.buy("taxable_included", "100", qty=10)

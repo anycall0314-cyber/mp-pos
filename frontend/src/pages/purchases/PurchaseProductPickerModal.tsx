@@ -16,6 +16,8 @@ interface Props {
   onConfirm: (selected: PickerProduct[]) => void;
   /** "regular":排除中古機;"secondhand-vendor":只列中古機。預設 regular */
   mode?: "regular" | "secondhand-vendor";
+  /** 工作台版型:不開彈出視窗,直接放在頁面裡 */
+  inline?: boolean;
 }
 
 interface RowState {
@@ -29,6 +31,7 @@ export function PurchaseProductPickerModal({
   onClose,
   onConfirm,
   mode = "regular",
+  inline = false,
 }: Props) {
   const secondhandFilter =
     mode === "secondhand-vendor"
@@ -144,12 +147,15 @@ export function PurchaseProductPickerModal({
   if (!open) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className={inline ? "wb-tool" : "modal-overlay"}
+      onClick={inline ? undefined : onClose}
+    >
       <div
-        className="modal-card picker-modal"
+        className={inline ? "wb-card picker-modal inline" : "modal-card picker-modal"}
         onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
+        role={inline ? undefined : "dialog"}
+        aria-modal={inline ? undefined : true}
       >
         <div className="modal-title">
           {mode === "secondhand-vendor"

@@ -3,6 +3,7 @@ from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.core.idempotency import IdempotentCreateMixin
 from apps.core.warehouse_scoping import WarehouseScopedMixin
 
 from .models import PurchaseOrder, PurchaseOrderCategory
@@ -32,6 +33,7 @@ class PurchaseOrderCategoryViewSet(viewsets.ModelViewSet):
 
 
 class PurchaseOrderViewSet(
+    IdempotentCreateMixin,
     WarehouseScopedMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
@@ -40,6 +42,7 @@ class PurchaseOrderViewSet(
 ):
     """進貨單:儲存即生效;不開放 update / delete,要取消請用 void action。"""
 
+    idempotency_scope = "purchase-order"
     serializer_class = PurchaseOrderSerializer
     search_fields = ["no", "supplier__code", "supplier__name", "note", "invoice_no"]
     ordering_fields = ["doc_date", "no", "created_at"]

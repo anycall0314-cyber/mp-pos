@@ -221,7 +221,20 @@ class SalesOrderItem(TenantOwnedModel):
         default=0,
         help_text="選方案後自動帶入,可手動覆寫",
     )
+    # 合約從哪一天起算:新辦 = 單據日期(伺服器存檔時決定,不看送來的值);攜碼 = 人填的合約生效日;續約 = 續約日
+    # (遠傳、台哥大當天就續約 = 開單當天;中華電信等手機到貨才續約,先入帳、續約日往後,事後可以改)
     activation_date = models.DateField("上線日", null=True, blank=True)
+    # 續約才填(選填):原本那份合約哪一天到期。只是記錄,不拿來算新約
+    prev_contract_end = models.DateField("原合約到期日", null=True, blank=True)
+    # 這份合約綁幾個月:存檔當下從方案抄下來。方案主檔之後改月數,已經開出去的合約不跟著變
+    # (事後改起算日重算到期日,用的也是這裡抄下來的月數)
+    contract_months = models.PositiveIntegerField(
+        "綁約月數", null=True, blank=True, editable=False
+    )
+    # 這份合約哪一天到期 = 起算日(activation_date)+ 上面抄下來的綁約月數。存檔當下算好;沒有起算日就是空的
+    contract_end = models.DateField(
+        "合約到期日", null=True, blank=True, editable=False, db_index=True
+    )
 
     note = models.CharField("備註", max_length=200, blank=True)
 

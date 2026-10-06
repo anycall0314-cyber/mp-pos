@@ -49,6 +49,8 @@ interface Props {
   onConfirm: (rows: BatchPasteResult[]) => void;
   /** "regular":比對排除中古機;"secondhand-vendor":只比對中古機 */
   mode?: "regular" | "secondhand-vendor";
+  /** 工作台版型:不開彈出視窗,直接放在頁面裡 */
+  inline?: boolean;
 }
 
 /** 切割「商品 數量 單價 序號」一行(支援 Tab、多個空白、逗號) */
@@ -166,6 +168,7 @@ export function PurchaseBatchPasteModal({
   onClose,
   onConfirm,
   mode = "regular",
+  inline = false,
 }: Props) {
   const [rawText, setRawText] = useState("");
   const [matching, setMatching] = useState(false);
@@ -312,12 +315,15 @@ export function PurchaseBatchPasteModal({
   if (!open) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className={inline ? "wb-tool" : "modal-overlay"}
+      onClick={inline ? undefined : onClose}
+    >
       <div
-        className="modal-card batch-paste-modal"
+        className={inline ? "wb-card batch-paste-modal inline" : "modal-card batch-paste-modal"}
         onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
+        role={inline ? undefined : "dialog"}
+        aria-modal={inline ? undefined : true}
       >
         <div className="modal-title">
           {mode === "secondhand-vendor"

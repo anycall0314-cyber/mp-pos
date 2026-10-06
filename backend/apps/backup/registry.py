@@ -93,6 +93,7 @@ REGISTRY: dict[str, Entry] = {
     "backup.TenantMaintenance": Entry(EXCLUDED, "維護鎖是伺服器當下狀態"),
     "backup.BackupAuditLog": Entry(EXCLUDED, "操作紀錄留在原地,不隨資料回溯"),
     "ledger.LedgerCheckRun": Entry(EXCLUDED, "對帳紀錄是當時資料的檢查結果,留在原地"),
+    "core.IdempotencyKey": Entry(EXCLUDED, "建單鑰匙只留幾天,記的是單號;還原後照樣對得回來"),
 }
 
 # 帶檔案的欄位:{表: [欄位]}。只存路徑不算備份,檔案本體要一起打包。

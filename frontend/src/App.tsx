@@ -23,8 +23,8 @@ import { NewPhoneModelWizardPage } from "@/pages/products/NewPhoneModelWizardPag
 import { PartTemplatesPage } from "@/pages/products/PartTemplatesPage";
 import { ProductTypesPage } from "@/pages/products/ProductTypesPage";
 import { ProductsPage } from "@/pages/products/ProductsPage";
-import { PurchasesPage } from "@/pages/purchases/PurchasesPage";
-import { PurchaseEntryPage } from "@/pages/purchases/PurchaseEntryPage";
+import { PurchaseListPage } from "@/pages/purchases/PurchaseListPage";
+import { PurchaseWorkbenchPage } from "@/pages/purchases/PurchaseWorkbenchPage";
 import { PurchaseLabelsPrintPage } from "@/pages/purchases/PurchaseLabelsPrintPage";
 import { BusinessDailyReportPage } from "@/pages/reports/BusinessDailyReport";
 import { ExploreReportPage } from "@/pages/reports/ExploreReportPage";
@@ -33,8 +33,9 @@ import { SalesDailyReportPage } from "@/pages/reports/SalesDailyReport";
 import { SecondhandAcquisitionPage } from "@/pages/secondhand-acquisition/SecondhandAcquisitionPage";
 import { TransferWorkbenchPage } from "@/pages/transfers/TransferWorkbenchPage";
 import { ToastHost } from "@/components/workbench/toast";
-import { SalesPage } from "@/pages/sales/SalesPage";
-import { SalesEntryPage } from "@/pages/sales/SalesEntryPage";
+import { SalesReturnsPage } from "@/pages/sales/SalesPage";
+import { SalesListPage } from "@/pages/sales/SalesListPage";
+import { SalesWorkbenchPage } from "@/pages/sales/SalesWorkbenchPage";
 import { SalesPrintPage } from "@/pages/sales/SalesPrintPage";
 import { SalesReturnEntryPage } from "@/pages/sales/SalesReturnEntryPage";
 import { CustomersPage } from "@/pages/customers/CustomersPage";
@@ -220,8 +221,9 @@ export function App() {
           />
           <Route path="/telecom-plans" element={<TelecomPlansPage />} />
           <Route path="/sim-cards" element={<SimCardsPage />} />
-          <Route path="/purchases" element={<PurchasesPage />} />
-          <Route path="/purchases/:id" element={<PurchaseEntryPage />} />
+          <Route path="/purchases" element={<PurchaseListPage />} />
+          <Route path="/purchases/new" element={<PurchaseWorkbenchPage />} />
+          <Route path="/purchases/:id" element={<PurchaseListPage />} />
           <Route
             path="/purchases/:id/print/labels"
             element={<PurchaseLabelsPrintPage />}
@@ -230,7 +232,9 @@ export function App() {
             path="/secondhand-acquisition"
             element={<SecondhandAcquisitionPage />}
           />
-          <Route path="/sales" element={<SalesPage />} />
+          <Route path="/sales" element={<SalesListPage />} />
+          <Route path="/sales/new" element={<SalesWorkbenchPage />} />
+          <Route path="/sales/returns" element={<SalesReturnsPage />} />
           <Route
             path="/sales/returns/new"
             element={<SalesReturnEntryPage />}
@@ -239,7 +243,7 @@ export function App() {
             path="/sales/returns/:id"
             element={<SalesReturnEntryPage />}
           />
-          <Route path="/sales/:id" element={<SalesEntryPage />} />
+          <Route path="/sales/:id" element={<SalesListPage />} />
           <Route path="/sales/:id/print/:type" element={<SalesPrintPage />} />
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/expenses" element={<PettyExpensesPage />} />

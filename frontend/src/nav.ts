@@ -42,7 +42,10 @@ export const NAV_MODULES: NavModule[] = [
     key: "sales",
     label: "銷貨作業",
     to: "/sales",
-    tabs: [{ to: "/sales", label: "銷貨單", aliases: ["銷退單", "銷貨作業"] }],
+    tabs: [
+      { to: "/sales", label: "銷貨單", aliases: ["銷貨作業"] },
+      { to: "/sales/returns", label: "銷退單", aliases: ["銷貨退回", "退貨"] },
+    ],
     tools: {
       label: "作業設定",
       items: [{ to: "/sales-persons", label: "業務員" }],
@@ -206,6 +209,16 @@ export function visibleModules(who: NavRole): NavModule[] {
       ? { ...m.tools, items: m.tools.items.filter((p) => pageVisible(p, who)) }
       : undefined,
   }));
+}
+
+/**
+ * 開單頁(新增銷貨單 / 新增進貨單 / 新增銷退單):整個畫面留給明細,
+ * 不放頁面上方那一排分頁,用頁首的「返回列表」回清單頁(清單頁照常有分頁)。
+ */
+const WORKSPACE_PATHS = ["/sales/new", "/purchases/new", "/sales/returns/new"];
+
+export function isWorkspacePath(pathname: string): boolean {
+  return WORKSPACE_PATHS.includes(pathname.replace(/\/+$/, ""));
 }
 
 export interface NavMatch {

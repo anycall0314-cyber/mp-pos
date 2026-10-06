@@ -16,9 +16,10 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.catalog.models import Category, Product
+from apps.core.dates import add_months
 from apps.core.money import CENTS, ONE, money_text, round_money
 from apps.core.tenant_fields import same_company as _same_company
-from apps.inventory.locking import lock_stock_rows, locked_balance as _locked_balance
+from apps.inventory.locking import lock_document, lock_stock_rows, locked_balance as _locked_balance
 from apps.inventory.identifiers import IdentifierError, create_serial, main_code, split_codes, taken
 from apps.inventory.models import ProductSerial, StockBalance, StockMovement
 from apps.parties.models import Customer, SimCard, TelecomPlan
@@ -136,6 +137,12 @@ def _validate_items(so: SalesOrder, items):
             )
 
         plan = it.telecom_plan
+        # 門號商品(虛擬、可以填門號)這一行就是在記一份門號合約:方案一定要有。
+        # 有方案就一定要有門號:沒有門號的合約之後認不出來是誰的,也提醒不到人
+        if product.is_virtual and product.allows_telecom_line and not plan:
+            raise SalesOrderError(f"第 {it.line_no} 行門號商品 {product.sku} 要選方案")
+        if plan and not (it.msisdn or "").strip():
+            raise SalesOrderError(f"第 {it.line_no} 行有門號方案,門號要填")
         if plan:
             requires_card = plan.kind in (
                 TelecomPlan.Kind.NEW,
@@ -153,6 +160,20 @@ def _validate_items(so: SalesOrder, items):
                 )
         elif it.sim_card_id:
             raise SalesOrderError(f"第 {it.line_no} 行有指定 SIM 卡但未選方案")
+
+        # 門號、方案、卡號只有一組:有方案的那一行數量只能是 1(改成 2 會收兩倍、算兩份佣金)
+        if plan and it.qty != 1:
+            raise SalesOrderError(
+                f"第 {it.line_no} 行有門號方案,數量只能是 1(一個門號一行)"
+            )
+
+        # 原合約到期日只有續約有意義(新辦 / 攜碼沒有「原本那份合約」)
+        if it.prev_contract_end and not (
+            plan and plan.kind == TelecomPlan.Kind.RENEWAL
+        ):
+            raise SalesOrderError(
+                f"第 {it.line_no} 行不是續約,不用填原合約到期日"
+            )
 
         if it.sim_card_id:
             card = it.sim_card
@@ -249,6 +270,83 @@ def split_tax_by_line(amounts, tax_method: str, subtotal: Decimal, tax: Decimal)
     lines[k][0] += du
     lines[k][1] += dt
     return [(u, t) for u, t in lines]
+
+
+def contract_end_of(item):
+    """這一行的合約哪一天到期 = 起算日 + 綁約月數。沒有方案、沒有起算日 = 沒有。
+
+    起算日就是 activation_date:新辦是單據日期、攜碼是合約生效日、續約是續約日
+    (遠傳 / 台哥大當天續約;中華電信等手機到貨才續約,續約日比入帳晚,事後用 update_contract_dates 改)。
+    月數用這一行存檔當下抄下來的(`contract_months`);方案主檔之後改了月數,這一張不跟著變。
+    """
+    plan = item.telecom_plan
+    if not plan or not item.activation_date:
+        return None
+    months = item.contract_months if item.contract_months is not None else plan.contract_months
+    return add_months(item.activation_date, months)
+
+
+def _store_contract_end(so, items):
+    """存檔當下把合約定下來:抄方案的綁約月數、新辦的起算日一律是單據日期、算好到期日。
+
+    新辦的起算日不看送來的值:單據日期是伺服器存檔時決定的(跨過半夜重送的那一張,
+    送來的起算日是前一天、單據日期是今天,兩個對不上;別的入口也可能亂送)。
+    """
+    changed = []
+    for it in items:
+        plan = it.telecom_plan
+        before = (it.contract_months, it.activation_date, it.contract_end)
+        if plan:
+            it.contract_months = plan.contract_months
+            if plan.kind == TelecomPlan.Kind.NEW:
+                it.activation_date = so.doc_date
+        else:
+            it.contract_months = None
+        it.contract_end = contract_end_of(it)
+        if before != (it.contract_months, it.activation_date, it.contract_end):
+            changed.append(it)
+    if changed:
+        SalesOrderItem.objects.bulk_update(
+            changed, ["contract_months", "activation_date", "contract_end"]
+        )
+
+
+def update_contract_dates(so: SalesOrder, item_id, activation_date, prev_contract_end):
+    """單已經存了之後改門號合約的日期(中華電信先入帳、續約日往後延;或當初打錯)。
+
+    只動日期與跟著算出來的合約到期日:不動金額、庫存、佣金。作廢的單不能改;新辦不能改(當天生效)。
+    """
+    with transaction.atomic():
+        if lock_document(so) is None:
+            raise SalesOrderError("找不到這張銷貨單")
+        if so.is_void:
+            raise SalesOrderError("此單已作廢,不能改合約日期")
+        item = (
+            so.items.select_for_update(of=("self",)).select_related("telecom_plan")
+            .filter(pk=item_id).first()
+        )
+        if item is None:
+            raise SalesOrderError("這一行不在這張銷貨單上")
+        plan = item.telecom_plan
+        if not plan:
+            raise SalesOrderError(f"第 {item.line_no} 行沒有門號方案,沒有合約日期可以改")
+        if plan.kind == TelecomPlan.Kind.NEW:
+            raise SalesOrderError(f"第 {item.line_no} 行是新辦,開單當天生效,沒有日期可以改")
+        if prev_contract_end and plan.kind != TelecomPlan.Kind.RENEWAL:
+            raise SalesOrderError(f"第 {item.line_no} 行不是續約,不用填原合約到期日")
+        if not activation_date:
+            raise SalesOrderError("合約起算日要填")
+        if item.contract_months is None:
+            # 這個欄位還沒有之前存的單:沒有當時的月數可以用,抄現在的(只有這一次)
+            item.contract_months = plan.contract_months
+        item.activation_date = activation_date
+        item.prev_contract_end = prev_contract_end or None
+        # 到期日用這一行當初抄下來的月數重算(方案主檔後來改成別的月數,這一張不變)
+        item.contract_end = contract_end_of(item)
+        item.save(update_fields=[
+            "activation_date", "prev_contract_end", "contract_months", "contract_end",
+        ])
+    return so
 
 
 def _store_line_tax(items, tax_method, subtotal, tax, model):
@@ -415,6 +513,7 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
         so.tax_amount = tax_amount
         so.total = total
         _store_line_tax(items, so.tax_method, subtotal, tax_amount, SalesOrderItem)
+        _store_contract_end(so, items)
 
         # 驗證付款金額 sum == 含稅總額
         _validate_payments(so, total)
@@ -647,6 +746,10 @@ def void_sales_order(so: SalesOrder) -> SalesOrder:
             so.items.select_related("product", "sim_card")
             .prefetch_related("serials__serial")
             .all()
+        )
+        # 作廢 = 當作沒開過:合約到期日清掉,之後的到期提醒不會算到這一張
+        SalesOrderItem.objects.filter(so=so, contract_end__isnull=False).update(
+            contract_end=None
         )
         _lock_rows(
             so.tenant, so.warehouse,

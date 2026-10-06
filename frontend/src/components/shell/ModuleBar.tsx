@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { NavMatch } from "@/nav";
+import { isWorkspacePath, NavMatch } from "@/nav";
 
 /**
  * 頁面上方的分頁列:同一個入口底下的其他頁在這裡切換。
  * 右邊的具名選單(商品設定、作業設定)放低頻的設定頁。
- * 只有一頁、也沒有設定頁的入口(工作台)不佔這一排。
+ * 只有一頁、也沒有設定頁的入口(工作台)不佔這一排;開單頁(`isWorkspacePath`)也不佔。
  */
 export function ModuleBar({
   match,
@@ -41,6 +41,8 @@ export function ModuleBar({
   }, [pathname]);
 
   if (!match) return null;
+  // 開單頁把高度留給明細:不放這一排,頁首有「返回列表」
+  if (isWorkspacePath(pathname)) return null;
   const { module, page } = match;
   const tools = module.tools?.items ?? [];
   if (module.tabs.length <= 1 && tools.length === 0) return null;
