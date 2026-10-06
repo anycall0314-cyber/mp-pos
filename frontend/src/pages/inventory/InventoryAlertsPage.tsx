@@ -134,7 +134,7 @@ function AlertsPanel() {
                 : `沒有${SEVERITY_LABEL[severityFilter]}等級的警示`}
             </div>
             <div className="ia-empty-hint">
-              安全庫存與商品狀態可在
+              安全庫存與販售狀態可在
               <Link to="/products" className="ia-empty-link">
                 商品管理
               </Link>

@@ -25,6 +25,7 @@ import {
   type FlaggedRow,
   flaggedRows,
 } from "./BulkDuplicateRows";
+import { defaultRequiresSerial, stockModeLabel } from "@/lib/productDefaults";
 
 interface Props {
   open: boolean;
@@ -105,7 +106,12 @@ export function ProductExpanderModal({
 
   // 屬性(可隨商品性質自動調整,但仍允許使用者覆蓋)
   // accessory mode 預設不需追蹤序號
-  const [requiresSerial, setRequiresSerial] = useState(!isAccessoryMode);
+  const [requiresSerial, setRequiresSerial] = useState(
+    defaultRequiresSerial(isAccessoryMode ? "phone_specific" : "none"),
+  );
+  // 人自己動過「需追蹤序號」:之後換商品性質不再替他改。放在狀態裡、跟著草稿存
+  // (存草稿再載回來還要記得;用「現在的值跟預設一不一樣」去猜會猜錯:自己勾了序號、切到主機,主機的預設本來就是追)
+  const [serialTouched, setSerialTouched] = useState(false);
   const [allowsTelecomLine, setAllowsTelecomLine] = useState(false);
   const [allowsCommission, setAllowsCommission] = useState(false);
 
@@ -136,6 +142,7 @@ export function ProductExpanderModal({
       axis2Text,
       pricesText,
       requiresSerial,
+      serialTouched,
       allowsTelecomLine,
       allowsCommission,
       compat: Array.from(compat.entries()),
@@ -153,6 +160,7 @@ export function ProductExpanderModal({
       axis2Text,
       pricesText,
       requiresSerial,
+      serialTouched,
       allowsTelecomLine,
       allowsCommission,
       compat,
@@ -188,6 +196,11 @@ export function ProductExpanderModal({
     setAxis2Text(s.axis2Text);
     setPricesText(s.pricesText);
     setRequiresSerial(s.requiresSerial);
+    // 這一版之前存的草稿沒有記「人動過沒有」:那一格跟這種商品的預設不一樣才當成動過
+    setSerialTouched(
+      (s as { serialTouched?: boolean }).serialTouched ??
+        s.requiresSerial !== defaultRequiresSerial(s.accessoryType),
+    );
     setAllowsTelecomLine(s.allowsTelecomLine);
     setAllowsCommission(s.allowsCommission);
     setCompat(new Map(s.compat));
@@ -196,17 +209,19 @@ export function ProductExpanderModal({
 
   // 商品性質改變時,自動帶屬性 + 軸標籤預設
   function changeAccessoryType(next: AccessoryType) {
+    // 再點一次已經選中的那一種:什麼都不做(不然會把下面勾好的屬性重設一次)
+    if (next === accessoryType) return;
     setAccessoryType(next);
+    // 序號預設跟一般「新增商品」用同一份(lib/productDefaults):主機逐件、配件按數量。
+    // 人自己動過「需追蹤序號」之後就不替他改(例如要逐件追的高價配件)
+    if (!serialTouched) setRequiresSerial(defaultRequiresSerial(next));
     if (next === "none") {
-      setRequiresSerial(true);
       setAxis1Label("容量");
       setAxis2Label("顏色");
     } else if (next === "phone_specific") {
-      setRequiresSerial(false);
       setAxis1Label("功能");
       setAxis2Label("顏色");
     } else {
-      setRequiresSerial(false);
       setAxis1Label("規格");
       setAxis2Label("樣式");
     }
@@ -294,7 +309,8 @@ export function ProductExpanderModal({
     setAxis1Text("");
     setAxis2Text("");
     setPricesText("");
-    setRequiresSerial(!isAccessoryMode);
+    setRequiresSerial(defaultRequiresSerial(isAccessoryMode ? "phone_specific" : "none"));
+    setSerialTouched(false);
     setAllowsTelecomLine(false);
     setAllowsCommission(false);
     setCompat(new Map());
@@ -396,7 +412,7 @@ export function ProductExpanderModal({
           <Field
             label="商品性質"
             required
-            hint="決定後續欄位顯示與屬性預設 — 影響庫存警示推論"
+            hint={`庫存:${stockModeLabel(requiresSerial)}`}
           >
             <div className="pf-tabs">
               {(
@@ -434,7 +450,7 @@ export function ProductExpanderModal({
           {/* 主機才顯示「主機資訊」 — 一次填寫,所有展開的 SKU 都帶 */}
           {isHost && (
             <div className="fieldset">
-              <legend>主機資訊(套用至所有展開 SKU)</legend>
+              <legend>主機資訊(這次建立的每一個品項都一樣)</legend>
               <div className="field-row">
                 <Field label="品牌" required>
                   <select
@@ -513,7 +529,7 @@ export function ProductExpanderModal({
           {/* 機型配件 → 多選相容機型,套用至所有展開 SKU */}
           {accessoryType === "phone_specific" && (
             <Field
-              label="相容機型(套用至所有展開 SKU)"
+              label="相容機型(這次建立的每一個品項都一樣)"
               hint="搜尋並選取多個機型;找不到可直接輸入新增"
             >
               <PhoneModelPicker
@@ -642,7 +658,10 @@ export function ProductExpanderModal({
             <legend>屬性(套用到所有展開商品)</legend>
             <Checkbox
               checked={requiresSerial}
-              onChange={setRequiresSerial}
+              onChange={(v) => {
+                if (v !== requiresSerial) setSerialTouched(true);
+                setRequiresSerial(v);
+              }}
               label="需追蹤序號(手機/平板=勾)"
             />
             <Checkbox

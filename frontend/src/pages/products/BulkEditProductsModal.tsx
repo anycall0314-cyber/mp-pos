@@ -287,7 +287,7 @@ export function BulkEditProductsModal({
             )}
           </section>
 
-          {/* 區塊 3: 商品狀態 */}
+          {/* 區塊 3: 販售狀態 */}
           <section className={"be-section" + (enLifecycle ? " on" : "")}>
             <label className="be-section-head">
               <input
@@ -295,7 +295,7 @@ export function BulkEditProductsModal({
                 checked={enLifecycle}
                 onChange={(e) => setEnLifecycle(e.target.checked)}
               />
-              <b>修改 商品狀態</b>
+              <b>修改 販售狀態</b>
             </label>
             {enLifecycle && (
               <div className="be-section-body">

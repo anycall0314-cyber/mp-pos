@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { ApiHttpError, asDuplicate } from "@/api/client";
 import {
@@ -34,6 +35,17 @@ import { type PhotoStored, usePhotoDraft } from "@/components/photos/usePhotoDra
 import { DuplicatePanel } from "./DuplicatePanel";
 import { useModalDraft } from "@/hooks/useModalDraft";
 import { MoneyInput } from "@/components/MoneyInput";
+import { toast } from "@/components/workbench/toast";
+import {
+  defaultRequiresSerial,
+  phoneNeedsWizard as needsWizard,
+  serialMemoryFromDraft,
+  stockModeLabel,
+  withNature,
+  withPin,
+  withSerialByHand,
+  withWarehouse,
+} from "@/lib/productDefaults";
 
 /** 比對兩個 form state 是否不同(用於 dirty 判斷) */
 function isDirtyAgainst<T extends object>(state: T, baseline: T): boolean {
@@ -97,6 +109,15 @@ interface FormState {
    * 放在這裡是為了跟欄位**存在同一份草稿裡**:「存成草稿先離開」再回來,欄位與照片一起接回來。
    */
   photo_draft: PhotoStored | null;
+  /** 人自己改過「需追蹤序號」(之後換商品性質不再替他改)。表單自己記的,跟著草稿走、不送出去 */
+  serial_touched: boolean;
+  /** 勾「虛擬商品 / 中古機」之前「需追蹤序號」是什麼(取消時要回得去)。同上 */
+  serial_before_pin: boolean | null;
+  /**
+   * 新增時選了「主機」、而且按過「留在這裡建立」。不是商品的欄位,不會送出去;
+   * 放在這裡是為了跟著草稿走(載入草稿時靠它知道當時有沒有按,不用拿別的欄位去猜)。
+   */
+  phone_here: boolean;
 }
 
 const EMPTY: FormState = {
@@ -105,7 +126,8 @@ const EMPTY: FormState = {
   spec: "",
   barcode: "",
   list_price: "0",
-  requires_serial: true,
+  // 預設的商品性質是機型配件:按數量記庫存(規則在 lib/productDefaults,各個新增入口共用)
+  requires_serial: defaultRequiresSerial("phone_specific"),
   allows_telecom_line: false,
   allows_commission: false,
   is_virtual: false,
@@ -127,6 +149,9 @@ const EMPTY: FormState = {
   min_sale_price: "0",
   is_active: true,
   photo_draft: null,
+  serial_touched: false,
+  serial_before_pin: null,
+  phone_here: false,
 };
 
 function toState(p: Product | null | undefined): FormState {
@@ -162,6 +187,9 @@ function toState(p: Product | null | undefined): FormState {
     min_sale_price: p.min_sale_price ?? "0",
     is_active: p.is_active,
     photo_draft: null,
+    serial_touched: false,
+    serial_before_pin: null,
+    phone_here: false,
   };
 }
 
@@ -251,6 +279,7 @@ export function ProductForm({
   const [newSeriesName, setNewSeriesName] = useState("");
   // 紀錄使用者是否手動改過世代序號;改過就不再從品名自動帶
   const genTouchedRef = useRef(false);
+  const nav = useNavigate();
 
   useEffect(() => {
     if (open) {
@@ -278,15 +307,26 @@ export function ProductForm({
     }
   }, [open, initial]);
 
-  // 主機:品名變動時,若使用者未手動改 generation,自動從品名末碼擷取數字
+  // 主機:品名變動時,若使用者未手動改 generation,自動從品名末碼擷取數字。
+  // 主機欄位還沒打開(新增時還沒按「留在這裡建立」)就不填:那時候人看不到這一格,不能在背後替他寫東西
   useEffect(() => {
     if (state.accessory_type !== "none") return;
+    if (
+      needsWizard({
+        isEdit,
+        nature: state.accessory_type,
+        warehouse: state.warehouse_type,
+        stayHere: state.phone_here,
+      })
+    ) {
+      return;
+    }
     if (genTouchedRef.current) return;
     const m = state.name.match(/(\d+)\s*$/);
     if (m) {
       setState((s) => ({ ...s, generation: m[1] }));
     }
-  }, [state.name, state.accessory_type]);
+  }, [state.name, state.accessory_type, state.warehouse_type, state.phone_here, isEdit]);
 
   // 草稿系統的 debounce / beforeunload / unmount 都由 useModalDraft 處理
 
@@ -307,6 +347,38 @@ export function ProductForm({
 
   function patch<K extends keyof FormState>(k: K, v: FormState[K]) {
     setState((s) => ({ ...s, [k]: v }));
+  }
+
+  /**
+   * 換商品性質 / 倉別、勾「虛擬商品」「中古機」、人自己按「需追蹤序號」:
+   * 「需追蹤序號」要變成什麼,規則都在 `lib/productDefaults`(`withNature` / `withWarehouse` / `withPin` / `withSerialByHand`),
+   * 需要記住的兩件事(`serial_touched`、`serial_before_pin`)放在表單狀態裡、跟著草稿走。
+   */
+  function changeNature(next: AccessoryType) {
+    setState((s) => ({
+      ...withNature(s, next, isEdit),
+      // 離開「主機」就收回「留在這裡建立」:換去配件再換回主機,要重新選一次(不然誤按過一次就一直是開的)
+      phone_here: next === "none" ? s.phone_here : false,
+    }));
+  }
+
+  /** 換倉別(商品倉 / 零件倉):零件一律按數量 */
+  function changeWarehouse(next: WarehouseType) {
+    setState((s) => withWarehouse(s, next, isEdit));
+  }
+
+  /** 新增手機 / 平板還沒選「留在這裡建立」:這張表單先不能存 */
+  const phoneNeedsWizard = needsWizard({
+    isEdit,
+    nature: state.accessory_type,
+    warehouse: state.warehouse_type,
+    stayHere: state.phone_here,
+  });
+  const PHONE_GATE_TEXT = "手機 / 平板請按「新增手機型號」,或按「留在這裡建立」";
+
+  /** 勾 / 取消「虛擬商品」「中古機」(會把「需追蹤序號」定住;取消時回到該回的地方) */
+  function pinSerial(kind: "virtual" | "secondhand", on: boolean) {
+    setState((s) => withPin(s, kind, on, isEdit));
   }
 
   async function handleCreateCategory() {
@@ -370,6 +442,11 @@ export function ProductForm({
     e?.preventDefault();
     setError(null);
     setFieldErrors({});
+    // 新增手機 / 平板要走「新增手機型號」(或先按「留在這裡建立」):按 Enter 送出也一樣擋,而且要講為什麼
+    if (phoneNeedsWizard) {
+      setError(PHONE_GATE_TEXT);
+      return;
+    }
     if (!state.category) {
       setFieldErrors({ category: ["請選類別"] });
       return;
@@ -485,7 +562,20 @@ export function ProductForm({
   function loadDraft() {
     if (!draftHelper.draft || busy) return;
     // 舊版存的草稿沒有照片那一欄
-    const saved = { ...EMPTY, ...draftHelper.draft.state };
+    const stored = draftHelper.draft.state as Partial<FormState>;
+    const merged = { ...EMPTY, ...stored };
+    const saved: FormState = {
+      ...merged,
+      // 這一版之前存的草稿沒有記「人動過序號沒有」「勾虛擬 / 中古之前是什麼」:補上(規則在 serialMemoryFromDraft)
+      ...serialMemoryFromDraft({
+        ...merged,
+        serial_touched: stored.serial_touched,
+        serial_before_pin: stored.serial_before_pin,
+      }),
+      // 這一版之前存的草稿沒有記「按過留在這裡建立」:有選品牌或系列才算(那兩格是人自己選的;
+      // 世代不算 —— 它會從品名的數字自動帶,不代表人打開過主機欄位)
+      phone_here: stored.phone_here ?? !!(stored.brand || stored.series),
+    };
     setState(saved);
     draftHelper.consumeDraft();
     // 欄位與照片是同一份草稿裡的:一起換過去(載入之前在這張表單上另外加的照片不留,
@@ -516,7 +606,8 @@ export function ProductForm({
             className="btn primary"
             onClick={submit}
             type="button"
-            disabled={busy || saveProduct.isPending}
+            disabled={busy || saveProduct.isPending || phoneNeedsWizard}
+            title={phoneNeedsWizard ? PHONE_GATE_TEXT : undefined}
           >
             {busy || saveProduct.isPending ? "儲存中…" : "儲存"}
           </button>
@@ -613,9 +704,7 @@ export function ProductForm({
             <button
               type="button"
               className={`pf-tab${state.warehouse_type === "product" ? " active" : ""}`}
-              onClick={() =>
-                patch("warehouse_type", "product" as WarehouseType)
-              }
+              onClick={() => changeWarehouse("product")}
             >
               商品倉
               <span className="pf-tab-sub">銷貨用</span>
@@ -623,7 +712,7 @@ export function ProductForm({
             <button
               type="button"
               className={`pf-tab${state.warehouse_type === "parts" ? " active" : ""}`}
-              onClick={() => patch("warehouse_type", "parts" as WarehouseType)}
+              onClick={() => changeWarehouse("parts")}
             >
               零件倉
               <span className="pf-tab-sub">維修用</span>
@@ -686,13 +775,13 @@ export function ProductForm({
           label="商品性質"
           required
           error={fieldErrors.accessory_type}
-          hint="決定後續欄位顯示;選錯會影響庫存警示推論"
+          hint={`庫存:${stockModeLabel(state.requires_serial)}`}
         >
           <div className="pf-tabs">
             <button
               type="button"
               className={`pf-tab${state.accessory_type === "none" ? " active" : ""}`}
-              onClick={() => patch("accessory_type", "none" as AccessoryType)}
+              onClick={() => changeNature("none")}
             >
               主機
               <span className="pf-tab-sub">手機 / 平板本體</span>
@@ -700,9 +789,7 @@ export function ProductForm({
             <button
               type="button"
               className={`pf-tab${state.accessory_type === "phone_specific" ? " active" : ""}`}
-              onClick={() =>
-                patch("accessory_type", "phone_specific" as AccessoryType)
-              }
+              onClick={() => changeNature("phone_specific")}
             >
               機型配件
               <span className="pf-tab-sub">手機殼 / 保護貼</span>
@@ -710,9 +797,7 @@ export function ProductForm({
             <button
               type="button"
               className={`pf-tab${state.accessory_type === "universal" ? " active" : ""}`}
-              onClick={() =>
-                patch("accessory_type", "universal" as AccessoryType)
-              }
+              onClick={() => changeNature("universal")}
             >
               通用配件
               <span className="pf-tab-sub">充電線 / 耳機</span>
@@ -720,7 +805,37 @@ export function ProductForm({
           </div>
         </Field>
 
-        {state.accessory_type === "none" && (
+        {phoneNeedsWizard && (
+          <div className="pf-guide">
+            <span>手機 / 平板</span>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={() => {
+                // 這張表單打好的東西留在「新增商品」的草稿(不會帶到下一頁);手機配對先結束
+                draftHelper.flush();
+                void photos.endPair();
+                if (isDirtyAgainst(state, baselineRef.current) || photos.dirty) {
+                  toast("剛才填的留在「新增商品」的草稿", "ok", { ms: 5000 });
+                }
+                nav("/products/new-phone-model");
+              }}
+            >
+              新增手機型號
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => patch("phone_here", true)}
+            >
+              留在這裡建立
+            </button>
+            {/* 這一句直接寫出來(觸控看不到滑鼠提示):一般手機從這裡建,就沒有容量、顏色、品況的結構 */}
+            <span className="pf-guide-note">沒有容量、顏色之分的機種才留在這裡</span>
+          </div>
+        )}
+
+        {state.accessory_type === "none" && !phoneNeedsWizard && (
           <div className="fieldset">
             <legend>主機資訊</legend>
             <div className="field-row">
@@ -1038,7 +1153,7 @@ export function ProductForm({
           state.accessory_type === "phone_specific" && (
           <Field
             label="相容機型"
-            hint="綁定後,查詢該機型庫存時此配件將自動列出,並納入安全庫存動態計算。同款不同容量/顏色/中古機等變體 SKU 全部涵蓋。"
+            hint="查這個機型的庫存時會一起列出這個配件;同款不同容量、顏色、中古機都算"
           >
             <PhoneModelPicker
               placeholder={
@@ -1141,9 +1256,9 @@ export function ProductForm({
         />
 
         <Field
-          label="商品狀態"
+          label="販售狀態"
           error={fieldErrors.lifecycle_status}
-          hint="決定庫存警示行為(停產 / 清倉不觸發補貨警示)"
+          hint="停產、清倉不提醒補貨"
         >
           <select
             value={state.lifecycle_status}
@@ -1163,10 +1278,14 @@ export function ProductForm({
           <div className="pf-details-body">
             <Checkbox
               checked={state.requires_serial}
-              onChange={(v) =>
-                patch("requires_serial", state.is_virtual ? false : v)
-              }
+              onChange={(v) => setState((s) => withSerialByHand(s, v))}
               label="需追蹤序號"
+            />
+            {/* 中古機放在看得到的地方(以前收在「會計處理」裡,新手找不到) */}
+            <Checkbox
+              checked={state.is_secondhand}
+              onChange={(v) => pinSerial("secondhand", v)}
+              label="中古機(逐隻記成色 / 電池 / 自定售價)"
             />
             <Checkbox
               checked={state.allows_telecom_line}
@@ -1191,23 +1310,8 @@ export function ProductForm({
           <div className="pf-details-body fieldset-skip">
           <Checkbox
             checked={state.is_virtual}
-            onChange={(v) => {
-              patch("is_virtual", v);
-              if (v) patch("requires_serial", false);
-            }}
+            onChange={(v) => pinSerial("virtual", v)}
             label="虛擬商品"
-          />
-          <Checkbox
-            checked={state.is_secondhand}
-            onChange={(v) => {
-              patch("is_secondhand", v);
-              // 中古機一定追蹤序號;勾起時自動把追蹤序號打開、虛擬商品關掉
-              if (v) {
-                patch("requires_serial", true);
-                patch("is_virtual", false);
-              }
-            }}
-            label="中古機(逐隻記成色 / 電池 / 自定售價)"
           />
           <Checkbox
             checked={state.counts_cash}

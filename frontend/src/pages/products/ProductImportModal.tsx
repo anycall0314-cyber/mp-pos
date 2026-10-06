@@ -99,7 +99,7 @@ export function ProductImportModal({ open, onClose, onImported }: Props) {
                 </div>
                 <div className="pi-note-dim">
                   類別不存在會自動建立。已存在的品號 / 品名會跳過。
-                  匯入商品的「商品狀態」預設為「待補齊」,不影響庫存警示。
+                  匯入商品的「販售狀態」預設為「待補齊」,不影響庫存警示。
                 </div>
               </div>
               <input

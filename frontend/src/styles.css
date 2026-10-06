@@ -1010,6 +1010,10 @@ button { font-family: inherit; }
 }
 .member-row-value { font-size: var(--font-body); }
 
+/* 商品表單:新增時選了「主機」,帶去「新增手機型號」的那一排 */
+.pf-guide { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 4px 0 16px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
+.pf-guide-note { flex: 1 1 100%; color: var(--text-dim); font-size: var(--font-secondary); }
+
 /* 商品標籤(50 × 30 mm,熱感 203 dpi;一張標籤一頁)。尺寸跟 lib/labels.ts 的 LABEL 是同一組數字。
    字一律用 mm、純黑:熱感只有黑跟白,灰色的字會被印成一點一點的。
    紙張尺寸用「有名字的頁面」(page: label):這份樣式裡別的列印頁(收據、維修單)各有自己的 @page,

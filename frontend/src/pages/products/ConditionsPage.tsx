@@ -67,7 +67,7 @@ export function ConditionsPage() {
   async function submit() {
     if (!editing) return;
     if (!editing.name.trim()) {
-      setError("請填狀態名稱");
+      setError("請填品況名稱");
       return;
     }
     const code = editing.code.trim() || slugify(editing.name);
@@ -93,8 +93,8 @@ export function ConditionsPage() {
   async function handleDelete(c: Condition) {
     if (
       !confirm(
-        `刪除狀態「${c.name}」?\n` +
-          `已掛此狀態的 ${c.product_count ?? 0} 個 SKU 會卡住(PROTECT) — 請先把那些 SKU 改成別的狀態,或先停用此狀態。`,
+        `刪除品況「${c.name}」?\n` +
+          `已經有 ${c.product_count ?? 0} 個商品是這個品況的話刪不掉:請先把那些商品改成別的品況,或改成停用。`,
       )
     )
       return;
@@ -108,10 +108,10 @@ export function ConditionsPage() {
   return (
     <div className="page">
       <Toolbar
-        title="商品狀態管理"
+        title="商品品況"
         actions={
           <button className="btn primary" onClick={startNew}>
-            + 新增狀態
+            + 新增品況
           </button>
         }
       />
@@ -125,10 +125,9 @@ export function ConditionsPage() {
             lineHeight: 1.6,
           }}
         >
-          商品狀態用於「新增手機型號」wizard 的狀態維度 —
-          系統已預設「全新 / 已拆封 / 中古機(保固內)/ 中古機」4 個,可自行增刪改。
+          「新增手機型號」時選的品況。預設有全新 / 已拆封 / 中古機(保固內)/ 中古機,可以自己增刪改。
           <br />
-          名稱含「中古」會自動勾「視為中古機」,該狀態下建的 SKU 會自動觸發中古機成本邏輯(每隻獨立 purchase_unit_cost)。
+          名稱有「中古」會自動勾「視為中古機」:這個品況的商品每一台各記成本。
         </div>
 
         {error && <Banner kind="error" message={error} />}
@@ -137,12 +136,12 @@ export function ConditionsPage() {
         {editing && (
           <div className="form-card">
             <div className="section-head">
-              {editing.id ? "編輯狀態" : "新增狀態"}
+              {editing.id ? "編輯品況" : "新增品況"}
             </div>
 
             <div className="form-field">
               <label className="form-field-label" htmlFor="cd-name">
-                狀態名稱<span className="required">*</span>
+                品況名稱<span className="required">*</span>
               </label>
               <input
                 id="cd-name"
@@ -159,7 +158,7 @@ export function ConditionsPage() {
             <div className="form-row-2col">
               <div className="form-field" style={{ marginBottom: 0 }}>
                 <label className="form-field-label" htmlFor="cd-code">
-                  狀態代碼
+                  品況代碼
                 </label>
                 <input
                   id="cd-code"
@@ -255,7 +254,7 @@ export function ConditionsPage() {
                 啟用
               </label>
               <div className="form-field-hint">
-                停用後 wizard 不會把此狀態列為可選項。
+                停用後新增手機型號時不能選。
               </div>
             </div>
 
@@ -282,14 +281,14 @@ export function ConditionsPage() {
                 onClick={submit}
                 disabled={save.isPending}
               >
-                {save.isPending ? "儲存中…" : "儲存狀態"}
+                {save.isPending ? "儲存中…" : "儲存品況"}
               </button>
             </div>
           </div>
         )}
 
         <div className="section-head">
-          已建立狀態
+          已建立品況
           <span className="section-head-meta">
             共 {conditions.data?.length ?? 0} 種
           </span>
@@ -298,7 +297,7 @@ export function ConditionsPage() {
         {conditions.isLoading && <div>載入中…</div>}
         {!conditions.isLoading && (conditions.data?.length ?? 0) === 0 && (
           <div className="empty-cta">
-            <div className="empty-cta-title">尚未建立任何狀態</div>
+            <div className="empty-cta-title">尚未建立任何品況</div>
             <div className="empty-cta-desc">
               預設值由系統 seed 4 個。如果這裡是空的,
               <br />
@@ -323,7 +322,7 @@ export function ConditionsPage() {
                 <th style={{ width: 110, textAlign: "center" }}>
                   逐台記機況
                 </th>
-                <th style={{ width: 100, textAlign: "center" }}>SKU 數</th>
+                <th style={{ width: 100, textAlign: "center" }}>商品數</th>
                 <th style={{ width: 80 }}>啟用</th>
                 <th style={{ width: 160 }}></th>
               </tr>

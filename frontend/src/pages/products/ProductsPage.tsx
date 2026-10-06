@@ -314,7 +314,7 @@ export function ProductsPage() {
               <button
                 className="btn"
                 onClick={() => nav("/products/new-phone-model")}
-                title="一次建好「狀態 × 容量 × 顏色」所有 SKU 變體"
+                title="一次建好這個機型的品況 × 容量 × 顏色"
               >
                 + 新增手機型號
               </button>

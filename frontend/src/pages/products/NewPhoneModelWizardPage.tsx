@@ -17,6 +17,7 @@ import { Toolbar } from "@/components/Toolbar";
 import { MoneyInput } from "@/components/MoneyInput";
 import { intStr } from "@/lib/money";
 import { hasRealReason } from "./DuplicatePanel";
+import { defaultConditionIds } from "@/lib/productDefaults";
 
 /**
  * 「新增手機型號」3 步 wizard。
@@ -268,14 +269,13 @@ export function NewPhoneModelWizardPage() {
   const template = usePartTemplate(state.template_id);
   const create = useCreatePhoneModelBundle();
 
-  // 首次載入 conditions 後預設全勾(active 的)
+  // 品況主檔第一次載到時,只預選「全新」(規則在 lib/productDefaults)。
+  // 以前是全部勾起來:新手一按就建出 4 種品況 × 容量 × 顏色、一堆用不到的品項;要中古、拆封的自己再勾
   useEffect(() => {
     if (!conditionsSeeded && conditions.data) {
       setState((s) => ({
         ...s,
-        condition_ids: (conditions.data ?? [])
-          .filter((c) => c.is_active)
-          .map((c) => c.id),
+        condition_ids: defaultConditionIds(conditions.data ?? []),
       }));
       setConditionsSeeded(true);
     }
@@ -323,7 +323,7 @@ export function NewPhoneModelWizardPage() {
   }
 
   function validateStep2(): string | null {
-    if (state.condition_ids.length === 0) return "至少選 1 個狀態";
+    if (state.condition_ids.length === 0) return "至少選 1 個品況";
     if (state.capacities.length === 0) return "至少 1 個容量";
     if (state.colors.length === 0) return "至少 1 個顏色";
     return null;
@@ -559,7 +559,7 @@ export function NewPhoneModelWizardPage() {
                   style={{ textAlign: "right" }}
                 />
                 <div className="form-field-hint">
-                  套用到所有主機 SKU,之後可逐項調整
+                  套用到這次建立的每一個品項,之後可以各別改
                 </div>
               </div>
             </div>
@@ -586,7 +586,7 @@ export function NewPhoneModelWizardPage() {
                     ))}
                 </select>
                 <div className="form-field-hint">
-                  配件 placeholder SKU 要掛到哪個類別
+                  這個機型的配件歸在哪一類(不會建立配件商品)
                 </div>
               </div>
               <div className="form-field" style={{ marginBottom: 0 }}>
@@ -610,7 +610,7 @@ export function NewPhoneModelWizardPage() {
                     ))}
                 </select>
                 <div className="form-field-hint">
-                  維修零件 SKU 要掛到哪個類別
+                  維修零件歸在哪一類
                 </div>
               </div>
             </div>
@@ -658,10 +658,10 @@ export function NewPhoneModelWizardPage() {
               </span>
             </div>
 
-            {/* 狀態 */}
+            {/* 品況 */}
             <div className="form-field">
               <label className="form-field-label">
-                狀態<span className="required">*</span>
+                品況<span className="required">*</span>
               </label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
                 {(conditions.data ?? [])
@@ -704,9 +704,13 @@ export function NewPhoneModelWizardPage() {
                     </label>
                   ))}
               </div>
+              {state.condition_ids.length === 0 && (
+                <div className="form-field-hint" style={{ color: "var(--warn-text)" }}>
+                  請勾選品況
+                </div>
+              )}
               <div className="form-field-hint">
-                名稱含「中古」的狀態下建出的 SKU 會自動 is_secondhand=True,
-                觸發中古機「每隻獨立成本」邏輯
+                中古機:每一台各記成本、成色、售價
               </div>
             </div>
 
@@ -751,9 +755,8 @@ export function NewPhoneModelWizardPage() {
                 placeholder="輸入後按 Enter,例:殼"
               />
               <div className="form-field-hint">
-                這只是記錄「這支手機之後會配什麼類別的配件」, wizard 不會建任何配件 SKU。
-                真正配件商品(imos / HODA 各品牌變體)要走「+ 新增配件」獨立 wizard,
-                建好後在那邊勾選相容機型即可。
+                只記這支手機會配哪幾類配件,不會建立配件商品。
+                配件商品用「+ 新增配件」建,建好在那邊勾相容機型。
               </div>
             </div>
 
@@ -791,8 +794,8 @@ export function NewPhoneModelWizardPage() {
                   ))}
                 </div>
                 <div className="form-field-hint">
-                  Wizard 會為每項建一個零件 SKU 並綁定到此機型。
-                  要新增或修改零件清單請去「庫存 → 零件範本管理」改範本
+                  每一項會建立一個零件品項、掛在這個機型上。
+                  要改零件清單請到「零件範本」
                 </div>
               </div>
             )}
@@ -812,17 +815,17 @@ export function NewPhoneModelWizardPage() {
               <b style={{ marginLeft: 6, color: "var(--accent)" }}>
                 {expectedMain}
               </b>{" "}
-              個主機 SKU
+              個主機品項
               {state.parts_items.length > 0 && (
                 <>
                   {" "}
-                  + <b>{state.parts_items.length}</b> 個維修零件 SKU
+                  + <b>{state.parts_items.length}</b> 個零件品項
                 </>
               )}
               {state.accessory_categories.length > 0 && (
                 <span style={{ color: "var(--text-dim)" }}>
                   {" "}
-                  (記錄 {state.accessory_categories.length} 個相容配件類別,不建 SKU)
+                  (記 {state.accessory_categories.length} 個相容配件類別,不建立商品)
                 </span>
               )}
               <div
@@ -832,8 +835,8 @@ export function NewPhoneModelWizardPage() {
                   marginTop: 4,
                 }}
               >
-                {state.condition_ids.length} 狀態 × {state.capacities.length} 容量 ×{" "}
-                {state.colors.length} 顏色 = {expectedMain}
+                會建立 {expectedMain} 個品項(品況 {state.condition_ids.length} ×
+                容量 {state.capacities.length} × 顏色 {state.colors.length})
               </div>
             </div>
 
@@ -889,9 +892,9 @@ export function NewPhoneModelWizardPage() {
                     marginBottom: 16,
                   }}
                 >
-                  <SummaryStat label="主機 SKU" value={preview.main_count} />
+                  <SummaryStat label="主機品項" value={preview.main_count} />
                   <SummaryStat
-                    label="維修零件 SKU"
+                    label="零件品項"
                     value={preview.parts_count}
                   />
                 </div>
@@ -925,7 +928,7 @@ export function NewPhoneModelWizardPage() {
                       </span>
                     ))}
                     <span style={{ marginLeft: 8 }}>
-                      不會建 SKU,實際配件去「+ 新增配件」獨立建立
+                      不建立商品;配件用「+ 新增配件」建
                     </span>
                   </div>
                 )}
@@ -1003,7 +1006,7 @@ export function NewPhoneModelWizardPage() {
                   >
                     {create.isPending
                       ? "建立中…"
-                      : `確認建立 ${preview.main_count + preview.parts_count} 個 SKU`}
+                      : `確認建立 ${preview.main_count + preview.parts_count} 個品項`}
                   </button>
                 </div>
               </>
@@ -1023,17 +1026,16 @@ export function NewPhoneModelWizardPage() {
                   }}
                 >
                   已成功建立機型「<b>{created.model_name}</b>」 ——
-                  主機 <b>{created.main_count}</b> 個 SKU、
+                  主機 <b>{created.main_count}</b> 個品項、
                   維修零件 <b>{created.parts_count}</b> 個。
                   {created.accessory_slots.length > 0 && (
                     <>
                       {" "}
                       已記錄 <b>{created.accessory_slots.length}</b> 個相容配件類別,
-                      實際配件商品請走「+ 新增配件」獨立建立。
+                      配件商品請用「+ 新增配件」建。
                     </>
                   )}{" "}
-                  之後遇到全新 / 已拆封 / 中古機收購都不用再多一道「先建商品」手續,
-                  直接掛序號即可。
+                  這次勾的品況已經有品項,進貨 / 收購時直接掛序號;沒勾的品況要用的時候再來新增。
                 </div>
 
                 <div
@@ -1106,9 +1108,9 @@ function PreviewTable({
   kind: "main" | "accessory" | "parts";
 }) {
   const titles = {
-    main: "主機 SKU",
-    accessory: "配件 placeholder",
-    parts: "維修零件 SKU",
+    main: "主機品項",
+    accessory: "相容配件類別",
+    parts: "零件品項",
   };
   return (
     <div style={{ marginBottom: 16 }}>
