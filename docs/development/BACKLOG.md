@@ -1,0 +1,92 @@
+# BACKLOG
+
+整理過的候選項目。**放在這裡不代表現在要做**;owner 點了才變成 `CURRENT_TASK.md`。
+來源:目前程式已經有的功能、`docs/roadmap.md`(早期的分階段規劃,部分已過時)、`docs/product-roadmap.md`(AI 代理人願景)、
+`docs/decisions.md` 各則的「沒做」、以及近期對話。
+
+優先級:P0 資料正確性 / 系統核心 / 阻塞;P1 核心營運流程;P2 管理與效率;P3 操作體驗;P4 未來想法。
+
+---
+
+## 進行中(工作目錄裡已經動工、還沒提交)
+
+這兩件是訂這套流程之前就開工的,現在都**停著**,等 owner 決定先收哪一件(建議見 `CURRENT_TASK.md`)。
+
+### A. 進貨、銷貨開單頁(商品明細優先)+ 建單防重複 + 門號合約日期 —— 做完,等第二輪複審
+- 內容:進貨 / 銷貨拆成清單頁 + 開單頁;建單認得 `Idempotency-Key`;門號欄位接在商品下方;
+  合約從續約日 / 生效日起算、到期日存檔當下算好、存了之後可以改日期;進貨計價數量 0 = 整行贈品。
+- 狀態:本機整條驗過;後端 550 個、前端 65 個測試過;Grok 紅隊兩輪意見已修;
+  Codex 第一輪「還不能上線(必修 2 項)」,兩項都修了,**還沒送第二輪**。
+- 資料庫:`core.0002`(建單鑰匙)、`sales.0017`(合約日期)、`purchasing.0008`(計價數量可空)。
+- 主要檔案:`frontend/src/pages/sales/Sales{Workbench,List}Page.tsx`、`pages/purchases/Purchase{Workbench,List}Page.tsx`、
+  `SerialSlots.tsx`、`serials.ts`、`components/workbench/{MoreMenu,QtyInput}.tsx`、`lib/{deviceCodes,dates}.ts`、`nav.ts`、`styles.css`、
+  `backend/apps/core/{idempotency,dates}.py`、`apps/sales/`、`apps/purchasing/`、`docs/`。
+
+### B. 商品照片與手機拍照直傳(規格 A / B / C 階段)—— 做到一半
+- 規格:`MP-POS-商品圖片備註與手機拍照直傳規格.md`(owner 2026-10-06 給的)。
+- 做好的:後端整塊(新的 `backend/apps/photos/`:照片、暫存、手機配對、隨商品存檔、清理;商品 API 帶照片張數與縮圖;
+  備份登記;35 個測試過)。前端只有共用零件(`api/photos.ts`、`lib/{imageShrink,qr}.ts`、`components/photos/usePhotoDraft.ts`)。
+- 還沒做:商品表單裡的照片區、手機拍照頁、QR Code 配對畫面、點品名看照片(商品 / 庫存 / 進貨 / 銷貨)、文件、紅隊與複審。
+- 會多兩個安裝項目:後端 `Pillow`、`pillow-heif`(已寫進 `requirements.txt`),前端 `qrcode-generator`(已寫進 `package.json`)。
+- 注意:B 的後端已經接在商品 API 與設定檔上(`config/settings/base.py`、`config/urls.py`、`apps/catalog/{views,serializers}.py`、
+  `apps/backup/registry.py`、`requirements.txt`、`frontend/package*.json`)。**A 要單獨提交時,這幾個檔要分開處理**
+  (`registry.py` 兩批都有改)。
+
+---
+
+## P0 核心資料正確性
+
+- 調撥單、個人收購建單防重複送單(進貨、銷貨已做;見 A)
+- 帳務概念分開:商品營業額 / 服務收入 / 佣金收入 / 成本 / 毛利 / 應收 / 現金流 / 資金移轉,不混成一個「營業額」
+  (現況:報表語意層已經把「銷售」限定為計入毛利的明細、收購二手另列;佣金存在銷貨明細上;還沒有應收與資金移轉)
+- 門號佣金應收與撥款對帳(`docs/roadmap.md` Phase 2:佣金對帳單)
+- 舊 POS 十年會員消費正式匯入(工具已上線,資料還沒正式匯入)
+- 二手機收購成本可追溯:實際收購價已逐台記;「當日市場基準價」還沒有(見 IDEAS)
+
+## P1 核心操作流程
+
+- 商品照片與手機拍照直傳(見進行中 B)
+- 門號合約到期的統計與提醒(日期在 A 裡開始記)
+- 銷貨:掛單、定購、實收找零
+- 借出單、不良品流程(`docs/roadmap.md` 1.5、1.6;尚未動工)
+- 條碼列印機(Argox OS-2130D)
+- SIM 卡批卡 / 退卡、卡號異動(`docs/roadmap.md` Phase 2;目前只有 SIM 卡主檔與銷貨時出卡)
+
+## P2 管理功能
+
+- 應收帳款、佣金管理
+- 員工績效與毛利歸屬(先把歸屬記對)
+- 多門市損益
+- 庫存週轉、滯銷品報表(可以先看「自由組合」報表加指標做不做得到)
+- 管理首頁(Dashboard)
+- 報表權限(目前不鎖,店員也看得到全公司與毛利)
+
+## P3 操作體驗
+
+- UI 改善計劃後續批次(共用頁框、查詢列統一、首頁待辦導向)
+- 其餘錄入頁(維修單、銷退單)的版型
+- 銷貨單清單標示「已退」
+- 商品照片 D 階段(分類照片列表、新建前候選帶照片)
+
+## P4 未來功能
+
+- AI 代理人:拍新廠商出貨單就入庫、商品辨識、型號名稱正規化(`docs/product-roadmap.md`)
+- 自然語言問報表(資料底層第 4 層;`docs/資料底層與自然語言報表_規劃.md`)
+- 舊 POS 資料智慧搜尋、自動異常偵測
+- 多租戶 SaaS 化(訂閱、平台後台擴充)
+
+---
+
+## 技術債(發現了先記著,不順手改)
+
+- (Codex 第三輪的「建議」,沒有在這一批修)進貨開單頁的掃碼框沒有跟著供應商 / 入庫倉 / 換一張單重設:
+  查到一半換供應商,舊條件的結果還可能落回畫面;清空草稿之後,上一張的「沒加入」可能繼續擋下一張
+- (同上)銷貨單清單上「方案」那段字顯示的是方案主檔現在的月數;方案改過月數之後,舊單的到期日是對的(照當初的月數),
+  但那段字會寫成新的月數,兩個看起來矛盾 → 改成顯示明細上抄下來的月數
+
+- 前端沒有 lint 設定(`eslint.config.*` 不存在),只有 `tsc` 與 `npm test`
+- 前端主程式打包超過 500KB,沒有分頁載入
+- 後端 `.venv/bin/pip` 的路徑還指到搬家前的資料夾(要用 `.venv/bin/python -m pip`);部署機是否也這樣要確認
+- `AGENTS.md` 比 `CLAUDE.md` 少幾列業務規則,兩份沒有完全同步
+- `docs/roadmap.md` 是早期規劃,跟現況有落差(例如寫銷貨單是錄入頁)
+- 正式環境的上傳檔(`/media/`)由誰送出沒有寫清楚;進貨單原圖的網址在正式站是否打得開要確認
