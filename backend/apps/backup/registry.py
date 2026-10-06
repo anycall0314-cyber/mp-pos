@@ -53,6 +53,8 @@ REGISTRY: dict[str, Entry] = {
         "sales.SalesOrder", "sales.SalesOrderItem", "sales.SalesOrderItemSerial",
         "sales.SalesOrderPayment", "sales.SalesReturn", "sales.SalesReturnItem",
         "sales.SalesReturnItemSerial", "sales.LegacyPurchase",
+        # 門號合約快到期的聯絡紀錄(掛在銷貨明細上)
+        "sales.ContractFollowUp",
         "transfers.TransferOrder", "transfers.TransferOrderItem",
         "transfers.TransferOrderItemSerial",
         "cash.PettyExpense", "cash.CashAdjustment", "cash.PhoneBillCollection",
@@ -130,7 +132,7 @@ TENANT_HIGH_WATER = [
     "next_expense_seq", "next_cash_adj_seq", "next_phone_bill_seq", "next_repair_seq",
 ]
 # 公司那一列要帶走的設定欄位(流水號另外用 TENANT_HIGH_WATER)
-TENANT_SETTINGS = ["name", "repair_warranty_days"]
+TENANT_SETTINGS = ["name", "repair_warranty_days", "contract_remind_months"]
 
 # 單號靠「最後一張單 + 1」取號的單據:{表: 字首}。還原前把已用過的最大號記進
 # DocNumberFloor。

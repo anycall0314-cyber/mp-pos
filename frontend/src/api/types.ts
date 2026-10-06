@@ -951,6 +951,8 @@ export interface PhoneModel {
 
 // 登入首頁所需的 metric 一次回
 export interface HomeSummary {
+  /** 門號合約:快到期(或已經過期)還沒處理的有幾筆 */
+  contracts_pending?: number;
   warehouse_id: number | null;
   warehouse_name: string;
   today: { revenue: number; sales_count: number };

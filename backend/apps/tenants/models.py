@@ -46,6 +46,11 @@ class Tenant(TimestampedModel):
         default=90,
         help_text="返修保固判定基準(自完修日起算)",
     )
+    contract_remind_months = models.PositiveSmallIntegerField(
+        "門號合約到期前幾個月提醒",
+        default=3,
+        help_text="門號合約到期前幾個月開始出現在「合約到期」的待聯絡名單",
+    )
 
     class Meta:
         ordering = ["id"]

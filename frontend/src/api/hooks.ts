@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "./client";
+import {
+  type ContractQuery,
+  type FollowStatus,
+  listContracts,
+  setContractFollowUp,
+} from "./contracts";
 import { listProductPhotos, type PhotosPayload } from "./photos";
 import {
   Carrier,
@@ -219,6 +225,33 @@ export function useDeletePaymentMethod() {
     mutationFn: (id: number) =>
       api<void>(`/payment-methods/${id}/`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["payment-methods"] }),
+  });
+}
+
+/** 門號合約到期的名單(分頁 / 篩選都在參數裡) */
+export const useContracts = (q: ContractQuery) =>
+  useQuery({
+    queryKey: ["telecom-contracts", q],
+    queryFn: () => listContracts(q),
+    // 換分頁 / 打搜尋時先留著上一份,畫面不會整個閃掉。那一份不是現在要的名單(`isPlaceholderData`):
+    // 畫面只能拿來顯示、不能讓人按 —— 按下去標到的是上一份名單裡的人
+    placeholderData: (prev) => prev,
+    // 不留舊名單:換回看過的條件 / 那一頁一定重新抓。留著的話會先拿出剛剛的那一份,上面的人別的店員可能已經標過了
+    gcTime: 0,
+    // 名單不自己在背後換:人正要按的時候列一跳,就按到別人。只有人自己換條件、翻頁、再點分頁,或自己標完才重抓
+    refetchOnReconnect: false,
+  });
+
+/** 標「已聯絡 / 不續約」、寫備註、取消標記 */
+export function useContractFollowUp() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: number; status: FollowStatus | ""; note: string }) =>
+      setContractFollowUp(v.id, v.status, v.note),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["telecom-contracts"] });
+      qc.invalidateQueries({ queryKey: ["home-summary"] });
+    },
   });
 }
 
@@ -1651,6 +1684,8 @@ export interface TenantSettings {
   name?: string;
   code?: string;
   repair_warranty_days: number;
+  /** 門號合約到期前幾個月開始出現在待聯絡名單 */
+  contract_remind_months: number;
 }
 
 export const useTenantSettings = () =>
@@ -1670,6 +1705,9 @@ export function useSaveTenantSettings() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tenant-settings"] });
+      // 「到期前幾個月提醒」改了:合約到期的名單與今日總覽的筆數要跟著重抓
+      qc.invalidateQueries({ queryKey: ["telecom-contracts"] });
+      qc.invalidateQueries({ queryKey: ["home-summary"] });
     },
   });
 }

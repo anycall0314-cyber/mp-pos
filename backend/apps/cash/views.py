@@ -695,8 +695,17 @@ def home_summary(request):
         status=RepairOrder.Status.COMPLETED
     ).count()
 
+    # 門號合約:快到期(或已經過期)還沒處理的有幾筆 —— 規則在 apps/sales/contracts.py
+    from apps.sales import contracts as contract_rules
+
+    contract_qs = contract_rules.pending(tenant, today)
+    if wid is not None:
+        contract_qs = contract_qs.filter(so__warehouse_id=wid)
+    contracts_pending = contract_qs.count()
+
     return Response(
         {
+            "contracts_pending": contracts_pending,
             "warehouse_id": wid,
             "warehouse_name": warehouse_name,
             "today": today_data,

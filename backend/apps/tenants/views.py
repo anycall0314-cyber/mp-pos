@@ -109,6 +109,7 @@ def tenant_settings(request):
                 "name": tenant.name,
                 "code": tenant.code,
                 "repair_warranty_days": tenant.repair_warranty_days,
+                "contract_remind_months": tenant.contract_remind_months,
             }
         )
     profile = getattr(request.user, "profile", None)
@@ -129,11 +130,34 @@ def tenant_settings(request):
                 {"detail": "保固天數需在 1 ~ 3650 之間"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+    months = request.data.get("contract_remind_months")
+    if months is not None:
+        try:
+            months = int(months)
+        except (ValueError, TypeError):
+            return Response(
+                {"detail": "提醒的月數需為整數"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if months < 1 or months > 24:
+            return Response(
+                {"detail": "提醒的月數需在 1 ~ 24 之間"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    # 全部檢查過才存:其中一個不對就整筆不動(不會回了錯誤、另一個欄位卻已經改掉)
+    changed = []
+    if days is not None:
         tenant.repair_warranty_days = days
-        tenant.save(update_fields=["repair_warranty_days"])
+        changed.append("repair_warranty_days")
+    if months is not None:
+        tenant.contract_remind_months = months
+        changed.append("contract_remind_months")
+    if changed:
+        tenant.save(update_fields=changed)
     return Response(
         {
             "id": tenant.id,
             "repair_warranty_days": tenant.repair_warranty_days,
+            "contract_remind_months": tenant.contract_remind_months,
         }
     )

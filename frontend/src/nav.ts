@@ -125,6 +125,7 @@ export const NAV_MODULES: NavModule[] = [
     to: "/telecom/billing",
     tabs: [
       { to: "/telecom/billing", label: "代收話費" },
+      { to: "/telecom/expiries", label: "合約到期", aliases: ["到期查詢", "續約提醒", "門號到期"] },
       { to: "/telecom-plans", label: "電信方案", aliases: ["方案管理"] },
       { to: "/sim-cards", label: "SIM 卡", aliases: ["卡片管理"] },
     ],

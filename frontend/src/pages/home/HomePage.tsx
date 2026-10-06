@@ -29,7 +29,8 @@ export function HomePage() {
     (repair?.overdue_external.count ?? 0) +
     (repair?.awaiting_pickup.count ?? 0) +
     (repair?.parts_low_stock.count ?? 0);
-  const noticeCount = (lowStock?.count ?? 0) + repairAlertsCount;
+  const contractsPending = summary.data?.contracts_pending ?? 0;
+  const noticeCount = (lowStock?.count ?? 0) + repairAlertsCount + contractsPending;
 
   const revenueDiff = pctDiff(today?.revenue, yesterday?.revenue);
   const countDiff = absDiff(today?.sales_count, yesterday?.sales_count);
@@ -119,6 +120,15 @@ export function HomePage() {
               )}
               {!summary.isLoading && noticeCount === 0 && (
                 <div className="hp-panel-empty">目前沒有待辦事項</div>
+              )}
+              {contractsPending > 0 && (
+                <NavLink to="/telecom/expiries" className="hp-alert-row hp-alert-link">
+                  <span className="hp-alert-dot hp-alert-red" />
+                  <div className="hp-alert-content">
+                    <div className="hp-alert-title">門號合約 {contractsPending} 筆待聯絡</div>
+                    <div className="hp-alert-sub">快到期或已經過期,還沒聯絡</div>
+                  </div>
+                </NavLink>
               )}
               {repair?.overdue_repairs.items.map((it) => (
                 <NavLink

@@ -48,6 +48,7 @@ import { LedgerChecksPage } from "@/pages/ledger/LedgerChecksPage";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { SimCardsPage } from "@/pages/sim-cards/SimCardsPage";
 import { SuppliersPage } from "@/pages/suppliers/SuppliersPage";
+import { ContractsPage } from "@/pages/telecom/ContractsPage";
 import { TelecomPlansPage } from "@/pages/telecom-plans/TelecomPlansPage";
 import { ModuleBar } from "@/components/shell/ModuleBar";
 import { Sidebar } from "@/components/shell/Sidebar";
@@ -307,7 +308,7 @@ export function App() {
           />
           <Route
             path="/telecom/expiries"
-            element={<Placeholder title="到期查詢" />}
+            element={<ContractsPage />}
           />
           <Route path="/repairs" element={<RepairsPage />} />
           <Route path="/repairs/items" element={<RepairItemsPage />} />

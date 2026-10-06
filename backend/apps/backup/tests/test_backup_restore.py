@@ -792,6 +792,52 @@ class RollbackTests(_Base):
         self.assertTrue(PhotoDraft.objects.filter(uid=other, state="open").exists())
         self.assertTrue(default_storage.exists(other_file))
 
+    def test_contract_follow_ups_and_the_reminder_setting_come_back(self):
+        """門號合約的聯絡紀錄(掛在銷貨明細上)與「到期前幾個月提醒」的設定,跟著備份回來。"""
+        from datetime import date
+
+        from apps.parties.models import Carrier, TelecomPlan
+        from apps.sales import contracts as contract_rules
+        from apps.sales.models import ContractFollowUp, SalesOrderItem
+
+        carrier = Carrier.objects.create(tenant=self.a.tenant, code="FET", name="遠傳")
+        plan = TelecomPlan.objects.create(
+            tenant=self.a.tenant, carrier=carrier, name="599 續約", monthly_fee=599,
+            contract_months=24, kind="renewal",
+        )
+        Product.objects.filter(pk=self.a.case.pk).update(allows_telecom_line=True)
+
+        def sell(msisdn):
+            r = self.a.admin.post("/api/v1/sales-orders/", {
+                "customer": self.a.customer.id, "warehouse": self.a.wh.id, "tax_method": "untaxed",
+                "payments": [], "items": [{
+                    "product": self.a.case.id, "qty": 1, "unit_price": "0", "msisdn": msisdn,
+                    "telecom_plan": plan.id, "activation_date": date.today().isoformat()}],
+            }, format="json")
+            self.assertEqual(r.status_code, 201, r.content)
+            return SalesOrderItem.objects.get(so_id=r.json()["id"])
+
+        kept = sell("0911000001")
+        contract_rules.set_follow_up(self.a.tenant, kept.id, "declined", "攜碼到別家", self.a.admin_user)
+        Tenant.objects.filter(pk=self.a.tenant.pk).update(contract_remind_months=6)
+        saved = self.path(self.backup(self.a))
+
+        # 備份之後:原本那一筆被改成已聯絡、又多標了一筆、設定也改了
+        contract_rules.set_follow_up(self.a.tenant, kept.id, "contacted", "之後改的", self.a.admin_user)
+        later = sell("0911000002")
+        contract_rules.set_follow_up(self.a.tenant, later.id, "contacted", "", self.a.admin_user)
+        Tenant.objects.filter(pk=self.a.tenant.pk).update(contract_remind_months=1)
+
+        job = self.rollback(self.a, saved)
+        self.assertEqual(job.status, RestoreJob.Status.DONE, job.error)
+        rows = list(ContractFollowUp.objects.filter(tenant=self.a.tenant).select_related("item", "updated_by"))
+        self.assertEqual([(f.item.msisdn, f.status, f.note) for f in rows],
+                         [("0911000001", "declined", "攜碼到別家")])
+        self.assertEqual(rows[0].updated_by, self.a.admin_user)     # 誰標的對得回同一個帳號
+        self.assertEqual(Tenant.objects.get(pk=self.a.tenant.pk).contract_remind_months, 6)
+        state = contract_rules.contracts(self.a.tenant).get(msisdn="0911000001").state
+        self.assertEqual(state, contract_rules.DECLINED)
+
     def test_numbers_only_move_forward(self):
         self.change_things_after_backup()
         job = self.rollback(self.a, self.saved)

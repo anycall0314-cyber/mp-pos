@@ -17,6 +17,8 @@ import {
 import type { InvoiceTrack, PaymentMethod, PaymentMethodKind } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { apiErrorText } from "@/components/workbench/errors";
+import { toast } from "@/components/workbench/toast";
 
 const PM_KINDS: { value: PaymentMethodKind; label: string }[] = [
   { value: "cash", label: "現金" },
@@ -47,6 +49,29 @@ export function SettingsPage() {
       setWarrantyDays(String(tenantSettings.data.repair_warranty_days));
     }
   }, [tenantSettings.data]);
+
+  const [remindMonths, setRemindMonths] = useState("");
+  // 人動過這一格之後,伺服器的值不再蓋進來(清空重打到一半不會被填回去)
+  const [remindTouched, setRemindTouched] = useState(false);
+  useEffect(() => {
+    if (tenantSettings.data && !remindTouched) {
+      setRemindMonths(String(tenantSettings.data.contract_remind_months));
+    }
+  }, [tenantSettings.data, remindTouched]);
+
+  async function saveRemindMonths() {
+    const n = Number(remindMonths);
+    if (!Number.isInteger(n) || n < 1 || n > 24) {
+      alert("提醒的月數需在 1 ~ 24 之間");
+      return;
+    }
+    try {
+      await saveTenantSettings.mutateAsync({ contract_remind_months: n });
+      toast("已儲存", "ok");
+    } catch (e) {
+      toast(apiErrorText(e), "err");
+    }
+  }
 
   async function saveWarranty() {
     const n = Number(warrantyDays);
@@ -118,6 +143,46 @@ export function SettingsPage() {
               !tenantSettings.data ||
               String(tenantSettings.data?.repair_warranty_days) ===
                 warrantyDays.trim()
+            }
+          >
+            {saveTenantSettings.isPending ? "儲存中…" : "儲存"}
+          </button>
+        </div>
+
+        <h3>電信</h3>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            marginBottom: 24,
+            flexWrap: "wrap",
+          }}
+        >
+          <label style={{ fontSize: 14 }}>合約到期前</label>
+          <input
+            type="number"
+            min={1}
+            max={24}
+            value={remindMonths}
+            aria-label="合約到期前幾個月提醒"
+            onChange={(e) => {
+              setRemindTouched(true);
+              setRemindMonths(e.target.value);
+            }}
+            style={{ width: 120 }}
+          />
+          <span style={{ fontSize: 14, color: "var(--text-dim)" }}>
+            個月列入待聯絡(預設 3 個月)
+          </span>
+          <button
+            type="button"
+            className="btn primary"
+            onClick={saveRemindMonths}
+            disabled={
+              saveTenantSettings.isPending ||
+              !tenantSettings.data ||
+              String(tenantSettings.data?.contract_remind_months) === remindMonths.trim()
             }
           >
             {saveTenantSettings.isPending ? "儲存中…" : "儲存"}

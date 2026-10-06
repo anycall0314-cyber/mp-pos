@@ -9,6 +9,14 @@ from apps.core.models import TenantOwnedModel
 from apps.core.numbering import last_doc_seq
 
 
+class Digits(models.Func):
+    """只留數字。門號比對用:`0912-345-678` 與 `0912345678` 是同一個門號(門號存的是當初打的樣子)。"""
+
+    function = "REGEXP_REPLACE"
+    template = "%(function)s(%(expressions)s, '[^0-9]', '', 'g')"
+    output_field = models.CharField()
+
+
 class SalesOrder(TenantOwnedModel):
     """銷貨單(單頭)。儲存即生效,沒有「過帳」中間狀態。"""
 
@@ -242,6 +250,15 @@ class SalesOrderItem(TenantOwnedModel):
         ordering = ["so", "line_no"]
         verbose_name = "銷貨明細"
         verbose_name_plural = "銷貨明細"
+        indexes = [
+            # 「這個門號後來有沒有更新的合約」要用去掉符號後的門號去找(見 apps/sales/contracts.py);
+            # 只有門號合約那幾行需要
+            models.Index(
+                Digits("msisdn"),
+                name="soi_msisdn_digits",
+                condition=models.Q(telecom_plan__isnull=False),
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.so.no} #{self.line_no}"
@@ -574,3 +591,40 @@ class SalesReturnItemSerial(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.item_id}::{self.serial_id}"
+
+
+class ContractFollowUp(TenantOwnedModel):
+    """門號合約快到期時,門市聯絡客人的紀錄:一筆合約(一行有方案的銷貨明細)最多一筆。
+
+    只是「聯絡到哪了」的註記,不動銷貨單、不動錢與貨。客人續約了(同一個門號有更新的合約)那一筆自然算已續約,
+    不靠這裡標。沒有這一筆 = 還沒處理。
+    狀態可以是空的:還沒聯絡上、只先記一句備註(例如「無人接聽」)—— 那一筆仍然在待聯絡。
+    """
+
+    class Status(models.TextChoices):
+        CONTACTED = "contacted", "已聯絡"
+        DECLINED = "declined", "不續約"
+
+    item = models.OneToOneField(
+        SalesOrderItem,
+        on_delete=models.CASCADE,
+        related_name="follow_up",
+        verbose_name="門號合約(銷貨明細)",
+    )
+    status = models.CharField("狀態", max_length=12, choices=Status.choices, blank=True)
+    note = models.CharField("備註", max_length=200, blank=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="誰標的",
+    )
+
+    class Meta:
+        verbose_name = "合約聯絡紀錄"
+        verbose_name_plural = "合約聯絡紀錄"
+
+    def __str__(self) -> str:
+        return f"{self.item_id}::{self.status}"

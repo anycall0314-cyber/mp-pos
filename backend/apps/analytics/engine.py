@@ -81,6 +81,8 @@ PRESETS = {
     "today": "今天", "yesterday": "昨天", "last_7_days": "近 7 天", "last_30_days": "近 30 天",
     "this_month": "本月", "last_month": "上月", "this_quarter": "本季",
     "this_year": "今年", "last_year": "去年",
+    # 往後看的期間:給「日期是未來」的指標用(門號合約哪個月到期)。銷貨那些指標選了只會是空的
+    "next_3_months": "未來 3 個月", "next_12_months": "未來 12 個月",
 }
 
 
@@ -109,6 +111,10 @@ def preset_range(name, today=None):
         return t.replace(month=1, day=1), t
     if name == "last_year":
         return date(t.year - 1, 1, 1), date(t.year - 1, 12, 31)
+    if name in ("next_3_months", "next_12_months"):
+        from apps.core.dates import add_months
+
+        return t, add_months(t, 3 if name == "next_3_months" else 12)
     raise QueryError("沒有這個期間")
 
 

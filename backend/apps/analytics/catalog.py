@@ -113,6 +113,18 @@ def _state_labels():
     return dict(StockSnapshot.State.choices)
 
 
+def _plan_kind_labels():
+    from apps.parties.models import TelecomPlan
+
+    return dict(TelecomPlan.Kind.choices)
+
+
+def _contract_state_labels():
+    from apps.sales.contracts import STATE_LABELS
+
+    return dict(STATE_LABELS)
+
+
 DIMENSIONS = {d.key: d for d in [
     Dim("date", "日期", "date"),
     Dim("warehouse", "門市", "ref", model="inventory.Warehouse"),
@@ -129,6 +141,10 @@ DIMENSIONS = {d.key: d for d in [
     Dim("stock_state", "庫存狀態", "choice", labels=lambda tenant: _state_labels()),
     Dim("legacy_doc_type", "舊單別", "choice", labels=lambda tenant: _legacy_type_labels()),
     Dim("source", "資料來源", "choice", labels=lambda tenant: {"mp": "新系統", "legacy": "舊 POS"}),
+    # 門號合約(只有「門號合約」那一組指標用得到)
+    Dim("carrier", "電信業者", "ref", model="parties.Carrier"),
+    Dim("plan_kind", "方案種類", "choice", labels=lambda tenant: _plan_kind_labels()),
+    Dim("contract_state", "合約處理狀況", "choice", labels=lambda tenant: _contract_state_labels()),
 ]}
 
 GRAINS = {"day": "日", "week": "週", "month": "月", "quarter": "季", "year": "年"}
@@ -152,6 +168,13 @@ def _sales(tenant):
     from apps.sales.models import SalesOrderItem
 
     return SalesOrderItem.objects.filter(tenant=tenant, so__is_void=False)
+
+
+def _contracts(tenant):
+    # 門號合約:哪些算數(作廢、被退掉的不算)、哪一筆已經續約,規則只有 apps/sales/contracts.py 那一份
+    from apps.sales.contracts import contracts
+
+    return contracts(tenant)
 
 
 def _returns(tenant):
@@ -237,6 +260,15 @@ FACTS = {f.key: f for f in [
         "source": NEW,
         **_product_paths(),
     }, as_of=True, days=_stock_days),
+    # 門號合約:日期是「合約到期日」(不是賣出去那一天)—— 看的是哪個月有幾筆要到期
+    Fact("contracts", "門號合約", _contracts, "contract_end", {
+        "warehouse": Path("so__warehouse_id", "so__warehouse__name"),
+        "sales_person": Path("so__sales_person_id", "so__sales_person__name"),
+        "carrier": Path("telecom_plan__carrier_id", "telecom_plan__carrier__name"),
+        "plan_kind": Path("telecom_plan__kind"),
+        "contract_state": Path("state"),
+        "source": NEW,
+    }),
     # 舊 POS:門市 / 商品 / 業務員走對照表(人確認過才有值),沒對到的歸「未對照」
     Fact("legacy", "舊 POS", _legacy, "document__document_date", {
         "warehouse": Path("document__store_map__warehouse_id",
@@ -283,6 +315,9 @@ BASES = [
     Base("stock_qty", "庫存數量", "stock", lambda: Sum("qty"), "int"),
     Base("stock_value", "庫存金額", "stock", lambda: Sum("cost_value")),
 
+    # 期間 = 合約到期日落在哪一段。已經續約 / 不續約的也算在裡面,要分開看就用「合約處理狀況」分組
+    Base("contracts_due", "到期門號數", "contracts", lambda: Count("id"), "int"),
+
     Base("legacy_raw", "舊 POS 原始額", "legacy", lambda: Sum("amount_minor"), scale=CENT),
     Base("legacy_net", "舊 POS 淨額", "legacy",
          lambda: Sum(F("amount_minor") * F("net_sign")), scale=CENT),
@@ -324,7 +359,7 @@ DERIVED = [
 ]
 
 MEASURES = {m.key: m for m in [*BASES, *DERIVED]}
-GROUPS = ["銷貨", "毛利", "銷退", "進貨", "收款", "庫存", "舊 POS"]
+GROUPS = ["銷貨", "毛利", "銷退", "進貨", "收款", "庫存", "門號合約", "舊 POS"]
 
 
 def group_of(measure):

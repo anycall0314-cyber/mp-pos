@@ -7285,3 +7285,51 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   font-size: 1rem;
 }
 .pc-detail-body .ph-panel-strip, .pc-detail-body .ph-empty { margin: 0 0 12px; }
+
+/* ── 合約到期(門號合約快到期的名單) ── */
+.ct-bar { flex-wrap: wrap; row-gap: 8px; }
+.ct-bar select, .ct-bar .ct-search {
+  min-height: var(--control-height);
+  padding: 0 10px;
+  border: 1px solid var(--wb-input-border);
+  border-radius: 6px;
+  background: var(--wb-input);
+  color: var(--wb-text);
+  font-size: var(--font-body);
+}
+.ct-bar .ct-search { width: 15rem; max-width: 100%; }
+.ct-overdue { margin-bottom: 8px; }
+.ct-actions { white-space: nowrap; text-align: right; }
+.ct-actions .wb-btn + .wb-btn { margin-left: 6px; }
+.ct-note-cell { max-width: 16rem; overflow-wrap: anywhere; }
+.ct-detail { display: flex; flex-direction: column; gap: 6px; padding: 4px 0; }
+.ct-note { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.ct-note input {
+  flex: 1 1 14rem;
+  min-width: 0;
+  min-height: var(--control-height);
+  padding: 0 10px;
+  border: 1px solid var(--wb-input-border);
+  border-radius: 6px;
+  background: var(--wb-input);
+  color: var(--wb-text);
+  font-size: var(--font-body);
+}
+.ct-pages { display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 10px; }
+/* 畫面上的名單不是現在要的那一份(剛換分頁 / 篩選 / 翻頁):看得到、按不到 */
+.ct-stale { opacity: 0.5; pointer-events: none; }
+/* 標完留在原地的那一列:資料變淡,按鈕(可以復原)照常 */
+.wb-table tr.ct-done > td:not(.ct-actions) { opacity: 0.55; }
+.wb-card.ct-done > :not(.wb-detail-actions):not(.ct-detail) { opacity: 0.55; }
+/* 日期、門號、還剩幾天、門市不折行(折了一列變兩行高);客人、方案、備註可以折 */
+.ct-table td.wb-mono, .ct-table td.ct-fit { white-space: nowrap; }
+/* 三顆狀況按鈕:現在的狀況那一顆亮著(不能按,但不要變淡) */
+.ct-state.on:disabled { opacity: 1; }
+.ct-unsaved { color: var(--warn-text); }
+.ct-card-note { overflow-wrap: anywhere; }
+@media (max-width: 768px) {
+  /* 窄畫面:篩選的下拉一排排滿、搜尋自己一排,不要被擠到畫面外 */
+  .ct-bar .ws-grow { display: none; }
+  .ct-bar select { flex: 1 1 7rem; min-width: 0; }
+  .ct-bar .ct-search { flex: 1 1 100%; width: auto; }
+}
