@@ -31,8 +31,8 @@ import { ExploreReportPage } from "@/pages/reports/ExploreReportPage";
 import { PartsUsageReportPage } from "@/pages/reports/PartsUsageReportPage";
 import { SalesDailyReportPage } from "@/pages/reports/SalesDailyReport";
 import { SecondhandAcquisitionPage } from "@/pages/secondhand-acquisition/SecondhandAcquisitionPage";
-import { TransfersPage } from "@/pages/transfers/TransfersPage";
-import { TransferEntryPage } from "@/pages/transfers/TransferEntryPage";
+import { TransferWorkbenchPage } from "@/pages/transfers/TransferWorkbenchPage";
+import { ToastHost } from "@/components/workbench/toast";
 import { SalesPage } from "@/pages/sales/SalesPage";
 import { SalesEntryPage } from "@/pages/sales/SalesEntryPage";
 import { SalesPrintPage } from "@/pages/sales/SalesPrintPage";
@@ -348,8 +348,8 @@ export function App() {
           />
           <Route path="/suppliers" element={<SuppliersPage />} />
           <Route path="/sales-persons" element={<SalesPersonsPage />} />
-          <Route path="/transfers" element={<TransfersPage />} />
-          <Route path="/transfers/:id" element={<TransferEntryPage />} />
+          <Route path="/transfers" element={<TransferWorkbenchPage />} />
+          <Route path="/transfers/:id" element={<TransferWorkbenchPage />} />
           <Route path="/inventory" element={<InventoryQueryPage />} />
           <Route path="/inventory/alerts" element={<InventoryAlertsPage />} />
           <Route path="/inventory/categories" element={<CategoriesPage />} />
@@ -417,6 +417,7 @@ export function App() {
           />
         </Routes>
         </main>
+        {!isPrintMode && <ToastHost />}
       </div>
     </div>
   );

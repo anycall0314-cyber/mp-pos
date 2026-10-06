@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 
 import { Link } from "react-router-dom";
 
 import {
   StockMatrixProduct,
+  StockMatrixWarehouse,
+  useCategories,
+  useDevicesByCode,
   useHomeSummary,
   useInStockSerials,
   usePendingTransfers,
-  useDevicesByCode,
   useStockMatrix,
   useWarehouses,
 } from "@/api/hooks";
@@ -16,276 +18,24 @@ import type { Category } from "@/api/types";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { CompatibilityModal } from "@/components/CompatibilityModal";
 import { SerialHistoryModal } from "@/components/SerialHistoryModal";
-import { codesLabel } from "@/lib/deviceCodes";
-import { Toolbar } from "@/components/Toolbar";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { codesLabel } from "@/lib/deviceCodes";
 
-interface SerialListModalProps {
-  product: StockMatrixProduct;
-  warehouseId: number;
-  warehouseLabel: string;
-  onClose: () => void;
-}
+/**
+ * 庫存查詢(工作台版型)。
+ *
+ * 上面一排:搜尋框(Enter 就查)、分店、類別、常用類別;下面是每家分店一欄的庫存表。
+ * 點一列就地展開:序號商品列出每家分店在庫的每一台(IMEI / SN / 成本 / 機況),
+ * 配件列出還在調撥路上的單。不開彈出視窗。
+ */
 
-function SerialListModal({
-  product,
-  warehouseId,
-  warehouseLabel,
-  onClose,
-}: SerialListModalProps) {
-  const serials = useInStockSerials(product.id, warehouseId);
-  const rows = serials.data ?? [];
-  const [historyId, setHistoryId] = useState<number | null>(null);
-  const isMobile = useIsMobile();
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-card serial-list-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="modal-title">
-          {product.name} · {warehouseLabel}
-        </div>
-        <div className="modal-body">
-          {serials.isLoading && <div className="md-empty">…</div>}
-          {!serials.isLoading && isMobile && (
-            <div className="serial-card-list">
-              {rows.length === 0 && <div className="md-empty">—</div>}
-              {rows.map((s, i) => (
-                <div key={s.id} className="serial-card">
-                  <div className="serial-card-head">
-                    <span className="serial-card-no">
-                      #{i + 1} {codesLabel(s)}
-                    </span>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => setHistoryId(s.id)}
-                    >
-                      履歷
-                    </button>
-                  </div>
-                  <dl className="serial-card-detail">
-                    <dt>進貨日</dt>
-                    <dd>{s.received_at?.slice(0, 10) ?? "—"}</dd>
-                    <dt>單台成本</dt>
-                    <dd>
-                      {Math.round(
-                        Number(s.purchase_unit_cost),
-                      ).toLocaleString()}
-                    </dd>
-                    {product.tracks_unit_condition && (
-                      <>
-                        <dt>成色</dt>
-                        <dd>{s.condition_grade || "—"}</dd>
-                        <dt>自定售價</dt>
-                        <dd>
-                          {s.custom_unit_price
-                            ? Math.round(
-                                Number(s.custom_unit_price),
-                              ).toLocaleString()
-                            : "—"}
-                        </dd>
-                        <dt>電池 %</dt>
-                        <dd>{s.battery_health ?? "—"}</dd>
-                        <dt>備註</dt>
-                        <dd>{s.condition_note || "—"}</dd>
-                      </>
-                    )}
-                  </dl>
-                </div>
-              ))}
-            </div>
-          )}
-          {!serials.isLoading && !isMobile && (
-            <table className="line-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 40 }}>#</th>
-                  <th>IMEI</th>
-                  <th>SN</th>
-                  <th>進貨日</th>
-                  <th className="num">單台成本</th>
-                  {product.tracks_unit_condition && <th>成色</th>}
-                  {product.tracks_unit_condition && (
-                    <th className="num">自定售價</th>
-                  )}
-                  {product.tracks_unit_condition && (
-                    <th className="num">電池 %</th>
-                  )}
-                  {product.tracks_unit_condition && <th>備註</th>}
-                  <th style={{ width: 60 }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((s, i) => (
-                  <tr key={s.id}>
-                    <td>{i + 1}</td>
-                    <td>{s.imei || "—"}</td>
-                    <td>{s.sn || "—"}</td>
-                    <td>{s.received_at?.slice(0, 10) ?? "—"}</td>
-                    <td className="num">
-                      {Math.round(Number(s.purchase_unit_cost)).toLocaleString()}
-                    </td>
-                    {product.tracks_unit_condition && (
-                      <td>{s.condition_grade || "—"}</td>
-                    )}
-                    {product.tracks_unit_condition && (
-                      <td className="num">
-                        {s.custom_unit_price
-                          ? Math.round(
-                              Number(s.custom_unit_price),
-                            ).toLocaleString()
-                          : "—"}
-                      </td>
-                    )}
-                    {product.tracks_unit_condition && (
-                      <td className="num">{s.battery_health ?? "—"}</td>
-                    )}
-                    {product.tracks_unit_condition && (
-                      <td>{s.condition_note || "—"}</td>
-                    )}
-                    <td>
-                      <button
-                        type="button"
-                        className="btn"
-                        style={{ fontSize: 12, padding: "2px 6px" }}
-                        onClick={() => setHistoryId(s.id)}
-                      >
-                        履歷
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {rows.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={product.tracks_unit_condition ? 10 : 6}
-                      className="md-empty"
-                    >
-                      —
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
-        <div className="modal-actions">
-          <button className="btn primary" type="button" onClick={onClose}>
-            關閉
-          </button>
-        </div>
-      </div>
-      {historyId != null && (
-        <SerialHistoryModal
-          serialId={historyId}
-          onClose={() => setHistoryId(null)}
-        />
-      )}
-    </div>
-  );
-}
-
-// 配件:沒有序號履歷,改顯示「與本倉相關、已派發未確認」的調撥狀態
-function TransferStatusModal({
-  product,
-  warehouseId,
-  warehouseLabel,
-  onClose,
-}: SerialListModalProps) {
-  const pending = usePendingTransfers(product.id, warehouseId);
-  const rows = pending.data ?? [];
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-card serial-list-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="modal-title">
-          {product.name} · {warehouseLabel}
-        </div>
-        <div className="modal-body">
-          <div
-            style={{
-              fontSize: 13,
-              color: "var(--text-dim)",
-              marginBottom: 8,
-            }}
-          >
-            配件無序號履歷;以下為與本倉相關、已派發但尚未確認的調撥。
-          </div>
-          {pending.isLoading && <div className="md-empty">…</div>}
-          {!pending.isLoading && (
-            <table className="line-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 40 }}>#</th>
-                  <th>單號</th>
-                  <th>方向</th>
-                  <th>對方倉</th>
-                  <th>單據日期</th>
-                  <th className="num">數量</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((t, i) => {
-                  const counterpart =
-                    t.direction === "out" ? t.to_warehouse : t.from_warehouse;
-                  return (
-                    <tr key={`${t.transfer_no}-${i}`}>
-                      <td>{i + 1}</td>
-                      <td>{t.transfer_no}</td>
-                      <td>
-                        {t.direction === "out"
-                          ? "調出本倉"
-                          : t.direction === "in"
-                            ? "調入本倉"
-                            : "—"}
-                      </td>
-                      <td>
-                        {counterpart.code} {counterpart.name}
-                      </td>
-                      <td>{t.doc_date}</td>
-                      <td className="num">{t.qty}</td>
-                    </tr>
-                  );
-                })}
-                {rows.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="md-empty">
-                      目前沒有調撥中(未確認)的單據
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
-        <div className="modal-actions">
-          <button className="btn primary" type="button" onClick={onClose}>
-            關閉
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// 一頁幾筆。舊版是「先取 500 再濾零庫存」,有貨的商品排在 500 名之後就
-// 整筆消失;現在過濾在 DB 端做完才分頁,配合下面的上一頁 / 下一頁翻到底。
+// 一頁幾筆。過濾在 DB 端做完才分頁,配合下面的上一頁 / 下一頁翻到底。
 const MATRIX_PAGE_SIZE = 200;
+const K_PINS = "mp_pos_inv_cat_pins";
 
-/** 品況顯示:有掛品況主檔就用它,舊資料退回中古機旗標。 */
-function conditionLabel(p: StockMatrixProduct): string {
-  if (p.condition_name) return p.condition_name;
-  return p.is_secondhand ? "中古機" : "—";
+interface CatRef {
+  id: number;
+  label: string;
 }
 
 interface AppliedFilter {
@@ -313,58 +63,235 @@ function sortKeyEquals(a: SortKey, b: SortKey): boolean {
   return true;
 }
 
+/** 品況顯示:有掛品況主檔就用它,舊資料退回中古機旗標。 */
+function conditionLabel(p: StockMatrixProduct): string {
+  if (p.condition_name) return p.condition_name;
+  return p.is_secondhand ? "中古機" : "";
+}
+
+function money(v: string | number | null | undefined): string {
+  const n = Number(v);
+  return n > 0 ? Math.round(n).toLocaleString() : "—";
+}
+
+function readPins(): CatRef[] | null {
+  try {
+    const raw = localStorage.getItem(K_PINS);
+    if (raw === null) return null;
+    const list = JSON.parse(raw);
+    return Array.isArray(list)
+      ? list.filter((c) => c && Number(c.id) > 0 && typeof c.label === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+function writePins(list: CatRef[]) {
+  try {
+    localStorage.setItem(K_PINS, JSON.stringify(list));
+  } catch {
+    /* 存不了就算了 */
+  }
+}
+
+/** 序號商品:某一家分店在庫的每一台 */
+function UnitsOfStore({
+  product,
+  warehouse,
+  onHistory,
+}: {
+  product: StockMatrixProduct;
+  warehouse: StockMatrixWarehouse;
+  onHistory: (serialId: number) => void;
+}) {
+  const serials = useInStockSerials(product.id, warehouse.id);
+  const rows = serials.data ?? [];
+  const qty = product.stock_by_warehouse[String(warehouse.id)] ?? 0;
+  return (
+    <div className="wb-inv-store">
+      <div>
+        <b>{warehouse.name}</b>
+        <span className="wb-dim"> 在庫 {qty}</span>
+      </div>
+      {serials.isLoading && <div className="wb-dim wb-small">載入中…</div>}
+      {serials.isError && <span className="wb-badge bad">序號沒載到</span>}
+      {rows.map((s) => (
+        <div key={s.id} className="wb-inv-unit">
+          <span className="wb-mono">{codesLabel(s)}</span>
+          <span className="wb-dim">成本 {money(s.purchase_unit_cost)}</span>
+          {product.tracks_unit_condition && (
+            <>
+              {s.condition_grade && <span>{s.condition_grade} 級</span>}
+              {s.custom_unit_price && (
+                <span>售價 {money(s.custom_unit_price)}</span>
+              )}
+              {s.battery_health != null && (
+                <span className="wb-dim">電池 {s.battery_health}%</span>
+              )}
+              {s.condition_note && (
+                <span className="wb-dim">{s.condition_note}</span>
+              )}
+            </>
+          )}
+          {s.received_at && (
+            <span className="wb-dim">{s.received_at.slice(0, 10)} 進</span>
+          )}
+          <button
+            type="button"
+            className="wb-link"
+            onClick={(e) => {
+              e.stopPropagation();
+              onHistory(s.id);
+            }}
+          >
+            履歷
+          </button>
+        </div>
+      ))}
+      {!serials.isLoading && rows.length < qty && rows.length > 0 && (
+        <div className="wb-dim wb-small">只列前 {rows.length} 台</div>
+      )}
+    </div>
+  );
+}
+
+/** 配件:沒有序號,列出跟這家分店有關、已送出還沒入庫的調撥 */
+function PendingOfStore({
+  product,
+  warehouse,
+}: {
+  product: StockMatrixProduct;
+  warehouse: StockMatrixWarehouse;
+}) {
+  const pending = usePendingTransfers(product.id, warehouse.id);
+  const rows = pending.data ?? [];
+  const qty = product.stock_by_warehouse[String(warehouse.id)] ?? 0;
+  return (
+    <div className="wb-inv-store">
+      <div>
+        <b>{warehouse.name}</b>
+        <span className="wb-dim"> 在庫 {qty}</span>
+      </div>
+      {pending.isError && <span className="wb-badge bad">調撥中的單沒載到</span>}
+      {rows.map((t, i) => {
+        const other = t.direction === "out" ? t.to_warehouse : t.from_warehouse;
+        return (
+          <div key={`${t.transfer_no}-${i}`} className="wb-inv-unit">
+            <span className="wb-badge warn">調撥中</span>
+            <span>
+              {t.direction === "out" ? "調去" : "要從"}
+              {other.name}
+              {t.direction === "out" ? "" : "進來"} ×{t.qty}
+            </span>
+            <span className="wb-dim">
+              {t.transfer_no} · {t.doc_date}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ProductDetail({
+  product,
+  warehouses,
+  onHistory,
+  onCompat,
+}: {
+  product: StockMatrixProduct;
+  warehouses: StockMatrixWarehouse[];
+  onHistory: (serialId: number) => void;
+  onCompat: () => void;
+}) {
+  const stocked = warehouses.filter(
+    (w) => (product.stock_by_warehouse[String(w.id)] ?? 0) > 0,
+  );
+  // 配件:沒貨的分店也可能有東西正在調過來
+  const shown = product.requires_serial ? stocked : warehouses;
+  return (
+    <div>
+      <div className="wb-inv-stores">
+        {shown.length === 0 && <span className="wb-dim">沒有在庫</span>}
+        {shown.map((w) =>
+          product.requires_serial ? (
+            <UnitsOfStore
+              key={w.id}
+              product={product}
+              warehouse={w}
+              onHistory={onHistory}
+            />
+          ) : (
+            <PendingOfStore key={w.id} product={product} warehouse={w} />
+          ),
+        )}
+      </div>
+      <div className="wb-detail-actions">
+        <button
+          type="button"
+          className="wb-btn small"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCompat();
+          }}
+        >
+          相容機型
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function InventoryQueryPage() {
   const isMobile = useIsMobile();
-  // 空狀態用:顯示低於安全庫存的品項,讓使用者一進來就看到需要關注的庫存
+  // 還沒查之前:列出低於安全庫存的品項,一進來就看到要注意的
   const homeSummary = useHomeSummary();
   const lowStockItems = homeSummary.data?.low_stock?.items ?? [];
 
-  // 表單狀態(未送出)
   const [keyword, setKeyword] = useState("");
-  // 類別多選:chip 集合;categoryPicker 是 ComboBox 暫存,選後加入 chip 並清空
-  const [selectedCategories, setSelectedCategories] = useState<
-    { id: number; label: string }[]
-  >([]);
-  const [categoryPicker, setCategoryPicker] = useState<number | "">("");
-  const [categoryPickerOption, setCategoryPickerOption] =
-    useState<ComboOption<Category> | null>(null);
+  const [selectedCategories, setSelectedCategories] = useState<CatRef[]>([]);
+  const [pins, setPins] = useState<CatRef[]>(() => readPins() ?? []);
 
-  // 倉別多選
   const warehousesQuery = useWarehouses();
-  const allWarehouses = warehousesQuery.data ?? [];
-  const [selectedWarehouseIds, setSelectedWarehouseIds] = useState<
-    Set<number>
-  >(new Set());
-
-  // 首次載入時把所有倉預設勾起來
+  const allWarehouses = useMemo(
+    () => warehousesQuery.data ?? [],
+    [warehousesQuery.data],
+  );
+  const [selectedWarehouseIds, setSelectedWarehouseIds] = useState<Set<number>>(
+    new Set(),
+  );
+  // 首次載入時每家分店都選起來
   useEffect(() => {
     if (allWarehouses.length > 0 && selectedWarehouseIds.size === 0) {
       setSelectedWarehouseIds(new Set(allWarehouses.map((w) => w.id)));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allWarehouses]);
 
-  // 已套用篩選(按查詢才會更新,跟著觸發 API)
+  // 第一次用:先把手機、中古這類主力類別釘成常用(之後由人自己釘 / 取消)
+  const categoriesQuery = useCategories();
+  useEffect(() => {
+    if (readPins() !== null || !categoriesQuery.data) return;
+    const seeded = categoriesQuery.data
+      .filter((c) => /手機|中古|二手|平板|穿戴/.test(c.name))
+      .slice(0, 6)
+      .map((c) => ({ id: c.id, label: c.name }));
+    writePins(seeded);
+    setPins(seeded);
+  }, [categoriesQuery.data]);
+
+  // 已套用的條件(按查詢、或查過之後再動篩選才更新)
   const [applied, setApplied] = useState<AppliedFilter | null>(null);
-  // 目前頁次(換條件時回第 1 頁)
   const [page, setPage] = useState(1);
+  const [opened, setOpened] = useState<Set<number>>(new Set());
+  const [historyId, setHistoryId] = useState<number | null>(null);
+  const [compat, setCompat] = useState<{ id: number; name: string } | null>(
+    null,
+  );
 
-  // 點數字打開的明細
-  const [serialDialog, setSerialDialog] = useState<{
-    product: StockMatrixProduct;
-    warehouseId: number;
-    warehouseLabel: string;
-  } | null>(null);
-
-  // 點品名打開的相容性 modal
-  const [compatibilityDialog, setCompatibilityDialog] = useState<{
-    productId: number;
-    productName: string;
-  } | null>(null);
-
-  // 關鍵字剛好是某一台設備的碼(IMEI 或 SN)時,把那一台現在的狀態與門市講出來:
-  // 下面的表是「同款商品」的在庫數,刷到的那一台可能已經賣掉、或在別的門市。
+  // 關鍵字剛好是某一台設備的碼(IMEI 或 SN)時,把那一台現在的狀態與分店講出來:
+  // 下面的表是「同款商品」的在庫數,刷到的那一台可能已經賣掉、或在別的分店。
   const devices = useDevicesByCode(applied?.keyword ?? "");
-  const [deviceHistoryId, setDeviceHistoryId] = useState<number | null>(null);
 
   const matrix = useStockMatrix(
     {
@@ -375,7 +302,7 @@ export function InventoryQueryPage() {
       page,
       pageSize: MATRIX_PAGE_SIZE,
     },
-    { enabled: !!applied && (applied.warehouseIds.length > 0) },
+    { enabled: !!applied && applied.warehouseIds.length > 0 },
   );
 
   const warehouses = matrix.data?.warehouses ?? [];
@@ -385,7 +312,6 @@ export function InventoryQueryPage() {
 
   // 資料變少(別人賣掉 / 改條件)時頁碼可能超界,後端會夾回最後一頁,
   // 這裡跟著它回報的頁碼校正,避免畫面停在空白頁又看不到分頁按鈕。
-  // 只在「這次回應成功」時做,載入中 data 暫空會把 pageCount 誤算成 1。
   const servedPage = matrix.data?.page;
   useEffect(() => {
     if (servedPage !== undefined && servedPage !== page) {
@@ -393,10 +319,7 @@ export function InventoryQueryPage() {
     }
   }, [servedPage, page]);
 
-  // 排序狀態(null = 用 API 預設順序)
   const [sort, setSort] = useState<SortState | null>(null);
-
-  // 套用排序
   const products = useMemo(() => {
     if (!sort) return rawProducts;
     const arr = [...rawProducts];
@@ -421,30 +344,24 @@ export function InventoryQueryPage() {
           bv = b.stock_by_warehouse[String(sort.by.warehouseId)] ?? 0;
           break;
       }
-      let cmp = 0;
-      if (typeof av === "string" && typeof bv === "string") {
-        // localeCompare 對中文 / 英文混合排序最穩
-        cmp = av.localeCompare(bv, "zh-Hant");
-      } else {
-        cmp = (av as number) - (bv as number);
-      }
+      const cmp =
+        typeof av === "string" && typeof bv === "string"
+          ? av.localeCompare(bv, "zh-Hant")
+          : (av as number) - (bv as number);
       return sort.dir === "asc" ? cmp : -cmp;
     });
     return arr;
   }, [rawProducts, sort]);
 
-  // 點欄位標題:第一次升冪、再點變降冪、第三次回預設
+  // 點欄位標題:第一次升冪、再點降冪、第三次回預設
   function toggleSort(key: SortKey) {
     setSort((prev) => {
-      if (!prev || !sortKeyEquals(prev.by, key)) {
-        return { by: key, dir: "asc" };
-      }
+      if (!prev || !sortKeyEquals(prev.by, key)) return { by: key, dir: "asc" };
       if (prev.dir === "asc") return { by: key, dir: "desc" };
       return null;
     });
   }
-
-  function sortIndicator(key: SortKey): string {
+  function sortMark(key: SortKey): string {
     if (!sort || !sortKeyEquals(sort.by, key)) return "";
     return sort.dir === "asc" ? " ▲" : " ▼";
   }
@@ -460,373 +377,337 @@ export function InventoryQueryPage() {
     return m;
   }, [warehouses, products]);
   const grandTotal = products.reduce((s, p) => s + p.stock_total, 0);
+  const grandCost = products.reduce(
+    (s, p) => s + Number(p.weighted_avg_cost || 0) * p.stock_total,
+    0,
+  );
 
-  function runQuery() {
+  function apply(next?: {
+    keyword?: string;
+    categories?: CatRef[];
+    warehouseIds?: Set<number>;
+  }) {
+    const ids = next?.warehouseIds ?? selectedWarehouseIds;
     setPage(1);
+    setOpened(new Set());
     setApplied({
-      keyword: keyword.trim(),
-      categoryIds: selectedCategories.map((c) => c.id),
-      warehouseIds: Array.from(selectedWarehouseIds),
+      keyword: (next?.keyword ?? keyword).trim(),
+      categoryIds: (next?.categories ?? selectedCategories).map((c) => c.id),
+      warehouseIds: Array.from(ids),
     });
   }
 
   function resetFilters() {
     setKeyword("");
     setSelectedCategories([]);
-    setCategoryPicker("");
-    setCategoryPickerOption(null);
     setSelectedWarehouseIds(new Set(allWarehouses.map((w) => w.id)));
     setApplied(null);
     setPage(1);
+    setOpened(new Set());
   }
 
-  function addCategory(opt: ComboOption<Category>) {
-    setSelectedCategories((prev) =>
-      prev.some((c) => c.id === opt.id)
-        ? prev
-        : [...prev, { id: opt.id as number, label: opt.label }],
-    );
-    setCategoryPicker("");
-    setCategoryPickerOption(null);
+  function toggleCategory(c: CatRef) {
+    const next = selectedCategories.some((x) => x.id === c.id)
+      ? selectedCategories.filter((x) => x.id !== c.id)
+      : [...selectedCategories, c];
+    setSelectedCategories(next);
+    // 點類別就直接查(不用再按查詢)
+    if (selectedWarehouseIds.size > 0) apply({ categories: next });
   }
-
-  function removeCategory(id: number) {
-    setSelectedCategories((prev) => prev.filter((c) => c.id !== id));
+  function togglePin(c: CatRef) {
+    const next = pins.some((x) => x.id === c.id)
+      ? pins.filter((x) => x.id !== c.id)
+      : [...pins, c];
+    setPins(next);
+    writePins(next);
   }
-
   function toggleWarehouse(wid: number) {
-    setSelectedWarehouseIds((prev) => {
+    const next = new Set(selectedWarehouseIds);
+    if (next.has(wid)) next.delete(wid);
+    else next.add(wid);
+    setSelectedWarehouseIds(next);
+    if (next.size === 0) {
+      // 一家都沒選:結果先藏起來(不能上面寫沒選分店、下面還是剛才那家的庫存)。
+      // 查詢條件留著,再選回任何一家就照原本的條件重查。
+      setOpened(new Set());
+      return;
+    }
+    // 查過之後再換分店:跟著重查
+    if (applied) apply({ warehouseIds: next });
+  }
+  function toggleOpen(pid: number) {
+    setOpened((prev) => {
       const next = new Set(prev);
-      if (next.has(wid)) next.delete(wid);
-      else next.add(wid);
+      if (next.has(pid)) next.delete(pid);
+      else next.add(pid);
       return next;
     });
   }
 
-  function setAllWarehouses(checked: boolean) {
-    if (checked) {
-      setSelectedWarehouseIds(new Set(allWarehouses.map((w) => w.id)));
-    } else {
-      setSelectedWarehouseIds(new Set());
-    }
-  }
+  // 常用類別那一排:釘起來的 + 這次選的(還沒釘的排後面)
+  const catChips: CatRef[] = [
+    ...pins,
+    ...selectedCategories.filter((c) => !pins.some((p) => p.id === c.id)),
+  ];
+  const noStore = selectedWarehouseIds.size === 0;
+  const ready = !!applied && !noStore && !matrix.isLoading && !matrix.isError;
+  const colCount = 7 + warehouses.length;
 
   return (
-    <div className="page">
-      <Toolbar title="庫存查詢" />
-
-      <div className="list-filterbar inventory-filterbar">
-        <label className="inv-field inv-field-keyword">
-          關鍵字
+    <div className="wb">
+      <div className="wb-row">
+        <div className="wb-field grow" style={{ maxWidth: 460 }}>
+          <label>搜尋品名 / 品號 / IMEI</label>
           <input
             type="text"
+            className="wb-big"
+            autoFocus
             value={keyword}
+            placeholder="例:A17、保護貼、IMEI 末幾碼"
             onChange={(e) => setKeyword(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+              if (e.key === "Enter" && !noStore) {
                 e.preventDefault();
-                runQuery();
+                apply();
               }
             }}
-            placeholder="品名 / 品號 / IMEI"
           />
-        </label>
-        <label className="inv-field inv-field-category">
-          類別 (可多選)
-          <ComboBox<Category>
-            value={categoryPicker}
-            selectedOption={categoryPickerOption}
-            onChange={(_id, opt) => {
-              if (opt) addCategory(opt);
-            }}
-            fetchOptions={searchCategories}
-            placeholder={
-              selectedCategories.length === 0 ? "全部" : "繼續加類別…"
-            }
-          />
-        </label>
-
-        <button
-          type="button"
-          className="btn primary"
-          onClick={runQuery}
-          disabled={selectedWarehouseIds.size === 0}
-        >
-          查詢
-        </button>
-        <button type="button" className="btn" onClick={resetFilters}>
-          清除
-        </button>
-        <span className="list-filterbar-count">
-          {applied && !matrix.isLoading
-            ? `共 ${matrixTotal} 項 · 本頁 ${products.length} 項 · 本頁庫存 ${grandTotal} 件`
-            : ""}
-        </span>
+        </div>
+        <div className="wb-field">
+          <label>分店{noStore ? "(至少選一家)" : ""}</label>
+          <div className="wb-chips" style={{ minHeight: 44 }}>
+            {allWarehouses.map((w) => (
+              <button
+                key={w.id}
+                type="button"
+                className={`wb-chip cat${
+                  selectedWarehouseIds.has(w.id) ? " on" : ""
+                }`}
+                onClick={() => toggleWarehouse(w.id)}
+              >
+                {w.name}
+              </button>
+            ))}
+            {allWarehouses.length > 1 &&
+              selectedWarehouseIds.size < allWarehouses.length && (
+                <button
+                  type="button"
+                  className="wb-link"
+                  onClick={() => {
+                    const all = new Set(allWarehouses.map((w) => w.id));
+                    setSelectedWarehouseIds(all);
+                    if (applied) apply({ warehouseIds: all });
+                  }}
+                >
+                  全選
+                </button>
+              )}
+          </div>
+        </div>
+        <div className="wb-field" style={{ width: 190 }}>
+          <label>類別</label>
+          <div style={{ minHeight: 44, display: "flex", alignItems: "center" }}>
+            <ComboBox<Category>
+              value=""
+              selectedOption={null}
+              onChange={(_id, opt?: ComboOption<Category> | null) => {
+                if (!opt) return;
+                const c = { id: opt.id as number, label: opt.label };
+                if (!selectedCategories.some((x) => x.id === c.id)) {
+                  toggleCategory(c);
+                }
+              }}
+              fetchOptions={searchCategories}
+              placeholder="找類別…"
+            />
+          </div>
+        </div>
+        <div style={{ minHeight: 44, display: "flex", gap: 10, alignItems: "center" }}>
+          <button
+            type="button"
+            className="wb-btn blue"
+            onClick={() => apply()}
+            disabled={noStore}
+          >
+            查詢
+          </button>
+          <button type="button" className="wb-btn" onClick={resetFilters}>
+            清除
+          </button>
+          <span className="wb-dim wb-small">
+            {ready
+              ? `共 ${matrixTotal} 項 · 本頁庫存 ${grandTotal} 件`
+              : applied && !noStore && matrix.isLoading
+                ? "查詢中…"
+                : ""}
+          </span>
+        </div>
       </div>
 
-      {/* 已選類別 chip 列(僅在有選時顯示) */}
-      {selectedCategories.length > 0 && (
-        <div className="inv-chip-row">
-          <span className="inv-chip-row-label">已選類別:</span>
-          {selectedCategories.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              className="inv-chip"
-              onClick={() => removeCategory(c.id)}
-              title="點擊移除"
-            >
-              <span>{c.label}</span>
-              <span className="inv-chip-x">×</span>
-            </button>
-          ))}
+      {catChips.length > 0 && (
+        <div className="wb-row">
+          <div className="wb-field grow">
+            <label>常用類別</label>
+            <div className="wb-chips">
+              {catChips.map((c) => {
+                const on = selectedCategories.some((x) => x.id === c.id);
+                const pinned = pins.some((x) => x.id === c.id);
+                return (
+                  <span key={c.id} className={`wb-chip cat${on ? " on" : ""}`}>
+                    <button
+                      type="button"
+                      className="pin"
+                      title={pinned ? "取消常用" : "釘成常用"}
+                      onClick={() => togglePin(c)}
+                    >
+                      {pinned ? "★" : "☆"}
+                    </button>
+                    <button
+                      type="button"
+                      className="name"
+                      onClick={() => toggleCategory(c)}
+                    >
+                      {c.label}
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
 
-      {/* 倉別勾選列 */}
-      <div className="warehouse-picker">
-        <div className="warehouse-picker-label">倉別</div>
-        <label className="warehouse-picker-item">
-          <input
-            type="checkbox"
-            checked={
-              allWarehouses.length > 0 &&
-              selectedWarehouseIds.size === allWarehouses.length
-            }
-            onChange={(e) => setAllWarehouses(e.target.checked)}
-          />
-          <strong>全選</strong>
-        </label>
-        {allWarehouses.map((w) => (
-          <label key={w.id} className="warehouse-picker-item">
-            <input
-              type="checkbox"
-              checked={selectedWarehouseIds.has(w.id)}
-              onChange={() => toggleWarehouse(w.id)}
-            />
-            {w.code} {w.name}
-          </label>
-        ))}
-        {selectedWarehouseIds.size === 0 && (
-          <span className="warehouse-picker-hint">至少勾選一個倉</span>
-        )}
-      </div>
+      {(noStore ? [] : (devices.data ?? [])).map((d) => (
+        <div key={d.id} className="wb-warn wb-inv-hit">
+          <span>
+            <span className="wb-mono">{codesLabel(d)}</span> · {d.product_name} ·{" "}
+            <b>{d.status_label}</b>
+            {d.warehouse
+              ? ` · ${
+                  allWarehouses.find((w) => w.id === d.warehouse)?.name ??
+                  d.warehouse_code ??
+                  ""
+                }`
+              : ""}
+          </span>
+          <button
+            type="button"
+            className="wb-link"
+            onClick={() => setHistoryId(d.id)}
+          >
+            履歷
+          </button>
+        </div>
+      ))}
 
-      <div className="md-table" style={{ height: "calc(100% - 130px)" }}>
-        {!applied && (
-          <InventoryDefaultPanel
-            lowStockItems={lowStockItems}
-            onPickName={(name) => {
+      <div style={{ marginTop: 12 }}>
+        {noStore && (
+          <div
+            className="wb-dim"
+            style={{ textAlign: "center", padding: "28px 0" }}
+          >
+            先選分店
+          </div>
+        )}
+        {!applied && !noStore && (
+          <LowStockPanel
+            items={lowStockItems}
+            onPick={(name) => {
               setKeyword(name);
-              // 直接觸發查詢(已勾倉別才能查)
-              if (selectedWarehouseIds.size > 0) {
-                setApplied({
-                  warehouseIds: Array.from(selectedWarehouseIds),
-                  categoryIds: [],
-                  keyword: name,
-                });
-              }
+              if (!noStore) apply({ keyword: name, categories: [] });
             }}
           />
         )}
-        {applied && matrix.isLoading && (
-          <div className="md-empty">查詢中…</div>
+        {applied && !noStore && matrix.isError && (
+          <div className="wb-warn err">{String(matrix.error)}</div>
         )}
-        {applied && matrix.isError && (
-          <div className="md-empty">{String(matrix.error)}</div>
-        )}
-        {serialDialog &&
-          (serialDialog.product.requires_serial ? (
-            <SerialListModal
-              product={serialDialog.product}
-              warehouseId={serialDialog.warehouseId}
-              warehouseLabel={serialDialog.warehouseLabel}
-              onClose={() => setSerialDialog(null)}
-            />
-          ) : (
-            <TransferStatusModal
-              product={serialDialog.product}
-              warehouseId={serialDialog.warehouseId}
-              warehouseLabel={serialDialog.warehouseLabel}
-              onClose={() => setSerialDialog(null)}
-            />
-          ))}
-        {compatibilityDialog && (
-          <CompatibilityModal
-            productId={compatibilityDialog.productId}
-            productName={compatibilityDialog.productName}
-            onClose={() => setCompatibilityDialog(null)}
-          />
-        )}
-        {(devices.data ?? []).length > 0 && (
-          <div className="inv-device-hits">
-            {(devices.data ?? []).map((d) => (
-              <div key={d.id} className="inv-device-hit">
-                <span>
-                  {codesLabel(d)} · {d.product_name} · <b>{d.status_label}</b>
-                  {d.warehouse_code ? ` · ${d.warehouse_code}` : ""}
-                </span>
-                <button
-                  type="button"
-                  className="btn"
-                  style={{ fontSize: 12, padding: "2px 6px" }}
-                  onClick={() => setDeviceHistoryId(d.id)}
-                >
-                  履歷
-                </button>
+
+        {ready && isMobile && (
+          <div className="wb-inv-cards">
+            {products.length === 0 && (
+              <div className="wb-card wb-dim">查無資料</div>
+            )}
+            {products.map((p) => (
+              <div
+                key={p.id}
+                className="wb-card wb-inv-card"
+                onClick={() => toggleOpen(p.id)}
+              >
+                <div>
+                  <span className="pname">{p.name}</span>
+                  <span className="pcode">{p.sku}</span>
+                </div>
+                <div className="wb-dim wb-small">
+                  {[p.category_name, p.spec, conditionLabel(p)]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </div>
+                <div className="wb-inv-card-stores">
+                  {warehouses.map((w) => {
+                    const qty = p.stock_by_warehouse[String(w.id)] ?? 0;
+                    return (
+                      <span key={w.id} className={qty > 0 ? "" : "wb-dim"}>
+                        {w.name} <b>{qty}</b>
+                      </span>
+                    );
+                  })}
+                  <span>
+                    合計 <b>{p.stock_total}</b>
+                  </span>
+                </div>
+                <div className="wb-dim wb-small">
+                  售價 {money(p.list_price)} · 平均成本{" "}
+                  {money(p.weighted_avg_cost)}
+                </div>
+                {opened.has(p.id) && (
+                  <div className="wb-inv-card-detail">
+                    <ProductDetail
+                      product={p}
+                      warehouses={warehouses}
+                      onHistory={setHistoryId}
+                      onCompat={() => setCompat({ id: p.id, name: p.name })}
+                    />
+                  </div>
+                )}
               </div>
             ))}
-          </div>
-        )}
-        {deviceHistoryId != null && (
-          <SerialHistoryModal
-            serialId={deviceHistoryId}
-            onClose={() => setDeviceHistoryId(null)}
-          />
-        )}
-        {applied && !matrix.isLoading && !matrix.isError && isMobile && (
-          <div className="stock-mobile-list">
-            {products.length === 0 && (
-              <div className="md-empty">查無資料</div>
-            )}
-            {products.map((p, i) => {
-              const totalCost =
-                p.stock_total > 0 && Number(p.weighted_avg_cost) > 0
-                  ? Math.round(
-                      Number(p.weighted_avg_cost) * p.stock_total,
-                    ).toLocaleString()
-                  : "—";
-              return (
-                <div key={p.id} className="stock-card">
-                  <div className="stock-card-head">
-                    <div className="stock-card-no">#{i + 1}</div>
-                    <div className="stock-card-name">{p.name}</div>
-                    <button
-                      type="button"
-                      className="stock-card-compat"
-                      onClick={() =>
-                        setCompatibilityDialog({
-                          productId: p.id,
-                          productName: p.name,
-                        })
-                      }
-                      title="查看相容性"
-                    >
-                      相容
-                    </button>
-                  </div>
-                  <div className="stock-card-meta">
-                    {p.category_name}
-                    {p.spec ? ` · ${p.spec}` : ""}
-                    {conditionLabel(p) !== "—" ? ` · ${conditionLabel(p)}` : ""}
-                  </div>
-                  <div className="stock-card-wh">
-                    {warehouses.map((w) => {
-                      const qty = p.stock_by_warehouse[String(w.id)] ?? 0;
-                      return (
-                        <div key={w.id} className="stock-card-wh-row">
-                          <span className="stock-card-wh-name">
-                            {w.code} {w.name}
-                          </span>
-                          {qty > 0 ? (
-                            <button
-                              type="button"
-                              className="stock-link"
-                              onClick={() =>
-                                setSerialDialog({
-                                  product: p,
-                                  warehouseId: w.id,
-                                  warehouseLabel: `${w.code} ${w.name}`,
-                                })
-                              }
-                            >
-                              {qty}
-                            </button>
-                          ) : (
-                            <span style={{ color: "var(--text-dim)" }}>
-                              0
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="stock-card-summary">
-                    <span>
-                      合計 <b>{p.stock_total}</b>
-                    </span>
-                    <span>
-                      平均成本{" "}
-                      <b>
-                        {Number(p.weighted_avg_cost) > 0
-                          ? Math.round(
-                              Number(p.weighted_avg_cost),
-                            ).toLocaleString()
-                          : "—"}
-                      </b>
-                    </span>
-                    <span>
-                      總成本 <b>{totalCost}</b>
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
             {products.length > 0 && (
-              <div className="stock-card stock-card-total">
-                <div className="stock-card-meta">本頁合計</div>
-                {warehouses.map((w) => (
-                  <div key={w.id} className="stock-card-wh-row">
-                    <span className="stock-card-wh-name">
-                      {w.code} {w.name}
+              <div className="wb-card wb-inv-card">
+                <div className="wb-dim wb-small">本頁合計</div>
+                <div className="wb-inv-card-stores">
+                  {warehouses.map((w) => (
+                    <span key={w.id}>
+                      {w.name} <b>{totalsByWarehouse[String(w.id)] ?? 0}</b>
                     </span>
-                    <span>{totalsByWarehouse[String(w.id)] ?? 0}</span>
-                  </div>
-                ))}
-                <div className="stock-card-summary">
+                  ))}
                   <span>
                     合計 <b>{grandTotal}</b>
                   </span>
-                  <span>
-                    總成本{" "}
-                    <b>
-                      {Math.round(
-                        products.reduce(
-                          (s, p) =>
-                            s +
-                            Number(p.weighted_avg_cost || 0) * p.stock_total,
-                          0,
-                        ),
-                      ).toLocaleString()}
-                    </b>
-                  </span>
                 </div>
+                <div className="wb-dim wb-small">總成本 {money(grandCost)}</div>
               </div>
             )}
           </div>
         )}
-        {applied && !matrix.isLoading && !matrix.isError && !isMobile && (
-          <table className="stock-matrix-table">
+
+        {ready && !isMobile && (
+          <table className="wb-table">
             <thead>
               <tr>
-                <th style={{ width: 50 }} className="num">
-                  序
-                </th>
-                <th
-                  style={{ width: 110 }}
-                  className="sortable"
-                  onClick={() => toggleSort({ kind: "category" })}
-                >
-                  類別{sortIndicator({ kind: "category" })}
-                </th>
+                <th>品號</th>
                 <th
                   className="sortable"
                   onClick={() => toggleSort({ kind: "name" })}
                 >
-                  品名{sortIndicator({ kind: "name" })}
+                  品名{sortMark({ kind: "name" })}
                 </th>
-                <th style={{ width: 150 }}>規格</th>
-                <th style={{ width: 90 }}>品況</th>
+                <th
+                  className="sortable"
+                  onClick={() => toggleSort({ kind: "category" })}
+                >
+                  類別{sortMark({ kind: "category" })}
+                </th>
                 {warehouses.map((w) => (
                   <th
                     key={w.id}
@@ -835,105 +716,91 @@ export function InventoryQueryPage() {
                       toggleSort({ kind: "warehouse", warehouseId: w.id })
                     }
                   >
-                    {w.code}
-                    {sortIndicator({ kind: "warehouse", warehouseId: w.id })}
-                    <div className="warehouse-col-name">{w.name}</div>
+                    {w.name}
+                    {sortMark({ kind: "warehouse", warehouseId: w.id })}
                   </th>
                 ))}
                 <th
                   className="num sortable"
                   onClick={() => toggleSort({ kind: "total" })}
                 >
-                  小計{sortIndicator({ kind: "total" })}
+                  合計{sortMark({ kind: "total" })}
                 </th>
-                <th className="num" style={{ width: 90 }}>
-                  平均成本
-                </th>
-                <th className="num" style={{ width: 100 }}>
-                  總成本
-                </th>
+                <th className="num">售價</th>
+                <th className="num">平均成本</th>
+                <th className="num">總成本</th>
               </tr>
             </thead>
             <tbody>
-              {products.map((p, i) => (
-                <tr key={p.id}>
-                  <td className="num">{i + 1}</td>
-                  <td>{p.category_name}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="stock-link-name"
-                      onClick={() =>
-                        setCompatibilityDialog({
-                          productId: p.id,
-                          productName: p.name,
-                        })
-                      }
-                      title="查看相容性"
-                    >
-                      {p.name}
-                    </button>
-                  </td>
-                  <td style={{ color: "var(--text-dim)" }}>{p.spec || "—"}</td>
-                  <td style={{ color: "var(--text-dim)" }}>
-                    {conditionLabel(p)}
-                  </td>
-                  {warehouses.map((w) => {
-                    const qty = p.stock_by_warehouse[String(w.id)] ?? 0;
-                    return (
-                      <td key={w.id} className="num">
-                        {qty > 0 ? (
-                          <button
-                            type="button"
-                            className="stock-link"
-                            onClick={() =>
-                              setSerialDialog({
-                                product: p,
-                                warehouseId: w.id,
-                                warehouseLabel: `${w.code} ${w.name}`,
-                              })
-                            }
-                          >
-                            {qty}
-                          </button>
-                        ) : (
-                          <span style={{ color: "var(--text-dim)" }}>0</span>
-                        )}
-                      </td>
-                    );
-                  })}
-                  <td className="num" style={{ fontWeight: 600 }}>
-                    {p.stock_total}
-                  </td>
-                  <td className="num">
-                    {Number(p.weighted_avg_cost) > 0
-                      ? Math.round(
-                          Number(p.weighted_avg_cost),
-                        ).toLocaleString()
-                      : "—"}
-                  </td>
-                  <td className="num" style={{ fontWeight: 600 }}>
-                    {p.stock_total > 0 && Number(p.weighted_avg_cost) > 0
-                      ? Math.round(
-                          Number(p.weighted_avg_cost) * p.stock_total,
-                        ).toLocaleString()
-                      : "—"}
-                  </td>
-                </tr>
-              ))}
               {products.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={8 + warehouses.length}
-                    className="md-empty"
-                  >
+                  <td colSpan={colCount} className="empty">
                     查無資料
                   </td>
                 </tr>
               )}
+              {products.map((p) => {
+                const cond = conditionLabel(p);
+                return (
+                  <Fragment key={p.id}>
+                    <tr className="clickable" onClick={() => toggleOpen(p.id)}>
+                      <td className="wb-dim" style={{ whiteSpace: "nowrap" }}>
+                        {p.sku}
+                      </td>
+                      <td>
+                        {p.name}
+                        {p.spec && (
+                          <span className="wb-dim wb-small"> {p.spec}</span>
+                        )}
+                        {cond && p.tracks_unit_condition && (
+                          <>
+                            {" "}
+                            <span className="wb-badge">{cond}</span>
+                          </>
+                        )}
+                      </td>
+                      <td className="wb-dim wb-small">{p.category_name}</td>
+                      {warehouses.map((w) => {
+                        const qty = p.stock_by_warehouse[String(w.id)] ?? 0;
+                        return (
+                          <td key={w.id} className="num">
+                            {qty > 0 ? (
+                              <b>{qty}</b>
+                            ) : (
+                              <span className="wb-dim">0</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className="num">
+                        <b>{p.stock_total}</b>
+                      </td>
+                      <td className="num">{money(p.list_price)}</td>
+                      <td className="num">{money(p.weighted_avg_cost)}</td>
+                      <td className="num">
+                        {money(Number(p.weighted_avg_cost) * p.stock_total)}
+                      </td>
+                    </tr>
+                    {opened.has(p.id) && (
+                      <tr className="detail">
+                        <td colSpan={colCount}>
+                          <ProductDetail
+                            product={p}
+                            warehouses={warehouses}
+                            onHistory={setHistoryId}
+                            onCompat={() =>
+                              setCompat({ id: p.id, name: p.name })
+                            }
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
               {products.length > 0 && (
-                <tr className="stock-matrix-total-row">
-                  <td colSpan={5} style={{ textAlign: "right" }}>
+                <tr className="total">
+                  <td colSpan={3} style={{ textAlign: "right" }}>
                     本頁合計
                   </td>
                   {warehouses.map((w) => (
@@ -942,48 +809,33 @@ export function InventoryQueryPage() {
                     </td>
                   ))}
                   <td className="num">{grandTotal}</td>
+                  <td></td>
                   <td className="num">
-                    {grandTotal > 0
-                      ? Math.round(
-                          products.reduce(
-                            (s, p) =>
-                              s + Number(p.weighted_avg_cost || 0) * p.stock_total,
-                            0,
-                          ) / grandTotal,
-                        ).toLocaleString()
-                      : "—"}
+                    {grandTotal > 0 ? money(grandCost / grandTotal) : "—"}
                   </td>
-                  <td className="num" style={{ fontWeight: 700 }}>
-                    {Math.round(
-                      products.reduce(
-                        (s, p) =>
-                          s + Number(p.weighted_avg_cost || 0) * p.stock_total,
-                        0,
-                      ),
-                    ).toLocaleString()}
-                  </td>
+                  <td className="num">{money(grandCost)}</td>
                 </tr>
               )}
             </tbody>
           </table>
         )}
 
-        {applied && pageCount > 1 && (
-          <div className="inv-pager">
+        {applied && !noStore && pageCount > 1 && (
+          <div className="wb-pager">
             <button
               type="button"
-              className="btn"
+              className="wb-btn small"
               disabled={page <= 1}
               onClick={() => setPage((n) => Math.max(1, n - 1))}
             >
               上一頁
             </button>
-            <span className="inv-pager-label">
+            <span className="wb-dim wb-small">
               第 {page} / {pageCount} 頁{sort ? " · 排序限本頁" : ""}
             </span>
             <button
               type="button"
-              className="btn"
+              className="wb-btn small"
               disabled={page >= pageCount || !(matrix.data?.has_more ?? false)}
               onClick={() => setPage((n) => Math.min(pageCount, n + 1))}
             >
@@ -992,6 +844,20 @@ export function InventoryQueryPage() {
           </div>
         )}
       </div>
+
+      {historyId != null && (
+        <SerialHistoryModal
+          serialId={historyId}
+          onClose={() => setHistoryId(null)}
+        />
+      )}
+      {compat && (
+        <CompatibilityModal
+          productId={compat.id}
+          productName={compat.name}
+          onClose={() => setCompat(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1004,59 +870,56 @@ interface LowStockItem {
   safety_stock: number;
 }
 
-function InventoryDefaultPanel({
-  lowStockItems,
-  onPickName,
+/** 還沒查之前:低於安全庫存的品項,點一下就查那一項 */
+function LowStockPanel({
+  items,
+  onPick,
 }: {
-  lowStockItems: LowStockItem[];
-  onPickName: (name: string) => void;
+  items: LowStockItem[];
+  onPick: (name: string) => void;
 }) {
-  if (lowStockItems.length === 0) {
+  if (items.length === 0) {
     return (
-      <div className="inv-default">
-        <div className="inv-default-empty">
-          <div className="inv-default-empty-title">沒有需要關注的庫存</div>
-          <div className="inv-default-empty-hint">
-            設定上方篩選條件後,點「查詢」開始
-          </div>
-        </div>
+      <div className="wb-dim" style={{ textAlign: "center", padding: "28px 0" }}>
+        打關鍵字,或點類別開始查
       </div>
     );
   }
   return (
-    <div className="inv-default">
-      <div className="inv-default-head">
-        <div className="inv-default-title">
-          需要注意的庫存({lowStockItems.length} 項低於安全庫存)
-        </div>
-        <Link to="/products" className="inv-default-link">
-          調整安全庫存 →
+    <>
+      <div className="wb-section" style={{ marginTop: 0 }}>
+        <h3>低於安全庫存 {items.length} 項</h3>
+        <Link to="/products" className="wb-link">
+          調整安全庫存
         </Link>
       </div>
-      <div className="inv-default-list">
-        {lowStockItems.map((it) => (
-          <button
-            key={it.id}
-            type="button"
-            className="inv-default-row"
-            onClick={() => onPickName(it.name)}
-            title="點擊查詢這個品項"
-          >
-            <div className="inv-default-row-main">
-              <div className="inv-default-row-name">{it.name}</div>
-              <div className="inv-default-row-sub">
-                {it.sku} · 安全庫存 {it.safety_stock}
-              </div>
-            </div>
-            <div className="inv-default-row-qty">
-              剩 <b>{it.qty}</b> 件
-            </div>
-          </button>
-        ))}
-      </div>
-      <div className="inv-default-foot">
-        或設定上方篩選條件後,點「查詢」查看完整庫存
-      </div>
-    </div>
+      <table className="wb-table">
+        <thead>
+          <tr>
+            <th>品號</th>
+            <th>品名</th>
+            <th className="num">安全庫存</th>
+            <th className="num">現有</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((it) => (
+            <tr
+              key={it.id}
+              className="clickable"
+              onClick={() => onPick(it.name)}
+              title="點一下查這個品項"
+            >
+              <td className="wb-dim">{it.sku}</td>
+              <td>{it.name}</td>
+              <td className="num">{it.safety_stock}</td>
+              <td className="num">
+                <span className="wb-badge warn">{it.qty}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 }

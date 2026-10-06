@@ -562,6 +562,25 @@ export async function searchInStockSerials(
   });
 }
 
+/**
+ * 某商品在某門市「在庫」的每一台(工作台的序號小標籤用:全部列出來給人點)。
+ * 後端一頁 50 筆,這裡一頁一頁拿完;最多拿 400 台。
+ */
+export async function fetchInStockSerials(
+  product: number,
+  warehouse: number,
+): Promise<ProductSerial[]> {
+  const out: ProductSerial[] = [];
+  for (let page = 1; page <= 8; page++) {
+    const d = await api<Paginated<ProductSerial>>(
+      `/serials/?${qs({ status: "in_stock", product, warehouse, page })}`,
+    );
+    out.push(...d.results);
+    if (!d.next) break;
+  }
+  return out;
+}
+
 // 銷退單「原銷貨單」欄位用:用單號 / 客戶 / 電話 / 發票號碼找未作廢的銷貨單
 // (不載整頁清單,舊單也找得到)
 export async function searchSalesOrdersForReturn(

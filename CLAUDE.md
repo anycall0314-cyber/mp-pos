@@ -22,7 +22,7 @@
 - **庫存以序號為單位**:`ProductSerial` 一台一筆,狀態 in_stock / sold / void / returned / rma / in_transit
 - **成本走加權平均(全公司,不分倉)**:`Product.weighted_avg_cost` 跨倉聚合;**目的是避免「店員挑低成本機賣→虛幻獎金」**。庫存查詢的單倉視窗不顯示「該倉成本」,只顯示在庫數。中古機例外:每隻獨立 `purchase_unit_cost`,賣出時用該隻自己的成本(因為每台是獨立商品)
 - **計入現金 / 計入毛利雙旗標**:`Product.counts_cash` / `counts_margin`。收購二手虛擬商品 `counts_cash=True, counts_margin=False`,讓收購單在報表上「算現金流出但不汙染毛利」
-- **三種頁面版型**:錄入頁(進銷/調撥)、Master-Detail(主檔)、報表頁
+- **四種頁面版型**:錄入頁(進貨 / 銷貨)、Master-Detail(主檔)、報表頁、**工作台**(調撥、庫存查詢;2026-10-05 起,owner 習慣的「一個畫面、掃一下加一行、不開彈出視窗」,進貨 / 銷貨之後照這一套改)。細節見 `docs/ui-patterns.md`
 - **唯一前端**:不開 Django admin 給使用者用,Django admin 只當 dev fallback
 - **單一 React app + 角色控制**:Platform Admin / Tenant Admin / Tenant User 共用 SPA(MVP 還沒實作登入)
 - **導覽結構(6 群)**:報表 / 庫存 / 銷貨 / 門號 / 維修 / 設定。商品與類別合併在「庫存 → 建立商品」一頁;客戶管理在「銷貨」群組底下(個人/同業/企業/其他分頁切換);會員是獨立主檔(`/members`),也在「銷貨」群組;未實作的功能保留 placeholder 顯示「(尚未實作)」
@@ -128,6 +128,7 @@ inventory-3c/
     └── src/
         ├── api/                client.ts + hooks.ts + search.ts(searchProductsForSales 等) + types.ts
         ├── components/         ComboBox(支援 onEnterAfterValue / autoFocus / IME 偵測)/ Drawer / Field / Toolbar / Banner
+        │   └── workbench/      工作台版型的零件:ScanBox(掃碼框,條碼排隊處理;沒加進去的碼怎麼記在 `lib/scanMissed.ts`,有測試)/ toast(訊息條,可帶復原)/ ArmButton(兩段式按鈕)/ errors
         ├── pages/
         │   ├── products/        ProductsPage(合併商品 + 類別管理,左側兩段:商品搜尋 / 類別拖拉排序)+ ProductForm + ProductExpanderModal(型號展開,軸標籤可自訂)+ BulkAddProductsModal
         │   ├── purchases/       PurchasesPage + PurchaseEntryPage(規格獨立欄、Enter 跳下一筆)+ PurchaseLabelsPrintPage(條碼優先序 IMEI > 原廠 > SKU)+ PurchaseBatchPasteModal(模糊比對預覽)+ PurchaseProductPickerModal(勾選多商品入庫)
@@ -139,8 +140,8 @@ inventory-3c/
         │   ├── sim-cards/       SimCardsPage + SimCardForm
         │   ├── telecom-plans/   TelecomPlansPage + TelecomPlanForm
         │   ├── secondhand-acquisition/  SecondhandAcquisitionPage(hub:tabs 切換)+ SecondhandPersonalEntry(個人收購表單;廠商收購直接內嵌 PurchaseEntryPage)
-        │   ├── inventory/       InventoryQueryPage(庫存矩陣:多倉勾選 + 每倉一欄 + 點數字看序號明細 + 欄位排序)+ CategoriesPage(舊獨立頁,nav 已隱藏但路由仍在)
-        │   ├── transfers/       TransfersPage + TransferEntryPage(倉間調撥)
+        │   ├── inventory/       InventoryQueryPage(工作台版型:每家分店一欄 + 點一列就地展開每台序號 + 常用類別 + 欄位排序)+ CategoriesPage(舊獨立頁,nav 已隱藏但路由仍在)
+        │   ├── transfers/       TransferWorkbenchPage(工作台版型:新增、最近調撥、待入庫都在同一頁;`/transfers/編號` 展開那一張)
         │   ├── cash/            PettyExpensesPage 店頭雜支(列表 + Drawer 新增,連續模式)+ CashAdjustmentsPage
         │   ├── phone-bills/     PhoneBillsPage 代收話費(列表 + Drawer 兩步確認 + 電話會員 lookup)+ PhoneBillReceiptPage 80mm 熱感收據
         │   ├── login/           LoginPage(帳號密碼登入頁)
