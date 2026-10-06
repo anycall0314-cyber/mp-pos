@@ -47,6 +47,7 @@ import {
   ScanBoxApi,
   ScanOption,
 } from "@/components/workbench/ScanBox";
+import { PhotoName, usePhotoPeek } from "@/components/photos/PhotoName";
 import { toast } from "@/components/workbench/toast";
 import { addMonths } from "@/lib/dates";
 import { codesLabel, mainCode, normalizeCode } from "@/lib/deviceCodes";
@@ -451,6 +452,8 @@ export function SalesWorkbenchPage() {
 
   const scanRef = useRef<HTMLInputElement>(null);
   const scanApi = useRef<ScanBoxApi | null>(null);
+  /** 點品名(或搜尋結果上的「照片 N」)看照片與規格:只是看,不會加進明細;關掉回到掃碼框 */
+  const photoPeek = usePhotoPeek(() => scanApi.current?.resume());
   const tableRef = useRef<HTMLTableElement>(null);
   const partyRef = useRef<HTMLDivElement>(null);
   const checkoutRef = useRef<HTMLDivElement>(null);
@@ -992,6 +995,7 @@ export function SalesWorkbenchPage() {
           hint: p.matched_serial
             ? `序號 ${codesLabel(p.matched_serial)}`
             : o.secondary || undefined,
+          peek: p.photo_count ? `照片 ${p.photo_count}` : undefined,
           payload: p,
         };
       });
@@ -1620,7 +1624,7 @@ export function SalesWorkbenchPage() {
    * 右邊那一塊開著的時候,背後整塊停用(inert:點不到、游標進不去):
    * 結帳畫面開著,下一槍條碼不能加進明細把應收改掉。
    */
-  const behind = panel ? { inert: "" } : {};
+  const behind = panel || photoPeek.isOpen ? { inert: "" } : {};
 
   const panelTitle: Record<Panel, string> = {
     info: "單據資訊",
@@ -1846,6 +1850,9 @@ export function SalesWorkbenchPage() {
               !o.payload.matched_serial && isExactProduct(o.payload, q)
             }
             onPick={onPick}
+            onPeek={(o, use) =>
+              photoPeek.open({ id: o.payload.id, name: o.payload.name, sku: o.payload.sku, onUse: use })
+            }
           />
         </div>
 
@@ -1934,7 +1941,14 @@ export function SalesWorkbenchPage() {
                     className={`flash${hasSub ? " has-sub" : ""}${todo.length > 0 ? " todo" : ""}`}
                   >
                     <td className="prod">
-                      <span className="pname">{p.name}</span>
+                      <PhotoName
+                        id={p.id}
+                        name={p.name}
+                        sku={p.sku}
+                        thumb={p.photo_thumb}
+                        onPeek={photoPeek.open}
+                        className="pname"
+                      />
                       <span className="pcode">{p.sku}</span>
                       {todo.length > 0 && (
                         <button
@@ -2699,6 +2713,7 @@ export function SalesWorkbenchPage() {
           </div>
         )}
       </Drawer>
+      {photoPeek.panel}
     </div>
   );
 }

@@ -28,6 +28,9 @@ import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Checkbox, Field } from "@/components/Field";
 
+import { PhotoSection } from "@/components/photos/PhotoSection";
+import { type PhotoStored, usePhotoDraft } from "@/components/photos/usePhotoDraft";
+
 import { DuplicatePanel } from "./DuplicatePanel";
 import { useModalDraft } from "@/hooks/useModalDraft";
 import { MoneyInput } from "@/components/MoneyInput";
@@ -89,6 +92,11 @@ interface FormState {
   external_sale_price: string;
   min_sale_price: string;
   is_active: boolean;
+  /**
+   * 這次加的照片(哪一份照片作業、順序、說明、主圖)。不是商品的欄位,不會送出去;
+   * 放在這裡是為了跟欄位**存在同一份草稿裡**:「存成草稿先離開」再回來,欄位與照片一起接回來。
+   */
+  photo_draft: PhotoStored | null;
 }
 
 const EMPTY: FormState = {
@@ -118,6 +126,7 @@ const EMPTY: FormState = {
   external_sale_price: "0",
   min_sale_price: "0",
   is_active: true,
+  photo_draft: null,
 };
 
 function toState(p: Product | null | undefined): FormState {
@@ -152,6 +161,7 @@ function toState(p: Product | null | undefined): FormState {
     external_sale_price: p.external_sale_price ?? "0",
     min_sale_price: p.min_sale_price ?? "0",
     is_active: p.is_active,
+    photo_draft: null,
   };
 }
 
@@ -205,14 +215,25 @@ export function ProductForm({
   const [closePromptOpen, setClosePromptOpen] = useState(false);
   const baselineRef = useRef<FormState>(toState(initial));
 
-  // 草稿系統共用 hook
   const isEdit = !!initial?.id;
+  // 商品照片:先放在這一次編輯上,按儲存才跟商品一起存;取消就丟掉,商品原本的照片不動
+  const photos = usePhotoDraft({
+    active: open,
+    productId: initial?.id ?? null,
+    label: state.name,
+    spec: state.spec,
+  });
+  const saving = useRef(false);
+  /** 從按下儲存(照片先停收)到存完:整個表單的照片區與儲存鈕都不能再動 */
+  const [busy, setBusy] = useState(false);
+
+  // 草稿系統共用 hook(只加了照片、欄位都沒動也算有草稿:回來才看得到「載入草稿」)
   const draftHelper = useModalDraft<FormState>({
     key: DRAFT_KEY,
     open,
     state,
     isEditMode: isEdit,
-    isEmpty: (s) => !isDirtyAgainst(s, baselineRef.current),
+    isEmpty: (s) => !isDirtyAgainst(s, baselineRef.current) && !photos.dirty,
   });
 
   const saveProduct = useSaveProduct();
@@ -269,6 +290,21 @@ export function ProductForm({
 
   // 草稿系統的 debounce / beforeunload / unmount 都由 useModalDraft 處理
 
+  // 這次加的照片跟著欄位記進同一份草稿(只有新增商品有草稿)。
+  // 正在把上次的照片接回來時不動:那一刻「現在沒有照片作業」,記進去會把草稿裡的照片弄丟
+  const photoSnap = photos.snapshot();
+  const photoSnapKey = photoSnap ? JSON.stringify(photoSnap) : "";
+  useEffect(() => {
+    if (!open || isEdit || photos.resumePending) return;
+    setState((s) =>
+      (s.photo_draft ? JSON.stringify(s.photo_draft) : "") === photoSnapKey
+        ? s
+        : { ...s, photo_draft: photoSnapKey ? (JSON.parse(photoSnapKey) as PhotoStored) : null },
+    );
+    // 只跟著照片那一份的內容走
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoSnapKey, open, isEdit, photos.resumePending]);
+
   function patch<K extends keyof FormState>(k: K, v: FormState[K]) {
     setState((s) => ({ ...s, [k]: v }));
   }
@@ -304,18 +340,30 @@ export function ProductForm({
 
   /** 「就是這個」:不新增,改用既有商品;勾了就順便記住剛剛打的叫法 */
   async function useExisting(c: DuplicateCandidate) {
-    let note: string | undefined;
-    if (rememberName && state.name.trim()) {
-      try {
-        await rememberPhrase.mutateAsync({ product: c.id, value: state.name.trim() });
-      } catch (e) {
-        // 沒記住不影響「改用既有商品」,但要讓人知道(例:這句話已指到別的商品)
-        note = "叫法沒有記住:" + (e instanceof Error ? e.message : String(e));
+    // 跟「儲存」共用同一把鎖:正在存(包含還在等照片停收)的時候不能改用既有商品,
+    // 不然會先建出新的那一個、最後畫面又選回既有的,多出一個品號
+    if (saving.current) return;
+    saving.current = true;
+    setBusy(true);
+    try {
+      let note: string | undefined;
+      if (rememberName && state.name.trim()) {
+        try {
+          await rememberPhrase.mutateAsync({ product: c.id, value: state.name.trim() });
+        } catch (e) {
+          // 沒記住不影響「改用既有商品」,但要讓人知道(例:這句話已指到別的商品)
+          note = "叫法沒有記住:" + (e instanceof Error ? e.message : String(e));
+        }
       }
+      draftHelper.markSavedAndClear();
+      // 這次加的照片不會自動掛到既有商品上(要補圖請到那個商品去加)
+      photos.cancel();
+      onUseExisting?.(c.id, note);
+      onClose();
+    } finally {
+      saving.current = false;
+      setBusy(false);
     }
-    draftHelper.markSavedAndClear();
-    onUseExisting?.(c.id, note);
-    onClose();
   }
 
   async function submit(e?: FormEvent) {
@@ -330,7 +378,16 @@ export function ProductForm({
       setFieldErrors({ name: ["請填品名"] });
       return;
     }
+    if (saving.current) return;
+    saving.current = true;
+    setBusy(true);
     try {
+      // 照片都傳好了才存;從這一刻起這一份照片作業不再收新照片(手機那邊會看到「電腦正在儲存」)
+      const notReady = await photos.beforeSave();
+      if (notReady) {
+        setError(notReady);
+        return;
+      }
       const saved = await saveProduct.mutateAsync({
         id: initial?.id,
         category: state.category as number,
@@ -361,12 +418,16 @@ export function ProductForm({
         ...(dup && distinctReason.trim()
           ? { distinct_reason: distinctReason.trim() }
           : {}),
+        photos: photos.payload(),
       });
       // 儲存成功 → 清掉草稿 + 阻止 unmount flush 再寫回
       if (!isEdit) draftHelper.markSavedAndClear();
+      photos.saved();
       onSaved?.(saved);
       onClose();
     } catch (e) {
+      // 沒存成:照片作業恢復可以編輯,手機又可以繼續傳
+      await photos.saveFailed();
       const found = asDuplicate(e);
       if (found) {
         setDup(found);
@@ -388,12 +449,17 @@ export function ProductForm({
       } else {
         setError(String(e));
       }
+    } finally {
+      saving.current = false;
+      setBusy(false);
     }
   }
 
   function handleClose() {
+    if (saving.current) return;
     // 沒任何變更 → 直接關,不提示
-    if (!isDirtyAgainst(state, baselineRef.current)) {
+    if (!isDirtyAgainst(state, baselineRef.current) && !photos.dirty) {
+      photos.cancel();
       onClose();
       return;
     }
@@ -401,24 +467,37 @@ export function ProductForm({
   }
 
   function saveDraftAndClose() {
-    // hook 已經有 debounce + unmount flush,這裡讓 unmount flush 自然發生即可
     setClosePromptOpen(false);
+    // 現在就寫進去(表單元件不會卸載,等 600ms 的那一次會被關表單取消掉)
+    draftHelper.flush();
+    // 人離開了:手機配對結束;已經傳上來的照片留著,回來「載入草稿」接得回來
+    void photos.endPair();
     onClose();
   }
 
   function discardAndClose() {
     setClosePromptOpen(false);
     draftHelper.markSavedAndClear();
+    photos.cancel();
     onClose();
   }
 
   function loadDraft() {
-    if (!draftHelper.draft) return;
-    setState(draftHelper.draft.state);
+    if (!draftHelper.draft || busy) return;
+    // 舊版存的草稿沒有照片那一欄
+    const saved = { ...EMPTY, ...draftHelper.draft.state };
+    setState(saved);
     draftHelper.consumeDraft();
+    // 欄位與照片是同一份草稿裡的:一起換過去(載入之前在這張表單上另外加的照片不留,
+    // 不然會變成「草稿的欄位 + 剛才另外加的照片」)。沒接回來(斷線)的話照片區會出現「重試」
+    void photos.switchTo(saved.photo_draft ?? null).then((problem) => {
+      if (problem) setError(problem);
+    });
   }
 
   function discardDraft() {
+    if (busy) return;
+    photos.dropStored(draftHelper.draft?.state.photo_draft ?? null);
     draftHelper.discardDraft();
   }
 
@@ -437,9 +516,9 @@ export function ProductForm({
             className="btn primary"
             onClick={submit}
             type="button"
-            disabled={saveProduct.isPending}
+            disabled={busy || saveProduct.isPending}
           >
-            {saveProduct.isPending ? "儲存中…" : "儲存"}
+            {busy || saveProduct.isPending ? "儲存中…" : "儲存"}
           </button>
         </>
       }
@@ -453,7 +532,7 @@ export function ProductForm({
             onReasonChange={setDistinctReason}
             onUseExisting={isEdit ? undefined : useExisting}
             onProceed={() => submit()}
-            busy={saveProduct.isPending || rememberPhrase.isPending}
+            busy={busy || saveProduct.isPending || rememberPhrase.isPending}
           />
           {!isEdit && (
             <label className="checkbox dup-remember">
@@ -474,12 +553,13 @@ export function ProductForm({
             {new Date(draftHelper.draft.savedAt).toLocaleString()})
           </span>
           <div className="pf-draft-actions">
-            <button type="button" className="btn" onClick={discardDraft}>
+            <button type="button" className="btn" disabled={busy} onClick={discardDraft}>
               捨棄草稿
             </button>
             <button
               type="button"
               className="btn primary"
+              disabled={busy}
               onClick={loadDraft}
             >
               載入草稿
@@ -1052,6 +1132,13 @@ export function ProductForm({
             </Field>
           )}
         </div>
+
+        <PhotoSection
+          photos={photos}
+          productName={state.name}
+          sku={initial?.sku}
+          disabled={busy || saveProduct.isPending}
+        />
 
         <Field
           label="商品狀態"

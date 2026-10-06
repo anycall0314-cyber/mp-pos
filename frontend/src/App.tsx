@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { useAuth } from "@/auth/AuthContext";
 import { LoginPage } from "@/pages/login/LoginPage";
+import { PhonePhotoPage } from "@/pages/photos/PhonePhotoPage";
 import { PlatformAdminPage } from "@/pages/platform-admin/PlatformAdminPage";
 import { HomePage } from "@/pages/home/HomePage";
 import { CashAdjustmentsPage } from "@/pages/cash/CashAdjustmentsPage";
@@ -86,6 +87,11 @@ export function App() {
       localStorage.setItem("theme", theme);
     } catch {}
   }, [theme]);
+
+  // 手機掃 QR Code 開的拍照頁:不用登入(只認 QR Code 的憑證),不套外框
+  if (location.pathname === "/m/photo") {
+    return <PhonePhotoPage />;
+  }
 
   // /login 頁直接渲染,跳過所有 shell + guard
   if (isLoginPage) {

@@ -17,6 +17,7 @@ import { searchCategories } from "@/api/search";
 import type { Category } from "@/api/types";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { CompatibilityModal } from "@/components/CompatibilityModal";
+import { PhotoName, usePhotoPeek } from "@/components/photos/PhotoName";
 import { SerialHistoryModal } from "@/components/SerialHistoryModal";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { codesLabel } from "@/lib/deviceCodes";
@@ -286,6 +287,8 @@ export function InventoryQueryPage() {
   const [page, setPage] = useState(1);
   const [opened, setOpened] = useState<Set<number>>(new Set());
   const [historyId, setHistoryId] = useState<number | null>(null);
+  /** 點品名看照片與規格(只是看,不會展開那一列) */
+  const peek = usePhotoPeek();
   const [compat, setCompat] = useState<{ id: number; name: string } | null>(
     null,
   );
@@ -636,7 +639,14 @@ export function InventoryQueryPage() {
                 onClick={() => toggleOpen(p.id)}
               >
                 <div>
-                  <span className="pname">{p.name}</span>
+                  <PhotoName
+                    id={p.id}
+                    name={p.name}
+                    sku={p.sku}
+                    thumb={p.photo_thumb}
+                    onPeek={peek.open}
+                    className="pname"
+                  />
                   <span className="pcode">{p.sku}</span>
                 </div>
                 <div className="wb-dim wb-small">
@@ -749,7 +759,13 @@ export function InventoryQueryPage() {
                         {p.sku}
                       </td>
                       <td>
-                        {p.name}
+                        <PhotoName
+                          id={p.id}
+                          name={p.name}
+                          sku={p.sku}
+                          thumb={p.photo_thumb}
+                          onPeek={peek.open}
+                        />
                         {p.spec && (
                           <span className="wb-dim wb-small"> {p.spec}</span>
                         )}
@@ -859,6 +875,7 @@ export function InventoryQueryPage() {
           onClose={() => setCompat(null)}
         />
       )}
+      {peek.panel}
     </div>
   );
 }

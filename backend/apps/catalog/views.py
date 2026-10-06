@@ -34,6 +34,10 @@ from apps.inventory.models import (
     Warehouse,
 )
 from apps.parties.models import Supplier
+from apps.photos.models import ProductPhoto
+from apps.photos.services import (
+    PhotoRuleError, apply_to_product, committed_product, photo_urls,
+)
 from apps.purchasing.models import PurchaseOrderItem
 from apps.sales.models import SalesOrderItem
 from apps.tenants.permissions import IsPlatformAdmin, is_tenant_admin
@@ -241,6 +245,19 @@ class ProductViewSet(viewsets.ModelViewSet):
                 ),
                 stock_qty=F("serial_count") + F("balance_total"),
                 last_purchase_price=Subquery(last_price_sq),
+                # 照片:有幾張、主圖是哪一張(清單 / 搜尋結果要顯示縮圖;用 Subquery 不受 search 的 JOIN 影響)
+                photo_count_n=Coalesce(
+                    Subquery(
+                        ProductPhoto.objects.filter(product=OuterRef("pk"))
+                        .order_by().values("product").annotate(c=Count("*")).values("c")[:1],
+                        output_field=IntegerField(),
+                    ),
+                    Value(0),
+                ),
+                primary_photo_id=Subquery(
+                    ProductPhoto.objects.filter(product=OuterRef("pk"), is_primary=True)
+                    .order_by().values("pk")[:1]
+                ),
             )
             # search 走 serials__serial_no 會 JOIN serials,distinct 避免單一商品出現多次
             .distinct()
@@ -264,11 +281,35 @@ class ProductViewSet(viewsets.ModelViewSet):
             qs = qs.filter(accessory_type=Product.AccessoryType.NONE)
         return qs
 
+    def _photos_payload(self):
+        """商品存檔時一起送來的照片清單(見 apps/photos/services.py 的 apply_to_product);沒帶就是 None。"""
+        data = self.request.data
+        photos = data.get("photos") if hasattr(data, "get") else None
+        return photos if isinstance(photos, dict) else None
+
     def create(self, request, *args, **kwargs):
+        # 帶著同一份照片作業重送(第一次其實存成功了、只是回應沒收到):回那個商品,不建第二個品號
+        photos = self._photos_payload()
+        if photos:
+            done = committed_product(request.tenant, request.user, photos.get("draft"))
+            if done is not None:
+                # 「重送」= 同一張表單原樣再送一次,品名一定一樣。品名不一樣就是另一張表單拿到了同一份照片作業
+                # (兩個分頁都接回同一份草稿):不能回別人建的那個商品、讓他以為自己的存好了
+                if str(request.data.get("name") or "").strip() != done.name:
+                    return Response(
+                        {"detail": f"這些照片已經跟著「{done.name}」存好了,請關掉表單重新開一次"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                saved = self.get_queryset().filter(pk=done.pk).first()
+                if saved is not None:
+                    return Response(self.get_serializer(saved).data)
         # 防重複關卡的條碼鎖是交易層級的,整個新增要包在同一個交易裡
         try:
             with transaction.atomic():
                 return super().create(request, *args, **kwargs)
+        except PhotoRuleError as exc:
+            # 照片沒套成:商品也不建(同一個交易,整筆退回)
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except DuplicateProduct as dup:
             return Response(dup.as_dict(), status=status.HTTP_409_CONFLICT)
         except IntegrityError as e:
@@ -283,7 +324,16 @@ class ProductViewSet(viewsets.ModelViewSet):
             raise
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.tenant)
+        product = serializer.save(tenant=self.request.tenant)
+        # 照片跟商品同一個交易:商品建好、照片掛上、主圖定好,一次成立
+        apply_to_product(product, self._photos_payload(), self.request.user, created=True)
+
+    def perform_update(self, serializer):
+        product = serializer.save()
+        apply_to_product(product, self._photos_payload(), self.request.user)
+        # 這一筆是存檔前查出來的,上面帶的「幾張照片、主圖是哪一張」是舊的:拿掉,回應改用現查的
+        for stale in ("photo_count_n", "primary_photo_id"):
+            product.__dict__.pop(stale, None)
 
     def update(self, request, *args, **kwargs):
         # 改品名 / 條碼也過防重複關卡:不然可以先用無關的名字建檔,
@@ -291,6 +341,8 @@ class ProductViewSet(viewsets.ModelViewSet):
         try:
             with transaction.atomic():
                 return super().update(request, *args, **kwargs)
+        except PhotoRuleError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except DuplicateProduct as dup:
             return Response(dup.as_dict(), status=status.HTTP_409_CONFLICT)
         except IntegrityError as e:
@@ -992,6 +1044,12 @@ class ProductViewSet(viewsets.ModelViewSet):
             (d["product_id"], d["warehouse_id"]): d["qty"] for d in balance_data
         }
 
+        # 6.5 這一頁商品的主圖(庫存查詢點品名看照片;有照片的那一列多一個小縮圖)
+        primary_photo = dict(
+            ProductPhoto.objects.filter(product_id__in=product_ids, is_primary=True)
+            .values_list("product_id", "pk")
+        )
+
         # 7. 組裝。過濾已在 DB 端做完,這裡只負責攤成每倉欄位。
         products_data = []
         for p in products:
@@ -1024,6 +1082,10 @@ class ProductViewSet(viewsets.ModelViewSet):
                     "is_secondhand": p.is_secondhand,
                     "stock_by_warehouse": stock_by_wh,
                     "stock_total": sum(stock_by_wh.values()),
+                    "photo_thumb": (
+                        photo_urls("p", primary_photo[p.id])["thumb_url"]
+                        if p.id in primary_photo else ""
+                    ),
                 }
             )
 

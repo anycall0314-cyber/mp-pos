@@ -93,6 +93,9 @@ export interface Product {
   }[];
   is_active: boolean;
   stock_qty: number;
+  /** 商品照片:有幾張、主圖的縮圖網址(沒有照片是空字串) */
+  photo_count?: number;
+  photo_thumb?: string;
   created_at: string;
   updated_at: string;
 }

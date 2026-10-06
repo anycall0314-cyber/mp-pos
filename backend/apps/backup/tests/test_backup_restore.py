@@ -722,6 +722,76 @@ class RollbackTests(_Base):
         for action in ["restore.prechecked", "restore.confirmed", "restore.done"]:
             self.assertIn(action, actions)
 
+    def test_photo_edits_in_progress_do_not_block_the_restore_or_outlive_it(self):
+        """商品照片的編輯作業(暫存)不進備份,卻指到商品。還原時要先清掉、連還沒掛到商品的暫存檔:
+        不然舊商品刪掉之後它們指到不存在的列(還原做不完),或還原之後還能拿舊的作業去改還原回來的照片。"""
+        from io import BytesIO
+
+        from PIL import Image
+
+        from apps.photos.models import PhotoDraft, PhotoUpload, ProductPhoto
+
+        api = self.a.admin
+
+        def picture(color):
+            buf = BytesIO()
+            Image.new("RGB", (640, 480), color).save(buf, "JPEG")
+            return SimpleUploadedFile("a.jpg", buf.getvalue(), content_type="image/jpeg")
+
+        def draft(**body):
+            return api.post("/api/v1/photo-drafts/", body, format="json").json()["uid"]
+
+        def upload(uid, key, color=(200, 30, 30)):
+            r = api.post(f"/api/v1/photo-drafts/{uid}/uploads/",
+                         {"uid": key, "file": picture(color)}, format="multipart")
+            self.assertEqual(r.status_code, 201, r.content)
+
+        # 備份之前:皮套有一張存好的照片
+        case = self.a.case
+        first = draft(product=case.id)
+        upload(first, "kept")
+        r = api.patch(f"/api/v1/products/{case.id}/",
+                      {"photos": {"draft": first, "seen": [],
+                                  "items": [{"upload": "kept", "caption": "正面"}]}},
+                      format="json")
+        self.assertEqual(r.status_code, 200, r.content)
+        saved = self.path(self.backup(self.a))
+
+        # 備份之後:有人正在編輯皮套的照片(還沒存),也有人新增商品加了照片(還沒存)
+        editing = draft(product=case.id)
+        upload(editing, "not-saved", (10, 10, 200))
+        adding = draft(label="還沒存的新商品")
+        upload(adding, "new", (10, 200, 10))
+        loose = [u.image.name for u in PhotoUpload.objects.filter(uid__in=["not-saved", "new"])]
+        self.assertTrue(all(default_storage.exists(n) for n in loose))
+        # 另一家公司也有人正在加照片:還原甲公司不能動到它
+        other = self.b.admin.post("/api/v1/photo-drafts/", {}, format="json").json()["uid"]
+        r = self.b.admin.post(f"/api/v1/photo-drafts/{other}/uploads/",
+                              {"uid": "b-photo", "file": picture((90, 90, 90))}, format="multipart")
+        self.assertEqual(r.status_code, 201, r.content)
+        other_file = PhotoUpload.objects.get(uid="b-photo").image.name
+
+        job = self.rollback(self.a, saved)
+        self.assertEqual(job.status, RestoreJob.Status.DONE, job.error)
+        # 編輯作業與暫存都清掉了,還沒掛到商品的檔案也刪了
+        self.assertFalse(PhotoDraft.objects.filter(tenant=self.a.tenant).exists())
+        self.assertFalse(PhotoUpload.objects.filter(tenant=self.a.tenant).exists())
+        self.assertFalse(any(default_storage.exists(n) for n in loose))
+        # 存好的那一張跟著備份回來,檔案打得開
+        self.a.reload()
+        photos = list(ProductPhoto.objects.filter(product=self.a.case))
+        self.assertEqual([(p.caption, p.is_primary) for p in photos], [("正面", True)])
+        self.assertTrue(default_storage.exists(photos[0].image.name))
+        # 還原之前開的那一份編輯作業已經不能用:拿它來存,商品與照片都不動
+        r = api.patch(f"/api/v1/products/{self.a.case.id}/",
+                      {"photos": {"draft": editing, "seen": [photos[0].id], "items": []}}, format="json")
+        self.assertEqual(r.status_code, 400, r.content)
+        self.assertEqual(ProductPhoto.objects.filter(product=self.a.case).count(), 1)
+        # 別家公司的照片作業與暫存檔原封不動
+        self.assertEqual(PhotoUpload.objects.get(uid="b-photo").status, "ready")
+        self.assertTrue(PhotoDraft.objects.filter(uid=other, state="open").exists())
+        self.assertTrue(default_storage.exists(other_file))
+
     def test_numbers_only_move_forward(self):
         self.change_things_after_backup()
         job = self.rollback(self.a, self.saved)

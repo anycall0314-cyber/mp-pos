@@ -36,6 +36,7 @@ from . import container, jobs, keys, registry
 from .export import dump_json, schema_fingerprint, schema_state
 from .models import BackupJob, RestoreJob, TenantMaintenance, audit
 from .registry import (
+    CLEARED_ON_RESTORE,
     DOC_NUMBERED,
     FILE_FIELDS,
     FORMAT_VERSION,
@@ -1197,6 +1198,14 @@ def _apply(tenant, pkg, mode, written_files, obsolete_files, user_map=None) -> d
 
     # ── 2. 清掉這家公司現有的資料。帳號的門市先解開(門市等一下會換新的)
     UserProfile.objects.filter(tenant=company).update(default_warehouse=None)
+    # 不備份、卻指到公司資料的暫存表(商品照片編輯到一半的作業):先清掉,連它們還沒掛到商品的暫存檔。
+    # 留著的話下面刪商品會被外鍵擋住;就算刪得掉,還原之後還能拿舊的作業去改還原回來的照片
+    for label, fields in CLEARED_ON_RESTORE.items():
+        leftover = apps.get_model(label)._base_manager.filter(tenant=company)
+        if fields:
+            for row in leftover.values(*fields):
+                obsolete_files.extend(v for v in row.values() if v)
+        leftover._raw_delete(leftover.db)
     for model in reversed(order):
         model._base_manager.filter(tenant=company)._raw_delete(model._base_manager.db)
 

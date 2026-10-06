@@ -257,6 +257,9 @@ class ProductSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, seri
     )
     # 進貨畫面要不要開「成色 / 電池 / 售價 / 備註」那幾欄
     tracks_unit_condition = serializers.BooleanField(read_only=True)
+    # 商品照片:有幾張、主圖的縮圖網址(清單、搜尋結果、開單明細用來顯示「有照片」與小縮圖)
+    photo_count = serializers.SerializerMethodField()
+    photo_thumb = serializers.SerializerMethodField()
     last_purchase_price = serializers.DecimalField(
         max_digits=14, decimal_places=2, read_only=True, allow_null=True
     )
@@ -278,6 +281,20 @@ class ProductSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, seri
         write_only=True,
         help_text="配件相容的機型 key 清單",
     )
+
+    def get_photo_count(self, obj) -> int:
+        # 清單查詢已經算好(photo_count_n);單筆(剛建好那一筆)才另外查
+        n = getattr(obj, "photo_count_n", None)
+        return n if n is not None else obj.photos.count()
+
+    def get_photo_thumb(self, obj) -> str:
+        from apps.photos.services import photo_urls
+
+        if hasattr(obj, "primary_photo_id"):
+            pid = obj.primary_photo_id
+        else:
+            pid = obj.photos.filter(is_primary=True).values_list("pk", flat=True).first()
+        return photo_urls("p", pid)["thumb_url"] if pid else ""
 
     class Meta:
         model = Product
@@ -323,6 +340,8 @@ class ProductSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, seri
             "condition_name",
             "condition_code",
             "tracks_unit_condition",
+            "photo_count",
+            "photo_thumb",
             "is_variant",
             "warehouse_type",
             "is_externally_sellable",

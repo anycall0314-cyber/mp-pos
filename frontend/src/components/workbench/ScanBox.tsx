@@ -26,6 +26,8 @@ export interface ScanOption<T> {
   badge?: string;
   /** 靠右的灰色小字(例如在庫幾個) */
   hint?: string;
+  /** 有就在這一筆最右邊多一顆小按鈕(例如「照片 3」):點了只是看,不會加入 */
+  peek?: string;
   payload: T;
 }
 
@@ -38,6 +40,8 @@ export interface ScanBoxApi {
    * 有的話回一句話(為什麼現在不能送),沒有回 null。
    */
   blocker: () => string | null;
+  /** 看完照片回來:游標回到輸入框,原本的搜尋結果還在 */
+  resume: () => void;
 }
 
 /** 回一句話 = 沒加成(原因);其他 = 加好了 */
@@ -66,6 +70,11 @@ interface Props<T> {
    * 它們都是照舊的那個值查的。
    */
   resetKey?: string | number;
+  /**
+   * 點了某一筆的小按鈕(`peek`):頁面開它自己的面板給人看(照片與規格)。
+   * `use` = 人看完決定用這一筆:照平常點下拉那樣加入。不用就呼叫 `apiRef.resume()` 回到搜尋。
+   */
+  onPeek?: (opt: ScanOption<T>, use: () => void) => void;
   /** 頁面拿來問「還有沒有碼在處理」「有沒有碼沒加進去」 */
   apiRef?: MutableRefObject<ScanBoxApi | null>;
   disabled?: boolean;
@@ -98,11 +107,14 @@ export function ScanBox<T>({
   onScan,
   isExact,
   resetKey,
+  onPeek,
   apiRef,
   disabled,
   autoFocus,
   inputRef,
 }: Props<T>) {
+  /** 人正在看某一筆的照片:游標離開輸入框,下拉先不要收(回來要接著找) */
+  const peeking = useRef(false);
   const [text, setText] = useState("");
   const [items, setItems] = useState<ScanOption<T>[]>([]);
   const [open, setOpen] = useState(false);
@@ -204,6 +216,10 @@ export function ScanBox<T>({
         } while (tail !== queue.current);
       },
       blocker: () => scanBlocker(missedNow.current, textRef.current),
+      resume: () => {
+        peeking.current = false;
+        ref.current?.focus();
+      },
     };
     return () => {
       apiRef.current = null;
@@ -477,6 +493,7 @@ export function ScanBox<T>({
           }}
           onFocus={() => window.clearTimeout(blurTimer.current)}
           onBlur={() => {
+            if (peeking.current) return;
             blurTimer.current = window.setTimeout(() => setOpen(false), 150);
           }}
         />
@@ -498,6 +515,26 @@ export function ScanBox<T>({
                 <span>{o.label}</span>
                 {o.badge && <span className="wb-badge">{o.badge}</span>}
                 {o.hint && <span className="hint">{o.hint}</span>}
+                {o.peek && onPeek && (
+                  <button
+                    type="button"
+                    className={`ph-peek${o.hint ? "" : " alone"}`}
+                    tabIndex={-1}
+                    onMouseDown={(e) => {
+                      // 只是看:不加入、輸入框的字與下拉都留著
+                      e.preventDefault();
+                      e.stopPropagation();
+                      peeking.current = true;
+                      window.clearTimeout(blurTimer.current);
+                      onPeek(o, () => {
+                        peeking.current = false;
+                        pick(o, "mouse");
+                      });
+                    }}
+                  >
+                    {o.peek}
+                  </button>
+                )}
               </div>
             ))}
           </div>

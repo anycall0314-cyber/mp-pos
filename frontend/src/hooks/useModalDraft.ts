@@ -48,6 +48,8 @@ export interface UseModalDraftResult<T> {
   discardDraft: () => void;
   /** 送出成功 / 明確捨棄離開時呼叫:停止 unmount flush + 清除 localStorage。 */
   markSavedAndClear: () => void;
+  /** 現在就把草稿寫進去(不等 600ms):使用者按「儲存草稿,離開」的那一刻用。 */
+  flush: () => void;
 }
 
 export function useModalDraft<T>({
@@ -140,6 +142,7 @@ export function useModalDraft<T>({
 
   return {
     draft,
+    flush: () => flushRef.current(),
     consumeDraft: () => {
       setDraft(null);
       try {

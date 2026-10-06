@@ -6948,3 +6948,340 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   .ws-total > b { font-size: var(--font-page); }
   .ws-go { flex: 1 1 auto; }
 }
+
+/* ══════════════════════════════════════════════════════════
+   商品照片(圖片備註)
+   .ph-*    商品表單裡的照片區、看大圖、點品名看照片與規格的面板
+   .phone-* 手機掃 QR Code 開的拍照頁(不套外框;按鈕至少 48px 高)
+   ══════════════════════════════════════════════════════════ */
+.ph-section {
+  margin: 4px 0 16px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+.ph-section.over { border-color: var(--accent); }
+.ph-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.ph-title { font-size: var(--font-body); font-weight: 600; }
+.ph-count { font-size: var(--font-secondary); color: var(--text-dim); }
+.ph-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ph-actions .btn { min-height: var(--control-height); }
+.ph-note { margin-top: 8px; font-size: var(--font-secondary); color: var(--text-dim); }
+.ph-note.err { color: var(--danger-text); }
+.ph-empty {
+  margin-top: 12px;
+  padding: 20px 12px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+.ph-link {
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  color: var(--accent);
+  font-size: var(--font-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.ph-link:hover:not(:disabled) { background: var(--row-hover); }
+.ph-link:disabled { color: var(--text-dim); opacity: 0.5; cursor: default; }
+.ph-link.on { color: var(--success-text); opacity: 1; font-weight: 600; }
+
+.ph-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: 10px;
+}
+.ph-tile { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ph-tile.removed .ph-thumb img { opacity: 0.3; }
+.ph-thumb {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  overflow: hidden;
+  cursor: zoom-in;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+}
+.ph-thumb:disabled { cursor: default; }
+.ph-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ph-tile.failed .ph-thumb { border-color: var(--danger-text); }
+.ph-flag {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--accent-fill);
+  color: #fff;
+  font-size: var(--font-meta);
+}
+.ph-state {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 3px 4px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: var(--font-meta);
+  text-align: center;
+}
+.ph-state.bad { background: rgba(160, 30, 30, 0.85); }
+.ph-err { font-size: var(--font-meta); color: var(--danger-text); overflow-wrap: anywhere; }
+.ph-caption {
+  width: 100%;
+  min-width: 0;
+  height: 2rem;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: var(--font-secondary);
+}
+.ph-tile-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 2px; }
+.ph-tile-actions .ph-link { padding: 4px 3px; }
+
+.ph-pair {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.ph-pair-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.ph-pair-status { font-size: var(--font-body); font-weight: 600; }
+.ph-pair-status.connected { color: var(--success-text); }
+.ph-pair-status.expired, .ph-pair-status.idle { color: var(--warn-text); }
+.ph-pair-body { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.ph-qr { width: 200px; height: 200px; border-radius: 6px; flex: none; }
+.ph-pair-info { min-width: 0; flex: 1 1 140px; }
+.ph-pair-name { font-size: var(--font-body); font-weight: 600; overflow-wrap: anywhere; }
+.ph-pair-sku, .ph-pair-hint { font-size: var(--font-secondary); color: var(--text-dim); margin-top: 4px; }
+
+.ph-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.88);
+  display: flex;
+  flex-direction: column;
+}
+.ph-lightbox-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  color: #fff;
+  font-size: var(--font-body);
+}
+.ph-lightbox-btn {
+  min-height: var(--control-height);
+  padding: 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font-size: var(--font-body);
+  cursor: pointer;
+}
+.ph-lightbox-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0 8px 8px;
+}
+.ph-lightbox-stage img { max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in; }
+.ph-lightbox-stage.zoomed { display: block; overflow: auto; }
+.ph-lightbox-stage.zoomed img { max-width: none; max-height: none; cursor: zoom-out; }
+.ph-lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3rem;
+  height: 4.5rem;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 2rem;
+  cursor: pointer;
+}
+.ph-lightbox-nav.prev { left: 8px; }
+.ph-lightbox-nav.next { right: 8px; }
+
+.ph-panel-main {
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  overflow: hidden;
+  cursor: zoom-in;
+  display: block;
+}
+.ph-panel-main img { width: 100%; max-height: 46vh; object-fit: contain; display: block; }
+.ph-panel-caption { margin-top: 6px; font-size: var(--font-secondary); color: var(--text-dim); }
+.ph-panel-strip { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+.ph-panel-thumb {
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel-2);
+  cursor: pointer;
+}
+.ph-panel-thumb.on { border-color: var(--accent); }
+.ph-panel-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ph-panel-name { margin-top: 14px; font-size: var(--font-section); font-weight: 600; overflow-wrap: anywhere; }
+.ph-panel-off { margin-left: 8px; font-size: var(--font-secondary); color: var(--warn-text); font-weight: 400; }
+.ph-panel-spec { margin: 10px 0 0; }
+.ph-panel-spec > div { display: flex; gap: 12px; padding: 6px 0; border-top: 1px solid var(--border); font-size: var(--font-body); }
+.ph-panel-spec dt { flex: 0 0 5em; color: var(--text-dim); }
+.ph-panel-spec dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.ph-panel .ph-empty { margin-top: 0; }
+.ph-panel:focus { outline: none; }
+
+/* 清單 / 明細上的小入口:品名本身可以點(看照片與規格);有照片的多一個小縮圖,放得進既有的列高 */
+.ph-name {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  max-width: 100%;
+}
+.ph-name:hover, .ph-name:focus-visible { text-decoration: underline; }
+.ph-mini {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--panel-2);
+  cursor: pointer;
+  vertical-align: middle;
+  /* 上下用負的外距:縮圖比一行字高,但不把那一列撐高(商品明細優先) */
+  margin: -6px 8px -6px 0;
+}
+.ph-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.wb-scan-item .ph-peek.alone { margin-left: auto; }
+.wb-scan-item .ph-peek {
+  margin-left: 8px;
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--accent);
+  font-size: var(--font-secondary);
+  cursor: pointer;
+}
+
+/* ── 手機拍照頁 ── */
+.phone-photo {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 16px 16px 32px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+.phone-card {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.phone-title { font-size: 1.25rem; font-weight: 600; overflow-wrap: anywhere; }
+.phone-dim { color: var(--text-dim); font-size: 1rem; overflow-wrap: anywhere; }
+.phone-warn {
+  padding: 12px 14px;
+  border: 1px solid var(--warn-text);
+  border-radius: 10px;
+  color: var(--warn-text);
+  font-size: 1rem;
+}
+.phone-row { display: flex; gap: 12px; }
+.phone-btn {
+  flex: 1 1 0;
+  min-height: 56px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 1.125rem;
+  cursor: pointer;
+}
+.phone-btn.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
+.phone-btn.wide { flex: none; width: 100%; }
+.phone-btn:disabled { opacity: 0.4; }
+.phone-list { display: flex; flex-direction: column; gap: 8px; }
+.phone-shot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.phone-thumb {
+  width: 72px;
+  height: 72px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel-2);
+}
+.phone-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.phone-shot-text { flex: 1 1 auto; min-width: 0; }
+.phone-shot-state.ready { color: var(--success-text); }
+.phone-shot-state.failed { color: var(--danger-text); }
+.phone-shot-state.uploading { color: var(--text-dim); }
+.phone-shot-actions { display: flex; flex-direction: column; gap: 4px; }
+.phone-link {
+  min-height: 48px;
+  min-width: 64px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 1rem;
+}
+.pc-detail-body .ph-panel-strip, .pc-detail-body .ph-empty { margin: 0 0 12px; }

@@ -288,6 +288,11 @@ ls ~/Backups/mppos/
 
 **強烈建議**:把 `~/Backups/mppos/` 整個資料夾掛 iCloud Drive / Google Drive,異地備份。
 
+**注意:這個每日備份只有資料庫。** 上傳的檔案(商品照片、進貨單原圖)放在 `backend/media/`,不在裡面;
+要連檔案一起備份,用系統裡的「公司備份」(設定 → 公司備份,檔案會一起打包),或另外把 `backend/media/` 也排進備份。
+商品照片放在 `backend/media/product_photos/<公司編號>/`;照片檔由 Django 送出(`/api/v1/photo-file/…`,網址帶簽章),不用另外設靜態檔服務。
+處理照片要兩個套件(`Pillow`、`pillow-heif`,已經在 `requirements.txt`,部署腳本會自己裝)。
+
 ---
 
 ## 11. 之後的更新流程

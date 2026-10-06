@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "./client";
+import { listProductPhotos, type PhotosPayload } from "./photos";
 import {
   Carrier,
   Category,
@@ -690,6 +691,8 @@ export interface StockMatrixProduct {
   is_secondhand: boolean;
   stock_by_warehouse: Record<string, number>;
   stock_total: number;
+  /** 主圖的縮圖網址(沒有照片是空字串) */
+  photo_thumb?: string;
 }
 export interface StockMatrixResponse {
   warehouses: StockMatrixWarehouse[];
@@ -855,6 +858,8 @@ export function useSaveProduct() {
         id?: number;
         /** 系統說可能重複時,寫下哪裡不同才能建 */
         distinct_reason?: string;
+        /** 這次編輯定下來的照片清單(沒動過照片就不帶,商品的照片不動) */
+        photos?: PhotosPayload;
       },
     ) => {
       const { id, ...body } = payload;
@@ -864,9 +869,19 @@ export function useSaveProduct() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["product"] });
+      qc.invalidateQueries({ queryKey: ["product-photos"] });
     },
   });
 }
+
+/** 一個商品的照片(主圖在前)。點品名看照片的面板用 */
+export const useProductPhotos = (productId: number | null) =>
+  useQuery({
+    queryKey: ["product-photos", productId],
+    queryFn: () => listProductPhotos(productId as number),
+    enabled: productId != null,
+  });
 
 export function useSaveCategory() {
   const qc = useQueryClient();

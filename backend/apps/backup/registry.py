@@ -76,6 +76,8 @@ REGISTRY: dict[str, Entry] = {
         "ledger.StockSnapshot", "ledger.StockSnapshotDay",
         # 存起來的報表(查詢單)
         "analytics.SavedReport",
+        # 商品照片(掛在商品上的;檔案一起打包)
+        "photos.ProductPhoto",
     ),
     "auth.User": Entry(ACCOUNT, "只留帳號名稱等對照資訊;不含密碼"),
     "tenants.UserProfile": Entry(ACCOUNT, "角色、預設門市、鎖倉;還原時依對照處理"),
@@ -94,11 +96,24 @@ REGISTRY: dict[str, Entry] = {
     "backup.BackupAuditLog": Entry(EXCLUDED, "操作紀錄留在原地,不隨資料回溯"),
     "ledger.LedgerCheckRun": Entry(EXCLUDED, "對帳紀錄是當時資料的檢查結果,留在原地"),
     "core.IdempotencyKey": Entry(EXCLUDED, "建單鑰匙只留幾天,記的是單號;還原後照樣對得回來"),
+    "photos.PhotoDraft": Entry(EXCLUDED, "新增 / 編輯商品時的照片作業,暫存;存檔後照片已經在 ProductPhoto"),
+    "photos.PhotoUpload": Entry(EXCLUDED, "還沒隨商品存檔的暫存照片"),
 }
 
 # 帶檔案的欄位:{表: [欄位]}。只存路徑不算備份,檔案本體要一起打包。
 FILE_FIELDS: dict[str, list[str]] = {
     "identity.IntakeDocument": ["image"],
+    "photos.ProductPhoto": ["image", "thumb"],
+}
+
+# 不備份、卻指到公司資料的暫存表(例:商品照片編輯到一半的作業,指到商品)。
+# **還原時先整批清掉這家公司的這些列**(連它們自己的暫存檔):不清的話,舊資料刪掉之後它們指到不存在的列
+# (還原做不完),或是還原之後還能拿舊的作業去改還原回來的資料。
+# {表: [這張表自己的檔案欄位]};順序 = 刪除順序(先刪指著別人的)。
+# 新的暫存表只要指到公司資料就要登記在這裡,check_registry() 會擋。
+CLEARED_ON_RESTORE: dict[str, list[str]] = {
+    "photos.PhotoUpload": ["image", "thumb"],
+    "photos.PhotoDraft": [],
 }
 
 # 流水號 / 字軌這類「只能往前、不能倒退」的欄位。
@@ -152,9 +167,31 @@ def check_registry():
     for label in sorted(known - actual):
         problems.append(f"{label}:清單裡有,但系統裡沒有這張表")
 
+    for label in CLEARED_ON_RESTORE:
+        if REGISTRY.get(label) is None or REGISTRY[label].kind != EXCLUDED:
+            problems.append(f"{label}:列在 CLEARED_ON_RESTORE,但不是「不備份」的表")
+
     for model in apps.get_models():
         label = label_of(model)
         entry = REGISTRY.get(label)
+        if entry is not None and entry.kind == EXCLUDED:
+            # 不備份的表如果指到公司資料:還原會把那些公司資料刪掉重寫,這張表的列就指到不存在的東西
+            points_at = [
+                f.name for f in model._meta.get_fields()
+                if isinstance(f, (models.ForeignKey, models.OneToOneField))
+                and getattr(f, "concrete", False) and f.name != "tenant"
+                and getattr(REGISTRY.get(label_of(f.related_model)), "kind", None) == COMPANY
+            ]
+            if points_at and label not in CLEARED_ON_RESTORE:
+                problems.append(
+                    f"{label}.{points_at[0]}:不備份的表指到公司資料,"
+                    "要登記在 CLEARED_ON_RESTORE(還原時先清掉)"
+                )
+            if label in CLEARED_ON_RESTORE and not any(
+                f.name == "tenant" and getattr(f, "concrete", False)
+                for f in model._meta.get_fields()
+            ):
+                problems.append(f"{label}:列在 CLEARED_ON_RESTORE 卻沒有 tenant 欄位,無法依公司清掉")
         if entry is None or entry.kind != COMPANY:
             continue
         fields = model._meta.get_fields()

@@ -232,6 +232,22 @@
 
 ---
 
+## 商品照片的入口(點品名看照片與規格)
+
+零件在 `components/photos/`。原則:**看照片是「看」,不是「選」**;入口不佔版面、不改原本的手感。
+
+- 頁面最外層放一個面板:`const peek = usePhotoPeek(關掉之後要做的事)`,在畫面最後放 `{peek.panel}`。
+- 品名用 `<PhotoName id name sku thumb onPeek={peek.open} />`:品名本身可以點;有照片(`photo_thumb`)才多一個 32px 小縮圖。
+  縮圖用負的上下外距,**不能把那一列撐高**(開單頁、清單頁的列高不變)。點了不會展開那一列、不會加進單據。
+- 掃碼框的搜尋下拉:選項帶 `peek: "照片 N"` 才會多一顆小按鈕,頁面接 `onPeek(opt, use)` 開面板並把 `use` 交給面板的「使用此商品」。
+  點下拉的品名仍然是選用;看完按「返回繼續找」→ 呼叫掃碼框的 `resume()`,游標回輸入框、原本的搜尋結果還在。
+- 已經在明細裡的商品只給「關閉」,不給「使用此商品」(不然會重複加)。
+- 主檔頁(Master-Detail)點那一列照舊是選取;詳情裡用 `<ProductPhotoStrip productId />` 放一排照片,清單的小縮圖才開面板。
+- 表單裡加 / 改照片用 `<PhotoSection photos={usePhotoDraft(...)} />`:照片先掛在這一次編輯上,存檔時把 `photos.payload()` 跟表單一起送;
+  存檔前 `await photos.beforeSave()`、成功 `photos.saved()`、失敗 `photos.saveFailed()`、不存了 `photos.cancel()`。
+
+---
+
 ## ReportPage
 
 查詢報表。對應舊系統 100+ 個編號報表（MM/SA/FI/SIM 等）。

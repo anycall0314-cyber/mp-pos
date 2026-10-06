@@ -34,6 +34,7 @@ import {
   ScanBoxApi,
   ScanOption,
 } from "@/components/workbench/ScanBox";
+import { PhotoName, usePhotoPeek } from "@/components/photos/PhotoName";
 import { toast } from "@/components/workbench/toast";
 import {
   hasDeviceCode,
@@ -308,6 +309,8 @@ export function PurchaseWorkbenchPage({
 
   const scanRef = useRef<HTMLInputElement>(null);
   const scanApi = useRef<ScanBoxApi | null>(null);
+  /** 點品名(或搜尋結果上的「照片 N」)看照片與規格:只是看,不會加進明細;關掉回到掃碼框 */
+  const peek = usePhotoPeek(() => scanApi.current?.resume());
   const tableRef = useRef<HTMLTableElement>(null);
   const linesRef = useRef<Line[]>(lines);
   const currentRef = useRef<string | null>(restoredCurrent);
@@ -501,6 +504,7 @@ export function PurchaseWorkbenchPage({
           label: p.name,
           badge: p.is_active === false ? "已停用" : undefined,
           hint: p.spec || undefined,
+          peek: p.photo_count ? `照片 ${p.photo_count}` : undefined,
           payload: p,
         };
       });
@@ -1037,7 +1041,7 @@ export function PurchaseWorkbenchPage({
   const cols = showUntaxed ? 9 : 8;
 
   /** 單據資訊開著的時候,背後整塊停用(inert:點不到、游標進不去、條碼槍刷不進明細) */
-  const behind = infoOpen ? { inert: "" } : {};
+  const behind = infoOpen || peek.isOpen ? { inert: "" } : {};
 
   const moreMenu = (
     <MoreMenu disabled={busy}>
@@ -1149,6 +1153,9 @@ export function PurchaseWorkbenchPage({
             search={search}
             onScan={onScan}
             isExact={(o, q) => isExactProduct(o.payload, q)}
+            onPeek={(o, use) =>
+              peek.open({ id: o.payload.id, name: o.payload.name, sku: o.payload.sku, onUse: use })
+            }
             onPick={onPick}
           />
           <label
@@ -1271,7 +1278,14 @@ export function PurchaseWorkbenchPage({
                     className={`flash${isCurrent ? " current" : ""}${isOpen ? " has-sub" : ""}`}
                   >
                     <td className="prod">
-                      <span className="pname">{p.name}</span>
+                      <PhotoName
+                        id={p.id}
+                        name={p.name}
+                        sku={p.sku}
+                        thumb={p.photo_thumb}
+                        onPeek={peek.open}
+                        className="pname"
+                      />
                       <span className="pcode">{p.sku}</span>
                     </td>
                     <td className="spec">{p.spec || ""}</td>
@@ -1556,6 +1570,7 @@ export function PurchaseWorkbenchPage({
           </section>
         </div>
       </Drawer>
+      {peek.panel}
     </div>
   );
 }

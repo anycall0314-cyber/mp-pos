@@ -19,6 +19,8 @@ import { BulkCreatePartsModal } from "./BulkCreatePartsModal";
 import { BulkEditProductsModal } from "./BulkEditProductsModal";
 import { ProductAliasesPanel } from "./ProductAliasesPanel";
 import { ProductExpanderModal } from "./ProductExpanderModal";
+import { MiniThumb, ProductPhotoStrip, usePhotoPeek } from "@/components/photos/PhotoName";
+
 import { ProductForm } from "./ProductForm";
 import { ProductImportModal } from "./ProductImportModal";
 
@@ -101,6 +103,8 @@ export function ProductsPage() {
 
   // ─── 選擇與右側面板
   const [selection, setSelection] = useState<Selection>(null);
+  /** 點清單上的小縮圖看照片與規格 */
+  const peek = usePhotoPeek();
   // 左側欄頁籤:商品列表 / 機型 / 類別管理
   const [leftTab, setLeftTab] = useState<"products" | "models" | "categories">(
     "products",
@@ -507,7 +511,13 @@ export function ProductsPage() {
                               }}
                             />
                           </td>
-                          <td>{p.name}</td>
+                          <td>
+                            <MiniThumb
+                              src={p.photo_thumb}
+                              onClick={() => peek.open({ id: p.id, name: p.name, sku: p.sku })}
+                            />
+                            {p.name}
+                          </td>
                           <td>{p.category_name}</td>
                           <td className="num">{p.stock_qty}</td>
                         </tr>
@@ -680,6 +690,7 @@ export function ProductsPage() {
 
               {detailTab === "basic" && (
                 <>
+                  <ProductPhotoStrip productId={selectedProduct.id} />
                   <dl>
                     <dt>品名</dt>
                     <dd>{selectedProduct.name}</dd>
@@ -1013,6 +1024,7 @@ export function ProductsPage() {
         </main>
       </div>
 
+      {peek.panel}
       <ProductForm
         open={drawerOpen}
         initial={drawerInitial}
