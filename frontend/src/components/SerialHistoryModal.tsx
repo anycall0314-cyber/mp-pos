@@ -4,6 +4,7 @@ import { ApiHttpError } from "@/api/client";
 import { useSerialHistory, useSetSerialCodes } from "@/api/hooks";
 import { useCurrentUser } from "@/auth/AuthContext";
 import { codesLabel, looksLikeImei, normalizeCode } from "@/lib/deviceCodes";
+import { money } from "@/lib/money";
 
 interface Props {
   serialId: number;
@@ -56,7 +57,7 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
           {data && (
             <>
               <div className="bulk-preview-head">商品 / 狀態</div>
-              <div style={{ fontSize: 13, lineHeight: 1.8, marginBottom: 12 }}>
+              <div style={{ fontSize: 14, lineHeight: 1.8, marginBottom: 12 }}>
                 <div>
                   商品:<b>{data.serial.product_name}</b>{" "}
                   <span style={{ color: "var(--text-dim)" }}>
@@ -115,9 +116,7 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
                       自訂售價:
                       <b>
                         {data.serial.custom_unit_price
-                          ? Number(
-                              data.serial.custom_unit_price,
-                            ).toLocaleString()
+                          ? money(data.serial.custom_unit_price)
                           : "—"}
                       </b>
                     </div>
@@ -130,7 +129,7 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
                 )}
                 <div>
                   單台成本:
-                  <b>{Number(data.serial.purchase_unit_cost).toLocaleString()}</b>
+                  <b>{money(data.serial.purchase_unit_cost)}</b>
                 </div>
               </div>
 
@@ -141,22 +140,22 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
                 </div>
               )}
               {data.acquisition?.kind === "purchase" && (
-                <div style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.8 }}>
+                <div style={{ fontSize: 14, marginBottom: 12, lineHeight: 1.8 }}>
                   廠商進貨單{" "}
                   <b>{data.acquisition.purchase_order_no}</b>(
                   {data.acquisition.doc_date}),供應商{" "}
                   <b>{data.acquisition.supplier_name || "—"}</b>,單台成本{" "}
-                  <b>{Number(data.acquisition.amount).toLocaleString()}</b>
+                  <b>{money(data.acquisition.amount)}</b>
                 </div>
               )}
               {data.acquisition?.kind === "trade_in" && (
-                <div style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.8 }}>
+                <div style={{ fontSize: 14, marginBottom: 12, lineHeight: 1.8 }}>
                   個人會員收購{" "}
                   <b>{data.acquisition.member_name || "—"}</b>(
                   {data.acquisition.member_phone || "—"}),收購銷貨單{" "}
                   <b>{data.acquisition.sales_order_no}</b>(
                   {data.acquisition.doc_date}),金額{" "}
-                  <b>{Number(data.acquisition.amount).toLocaleString()}</b>
+                  <b>{money(data.acquisition.amount)}</b>
                 </div>
               )}
 
@@ -191,7 +190,7 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
                           {s.customer_name || s.customer_phone || "(散客)"}
                         </td>
                         <td className="num">
-                          {Number(s.unit_price).toLocaleString()}
+                          {money(s.unit_price)}
                         </td>
                         <td>{s.is_void ? "作廢" : "—"}</td>
                       </tr>

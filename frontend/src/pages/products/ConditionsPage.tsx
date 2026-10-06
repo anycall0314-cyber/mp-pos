@@ -119,7 +119,7 @@ export function ConditionsPage() {
       <div className="entry-body">
         <div
           style={{
-            fontSize: 14,
+            fontSize: 16,
             color: "var(--text-dim)",
             marginBottom: 16,
             lineHeight: 1.6,
@@ -333,7 +333,7 @@ export function ConditionsPage() {
                 <tr key={c.id}>
                   <td>{c.sort_order}</td>
                   <td>
-                    <code style={{ fontSize: 13 }}>{c.code}</code>
+                    <code style={{ fontSize: 14 }}>{c.code}</code>
                   </td>
                   <td>
                     <b>{c.name}</b>
@@ -345,8 +345,8 @@ export function ConditionsPage() {
                           padding: "2px 8px",
                           borderRadius: 999,
                           background: "rgba(251, 146, 60, 0.15)",
-                          color: "#fb923c",
-                          fontSize: 12,
+                          color: "var(--warn-text-orange)",
+                          fontSize: 14,
                           fontWeight: 500,
                         }}
                       >
@@ -358,7 +358,7 @@ export function ConditionsPage() {
                   </td>
                   <td style={{ textAlign: "center" }}>
                     {c.tracks_unit_condition ? (
-                      <span style={{ color: "#4ade80" }}>是</span>
+                      <span style={{ color: "var(--success-text)" }}>是</span>
                     ) : (
                       <span style={{ color: "var(--text-dim)" }}>—</span>
                     )}
@@ -366,9 +366,9 @@ export function ConditionsPage() {
                   <td style={{ textAlign: "center" }}>{c.product_count ?? 0}</td>
                   <td>
                     {c.is_active ? (
-                      <span style={{ color: "#4ade80" }}>啟用</span>
+                      <span style={{ color: "var(--success-text)" }}>啟用</span>
                     ) : (
-                      <span style={{ color: "#fb923c" }}>停用</span>
+                      <span style={{ color: "var(--warn-text-orange)" }}>停用</span>
                     )}
                   </td>
                   <td>

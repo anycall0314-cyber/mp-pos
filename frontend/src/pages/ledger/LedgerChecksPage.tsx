@@ -3,6 +3,7 @@ import type { LedgerCheckResult } from "@/api/types";
 import { useCurrentUser } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { money } from "@/lib/money";
 
 /**
  * 設定 → 每日對帳(公司管理員)
@@ -13,10 +14,6 @@ import { Toolbar } from "@/components/Toolbar";
 function when(iso: string | null | undefined): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("zh-TW", { hour12: false });
-}
-
-function money(v: string | number): string {
-  return Math.round(Number(v)).toLocaleString();
 }
 
 function verdict(r: LedgerCheckResult): { text: string; className: string } {

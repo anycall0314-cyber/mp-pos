@@ -317,7 +317,7 @@ export function ProductTypesPage() {
       <div className="entry-body">
         <div
           style={{
-            fontSize: 14,
+            fontSize: 16,
             color: "var(--text-dim)",
             marginBottom: 16,
             lineHeight: 1.6,
@@ -472,7 +472,7 @@ export function ProductTypesPage() {
           {totalCount > 1 && (
             <span
               className="section-head-meta"
-              style={{ marginLeft: "auto", fontSize: 12 }}
+              style={{ marginLeft: "auto", fontSize: 14 }}
             >
               依排序欄位顯示;之後可拖曳卡片調整順序
             </span>
@@ -560,7 +560,7 @@ export function ProductTypesPage() {
                     <span
                       style={{
                         marginLeft: 6,
-                        fontSize: 11,
+                        fontSize: 14,
                         color: "var(--text-dim)",
                       }}
                     >

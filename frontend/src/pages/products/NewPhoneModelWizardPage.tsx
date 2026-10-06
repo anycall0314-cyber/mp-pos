@@ -14,6 +14,8 @@ import {
 } from "@/api/hooks";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { MoneyInput } from "@/components/MoneyInput";
+import { intStr } from "@/lib/money";
 import { hasRealReason } from "./DuplicatePanel";
 
 /**
@@ -74,7 +76,7 @@ function ChipInput({
             background: "rgba(79, 140, 255, 0.12)",
             border: "1px solid rgba(79, 140, 255, 0.35)",
             color: "var(--accent)",
-            fontSize: 13,
+            fontSize: 14,
           }}
         >
           {v}
@@ -87,7 +89,7 @@ function ChipInput({
               border: 0,
               color: "inherit",
               cursor: "pointer",
-              fontSize: 14,
+              fontSize: 16,
               lineHeight: 1,
               padding: 0,
               marginLeft: 2,
@@ -124,7 +126,7 @@ function ChipInput({
           border: 0,
           outline: 0,
           color: "var(--text)",
-          fontSize: 14,
+          fontSize: 16,
           padding: "4px 2px",
         }}
       />
@@ -167,7 +169,7 @@ function Stepper({ step }: { step: 1 | 2 | 3 }) {
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: 13,
+              fontSize: 14,
               fontWeight: 600,
             }}
           >
@@ -175,7 +177,7 @@ function Stepper({ step }: { step: 1 | 2 | 3 }) {
           </div>
           <div
             style={{
-              fontSize: 14,
+              fontSize: 16,
               fontWeight: s.n === step ? 600 : 400,
               color: s.n === step ? "var(--text)" : "var(--text-dim)",
             }}
@@ -338,7 +340,7 @@ export function NewPhoneModelWizardPage() {
         state.accessory_category_id ?? state.main_category_id,
       parts_category_id: state.parts_category_id ?? state.main_category_id,
       template_id: state.template_id,
-      list_price: state.list_price || "0",
+      list_price: intStr(state.list_price),
       condition_ids: state.condition_ids,
       capacities: state.capacities,
       colors: state.colors,
@@ -550,11 +552,9 @@ export function NewPhoneModelWizardPage() {
               </div>
               <div className="form-field" style={{ marginBottom: 0 }}>
                 <label className="form-field-label">建議售價(主機)</label>
-                <input
-                  type="number"
-                  step="1"
+                <MoneyInput
                   value={state.list_price}
-                  onChange={(e) => patch("list_price", e.target.value)}
+                  onChange={(v) => patch("list_price", v)}
                   placeholder="39900"
                   style={{ textAlign: "right" }}
                 />
@@ -694,8 +694,8 @@ export function NewPhoneModelWizardPage() {
                             padding: "1px 6px",
                             borderRadius: 999,
                             background: "rgba(251, 146, 60, 0.15)",
-                            color: "#fb923c",
-                            fontSize: 11,
+                            color: "var(--warn-text-orange)",
+                            fontSize: 14,
                           }}
                         >
                           中古機
@@ -777,13 +777,13 @@ export function NewPhoneModelWizardPage() {
                         display: "flex",
                         gap: 8,
                         padding: "4px 6px",
-                        fontSize: 13,
+                        fontSize: 14,
                       }}
                     >
                       <code style={{ minWidth: 60 }}>{p.code}</code>
                       <span style={{ flex: 1 }}>{p.name}</span>
                       {p.shared_across_models && (
-                        <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
+                        <span style={{ color: "var(--text-dim)", fontSize: 14 }}>
                           跨機型共用
                         </span>
                       )}
@@ -804,7 +804,7 @@ export function NewPhoneModelWizardPage() {
                 borderRadius: 6,
                 padding: 12,
                 marginTop: 8,
-                fontSize: 14,
+                fontSize: 16,
                 color: "var(--text)",
               }}
             >
@@ -827,7 +827,7 @@ export function NewPhoneModelWizardPage() {
               )}
               <div
                 style={{
-                  fontSize: 12,
+                  fontSize: 14,
                   color: "var(--text-dim)",
                   marginTop: 4,
                 }}
@@ -899,7 +899,7 @@ export function NewPhoneModelWizardPage() {
                 {preview.accessory_slots.length > 0 && (
                   <div
                     style={{
-                      fontSize: 13,
+                      fontSize: 14,
                       color: "var(--text-dim)",
                       marginBottom: 14,
                       padding: "8px 12px",
@@ -1014,11 +1014,11 @@ export function NewPhoneModelWizardPage() {
                   style={{
                     background: "rgba(74, 222, 128, 0.12)",
                     border: "1px solid rgba(74, 222, 128, 0.35)",
-                    color: "#4ade80",
+                    color: "var(--success-text)",
                     padding: 16,
                     borderRadius: 8,
                     marginBottom: 16,
-                    fontSize: 14,
+                    fontSize: 16,
                     lineHeight: 1.6,
                   }}
                 >
@@ -1088,7 +1088,7 @@ function SummaryStat({ label, value }: { label: string; value: number }) {
         textAlign: "center",
       }}
     >
-      <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{label}</div>
+      <div style={{ fontSize: 14, color: "var(--text-dim)" }}>{label}</div>
       <div
         style={{ fontSize: 28, fontWeight: 600, color: "var(--text)" }}
       >
@@ -1114,7 +1114,7 @@ function PreviewTable({
     <div style={{ marginBottom: 16 }}>
       <div
         style={{
-          fontSize: 13,
+          fontSize: 14,
           color: "var(--text-dim)",
           marginBottom: 6,
         }}
@@ -1140,7 +1140,7 @@ function PreviewTable({
               padding: "6px 10px",
               borderBottom:
                 i < items.length - 1 ? "1px solid var(--border)" : "none",
-              fontSize: 13,
+              fontSize: 14,
             }}
           >
             <span style={{ flex: 1 }}>{it.name}</span>
@@ -1150,8 +1150,8 @@ function PreviewTable({
                   padding: "1px 6px",
                   borderRadius: 999,
                   background: "rgba(251, 146, 60, 0.15)",
-                  color: "#fb923c",
-                  fontSize: 11,
+                  color: "var(--warn-text-orange)",
+                  fontSize: 14,
                 }}
               >
                 中古機

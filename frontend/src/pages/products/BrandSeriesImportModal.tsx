@@ -110,7 +110,7 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
                   style={{
                     marginLeft: 12,
                     color: "var(--text-dim)",
-                    fontSize: 13,
+                    fontSize: 14,
                   }}
                 >
                   欄位:品牌名稱(必填)/ 品牌代碼 / 系列名稱 / 系列代碼 /
@@ -128,7 +128,7 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
                 />
               </div>
               <div
-                style={{ color: "var(--text-dim)", fontSize: 12, lineHeight: 1.6 }}
+                style={{ color: "var(--text-dim)", fontSize: 14, lineHeight: 1.6 }}
               >
                 規則:
                 <br />
@@ -169,7 +169,7 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
                   <span>更新 {preview.summary.types_updated}</span>
                 </div>
                 {preview.summary.rows_skipped > 0 && (
-                  <div style={{ color: "#fb923c" }}>
+                  <div style={{ color: "var(--warn-text-orange)" }}>
                     略過 {preview.summary.rows_skipped} 行
                   </div>
                 )}
@@ -177,12 +177,12 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
 
               {preview.errors.length > 0 && (
                 <div className="bsi-errors">
-                  <div style={{ fontWeight: 700, color: "#ff7070" }}>
+                  <div style={{ fontWeight: 700, color: "var(--danger-text)" }}>
                     錯誤 {preview.errors.length} 筆:
                   </div>
                   <ul style={{ margin: "6px 0", paddingLeft: 18 }}>
                     {preview.errors.slice(0, 20).map((er, i) => (
-                      <li key={i} style={{ fontSize: 12 }}>
+                      <li key={i} style={{ fontSize: 14 }}>
                         第 {er.line} 行:{er.msg}
                       </li>
                     ))}
@@ -211,7 +211,7 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
                         <td>{r.line}</td>
                         <td>{r.brand_name}</td>
                         <td>
-                          <code style={{ fontSize: 12 }}>{r.brand_code}</code>
+                          <code style={{ fontSize: 14 }}>{r.brand_code}</code>
                         </td>
                         <td>
                           <span
@@ -226,7 +226,7 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
                         </td>
                         <td>{r.series_name || "—"}</td>
                         <td>
-                          <code style={{ fontSize: 12 }}>{r.series_code}</code>
+                          <code style={{ fontSize: 14 }}>{r.series_code}</code>
                         </td>
                         <td>
                           {r.series_name ? (
@@ -267,7 +267,7 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
                   <div
                     style={{
                       color: "var(--text-dim)",
-                      fontSize: 12,
+                      fontSize: 14,
                       padding: 8,
                     }}
                   >

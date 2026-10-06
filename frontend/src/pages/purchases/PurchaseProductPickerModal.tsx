@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "@/api/client";
 import type { Paginated, Product } from "@/api/types";
 import { Banner } from "@/components/Banner";
+import { money } from "@/lib/money";
 
 export interface PickerProduct {
   product: Product;
@@ -262,9 +263,7 @@ export function PurchaseProductPickerModal({
                       <td>{r.product.category_name}</td>
                       <td className="num">
                         {r.product.last_purchase_price
-                          ? Math.round(
-                              Number(r.product.last_purchase_price),
-                            ).toLocaleString()
+                          ? money(r.product.last_purchase_price)
                           : "—"}
                       </td>
                       <td>

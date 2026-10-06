@@ -11,6 +11,7 @@ import {
   MasterColumn,
   DetailTab,
 } from "@/components/master-detail/MasterDetail";
+import { money, roundInt } from "@/lib/money";
 
 import { PettyExpenseForm } from "./PettyExpenseForm";
 
@@ -45,7 +46,7 @@ export function PettyExpensesPage() {
 
   const totalAmount = filtered
     .filter((e) => !e.is_void)
-    .reduce((s, e) => s + Math.round(Number(e.amount)), 0);
+    .reduce((s, e) => s + roundInt(e.amount), 0);
 
   const columns: MasterColumn<PettyExpense>[] = [
     { key: "doc_date", header: "日期", render: (r) => r.doc_date },
@@ -57,7 +58,7 @@ export function PettyExpensesPage() {
       header: "金額",
       render: (r) => (
         <span className="num">
-          {Math.round(Number(r.amount)).toLocaleString()}
+          {money(r.amount)}
         </span>
       ),
     },
@@ -114,7 +115,7 @@ export function PettyExpensesPage() {
             <dt>類別</dt>
             <dd>{r.category_label}</dd>
             <dt>金額</dt>
-            <dd>{Math.round(Number(r.amount)).toLocaleString()}</dd>
+            <dd>{money(r.amount)}</dd>
             <dt>付款方式</dt>
             <dd>{r.payment_method_name}</dd>
             <dt>收款對象</dt>
@@ -171,10 +172,10 @@ export function PettyExpensesPage() {
           </button>
         }
       >
-        <span style={{ color: "var(--text-dim)", fontSize: 13 }}>
+        <span style={{ color: "var(--text-dim)", fontSize: 14 }}>
           {filtered.length} 筆,有效金額合計{" "}
           <b style={{ color: "var(--text)" }}>
-            {totalAmount.toLocaleString()}
+            {money(totalAmount)}
           </b>
         </span>
       </Toolbar>

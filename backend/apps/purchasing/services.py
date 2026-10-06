@@ -16,6 +16,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
+from apps.core.money import round_money
 from apps.core.tenant_fields import same_company
 from apps.identity.normalize import normalize_serial
 from apps.inventory.identifiers import (
@@ -155,19 +156,20 @@ def _calc_doc_tax(items, tax_method: str):
     """依課稅別把明細加總拆成 (subtotal_net, tax, total_gross)。
     使用 item.amount(已含贈品折算 + 中古機逐隻成本加總邏輯)。
     """
+    # 單頭的三個數字一律整數元、四捨五入(跟廠商發票上的算法一樣;規則見 apps/core/money.py)
     gross_sum = sum((Decimal(it.amount) for it in items), Decimal("0"))
     if tax_method == PurchaseOrder.TaxMethod.TAXABLE_INCLUDED:
-        total = gross_sum.quantize(CENTS)
-        subtotal = (gross_sum / (Decimal("1") + TAX_RATE)).quantize(CENTS)
-        tax = (total - subtotal).quantize(CENTS)
+        total = round_money(gross_sum)
+        subtotal = round_money(gross_sum / (Decimal("1") + TAX_RATE))
+        tax = total - subtotal
         return subtotal, tax, total
     if tax_method == PurchaseOrder.TaxMethod.TAXABLE_EXCLUDED:
-        subtotal = gross_sum.quantize(CENTS)
-        tax = (gross_sum * TAX_RATE).quantize(CENTS)
-        total = (subtotal + tax).quantize(CENTS)
+        subtotal = round_money(gross_sum)
+        tax = round_money(gross_sum * TAX_RATE)
+        total = subtotal + tax
         return subtotal, tax, total
     # tax_free / zero_tax
-    subtotal = gross_sum.quantize(CENTS)
+    subtotal = round_money(gross_sum)
     return subtotal, Decimal("0.00"), subtotal
 
 
@@ -212,7 +214,7 @@ def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
                     (_serial_cost(e, it.unit_price) for e in entries),
                     Decimal("0"),
                 )
-                it.amount = gross_sum.quantize(CENTS)
+                it.amount = round_money(gross_sum)
                 if po.tax_method == PurchaseOrder.TaxMethod.TAXABLE_INCLUDED:
                     net_sum = (gross_sum / (Decimal("1") + TAX_RATE)).quantize(CENTS)
                 else:
@@ -223,7 +225,7 @@ def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
                     else Decimal("0")
                 )
             else:
-                it.amount = (billed_dec * it.unit_price).quantize(CENTS)
+                it.amount = round_money(billed_dec * it.unit_price)
                 net_unit = _net_unit_price(it.unit_price, po.tax_method)
                 net_billed_total = net_unit * billed_dec
                 it.unit_landed_cost = (

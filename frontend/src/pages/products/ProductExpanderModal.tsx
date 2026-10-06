@@ -17,6 +17,8 @@ import { DraftBanner } from "@/components/DraftBanner";
 import { Checkbox, Field } from "@/components/Field";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { useModalDraft } from "@/hooks/useModalDraft";
+import { MoneyInput } from "@/components/MoneyInput";
+import { intStr } from "@/lib/money";
 
 import {
   BulkDuplicateRows,
@@ -317,7 +319,7 @@ export function ProductExpanderModal({
     const items: BulkProductRow[] = toCreate.map((c) => ({
       name: c.name,
       spec: c.spec,
-      list_price: c.list_price || "0",
+      list_price: intStr(c.list_price),
       ...(reasons[c.name]?.trim()
         ? { distinct_reason: reasons[c.name].trim() }
         : {}),
@@ -557,7 +559,7 @@ export function ProductExpanderModal({
                           border: 0,
                           color: "inherit",
                           cursor: "pointer",
-                          fontSize: 14,
+                          fontSize: 16,
                           padding: 0,
                           lineHeight: 1,
                         }}
@@ -567,7 +569,7 @@ export function ProductExpanderModal({
                       </button>
                     </span>
                   ))}
-                  <span style={{ alignSelf: "center", fontSize: 12, color: "var(--text-dim)" }}>
+                  <span style={{ alignSelf: "center", fontSize: 14, color: "var(--text-dim)" }}>
                     共 {compat.size} 款
                   </span>
                 </div>
@@ -669,8 +671,7 @@ export function ProductExpanderModal({
                 <strong style={{ flex: 1, minWidth: 200 }}>
                   預覽:展開 {list.length} 筆,勾選 {selectedCount} 筆
                 </strong>
-                <input
-                  type="number"
+                <MoneyInput
                   placeholder="統一售價"
                   style={{ width: 110 }}
                   onKeyDown={(e) => {
@@ -730,16 +731,14 @@ export function ProductExpanderModal({
                           />
                         </td>
                         <td>{c.name}</td>
-                        <td style={{ color: "var(--text-dim)", fontSize: 12 }}>
+                        <td style={{ color: "var(--text-dim)", fontSize: 14 }}>
                           {c.spec || "—"}
                         </td>
                         <td className="num">
-                          <input
-                            type="number"
-                            step="1"
+                          <MoneyInput
                             value={c.list_price}
-                            onChange={(e) =>
-                              patchPrice(c.key, e.target.value)
+                            onChange={(v) =>
+                              patchPrice(c.key, v)
                             }
                             style={{ width: 90, textAlign: "right" }}
                           />

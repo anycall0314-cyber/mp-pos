@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.db import transaction
 
 from apps.catalog.models import Product
+from apps.core.money import round_money
 from apps.core.tenant_fields import same_company
 from apps.inventory.locking import lock_document, lock_stock_rows, locked_balance
 from apps.inventory.models import StockBalance, StockMovement
@@ -17,7 +18,8 @@ def compute_in_house_quote(repair_order: RepairOrder) -> Decimal:
         (p.qty * (p.part_product.weighted_avg_cost or Decimal("0")))
         for p in repair_order.parts.select_related("part_product").all()
     )
-    return Decimal(parts_cost) + (repair_order.labor_fee or Decimal("0"))
+    # 零件成本是平均值、會有零頭;報價是金額,收成整數元
+    return round_money(Decimal(parts_cost) + (repair_order.labor_fee or Decimal("0")))
 
 
 def _parts_cost(repair_order: RepairOrder) -> Decimal:

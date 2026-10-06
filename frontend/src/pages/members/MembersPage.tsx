@@ -11,6 +11,7 @@ import {
 import type { Member } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { money } from "@/lib/money";
 
 import { LegacyHistorySection } from "./LegacyHistorySection";
 
@@ -353,7 +354,7 @@ export function MembersPage() {
               {savedFlash && <Banner kind="success" message="已儲存" />}
               <dl>
                 <dt>
-                  姓名 <span style={{ color: "#ff7070" }}>*</span>
+                  姓名 <span style={{ color: "var(--danger-text)" }}>*</span>
                 </dt>
                 <dd>
                   <input
@@ -445,9 +446,9 @@ export function MembersPage() {
                     購買明細
                     {orders.isLoading || legacy.isLoading
                       ? " 載入中…"
-                      : ` (${orderStats.count} 筆銷貨 · 累計 $${orderStats.total.toLocaleString()}${
+                      : ` (${orderStats.count} 筆銷貨 · 累計 $${money(orderStats.total)}${
                           orderStats.legacyCount > 0
-                            ? ` · 舊系統 ${orderStats.legacyCount} 筆 / $${orderStats.legacyTotal.toLocaleString()}`
+                            ? ` · 舊系統 ${orderStats.legacyCount} 筆 / $${money(orderStats.legacyTotal)}`
                             : ""
                         }${
                           orderStats.lastVisit
@@ -491,27 +492,27 @@ export function MembersPage() {
                             <td>{r.doc_date}</td>
                             <td>
                               <div>{r.product_name}</div>
-                              <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
+                              <div style={{ fontSize: 14, color: "var(--text-dim)" }}>
                                 {r.product_sku}
                               </div>
                             </td>
-                            <td style={{ fontSize: 12 }}>{r.serial_or_msisdn}</td>
+                            <td style={{ fontSize: 14 }}>{r.serial_or_msisdn}</td>
                             <td className="num">{r.qty}</td>
                             <td className="num">
-                              {Number(r.unit_price).toLocaleString()}
+                              {money(r.unit_price)}
                             </td>
                             <td className="num">
-                              {Number(r.amount).toLocaleString()}
+                              {money(r.amount)}
                             </td>
                             <td>{r.sales_person_label}</td>
                             <td>{r.customer_name}</td>
-                            <td style={{ fontSize: 12, color: "var(--text-dim)" }}>
+                            <td style={{ fontSize: 14, color: "var(--text-dim)" }}>
                               {r.doc_no}
                               {r.source === "legacy" && (
                                 <span
                                   style={{
                                     marginLeft: 4,
-                                    fontSize: 10,
+                                    fontSize: 12,
                                     padding: "1px 4px",
                                     border: "1px solid var(--text-dim)",
                                     borderRadius: 3,

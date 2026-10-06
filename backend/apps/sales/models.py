@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.db import models, transaction
 
+from apps.core.money import round_money
 from apps.core.models import TenantOwnedModel
 from apps.core.numbering import last_doc_seq
 
@@ -236,7 +237,8 @@ class SalesOrderItem(TenantOwnedModel):
         # 未指定 amount 時自動帶入 qty × unit_price;
         # 使用者明確帶入 amount(含負數、折讓)就保留。
         if self.amount in (None, 0, Decimal("0"), Decimal("0.00")):
-            self.amount = self.qty * self.unit_price
+            # 金額一律整數元(規則見 apps/core/money.py)
+            self.amount = round_money(self.qty * self.unit_price)
         super().save(*args, **kwargs)
 
 

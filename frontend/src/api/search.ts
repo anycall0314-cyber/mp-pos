@@ -1,6 +1,7 @@
 import { api } from "./client";
 import type { ComboOption } from "@/components/ComboBox";
 import { codesLabel, normalizeCode } from "@/lib/deviceCodes";
+import { money } from "@/lib/money";
 import type {
   Carrier,
   Category,
@@ -548,7 +549,7 @@ export async function searchInStockSerials(
     if (s.product_is_secondhand) {
       if (s.condition_grade) parts.push(`${s.condition_grade} 級`);
       if (s.custom_unit_price)
-        parts.push(`售價 ${Number(s.custom_unit_price).toLocaleString()}`);
+        parts.push(`售價 ${money(s.custom_unit_price)}`);
       if (s.battery_health != null) parts.push(`電池 ${s.battery_health}%`);
     }
     // 主碼是 IMEI 時把 SN 也寫出來:刷 SN 找到的那一台才認得出來

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { useSalesOrders, useSalesReturns } from "@/api/hooks";
 import { Toolbar } from "@/components/Toolbar";
+import { money } from "@/lib/money";
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -145,7 +146,7 @@ export function SalesPage() {
                       </td>
                       <td>{sr.payment_method}</td>
                       <td className="num">
-                        {Math.round(Number(sr.total)).toLocaleString()}
+                        {money(sr.total)}
                       </td>
                     </tr>
                   ))}
@@ -270,13 +271,13 @@ export function SalesPage() {
                   </td>
                   <td>{so.tax_method_label}</td>
                   <td className="num">
-                    {Math.round(Number(so.subtotal)).toLocaleString()}
+                    {money(so.subtotal)}
                   </td>
                   <td className="num">
-                    {Math.round(Number(so.tax_amount)).toLocaleString()}
+                    {money(so.tax_amount)}
                   </td>
                   <td className="num">
-                    {Math.round(Number(so.total)).toLocaleString()}
+                    {money(so.total)}
                   </td>
                 </tr>
               ))}

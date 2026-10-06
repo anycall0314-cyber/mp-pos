@@ -5,7 +5,7 @@
     進貨  2026-08-01  湳雅店  手機 2 支 × 20000、皮套 10 個 × 100      → 41000
     調撥              皮套 4 個 湳雅店 → 民生店
     銷貨1 2026-09-10  湳雅店  手機 25000(成本 20000)+ 皮套 2 × 390(成本 200),免稅,有業務員
-    銷貨2 2026-08-15  民生店  皮套 1 × 390 含稅(未稅 371.43、稅 18.57;成本 100),沒有業務員
+    銷貨2 2026-08-15  民生店  皮套 1 × 390 含稅(未稅 371、稅 19:整數元、四捨五入;成本 100),沒有業務員
     銷貨3 2026-09-10  湳雅店  皮套 1 × 390(成本 100),免稅,有業務員
     銷退  2026-09-12  整張退掉銷貨3
 """
@@ -89,7 +89,7 @@ class NumbersTests(_Shop):
             "net_sales", "net_qty",
         ]
         self.assertEqual(self.run_query(measures)["totals"], {
-            "sales_untaxed": "26541.43",      # 25000 + 780 + 371.43 + 390
+            "sales_untaxed": "26541.00",      # 25000 + 780 + 371 + 390
             "sales_gross": "26560.00",        # 25780 + 390 + 390
             "sales_qty": 5,
             "sales_cost": "20400.00",         # 20000 + 200 + 100 + 100
@@ -98,16 +98,16 @@ class NumbersTests(_Shop):
             "return_qty": 1,
             "return_cost": "100.00",
             "return_orders": 1,
-            "net_sales": "26151.43",
+            "net_sales": "26151.00",
             "net_qty": 4,
         })
         self.assertEqual(self.run_query([
             "sales_profit", "gross_profit", "margin_rate", "avg_ticket", "non_margin_amount",
             "purchase_untaxed", "purchase_qty", "received", "refunded", "net_received",
         ])["totals"], {
-            "sales_profit": "6141.43",        # 26541.43 − 20400
-            "gross_profit": "5851.43",        # 6141.43 − (390 − 100)
-            "margin_rate": "0.2238",          # 5851.43 ÷ 26151.43
+            "sales_profit": "6141.00",        # 26541 − 20400
+            "gross_profit": "5851.00",        # 6141 − (390 − 100)
+            "margin_rate": "0.2237",          # 5851 ÷ 26151
             "avg_ticket": "8853.33",          # 26560 ÷ 3
             "non_margin_amount": "0.00",
             "purchase_untaxed": "41000.00",
@@ -121,7 +121,7 @@ class NumbersTests(_Shop):
         r = self.run_query(["sales_untaxed", "net_sales", "sales_orders"], ["warehouse"])
         self.assertEqual(self.by_label(r), {
             "甲湳雅店": {"sales_untaxed": "26170.00", "net_sales": "25780.00", "sales_orders": 2},
-            "甲民生店": {"sales_untaxed": "371.43", "net_sales": "371.43", "sales_orders": 1},
+            "甲民生店": {"sales_untaxed": "371.00", "net_sales": "371.00", "sales_orders": 1},
         })
         self.assertEqual(r["columns"]["dimensions"], [{"key": "warehouse", "label": "門市"}])
         self.assertEqual(r["row_count"], 2)
@@ -130,7 +130,7 @@ class NumbersTests(_Shop):
         r = self.run_query(["sales_untaxed", "return_untaxed"], ["date"],
                            {**AUG_SEP, "grain": "month"})
         self.assertEqual(self.by_label(r), {
-            "2026-08": {"sales_untaxed": "371.43", "return_untaxed": "0.00"},
+            "2026-08": {"sales_untaxed": "371.00", "return_untaxed": "0.00"},
             "2026-09": {"sales_untaxed": "26170.00", "return_untaxed": "390.00"},
         })
         self.assertEqual([row["dims"][0]["label"] for row in r["rows"]], ["2026-08", "2026-09"])
@@ -140,14 +140,14 @@ class NumbersTests(_Shop):
                          {"2026-09-10": "26170.00", "2026-09-12": "-390.00"})
         self.assertEqual(self.by_label(
             self.run_query(["sales_untaxed"], ["date"], {**AUG_SEP, "grain": "quarter"}),
-            "sales_untaxed"), {"2026-Q3": "26541.43"})
+            "sales_untaxed"), {"2026-Q3": "26541.00"})
 
     def test_two_angles_at_once(self):
         r = self.run_query(["sales_qty", "sales_profit"], ["warehouse", "category"])
         self.assertEqual(self.by_label(r), {
             "甲湳雅店 | 手機": {"sales_qty": 1, "sales_profit": "5000.00"},
             "甲湳雅店 | 皮套": {"sales_qty": 3, "sales_profit": "870.00"},     # 1170 − 300
-            "甲民生店 | 皮套": {"sales_qty": 1, "sales_profit": "271.43"},
+            "甲民生店 | 皮套": {"sales_qty": 1, "sales_profit": "271.00"},
         })
 
     def test_order_count_is_not_multiplied_by_lines(self):
@@ -177,7 +177,7 @@ class NumbersTests(_Shop):
         ])["totals"], {
             "sales_untaxed": "25000.00", "sales_cost": "20000.00", "sales_qty": 1,
             "sales_orders": 1, "sales_profit": "5000.00",
-            "non_margin_amount": "1541.43",       # 780 + 371.43 + 390
+            "non_margin_amount": "1541.00",       # 780 + 371 + 390
             "return_untaxed": "0.00", "gross_profit": "5000.00",
         })
 
@@ -199,10 +199,10 @@ class NumbersTests(_Shop):
                          {"現金": "26560.00"})
         self.assertEqual(
             self.by_label(self.run_query(["sales_untaxed"], ["tax_method"]), "sales_untaxed"),
-            {"未稅": "26170.00", "應稅內含": "371.43"})
+            {"未稅": "26170.00", "應稅內含": "371.00"})
         self.assertEqual(
             self.by_label(self.run_query(["sales_untaxed"], ["sales_person"]), "sales_untaxed"),
-            {"甲店員": "26170.00", "(未指定)": "371.43"})
+            {"甲店員": "26170.00", "(未指定)": "371.00"})
         self.assertEqual(
             self.by_label(self.run_query(["sales_qty"], ["condition", "product_kind"]), "sales_qty"),
             {"新品 | 商品": 5})
@@ -212,7 +212,7 @@ class FilterTests(_Shop):
     def test_filter_by_store_category_and_flag(self):
         self.assertEqual(self.run_query(
             ["sales_untaxed"], filters={"warehouse": [self.wh2.id]})["totals"],
-            {"sales_untaxed": "371.43"})
+            {"sales_untaxed": "371.00"})
         self.assertEqual(self.run_query(
             ["sales_untaxed"], filters={"category": [self.c.cat_phone.id]})["totals"],
             {"sales_untaxed": "25000.00"})
@@ -230,10 +230,10 @@ class FilterTests(_Shop):
 
     def test_filter_for_blank(self):
         r = self.run_query(["sales_untaxed"], filters={"sales_person": [None]})
-        self.assertEqual(r["totals"], {"sales_untaxed": "371.43"})
+        self.assertEqual(r["totals"], {"sales_untaxed": "371.00"})
         r = self.run_query(["sales_untaxed"],
                            filters={"sales_person": [None, self.c.sales_person.id]})
-        self.assertEqual(r["totals"], {"sales_untaxed": "26541.43"})
+        self.assertEqual(r["totals"], {"sales_untaxed": "26541.00"})
 
     def test_filter_applies_to_every_table_behind_a_measure(self):
         # 淨銷售額 = 銷貨 − 銷退,兩邊都要套到門市條件
@@ -244,7 +244,7 @@ class FilterTests(_Shop):
         self.assertEqual(self.run_query(["sales_untaxed"], filters={"source": ["legacy"]})["totals"],
                          {"sales_untaxed": "0.00"})
         self.assertEqual(self.run_query(["sales_untaxed"], filters={"source": ["mp"]})["totals"],
-                         {"sales_untaxed": "26541.43"})
+                         {"sales_untaxed": "26541.00"})
 
     def test_bad_filter_values(self):
         spec = {"measures": ["sales_untaxed"], "period": AUG_SEP}
@@ -310,7 +310,7 @@ class OtherCompanyTests(_Shop):
 
     def test_numbers_never_include_the_other_company(self):
         r = self.run_query(["sales_untaxed", "purchase_untaxed", "received"], ["warehouse"])
-        self.assertEqual(r["totals"]["sales_untaxed"], "26541.43")
+        self.assertEqual(r["totals"]["sales_untaxed"], "26541.00")
         self.assertEqual(r["totals"]["purchase_untaxed"], "41000.00")
         self.assertTrue(all(row["dims"][0]["label"].startswith("甲") for row in r["rows"]))
 
@@ -360,15 +360,15 @@ class CompareTests(_Shop):
         self.assertEqual(rows["甲湳雅店"]["previous"], {"net_sales": "0.00", "sales_orders": 0})
         # 這一期沒有、上一期有的門市也要列出來
         self.assertEqual(rows["甲民生店"]["values"], {"net_sales": "0.00", "sales_orders": 0})
-        self.assertEqual(rows["甲民生店"]["previous"], {"net_sales": "371.43", "sales_orders": 1})
+        self.assertEqual(rows["甲民生店"]["previous"], {"net_sales": "371.00", "sales_orders": 1})
         self.assertEqual(r["totals"], {"net_sales": "25780.00", "sales_orders": 2})
-        self.assertEqual(r["totals_previous"], {"net_sales": "371.43", "sales_orders": 1})
+        self.assertEqual(r["totals_previous"], {"net_sales": "371.00", "sales_orders": 1})
 
     def test_same_period_last_year(self):
         SalesOrder.objects.filter(pk=self.c.s2["id"]).update(doc_date=date(2025, 9, 30))
         r = self.run_query(["sales_untaxed"], period=SEP, compare="last_year")
         self.assertEqual(r["applied"]["compare_period"], {"from": "2025-09-01", "to": "2025-09-30"})
-        self.assertEqual(r["totals_previous"], {"sales_untaxed": "371.43"})
+        self.assertEqual(r["totals_previous"], {"sales_untaxed": "371.00"})
         leap = engine.parse({"measures": ["sales_untaxed"], "compare": "last_year",
                              "period": {"from": "2024-02-01", "to": "2024-02-29"}})
         self.assertEqual(engine._compare_period(leap), (date(2023, 2, 1), date(2023, 2, 28)))
@@ -482,7 +482,7 @@ class ShapeTests(_Shop):
                          ["皮套 甲民生店", "皮套 甲湳雅店", "手機 甲湳雅店"])
         r = self.run_query(["sales_untaxed"], ["warehouse"], limit=1)
         self.assertEqual((len(r["rows"]), r["row_count"], r["truncated"]), (1, 2, True))
-        self.assertEqual(r["totals"], {"sales_untaxed": "26541.43"})       # 合計不受筆數上限影響
+        self.assertEqual(r["totals"], {"sales_untaxed": "26541.00"})       # 合計不受筆數上限影響
 
     def test_rows_without_a_value_sort_last(self):
         # 手機那張銷貨挪到期間外:手機只剩進貨,毛利率算不出來(空的)。不管由大到小或由小到大都排最後
@@ -645,18 +645,18 @@ class LegacyTests(_Shop):
         self.assertEqual(self.by_label(r), {
             "2022": {"all_sales": "9500.00", "legacy_net": "9500.00", "net_sales": "0.00"},
             "2023": {"all_sales": "-250.00", "legacy_net": "-250.00", "net_sales": "0.00"},
-            "2026": {"all_sales": "26151.43", "legacy_net": "0.00", "net_sales": "26151.43"},
+            "2026": {"all_sales": "26151.00", "legacy_net": "0.00", "net_sales": "26151.00"},
         })
-        self.assertEqual(r["totals"]["all_sales"], "35401.43")
+        self.assertEqual(r["totals"]["all_sales"], "35401.00")
         r = self.run_query(["all_sales"], ["source"], self.TEN_YEARS)
-        self.assertEqual(self.by_label(r, "all_sales"), {"新系統": "26151.43", "舊 POS": "9250.00"})
+        self.assertEqual(self.by_label(r, "all_sales"), {"新系統": "26151.00", "舊 POS": "9250.00"})
         r = self.run_query(["all_sales"], period=self.TEN_YEARS, filters={"source": ["legacy"]})
         self.assertEqual(r["totals"], {"all_sales": "9250.00"})
 
     def test_blank_rows_from_both_systems_share_one_row(self):
         r = self.run_query(["all_sales"], ["sales_person"], self.TEN_YEARS)
         self.assertEqual(self.by_label(r, "all_sales"),
-                         {"甲店員": "25780.00", "(未指定) / 未對照": "9621.43"})
+                         {"甲店員": "25780.00", "(未指定) / 未對照": "9621.00"})
 
     def test_legacy_types(self):
         r = self.run_query(["legacy_raw"], ["legacy_doc_type"], self.TEN_YEARS)
@@ -680,7 +680,7 @@ class ApiTests(_Shop):
                          {"measures", "dimensions", "groups", "grains", "presets", "limits"})
         r = self.c.admin.post("/api/v1/analytics/query/", self.SPEC, format="json")
         self.assertEqual(r.status_code, 200, r.content)
-        self.assertEqual(r.json()["totals"], {"net_sales": "26151.43", "gross_profit": "5851.43"})
+        self.assertEqual(r.json()["totals"], {"net_sales": "26151.00", "gross_profit": "5851.00"})
         r = self.c.admin.get("/api/v1/analytics/options/?dimension=warehouse")
         self.assertEqual([o["label"] for o in r.json()["results"]], ["甲民生店", "甲湳雅店"])
         r = self.c.admin.get("/api/v1/analytics/options/?dimension=warehouse&q=民生")

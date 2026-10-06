@@ -80,9 +80,11 @@ def _money(minor):
 
 
 def _money_text(minor):
-    sign = "-" if minor < 0 else ""
+    """畫面上的金額:整數元、四捨五入(存的是「分」,原文不改;精確值在 minor)。"""
     whole, cents = divmod(abs(minor), 100)
-    return f"{sign}{whole:,}" + (f".{cents:02d}" if cents else "")
+    whole += 1 if cents >= 50 else 0
+    sign = "-" if minor < 0 and whole else ""
+    return f"{sign}{whole:,}"
 
 
 # ─────────────────────────── 會員頁:舊紀錄 ───────────────────────────

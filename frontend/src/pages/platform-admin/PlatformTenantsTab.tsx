@@ -45,7 +45,7 @@ export function PlatformTenantsTab() {
           alignItems: "center",
         }}
       >
-        <span style={{ color: "var(--text-dim)", fontSize: 13 }}>
+        <span style={{ color: "var(--text-dim)", fontSize: 14 }}>
           共 {list.data?.length ?? 0} 個經銷商
         </span>
         <button

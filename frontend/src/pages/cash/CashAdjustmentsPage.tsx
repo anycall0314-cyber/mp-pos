@@ -11,6 +11,7 @@ import {
   MasterColumn,
   DetailTab,
 } from "@/components/master-detail/MasterDetail";
+import { money, roundInt } from "@/lib/money";
 
 import { CashAdjustmentForm } from "./CashAdjustmentForm";
 
@@ -46,7 +47,7 @@ export function CashAdjustmentsPage() {
   const netTotal = filtered
     .filter((a) => !a.is_void)
     .reduce((s, a) => {
-      const amt = Math.round(Number(a.amount));
+      const amt = roundInt(a.amount);
       return s + (a.direction === "in" ? amt : -amt);
     }, 0);
 
@@ -58,7 +59,7 @@ export function CashAdjustmentsPage() {
       key: "direction",
       header: "方向",
       render: (r) => (
-        <span style={{ color: r.direction === "in" ? "#80d090" : "#ff7070" }}>
+        <span style={{ color: r.direction === "in" ? "var(--success-text-soft)" : "var(--danger-text)" }}>
           {r.direction_label}
         </span>
       ),
@@ -70,10 +71,10 @@ export function CashAdjustmentsPage() {
       render: (r) => (
         <span
           className="num"
-          style={{ color: r.direction === "in" ? "#80d090" : "#ff7070" }}
+          style={{ color: r.direction === "in" ? "var(--success-text-soft)" : "var(--danger-text)" }}
         >
           {r.direction === "in" ? "+" : "−"}
-          {Math.round(Number(r.amount)).toLocaleString()}
+          {money(r.amount)}
         </span>
       ),
     },
@@ -117,7 +118,7 @@ export function CashAdjustmentsPage() {
             <dt>事由</dt>
             <dd>{r.reason_label}</dd>
             <dt>金額</dt>
-            <dd>{Math.round(Number(r.amount)).toLocaleString()}</dd>
+            <dd>{money(r.amount)}</dd>
             <dt>經手人</dt>
             <dd>
               {r.handled_by_name
@@ -168,15 +169,15 @@ export function CashAdjustmentsPage() {
           </button>
         }
       >
-        <span style={{ color: "var(--text-dim)", fontSize: 13 }}>
+        <span style={{ color: "var(--text-dim)", fontSize: 14 }}>
           {filtered.length} 筆,淨額{" "}
           <b
             style={{
-              color: netTotal >= 0 ? "#80d090" : "#ff7070",
+              color: netTotal >= 0 ? "var(--success-text-soft)" : "var(--danger-text)",
             }}
           >
             {netTotal >= 0 ? "+" : ""}
-            {netTotal.toLocaleString()}
+            {money(netTotal)}
           </b>
         </span>
       </Toolbar>

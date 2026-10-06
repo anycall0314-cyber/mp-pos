@@ -13,6 +13,7 @@ import type {
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Toolbar } from "@/components/Toolbar";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { intStr, money } from "@/lib/money";
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -37,7 +38,7 @@ function itemGrossProfit(it: SalesOrderItem): number {
 }
 
 function fmtMoney(v: number): string {
-  return Math.round(v).toLocaleString();
+  return money(v);
 }
 
 function serialList(it: SalesOrderItem): string {
@@ -204,11 +205,11 @@ export function SalesDailyReportPage() {
           it.product_name,
           serialList(it),
           String(it.qty),
-          String(Math.round(Number(it.unit_price))),
-          String(Math.round(Number(it.amount))),
-          countsMargin ? String(Math.round(Number(it.cost_at_post))) : "",
+          intStr(it.unit_price),
+          intStr(it.amount),
+          countsMargin ? intStr(it.cost_at_post) : "",
           countsMargin
-            ? String(Math.round(itemGrossProfit(it)))
+            ? intStr(itemGrossProfit(it))
             : "",
           "",
           voidFlag ? "Y" : "",
@@ -395,7 +396,7 @@ export function SalesDailyReportPage() {
           <div className="sd-summary-card-label">毛利</div>
           <div
             className="sd-summary-card-value"
-            style={{ color: totals.profit < 0 ? "#ff7070" : undefined }}
+            style={{ color: totals.profit < 0 ? "var(--danger-text)" : undefined }}
           >
             ${fmtMoney(totals.profit)}
           </div>
@@ -414,28 +415,28 @@ export function SalesDailyReportPage() {
       {totals.partsLines > 0 && (
         <>
           <div className="sd-summary">
-            <div className="sd-summary-card" style={{ borderColor: "#60a5fa" }}>
+            <div className="sd-summary-card" style={{ borderColor: "var(--info-text)" }}>
               <div className="sd-summary-card-label">零件調貨 明細</div>
               <div className="sd-summary-card-value">{totals.partsLines}</div>
             </div>
-            <div className="sd-summary-card" style={{ borderColor: "#60a5fa" }}>
+            <div className="sd-summary-card" style={{ borderColor: "var(--info-text)" }}>
               <div className="sd-summary-card-label">零件 含稅金額</div>
               <div className="sd-summary-card-value">
                 ${fmtMoney(totals.partsAmount)}
               </div>
             </div>
-            <div className="sd-summary-card" style={{ borderColor: "#60a5fa" }}>
+            <div className="sd-summary-card" style={{ borderColor: "var(--info-text)" }}>
               <div className="sd-summary-card-label">零件 成本</div>
               <div className="sd-summary-card-value">
                 ${fmtMoney(totals.partsCost)}
               </div>
             </div>
-            <div className="sd-summary-card" style={{ borderColor: "#60a5fa" }}>
+            <div className="sd-summary-card" style={{ borderColor: "var(--info-text)" }}>
               <div className="sd-summary-card-label">零件 毛利</div>
               <div
                 className="sd-summary-card-value"
                 style={{
-                  color: totals.partsProfit < 0 ? "#ff7070" : undefined,
+                  color: totals.partsProfit < 0 ? "var(--danger-text)" : undefined,
                 }}
               >
                 ${fmtMoney(totals.partsProfit)}
@@ -544,7 +545,7 @@ function SalesReportMobileList({ orders, voided }: ReportTableProps) {
                         毛利{" "}
                         <span
                           style={{
-                            color: profit < 0 ? "#ff7070" : undefined,
+                            color: profit < 0 ? "var(--danger-text)" : undefined,
                           }}
                         >
                           ${fmtMoney(profit)}
@@ -568,7 +569,7 @@ function SalesReportMobileList({ orders, voided }: ReportTableProps) {
                   color: !hasMarginItem
                     ? "var(--text-dim)"
                     : orderProfit < 0
-                    ? "#ff7070"
+                    ? "var(--danger-text)"
                     : undefined,
                 }}
               >
@@ -681,7 +682,7 @@ function ReportOrderGroup({
                 color: !countsMargin
                   ? "var(--text-dim)"
                   : profit < 0
-                  ? "#ff7070"
+                  ? "var(--danger-text)"
                   : undefined,
               }}
             >
@@ -703,7 +704,7 @@ function ReportOrderGroup({
             color: !hasMarginItem
               ? "var(--text-dim)"
               : orderProfit < 0
-              ? "#ff7070"
+              ? "var(--danger-text)"
               : undefined,
           }}
         >

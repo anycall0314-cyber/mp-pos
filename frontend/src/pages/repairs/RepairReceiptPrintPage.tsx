@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 
 import { useRepairOrder } from "@/api/hooks";
+import { money, roundInt } from "@/lib/money";
 
 const TERMS = [
   "因摔機、浸水、受潮、或未經原廠授權之拆解等人為因素所造成之損壞,不在原廠保固範圍內。如客戶要求嘗試維修,本中心將依正常維修程序處理,但不保證能將裝置恢復至送修前狀態,亦不承擔因此喪失原廠保固之相關責任。",
@@ -48,10 +49,10 @@ export function RepairReceiptPrintPage() {
   }
   const titleSuffix = typeLabels.join(" · ");
   const quote = o.mode === "in_house" ? o.final_quote : o.external_quote_estimated;
-  const quoteNum = Math.round(Number(quote) || 0);
+  const quoteNum = roundInt(quote);
   const quoteDisplay =
     quoteNum > 0
-      ? `NT$ ${quoteNum.toLocaleString()}`
+      ? `NT$ ${money(quoteNum)}`
       : "待評估後通知";
   const repairItemDisplay =
     o.repair_item_name || o.defect_description.slice(0, 30) || "待評估";

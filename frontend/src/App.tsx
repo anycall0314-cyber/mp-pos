@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { useAuth } from "@/auth/AuthContext";
 import { LoginPage } from "@/pages/login/LoginPage";
@@ -47,103 +47,12 @@ import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { SimCardsPage } from "@/pages/sim-cards/SimCardsPage";
 import { SuppliersPage } from "@/pages/suppliers/SuppliersPage";
 import { TelecomPlansPage } from "@/pages/telecom-plans/TelecomPlansPage";
-import { NavSection, PLATFORM_NAV_GROUP, SIDEBAR_NAV } from "@/nav";
+import { ModuleBar } from "@/components/shell/ModuleBar";
+import { Sidebar } from "@/components/shell/Sidebar";
+import { matchForUser, visibleModules } from "@/nav";
 
 function Placeholder({ title }: { title: string }) {
   return <div className="placeholder">{title}(尚未實作)</div>;
-}
-
-const SIDEBAR_GROUPS_KEY = "sidebar_collapsed_groups";
-
-function readCollapsedGroups(): Record<string, boolean> {
-  try {
-    return JSON.parse(localStorage.getItem(SIDEBAR_GROUPS_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
-
-/**
- * 側邊欄導覽:每個分類標題可點折疊(記在 localStorage,下次記得)。
- * 預設全展開;點連結自動關閉(窄畫面的)側邊欄。
- */
-function SidebarNav({
-  role,
-  onNavigate,
-}: {
-  role?: string;
-  onNavigate: () => void;
-}) {
-  const sections: NavSection[] = [...SIDEBAR_NAV];
-  if (role === "platform_admin") {
-    sections.push({
-      label: PLATFORM_NAV_GROUP.label,
-      items: PLATFORM_NAV_GROUP.items,
-    });
-  }
-
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(
-    readCollapsedGroups,
-  );
-
-  function toggle(label: string) {
-    setCollapsed((prev) => {
-      const next = { ...prev, [label]: !prev[label] };
-      try {
-        localStorage.setItem(SIDEBAR_GROUPS_KEY, JSON.stringify(next));
-      } catch {}
-      return next;
-    });
-  }
-
-  return (
-    <nav className="sidebar-nav">
-      {sections.map((s) => {
-        const open = !collapsed[s.label];
-        return (
-          <div key={s.label} className={`sidebar-group${open ? " open" : ""}`}>
-            <button
-              type="button"
-              className="sidebar-group-label"
-              onClick={() => toggle(s.label)}
-              aria-expanded={open}
-            >
-              <span>{s.label}</span>
-              <svg
-                className="sidebar-caret"
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M9 6l6 6-6 6" />
-              </svg>
-            </button>
-            {open &&
-              s.items
-                .filter((it) => !it.adminOnly || role === "tenant_admin")
-                .map((it) => (
-                <NavLink
-                  key={it.to}
-                  to={it.to}
-                  end={it.to === "/home"}
-                  onClick={onNavigate}
-                  className={({ isActive }) =>
-                    isActive ? "sidebar-link active" : "sidebar-link"
-                  }
-                >
-                  {it.label}
-                </NavLink>
-              ))}
-          </div>
-        );
-      })}
-    </nav>
-  );
 }
 
 type Theme = "dark" | "light";
@@ -206,6 +115,10 @@ export function App() {
     );
   }
 
+  const who = { role: user?.profile?.role };
+  const modules = visibleModules(who);
+  const navMatch = matchForUser(location.pathname, who);
+
   return (
     <div className={`app-shell${mobileNavOpen ? " mobile-nav-open" : ""}`}>
       {!focusMode && !isPrintMode && (
@@ -221,59 +134,60 @@ export function App() {
             </button>
             <div className="brand">MP POS</div>
           </div>
-          <aside className="sidebar">
-            <div className="sidebar-brand">MP POS</div>
-            <SidebarNav
-              role={user?.profile?.role}
-              onNavigate={() => setMobileNavOpen(false)}
-            />
-            <div className="sidebar-footer">
-              {user && (
-                <div className="user-pill">
-                  <div className="user-pill-text">
-                    <span className="user-pill-name">{user.username}</span>
-                    <span className="user-pill-meta">
-                      {user.profile?.role_label ?? "—"}
-                      {user.profile?.tenant_name
-                        ? ` · ${user.profile.tenant_name}`
-                        : ""}
-                      {user.profile?.default_warehouse_name
-                        ? ` · ${user.profile.default_warehouse_name}`
-                        : ""}
-                    </span>
+          <Sidebar
+            modules={modules}
+            match={navMatch}
+            onNavigate={() => setMobileNavOpen(false)}
+            onOpenRequest={() => setMobileNavOpen(true)}
+            footer={
+              <>
+                {user && (
+                  <div className="user-pill">
+                    <div className="user-pill-text">
+                      <span className="user-pill-name">{user.username}</span>
+                      <span className="user-pill-meta">
+                        {user.profile?.role_label ?? "—"}
+                        {user.profile?.tenant_name
+                          ? ` · ${user.profile.tenant_name}`
+                          : ""}
+                        {user.profile?.default_warehouse_name
+                          ? ` · ${user.profile.default_warehouse_name}`
+                          : ""}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn user-pill-logout"
+                      onClick={() => logout()}
+                      title="登出"
+                    >
+                      登出
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="btn user-pill-logout"
-                    onClick={() => logout()}
-                    title="登出"
-                  >
-                    登出
-                  </button>
-                </div>
-              )}
-              <button
-                type="button"
-                className="theme-toggle"
-                onClick={() =>
-                  setTheme((t) => (t === "dark" ? "light" : "dark"))
-                }
-                title={theme === "dark" ? "切換到日間模式" : "切換到夜間模式"}
-                aria-label="切換主題"
-              >
-                {theme === "dark" ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="4" />
-                    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-                  </svg>
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                  </svg>
                 )}
-              </button>
-            </div>
-          </aside>
+                <button
+                  type="button"
+                  className="theme-toggle"
+                  onClick={() =>
+                    setTheme((t) => (t === "dark" ? "light" : "dark"))
+                  }
+                  title={theme === "dark" ? "切換到日間模式" : "切換到夜間模式"}
+                  aria-label="切換主題"
+                >
+                  {theme === "dark" ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="4" />
+                      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                    </svg>
+                  )}
+                </button>
+              </>
+            }
+          />
           {mobileNavOpen && (
             <div
               className="sidebar-backdrop"
@@ -289,6 +203,8 @@ export function App() {
           </div>
         )}
         <main className="main">
+        {!focusMode && !isPrintMode && <ModuleBar match={navMatch} pathname={location.pathname} />}
+        <div className="main-page">
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<HomePage />} />
@@ -416,6 +332,7 @@ export function App() {
             element={<Placeholder title="發票明細" />}
           />
         </Routes>
+        </div>
         </main>
         {!isPrintMode && <ToastHost />}
       </div>

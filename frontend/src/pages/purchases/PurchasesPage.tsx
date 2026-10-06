@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { usePurchaseOrders } from "@/api/hooks";
 import { Toolbar } from "@/components/Toolbar";
+import { money } from "@/lib/money";
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -131,12 +132,12 @@ export function PurchasesPage() {
                     {po.warehouse_code} {po.warehouse_name}
                   </td>
                   <td>{po.tax_method_label}</td>
-                  <td className="num">{Number(po.subtotal).toLocaleString()}</td>
+                  <td className="num">{money(po.subtotal)}</td>
                   <td className="num">
-                    {Number(po.tax_amount).toLocaleString()}
+                    {money(po.tax_amount)}
                   </td>
                   <td className="num">
-                    {Number(po.total_cost).toLocaleString()}
+                    {money(po.total_cost)}
                   </td>
                   <td>{po.created_at.slice(0, 16).replace("T", " ")}</td>
                 </tr>

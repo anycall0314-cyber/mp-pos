@@ -8,6 +8,7 @@ import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Checkbox, Field } from "@/components/Field";
+import { MoneyInput } from "@/components/MoneyInput";
 
 interface Props {
   open: boolean;
@@ -235,10 +236,9 @@ export function SimCardForm({ open, initial, onClose }: Props) {
         )}
         <div className="field-row">
           <Field label="押金" error={fieldErrors.deposit}>
-            <input
-              type="number"
+            <MoneyInput
               value={state.deposit}
-              onChange={(e) => patch("deposit", e.target.value)}
+              onChange={(v) => patch("deposit", v)}
             />
           </Field>
           <Field label="狀態">

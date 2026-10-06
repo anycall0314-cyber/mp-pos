@@ -8,6 +8,7 @@ import {
   MasterColumn,
   DetailTab,
 } from "@/components/master-detail/MasterDetail";
+import { money } from "@/lib/money";
 
 import { SimCardForm } from "./SimCardForm";
 
@@ -22,7 +23,7 @@ const columns: MasterColumn<SimCard>[] = [
     key: "deposit",
     header: "押金",
     render: (r) => (
-      <span className="num">{Number(r.deposit).toLocaleString()}</span>
+      <span className="num">{money(r.deposit)}</span>
     ),
   },
   {
@@ -56,7 +57,7 @@ export function SimCardsPage() {
               {r.vendor_code} {r.vendor_name}
             </dd>
             <dt>押金</dt>
-            <dd>{Number(r.deposit).toLocaleString()}</dd>
+            <dd>{money(r.deposit)}</dd>
             <dt>狀態</dt>
             <dd>{r.status_label}</dd>
             <dt>押金歸還</dt>

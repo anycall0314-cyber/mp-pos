@@ -10,6 +10,8 @@ import { Banner } from "@/components/Banner";
 import { DraftBanner } from "@/components/DraftBanner";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { useModalDraft } from "@/hooks/useModalDraft";
+import { MoneyInput } from "@/components/MoneyInput";
+import { intStr } from "@/lib/money";
 
 const DRAFT_KEY = "modal-draft:bulk-edit-products";
 
@@ -150,7 +152,7 @@ export function BulkEditProductsModal({
     setError(null);
     const patch: Record<string, unknown> = {};
     if (enPrice) {
-      if (listPrice.trim()) patch.list_price = listPrice;
+      if (listPrice.trim()) patch.list_price = intStr(listPrice);
       if (safetyStock.trim())
         patch.safety_stock = Number(safetyStock) || 0;
     }
@@ -228,11 +230,10 @@ export function BulkEditProductsModal({
               <div className="be-section-body">
                 <label>
                   建議零售價
-                  <input
-                    type="number"
+                  <MoneyInput
                     min="0"
                     value={listPrice}
-                    onChange={(e) => setListPrice(e.target.value)}
+                    onChange={setListPrice}
                     placeholder="留空 = 不改"
                   />
                 </label>
@@ -497,7 +498,7 @@ export function BulkEditProductsModal({
                             border: 0,
                             color: "inherit",
                             cursor: "pointer",
-                            fontSize: 14,
+                            fontSize: 16,
                             padding: 0,
                             lineHeight: 1,
                           }}
@@ -512,7 +513,7 @@ export function BulkEditProductsModal({
                 <div
                   style={{
                     color: "var(--text-dim)",
-                    fontSize: 12,
+                    fontSize: 14,
                     marginTop: 6,
                   }}
                 >

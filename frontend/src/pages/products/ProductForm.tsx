@@ -30,6 +30,7 @@ import { Checkbox, Field } from "@/components/Field";
 
 import { DuplicatePanel } from "./DuplicatePanel";
 import { useModalDraft } from "@/hooks/useModalDraft";
+import { MoneyInput } from "@/components/MoneyInput";
 
 /** 比對兩個 form state 是否不同(用於 dirty 判斷) */
 function isDirtyAgainst<T extends object>(state: T, baseline: T): boolean {
@@ -573,13 +574,11 @@ export function ProductForm({
                     label="對外售價"
                     hint="銷貨時自動帶入"
                   >
-                    <input
-                      type="number"
-                      step="1"
+                    <MoneyInput
                       min="0"
                       value={state.external_sale_price}
-                      onChange={(e) =>
-                        patch("external_sale_price", e.target.value)
+                      onChange={(v) =>
+                        patch("external_sale_price", v)
                       }
                     />
                   </Field>
@@ -587,13 +586,11 @@ export function ProductForm({
                     label="最低售價"
                     hint="防呆下限,銷貨手動調整不可低於此值"
                   >
-                    <input
-                      type="number"
-                      step="1"
+                    <MoneyInput
                       min="0"
                       value={state.min_sale_price}
-                      onChange={(e) =>
-                        patch("min_sale_price", e.target.value)
+                      onChange={(v) =>
+                        patch("min_sale_price", v)
                       }
                     />
                   </Field>
@@ -823,7 +820,7 @@ export function ProductForm({
               <div className="pf-inline-modal">
                 <div className="pf-inline-modal-title">
                   新增系列
-                  <span style={{ color: "var(--text-dim)", fontSize: 12, marginLeft: 8 }}>
+                  <span style={{ color: "var(--text-dim)", fontSize: 14, marginLeft: 8 }}>
                     (
                     {(brands.data ?? []).find((b) => b.id === state.brand)?.name}
                     )
@@ -1048,11 +1045,9 @@ export function ProductForm({
           </Field>
           {state.warehouse_type === "product" && (
             <Field label="建議零售價" error={fieldErrors.list_price}>
-              <input
-                type="number"
-                step="1"
+              <MoneyInput
                 value={state.list_price}
-                onChange={(e) => patch("list_price", e.target.value)}
+                onChange={(v) => patch("list_price", v)}
               />
             </Field>
           )}

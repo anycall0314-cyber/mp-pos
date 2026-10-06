@@ -43,7 +43,7 @@ export function SecondhandAcquisitionPage() {
   return (
     <div className="page secondhand-hub">
       <Toolbar
-        title="中古入庫"
+        title="中古收購"
         actions={
           <div className="tab-switcher" role="tablist" aria-label="收購來源">
             {TABS.map((t) => (

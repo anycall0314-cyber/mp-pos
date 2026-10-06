@@ -11,6 +11,8 @@ import type { Carrier, TelecomPlanKind } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Field } from "@/components/Field";
+import { MoneyInput } from "@/components/MoneyInput";
+import { intStr } from "@/lib/money";
 
 interface Props {
   open: boolean;
@@ -178,7 +180,7 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
       return;
     }
     // 一律送整數,避免小數點汙染
-    const toIntStr = (s: string) => String(Math.round(Number(s) || 0));
+    const toIntStr = (s: string) => intStr(s);
     const items: BulkTelecomPlanRow[] = toCreate.map((c) => ({
       name: c.name,
       monthly_fee: toIntStr(c.monthly_fee),
@@ -240,7 +242,7 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
               alignItems: "center",
             }}
           >
-            <span style={{ color: "var(--text-dim)", fontSize: 13 }}>
+            <span style={{ color: "var(--text-dim)", fontSize: 14 }}>
               前綴快捷:
             </span>
             <button
@@ -318,7 +320,7 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
           </div>
           <div
             style={{
-              fontSize: 12,
+              fontSize: 14,
               color: "var(--text-dim)",
               marginTop: -4,
               marginBottom: 8,
@@ -341,15 +343,13 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
                 <strong style={{ flex: 1 }}>
                   預覽:展開 {list.length} 筆,勾選 {selectedCount} 筆
                 </strong>
-                <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+                <span style={{ fontSize: 14, color: "var(--text-dim)" }}>
                   批次填佣金:
                 </span>
-                <input
-                  type="number"
-                  step="1"
+                <MoneyInput
                   min="0"
                   value={bulkCommission}
-                  onChange={(e) => setBulkCommission(e.target.value)}
+                  onChange={setBulkCommission}
                   placeholder="例 8000"
                   style={{ width: 90, textAlign: "right" }}
                 />
@@ -429,14 +429,12 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
                             />
                           </td>
                           <td className="num">
-                            <input
-                              type="number"
-                  step="1"
-                  min="0"
+                            <MoneyInput
+                              min="0"
                               value={c.monthly_fee}
-                              onChange={(e) =>
+                              onChange={(v) =>
                                 patchField(c.key, {
-                                  monthly_fee: e.target.value,
+                                  monthly_fee: v,
                                 })
                               }
                               style={{ width: 70, textAlign: "right" }}
@@ -457,21 +455,19 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
                             />
                           </td>
                           <td className="num">
-                            <input
-                              type="number"
-                  step="1"
-                  min="0"
+                            <MoneyInput
+                              min="0"
                               value={c.commission}
-                              onChange={(e) =>
+                              onChange={(v) =>
                                 patchField(c.key, {
-                                  commission: e.target.value,
+                                  commission: v,
                                 })
                               }
                               style={{ width: 80, textAlign: "right" }}
                             />
                           </td>
                           <td
-                            style={{ color: "#ff7070", fontSize: 12 }}
+                            style={{ color: "var(--danger-text)", fontSize: 14 }}
                           >
                             {err ? JSON.stringify(err.errors) : ""}
                           </td>

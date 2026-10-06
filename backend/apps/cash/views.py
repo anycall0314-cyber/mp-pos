@@ -1,12 +1,13 @@
 from datetime import date as date_cls, timedelta
 
 from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum, Value
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, Round
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
 from apps.catalog.models import Product
+from apps.core.money import money_int
 from apps.core.warehouse_scoping import WarehouseScopedMixin, report_warehouse_id
 from apps.inventory.models import ProductSerial, StockBalance, Warehouse
 from apps.purchasing.models import PurchaseOrder
@@ -131,6 +132,9 @@ def _compute_cash_balance_before(tenant, warehouse_id, before_date, cash_codes):
     用來當營業日報「期初現金」的值(全自動累加,使用者不可改)。
     + 銷貨現金收入   + 代收話費    − 進貨現金付款  − 雜支現金支出  − 銷退現金支出
     + 現金存入       − 現金提取
+
+    每一筆先四捨五入成整數元再加總(`Sum(Round(...))`),跟當日明細逐筆 `money_int` 再加的算法一樣。
+    否則以前算到分的單會讓「昨天的結餘」跟「今天的期初」差 1 元(兩筆 115.50:逐筆是 232,先加再進位是 231)。
     """
     from apps.sales.models import SalesReturn
 
@@ -141,7 +145,7 @@ def _compute_cash_balance_before(tenant, warehouse_id, before_date, cash_codes):
             so__doc_date__lt=before_date,
             so__is_void=False,
             method__in=cash_codes,
-        ).aggregate(s=Sum("amount"))["s"]
+        ).aggregate(s=Sum(Round("amount")))["s"]
         or 0
     )
     sales_return_out = (
@@ -152,7 +156,7 @@ def _compute_cash_balance_before(tenant, warehouse_id, before_date, cash_codes):
             is_void=False,
             payment_method__in=cash_codes,
         )
-        .aggregate(s=Sum("total"))["s"]
+        .aggregate(s=Sum(Round("total")))["s"]
         or 0
     )
     purchases_out = (
@@ -163,7 +167,7 @@ def _compute_cash_balance_before(tenant, warehouse_id, before_date, cash_codes):
             is_void=False,
             payment_method__kind="cash",
         )
-        .aggregate(s=Sum("total_cost"))["s"]
+        .aggregate(s=Sum(Round("total_cost")))["s"]
         or 0
     )
     expenses_out = (
@@ -174,7 +178,7 @@ def _compute_cash_balance_before(tenant, warehouse_id, before_date, cash_codes):
             is_void=False,
             payment_method__kind="cash",
         )
-        .aggregate(s=Sum("amount"))["s"]
+        .aggregate(s=Sum(Round("amount")))["s"]
         or 0
     )
     adj_in = (
@@ -185,7 +189,7 @@ def _compute_cash_balance_before(tenant, warehouse_id, before_date, cash_codes):
             is_void=False,
             direction="in",
         )
-        .aggregate(s=Sum("amount"))["s"]
+        .aggregate(s=Sum(Round("amount")))["s"]
         or 0
     )
     adj_out = (
@@ -196,7 +200,7 @@ def _compute_cash_balance_before(tenant, warehouse_id, before_date, cash_codes):
             is_void=False,
             direction="out",
         )
-        .aggregate(s=Sum("amount"))["s"]
+        .aggregate(s=Sum(Round("amount")))["s"]
         or 0
     )
     phone_bills_in = (
@@ -206,10 +210,10 @@ def _compute_cash_balance_before(tenant, warehouse_id, before_date, cash_codes):
             doc_date__lt=before_date,
             is_void=False,
         )
-        .aggregate(s=Sum("amount"))["s"]
+        .aggregate(s=Sum(Round("amount")))["s"]
         or 0
     )
-    return int(
+    return money_int(
         sales_in
         + phone_bills_in
         - sales_return_out
@@ -291,6 +295,10 @@ def business_daily_report(request):
     )
     sales_rows = []
     sales_total = 0
+    # 現金付款是負的銷貨單 = 個人收購(付現金給客人)。期初現金本來就把它算成支出,
+    # 當天也要列出來,否則「昨天的結餘」會比「今天的期初」多出收購付出去的錢
+    buyback_rows = []
+    buybacks_total = 0
     non_cash_sales_rows = []
     non_cash_sales_total = 0
     for so in sales_qs:
@@ -299,9 +307,9 @@ def business_daily_report(request):
         non_cash_breakdown = {}
         for p in so.payments.all():
             if p.method in cash_codes:
-                cash_amount += int(p.amount)
+                cash_amount += money_int(p.amount)
             elif p.method in non_cash_codes:
-                amt = int(p.amount)
+                amt = money_int(p.amount)
                 non_cash_amount += amt
                 non_cash_breakdown[p.method] = (
                     non_cash_breakdown.get(p.method, 0) + amt
@@ -321,6 +329,20 @@ def business_daily_report(request):
                 }
             )
             sales_total += cash_amount
+        elif cash_amount < 0:
+            buyback_rows.append(
+                {
+                    "id": so.id,
+                    "no": so.no,
+                    "customer_name": so.customer.name if so.customer_id else "",
+                    "sales_person_name": (
+                        so.sales_person.name if so.sales_person_id else ""
+                    ),
+                    "total": str(so.total),
+                    "cash_amount": str(-cash_amount),
+                }
+            )
+            buybacks_total += -cash_amount
 
         if non_cash_amount > 0:
             non_cash_sales_rows.append(
@@ -368,7 +390,7 @@ def business_daily_report(request):
                 "total_cost": str(po.total_cost),
             }
         )
-        purchases_total += int(po.total_cost)
+        purchases_total += money_int(po.total_cost)
 
     # 3. 雜支 cash 支出
     expenses_qs = (
@@ -394,7 +416,7 @@ def business_daily_report(request):
                 "amount": str(ex.amount),
             }
         )
-        expenses_total += int(ex.amount)
+        expenses_total += money_int(ex.amount)
 
     # 3b. 銷退現金支出:當日 + 該倉 + 非作廢 + 退款方式=現金的銷退單
     from apps.sales.models import SalesReturn
@@ -428,7 +450,7 @@ def business_daily_report(request):
                 "total": str(sr.total),
             }
         )
-        sales_returns_total += int(sr.total)
+        sales_returns_total += money_int(sr.total)
 
     # 3c. 代收話費(店家代收電信費,純現金收入)
     phone_bills_qs = (
@@ -456,7 +478,7 @@ def business_daily_report(request):
                 "amount": str(pb.amount),
             }
         )
-        phone_bills_total += int(pb.amount)
+        phone_bills_total += money_int(pb.amount)
 
     # 4. 現金調整(老闆補錢進、領現金出去、盤點校正)
     adjustments_qs = (
@@ -471,7 +493,7 @@ def business_daily_report(request):
     adj_in_total = 0
     adj_out_total = 0
     for adj in adjustments_qs:
-        amt = int(adj.amount)
+        amt = money_int(adj.amount)
         if adj.direction == "in":
             adj_in_total += amt
         else:
@@ -490,6 +512,7 @@ def business_daily_report(request):
 
     net = (
         sales_total
+        - buybacks_total
         + phone_bills_total
         - purchases_total
         - expenses_total
@@ -503,6 +526,7 @@ def business_daily_report(request):
             "date": target_date.isoformat(),
             "opening_cash": opening_cash,
             "sales": {"rows": sales_rows, "total": sales_total},
+            "buybacks": {"rows": buyback_rows, "total": buybacks_total},
             "non_cash_sales": {
                 "rows": non_cash_sales_rows,
                 "total": non_cash_sales_total,
@@ -549,9 +573,10 @@ def home_summary(request):
         )
         if wid is not None:
             qs = qs.filter(warehouse_id=wid)
-        agg = qs.aggregate(t=Sum("total"), c=Count("id"))
+        # 逐張四捨五入再加總,跟下面「最近交易」每一列的金額加起來一樣
+        agg = qs.aggregate(t=Sum(Round("total")), c=Count("id"))
         return {
-            "revenue": int(agg["t"] or 0),
+            "revenue": money_int(agg["t"]),
             "sales_count": agg["c"] or 0,
         }
 
@@ -645,7 +670,7 @@ def home_summary(request):
                 "no": so.no,
                 "customer_name": so.customer.name if so.customer else "散客",
                 "sales_person_name": so.sales_person.name if so.sales_person else "",
-                "total": int(so.total or 0),
+                "total": money_int(so.total),
                 "doc_time": so.created_at.isoformat(),
                 "items_brief": items_brief,
             }

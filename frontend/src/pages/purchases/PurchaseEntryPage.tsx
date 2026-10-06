@@ -35,6 +35,8 @@ import {
   routeCodes,
   splitCode,
 } from "@/lib/deviceCodes";
+import { MoneyInput } from "@/components/MoneyInput";
+import { intStr, money, roundInt, splitTax } from "@/lib/money";
 
 import {
   BatchPasteResult,
@@ -50,7 +52,7 @@ function toIntStr(v: string | number | null | undefined): string {
   if (v === null || v === undefined || v === "") return "0";
   const n = Number(v);
   if (!Number.isFinite(n)) return "0";
-  return String(Math.round(n));
+  return intStr(n);
 }
 
 interface SerialEntry extends DeviceCodes {
@@ -99,9 +101,9 @@ function normalizeSerialEntry(raw: unknown): SerialEntry {
         : splitCode(String(r.sn ?? ""));
     if (r.grade) entry.grade = String(r.grade) as ConditionGrade;
     if (r.cost !== undefined && r.cost !== null && r.cost !== "")
-      entry.cost = String(r.cost);
+      entry.cost = intStr(r.cost);
     if (r.price !== undefined && r.price !== null && r.price !== "")
-      entry.price = String(r.price);
+      entry.price = intStr(r.price);
     if (r.battery !== undefined && r.battery !== null && r.battery !== "")
       entry.battery = String(r.battery);
     if (r.note) entry.note = String(r.note);
@@ -439,29 +441,25 @@ function SerialAside({
               {isSecondhand && (
                 <div className="serial-detail-row">
                   <label>進貨成本</label>
-                  <input
-                    type="number"
+                  <MoneyInput
                     className="num-input"
                     value={line.serial_numbers[focusedIdx]?.cost ?? ""}
                     disabled={readonly}
-                    placeholder={`留空 = 用單價 ${Math.round(
-                      Number(line.unit_price),
-                    ).toLocaleString()}`}
-                    onChange={(e) =>
-                      onUpdateSerialField(focusedIdx, "cost", e.target.value)
+                    placeholder={`留空 = 用單價 ${money(line.unit_price)}`}
+                    onChange={(v) =>
+                      onUpdateSerialField(focusedIdx, "cost", v)
                     }
                   />
                 </div>
               )}
               <div className="serial-detail-row">
                 <label>自訂售價</label>
-                <input
-                  type="number"
+                <MoneyInput
                   className="num-input"
                   value={line.serial_numbers[focusedIdx]?.price ?? ""}
                   disabled={readonly}
-                  onChange={(e) =>
-                    onUpdateSerialField(focusedIdx, "price", e.target.value)
+                  onChange={(v) =>
+                    onUpdateSerialField(focusedIdx, "price", v)
                   }
                 />
               </div>
@@ -495,7 +493,7 @@ function SerialAside({
                   <button
                     type="button"
                     className="btn"
-                    style={{ fontSize: 12, padding: "3px 10px" }}
+                    style={{ fontSize: 14, padding: "3px 10px" }}
                     title="把此隻的成色/售價/電池/備註套用到下面所有序號"
                     onClick={() => onApplyToAll(focusedIdx)}
                   >
@@ -830,7 +828,7 @@ export function PurchaseEntryPage({
           },
           qty: r.qty,
           billed_qty: r.qty,
-          unit_price: String(Math.round(Number(r.unit_price) || 0)),
+          unit_price: intStr(r.unit_price),
           serial_numbers: r.serial_numbers.map((code) => splitCode(code)),
         };
       });
@@ -929,17 +927,12 @@ export function PurchaseEntryPage({
     );
   }
 
-  const grossSum = lines.reduce((s, l) => s + (calcAmount(l) || 0), 0);
-  const [estSubtotal, estTax, estTotal] = (() => {
-    if (taxMethod === "taxable_included") {
-      const sub = grossSum / 1.05;
-      return [sub, grossSum - sub, grossSum];
-    }
-    if (taxMethod === "taxable_excluded") {
-      return [grossSum, grossSum * 0.05, grossSum * 1.05];
-    }
-    return [grossSum, 0, grossSum];
-  })();
+  // 試算跟伺服器存檔用同一套算法(整數元、四捨五入)
+  // 看已經存好的單:直接顯示存下來的小計 / 稅額 / 總額,不重算(舊單是用以前的算法存的,重算會差幾元)
+  const savedDoc = isNew ? undefined : existing.data;
+  const [estSubtotal, estTax, estTotal] = savedDoc
+    ? [savedDoc.subtotal, savedDoc.tax_amount, savedDoc.total_cost].map(roundInt)
+    : splitTax(lines.map(calcAmount), taxMethod);
 
   function validate(): string | null {
     if (!supplier) return "請選供應商";
@@ -1078,7 +1071,7 @@ export function PurchaseEntryPage({
           focusMode ? null : (
           <>
             <button className="btn" onClick={() => navigate(backPath)}>
-              {isSecondhandVendor ? "回中古入庫" : "回列表"}
+              {isSecondhandVendor ? "回中古收購" : "回列表"}
             </button>
             {isNew && (
               <button className="btn" type="button" onClick={discardDraft}>
@@ -1261,10 +1254,10 @@ export function PurchaseEntryPage({
               <th style={{ width: 40 }}>#</th>
               <th style={{ width: 260 }}>商品</th>
               <th style={{ width: 150 }}>規格</th>
-              <th style={{ width: 70 }} className="num">
+              <th style={{ width: 84 }} className="num">
                 進貨數量
               </th>
-              <th style={{ width: 70 }} className="num">
+              <th style={{ width: 84 }} className="num">
                 計價數量
               </th>
               <th style={{ width: 100 }} className="num">
@@ -1345,7 +1338,7 @@ export function PurchaseEntryPage({
                       color: l.productOption?.payload?.spec
                         ? "var(--text)"
                         : "var(--text-dim)",
-                      fontSize: 13,
+                      fontSize: 14,
                     }}
                     title={
                       needsSerial
@@ -1390,14 +1383,10 @@ export function PurchaseEntryPage({
                     />
                   </td>
                   <td>
-                    <input
-                      type="number"
+                    <MoneyInput
                       className="num-input"
-                      step="1"
                       value={l.unit_price}
-                      onChange={(e) =>
-                        updateLine(l.key, { unit_price: e.target.value })
-                      }
+                      onChange={(v) => updateLine(l.key, { unit_price: v })}
                       onBlur={(e) =>
                         updateLine(l.key, {
                           unit_price: toIntStr(e.target.value),
@@ -1407,13 +1396,11 @@ export function PurchaseEntryPage({
                     />
                   </td>
                   <td className="num">
-                    {Math.round(calcAmount(l)).toLocaleString()}
+                    {money(item ? item.amount : calcAmount(l))}
                   </td>
                   <td className="num">
                     {item
-                      ? Math.round(
-                          Number(item.unit_landed_cost),
-                        ).toLocaleString()
+                      ? money(item.unit_landed_cost)
                       : "—"}
                   </td>
                   <td className="row-actions">
@@ -1477,13 +1464,13 @@ export function PurchaseEntryPage({
       <div className="entry-footer">
         <div className="entry-summary">
           <span>
-            未稅小計<b>{Math.round(estSubtotal).toLocaleString()}</b>
+            未稅小計<b>{money(estSubtotal)}</b>
           </span>
           <span>
-            稅額<b>{Math.round(estTax).toLocaleString()}</b>
+            稅額<b>{money(estTax)}</b>
           </span>
-          <span>
-            含稅總額<b>{Math.round(estTotal).toLocaleString()}</b>
+          <span className="grand">
+            含稅總額<b>{money(estTotal)}</b>
           </span>
         </div>
       </div>
@@ -1541,15 +1528,15 @@ export function PurchaseEntryPage({
               <div className="modal-sep" />
               <div className="modal-row">
                 <span>未稅小計</span>
-                <b>{Math.round(estSubtotal).toLocaleString()}</b>
+                <b>{money(estSubtotal)}</b>
               </div>
               <div className="modal-row">
                 <span>稅額</span>
-                <b>{Math.round(estTax).toLocaleString()}</b>
+                <b>{money(estTax)}</b>
               </div>
               <div className="modal-row big">
                 <span>含稅總額</span>
-                <b>{Math.round(estTotal).toLocaleString()}</b>
+                <b>{money(estTotal)}</b>
               </div>
             </div>
             <div className="modal-actions">

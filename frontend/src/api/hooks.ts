@@ -307,6 +307,8 @@ export interface BusinessDailyReport {
   date: string;
   opening_cash: number;
   sales: BusinessDailySection;
+  /** 個人收購付出去的現金(現金付款是負的銷貨單);total 是正數 */
+  buybacks?: BusinessDailySection;
   non_cash_sales: BusinessDailySection;
   sales_returns: BusinessDailySection;
   purchases: BusinessDailySection;

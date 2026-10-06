@@ -6,6 +6,7 @@ import { useCustomers, useSalesOrders, useSaveCustomer } from "@/api/hooks";
 import type { Customer, CustomerKind } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { money } from "@/lib/money";
 
 const CUSTOMER_KINDS: { value: CustomerKind; label: string }[] = [
   { value: "individual", label: "個人" },
@@ -253,7 +254,7 @@ export function CustomersPage() {
                   style={{
                     marginLeft: 6,
                     opacity: 0.7,
-                    fontSize: 13,
+                    fontSize: 14,
                   }}
                 >
                   {count}
@@ -355,7 +356,7 @@ export function CustomersPage() {
                   />
                 </dd>
                 <dt>
-                  姓名 / 名稱 <span style={{ color: "#ff7070" }}>*</span>
+                  姓名 / 名稱 <span style={{ color: "var(--danger-text)" }}>*</span>
                 </dt>
                 <dd>
                   <input
@@ -443,7 +444,7 @@ export function CustomersPage() {
                     銷售紀錄
                     {orders.isLoading
                       ? " 載入中…"
-                      : ` (${orderStats.count} 筆 · 累計 $${orderStats.total.toLocaleString()}${
+                      : ` (${orderStats.count} 筆 · 累計 $${money(orderStats.total)}${
                           orderStats.lastVisit
                             ? ` · 最近 ${orderStats.lastVisit}`
                             : ""
@@ -478,7 +479,7 @@ export function CustomersPage() {
                             <td>{so.tax_method_label}</td>
                             <td>{so.invoice_no || "—"}</td>
                             <td className="num">
-                              {Number(so.total).toLocaleString()}
+                              {money(so.total)}
                             </td>
                           </tr>
                         ))}

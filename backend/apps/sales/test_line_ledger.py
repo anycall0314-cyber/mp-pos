@@ -11,8 +11,9 @@ from django.apps import apps as django_apps
 from django.test import TestCase, TransactionTestCase
 
 from apps.backup.tests.factory import Company
+from apps.core.money import CENTS, ONE
 from apps.inventory.models import ProductSerial
-from apps.sales.models import SalesOrder, SalesOrderItem, SalesReturnItem
+from apps.sales.models import SalesOrder, SalesOrderItem, SalesOrderPayment, SalesReturnItem
 from apps.sales.services import _calc_tax, split_tax_by_line
 
 backfill = importlib.import_module(
@@ -44,29 +45,62 @@ def build_return(tenant, so_id, lines, warehouse=None, void=False, customer="sam
 
 
 class SplitTests(TestCase):
+    def assert_adds_up(self, amounts, method, unit):
+        subtotal, tax, total = _calc_tax(sum(amounts, D("0")), method, unit)
+        split = split_tax_by_line(amounts, method, subtotal, tax)
+        self.assertIsNotNone(split, (method, amounts))
+        self.assertEqual(sum(u for u, _ in split), subtotal)
+        self.assertEqual(sum(t for _, t in split), tax)
+        if method == "taxable_included":
+            for a, (u, t) in zip(amounts, split):
+                self.assertEqual(u + t, a)
+        return subtotal, tax, total, split
+
     def test_lines_always_add_up_to_the_header(self):
+        # 現在的規則:明細金額是整數元,單頭與每一行也都是整數元
+        rng = random.Random(20261006)
+        for method in ("taxable_included", "taxable_excluded", "untaxed", "tax_free"):
+            for _ in range(300):
+                amounts = [D(rng.randint(-500, 3000)) for _ in range(rng.randint(1, 9))]
+                subtotal, tax, total, split = self.assert_adds_up(amounts, method, ONE)
+                for value in (subtotal, tax, total, *(x for pair in split for x in pair)):
+                    self.assertEqual(value, value.to_integral_value(), (method, amounts))
+
+    def test_lines_saved_before_whole_dollars_still_add_up(self):
+        # 2026-10-06 以前存的單是算到分的:照舊認得、照舊分得開(對帳與回填要用)
         rng = random.Random(20261004)
         for method in ("taxable_included", "taxable_excluded", "untaxed", "tax_free"):
             for _ in range(300):
                 amounts = [
                     D(rng.randint(-50000, 300000)) / 100 for _ in range(rng.randint(1, 9))
                 ]
-                subtotal, tax, total = _calc_tax(sum(amounts, D("0")), method)
-                split = split_tax_by_line(amounts, method, subtotal, tax)
-                self.assertIsNotNone(split, (method, amounts))
-                self.assertEqual(sum(u for u, _ in split), subtotal)
-                self.assertEqual(sum(t for _, t in split), tax)
-                if method == "taxable_included":
-                    for a, (u, t) in zip(amounts, split):
-                        self.assertEqual(u + t, a)
+                self.assert_adds_up(amounts, method, CENTS)
 
     def test_rounding_goes_to_the_biggest_line(self):
-        amounts = [D("100.00"), D("250.00"), D("100.00")]
+        amounts = [D("100"), D("250"), D("100")]
         subtotal, tax, _ = _calc_tax(sum(amounts), "taxable_included")
+        self.assertEqual((subtotal, tax), (D("429"), D("21")))
+        split = split_tax_by_line(amounts, "taxable_included", subtotal, tax)
+        # 各自四捨五入是 95 / 238 / 95 = 428,少的 1 元補在最大那一行
+        self.assertEqual(split[0], (D("95"), D("5")))
+        self.assertEqual(split[1], (D("239"), D("11")))
+        self.assertEqual(split[2], (D("95"), D("5")))
+
+    def test_rounding_of_an_order_saved_in_cents(self):
+        amounts = [D("100.00"), D("250.00"), D("100.00")]
+        subtotal, tax, _ = _calc_tax(sum(amounts), "taxable_included", CENTS)
         split = split_tax_by_line(amounts, "taxable_included", subtotal, tax)
         self.assertEqual(split[0], (D("95.24"), D("4.76")))
         self.assertEqual(split[2], (D("95.24"), D("4.76")))
         self.assertEqual(sum(u for u, _ in split), subtotal)
+
+    def test_half_a_dollar_always_rounds_up(self):
+        # 外加 90 的稅是 4.5:四捨五入是 5(Python 預設的進位法會給 4)
+        self.assertEqual(_calc_tax(D("90"), "taxable_excluded"), (D("90"), D("5"), D("95")))
+        self.assertEqual(_calc_tax(D("110"), "taxable_excluded"), (D("110"), D("6"), D("116")))
+        self.assertEqual(_calc_tax(D("1000"), "taxable_included"), (D("952"), D("48"), D("1000")))
+        # 負的(收購、折讓)跟正的進位到同一個數字
+        self.assertEqual(_calc_tax(D("-90"), "taxable_excluded"), (D("-90"), D("-5"), D("-95")))
 
     def test_header_that_does_not_match_is_not_forced(self):
         self.assertIsNone(
@@ -109,12 +143,62 @@ class LedgerTests(TestCase):
 
     def test_sale_taxable_excluded(self):
         so = self.sell("taxable_excluded", [
-            {"product": self.c.case.id, "qty": 1, "unit_price": "33.30"},
-            {"product": self.c.case.id, "qty": 1, "unit_price": "33.30"},
-            {"product": self.c.case.id, "qty": 1, "unit_price": "33.30"},
-        ], "104.90")
+            {"product": self.c.case.id, "qty": 1, "unit_price": "33"},
+            {"product": self.c.case.id, "qty": 1, "unit_price": "33"},
+            {"product": self.c.case.id, "qty": 1, "unit_price": "33"},
+        ], "104")
+        # 99 的稅是 4.95 → 5,總額 104
+        self.assertEqual(
+            (D(so["subtotal"]), D(so["tax_amount"]), D(so["total"])), (D("99"), D("5"), D("104"))
+        )
         self.assert_lines_match_header(so, so["items"])
-        self.assertEqual([D(i["untaxed_amount"]) for i in so["items"]], [D("33.30")] * 3)
+        self.assertEqual([D(i["untaxed_amount"]) for i in so["items"]], [D("33")] * 3)
+        # 每行的稅各自是 1.65 → 2,加起來 6;多的 1 元從第一行扣回來
+        self.assertEqual([D(i["tax_amount"]) for i in so["items"]], [D("1"), D("2"), D("2")])
+
+    def test_excluded_total_with_half_a_dollar_can_be_paid(self):
+        # 以前:110 外加的總額是 115.50,畫面只能收整數,這張單存不進去
+        so = self.sell("taxable_excluded", [
+            {"product": self.c.case.id, "qty": 1, "unit_price": "110"},
+        ], "116")
+        self.assertEqual(
+            (D(so["subtotal"]), D(so["tax_amount"]), D(so["total"])), (D("110"), D("6"), D("116"))
+        )
+        r = self.c.admin.post("/api/v1/sales-orders/", {
+            "customer": self.c.customer.id, "warehouse": self.c.wh.id,
+            "tax_method": "taxable_excluded",
+            "items": [{"product": self.c.case.id, "qty": 1, "unit_price": "110"}],
+            "payments": [{"method": "cash", "amount": "115.50"}],
+        }, format="json")
+        self.assertEqual(r.status_code, 400, r.content)
+
+    def test_line_amount_is_whole_dollars(self):
+        # 單價帶小數(別的程式送進來的):明細金額四捨五入成整數元,後面全部照這個數字算
+        so = self.sell("taxable_included", [
+            {"product": self.c.case.id, "qty": 3, "unit_price": "33.50"},
+        ], "101")
+        item = SalesOrderItem.objects.get(so_id=so["id"])
+        self.assertEqual(item.amount, D("101"))  # 100.5 → 101
+        self.assertEqual((item.untaxed_amount, item.tax_amount), (D("96"), D("5")))
+        self.assertEqual(D(so["total"]), D("101"))
+
+    def as_saved_in_cents(self, so_id, prices=None):
+        """把一張單改回 2026-10-06 以前存檔的樣子(金額算到分、Python 預設進位)。"""
+        so = SalesOrder.objects.get(pk=so_id)
+        items = list(so.items.order_by("line_no", "id"))
+        for it, price in zip(items, prices or []):
+            it.unit_price = D(price)
+            it.amount = (it.qty * it.unit_price).quantize(CENTS)
+            SalesOrderItem.objects.filter(pk=it.pk).update(
+                unit_price=it.unit_price, amount=it.amount)
+        amounts = [it.amount for it in items]
+        subtotal, tax, total = _calc_tax(sum(amounts, D("0")), so.tax_method, CENTS)
+        SalesOrder.objects.filter(pk=so.pk).update(subtotal=subtotal, tax_amount=tax, total=total)
+        split = split_tax_by_line(amounts, so.tax_method, subtotal, tax)
+        for it, (u, t) in zip(items, split):
+            SalesOrderItem.objects.filter(pk=it.pk).update(untaxed_amount=u, tax_amount=t)
+        SalesOrderPayment.objects.filter(so=so).update(amount=total)
+        return subtotal, tax, total
 
     def test_untaxed_sale_has_no_tax(self):
         so = self.sell("untaxed", [
@@ -187,9 +271,9 @@ class LedgerTests(TestCase):
                 {"product": self.c.case.id, "qty": 1, "unit_price": "390"},
             ], "26170"),
             self.sell("taxable_excluded", [
-                {"product": self.c.case.id, "qty": 1, "unit_price": "33.30"},
-                {"product": self.c.case.id, "qty": 2, "unit_price": "33.30"},
-            ], "104.90"),
+                {"product": self.c.case.id, "qty": 1, "unit_price": "33"},
+                {"product": self.c.case.id, "qty": 2, "unit_price": "33"},
+            ], "104"),
             # 三行各自四捨五入會多 1 分,零頭要補在最大那一行
             self.sell("taxable_included", [
                 {"product": self.c.case.id, "qty": 1, "unit_price": "100"},
@@ -197,6 +281,13 @@ class LedgerTests(TestCase):
                 {"product": self.c.case.id, "qty": 1, "unit_price": "100"},
             ], "300"),
         ]
+        # 回填是給 2026-10-06 以前(金額算到分)的單用的:把這三張改回當時存檔的樣子
+        self.assertEqual(self.as_saved_in_cents(orders[0]["id"])[:2], (D("24923.81"), D("1246.19")))
+        self.assertEqual(
+            self.as_saved_in_cents(orders[1]["id"], ["33.30", "33.30"]),
+            (D("99.90"), D("5.00"), D("104.90")),
+        )
+        self.assertEqual(self.as_saved_in_cents(orders[2]["id"])[:2], (D("285.71"), D("14.29")))
         case_line = SalesOrderItem.objects.get(so_id=orders[0]["id"], line_no=2)
         # 除不盡的成本(舊資料可能這樣):整張退時沖回整行成本
         SalesOrderItem.objects.filter(pk=case_line.pk).update(cost_at_post=D("100.01"))

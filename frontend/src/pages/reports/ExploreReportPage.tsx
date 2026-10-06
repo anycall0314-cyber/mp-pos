@@ -21,6 +21,7 @@ import type {
 import { useCurrentUser } from "@/auth/AuthContext";
 import { Banner, errorMessageOf } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { intStr, money } from "@/lib/money";
 
 /**
  * 報表 → 自由組合
@@ -55,7 +56,7 @@ function fmt(v: string | number | null | undefined, format: Format): string {
   if (v === null || v === undefined) return "—";
   const n = Number(v);
   if (format === "pct") return `${(n * 100).toFixed(1)}%`;
-  return Math.round(n).toLocaleString();
+  return money(n);
 }
 
 /** 跟上一期比:回傳顯示文字與方向。比率類看「差幾個百分點」,其他看差額與漲跌幅。 */
@@ -71,7 +72,7 @@ function change(
   const dir = diff > 0 ? "up" : diff < 0 ? "down" : "";
   const sign = diff > 0 ? "+" : "";
   if (format === "pct") return { text: `${sign}${(diff * 100).toFixed(1)}`, dir };
-  const amount = `${sign}${Math.round(diff).toLocaleString()}`;
+  const amount = `${sign}${money(diff)}`;
   if (Number(prev) === 0) return { text: amount, dir };
   const pct = Math.round((diff / Math.abs(Number(prev))) * 100);
   return { text: `${amount} (${pct > 0 ? "+" : ""}${pct}%)`, dir };
@@ -251,8 +252,13 @@ export function ExploreReportPage() {
       ),
     ];
     // 比率在畫面上是百分比,匯出也給百分比(不然 0.2238 貼進試算表會被看成 0.22%)
+    // 其他數字跟畫面一樣收成整數(資料庫給的是 "12345.67")
     const cell = (v: string | number | null | undefined, format: Format) =>
-      format === "pct" && v !== null && v !== undefined ? fmt(v, format) : v;
+      v === null || v === undefined
+        ? v
+        : format === "pct"
+          ? fmt(v, format)
+          : intStr(v);
     const line = (labels: string[], cur: AnalyticsNumbers, prev?: AnalyticsNumbers) => [
       ...labels,
       ...result.columns.measures.flatMap((m) =>
@@ -276,7 +282,7 @@ export function ExploreReportPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${loaded?.name ?? "自由組合"}_${result.applied.period.from}_${result.applied.period.to}.csv`;
+    a.download = `${loaded?.name ?? "自訂分析"}_${result.applied.period.from}_${result.applied.period.to}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -284,7 +290,7 @@ export function ExploreReportPage() {
   if (catalogError) {
     return (
       <div className="page">
-        <Toolbar title="自由組合" />
+        <Toolbar title="自訂分析" />
         <div className="entry-body">
           <Banner kind="error" message={`讀取失敗:${errorMessageOf(catalogError)}`} />
         </div>
@@ -294,7 +300,7 @@ export function ExploreReportPage() {
   if (!catalog) {
     return (
       <div className="page">
-        <Toolbar title="自由組合" />
+        <Toolbar title="自訂分析" />
       </div>
     );
   }
@@ -305,7 +311,7 @@ export function ExploreReportPage() {
   return (
     <div className="page">
       <Toolbar
-        title="自由組合"
+        title="自訂分析"
         actions={
           <select
             className="ex-select"

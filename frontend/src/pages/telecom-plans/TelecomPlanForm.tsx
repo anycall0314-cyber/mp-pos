@@ -8,6 +8,7 @@ import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Checkbox, Field } from "@/components/Field";
+import { MoneyInput } from "@/components/MoneyInput";
 
 interface Props {
   open: boolean;
@@ -240,10 +241,9 @@ export function TelecomPlanForm({ open, initial, onClose }: Props) {
         )}
         <div className="field-row">
           <Field label="月租" required error={fieldErrors.monthly_fee}>
-            <input
-              type="number"
+            <MoneyInput
               value={state.monthly_fee}
-              onChange={(e) => patch("monthly_fee", e.target.value)}
+              onChange={(v) => patch("monthly_fee", v)}
             />
           </Field>
           <Field label="綁約月數" required error={fieldErrors.contract_months}>
@@ -270,10 +270,9 @@ export function TelecomPlanForm({ open, initial, onClose }: Props) {
             </select>
           </Field>
           <Field label="佣金" required error={fieldErrors.commission}>
-            <input
-              type="number"
+            <MoneyInput
               value={state.commission}
-              onChange={(e) => patch("commission", e.target.value)}
+              onChange={(v) => patch("commission", v)}
             />
           </Field>
         </div>

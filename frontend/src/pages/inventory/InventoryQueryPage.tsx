@@ -20,6 +20,7 @@ import { CompatibilityModal } from "@/components/CompatibilityModal";
 import { SerialHistoryModal } from "@/components/SerialHistoryModal";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { codesLabel } from "@/lib/deviceCodes";
+import { money, roundInt } from "@/lib/money";
 
 /**
  * 庫存查詢(工作台版型)。
@@ -69,9 +70,9 @@ function conditionLabel(p: StockMatrixProduct): string {
   return p.is_secondhand ? "中古機" : "";
 }
 
-function money(v: string | number | null | undefined): string {
-  const n = Number(v);
-  return n > 0 ? Math.round(n).toLocaleString() : "—";
+/** 價格欄:沒有價格(0 或空的)顯示「—」 */
+function price(v: string | number | null | undefined): string {
+  return roundInt(v) > 0 ? money(v) : "—";
 }
 
 function readPins(): CatRef[] | null {
@@ -118,12 +119,12 @@ function UnitsOfStore({
       {rows.map((s) => (
         <div key={s.id} className="wb-inv-unit">
           <span className="wb-mono">{codesLabel(s)}</span>
-          <span className="wb-dim">成本 {money(s.purchase_unit_cost)}</span>
+          <span className="wb-dim">成本 {price(s.purchase_unit_cost)}</span>
           {product.tracks_unit_condition && (
             <>
               {s.condition_grade && <span>{s.condition_grade} 級</span>}
               {s.custom_unit_price && (
-                <span>售價 {money(s.custom_unit_price)}</span>
+                <span>售價 {price(s.custom_unit_price)}</span>
               )}
               {s.battery_health != null && (
                 <span className="wb-dim">電池 {s.battery_health}%</span>
@@ -657,8 +658,8 @@ export function InventoryQueryPage() {
                   </span>
                 </div>
                 <div className="wb-dim wb-small">
-                  售價 {money(p.list_price)} · 平均成本{" "}
-                  {money(p.weighted_avg_cost)}
+                  售價 {price(p.list_price)} · 平均成本{" "}
+                  {price(p.weighted_avg_cost)}
                 </div>
                 {opened.has(p.id) && (
                   <div className="wb-inv-card-detail">
@@ -685,7 +686,7 @@ export function InventoryQueryPage() {
                     合計 <b>{grandTotal}</b>
                   </span>
                 </div>
-                <div className="wb-dim wb-small">總成本 {money(grandCost)}</div>
+                <div className="wb-dim wb-small">總成本 {price(grandCost)}</div>
               </div>
             )}
           </div>
@@ -775,10 +776,10 @@ export function InventoryQueryPage() {
                       <td className="num">
                         <b>{p.stock_total}</b>
                       </td>
-                      <td className="num">{money(p.list_price)}</td>
-                      <td className="num">{money(p.weighted_avg_cost)}</td>
+                      <td className="num">{price(p.list_price)}</td>
+                      <td className="num">{price(p.weighted_avg_cost)}</td>
                       <td className="num">
-                        {money(Number(p.weighted_avg_cost) * p.stock_total)}
+                        {price(Number(p.weighted_avg_cost) * p.stock_total)}
                       </td>
                     </tr>
                     {opened.has(p.id) && (
@@ -811,9 +812,9 @@ export function InventoryQueryPage() {
                   <td className="num">{grandTotal}</td>
                   <td></td>
                   <td className="num">
-                    {grandTotal > 0 ? money(grandCost / grandTotal) : "—"}
+                    {grandTotal > 0 ? price(grandCost / grandTotal) : "—"}
                   </td>
-                  <td className="num">{money(grandCost)}</td>
+                  <td className="num">{price(grandCost)}</td>
                 </tr>
               )}
             </tbody>

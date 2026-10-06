@@ -36,6 +36,8 @@ import { ComboBox } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
 import { Toolbar } from "@/components/Toolbar";
+import { MoneyInput } from "@/components/MoneyInput";
+import { intStr } from "@/lib/money";
 
 const STATUS_META: Record<IntakeMatchStatus, { label: string; cls: string }> = {
   auto_matched: { label: "自動對應", cls: "ok" },
@@ -169,7 +171,7 @@ export function IntakePage() {
 
   return (
     <div className="page">
-      <Toolbar title="待確認入庫" />
+      <Toolbar title="進貨匯入" />
 
       <div className="intake-create">
         {formError && <Banner kind="error" message={formError} />}
@@ -295,9 +297,8 @@ export function IntakePage() {
             </label>
             <label className="intake-taxpick">
               單據總額
-              <input
+              <MoneyInput
                 key={`dt-${batch.id}`}
-                type="number"
                 min={0}
                 style={{ width: 90 }}
                 defaultValue={batch.document_total ?? ""}
@@ -305,6 +306,8 @@ export function IntakePage() {
                 title="填了才會在過帳時和明細合計核對"
                 onBlur={(e) => {
                   const v = e.target.value.trim();
+                  // 沒動過就不存(原本帶小數的總額,框裡顯示成整數,不能因為點進去又離開就被改寫)
+                  if (v === intStr(batch.document_total, "")) return;
                   setHeader.mutate({
                     id: batch.id,
                     document_total: v === "" ? null : v,
@@ -655,12 +658,11 @@ function ItemDetail({ item }: { item: IntakeItem }) {
           </label>
           <label>
             進價
-            <input
-              type="number"
+            <MoneyInput
               min={0}
               value={corr.unit_price}
-              onChange={(e) =>
-                setCorr((s) => ({ ...s, unit_price: e.target.value }))
+              onChange={(v) =>
+                setCorr((s) => ({ ...s, unit_price: v }))
               }
             />
           </label>

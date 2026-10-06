@@ -11,6 +11,7 @@ from decimal import Decimal
 from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 
+from apps.core.money import money_int
 from apps.identity.normalize import normalize_serial
 from apps.inventory.models import (
     ProductSerial,
@@ -27,7 +28,7 @@ from apps.sales.models import (
     SalesReturnItem,
     SalesReturnItemSerial,
 )
-from apps.sales.services import _calc_tax
+from apps.sales.services import matches_tax_rule
 
 from .models import LedgerCheckRun, StockSnapshot, StockSnapshotDay
 from .snapshot import current_stock, daily_lock, hold_company
@@ -73,7 +74,7 @@ def check_sales_orders(tenant):
     header, lines, payments = [], [], []
     for pk, no, method, subtotal, tax, total in orders:
         amount, untaxed, line_tax = sums.get(pk, (ZERO, ZERO, ZERO))
-        if _calc_tax(amount, method) != (subtotal, tax, total):
+        if not matches_tax_rule(amount, method, subtotal, tax, total):
             header.append(no)
         if (untaxed, line_tax) != (subtotal, tax):
             lines.append(no)
@@ -94,7 +95,7 @@ def check_sales_returns(tenant):
     header, lines = [], []
     for pk, no, method, subtotal, tax, total in rows:
         amount, untaxed, line_tax = sums.get(pk, (ZERO, ZERO, ZERO))
-        if _calc_tax(amount, method) != (subtotal, tax, total):
+        if not matches_tax_rule(amount, method, subtotal, tax, total):
             header.append(no)
         if (untaxed, line_tax) != (subtotal, tax):
             lines.append(no)
@@ -314,7 +315,7 @@ def check_legacy(tenant):
             detail=(
                 f"店別 {unmapped(LegacyStoreMap):,}、品號 {unmapped(LegacyProductMap):,}、"
                 f"業務 {unmapped(LegacySalespersonMap):,} 個;未對照品號淨額 "
-                f"{round(unmapped_net / 100):,}"
+                f"{money_int(Decimal(unmapped_net) / 100):,}"
             ),
         ),
     ]

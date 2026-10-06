@@ -8,6 +8,8 @@ import {
   MasterColumn,
   DetailTab,
 } from "@/components/master-detail/MasterDetail";
+import { intStr, money } from "@/lib/money";
+import { MoneyInput } from "@/components/MoneyInput";
 
 import { BulkAddTelecomPlansModal } from "./BulkAddTelecomPlansModal";
 import { TelecomPlanForm } from "./TelecomPlanForm";
@@ -90,9 +92,9 @@ export function TelecomPlansPage() {
         const id = Number(idStr);
         const plan = data.find((p) => p.id === id);
         const planIntStr = plan
-          ? String(Math.round(Number(plan.commission)))
+          ? intStr(plan.commission)
           : null;
-        const editIntStr = String(Math.round(Number(v.trim() || 0)));
+        const editIntStr = intStr(v);
         if (plan && editIntStr === planIntStr) {
           changed = true;
         } else {
@@ -116,9 +118,9 @@ export function TelecomPlansPage() {
   async function commitCommission(plan: TelecomPlan) {
     const v = editCommission[plan.id];
     if (v == null) return;
-    const intStr = String(Math.round(Number(v.trim() || 0)));
-    const originalIntStr = String(Math.round(Number(plan.commission)));
-    if (!v.trim() || intStr === originalIntStr) {
+    const nextIntStr = intStr(v);
+    const originalIntStr = intStr(plan.commission);
+    if (!v.trim() || nextIntStr === originalIntStr) {
       // 還原成原值,清掉編輯暫存
       setEditCommission((s) => {
         const next = { ...s };
@@ -129,7 +131,7 @@ export function TelecomPlansPage() {
     }
     markSaving(plan.id, true);
     try {
-      await savePlan.mutateAsync({ id: plan.id, commission: intStr });
+      await savePlan.mutateAsync({ id: plan.id, commission: nextIntStr });
       // 留 editCommission 條目,下次 data refetch 後若一致再清(下方 useEffect)
     } catch (e) {
       setBulkResult(
@@ -212,7 +214,7 @@ export function TelecomPlansPage() {
         header: "月租",
         render: (r) => (
           <span className="num">
-            {Math.round(Number(r.monthly_fee)).toLocaleString()}
+            {money(r.monthly_fee)}
           </span>
         ),
       },
@@ -226,19 +228,17 @@ export function TelecomPlansPage() {
         key: "commission",
         header: "佣金",
         render: (r) => {
-          const original = String(Math.round(Number(r.commission)));
+          const original = intStr(r.commission);
           const editing = editCommission[r.id];
           const value = editing ?? original;
           const dirty = editing != null && editing !== original;
           return (
-            <input
-              type="number"
-              step="1"
+            <MoneyInput
               min="0"
               className="num-input"
               value={value}
-              onChange={(e) =>
-                setEditCommission((s) => ({ ...s, [r.id]: e.target.value }))
+              onChange={(v) =>
+                setEditCommission((s) => ({ ...s, [r.id]: v }))
               }
               onBlur={() => commitCommission(r)}
               onKeyDown={(e) => {
@@ -288,13 +288,13 @@ export function TelecomPlansPage() {
               {r.carrier_code} {r.carrier_name}
             </dd>
             <dt>月租</dt>
-            <dd>{Math.round(Number(r.monthly_fee)).toLocaleString()}</dd>
+            <dd>{money(r.monthly_fee)}</dd>
             <dt>綁約月數</dt>
             <dd>{r.contract_months}</dd>
             <dt>類型</dt>
             <dd>{r.kind_label}</dd>
             <dt>佣金</dt>
-            <dd>{Math.round(Number(r.commission)).toLocaleString()}</dd>
+            <dd>{money(r.commission)}</dd>
             <dt>備註</dt>
             <dd>{r.note || "—"}</dd>
             <dt>狀態</dt>
@@ -380,7 +380,7 @@ export function TelecomPlansPage() {
           {batchPending && (
             <span style={{ color: "var(--text-dim)" }}>處理中…</span>
           )}
-          <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-dim)" }}>
+          <span style={{ marginLeft: "auto", fontSize: 14, color: "var(--text-dim)" }}>
             佣金請直接於下方列表佣金欄位輸入(離開欄位自動儲存)
           </span>
         </div>
@@ -391,8 +391,8 @@ export function TelecomPlansPage() {
           style={{
             padding: "6px 16px",
             background: "rgba(128,208,144,0.15)",
-            color: "#80d090",
-            fontSize: 13,
+            color: "var(--success-text-soft)",
+            fontSize: 14,
           }}
         >
           {bulkResult}

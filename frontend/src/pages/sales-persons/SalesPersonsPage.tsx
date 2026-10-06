@@ -188,7 +188,7 @@ export function SalesPersonsPage() {
                         <td>{s.phone || "—"}</td>
                         <td
                           style={{
-                            color: s.is_active ? "#80d090" : "var(--text-dim)",
+                            color: s.is_active ? "var(--success-text-soft)" : "var(--text-dim)",
                           }}
                         >
                           {s.is_active ? "啟用" : "停用"}
@@ -225,7 +225,7 @@ export function SalesPersonsPage() {
               {savedFlash && <Banner kind="success" message="已儲存" />}
               <dl>
                 <dt>
-                  代號 <span style={{ color: "#ff7070" }}>*</span>
+                  代號 <span style={{ color: "var(--danger-text)" }}>*</span>
                 </dt>
                 <dd>
                   <input
@@ -237,7 +237,7 @@ export function SalesPersonsPage() {
                   />
                 </dd>
                 <dt>
-                  姓名 <span style={{ color: "#ff7070" }}>*</span>
+                  姓名 <span style={{ color: "var(--danger-text)" }}>*</span>
                 </dt>
                 <dd>
                   <input

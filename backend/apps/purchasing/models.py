@@ -3,6 +3,7 @@ from datetime import date
 from django.conf import settings
 from django.db import models, transaction
 
+from apps.core.money import round_money
 from apps.core.models import TenantOwnedModel
 from apps.core.numbering import last_doc_seq
 
@@ -208,5 +209,6 @@ class PurchaseOrderItem(TenantOwnedModel):
         # billed_qty 預設 = qty(無贈品的常態)
         if not self.billed_qty:
             self.billed_qty = self.qty
-        self.amount = self.billed_qty * self.unit_price
+        # 金額一律整數元(規則見 apps/core/money.py);過帳之後再存一次也不會把零頭帶回來
+        self.amount = round_money(self.billed_qty * self.unit_price)
         super().save(*args, **kwargs)

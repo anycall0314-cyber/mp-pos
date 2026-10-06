@@ -5,6 +5,7 @@ import type { Product } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { pickActiveProduct } from "@/pages/products/pickActiveProduct";
+import { MoneyInput } from "@/components/MoneyInput";
 
 /**
  * 解析後尚未經過商品比對的原始一行
@@ -337,13 +338,13 @@ export function PurchaseBatchPasteModal({
                   marginBottom: 8,
                 }}
               >
-                <div style={{ fontSize: 15, color: "var(--text-dim)", flex: 1 }}>
+                <div style={{ fontSize: 16, color: "var(--text-dim)", flex: 1 }}>
                   從 Excel 複製貼入,商品可用品名、品號或條碼,系統會自動比對,模糊符合會給你下拉再選。
                 </div>
                 <button
                   type="button"
                   className="btn"
-                  style={{ flexShrink: 0, fontSize: 14, whiteSpace: "nowrap" }}
+                  style={{ flexShrink: 0, fontSize: 16, whiteSpace: "nowrap" }}
                   onClick={() => downloadSampleCsv(mode)}
                   title="下載 CSV 範例,可用 Excel 打開編輯"
                 >
@@ -363,7 +364,7 @@ PH-000023\t1\t29000\t356121234567000`}
                   width: "100%",
                   fontFamily:
                     "ui-monospace, 'SFMono-Regular', Menlo, monospace",
-                  fontSize: 15,
+                  fontSize: 16,
                   background: "var(--panel)",
                   color: "var(--text)",
                   border: "1px solid var(--border)",
@@ -381,7 +382,7 @@ PH-000023\t1\t29000\t356121234567000`}
                   display: "flex",
                   alignItems: "center",
                   marginBottom: 8,
-                  fontSize: 15,
+                  fontSize: 16,
                 }}
               >
                 <strong style={{ flex: 1 }}>
@@ -448,7 +449,7 @@ PH-000023\t1\t29000\t356121234567000`}
                           ? (
                               <span
                                 style={{
-                                  fontSize: 13,
+                                  fontSize: 14,
                                   color: "#f0c050",
                                   marginLeft: 4,
                                 }}
@@ -460,7 +461,7 @@ PH-000023\t1\t29000\t356121234567000`}
                           ? (
                               <span
                                 style={{
-                                  fontSize: 13,
+                                  fontSize: 14,
                                   color: "#f0c050",
                                   marginLeft: 4,
                                 }}
@@ -471,8 +472,8 @@ PH-000023\t1\t29000\t356121234567000`}
                           : (
                               <span
                                 style={{
-                                  fontSize: 13,
-                                  color: "#ff7070",
+                                  fontSize: 14,
+                                  color: "var(--danger-text)",
                                   marginLeft: 4,
                                 }}
                               >
@@ -553,7 +554,7 @@ PH-000023\t1\t29000\t356121234567000`}
                             {r.rawProductText && r.productOption && (
                               <div
                                 style={{
-                                  fontSize: 13,
+                                  fontSize: 14,
                                   color: "var(--text-dim)",
                                 }}
                               >
@@ -575,13 +576,11 @@ PH-000023\t1\t29000\t356121234567000`}
                             />
                           </td>
                           <td>
-                            <input
-                              type="number"
-                              step="1"
+                            <MoneyInput
                               className="num-input"
                               value={r.unit_price}
-                              onChange={(e) =>
-                                patchRow(r.key, { unit_price: e.target.value })
+                              onChange={(v) =>
+                                patchRow(r.key, { unit_price: v })
                               }
                             />
                           </td>
@@ -606,7 +605,7 @@ PH-000023\t1\t29000\t356121234567000`}
                                 width: "100%",
                                 fontFamily:
                                   "ui-monospace, monospace",
-                                fontSize: 14,
+                                fontSize: 16,
                               }}
                             />
                           </td>
@@ -614,7 +613,7 @@ PH-000023\t1\t29000\t356121234567000`}
                             <button
                               type="button"
                               className="btn"
-                              style={{ fontSize: 13, padding: "2px 6px" }}
+                              style={{ fontSize: 14, padding: "2px 6px" }}
                               onClick={() => removeRow(r.key)}
                               title="刪除這列"
                             >

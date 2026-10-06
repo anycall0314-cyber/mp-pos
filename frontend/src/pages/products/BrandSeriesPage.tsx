@@ -203,8 +203,8 @@ export function BrandSeriesPage() {
           style={{
             padding: "6px 16px",
             background: "rgba(128,208,144,0.15)",
-            color: "#80d090",
-            fontSize: 13,
+            color: "var(--success-text-soft)",
+            fontSize: 14,
           }}
         >
           {importSuccess}
@@ -222,7 +222,7 @@ export function BrandSeriesPage() {
         >
           <div
             style={{
-              fontSize: 12,
+              fontSize: 14,
               color: "var(--text-dim)",
               padding: "4px 0 8px",
             }}
@@ -250,7 +250,7 @@ export function BrandSeriesPage() {
                   style={{
                     marginLeft: 6,
                     color: "var(--text-dim)",
-                    fontSize: 12,
+                    fontSize: 14,
                   }}
                 >
                   ({b.code})
@@ -259,7 +259,7 @@ export function BrandSeriesPage() {
               <div className="pt-list-meta">
                 {b.series_count ?? 0} 個系列
                 {!b.is_active && (
-                  <span style={{ marginLeft: 8, color: "#fb923c" }}>停用</span>
+                  <span style={{ marginLeft: 8, color: "var(--warn-text-orange)" }}>停用</span>
                 )}
               </div>
             </button>
@@ -314,7 +314,7 @@ export function BrandSeriesPage() {
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 4,
-                    fontSize: 13,
+                    fontSize: 14,
                   }}
                 >
                   <input
@@ -467,7 +467,7 @@ export function BrandSeriesPage() {
                         display: "inline-flex",
                         alignItems: "center",
                         gap: 4,
-                        fontSize: 13,
+                        fontSize: 14,
                       }}
                     >
                       <input
@@ -530,7 +530,7 @@ export function BrandSeriesPage() {
                       <tr key={s.id}>
                         <td>{s.sort_order}</td>
                         <td>
-                          <code style={{ fontSize: 12 }}>{s.code}</code>
+                          <code style={{ fontSize: 14 }}>{s.code}</code>
                         </td>
                         <td>
                           <b>{s.name}</b>
@@ -542,8 +542,8 @@ export function BrandSeriesPage() {
                                 padding: "2px 6px",
                                 borderRadius: 4,
                                 background: "rgba(96,165,250,0.15)",
-                                color: "#60a5fa",
-                                fontSize: 12,
+                                color: "var(--info-text)",
+                                fontSize: 14,
                               }}
                             >
                               {s.product_type_name}
@@ -554,9 +554,9 @@ export function BrandSeriesPage() {
                         </td>
                         <td>
                           {s.is_active ? (
-                            <span style={{ color: "#4ade80" }}>啟用</span>
+                            <span style={{ color: "var(--success-text)" }}>啟用</span>
                           ) : (
-                            <span style={{ color: "#fb923c" }}>停用</span>
+                            <span style={{ color: "var(--warn-text-orange)" }}>停用</span>
                           )}
                         </td>
                         <td>

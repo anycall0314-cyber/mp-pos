@@ -48,13 +48,22 @@ import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
 import { Toolbar } from "@/components/Toolbar";
 import { codesLabel } from "@/lib/deviceCodes";
+import { MoneyInput } from "@/components/MoneyInput";
+import {
+  intStr,
+  lineTotal,
+  money,
+  roundInt,
+  splitTax,
+  splitUntaxedByLine,
+} from "@/lib/money";
 
 /** 把資料庫的 "100.00" / number 統一轉成整數字串(四捨五入,空 / NaN 還原成 "0")。 */
 function toIntStr(v: string | number | null | undefined): string {
   if (v === null || v === undefined || v === "") return "0";
   const n = Number(v);
   if (!Number.isFinite(n)) return "0";
-  return String(Math.round(n));
+  return intStr(n);
 }
 
 /** 逐台定價:該台有核定售價就用它,回傳整數字串;否則 null(由呼叫端決定 fallback)。
@@ -171,7 +180,7 @@ function CheckoutModal({
   onContinue,
 }: CheckoutModalProps) {
   const paid = methods.reduce(
-    (s, m) => s + (Number(amounts[m.code]) || 0),
+    (s, m) => s + roundInt(amounts[m.code]),
     0,
   );
   const diff = totalGross - paid;
@@ -187,7 +196,7 @@ function CheckoutModal({
           role="dialog"
           aria-modal="true"
         >
-          <div className="modal-title" style={{ color: "#80d090" }}>
+          <div className="modal-title" style={{ color: "var(--success-text-soft)" }}>
             結帳完成
           </div>
           <div className="modal-body">
@@ -201,7 +210,7 @@ function CheckoutModal({
             </div>
             <div className="modal-row">
               <span>含稅總額</span>
-              <b>{Math.round(Number(savedSO.total)).toLocaleString()}</b>
+              <b>{money(savedSO.total)}</b>
             </div>
             {savedSO.invoice_no && (
               <div className="modal-row">
@@ -216,7 +225,7 @@ function CheckoutModal({
                   <div key={p.id} className="modal-row">
                     <span>{p.method_label}</span>
                     <b>
-                      {Math.round(Number(p.amount)).toLocaleString()}
+                      {money(p.amount)}
                       {p.note ? `(${p.note})` : ""}
                     </b>
                   </div>
@@ -288,15 +297,15 @@ function CheckoutModal({
           <div className="modal-sep" />
           <div className="modal-row">
             <span>未稅小計</span>
-            <b>{Math.round(subtotal).toLocaleString()}</b>
+            <b>{money(subtotal)}</b>
           </div>
           <div className="modal-row">
             <span>稅額</span>
-            <b>{Math.round(tax).toLocaleString()}</b>
+            <b>{money(tax)}</b>
           </div>
           <div className="modal-row big">
             <span>應收</span>
-            <b>{Math.round(totalGross).toLocaleString()}</b>
+            <b>{money(totalGross)}</b>
           </div>
           <div className="modal-sep" />
           {methods.map((m, i) => (
@@ -308,7 +317,7 @@ function CheckoutModal({
                   style={{
                     color:
                       m.kind === "cash"
-                        ? "#80d090"
+                        ? "var(--success-text-soft)"
                         : m.kind === "transfer"
                         ? "#80b0d0"
                         : "var(--text-dim)",
@@ -317,11 +326,10 @@ function CheckoutModal({
                   {m.kind_label}
                 </span>
               </label>
-              <input
-                type="number"
+              <MoneyInput
                 value={amounts[m.code] ?? "0"}
                 autoFocus={i === 0}
-                onChange={(e) => onAmountChange(m.code, e.target.value)}
+                onChange={(v) => onAmountChange(m.code, v)}
               />
             </div>
           ))}
@@ -343,13 +351,13 @@ function CheckoutModal({
             ))}
           <div
             className="checkout-status"
-            style={{ color: aligned ? "#80d090" : "#ff7070" }}
+            style={{ color: aligned ? "var(--success-text-soft)" : "var(--danger-text)" }}
           >
             {aligned
-              ? `已對齊(共 ${Math.round(paid).toLocaleString()})`
+              ? `已對齊(共 ${money(paid)})`
               : diff > 0
-              ? `尚需 ${Math.round(diff).toLocaleString()}`
-              : `多收 ${Math.round(Math.abs(diff)).toLocaleString()}`}
+              ? `尚需 ${money(diff)}`
+              : `多收 ${money(Math.abs(diff))}`}
           </div>
         </div>
         <div className="modal-actions">
@@ -477,8 +485,13 @@ const TAX_METHODS: { value: TaxMethod; label: string }[] = [
   { value: "untaxed", label: "未稅" },
 ];
 
-function calcAmount(line: Line) {
-  return Number(line.amount);
+/**
+ * 這一行的金額。開單時一律 數量 × 單價(單價先收成整數元):金額格、頁尾試算、預設付款、送出的明細
+ * 全部用這一個數字,不要各算各的(以前頁尾讀 `line.amount`、送出用 數量 × 單價,換商品或單價帶小數時兩邊會不一樣,
+ * 預設付款對不上、單存不進去)。看已經存好的單(`saved`)用存下來的金額:舊單可能是折讓,不等於數量 × 單價。
+ */
+function lineAmount(line: Line, saved = false): number {
+  return saved ? roundInt(line.amount) : lineTotal(line.qty, line.unit_price);
 }
 
 interface LineRowProps {
@@ -524,9 +537,7 @@ function LineRow({
     opt?: ComboOption<SalesProductHit>,
   ) {
     const p = opt?.payload;
-    // 選到商品時把建議零售價一次帶到單價與金額(各自獨立,之後互不同步)
-    const userTypedAmount =
-      Number(line.amount) !== 0 && Number(line.amount) !== Number(line.unit_price);
+    // 選到商品時把建議零售價帶到單價,金額跟著重算
     // 打 / 掃 IMEI 命中時,優先帶該台的核定售價
     const msCustom = unitCustomPrice(p, p?.matched_serial);
     // 零件倉商品被選到:自動帶 external_sale_price(對外售價)
@@ -557,10 +568,7 @@ function LineRow({
       qty: pickedQty,
       serialChoices: autoSerial ? [autoSerial] : [],
       unit_price: p ? defaultPrice : line.unit_price,
-      amount:
-        p && !userTypedAmount
-          ? toIntStr(Number(defaultPrice) * pickedQty)
-          : line.amount,
+      amount: p ? toIntStr(Number(defaultPrice) * pickedQty) : line.amount,
       msisdn: p?.allows_telecom_line ? line.msisdn : "",
       telecom_plan: p?.allows_telecom_line ? line.telecom_plan : "",
       telecomPlanOption: p?.allows_telecom_line ? line.telecomPlanOption : null,
@@ -581,11 +589,6 @@ function LineRow({
             date: last.doc_date,
             no: last.sales_order_no,
           };
-          // 已被使用者改過金額 → 只放提示、不覆蓋
-          if (userTypedAmount) {
-            update({ lastPriceHint: hint });
-            return;
-          }
           // 逐台定價的商品:價格來自這一台的核定售價,不是同型號另一台的
           // 歷史成交價。這個查詢是非同步回來的,不擋住就會把剛帶好的
           // 單台售價蓋掉(也會跟「唯一在庫自動選機」互相競賽)。
@@ -733,21 +736,19 @@ function LineRow({
         )}
       </td>
       <td>
-        <input
-          type="number"
+        <MoneyInput
           className="num-input"
-          step="1"
           value={line.unit_price}
-          onChange={(e) =>
+          onChange={(v) =>
             update({
-              unit_price: e.target.value,
-              amount: toIntStr(line.qty * Number(e.target.value || 0)),
+              unit_price: v,
+              amount: toIntStr(lineTotal(line.qty, v)),
             })
           }
           onBlur={(e) =>
             update({
               unit_price: toIntStr(e.target.value),
-              amount: toIntStr(line.qty * Number(e.target.value || 0)),
+              amount: toIntStr(lineTotal(line.qty, e.target.value)),
             })
           }
           disabled={readonly}
@@ -755,14 +756,14 @@ function LineRow({
         {line.lastPriceHint && (
           <div
             style={{
-              fontSize: 11,
+              fontSize: 14,
               color: "var(--text-dim)",
               marginTop: 2,
               textAlign: "right",
             }}
             title={`前次成交價,來源單據 ${line.lastPriceHint.no}`}
           >
-            前次 ${Number(line.lastPriceHint.price).toLocaleString()} ({line.lastPriceHint.date})
+            前次 ${money(line.lastPriceHint.price)} ({line.lastPriceHint.date})
           </div>
         )}
       </td>
@@ -771,7 +772,7 @@ function LineRow({
           type="number"
           className="num-input"
           step="1"
-          value={toIntStr(line.qty * Number(line.unit_price || 0))}
+          value={toIntStr(lineAmount(line, readonly))}
           disabled
           title="自動計算:數量 × 單價"
           readOnly
@@ -853,7 +854,7 @@ function LineRow({
                       color: "var(--text-dim)",
                       cursor: "pointer",
                       padding: "0 4px",
-                      fontSize: 14,
+                      fontSize: 16,
                       flexShrink: 0,
                     }}
                     title="續約不換卡,收起此欄"
@@ -887,7 +888,7 @@ function LineRow({
                   value={line.commission}
                   disabled
                   placeholder="佣金"
-                  title="佣金以方案設定為準,不可於銷貨時更改;請至「方案管理」調整"
+                  title="佣金以方案設定為準,不可於銷貨時更改;請至「電信作業 → 電信方案」調整"
                 />
               </div>
             )}
@@ -1679,30 +1680,44 @@ export function SalesEntryPage() {
     );
   }
 
-  const subtotalRaw = lines.reduce((s, l) => s + (calcAmount(l) || 0), 0);
-  const [estSubtotal, estTax, estTotal] = (() => {
-    const raw = subtotalRaw;
-    if (taxMethod === "taxable_included") {
-      const sub = raw / 1.05;
-      return [sub, raw - sub, raw];
-    }
-    if (taxMethod === "taxable_excluded") {
-      return [raw, raw * 0.05, raw * 1.05];
-    }
-    return [raw, 0, raw];
-  })();
+  // 試算跟伺服器存檔用同一套算法(整數元、四捨五入)
+  // 看已經存好的單:直接顯示存下來的小計 / 稅額 / 總額,不重算(舊單是用以前的算法存的,重算會差幾元)
+  const savedDoc = readonly ? existing.data : undefined;
+  const [estSubtotal, estTax, estTotal] = savedDoc
+    ? [savedDoc.subtotal, savedDoc.tax_amount, savedDoc.total].map(roundInt)
+    : splitTax(lines.map((l) => lineAmount(l)), taxMethod);
 
-  // 預估毛利 = sum(未稅 amount - cost + commission)
-  const estGrossMargin = lines.reduce((sum, l) => {
-    const p = l.productOption?.payload;
-    if (!p) return sum;
-    const lineAmount = Number(l.amount) || 0;
-    const lineCost = p.is_virtual ? 0 : Number(p.weighted_avg_cost) || 0;
-    const lineComm = Number(l.commission) || 0;
-    const netAmount =
-      taxMethod === "taxable_included" ? lineAmount / 1.05 : lineAmount;
-    return sum + netAmount - lineCost + lineComm;
-  }, 0);
+  // 預估毛利 = 計毛利那幾行的(未稅金額 − 平均成本 × 數量 + 佣金)。
+  // 成本與佣金都是 0、每一行都計毛利時,毛利就等於未稅小計(以前成本沒乘數量,賣 2 支只扣 1 支的成本)。
+  // 看已經存好的單:用存檔當下記在每一行的未稅金額、成本、佣金(不計毛利的商品不算),
+  // 不拿現在的平均成本重算(載進來的商品沒有帶成本,重算會把成本當成 0)。
+  const estGrossMargin = savedDoc
+    ? savedDoc.items.reduce(
+        (sum, it) =>
+          it.product_counts_margin === false
+            ? sum
+            : sum +
+              Number(it.untaxed_amount || 0) -
+              Number(it.cost_at_post || 0) +
+              Number(it.commission || 0),
+        0,
+      )
+    : (() => {
+        // 開單中:每一行的未稅金額跟存檔時分到每行的算法一樣;不計毛利的商品(例:收購二手)整行不算,
+        // 存檔前後看到的毛利才會是同一個數字
+        const untaxed = splitUntaxedByLine(
+          lines.map((l) => lineAmount(l)),
+          taxMethod,
+        );
+        return lines.reduce((sum, l, i) => {
+          const p = l.productOption?.payload;
+          if (!p || p.counts_margin === false) return sum;
+          const lineCost = p.is_virtual
+            ? 0
+            : (Number(p.weighted_avg_cost) || 0) * l.qty;
+          return sum + untaxed[i] - lineCost + roundInt(l.commission);
+        }, 0);
+      })();
 
   function validate(): string | null {
     if (!warehouse) return "請選出貨倉";
@@ -1741,7 +1756,7 @@ export function SalesEntryPage() {
       return;
     }
     // 預設:把整筆金額放在「預設」方法,其他為 0
-    const total = Math.round(estTotal);
+    const total = roundInt(estTotal);
     const defaultMethod =
       paymentMethods.find((m) => m.is_default) ?? paymentMethods[0];
     const amounts: Record<string, string> = {};
@@ -1757,9 +1772,9 @@ export function SalesEntryPage() {
 
   async function doSave() {
     setError(null);
-    const target = Math.round(estTotal);
+    const target = roundInt(estTotal);
     const paid = Object.values(payAmounts).reduce(
-      (s, v) => s + (Number(v) || 0),
+      (s, v) => s + roundInt(v),
       0,
     );
     if (paid !== target) {
@@ -1768,7 +1783,7 @@ export function SalesEntryPage() {
     }
     const payments: Array<{ method: string; amount: string; note?: string }> = [];
     for (const m of paymentMethods) {
-      const amt = Number(payAmounts[m.code]) || 0;
+      const amt = roundInt(payAmounts[m.code]);
       if (amt === 0) continue;
       payments.push({
         method: m.code,
@@ -1793,8 +1808,8 @@ export function SalesEntryPage() {
           line_no: idx + 1,
           product: l.product as number,
           qty: l.qty,
-          unit_price: l.unit_price,
-          amount: toIntStr(l.qty * Number(l.unit_price || 0)),
+          unit_price: toIntStr(l.unit_price),
+          amount: toIntStr(lineAmount(l)),
           serial_ids: pickedSerialIds(l),
           msisdn: l.msisdn,
           telecom_plan:
@@ -1804,7 +1819,7 @@ export function SalesEntryPage() {
           activation_date:
             l.activation_date ||
             (l.telecom_plan !== "" ? docDate : null),
-          commission: l.commission || "0",
+          commission: toIntStr(l.commission),
         })),
         payments,
       } as Parameters<typeof createMutation.mutateAsync>[0]);
@@ -2113,7 +2128,7 @@ export function SalesEntryPage() {
                         background: "var(--danger, #c33)",
                         color: "white",
                         borderRadius: 3,
-                        fontSize: 11,
+                        fontSize: 14,
                         whiteSpace: "nowrap",
                       }}
                       title="此銷貨單已有銷退,原發票已標作廢"
@@ -2174,7 +2189,7 @@ export function SalesEntryPage() {
             {scanMsg && (
               <span
                 className="scan-msg"
-                style={{ color: scanMsg.ok ? "#80d090" : "#ff7070" }}
+                style={{ color: scanMsg.ok ? "var(--success-text-soft)" : "var(--danger-text)" }}
               >
                 {scanMsg.text}
               </span>
@@ -2187,7 +2202,7 @@ export function SalesEntryPage() {
             <tr>
               <th style={{ width: 40 }}>#</th>
               <th style={{ width: 240 }}>商品</th>
-              <th style={{ width: 60 }} className="num">
+              <th style={{ width: 84 }} className="num">
                 數量
               </th>
               <th style={{ width: 90 }} className="num">
@@ -2252,21 +2267,21 @@ export function SalesEntryPage() {
       <div className="entry-footer">
         <div className="entry-summary">
           <span>
-            未稅小計<b>{Math.round(estSubtotal).toLocaleString()}</b>
+            未稅小計<b>{money(estSubtotal)}</b>
           </span>
           <span>
-            稅額<b>{Math.round(estTax).toLocaleString()}</b>
+            稅額<b>{money(estTax)}</b>
           </span>
-          <span>
-            含稅總額<b>{Math.round(estTotal).toLocaleString()}</b>
+          <span className="grand">
+            含稅總額<b>{money(estTotal)}</b>
           </span>
           <span
             style={{
               color: marginHidden
                 ? "var(--text-dim)"
                 : estGrossMargin >= 0
-                ? "#80d090"
-                : "#ff7070",
+                ? "var(--success-text-soft)"
+                : "var(--danger-text)",
               display: "inline-flex",
               alignItems: "center",
               gap: 6,
@@ -2276,7 +2291,7 @@ export function SalesEntryPage() {
             <b>
               {marginHidden
                 ? "•••"
-                : Math.round(estGrossMargin).toLocaleString()}
+                : money(estGrossMargin)}
             </b>
             <button
               type="button"
@@ -2346,9 +2361,9 @@ export function SalesEntryPage() {
 
       {showConfirm && (
         <CheckoutModal
-          totalGross={Math.round(estTotal)}
-          subtotal={Math.round(estSubtotal)}
-          tax={Math.round(estTax)}
+          totalGross={roundInt(estTotal)}
+          subtotal={roundInt(estSubtotal)}
+          tax={roundInt(estTax)}
           itemsCount={lines.length}
           customerLabel={
             customer || member

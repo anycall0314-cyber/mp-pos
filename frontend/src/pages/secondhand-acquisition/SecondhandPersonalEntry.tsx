@@ -22,6 +22,8 @@ import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
 import { looksLikeImei } from "@/lib/deviceCodes";
+import { MoneyInput } from "@/components/MoneyInput";
+import { intStr, money } from "@/lib/money";
 
 const GRADE_OPTIONS: { value: ConditionGrade; label: string }[] = [
   { value: "S", label: "S 媲美新機 / 拆封未使用" },
@@ -173,18 +175,16 @@ export function SecondhandPersonalEntry() {
         imei: imei.trim(),
         sn: sn.trim(),
         condition_grade: grade,
-        custom_unit_price: customPrice || null,
+        custom_unit_price: customPrice ? intStr(customPrice) : null,
         battery_health: batteryHealth ? Number(batteryHealth) : null,
         condition_note: conditionNote,
-        acquisition_price: acquisitionPrice,
+        acquisition_price: intStr(acquisitionPrice),
         payment_method_code: paymentMethod,
         doc_date: docDate || null,
         note,
       });
       setSuccess(
-        `收購完成:序號 ${res.serial.serial_no},對應銷貨單 ${res.sales_order.no},付款 ${Number(
-          acquisitionPrice,
-        ).toLocaleString()} 元給 ${member?.name ?? "會員"}`,
+        `收購完成:序號 ${res.serial.serial_no},對應銷貨單 ${res.sales_order.no},付款 ${money(acquisitionPrice)} 元給 ${member?.name ?? "會員"}`,
       );
       reset();
     } catch (e) {
@@ -237,7 +237,7 @@ export function SecondhandPersonalEntry() {
                 </span>
               )}
               {memberStatus === "found" && member && (
-                <span className="member-tag" style={{ color: "#80d090" }}>
+                <span className="member-tag" style={{ color: "var(--success-text-soft)" }}>
                   會員:{member.name} ({member.code})
                 </span>
               )}
@@ -332,18 +332,16 @@ export function SecondhandPersonalEntry() {
             />
           </Field>
           <Field label="預計售價(自定)">
-            <input
-              type="number"
+            <MoneyInput
               value={customPrice}
-              onChange={(e) => setCustomPrice(e.target.value)}
+              onChange={setCustomPrice}
               placeholder="留空使用主檔售價"
             />
           </Field>
           <Field label="收購金額(付給會員)" required>
-            <input
-              type="number"
+            <MoneyInput
               value={acquisitionPrice}
-              onChange={(e) => setAcquisitionPrice(e.target.value)}
+              onChange={setAcquisitionPrice}
               placeholder="例:20000"
             />
           </Field>
@@ -391,7 +389,7 @@ export function SecondhandPersonalEntry() {
 
       <div
         className="md-empty"
-        style={{ marginTop: 24, fontSize: 13, lineHeight: 1.7 }}
+        style={{ marginTop: 24, fontSize: 14, lineHeight: 1.7 }}
       >
         系統會以未稅方式同步建立「收購二手」銷貨單(金額負數,代表現金流出)與中古機序號,
         並依該會員自動帶 / 建立個人客戶作為銷貨單歸屬。

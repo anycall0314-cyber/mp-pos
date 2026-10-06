@@ -81,7 +81,7 @@ export function PlatformWarehousesTab() {
             display: "flex",
             alignItems: "center",
             gap: 6,
-            fontSize: 13,
+            fontSize: 14,
           }}
         >
           篩選經銷商:

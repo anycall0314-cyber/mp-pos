@@ -8,6 +8,7 @@ import {
 import type { PartTemplate } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { MoneyInput } from "@/components/MoneyInput";
 
 /**
  * 「快速加入」常用零件 — 點一下加一列並自動帶入名稱與代碼。
@@ -196,7 +197,7 @@ function ChipInput({
             background: "rgba(79, 140, 255, 0.12)",
             border: "1px solid rgba(79, 140, 255, 0.35)",
             color: "var(--accent)",
-            fontSize: 13,
+            fontSize: 14,
           }}
         >
           {v}
@@ -209,7 +210,7 @@ function ChipInput({
               border: 0,
               color: "inherit",
               cursor: "pointer",
-              fontSize: 14,
+              fontSize: 16,
               lineHeight: 1,
               padding: 0,
               marginLeft: 2,
@@ -247,7 +248,7 @@ function ChipInput({
           border: 0,
           outline: 0,
           color: "var(--text)",
-          fontSize: 14,
+          fontSize: 16,
           padding: "4px 2px",
         }}
       />
@@ -473,7 +474,7 @@ export function PartTemplatesPage() {
         >
           <div
             style={{
-              fontSize: 12,
+              fontSize: 14,
               color: "var(--text-dim)",
               padding: "4px 0 8px",
             }}
@@ -499,7 +500,7 @@ export function PartTemplatesPage() {
               <div className="pt-list-meta">
                 {t.items.length} 種
                 {!t.is_active && (
-                  <span style={{ marginLeft: 8, color: "#fb923c" }}>停用</span>
+                  <span style={{ marginLeft: 8, color: "var(--warn-text-orange)" }}>停用</span>
                 )}
               </div>
             </button>
@@ -526,7 +527,7 @@ export function PartTemplatesPage() {
               <div style={{ marginBottom: 16 }}>
                 <div
                   style={{
-                    fontSize: 13,
+                    fontSize: 14,
                     color: "var(--text-dim)",
                     marginBottom: 8,
                   }}
@@ -560,7 +561,7 @@ export function PartTemplatesPage() {
                 <label
                   style={{
                     display: "block",
-                    fontSize: 13,
+                    fontSize: 14,
                     color: "var(--text-dim)",
                     marginBottom: 6,
                   }}
@@ -586,7 +587,7 @@ export function PartTemplatesPage() {
                     <label
                       style={{
                         display: "block",
-                        fontSize: 13,
+                        fontSize: 14,
                         color: "var(--text-dim)",
                         marginBottom: 6,
                       }}
@@ -602,7 +603,7 @@ export function PartTemplatesPage() {
                         width: "100%",
                         resize: "vertical",
                         padding: "8px 12px",
-                        fontSize: 14,
+                        fontSize: 16,
                         lineHeight: 1.5,
                       }}
                     />
@@ -700,7 +701,7 @@ export function PartTemplatesPage() {
                 </h4>
                 <span
                   style={{
-                    fontSize: 13,
+                    fontSize: 14,
                     color: "var(--text-dim)",
                   }}
                 >
@@ -712,7 +713,7 @@ export function PartTemplatesPage() {
               <div style={{ marginBottom: 10 }}>
                 <div
                   style={{
-                    fontSize: 12,
+                    fontSize: 14,
                     color: "var(--text-dim)",
                     marginBottom: 6,
                   }}
@@ -780,13 +781,11 @@ export function PartTemplatesPage() {
                         />
                       </td>
                       <td>
-                        <input
-                          type="number"
+                        <MoneyInput
                           min="0"
-                          step="any"
                           value={it.default_cost}
-                          onChange={(e) =>
-                            patchItem(idx, { default_cost: e.target.value })
+                          onChange={(v) =>
+                            patchItem(idx, { default_cost: v })
                           }
                           placeholder="0"
                           style={{ textAlign: "right" }}

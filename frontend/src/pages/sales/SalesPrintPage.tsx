@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 
 import { useSalesOrder } from "@/api/hooks";
+import { money } from "@/lib/money";
 
 /**
  * 80mm 熱感收據佈局。
@@ -105,7 +106,7 @@ export function SalesPrintPage() {
               </td>
               <td className="num">{it.qty}</td>
               <td className="num">
-                {Math.round(Number(it.amount)).toLocaleString()}
+                {money(it.amount)}
               </td>
             </tr>
           ))}
@@ -117,15 +118,15 @@ export function SalesPrintPage() {
       <div className="print-totals">
         <Row
           label="未稅小計"
-          value={Math.round(Number(so.subtotal)).toLocaleString()}
+          value={money(so.subtotal)}
         />
         <Row
           label="稅額"
-          value={Math.round(Number(so.tax_amount)).toLocaleString()}
+          value={money(so.tax_amount)}
         />
         <Row
           label="含稅總額"
-          value={Math.round(Number(so.total)).toLocaleString()}
+          value={money(so.total)}
           big
         />
       </div>

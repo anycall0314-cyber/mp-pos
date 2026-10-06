@@ -60,7 +60,7 @@ export function LoginPage() {
         {error && <Banner kind="error" message={error} />}
 
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 13, color: "var(--text-dim)" }}>帳號</span>
+          <span style={{ fontSize: 14, color: "var(--text-dim)" }}>帳號</span>
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -71,7 +71,7 @@ export function LoginPage() {
         </label>
 
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 13, color: "var(--text-dim)" }}>密碼</span>
+          <span style={{ fontSize: 14, color: "var(--text-dim)" }}>密碼</span>
           <input
             type="password"
             value={password}
@@ -91,7 +91,7 @@ export function LoginPage() {
 
         <div
           style={{
-            fontSize: 12,
+            fontSize: 14,
             color: "var(--text-dim)",
             textAlign: "center",
             marginTop: 4,

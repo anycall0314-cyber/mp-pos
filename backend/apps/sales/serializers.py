@@ -2,6 +2,7 @@ from datetime import date
 
 from rest_framework import serializers
 
+from apps.core.money import round_money
 from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
 from apps.inventory.models import ProductSerial
 
@@ -253,7 +254,8 @@ class SalesOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSeri
             # 佣金一律以方案設定為準,忽略傳入值(防 API 繞過前端鎖)
             plan = item_data.get("telecom_plan")
             if plan is not None:
-                item_data["commission"] = plan.commission
+                # 存進明細的佣金是金額,整數元(方案主檔以前存的 100.50 不回頭改,畫面顯示與試算是 101)
+                item_data["commission"] = round_money(plan.commission)
             else:
                 item_data["commission"] = 0
             item = SalesOrderItem.objects.create(so=so, tenant=so.tenant, **item_data)

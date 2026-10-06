@@ -16,6 +16,8 @@ import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
+import { MoneyInput } from "@/components/MoneyInput";
+import { keepOrInt, money } from "@/lib/money";
 
 interface Props {
   open: boolean;
@@ -79,7 +81,7 @@ function toState(a: CashAdjustment): FormState {
     doc_date: a.doc_date,
     direction: a.direction,
     reason: a.reason,
-    amount: String(Math.round(Number(a.amount))),
+    amount: String(a.amount),
     handled_by: a.handled_by ?? "",
     note: a.note,
   };
@@ -168,8 +170,8 @@ export function CashAdjustmentForm({ open, initial, onClose }: Props) {
       setError("請選門市");
       return;
     }
-    const amountInt = Math.round(Number(state.amount) || 0);
-    if (amountInt <= 0) {
+    // 用原值判斷:以前存的 0.49 沒動過也要能存其他欄位(收成整數會變 0 被擋)
+    if (!(Number(state.amount) > 0)) {
       setError("金額需大於 0");
       return;
     }
@@ -182,7 +184,6 @@ export function CashAdjustmentForm({ open, initial, onClose }: Props) {
 
   async function reallySave() {
     setError(null);
-    const amountInt = Math.round(Number(state.amount) || 0);
     try {
       await save.mutateAsync({
         id: initial?.id,
@@ -190,7 +191,7 @@ export function CashAdjustmentForm({ open, initial, onClose }: Props) {
         doc_date: state.doc_date,
         direction: state.direction,
         reason: state.reason,
-        amount: String(amountInt),
+        amount: keepOrInt(state.amount, initial?.amount),
         handled_by: (state.handled_by as number) || null,
         note: state.note.trim(),
       });
@@ -275,7 +276,7 @@ export function CashAdjustmentForm({ open, initial, onClose }: Props) {
               padding: "8px 12px",
               background: "var(--panel)",
               borderLeft: "3px solid #ffa500",
-              fontSize: 13,
+              fontSize: 14,
               color: "var(--text-dim)",
               marginBottom: 12,
             }}
@@ -290,7 +291,7 @@ export function CashAdjustmentForm({ open, initial, onClose }: Props) {
             <dt>方向</dt>
             <dd
               style={{
-                color: state.direction === "in" ? "#80d090" : "#ff7070",
+                color: state.direction === "in" ? "var(--success-text-soft)" : "var(--danger-text)",
                 fontWeight: 600,
               }}
             >
@@ -303,12 +304,12 @@ export function CashAdjustmentForm({ open, initial, onClose }: Props) {
               style={{
                 fontSize: 20,
                 fontWeight: 700,
-                color: state.direction === "in" ? "#80d090" : "#ff7070",
+                color: state.direction === "in" ? "var(--success-text-soft)" : "var(--danger-text)",
                 fontVariantNumeric: "tabular-nums",
               }}
             >
               {state.direction === "in" ? "+" : "−"}$
-              {Math.round(Number(state.amount) || 0).toLocaleString()}
+              {money(state.amount)}
             </dd>
             <dt>經手人</dt>
             <dd style={{ fontWeight: 600 }}>{handledByOption?.label ?? "—"}</dd>
@@ -374,12 +375,10 @@ export function CashAdjustmentForm({ open, initial, onClose }: Props) {
             </select>
           </Field>
           <Field label="金額" required>
-            <input
-              type="number"
-              step="1"
+            <MoneyInput
               min="0"
               value={state.amount}
-              onChange={(e) => patch("amount", e.target.value)}
+              onChange={(v) => patch("amount", v)}
               autoFocus
             />
           </Field>

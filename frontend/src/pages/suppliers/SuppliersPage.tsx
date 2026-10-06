@@ -220,7 +220,7 @@ export function SuppliersPage() {
               <div
                 style={{
                   padding: "2px 10px 6px",
-                  fontSize: 13,
+                  fontSize: 14,
                   color: "var(--text-dim)",
                 }}
               >
@@ -310,7 +310,7 @@ export function SuppliersPage() {
                           <td
                             style={{
                               color: s.is_active
-                                ? "#80d090"
+                                ? "var(--success-text-soft)"
                                 : "var(--text-dim)",
                             }}
                           >
@@ -360,7 +360,7 @@ export function SuppliersPage() {
                       <span
                         style={{
                           marginLeft: 8,
-                          fontSize: 13,
+                          fontSize: 14,
                           color: "var(--text-dim)",
                         }}
                       >
@@ -370,7 +370,7 @@ export function SuppliersPage() {
                   </>
                 )}
                 <dt>
-                  名稱 <span style={{ color: "#ff7070" }}>*</span>
+                  名稱 <span style={{ color: "var(--danger-text)" }}>*</span>
                 </dt>
                 <dd>
                   <input

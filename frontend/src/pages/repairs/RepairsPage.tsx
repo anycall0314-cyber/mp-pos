@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { useRepairOrders, useSaveRepairOrder } from "@/api/hooks";
+import { MoneyInput } from "@/components/MoneyInput";
 import { Toolbar } from "@/components/Toolbar";
+import { intStr, money } from "@/lib/money";
 
 const STATUS_OPTIONS = [
   { v: "", label: "全部" },
@@ -26,7 +28,7 @@ function InlineMoneyCell({
   onSave: (v: string) => Promise<void>;
   title?: string;
 }) {
-  const normalized = String(Math.round(Number(initial) || 0));
+  const normalized = intStr(initial);
   const [val, setVal] = useState(normalized);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -37,7 +39,7 @@ function InlineMoneyCell({
 
   async function flush() {
     if (saving) return;
-    const trimmed = val.trim() === "" ? "0" : val.trim();
+    const trimmed = intStr(val);
     if (trimmed === normalized) {
       setVal(normalized);
       return;
@@ -56,12 +58,11 @@ function InlineMoneyCell({
   }
 
   return (
-    <input
-      type="number"
+    <MoneyInput
       min={0}
       value={val}
       disabled={disabled || saving}
-      onChange={(e) => setVal(e.target.value)}
+      onChange={setVal}
       onBlur={flush}
       onKeyDown={(e) => {
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
@@ -81,7 +82,7 @@ function InlineMoneyCell({
 }
 
 const NUMBER_FMT = (v: string | number) =>
-  Math.round(Number(v) || 0).toLocaleString();
+  money(v);
 
 export function RepairsPage() {
   const [status, setStatus] = useState("");
@@ -150,7 +151,7 @@ export function RepairsPage() {
           style={{
             marginLeft: "auto",
             color: "var(--text-dim)",
-            fontSize: 12,
+            fontSize: 14,
           }}
         >
           報價 / 成本 / 實付欄位可直接點選編輯(失焦自動存)
@@ -215,8 +216,8 @@ export function RepairsPage() {
                                 : "rgba(251,146,60,0.15)",
                             color:
                               r.warranty_info?.status === "within"
-                                ? "#4ade80"
-                                : "#fb923c",
+                                ? "var(--success-text)"
+                                : "var(--warn-text-orange)",
                           }}
                         >
                           返修
@@ -284,9 +285,9 @@ export function RepairsPage() {
                       style={{
                         color:
                           margin < 0
-                            ? "#ff7070"
+                            ? "var(--danger-text)"
                             : margin > 0
-                              ? "#4ade80"
+                              ? "var(--success-text)"
                               : "var(--text-dim)",
                         fontWeight: 600,
                       }}

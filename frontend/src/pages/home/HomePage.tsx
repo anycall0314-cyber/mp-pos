@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 
 import { TrendingItem, useHomeSummary, useTrending } from "@/api/hooks";
 import { useCurrentUser } from "@/auth/AuthContext";
+import { money } from "@/lib/money";
 
 /**
  * 登入後第一眼:
@@ -69,7 +70,7 @@ export function HomePage() {
           <div className="hp-stat-grid">
             <StatCard
               label="今日營業額"
-              value={`$${(today?.revenue ?? 0).toLocaleString()}`}
+              value={`$${money(today?.revenue)}`}
               hint={revenueDiff}
             />
             <StatCard
@@ -246,7 +247,7 @@ export function HomePage() {
                     </div>
                   </div>
                   <div className="hp-recent-amount">
-                    ${s.total.toLocaleString()}
+                    ${money(s.total)}
                   </div>
                 </NavLink>
               ))}
@@ -321,7 +322,7 @@ export function HomePage() {
             <QuickLink to="/reports/business-daily" label="營業日報" />
             <QuickLink to="/transfers/new" label="調撥作業" />
             <QuickLink to="/telecom/billing" label="代收話費" />
-            <QuickLink to="/products" label="商品建立" />
+            <QuickLink to="/products" label="商品管理" />
           </div>
         </section>
       </div>

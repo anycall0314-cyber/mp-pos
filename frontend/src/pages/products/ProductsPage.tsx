@@ -12,6 +12,7 @@ import { api } from "@/api/client";
 import type { Product } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { money } from "@/lib/money";
 
 import { BulkAddProductsModal } from "./BulkAddProductsModal";
 import { BulkCreatePartsModal } from "./BulkCreatePartsModal";
@@ -23,7 +24,7 @@ import { ProductImportModal } from "./ProductImportModal";
 
 function formatMoney(value: string | number) {
   const n = Number(value);
-  return Number.isFinite(n) ? Math.round(n).toLocaleString() : "—";
+  return Number.isFinite(n) ? money(n) : "—";
 }
 
 function flagText(p: Product) {
@@ -274,7 +275,7 @@ export function ProductsPage() {
                   <span
                     style={{
                       color: "var(--text-dim)",
-                      fontSize: 13,
+                      fontSize: 14,
                       padding: "0 6px",
                     }}
                   >
@@ -384,8 +385,8 @@ export function ProductsPage() {
           style={{
             padding: "6px 16px",
             background: "rgba(128,208,144,0.15)",
-            color: "#80d090",
-            fontSize: 13,
+            color: "var(--success-text-soft)",
+            fontSize: 14,
           }}
         >
           {bulkResult}
@@ -434,7 +435,7 @@ export function ProductsPage() {
                     <div
                       style={{
                         padding: "6px 12px",
-                        fontSize: 12,
+                        fontSize: 14,
                         color: "var(--text-dim)",
                         background: "var(--panel-2)",
                         borderBottom: "1px solid var(--border)",
@@ -611,7 +612,7 @@ export function ProductsPage() {
                               style={{
                                 color: "var(--text-dim)",
                                 marginLeft: 6,
-                                fontSize: 12,
+                                fontSize: 14,
                               }}
                             >
                               (停用)
@@ -738,7 +739,7 @@ export function ProductsPage() {
               )}
               <dl>
                 <dt>
-                  代碼 <span style={{ color: "#ff7070" }}>*</span>
+                  代碼 <span style={{ color: "var(--danger-text)" }}>*</span>
                 </dt>
                 <dd>
                   <input
@@ -757,7 +758,7 @@ export function ProductsPage() {
                   <span
                     style={{
                       color: "var(--text-dim)",
-                      fontSize: 12,
+                      fontSize: 14,
                       marginLeft: 8,
                     }}
                   >
@@ -765,7 +766,7 @@ export function ProductsPage() {
                   </span>
                 </dd>
                 <dt>
-                  名稱 <span style={{ color: "#ff7070" }}>*</span>
+                  名稱 <span style={{ color: "var(--danger-text)" }}>*</span>
                 </dt>
                 <dd>
                   <input
@@ -793,7 +794,7 @@ export function ProductsPage() {
                   <span
                     style={{
                       color: "var(--text-dim)",
-                      fontSize: 12,
+                      fontSize: 14,
                       marginLeft: 8,
                     }}
                   >
@@ -841,7 +842,7 @@ export function ProductsPage() {
                         }))
                       }
                     />
-                    <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
+                    <span style={{ color: "var(--text-dim)", fontSize: 14 }}>
                       勾起時,本類別下所有商品自動標為中古機(逐隻記成色 / 電池 / 自定售價)
                     </span>
                   </label>
@@ -865,7 +866,7 @@ export function ProductsPage() {
                         }))
                       }
                     />
-                    <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
+                    <span style={{ color: "var(--text-dim)", fontSize: 14 }}>
                       關掉代表這類商品跟機型無關(線材 / 吊飾 / 家電),不列入待補相容機型
                     </span>
                   </label>
@@ -922,7 +923,7 @@ export function ProductsPage() {
                 <dt>排序</dt>
                 <dd>
                   {selectedCategory.sort_order}{" "}
-                  <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
+                  <span style={{ color: "var(--text-dim)", fontSize: 14 }}>
                     (左側拖拉重排)
                   </span>
                 </dd>
@@ -967,7 +968,7 @@ export function ProductsPage() {
                         }))
                       }
                     />
-                    <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
+                    <span style={{ color: "var(--text-dim)", fontSize: 14 }}>
                       勾起並儲存時,會把底下所有商品同步標為中古機
                       (反向取消不會還原既有商品)
                     </span>
@@ -992,7 +993,7 @@ export function ProductsPage() {
                         }))
                       }
                     />
-                    <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
+                    <span style={{ color: "var(--text-dim)", fontSize: 14 }}>
                       關掉代表這類商品跟機型無關(線材 / 吊飾 / 家電),不列入待補相容機型
                     </span>
                   </label>
@@ -1147,7 +1148,7 @@ function ModelBrowser({
             <div
               style={{
                 padding: "6px 12px",
-                fontSize: 12,
+                fontSize: 14,
                 fontWeight: 600,
                 color: "var(--text-dim)",
                 background: "var(--panel-2)",
@@ -1205,7 +1206,7 @@ function ModelSkuPanel({
             style={{
               fontWeight: 600,
               marginBottom: 6,
-              color: g.is_secondhand ? "#fb923c" : "var(--text)",
+              color: g.is_secondhand ? "var(--warn-text-orange)" : "var(--text)",
             }}
           >
             {g.condition}
@@ -1237,7 +1238,7 @@ function ModelSkuPanel({
                     {s.region_version || "—"}
                   </td>
                   <td className="num">
-                    {Math.round(Number(s.list_price)).toLocaleString()}
+                    {money(s.list_price)}
                   </td>
                   <td className="num">{s.stock_qty}</td>
                 </tr>

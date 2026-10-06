@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { usePartsUsageReport } from "@/api/hooks";
 import { Toolbar } from "@/components/Toolbar";
+import { money } from "@/lib/money";
 
 function firstOfMonth(): string {
   const d = new Date();
@@ -53,7 +54,7 @@ export function PartsUsageReportPage() {
 
   return (
     <div className="page">
-      <Toolbar title="零件耗用報表" />
+      <Toolbar title="零件耗用" />
       <div className="list-filterbar">
         <label>
           起日
@@ -155,7 +156,7 @@ export function PartsUsageReportPage() {
                     <b>{r.total_qty}</b>
                   </td>
                   <td className="num">
-                    {Math.round(Number(r.unit_cost)).toLocaleString()}
+                    {money(r.unit_cost)}
                   </td>
                 </tr>
               ))}

@@ -8,6 +8,7 @@ import {
   MasterColumn,
   DetailTab,
 } from "@/components/master-detail/MasterDetail";
+import { money, roundInt } from "@/lib/money";
 
 import { PhoneBillForm } from "./PhoneBillForm";
 import { maskIdNo } from "./mask";
@@ -40,7 +41,7 @@ export function PhoneBillsPage() {
 
   const totalAmount = filtered
     .filter((e) => !e.is_void)
-    .reduce((s, e) => s + Math.round(Number(e.amount)), 0);
+    .reduce((s, e) => s + roundInt(e.amount), 0);
 
   const columns: MasterColumn<PhoneBillCollection>[] = [
     { key: "doc_date", header: "日期", render: (r) => r.doc_date },
@@ -53,7 +54,7 @@ export function PhoneBillsPage() {
       header: "金額",
       render: (r) => (
         <span className="num">
-          {Math.round(Number(r.amount)).toLocaleString()}
+          {money(r.amount)}
         </span>
       ),
     },
@@ -112,7 +113,7 @@ export function PhoneBillsPage() {
             <dt>電話號碼</dt>
             <dd>{r.phone_no}</dd>
             <dt>金額</dt>
-            <dd>{Math.round(Number(r.amount)).toLocaleString()}</dd>
+            <dd>{money(r.amount)}</dd>
             <dt>身分證(隱碼)</dt>
             <dd>{maskIdNo(r.id_no)}</dd>
             <dt>經手人</dt>
@@ -170,10 +171,10 @@ export function PhoneBillsPage() {
           </button>
         }
       >
-        <span style={{ color: "var(--text-dim)", fontSize: 13 }}>
+        <span style={{ color: "var(--text-dim)", fontSize: 14 }}>
           {filtered.length} 筆,有效金額合計{" "}
           <b style={{ color: "var(--text)" }}>
-            {totalAmount.toLocaleString()}
+            {money(totalAmount)}
           </b>
         </span>
       </Toolbar>

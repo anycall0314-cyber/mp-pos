@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useBusinessDailyReport, useWarehouses } from "@/api/hooks";
 import { useDefaultWarehouse } from "@/auth/AuthContext";
 import { Toolbar } from "@/components/Toolbar";
+import { intStr, money } from "@/lib/money";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -37,6 +38,9 @@ export function BusinessDailyReportPage() {
   const salesTotal = report?.sales.total ?? 0;
   const nonCashSalesTotal = report?.non_cash_sales.total ?? 0;
   const salesReturnsTotal = report?.sales_returns.total ?? 0;
+  // `?.`:上線那幾秒可能是新畫面接到舊伺服器的回應(還沒有這一區),不能整頁壞掉
+  const buybacksTotal = report?.buybacks?.total ?? 0;
+  const buybackRows = report?.buybacks?.rows ?? [];
   const purchasesTotal = report?.purchases.total ?? 0;
   const expensesTotal = report?.expenses.total ?? 0;
   const phoneBillsTotal = report?.phone_bills.total ?? 0;
@@ -46,6 +50,7 @@ export function BusinessDailyReportPage() {
     salesTotal
     + phoneBillsTotal
     - salesReturnsTotal
+    - buybacksTotal
     - purchasesTotal
     - expensesTotal
     + adjInTotal
@@ -73,8 +78,8 @@ export function BusinessDailyReportPage() {
           r.no,
           (r.customer_name ?? "").toString().replace(/,/g, " "),
           (r.sales_person_name ?? "").toString().replace(/,/g, " "),
-          r.total,
-          r.cash_amount,
+          intStr(r.total),
+          intStr(r.cash_amount),
         ].join(","),
       );
     }
@@ -85,7 +90,7 @@ export function BusinessDailyReportPage() {
     for (const r of report.non_cash_sales.rows) {
       const breakdown = Array.isArray(r.method_breakdown)
         ? (r.method_breakdown as { name: string; amount: string }[])
-            .map((m) => `${m.name}:${m.amount}`)
+            .map((m) => `${m.name}:${intStr(m.amount)}`)
             .join(" + ")
         : "";
       lines.push(
@@ -93,8 +98,8 @@ export function BusinessDailyReportPage() {
           r.no,
           (r.customer_name ?? "").toString().replace(/,/g, " "),
           (r.sales_person_name ?? "").toString().replace(/,/g, " "),
-          r.total,
-          r.non_cash_amount,
+          intStr(r.total),
+          intStr(r.non_cash_amount),
           breakdown.replace(/,/g, " "),
         ].join(","),
       );
@@ -111,7 +116,7 @@ export function BusinessDailyReportPage() {
           String(r.phone_no ?? "").replace(/,/g, " "),
           String(r.member_name ?? "").replace(/,/g, " "),
           String(r.handled_by_name ?? "").replace(/,/g, " "),
-          r.amount,
+          intStr(r.amount),
         ].join(","),
       );
     }
@@ -125,7 +130,7 @@ export function BusinessDailyReportPage() {
           r.no,
           (r.supplier_name ?? "").toString().replace(/,/g, " "),
           r.payment_method_name,
-          r.total_cost,
+          intStr(r.total_cost),
         ].join(","),
       );
     }
@@ -140,7 +145,7 @@ export function BusinessDailyReportPage() {
           r.category_label,
           (r.payee ?? "").toString().replace(/,/g, " "),
           (r.note ?? "").toString().replace(/,/g, " "),
-          r.amount,
+          intStr(r.amount),
         ].join(","),
       );
     }
@@ -155,11 +160,25 @@ export function BusinessDailyReportPage() {
           String(r.original_so_no ?? ""),
           (r.customer_name ?? "").toString().replace(/,/g, " "),
           String(r.payment_method_name ?? ""),
-          r.total,
+          intStr(r.total),
         ].join(","),
       );
     }
     lines.push(`小計,,,,${salesReturnsTotal}`);
+    lines.push("");
+    lines.push("【收購現金支出】");
+    lines.push("單號,客戶,業務員,金額");
+    for (const r of buybackRows) {
+      lines.push(
+        [
+          r.no,
+          (r.customer_name ?? "").toString().replace(/,/g, " "),
+          (r.sales_person_name ?? "").toString().replace(/,/g, " "),
+          intStr(r.cash_amount),
+        ].join(","),
+      );
+    }
+    lines.push(`小計,,,${buybacksTotal}`);
     lines.push("");
     lines.push("【現金調整】");
     lines.push("單號,方向,事由,備註,金額");
@@ -170,7 +189,7 @@ export function BusinessDailyReportPage() {
           r.direction_label,
           r.reason_label,
           (r.note ?? "").toString().replace(/,/g, " "),
-          r.amount,
+          intStr(r.amount),
         ].join(","),
       );
     }
@@ -182,6 +201,7 @@ export function BusinessDailyReportPage() {
     lines.push(`非現金收入,${nonCashSalesTotal}`);
     lines.push(`代收話費,${phoneBillsTotal}`);
     lines.push(`銷退現金支出,-${salesReturnsTotal}`);
+    lines.push(`收購現金支出,-${buybacksTotal}`);
     lines.push(`進貨現金付款,-${purchasesTotal}`);
     lines.push(`雜支現金支出,-${expensesTotal}`);
     lines.push(`現金存入,+${adjInTotal}`);
@@ -264,6 +284,7 @@ export function BusinessDailyReportPage() {
                 ]}
                 subs={[
                   { label: "銷退現金", value: salesReturnsTotal },
+                  { label: "收購支出", value: buybacksTotal },
                   { label: "進貨付款", value: purchasesTotal },
                   { label: "雜支支出", value: expensesTotal },
                   { label: "現金提取", value: adjOutTotal },
@@ -313,10 +334,10 @@ export function BusinessDailyReportPage() {
                       <td>{String(r.customer_name || "—")}</td>
                       <td>{String(r.sales_person_name || "—")}</td>
                       <td className="num">
-                        {Math.round(Number(r.total)).toLocaleString()}
+                        {money(r.total)}
                       </td>
                       <td className="num">
-                        {Math.round(Number(r.cash_amount)).toLocaleString()}
+                        {money(r.cash_amount)}
                       </td>
                     </tr>
                   ))}
@@ -369,20 +390,16 @@ export function BusinessDailyReportPage() {
                         <td>{String(r.customer_name || "—")}</td>
                         <td>{String(r.sales_person_name || "—")}</td>
                         <td className="num">
-                          {Math.round(Number(r.total)).toLocaleString()}
+                          {money(r.total)}
                         </td>
                         <td className="num">
-                          {Math.round(
-                            Number(r.non_cash_amount),
-                          ).toLocaleString()}
+                          {money(r.non_cash_amount)}
                         </td>
-                        <td style={{ fontSize: 12 }}>
+                        <td style={{ fontSize: 14 }}>
                           {breakdown
                             .map(
                               (m) =>
-                                `${m.name} ${Math.round(
-                                  Number(m.amount),
-                                ).toLocaleString()}`,
+                                `${m.name} ${money(m.amount)}`,
                             )
                             .join(" / ")}
                         </td>
@@ -437,7 +454,7 @@ export function BusinessDailyReportPage() {
                       <td>{String(r.member_name || "—")}</td>
                       <td>{String(r.handled_by_name || "—")}</td>
                       <td className="num">
-                        {Math.round(Number(r.amount)).toLocaleString()}
+                        {money(r.amount)}
                       </td>
                     </tr>
                   ))}
@@ -462,7 +479,7 @@ export function BusinessDailyReportPage() {
               title="進貨現金付款"
               count={report.purchases.rows.length}
               total={purchasesTotal}
-              totalColor="#ff7070"
+              totalColor="var(--danger-text)"
             >
               <table className="line-table">
                 <thead>
@@ -487,7 +504,7 @@ export function BusinessDailyReportPage() {
                       <td>{String(r.supplier_name || "—")}</td>
                       <td>{String(r.payment_method_name)}</td>
                       <td className="num">
-                        {Math.round(Number(r.total_cost)).toLocaleString()}
+                        {money(r.total_cost)}
                       </td>
                     </tr>
                   ))}
@@ -507,7 +524,7 @@ export function BusinessDailyReportPage() {
               title="雜支現金支出"
               count={report.expenses.rows.length}
               total={expensesTotal}
-              totalColor="#ff7070"
+              totalColor="var(--danger-text)"
             >
               <table className="line-table">
                 <thead>
@@ -532,7 +549,7 @@ export function BusinessDailyReportPage() {
                       <td>{String(r.payee || "—")}</td>
                       <td>{String(r.note || "—")}</td>
                       <td className="num">
-                        {Math.round(Number(r.amount)).toLocaleString()}
+                        {money(r.amount)}
                       </td>
                     </tr>
                   ))}
@@ -552,7 +569,7 @@ export function BusinessDailyReportPage() {
               title="銷退現金支出"
               count={report.sales_returns.rows.length}
               total={salesReturnsTotal}
-              totalColor="#ff7070"
+              totalColor="var(--danger-text)"
             >
               <table className="line-table">
                 <thead>
@@ -578,8 +595,8 @@ export function BusinessDailyReportPage() {
                       <td>{String(r.original_so_no ?? "—")}</td>
                       <td>{String(r.customer_name || "—")}</td>
                       <td>{String(r.payment_method_name ?? "")}</td>
-                      <td className="num" style={{ color: "#ff7070" }}>
-                        −{Math.round(Number(r.total)).toLocaleString()}
+                      <td className="num" style={{ color: "var(--danger-text)" }}>
+                        −{money(r.total)}
                       </td>
                     </tr>
                   ))}
@@ -587,6 +604,51 @@ export function BusinessDailyReportPage() {
                     <tr>
                       <td colSpan={5} className="md-empty">
                         本日無現金銷退
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </Section>
+
+            {/* 收購現金支出(個人收購:付現金給客人) */}
+            <Section
+              title="收購現金支出"
+              count={buybackRows.length}
+              total={buybacksTotal}
+              totalColor="var(--danger-text)"
+            >
+              <table className="line-table">
+                <thead>
+                  <tr>
+                    <th>單號</th>
+                    <th>客戶</th>
+                    <th>業務員</th>
+                    <th className="num">付出金額</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {buybackRows.map((r) => (
+                    <tr
+                      key={r.id}
+                      onClick={() =>
+                        window.open(`/sales/${r.id}?focus=1`, "_blank")
+                      }
+                      style={{ cursor: "pointer" }}
+                      title="點擊在新分頁查看收購單"
+                    >
+                      <td>{r.no}</td>
+                      <td>{String(r.customer_name || "—")}</td>
+                      <td>{String(r.sales_person_name || "—")}</td>
+                      <td className="num" style={{ color: "var(--danger-text)" }}>
+                        −{money(r.cash_amount)}
+                      </td>
+                    </tr>
+                  ))}
+                  {buybackRows.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="md-empty">
+                        本日無現金收購
                       </td>
                     </tr>
                   )}
@@ -605,7 +667,7 @@ export function BusinessDailyReportPage() {
               count={report.adjustments.rows.length}
               total={adjInTotal - adjOutTotal}
               totalColor={
-                adjInTotal - adjOutTotal < 0 ? "#ff7070" : undefined
+                adjInTotal - adjOutTotal < 0 ? "var(--danger-text)" : undefined
               }
             >
               <table className="line-table">
@@ -631,7 +693,7 @@ export function BusinessDailyReportPage() {
                         style={{
                           color:
                             String(r.direction) === "out"
-                              ? "#ff7070"
+                              ? "var(--danger-text)"
                               : undefined,
                         }}
                       >
@@ -644,12 +706,12 @@ export function BusinessDailyReportPage() {
                         style={{
                           color:
                             String(r.direction) === "out"
-                              ? "#ff7070"
+                              ? "var(--danger-text)"
                               : undefined,
                         }}
                       >
                         {String(r.direction) === "in" ? "+" : "−"}
-                        {Math.round(Number(r.amount)).toLocaleString()}
+                        {money(r.amount)}
                       </td>
                     </tr>
                   ))}
@@ -732,7 +794,7 @@ function Section({
             className="biz-section-total"
             style={{ color: totalColor ?? undefined }}
           >
-            {total.toLocaleString()}
+            {money(total)}
           </span>
         ) : (
           <span />
@@ -774,20 +836,20 @@ function CashFlowCard({
         <div className="biz-flow-row biz-flow-opening">
           <span className="biz-flow-op"> </span>
           <span className="biz-flow-label">前日現金</span>
-          <span className="biz-flow-value">{opening.toLocaleString()}</span>
+          <span className="biz-flow-value">{money(opening)}</span>
         </div>
         {nonZeroAdds.map((r) => (
           <div key={r.label} className="biz-flow-row biz-flow-add">
             <span className="biz-flow-op">+</span>
             <span className="biz-flow-label">{r.label}</span>
-            <span className="biz-flow-value">{r.value.toLocaleString()}</span>
+            <span className="biz-flow-value">{money(r.value)}</span>
           </div>
         ))}
         {nonZeroSubs.map((r) => (
           <div key={r.label} className="biz-flow-row biz-flow-sub">
             <span className="biz-flow-op">−</span>
             <span className="biz-flow-label">{r.label}</span>
-            <span className="biz-flow-value">{r.value.toLocaleString()}</span>
+            <span className="biz-flow-value">{money(r.value)}</span>
           </div>
         ))}
         <div className="biz-flow-row biz-flow-hero">
@@ -795,9 +857,9 @@ function CashFlowCard({
           <span className="biz-flow-label">今日結餘</span>
           <span
             className="biz-flow-value"
-            style={{ color: closing < 0 ? "#ff7070" : undefined }}
+            style={{ color: closing < 0 ? "var(--danger-text)" : undefined }}
           >
-            {closing.toLocaleString()}
+            {money(closing)}
           </span>
         </div>
       </div>
@@ -832,13 +894,13 @@ function RevenueCard({
           <div key={r.label} className="biz-flow-row biz-flow-add">
             <span className="biz-flow-op"> </span>
             <span className="biz-flow-label">{r.label}</span>
-            <span className="biz-flow-value">{r.value.toLocaleString()}</span>
+            <span className="biz-flow-value">{money(r.value)}</span>
           </div>
         ))}
         <div className="biz-flow-row biz-flow-hero">
           <span className="biz-flow-op">=</span>
           <span className="biz-flow-label">總計</span>
-          <span className="biz-flow-value">{total.toLocaleString()}</span>
+          <span className="biz-flow-value">{money(total)}</span>
         </div>
       </div>
     </div>

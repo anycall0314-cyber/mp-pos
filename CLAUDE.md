@@ -25,13 +25,14 @@
 - **四種頁面版型**:錄入頁(進貨 / 銷貨)、Master-Detail(主檔)、報表頁、**工作台**(調撥、庫存查詢;2026-10-05 起,owner 習慣的「一個畫面、掃一下加一行、不開彈出視窗」,進貨 / 銷貨之後照這一套改)。細節見 `docs/ui-patterns.md`
 - **唯一前端**:不開 Django admin 給使用者用,Django admin 只當 dev fallback
 - **單一 React app + 角色控制**:Platform Admin / Tenant Admin / Tenant User 共用 SPA(MVP 還沒實作登入)
-- **導覽結構(6 群)**:報表 / 庫存 / 銷貨 / 門號 / 維修 / 設定。商品與類別合併在「庫存 → 建立商品」一頁;客戶管理在「銷貨」群組底下(個人/同業/企業/其他分頁切換);會員是獨立主檔(`/members`),也在「銷貨」群組;未實作的功能保留 placeholder 顯示「(尚未實作)」
+- **導覽結構**(2026-10-06 改版,唯一的一份設定在 `frontend/src/nav.ts`):側邊欄只有「今日總覽 + 8 個業務入口」,系統設定固定在最下面;**入口名稱一律 4 個字**(owner 要求字數一致)。點入口直接進它的預設頁;同一個入口的其他頁在頁面上方的分頁切換(`components/shell/ModuleBar`),低頻的設定頁收在分頁列右邊的具名選單(商品設定 / 作業設定)。路由一條都沒改,舊網址照用;改名的頁面把舊名字留在 `aliases`,側邊欄上面的功能搜尋(Ctrl / Cmd + K)打舊名字找得到。「目前這一頁」取網址對得上且最長的那一頁(`matchNav`),同一層只會有一個。新增頁面要掛進 `nav.ts`(`nav.test.mjs` 會檢查改版前的 32 個入口都還在、名稱字數、管理員頁面)
 
 ## 業務規則速查
 
 | 主題 | 重點 |
 |---|---|
 | 課稅別 | 應稅內含 / 應稅外加 / 免稅 / 零稅;含稅金額 ÷ 1.05 = 未稅 |
+| 金額一律整數元 | 2026-10-06 起,**單據上的金額(明細金額、未稅小計、稅額、含稅總額)存檔就是整數元、四捨五入**(剛好一半進位,負數往離 0 遠的那一邊)。規則只有一份:後端 `apps/core/money.py`(`round_money` / `money_int` / `money_text`),前端 `frontend/src/lib/money.ts`(`money()` 顯示、`intStr()` 輸入框與送出、`roundInt()`、`splitTax()` 試算,跟後端 `_calc_tax` 同一套算法)。含稅:未稅 = 加總 ÷ 1.05 四捨五入,稅額 = 總額 − 未稅;外加:稅額 = 加總 × 5% 四捨五入(以前算到分,110 外加的總額是 115.50,畫面只收整數,這種單存不進去)。**成本不收整數**(落地成本、加權平均、`cost_at_post` 照舊算到分,只在畫面顯示成整數;95.24 的線材收成 95 進 1000 條會差 240 元)。**以前存的單不改寫**:每日對帳用 `matches_tax_rule()`,新舊兩種算法符合一種就算一致;`split_tax_by_line` 也認得舊單。畫面不要自己 `Math.round` / `Number(x).toLocaleString()`(`money.test.mjs` 會掃全專案),金額輸入框用 `components/MoneyInput`(小數點打不進去、貼上小數會四捨五入、沒有上下箭頭);報表加總不要用 `int()`(無條件捨去)。營業日報:個人收購付出去的現金(現金付款是負的銷貨單)列在「收購現金支出」,當天的結餘 = 隔天的期初。賣出速度(件 / 日)、比率不是金額,照舊有小數 |
 | 進貨成本 | `unit_landed_cost` = 未稅單價(含稅單會自動除 1.05);贈品由 `billed_qty < qty` 表示,平均成本被稀釋 |
 | 發票自動取號 | 銷貨單儲存時,依 `invoice_form` 從 `InvoiceTrack` 字軌 `SELECT FOR UPDATE` 取下一張號碼,寫入 `invoice_no` |
 | 結帳 | 銷貨單 N 筆 `SalesOrderPayment`(現金/匯款/非現金),`sum(amount) == total` 才能存 |
@@ -128,6 +129,7 @@ inventory-3c/
     └── src/
         ├── api/                client.ts + hooks.ts + search.ts(searchProductsForSales 等) + types.ts
         ├── components/         ComboBox(支援 onEnterAfterValue / autoFocus / IME 偵測)/ Drawer / Field / Toolbar / Banner
+        │   ├── shell/          外框:Sidebar(側邊欄)/ ModuleBar(頁面上方的分頁與設定選單)/ NavSearch(功能搜尋)
         │   └── workbench/      工作台版型的零件:ScanBox(掃碼框,條碼排隊處理;沒加進去的碼怎麼記在 `lib/scanMissed.ts`,有測試)/ toast(訊息條,可帶復原)/ ArmButton(兩段式按鈕)/ errors
         ├── pages/
         │   ├── products/        ProductsPage(合併商品 + 類別管理,左側兩段:商品搜尋 / 類別拖拉排序)+ ProductForm + ProductExpanderModal(型號展開,軸標籤可自訂)+ BulkAddProductsModal
@@ -147,8 +149,9 @@ inventory-3c/
         │   ├── login/           LoginPage(帳號密碼登入頁)
         │   └── platform-admin/  PlatformAdminPage(經銷商 / 用戶 / 倉別 三 tabs)+ 各 Tab 元件,只有 platform_admin 看得到
         ├── auth/                AuthContext + useAuth / useCurrentUser / useDefaultWarehouse / useDefaultHandledBy
-        ├── App.tsx              路由與導覽(NAV_GROUPS 6 群:報表/庫存/銷貨/門號/維修/設定 + platform_admin 多看到「平台」群)
-        └── styles.css           全站 CSS,暗色主題
+        ├── nav.ts               導覽的唯一設定(入口、分頁、設定選單、舊名字)+ matchNav / searchNav / visibleModules;nav.test.mjs
+        ├── App.tsx              路由與外框(側邊欄 Sidebar、頁面上方的分頁 ModuleBar 都在 components/shell/)
+        └── styles.css           全站 CSS(暗色為預設、日間可切)。最上面是字級與尺寸的變數(正文 16 / 次要 14 / 區塊標題 18 / 頁標題 24 / 控制項 44px),畫面樣式一律用變數、不寫死 px;列印頁的樣式例外。同一段還有跟主題走的狀態文字色(`--warn-text` / `--success-text` / `--danger-text` / `--info-text`:夜間亮色、日間深色),寫警示 / 成功 / 錯誤的字一律用變數
 ```
 
 後端新加的 endpoint:
@@ -164,6 +167,7 @@ inventory-3c/
 - **儲存草稿**:`/sales/new` 與 `/purchases/new` 自動 debounce 寫 sessionStorage,儲存成功後清空
 - **migration 涉及資料改動**:在 migration 內寫 `RunPython` 一併處理(例如 billed_qty 預設帶 qty、seed PaymentMethod)
 - **不可預測的字串(IMEI、卡號)**:存原值,前端顯示時取末 N 碼
+- **金額**:顯示一律 `money()`、輸入框一律 `<MoneyInput>`(都在 `frontend/src/lib/money.ts` / `components/MoneyInput.tsx`);表單載入時把資料庫原本的字串放進 state、不要先收成整數(沒動過的欄位要原樣送回去);看已存的單直接顯示存下來的數字、不重算;後端算金額用 `apps/core/money.py` 的 `round_money()`,不要自己 `quantize`
 
 ## 使用者偏好
 

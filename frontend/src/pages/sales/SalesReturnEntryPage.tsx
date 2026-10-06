@@ -14,17 +14,14 @@ import type { SalesOrder } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Toolbar } from "@/components/Toolbar";
+import { money } from "@/lib/money";
 
 /**
  * 銷退單:只能整張退。選原銷貨單 → 原單每一行、每一台全部退,退款 = 原單總額。
  * 明細由後端照原單帶入,這頁不送明細。
  */
 
-function money(v: string | number | undefined): string {
-  return Math.round(Number(v ?? 0)).toLocaleString();
-}
-
-const labelStyle = { display: "block", fontSize: 12, color: "var(--text-dim)" } as const;
+const labelStyle = { display: "block", fontSize: 14, color: "var(--text-dim)" } as const;
 
 export function SalesReturnEntryPage() {
   const navigate = useNavigate();
@@ -275,12 +272,12 @@ export function SalesReturnEntryPage() {
                 <tr key={it.key}>
                   <td>
                     <div>{it.name}</div>
-                    <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{it.sku}</div>
+                    <div style={{ fontSize: 14, color: "var(--text-dim)" }}>{it.sku}</div>
                   </td>
                   <td className="num">{it.qty}</td>
                   <td className="num">{money(it.unit_price)}</td>
                   <td className="num">{money(it.amount)}</td>
-                  <td style={{ fontSize: 12 }}>{it.serials.length ? it.serials.join(", ") : "—"}</td>
+                  <td style={{ fontSize: 14 }}>{it.serials.length ? it.serials.join(", ") : "—"}</td>
                 </tr>
               ))}
             </tbody>

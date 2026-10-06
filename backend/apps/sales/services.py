@@ -16,6 +16,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.catalog.models import Category, Product
+from apps.core.money import CENTS, ONE, money_text, round_money
 from apps.core.tenant_fields import same_company as _same_company
 from apps.inventory.locking import lock_stock_rows, locked_balance as _locked_balance
 from apps.inventory.identifiers import IdentifierError, create_serial, main_code, split_codes, taken
@@ -32,7 +33,6 @@ from .models import (
     SalesReturnItemSerial,
 )
 
-CENTS = Decimal("0.01")
 TAX_RATE = Decimal("0.05")
 
 
@@ -175,19 +175,42 @@ def _validate_items(so: SalesOrder, items):
         raise SalesOrderError("整單卡片重複")
 
 
-def _calc_tax(subtotal_raw: Decimal, tax_method: str):
+def _rounder(unit: Decimal):
+    """unit=ONE:現在的規則(整數元、四捨五入)。unit=CENTS:2026-10-06 以前的算法
+    (算到分、Python 預設的四捨六入五成雙),只用來認得以前存下來的單,不拿來算新的單。"""
+    if unit == ONE:
+        return round_money
+    return lambda d: d.quantize(CENTS)
+
+
+def _calc_tax(subtotal_raw: Decimal, tax_method: str, unit: Decimal = ONE):
+    """明細金額加總 → (未稅小計, 稅額, 含稅總額),全部整數元、四捨五入。
+
+    含稅:總額 = 加總,未稅 = 加總 ÷ 1.05 四捨五入,稅額 = 總額 − 未稅(三個數字一定對得起來)。
+    外加:未稅 = 加總,稅額 = 加總 × 5% 四捨五入,總額 = 未稅 + 稅額。
+    """
+    q = _rounder(unit)
     if tax_method == SalesOrder.TaxMethod.TAXABLE_INCLUDED:
-        total = subtotal_raw.quantize(CENTS)
-        subtotal = (subtotal_raw / (Decimal("1") + TAX_RATE)).quantize(CENTS)
-        tax = (total - subtotal).quantize(CENTS)
+        total = q(subtotal_raw)
+        subtotal = q(subtotal_raw / (Decimal("1") + TAX_RATE))
+        tax = q(total - subtotal)
         return subtotal, tax, total
     if tax_method == SalesOrder.TaxMethod.TAXABLE_EXCLUDED:
-        subtotal = subtotal_raw.quantize(CENTS)
-        tax = (subtotal_raw * TAX_RATE).quantize(CENTS)
-        total = (subtotal + tax).quantize(CENTS)
+        subtotal = q(subtotal_raw)
+        tax = q(subtotal_raw * TAX_RATE)
+        total = q(subtotal + tax)
         return subtotal, tax, total
-    subtotal = subtotal_raw.quantize(CENTS)
+    subtotal = q(subtotal_raw)
     return subtotal, Decimal("0.00"), subtotal
+
+
+def matches_tax_rule(amount: Decimal, tax_method: str, subtotal, tax, total) -> bool:
+    """單頭的三個數字是不是「明細加總照稅別算出來的」。現在的規則或以前的規則,符合一種就算
+    (以前存下來的單是算到分的,不回頭改寫)。"""
+    return any(
+        _calc_tax(amount, tax_method, unit) == (subtotal, tax, total)
+        for unit in (ONE, CENTS)
+    )
 
 
 def split_tax_by_line(amounts, tax_method: str, subtotal: Decimal, tax: Decimal):
@@ -197,16 +220,22 @@ def split_tax_by_line(amounts, tax_method: str, subtotal: Decimal, tax: Decimal)
     讓整單加總正好等於單頭。單頭不是「明細加總照稅別算出來的那個數」時,代表單頭跟
     明細本來就對不上,回傳 None,不硬塞(否則含稅行的 未稅 + 稅額 會不等於金額)。
     """
-    if _calc_tax(sum(amounts, Decimal("0")), tax_method)[:2] != (subtotal, tax):
+    # 單頭是照哪一套規則算的(現在:整數元;以前:算到分),每一行就照同一套分
+    total_amount = sum(amounts, Decimal("0"))
+    for unit in (ONE, CENTS):
+        if _calc_tax(total_amount, tax_method, unit)[:2] == (subtotal, tax):
+            break
+    else:
         return None
+    q = _rounder(unit)
     lines = []
     for a in amounts:
         if tax_method == SalesOrder.TaxMethod.TAXABLE_INCLUDED:
-            u = (a / (Decimal("1") + TAX_RATE)).quantize(CENTS)
+            u = q(a / (Decimal("1") + TAX_RATE))
             t = a - u
         elif tax_method == SalesOrder.TaxMethod.TAXABLE_EXCLUDED:
             u = a
-            t = (a * TAX_RATE).quantize(CENTS)
+            t = q(a * TAX_RATE)
         else:
             u, t = a, Decimal("0.00")
         lines.append([u, t])
@@ -214,7 +243,7 @@ def split_tax_by_line(amounts, tax_method: str, subtotal: Decimal, tax: Decimal)
         return []
     du = subtotal - sum(u for u, _ in lines)
     dt = tax - sum(t for _, t in lines)
-    if abs(du) > CENTS * len(lines) or abs(dt) > CENTS * len(lines):
+    if abs(du) > unit * len(lines) or abs(dt) > unit * len(lines):
         return None
     k = max(range(len(lines)), key=lambda i: (abs(amounts[i]), -i))
     lines[k][0] += du
@@ -239,14 +268,14 @@ def _validate_payments(so: SalesOrder, total: Decimal):
     if target == 0:
         if paid != 0:
             raise SalesOrderError(
-                f"總額為 0,付款金額應為 0(目前 {paid})"
+                f"總額為 0,付款金額應為 0(目前 {money_text(paid)})"
             )
         return
     if not payments:
         raise SalesOrderError("結帳尚未指定付款方式")
     if paid != target:
         raise SalesOrderError(
-            f"付款金額 {paid} 與含稅總額 {target} 不一致"
+            f"付款金額 {money_text(paid)} 與含稅總額 {money_text(target)} 不一致"
         )
 
 
@@ -273,10 +302,11 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
 
         for it in items:
             product = it.product
+            # 明細金額一律整數元(四捨五入);後面的小計 / 稅額 / 總額都從這個數字算
             if not it.amount:
-                it.amount = (Decimal(it.qty) * it.unit_price).quantize(CENTS)
+                it.amount = round_money(Decimal(it.qty) * it.unit_price)
             else:
-                it.amount = it.amount.quantize(CENTS)
+                it.amount = round_money(it.amount)
 
             # cost_at_post:
             # - 虛擬:0
@@ -298,7 +328,11 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
                 ).first()
                 unit_cost = bal.weighted_avg_cost if bal else Decimal("0")
                 it.cost_at_post = (Decimal(it.qty) * unit_cost).quantize(CENTS)
-            it.save(update_fields=["amount", "cost_at_post"])
+            # 直接寫進資料庫,不走 save():save() 把金額 0 當成「沒填」會重算一次,
+            # 四捨五入成 0 的金額(0.40)就又被改回去了
+            SalesOrderItem.objects.filter(pk=it.pk).update(
+                amount=it.amount, cost_at_post=it.cost_at_post
+            )
             subtotal_raw += it.amount
 
             # 序號狀態 → sold + 寫 StockMovement
@@ -336,8 +370,8 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
                             {
                                 "detail": (
                                     f"零件「{product.name}」單價 "
-                                    f"{int(it.unit_price)} 不可低於最低售價 "
-                                    f"{int(product.min_sale_price)}"
+                                    f"{money_text(it.unit_price)} 不可低於最低售價 "
+                                    f"{money_text(product.min_sale_price)}"
                                 )
                             }
                         )
@@ -511,7 +545,7 @@ def acquire_secondhand_from_member(
         raise SecondhandIntakeError(f"序號 {', '.join(clash)} 已存在")
     if condition_grade not in ProductSerial.ConditionGrade.values:
         raise SecondhandIntakeError(f"成色等級 {condition_grade} 無效")
-    price = Decimal(str(acquisition_price)).quantize(CENTS)
+    price = round_money(Decimal(str(acquisition_price)))
     if price <= 0:
         raise SecondhandIntakeError("收購金額需大於 0")
 
@@ -737,7 +771,7 @@ def _validate_sales_return(sr: SalesReturn):
             raise SalesReturnError(f"第 {it.line_no} 行要整行退(原 {oi.qty},退 {it.qty})")
         if it.unit_price != oi.unit_price:
             raise SalesReturnError(
-                f"第 {it.line_no} 行單價 {it.unit_price} 與原單 {oi.unit_price} 不一致"
+                f"第 {it.line_no} 行單價 {money_text(it.unit_price)} 與原單 {money_text(oi.unit_price)} 不一致"
             )
         want = sorted(link.serial_id for link in oi.serials.all())
         got = sorted(link.serial_id for link in it.serials.all())

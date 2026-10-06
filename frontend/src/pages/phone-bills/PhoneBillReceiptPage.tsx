@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 
 import { usePhoneBill } from "@/api/hooks";
+import { money } from "@/lib/money";
 
 import { maskIdNo } from "./mask";
 
@@ -58,7 +59,7 @@ export function PhoneBillReceiptPage() {
       <div className="print-totals">
         <Row
           label="繳費金額"
-          value={Math.round(Number(pb.amount)).toLocaleString()}
+          value={money(pb.amount)}
           big
         />
       </div>

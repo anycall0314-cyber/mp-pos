@@ -40,6 +40,8 @@ import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Field } from "@/components/Field";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { Toolbar } from "@/components/Toolbar";
+import { MoneyInput } from "@/components/MoneyInput";
+import { intStr, money } from "@/lib/money";
 import { RepairHistoryModal } from "./RepairHistoryModal";
 import { UnlockPatternInput } from "./UnlockPatternInput";
 
@@ -84,13 +86,24 @@ async function searchRepairVendors(
   }));
 }
 
+/**
+ * 換一張維修單(或從某一張切到新增)就整個重來。`/repairs/5`、`/repairs/6`、`/repairs/new` 是同一條路由,
+ * 不這樣做的話表單會留著上一張的內容:新的那張還沒載到就按儲存,會把 5 的內容寫進 6;切到新增會複製出一張一樣的單。
+ */
 export function RepairEntryPage() {
+  const { id } = useParams();
+  return <RepairEntryForm key={id ?? "new"} />;
+}
+
+function RepairEntryForm() {
   const { id: idParam } = useParams();
   const isEdit = idParam !== "new";
   const id = isEdit ? Number(idParam) : null;
   const navigate = useNavigate();
 
   const existing = useRepairOrder(id);
+  // 既有的單還沒載進來(或載入失敗):畫面上是空白表單,不能讓它存回去
+  const notLoaded = isEdit && !existing.data;
   const save = useSaveRepairOrder();
   const setStatus = useSetRepairStatus();
   const complete = useCompleteRepair();
@@ -179,6 +192,7 @@ export function RepairEntryPage() {
     }
     const o = existing.data;
     if (!o) return;
+    // 金額照資料庫原本的字串放進 state(框裡會顯示成整數):沒動過的欄位存檔時原樣送回去,不會被改寫
     setMode(o.mode);
     setCustomer(o.customer);
     setCustomerName(o.customer_name);
@@ -235,7 +249,10 @@ export function RepairEntryPage() {
       o.warranty_info?.previous_completed_date ?? null,
     );
     setPreviousWarrantyDays(o.warranty_info?.warranty_days ?? 90);
-  }, [existing.data, isEdit, defaultWh, defaultHandledBy]);
+    // 依賴只放編號 / 名稱:defaultWh、defaultHandledBy 每次畫面更新都是新的物件,
+    // 整個放進來會變成「改任何一格就立刻被存檔的內容蓋回去」(既有的單改不了)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existing.data, isEdit, defaultWh.id, defaultHandledBy.id, defaultHandledBy.name]);
 
   // 計算保固狀態(僅在勾選返修 + 有完修日時)
   const warrantyStatus = useMemo(() => {
@@ -318,7 +335,7 @@ export function RepairEntryPage() {
 
   function pickRepairItem(item: RepairItem) {
     setRepairItemId(item.id);
-    setLaborFee(item.default_labor_fee);
+    setLaborFee(intStr(item.default_labor_fee));
     setParts(
       item.parts.map((p) => ({
         part_product: p.part_product,
@@ -409,6 +426,7 @@ export function RepairEntryPage() {
   }
 
   async function submit(opts?: { printAfter?: boolean }) {
+    if (notLoaded) return;
     setError(null);
     // 收件必填最小集合(per spec):電話/姓名/門市/經手人/機型/序號/收件日/故障描述/解鎖方式
     if (!customerPhone.trim()) {
@@ -617,7 +635,7 @@ export function RepairEntryPage() {
                 <span
                   style={{
                     color: "var(--text-dim)",
-                    fontSize: 13,
+                    fontSize: 14,
                     padding: "0 12px",
                   }}
                 >
@@ -629,7 +647,7 @@ export function RepairEntryPage() {
                 <button
                   className="btn"
                   onClick={() => submit()}
-                  disabled={save.isPending}
+                  disabled={save.isPending || notLoaded}
                   title="只儲存,不開啟列印"
                 >
                   {save.isPending ? "儲存中…" : "儲存"}
@@ -637,7 +655,7 @@ export function RepairEntryPage() {
                 <button
                   className="btn primary"
                   onClick={() => submit({ printAfter: true })}
-                  disabled={save.isPending}
+                  disabled={save.isPending || notLoaded}
                 >
                   {save.isPending ? "儲存中…" : "儲存並列印收據"}
                 </button>
@@ -805,7 +823,7 @@ export function RepairEntryPage() {
                     )}
                     {showQuickCreate && !customer && (
                       <div className="re-quick-create">
-                        <span style={{ color: "var(--text-dim)", fontSize: 13 }}>
+                        <span style={{ color: "var(--text-dim)", fontSize: 14 }}>
                           查無此電話的客戶,
                         </span>
                         <label
@@ -813,7 +831,7 @@ export function RepairEntryPage() {
                             display: "inline-flex",
                             alignItems: "center",
                             gap: 4,
-                            fontSize: 13,
+                            fontSize: 14,
                           }}
                         >
                           <input
@@ -1029,9 +1047,7 @@ export function RepairEntryPage() {
                       {(itemsByModel.data ?? []).map((it) => (
                         <option key={it.id} value={it.id}>
                           {it.name}(工資 $
-                          {Math.round(
-                            Number(it.default_labor_fee),
-                          ).toLocaleString()}
+                          {money(it.default_labor_fee)}
                           )
                         </option>
                       ))}
@@ -1110,13 +1126,11 @@ export function RepairEntryPage() {
                                 />
                               </td>
                               <td className="num">
-                                ${Math.round(Number(p.unit_cost) || 0).toLocaleString()}
+                                ${money(p.unit_cost)}
                               </td>
                               <td className="num">
                                 <b>
-                                  ${(
-                                    Math.round(Number(p.unit_cost) || 0) * p.qty
-                                  ).toLocaleString()}
+                                  ${money(Number(p.unit_cost || 0) * p.qty)}
                                 </b>
                               </td>
                               <td>
@@ -1142,7 +1156,7 @@ export function RepairEntryPage() {
                               零件成本合計
                             </td>
                             <td className="num">
-                              <b>${Math.round(partsCost).toLocaleString()}</b>
+                              <b>${money(partsCost)}</b>
                             </td>
                             <td></td>
                           </tr>
@@ -1173,19 +1187,17 @@ export function RepairEntryPage() {
                   </Field>
                   <div className="re-2col">
                     <Field label="預估費用(送修前)">
-                      <input
-                        type="number"
+                      <MoneyInput
                         min="0"
                         value={extEst}
-                        onChange={(e) => setExtEst(e.target.value)}
+                        onChange={setExtEst}
                       />
                     </Field>
                     <Field label="實際費用(取件後)">
-                      <input
-                        type="number"
+                      <MoneyInput
                         min="0"
                         value={extActual}
-                        onChange={(e) => setExtActual(e.target.value)}
+                        onChange={setExtActual}
                       />
                     </Field>
                     <Field label="送出外廠日期">
@@ -1208,11 +1220,10 @@ export function RepairEntryPage() {
                       label="內部結算價(收件人 → 維修人員)"
                       hint="此單視為內部轉單。收件人毛利 = 客戶實付 − 此值;維修人員毛利 = 此值 − 零件成本"
                     >
-                      <input
-                        type="number"
+                      <MoneyInput
                         min="0"
                         value={internalSettle}
-                        onChange={(e) => setInternalSettle(e.target.value)}
+                        onChange={setInternalSettle}
                       />
                     </Field>
                   )}
@@ -1231,22 +1242,21 @@ export function RepairEntryPage() {
                   <>
                     <div className="re-summary-row">
                       <span>零件成本合計</span>
-                      <b>${Math.round(partsCost).toLocaleString()}</b>
+                      <b>${money(partsCost)}</b>
                     </div>
                     <div className="re-summary-row">
                       <span>工資</span>
-                      <input
-                        type="number"
+                      <MoneyInput
                         min="0"
                         value={laborFee}
-                        onChange={(e) => setLaborFee(e.target.value)}
+                        onChange={setLaborFee}
                         className="re-summary-input"
                       />
                     </div>
                     <div className="re-summary-row re-summary-divider">
                       <span>系統建議報價</span>
                       <span className="re-summary-calc">
-                        ${Math.round(suggestedQuote).toLocaleString()}
+                        ${money(suggestedQuote)}
                         <span className="re-summary-formula">
                           (零件 + 工資)
                         </span>
@@ -1254,11 +1264,10 @@ export function RepairEntryPage() {
                     </div>
                     <div className="re-summary-row">
                       <span>實際報價</span>
-                      <input
-                        type="number"
+                      <MoneyInput
                         min="0"
                         value={finalQuote}
-                        onChange={(e) => setFinalQuote(e.target.value)}
+                        onChange={setFinalQuote}
                         className="re-summary-input"
                       />
                     </div>
@@ -1267,28 +1276,27 @@ export function RepairEntryPage() {
                   <>
                     <div className="re-summary-row">
                       <span>委外預估費用</span>
-                      <b>${Math.round(Number(extEst) || 0).toLocaleString()}</b>
+                      <b>${money(extEst)}</b>
                     </div>
                     <div className="re-summary-row re-summary-divider">
                       <span>委外實際費用</span>
-                      <b>${Math.round(Number(extActual) || 0).toLocaleString()}</b>
+                      <b>${money(extActual)}</b>
                     </div>
                   </>
                 )}
                 <div className="re-summary-row re-summary-hero">
                   <span>客戶實付金額</span>
-                  <input
-                    type="number"
+                  <MoneyInput
                     min="0"
                     value={customerPaid}
-                    onChange={(e) => setCustomerPaid(e.target.value)}
+                    onChange={setCustomerPaid}
                     className="re-summary-input re-summary-input-hero"
                   />
                 </div>
                 <div className="re-summary-row re-summary-margin">
                   <span>預估毛利</span>
-                  <b style={{ color: margin < 0 ? "#ff7070" : "#4ade80" }}>
-                    ${Math.round(margin).toLocaleString()}
+                  <b style={{ color: margin < 0 ? "var(--danger-text)" : "var(--success-text)" }}>
+                    ${money(margin)}
                   </b>
                 </div>
                 <div className="re-summary-formula re-summary-margin-formula">
@@ -1317,10 +1325,10 @@ export function RepairEntryPage() {
                 <b
                   style={{
                     color:
-                      personalBreakdown.spAmt < 0 ? "#ff7070" : "#4ade80",
+                      personalBreakdown.spAmt < 0 ? "var(--danger-text)" : "var(--success-text)",
                   }}
                 >
-                  ${Math.round(personalBreakdown.spAmt).toLocaleString()}
+                  ${money(personalBreakdown.spAmt)}
                 </b>
               </div>
               <div className="re-personal-row">
@@ -1338,13 +1346,13 @@ export function RepairEntryPage() {
                   style={{
                     color:
                       personalBreakdown.techAmt < 0
-                        ? "#ff7070"
+                        ? "var(--danger-text)"
                         : personalBreakdown.techAmt > 0
-                          ? "#4ade80"
+                          ? "var(--success-text)"
                           : "var(--text-dim)",
                   }}
                 >
-                  ${Math.round(personalBreakdown.techAmt).toLocaleString()}
+                  ${money(personalBreakdown.techAmt)}
                 </b>
               </div>
               <div className="re-personal-formula">

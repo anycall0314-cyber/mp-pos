@@ -13,6 +13,8 @@ import { Drawer } from "@/components/Drawer";
 import { Checkbox, Field } from "@/components/Field";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { Toolbar } from "@/components/Toolbar";
+import { MoneyInput } from "@/components/MoneyInput";
+import { money } from "@/lib/money";
 
 interface PartLine {
   part_product: number;
@@ -78,7 +80,7 @@ export function RepairItemsPage() {
       await save.mutateAsync({
         id: editId ?? undefined,
         name: form.name,
-        default_labor_fee: form.default_labor_fee,
+        default_labor_fee: form.default_labor_fee || "0",
         is_active: form.is_active,
         model_keys: form.model_keys.map((m) => m.model_key),
         parts_input: form.parts.map((p) => ({
@@ -118,7 +120,7 @@ export function RepairItemsPage() {
               <div className="ri-card-head">
                 <div className="ri-card-name">{it.name}</div>
                 <div className="ri-card-fee">
-                  工資 ${Math.round(Number(it.default_labor_fee)).toLocaleString()}
+                  工資 ${money(it.default_labor_fee)}
                 </div>
               </div>
               <div className="ri-card-sub">
@@ -181,13 +183,11 @@ export function RepairItemsPage() {
           />
         </Field>
         <Field label="預設工資" hint="自修建議報價 = 零件成本 + 工資">
-          <input
-            type="number"
-            step="1"
+          <MoneyInput
             min="0"
             value={form.default_labor_fee}
-            onChange={(e) =>
-              setForm({ ...form, default_labor_fee: e.target.value })
+            onChange={(v) =>
+              setForm({ ...form, default_labor_fee: v })
             }
           />
         </Field>
@@ -283,7 +283,7 @@ export function RepairItemsPage() {
                     <tr key={p.part_product}>
                       <td>
                         <div style={{ fontWeight: 600 }}>{p.part_name}</div>
-                        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
+                        <div style={{ fontSize: 14, color: "var(--text-dim)" }}>
                           {p.part_sku}
                         </div>
                       </td>

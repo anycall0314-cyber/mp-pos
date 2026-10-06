@@ -12,6 +12,8 @@ import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
+import { MoneyInput } from "@/components/MoneyInput";
+import { keepOrInt, money } from "@/lib/money";
 
 interface Props {
   open: boolean;
@@ -58,7 +60,7 @@ function toState(e: PettyExpense): FormState {
     warehouse: e.warehouse,
     doc_date: e.doc_date,
     category: e.category,
-    amount: String(Math.round(Number(e.amount))),
+    amount: String(e.amount),
     payment_method: e.payment_method,
     payee: e.payee,
     handled_by: e.handled_by ?? "",
@@ -172,8 +174,8 @@ export function PettyExpenseForm({ open, initial, onClose }: Props) {
       setError("請選付款方式");
       return;
     }
-    const amountInt = Math.round(Number(state.amount) || 0);
-    if (amountInt <= 0) {
+    // 用原值判斷:以前存的 0.49 沒動過也要能存其他欄位(收成整數會變 0 被擋)
+    if (!(Number(state.amount) > 0)) {
       setError("金額需大於 0");
       return;
     }
@@ -186,14 +188,13 @@ export function PettyExpenseForm({ open, initial, onClose }: Props) {
 
   async function reallySave() {
     setError(null);
-    const amountInt = Math.round(Number(state.amount) || 0);
     try {
       await save.mutateAsync({
         id: initial?.id,
         warehouse: state.warehouse as number,
         doc_date: state.doc_date,
         category: state.category,
-        amount: String(amountInt),
+        amount: keepOrInt(state.amount, initial?.amount),
         payment_method: state.payment_method as number,
         payee: state.payee.trim(),
         handled_by: (state.handled_by as number) || null,
@@ -285,7 +286,7 @@ export function PettyExpenseForm({ open, initial, onClose }: Props) {
               padding: "8px 12px",
               background: "var(--panel)",
               borderLeft: "3px solid #ffa500",
-              fontSize: 13,
+              fontSize: 14,
               color: "var(--text-dim)",
               marginBottom: 12,
             }}
@@ -304,11 +305,11 @@ export function PettyExpenseForm({ open, initial, onClose }: Props) {
               style={{
                 fontSize: 20,
                 fontWeight: 700,
-                color: "#ff7070",
+                color: "var(--danger-text)",
                 fontVariantNumeric: "tabular-nums",
               }}
             >
-              ${Math.round(Number(state.amount) || 0).toLocaleString()}
+              ${money(state.amount)}
             </dd>
             <dt>付款方式</dt>
             <dd>{pmName}</dd>
@@ -364,12 +365,10 @@ export function PettyExpenseForm({ open, initial, onClose }: Props) {
             </select>
           </Field>
           <Field label="金額" required>
-            <input
-              type="number"
-              step="1"
+            <MoneyInput
               min="0"
               value={state.amount}
-              onChange={(e) => patch("amount", e.target.value)}
+              onChange={(v) => patch("amount", v)}
               autoFocus
             />
           </Field>

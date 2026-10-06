@@ -85,7 +85,7 @@ export function SettingsPage() {
       <Toolbar title="系統設定" />
       <div className="entry-body">
         <h3 style={{ marginTop: 0 }}>維修</h3>
-        <p style={{ color: "var(--text-dim)", fontSize: 13 }}>
+        <p style={{ color: "var(--text-dim)", fontSize: 14 }}>
           返修保固天數:自原維修單完修日起算,在此範圍內視為保固有效。
         </p>
         <div
@@ -97,7 +97,7 @@ export function SettingsPage() {
             flexWrap: "wrap",
           }}
         >
-          <label style={{ fontSize: 13 }}>保固天數</label>
+          <label style={{ fontSize: 14 }}>保固天數</label>
           <input
             type="number"
             min={1}
@@ -106,7 +106,7 @@ export function SettingsPage() {
             onChange={(e) => setWarrantyDays(e.target.value)}
             style={{ width: 120 }}
           />
-          <span style={{ fontSize: 13, color: "var(--text-dim)" }}>
+          <span style={{ fontSize: 14, color: "var(--text-dim)" }}>
             天(預設 90 天)
           </span>
           <button
@@ -125,7 +125,7 @@ export function SettingsPage() {
         </div>
 
         <h3>門市</h3>
-        <p style={{ color: "var(--text-dim)", fontSize: 13 }}>
+        <p style={{ color: "var(--text-dim)", fontSize: 14 }}>
           門市地址 / 電話會印在收據(代收話費等)上。代碼 / 名稱請聯絡管理員調整。
         </p>
 
@@ -205,7 +205,7 @@ export function SettingsPage() {
         )}
 
         <h3 style={{ marginTop: 32 }}>發票類型</h3>
-        <p style={{ color: "var(--text-dim)", fontSize: 13 }}>
+        <p style={{ color: "var(--text-dim)", fontSize: 14 }}>
           內建 6 種,可切換啟用 / 指定預設 / 改名稱。銷貨、進貨單的下拉只列「啟用中」。
         </p>
 
@@ -276,7 +276,7 @@ export function SettingsPage() {
         )}
 
         <h3 style={{ marginTop: 24 }}>發票字軌</h3>
-        <p style={{ color: "var(--text-dim)", fontSize: 13 }}>
+        <p style={{ color: "var(--text-dim)", fontSize: 14 }}>
           財政部每期發放的發票號碼區段。
           銷貨單建立時依「發票類型」自動取下一張可用號碼,使用者不需手動輸入。
         </p>
@@ -434,9 +434,9 @@ export function SettingsPage() {
                   <td className="num">{t.range_end}</td>
                   <td className="num">
                     {t.is_depleted ? (
-                      <span style={{ color: "#ff7070" }}>已用完</span>
+                      <span style={{ color: "var(--danger-text)" }}>已用完</span>
                     ) : (
-                      <span style={{ color: "#80d090" }}>
+                      <span style={{ color: "var(--success-text-soft)" }}>
                         {t.next_invoice_no}
                       </span>
                     )}
@@ -470,9 +470,9 @@ export function SettingsPage() {
         )}
 
         <h3 style={{ marginTop: 24 }}>付款方式</h3>
-        <p style={{ color: "var(--text-dim)", fontSize: 13 }}>
+        <p style={{ color: "var(--text-dim)", fontSize: 14 }}>
           結帳時可選的付款通路。分類:
-          <b style={{ color: "#80d090" }}>現金</b> 計入當日營業現金;
+          <b style={{ color: "var(--success-text-soft)" }}>現金</b> 計入當日營業現金;
           <b>匯款</b> 與
           <b>非現金</b>(刷卡 / LinePay / 街口 / 全支付 / Apple Pay…)
           不計入當日現金。可自由新增、停用、設預設。
@@ -625,7 +625,7 @@ export function SettingsPage() {
                       style={{
                         color:
                           p.kind === "cash"
-                            ? "#80d090"
+                            ? "var(--success-text-soft)"
                             : p.kind === "transfer"
                             ? "#80b0d0"
                             : "var(--text-dim)",

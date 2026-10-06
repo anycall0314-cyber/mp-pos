@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 
 import { usePurchaseOrder } from "@/api/hooks";
 import type { PurchaseOrderItem } from "@/api/types";
+import { money } from "@/lib/money";
 
 /**
  * 50 × 30mm 熱感標籤;每件商品數量印對應張數。
@@ -131,7 +132,7 @@ function LabelTile({
       <div className="label-row">
         {last5 && <span className="label-last5">序末 {last5}</span>}
         {listPrice != null && (
-          <span className="label-price">$ {Number(listPrice).toLocaleString()}</span>
+          <span className="label-price">$ {money(listPrice)}</span>
         )}
       </div>
       <div className="label-footer">

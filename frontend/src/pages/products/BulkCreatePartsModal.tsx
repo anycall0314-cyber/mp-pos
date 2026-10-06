@@ -15,6 +15,7 @@ import type {
 import { Banner } from "@/components/Banner";
 import { DraftBanner } from "@/components/DraftBanner";
 import { useModalDraft } from "@/hooks/useModalDraft";
+import { MoneyInput } from "@/components/MoneyInput";
 
 const DRAFT_KEY = "modal-draft:bulk-create-parts";
 
@@ -349,11 +350,10 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
                 </label>
                 <label>
                   統一成本
-                  <input
-                    type="number"
+                  <MoneyInput
                     min="0"
                     value={defaultCost}
-                    onChange={(e) => setDefaultCost(e.target.value)}
+                    onChange={setDefaultCost}
                     style={{ width: 100 }}
                   />
                 </label>
@@ -429,7 +429,7 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
                               className="bcp-tag"
                               style={{
                                 background: "rgba(251, 191, 36, 0.15)",
-                                color: "#fbbf24",
+                                color: "var(--warn-text)",
                                 marginLeft: 4,
                               }}
                             >
@@ -444,7 +444,7 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
                               <span
                                 style={{
                                   color: "var(--text-dim)",
-                                  fontSize: 11,
+                                  fontSize: 14,
                                 }}
                               >
                                 ({r.model_name.split(" / ").slice(0, 2).join(" / ")}
@@ -471,13 +471,12 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
                           />
                         </td>
                         <td>
-                          <input
-                            type="number"
+                          <MoneyInput
                             min="0"
                             value={r.cost}
-                            onChange={(e) => {
+                            onChange={(v) => {
                               const next = [...rows];
-                              next[idx] = { ...r, cost: e.target.value };
+                              next[idx] = { ...r, cost: v };
                               setRows(next);
                             }}
                           />
@@ -512,7 +511,7 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
                   </div>
                 )}
                 {result.errors.length > 0 && (
-                  <div className="bcp-result-row" style={{ color: "#ff7070" }}>
+                  <div className="bcp-result-row" style={{ color: "var(--danger-text)" }}>
                     錯誤 {result.errors.length} 筆:
                     <ul className="bcp-result-sub">
                       {result.errors.slice(0, 10).map((e, i) => (

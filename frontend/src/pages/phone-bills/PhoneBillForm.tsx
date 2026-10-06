@@ -20,6 +20,8 @@ import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
+import { MoneyInput } from "@/components/MoneyInput";
+import { money, roundInt } from "@/lib/money";
 
 import { maskIdNo } from "./mask";
 
@@ -191,7 +193,7 @@ export function PhoneBillForm({ open, onClose }: Props) {
       setError("請輸入電話號碼");
       return;
     }
-    const amountInt = Math.round(Number(state.amount) || 0);
+    const amountInt = roundInt(state.amount);
     if (amountInt <= 0) {
       setError("金額需大於 0");
       return;
@@ -209,7 +211,7 @@ export function PhoneBillForm({ open, onClose }: Props) {
 
   async function reallySave() {
     setError(null);
-    const amountInt = Math.round(Number(state.amount) || 0);
+    const amountInt = roundInt(state.amount);
     try {
       const created = await save.mutateAsync({
         warehouse: state.warehouse as number,
@@ -300,7 +302,7 @@ export function PhoneBillForm({ open, onClose }: Props) {
           style={{
             padding: "8px 12px",
             background: "var(--panel)",
-            borderLeft: "3px solid #80d090",
+            borderLeft: "3px solid var(--success-text-soft)",
             color: "var(--text)",
             marginBottom: 12,
             display: "flex",
@@ -327,7 +329,7 @@ export function PhoneBillForm({ open, onClose }: Props) {
               padding: "8px 12px",
               background: "var(--panel)",
               borderLeft: "3px solid #ffa500",
-              fontSize: 13,
+              fontSize: 14,
               color: "var(--text-dim)",
               marginBottom: 12,
             }}
@@ -352,7 +354,7 @@ export function PhoneBillForm({ open, onClose }: Props) {
                 fontVariantNumeric: "tabular-nums",
               }}
             >
-              ${Math.round(Number(state.amount) || 0).toLocaleString()}
+              ${money(state.amount)}
             </dd>
             <dt>身分證</dt>
             <dd>{state.id_no.trim() || "—"}</dd>
@@ -427,13 +429,13 @@ export function PhoneBillForm({ open, onClose }: Props) {
               />
               {memberStatus === "checking" && (
                 <span
-                  style={{ color: "var(--text-dim)", fontSize: 12 }}
+                  style={{ color: "var(--text-dim)", fontSize: 14 }}
                 >
                   查詢中…
                 </span>
               )}
               {memberStatus === "found" && member && (
-                <span style={{ color: "#80d090", fontSize: 12 }}>
+                <span style={{ color: "var(--success-text-soft)", fontSize: 14 }}>
                   會員:{member.name} ({member.code})
                 </span>
               )}
@@ -458,12 +460,10 @@ export function PhoneBillForm({ open, onClose }: Props) {
             </div>
           </Field>
           <Field label="金額" required>
-            <input
-              type="number"
-              step="1"
+            <MoneyInput
               min="0"
               value={state.amount}
-              onChange={(e) => patch("amount", e.target.value)}
+              onChange={(v) => patch("amount", v)}
             />
           </Field>
           <Field label="身分證字號" required>
@@ -476,7 +476,7 @@ export function PhoneBillForm({ open, onClose }: Props) {
             {state.id_no.trim() && (
               <div
                 style={{
-                  fontSize: 12,
+                  fontSize: 14,
                   color: "var(--text-dim)",
                   marginTop: 4,
                 }}

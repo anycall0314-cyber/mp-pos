@@ -136,7 +136,7 @@ export function PlatformUsersTab() {
             display: "flex",
             alignItems: "center",
             gap: 6,
-            fontSize: 13,
+            fontSize: 14,
           }}
         >
           篩選經銷商:
@@ -202,7 +202,7 @@ export function PlatformUsersTab() {
                     <span
                       style={{
                         marginLeft: 4,
-                        fontSize: 10,
+                        fontSize: 12,
                         color: "var(--text-dim)",
                       }}
                     >
@@ -230,7 +230,7 @@ export function PlatformUsersTab() {
                   <button
                     type="button"
                     className="btn"
-                    style={{ fontSize: 12, padding: "4px 8px" }}
+                    style={{ fontSize: 14, padding: "4px 8px" }}
                     onClick={() => handleResetPassword(u)}
                   >
                     重設密碼
@@ -369,7 +369,7 @@ export function PlatformUsersTab() {
               </Field>
               {form.role === "tenant_user" && (
                 <Field label="">
-                  <label style={{ fontSize: 13 }}>
+                  <label style={{ fontSize: 14 }}>
                     <input
                       type="checkbox"
                       checked={form.is_warehouse_locked}
@@ -385,7 +385,7 @@ export function PlatformUsersTab() {
                 </Field>
               )}
               <Field label="">
-                <label style={{ fontSize: 13 }}>
+                <label style={{ fontSize: 14 }}>
                   <input
                     type="checkbox"
                     checked={form.create_sales_person}
