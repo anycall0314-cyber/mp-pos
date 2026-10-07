@@ -10,6 +10,9 @@ interface DrawerProps {
   /** true 時點背景遮罩 + Escape 都不關閉,僅關閉按鈕能關;
    *  搭配 ProductForm 之類有輸入暫存的表單用,避免誤觸丟資料 */
   lockBackdrop?: boolean;
+  /** true 時整個抽屜(頁首、內容、頁尾)都不能動:上面疊了另一個面板(看照片與規格)時用,
+   *  不然可以用鍵盤(Tab)繞回下面這一個按東西 */
+  frozen?: boolean;
 }
 
 export function Drawer({
@@ -20,6 +23,7 @@ export function Drawer({
   footer,
   children,
   lockBackdrop = false,
+  frozen = false,
 }: DrawerProps) {
   useEffect(() => {
     if (!open || lockBackdrop) return;
@@ -40,6 +44,7 @@ export function Drawer({
         className="drawer"
         style={{ width }}
         onClick={(e) => e.stopPropagation()}
+        {...(frozen ? { inert: "" } : {})}
       >
         <header className="drawer-header">
           <span>{title}</span>

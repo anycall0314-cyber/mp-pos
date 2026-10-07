@@ -30,12 +30,14 @@ import { Drawer } from "@/components/Drawer";
 import { Checkbox, Field } from "@/components/Field";
 
 import { PhotoSection } from "@/components/photos/PhotoSection";
+import type { PeekTarget } from "@/components/photos/ProductPhotoPanel";
 import { type PhotoStored, usePhotoDraft } from "@/components/photos/usePhotoDraft";
 
 import { DuplicatePanel } from "./DuplicatePanel";
 import { useModalDraft } from "@/hooks/useModalDraft";
 import { MoneyInput } from "@/components/MoneyInput";
 import { toast } from "@/components/workbench/toast";
+import { rememberNote, rememberTone } from "@/lib/findFirst";
 import {
   defaultRequiresSerial,
   phoneNeedsWizard as needsWizard,
@@ -65,13 +67,25 @@ function isDirtyAgainst<T extends object>(state: T, baseline: T): boolean {
   return false;
 }
 
+/** 「記住這個叫法」的結果:一句話 + 用什麼顏色講(沒記住不能用成功的顏色) */
+export interface RememberResult {
+  text: string;
+  tone: "ok" | "" | "err";
+}
+
 interface ProductFormProps {
   open: boolean;
   initial?: Product | null;
   onClose: () => void;
   onSaved?: (p: Product) => void;
-  /** 新增時發現已經建過,使用者選了「就是這個」 */
-  onUseExisting?: (productId: number, note?: string) => void;
+  /** 新增時發現已經建過,使用者選了「就是這個」。note = 有勾「記住這個叫法」時,記成了什麼 */
+  onUseExisting?: (productId: number, note?: RememberResult) => void;
+  /** 新增時先帶進來的字(「先找有沒有建過」找的那一句):有的才帶,編輯時不看 */
+  prefill?: { name?: string; barcode?: string } | null;
+  /** 「可能已經建過」的候選點了看照片與規格(面板由頁面放,要疊在這張表單上面) */
+  onPeek?: (t: PeekTarget) => void;
+  /** 那個面板現在開著:這張表單整個不能動(不然可以用 Tab 繞回來,看著 A 的照片卻按到 B 的「就是這個」) */
+  peeking?: boolean;
 }
 
 interface FormState {
@@ -223,11 +237,15 @@ export function ProductForm({
   onClose,
   onSaved,
   onUseExisting,
+  prefill,
+  onPeek,
+  peeking = false,
 }: ProductFormProps) {
   // 防重複:後端說「可能已經建過」時的候選,以及使用者寫的差異
   const [dup, setDup] = useState<DuplicateBody | null>(null);
   const [distinctReason, setDistinctReason] = useState("");
-  const [rememberName, setRememberName] = useState(true);
+  // 「記住這個叫法」要人自己勾:記下去之後這句話會直接對到那個商品,不替人決定
+  const [rememberName, setRememberName] = useState(false);
   const rememberPhrase = useRememberPhrase();
   const [state, setState] = useState<FormState>(toState(initial));
   const [categoryOption, setCategoryOption] =
@@ -281,9 +299,35 @@ export function ProductForm({
   const genTouchedRef = useRef(false);
   const nav = useNavigate();
 
+  // 儲存中表單會凍住,游標會離開原本那一格:沒存成(被擋下、欄位有錯)回來時放回去,不用再點一次
+  const backTo = useRef<HTMLElement | null>(null);
+  const rememberFocus = () => {
+    backTo.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  };
+  useEffect(() => {
+    if (busy) return;
+    const el = backTo.current;
+    backTo.current = null;
+    if (el?.isConnected) el.focus();
+  }, [busy]);
+
+  // 看照片的面板開著時不能存、不能改用既有商品(表單已經凍住;這裡是按下去那一刻再擋一次)
+  const peekingRef = useRef(peeking);
+  peekingRef.current = peeking;
+
+  // 帶進來的字只在打開那一刻看一次(不因為上一層重畫就把人打到一半的表單洗掉)
+  const prefillRef = useRef(prefill);
+  prefillRef.current = prefill;
+
   useEffect(() => {
     if (open) {
       const base = toState(initial);
+      if (!initial) {
+        // 帶進來的字算在「一開始就有的」裡:什麼都沒再改就關掉,不用問要不要存草稿
+        const given = prefillRef.current;
+        if (given?.name) base.name = given.name;
+        if (given?.barcode) base.barcode = given.barcode;
+      }
       setState(base);
       baselineRef.current = base;
       setCategoryOption(
@@ -299,7 +343,7 @@ export function ProductForm({
       setFieldErrors({});
       setDup(null);
       setDistinctReason("");
-      setRememberName(true);
+      setRememberName(false);
       setShowNewCategory(false);
       setNewCategory({ code: "", name: "", sort_order: "" });
       setClosePromptOpen(false);
@@ -405,26 +449,40 @@ export function ProductForm({
     }
   }
 
-  // 品名或條碼改了,先前那批候選就不算數,下次儲存重新檢查
+  // 品名或條碼改了,先前那批候選就不算數,下次儲存重新檢查。
+  // 「記住這個叫法」也收回不勾:那個勾是對著先前那一句話、那一批候選打的,換了一句要重新決定
   useEffect(() => {
     setDup(null);
+    setRememberName(false);
   }, [state.name, state.barcode]);
 
   /** 「就是這個」:不新增,改用既有商品;勾了就順便記住剛剛打的叫法 */
   async function useExisting(c: DuplicateCandidate) {
     // 跟「儲存」共用同一把鎖:正在存(包含還在等照片停收)的時候不能改用既有商品,
     // 不然會先建出新的那一個、最後畫面又選回既有的,多出一個品號
-    if (saving.current) return;
+    if (saving.current || peekingRef.current) return;
     saving.current = true;
+    rememberFocus();
     setBusy(true);
     try {
-      let note: string | undefined;
+      let note: RememberResult | undefined;
       if (rememberName && state.name.trim()) {
         try {
-          await rememberPhrase.mutateAsync({ product: c.id, value: state.name.trim() });
+          const done = await rememberPhrase.mutateAsync({
+            product: c.id,
+            value: state.name.trim(),
+          });
+          const verified = done.alias?.verified;
+          note = {
+            text: rememberNote(done.action, verified),
+            tone: rememberTone(done.action, verified),
+          };
         } catch (e) {
           // 沒記住不影響「改用既有商品」,但要讓人知道(例:這句話已指到別的商品)
-          note = "叫法沒有記住:" + (e instanceof Error ? e.message : String(e));
+          note = {
+            text: "叫法沒有記住:" + (e instanceof Error ? e.message : String(e)),
+            tone: "err",
+          };
         }
       }
       draftHelper.markSavedAndClear();
@@ -440,6 +498,7 @@ export function ProductForm({
 
   async function submit(e?: FormEvent) {
     e?.preventDefault();
+    if (peekingRef.current) return;
     setError(null);
     setFieldErrors({});
     // 新增手機 / 平板要走「新增手機型號」(或先按「留在這裡建立」):按 Enter 送出也一樣擋,而且要講為什麼
@@ -457,6 +516,7 @@ export function ProductForm({
     }
     if (saving.current) return;
     saving.current = true;
+    rememberFocus();
     setBusy(true);
     try {
       // 照片都傳好了才存;從這一刻起這一份照片作業不再收新照片(手機那邊會看到「電腦正在儲存」)
@@ -597,6 +657,9 @@ export function ProductForm({
       title={isEdit ? `編輯商品 ${initial?.name}` : "新增商品"}
       onClose={handleClose}
       lockBackdrop
+      // 看照片的面板開著、或正在儲存 / 改用既有商品:整張表單不能動。
+      // 儲存送出去的是按下那一刻的內容,這時候再改的字不會被存、存好之後又被清掉
+      frozen={peeking || busy}
       footer={
         <>
           <button className="btn" onClick={handleClose} type="button">
@@ -624,6 +687,7 @@ export function ProductForm({
             onUseExisting={isEdit ? undefined : useExisting}
             onProceed={() => submit()}
             busy={busy || saveProduct.isPending || rememberPhrase.isPending}
+            onPeek={onPeek}
           />
           {!isEdit && (
             <label className="checkbox dup-remember">

@@ -12,6 +12,7 @@ import { api } from "@/api/client";
 import type { Product } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { MoreMenu } from "@/components/workbench/MoreMenu";
 import { toast } from "@/components/workbench/toast";
 import { money } from "@/lib/money";
 import { purchaseLinkFor } from "@/lib/purchasePrefill";
@@ -19,6 +20,7 @@ import { purchaseLinkFor } from "@/lib/purchasePrefill";
 import { BulkAddProductsModal } from "./BulkAddProductsModal";
 import { BulkCreatePartsModal } from "./BulkCreatePartsModal";
 import { BulkEditProductsModal } from "./BulkEditProductsModal";
+import { FindFirstPanel } from "./FindFirstPanel";
 import { ProductAliasesPanel } from "./ProductAliasesPanel";
 import { ProductExpanderModal } from "./ProductExpanderModal";
 import { MiniThumb, ProductPhotoStrip, usePhotoPeek } from "@/components/photos/PhotoName";
@@ -71,6 +73,18 @@ const EMPTY_NEW_CAT: CategoryNewState = {
   is_secondhand_default: false,
   needs_host_model: true,
 };
+
+type BatchTool = "expander" | "parts" | "paste" | "import" | "accessory" | "phone";
+
+/** 「批次工具」選單(字數一致)。原本散在上面那一排的入口都在這裡,一個都沒拿掉 */
+const BATCH_TOOLS: { key: BatchTool; label: string; title: string }[] = [
+  { key: "phone", label: "手機型號", title: "一次建好這個機型的品況 × 容量 × 顏色" },
+  { key: "accessory", label: "配件展開", title: "建配件商品(品牌 × 功能 × 顏色),完成後勾選相容機型" },
+  { key: "expander", label: "型號展開", title: "一個型號展開成容量 × 顏色" },
+  { key: "parts", label: "零件批次", title: "照零件範本一次建好維修零件" },
+  { key: "paste", label: "批次貼上", title: "一次貼上多筆商品" },
+  { key: "import", label: "匯入表格", title: "匯入 CSV / Excel 檔" },
+];
 
 export function ProductsPage() {
   const nav = useNavigate();
@@ -131,6 +145,13 @@ export function ProductsPage() {
   // ─── 商品 Drawer(編輯 / 新增)
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerInitial, setDrawerInitial] = useState<Product | null>(null);
+  /** 新增時先帶進表單的字(「先找有沒有建過」找的那一句) */
+  const [drawerPrefill, setDrawerPrefill] = useState<{
+    name: string;
+    barcode: string;
+  } | null>(null);
+  // ─── 按「新增商品」先找一次:有就用那一款,確定沒有才建
+  const [findOpen, setFindOpen] = useState(false);
 
   // ─── 批次新增 Modal
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -259,6 +280,24 @@ export function ProductsPage() {
     }
   }
 
+  function openBatchTool(key: BatchTool) {
+    if (key === "phone") nav("/products/new-phone-model");
+    else if (key === "accessory") setAccessoryExpanderOpen(true);
+    else if (key === "expander") setExpanderOpen(true);
+    else if (key === "parts") setBulkPartsOpen(true);
+    else if (key === "paste") setBulkOpen(true);
+    else setImportOpen(true);
+  }
+
+  /** 把一個既有商品找出來並選起來(右邊看得到它,旁邊就有「進貨」) */
+  function showProduct(p: { id: number; sku: string }) {
+    setProductQuery(p.sku);
+    setAppliedProductQuery(p.sku);
+    setLeftTab("products");
+    setDetailTab("basic");
+    setSelection({ kind: "product", id: p.id });
+  }
+
   function runProductSearch() {
     setAppliedProductQuery(productQuery.trim());
   }
@@ -301,40 +340,28 @@ export function ProductsPage() {
                   </button>
                 </>
               )}
-              <button className="btn" onClick={() => setExpanderOpen(true)}>
-                型號展開
-              </button>
-              <button className="btn" onClick={() => setBulkPartsOpen(true)}>
-                零件批次建立
-              </button>
-              <button className="btn" onClick={() => setBulkOpen(true)}>
-                批次貼上
-              </button>
-              <button className="btn" onClick={() => setImportOpen(true)}>
-                匯入 Excel
-              </button>
-              <button
-                className="btn"
-                onClick={() => nav("/products/new-phone-model")}
-                title="一次建好這個機型的品況 × 容量 × 顏色"
-              >
-                + 新增手機型號
-              </button>
-              <button
-                className="btn"
-                onClick={() => setAccessoryExpanderOpen(true)}
-                title="建配件商品(品牌 × 功能 × 顏色),完成後勾選相容機型"
-              >
-                + 新增配件
-              </button>
-              <button
-                className="btn primary"
-                onClick={() => {
-                  setDrawerInitial(null);
-                  setDrawerOpen(true);
-                }}
-              >
-                + 新增商品
+              {/* 一次建很多筆的工具收在這裡(字數一致);平常建一個商品只有右邊那一顆 */}
+              <MoreMenu label="批次工具" buttonClass="btn">
+                {(close) =>
+                  BATCH_TOOLS.map((t) => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      role="menuitem"
+                      className="ws-more-item"
+                      title={t.title}
+                      onClick={() => {
+                        close();
+                        openBatchTool(t.key);
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  ))
+                }
+              </MoreMenu>
+              <button className="btn primary" onClick={() => setFindOpen(true)}>
+                新增商品
               </button>
             </>
           ) : (
@@ -1035,10 +1062,32 @@ export function ProductsPage() {
         </main>
       </div>
 
-      {peek.panel}
+      <FindFirstPanel
+        open={findOpen}
+        onClose={() => setFindOpen(false)}
+        peeking={peek.isOpen}
+        onPeek={peek.open}
+        onUse={(p) => {
+          setFindOpen(false);
+          showProduct(p);
+        }}
+        onCreate={(kind, prefill) => {
+          setFindOpen(false);
+          if (kind === "phone") {
+            nav("/products/new-phone-model");
+            return;
+          }
+          setDrawerInitial(null);
+          setDrawerPrefill(prefill);
+          setDrawerOpen(true);
+        }}
+      />
       <ProductForm
         open={drawerOpen}
         initial={drawerInitial}
+        prefill={drawerPrefill}
+        onPeek={peek.open}
+        peeking={peek.isOpen}
         onClose={() => setDrawerOpen(false)}
         onSaved={(p) => {
           // 新建的:選到那一筆(右邊看得到「進貨」),並且跳一句可以直接按的
@@ -1057,19 +1106,14 @@ export function ProductsPage() {
           );
         }}
         onUseExisting={(id, note) => {
-          if (note) {
-            setBulkResult(note);
-            setTimeout(() => setBulkResult(null), 6000);
-          }
+          // 記住叫法的結果用訊息條講(沒記住是紅的;以前放在上面那條綠色的成功列,看起來像成功)
+          if (note) toast(note.text, note.tone, { ms: 6000 });
           // 用品號把那筆找出來並選起來,讓人直接看到既有的那一筆
-          api<Product>(`/products/${id}/`).then((p) => {
-            setProductQuery(p.sku);
-            setAppliedProductQuery(p.sku);
-            setLeftTab("products");
-            setSelection({ kind: "product", id });
-          });
+          api<Product>(`/products/${id}/`).then(showProduct);
         }}
       />
+      {/* 看照片與規格的面板放在「先找有沒有建過」與商品表單後面:從那兩個地方點開時要疊在上面 */}
+      {peek.panel}
       <BulkAddProductsModal
         open={bulkOpen}
         onClose={() => setBulkOpen(false)}

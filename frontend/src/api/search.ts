@@ -114,6 +114,25 @@ export async function resolveProducts(
   );
 }
 
+/**
+ * 新增商品前先找一次用:共用比對的候選,加上原本的搜尋(品號 / 條碼 / 品名片段)。
+ * 兩個都查成功才算查成功 —— 只回來一半就說「沒有找到」,人會照著建出重複的品號。
+ * 零庫存、已停用的都在裡面。
+ */
+export async function findProductsBeforeCreate(
+  query: string,
+  /** 庫存算哪一家門市(`lib/findFirst` 的 `stockScope`);不給 = 全公司 */
+  warehouseId?: number,
+): Promise<{ resolved: ResolveCandidate[]; plain: Product[] }> {
+  const [resolved, plain] = await Promise.all([
+    resolveProducts(query, { warehouseId, limit: LIMIT }),
+    fetchPaginated<Product>(
+      `/products/?${qs({ search: query, page_size: LIMIT, warehouse: warehouseId })}`,
+    ),
+  ]);
+  return { resolved: resolved.candidates, plain };
+}
+
 /** 候選的一行說明:已停用 / 庫存 / 符合原因 / 差異 */
 export function candidateSummary(c: ResolveCandidate): string {
   return [

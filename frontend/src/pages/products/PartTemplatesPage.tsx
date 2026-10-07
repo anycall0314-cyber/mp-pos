@@ -479,7 +479,7 @@ export function PartTemplatesPage() {
               padding: "4px 0 8px",
             }}
           >
-            建立後可在「進貨入庫 → 商品管理 → 零件批次建立」一鍵展開
+            建立後可在「進貨入庫 → 商品管理 → 批次工具 → 零件批次」一鍵展開
           </div>
           {list.isLoading && <div>載入中…</div>}
           {!list.isLoading && (list.data?.length ?? 0) === 0 && !editing && (
@@ -611,7 +611,7 @@ export function PartTemplatesPage() {
                   <label
                     className="toggle-switch"
                     style={{ paddingTop: 28 }}
-                    title="停用後,此範本不會出現在『零件批次建立』選單"
+                    title="停用後,此範本不會出現在『零件批次』選單"
                   >
                     <input
                       type="checkbox"

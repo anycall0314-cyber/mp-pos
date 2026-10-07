@@ -6105,6 +6105,28 @@ tr.selected .intake-badge { filter: none; }
 }
 .dup-proceed input { flex: 1; min-width: 0; }
 .dup-remember { margin: -4px 0 12px; font-size: var(--font-secondary); }
+.dup-row .ph-mini { margin: 0; }
+
+/* ─── 新增商品先找一次(FindFirstPanel) ───────────────── */
+.ff-search { display: flex; gap: 8px; }
+.ff-search input { flex: 1; min-width: 0; }
+.ff-note { margin-top: 12px; color: var(--text-dim); }
+.ff-list { margin-top: 8px; }
+.ff-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.ff-row:first-child { border-top: 0; }
+.ff-row .ph-mini { width: 44px; height: 44px; margin: 0; }
+.ff-row-main { min-width: 0; flex: 1; }
+.ff-row-sub { color: var(--text-dim); font-size: var(--font-secondary); margin-top: 2px; overflow-wrap: anywhere; }
+.ff-row .btn { flex: none; }
+.ff-none { margin-right: auto; align-self: center; color: var(--text-dim); }
+/* 字改過了:先前那一批候選只能看,不能選 */
+.ff-list.stale .ff-row-main, .ff-list.stale .ph-mini { opacity: 0.45; }
 
 /* ─── 備份與還原 ─────────────────────────────────────── */
 .backup-page { max-width: 880px; }
