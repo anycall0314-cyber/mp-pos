@@ -5,6 +5,7 @@ import { ApiHttpError } from "@/api/client";
 import type { Supplier } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { useReorder } from "@/hooks/useReorder";
 
 type Selection =
   | { kind: "supplier"; id: number }
@@ -62,29 +63,11 @@ export function SuppliersPage() {
     );
   }, [suppliersResult.data]);
 
-  async function handleReorder(srcId: number, targetId: number) {
-    if (srcId === targetId) return;
-    const arr = [...suppliers];
-    const fromIdx = arr.findIndex((s) => s.id === srcId);
-    const toIdx = arr.findIndex((s) => s.id === targetId);
-    if (fromIdx < 0 || toIdx < 0) return;
-    const [removed] = arr.splice(fromIdx, 1);
-    arr.splice(toIdx, 0, removed);
-    const renumbered = arr.map((s, i) => ({ ...s, sort_order: (i + 1) * 10 }));
-    const changed = renumbered.filter((s, i) => {
-      const before = suppliers[i];
-      return !before || before.id !== s.id || before.sort_order !== s.sort_order;
-    });
-    try {
-      await Promise.all(
-        changed.map((s) =>
-          saveSupplier.mutateAsync({ id: s.id, sort_order: s.sort_order }),
-        ),
-      );
-    } catch (e) {
-      setError("排序儲存失敗,請重新整理頁面");
-    }
-  }
+  // 放開的當下畫面就換、背景存、全部存完才重抓一次(規則在 lib/reorder.ts、lib/reorderStore.ts)
+  const { move: handleReorder, error: orderError } = useReorder({
+    queryKey: ["suppliers"],
+    path: (id) => `/suppliers/${id}/`,
+  });
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -204,6 +187,7 @@ export function SuppliersPage() {
                 {!suppliersResult.isLoading && `${filtered.length} 筆`}
               </span>
             </div>
+            {orderError && <Banner kind="error" message={orderError} />}
             <div className="pc-section-search">
               <input
                 value={query}

@@ -16,7 +16,15 @@ export function getToken(): string | null {
   }
 }
 
+// 第幾次登入狀態:登入、登出、登入失效都算換一次。還在排隊的背景工作(例:拖拉排序的存檔)
+// 拿它來認「我還是不是當初那個登入狀態」—— 換了就不能再送,不然會用下一個人的身分送出去
+let session = 0;
+export function sessionId(): number {
+  return session;
+}
+
 export function setToken(token: string | null) {
+  session += 1;
   try {
     if (token) sessionStorage.setItem(TOKEN_KEY, token);
     else sessionStorage.removeItem(TOKEN_KEY);

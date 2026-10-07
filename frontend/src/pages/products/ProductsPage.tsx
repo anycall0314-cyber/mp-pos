@@ -13,6 +13,7 @@ import type { Product } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { MoreMenu } from "@/components/workbench/MoreMenu";
+import { useReorder } from "@/hooks/useReorder";
 import { toast } from "@/components/workbench/toast";
 import { money } from "@/lib/money";
 import { purchaseLinkFor } from "@/lib/purchasePrefill";
@@ -256,29 +257,13 @@ export function ProductsPage() {
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dragOverId, setDragOverId] = useState<number | null>(null);
 
-  async function handleCategoryReorder(srcId: number, targetId: number) {
-    if (srcId === targetId) return;
-    const arr = [...sortedCategories];
-    const fromIdx = arr.findIndex((c) => c.id === srcId);
-    const toIdx = arr.findIndex((c) => c.id === targetId);
-    if (fromIdx < 0 || toIdx < 0) return;
-    const [removed] = arr.splice(fromIdx, 1);
-    arr.splice(toIdx, 0, removed);
-    const renumbered = arr.map((c, i) => ({ ...c, sort_order: (i + 1) * 10 }));
-    const changed = renumbered.filter((c, i) => {
-      const before = sortedCategories[i];
-      return !before || before.id !== c.id || before.sort_order !== c.sort_order;
-    });
-    try {
-      await Promise.all(
-        changed.map((c) =>
-          saveCategory.mutateAsync({ id: c.id, sort_order: c.sort_order }),
-        ),
-      );
-    } catch (e) {
-      setCatError("排序儲存失敗,請重新整理頁面");
-    }
-  }
+  // 放開的當下畫面就換、背景存、全部存完才重抓一次(規則在 lib/reorder.ts、lib/reorderStore.ts)。
+  // 沒存成的訊息放在清單上面:右邊的類別詳情沒選類別時不會出現
+  const { move: handleCategoryReorder, error: catOrderError } = useReorder({
+    queryKey: ["categories"],
+    path: (id) => `/categories/${id}/`,
+    alsoRefresh: [["products"]],
+  });
 
   function openBatchTool(key: BatchTool) {
     if (key === "phone") nav("/products/new-phone-model");
@@ -580,6 +565,7 @@ export function ProductsPage() {
             <div className="pc-section-header">
               <span>類別(拖拉重排)</span>
             </div>
+            {catOrderError && <Banner kind="error" message={catOrderError} />}
             <div className="pc-section-search">
               <input
                 value={categoryQuery}
