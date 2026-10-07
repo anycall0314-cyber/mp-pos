@@ -35,13 +35,29 @@ interface Props {
   onPeek: (t: PeekTarget) => void;
   /** 照片面板開著:Esc / 點旁邊是關照片面板,這個框不跟著收 */
   peeking: boolean;
+  /** 打開時先帶進來的字(進貨開單頁「找不到」的那一串):有字就自動先找一次 */
+  initialText?: string;
+  /** 從單據裡開的:這張單的廠商(它的料號 / 叫法也找) */
+  from?: { supplierId?: number | "" };
+  /** 已停用的那一列按鈕上的字。商品管理是「查看這款」(過去看、管理員可以恢復);單據裡沒有地方可以「過去看」,由頁面決定怎麼講 */
+  inactiveLabel?: string;
 }
 
 /**
  * 按「新增商品」先出現的框:用自己的說法找一次,有就用那一款,確定沒有才建。
  * 規則(什麼時候可以選、什麼時候可以往下建)在 lib/findFirst。
  */
-export function FindFirstPanel({ open, onClose, onUse, onCreate, onPeek, peeking }: Props) {
+export function FindFirstPanel({
+  open,
+  onClose,
+  onUse,
+  onCreate,
+  onPeek,
+  peeking,
+  initialText,
+  from,
+  inactiveLabel = "查看這款",
+}: Props) {
   const scope = stockScope(useCurrentUser()?.profile);
   const [input, setInput] = useState("");
   const [state, setState] = useState<FindState<Product>>(IDLE);
@@ -52,10 +68,12 @@ export function FindFirstPanel({ open, onClose, onUse, onCreate, onPeek, peeking
     setState(now.current);
   }
 
-  // 每次打開都從空的開始;關掉之前送出去的那一次回來也不算
+  // 每次打開都重新開始(關掉之前送出去的那一次回來也不算);有帶字進來就先找一次
   useEffect(() => {
-    setInput("");
+    const start = open ? (initialText ?? "") : "";
+    setInput(start);
     apply(reset);
+    if (open && askable(start)) run(start);
     // 只跟著開關走
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -64,15 +82,16 @@ export function FindFirstPanel({ open, onClose, onUse, onCreate, onPeek, peeking
   // 所以選字結束後晚一拍才放掉(不去攔按鍵,免得把選好的字吃掉)
   const composing = useRef(false);
 
-  function run() {
-    if (!askable(input)) return;
-    apply((s) => ask(s, input));
+  /** text = 要找的字(不給就是框裡現在的字) */
+  function run(text: string = input) {
+    if (!askable(text)) return;
+    apply((s) => ask(s, text));
     const sent = now.current;
     if (sent.phase !== "loading") return;
     // 條碼送整串數字(照包裝打的 4712-3456-7890 也找得到);畫面上「現在找的是哪一句」仍然是人打的那一句
-    const text = searchText(sent.asked);
-    findProductsBeforeCreate(text, scope)
-      .then((r) => mergeRows(r.resolved, r.plain, text))
+    const query = searchText(sent.asked);
+    findProductsBeforeCreate(query, scope, from)
+      .then((r) => mergeRows(r.resolved, r.plain, query))
       .then(
         (rows) => apply((s) => settle(s, sent.seq, rows)),
         // 整理回應時出錯也算沒查成功(不能停在「尋找中…」)
@@ -168,7 +187,12 @@ export function FindFirstPanel({ open, onClose, onUse, onCreate, onPeek, peeking
           aria-label="品名或條碼"
         />
         {/* 按鈕直接找(不經過上面「選字中不找」那一關:會按到按鈕,字就是選好了) */}
-        <button type="button" className="btn primary" disabled={!askable(input)} onClick={run}>
+        <button
+          type="button"
+          className="btn primary"
+          disabled={!askable(input)}
+          onClick={() => run()}
+        >
           尋找
         </button>
       </form>
@@ -204,7 +228,7 @@ export function FindFirstPanel({ open, onClose, onUse, onCreate, onPeek, peeking
                 disabled={!view.canUse}
                 onClick={() => onUse(p)}
               >
-                {p.is_active ? "使用這款" : "查看這款"}
+                {p.is_active ? "使用這款" : inactiveLabel}
               </button>
             </div>
           );

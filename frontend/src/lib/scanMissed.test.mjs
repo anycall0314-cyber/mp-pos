@@ -5,9 +5,12 @@ import test from "node:test";
 
 import {
   addMissed,
+  missedEntry,
   resolveMissed,
+  retryAfterCreated,
   retryTarget,
   scanBlocker,
+  settleCreated,
 } from "./scanMissed.ts";
 
 const m = (id, kw, reason = "找不到") => ({ id, kw, reason });
@@ -75,4 +78,73 @@ test("能不能送出:有沒加入的、或輸入框還有字,都不能", () => 
   assert.match(scanBlocker([], "ZZZ999"), /ZZZ999/);
   // 兩個都有:先講沒加入的那一排
   assert.match(scanBlocker([m(1, "A")], "ZZZ999"), /沒加入/);
+});
+
+// ── 找不到是哪個商品的那幾筆,旁邊可以當場建 ──
+
+test("只有「找不到是哪個商品」的才標成可以當場建", () => {
+  assert.deepEqual(missedEntry(1, "A", "找不到", "unresolved"), { id: 1, kw: "A", reason: "找不到", creatable: true });
+  assert.deepEqual(missedEntry(2, "B", "已停用,沒有加入", "other"), { id: 2, kw: "B", reason: "已停用,沒有加入" });
+  assert.equal(missedEntry(2, "B", "x", "other").creatable, undefined);
+});
+
+test("重查的結果整個換掉:這一次是別的原因,就不能當場建了", () => {
+  const list = [missedEntry(1, "A", "找不到", "unresolved"), missedEntry(2, "B", "找不到", "unresolved")];
+  const next = addMissed(list, missedEntry(9, "A", "已停用,沒有加入", "other"), list[0]);
+  assert.deepEqual(next[0], { id: 1, kw: "A", reason: "已停用,沒有加入" });
+  assert.equal(next[0].creatable, undefined);
+  assert.deepEqual(next[1], list[1]);                      // 別筆不動
+});
+
+test("重查的結果整個換掉:原本不能建、這一次是找不到,就可以建", () => {
+  const list = [missedEntry(1, "A", "連線逾時", "other")];
+  const next = addMissed(list, missedEntry(9, "A", "有 3 個相似", "unresolved"), list[0]);
+  assert.deepEqual(next, [{ id: 1, kw: "A", reason: "有 3 個相似", creatable: true }]);
+});
+
+test("當場建好帶回來:由哪一筆開始的就只劃那一筆,同一個碼的別筆留著", () => {
+  const list = [
+    missedEntry(1, "T0301", "找不到", "unresolved"),
+    missedEntry(2, "T0301", "找不到", "unresolved"),
+    missedEntry(3, "B", "找不到", "unresolved"),
+  ];
+  assert.deepEqual(settleCreated(list, "T0301", list[1]).map((m) => m.id), [1, 3]);
+  assert.deepEqual(settleCreated(list, "T0301", list[0]).map((m) => m.id), [2, 3]);
+});
+
+test("那一筆已經不在了(人先按了清掉):什麼都不劃,不能改劃同一個碼的另一筆", () => {
+  const gone = missedEntry(1, "T0301", "找不到", "unresolved");
+  // 清掉之後同一個碼又刷了一次、又沒加進去:這一筆是另一次刷的,還沒進明細
+  const again = [missedEntry(5, "T0301", "找不到", "unresolved"), missedEntry(6, "B", "找不到", "unresolved")];
+  assert.equal(settleCreated(again, "T0301", gone), again);
+  assert.equal(settleCreated([], "T0301", gone).length, 0);
+});
+
+test("從下拉開始的(沒有指定哪一筆):劃同一個碼最早的那一筆;沒有那個碼就不動", () => {
+  const list = [
+    missedEntry(1, "T0301", "找不到", "unresolved"),
+    missedEntry(2, "T0301", "找不到", "unresolved"),
+    missedEntry(3, "B", "找不到", "unresolved"),
+  ];
+  assert.deepEqual(settleCreated(list, "T0301", null).map((m) => m.id), [2, 3]);
+  assert.equal(settleCreated(list, "沒有這個碼", null), list);
+});
+
+test("帶回來的那一刻,放回輸入框重查的那一筆要不要放掉", () => {
+  const a = missedEntry(1, "A", "找不到", "unresolved");
+  const b = missedEntry(2, "B", "找不到", "unresolved");
+  // 這一趟就是從那一筆開始的:放掉
+  assert.equal(retryAfterCreated(a, "A", a, "A"), null);
+  // 這一趟是從 A 開始的,但人已經點了 B 放回輸入框:B 要留著(他接著按 Enter 要算在 B 上)
+  assert.equal(retryAfterCreated(b, "A", a, "B"), b);
+  // 從下拉開始的(沒有指定哪一筆),輸入框還是那串字、重查的也是那串字:放掉
+  assert.equal(retryAfterCreated(a, "A", null, " A "), null);
+  // 從下拉開始的,但人已經點了別筆放回輸入框:不能動
+  assert.equal(retryAfterCreated(b, "A", null, "B"), b);
+  // 從下拉開始的,重查的是同一串字、但輸入框已經被改成別的字:不動(那串字還沒送出)
+  assert.equal(retryAfterCreated(a, "A", null, "AB"), a);
+  // 從下拉開始的,輸入框是那串字、但重查的是別筆(不該發生;發生了也不放掉別筆)
+  assert.equal(retryAfterCreated(b, "A", null, "A"), b);
+  // 本來就沒有在重查
+  assert.equal(retryAfterCreated(null, "A", a, "A"), null);
 });

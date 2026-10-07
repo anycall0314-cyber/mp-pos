@@ -123,9 +123,11 @@ export async function findProductsBeforeCreate(
   query: string,
   /** 庫存算哪一家門市(`lib/findFirst` 的 `stockScope`);不給 = 全公司 */
   warehouseId?: number,
+  /** 從單據裡開的:帶這張單的廠商(它的料號 / 叫法也找) */
+  from?: { supplierId?: number | "" },
 ): Promise<{ resolved: ResolveCandidate[]; plain: Product[] }> {
   const [resolved, plain] = await Promise.all([
-    resolveProducts(query, { warehouseId, limit: LIMIT }),
+    resolveProducts(query, { warehouseId, supplierId: from?.supplierId, limit: LIMIT }),
     fetchPaginated<Product>(
       `/products/?${qs({ search: query, page_size: LIMIT, warehouse: warehouseId })}`,
     ),

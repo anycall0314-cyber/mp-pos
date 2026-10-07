@@ -3,6 +3,7 @@
  * 進貨開單頁的網址收 `?add=商品編號,商品編號`;這裡只管「網址怎麼組、怎麼讀」(純函式,有測試)。
  * 真正加進明細的規則還是進貨開單頁原本那一套(中古機不能走一般進貨、停用的不會被悄悄加進去)。
  */
+import { barcodeIn } from "./findFirst.ts";
 
 /** 一次最多帶幾個商品(一支機型展開的容量 × 顏色 × 品況不會超過這個數字太多;擋掉亂給的網址) */
 export const MAX_PREFILL = 60;
@@ -130,6 +131,86 @@ export function sortFetched<P extends Fetched>(
     else out.fresh.push(r.value);
   }
   return out;
+}
+
+/**
+ * 在進貨開單頁當場找到 / 建好的商品,能不能放進這張(一般)進貨單。
+ * 回一句話 = 不能(原因);null = 可以。中古機走中古收購、虛擬商品不用進貨 —— 跟上面 `sortFetched` 同一套分法。
+ * 停用的不在這裡講:那一種頁面有自己的說法(管理員可以當場恢復)。
+ */
+export function notForPurchase(p: { name: string; is_secondhand?: boolean; is_virtual?: boolean }): string | null {
+  if (p.is_secondhand) return `「${p.name}」是中古機,請到中古收購進`;
+  if (p.is_virtual) return `「${p.name}」是虛擬商品,不用進貨`;
+  return null;
+}
+
+/**
+ * 「當場建 / 當場找」的一趟:從掃碼框的哪一串字、「沒加入」的哪一筆開始的。
+ * **一趟只能帶回一個商品一次**(`take`):連按兩下「使用這款」、存檔的回應回來兩次,都只加一次。
+ */
+export interface CreateTrip<E> {
+  kw: string;
+  entry: E | null;
+  /**
+   * 帶回來的商品已經不是「這一趟那串字」的了(人在表單載入了別的草稿):
+   * 商品照樣加進這張單,但**不劃**「沒加入」那一筆、不清掃碼框的字 —— 那串字還沒有對到商品。
+   */
+  detached: boolean;
+}
+/**
+ * 這一趟「自己的」那一筆「沒加入」:離開這一頁之前檢查還有沒有別的碼沒處理時,這一筆不算(它正在被處理)。
+ * 但載入過別的草稿的那一趟(`detached`)**沒有自己的那一筆**:表單裡的已經不是那串字的商品,那一筆其實還沒有著落,要照算。
+ */
+export function tripOwnEntry<E>(trip: CreateTrip<E> | null): E | null {
+  return trip && !trip.detached ? trip.entry : null;
+}
+
+/**
+ * 帶回來的商品要不要算在這一趟那串字上(劃掉「沒加入」那一筆、清掉掃碼框的字)。
+ * 一般的一趟:算。載入過別的草稿的那一趟:不算 —— 除非**那串字是條碼**、而且存好的商品條碼正好就是它
+ * (人載入草稿之後又把條碼改成這一次刷的:那它就是這一次刷的那個;不劃的話那一筆再重查一次會多加一件)。
+ * 「是不是條碼」用帶進表單時的同一個認法(`barcodeIn`:去掉空白與連字號後整串數字、8 碼以上)。
+ * **品名開始的那一趟載入草稿之後一律不算**:品名 `X-1` 去掉連字號剛好等於別的商品的條碼 `X1`,不代表它們是同一個東西。
+ */
+export function tripSettles<E>(
+  trip: CreateTrip<E>,
+  product: { barcode?: string | null },
+): boolean {
+  if (!trip.detached) return true;
+  const scanned = barcodeIn(trip.kw);
+  if (scanned === null) return false;
+  return scanned === (product.barcode ?? "").replace(/[\s-]/g, "");
+}
+
+export function tripBox<E>() {
+  let now: CreateTrip<E> | null = null;
+  return {
+    /** 開始新的一趟(上一趟沒做完的就不算了) */
+    start(kw: string, entry: E | null) {
+      now = { kw, entry, detached: false };
+    },
+    /** 看一下現在這一趟(不拿走) */
+    peek(): CreateTrip<E> | null {
+      return now;
+    },
+    /** 人在表單載入了別的草稿:這一趟之後帶回來的商品不算在那串字上(見 `detached`)。沒有進行中的一趟就不做事 */
+    detach() {
+      if (now) now = { ...now, detached: true };
+    },
+    /** 這一趟帶回商品了:拿走(之後再拿就是 null) */
+    take(): CreateTrip<E> | null {
+      const got = now;
+      now = null;
+      return got;
+    },
+    /** 人取消了(關掉沒選也沒建) */
+    drop() {
+      now = null;
+    },
+    active(): boolean {
+      return now !== null;
+    },
+  };
 }
 
 /** 帶過來之後沒加進去的,分成幾種(進貨開單頁照這個講給人知道) */

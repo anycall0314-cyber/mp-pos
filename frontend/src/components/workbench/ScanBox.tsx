@@ -10,9 +10,13 @@ import {
 import {
   addMissed,
   Missed,
+  missedEntry,
+  MissKind,
   resolveMissed,
+  retryAfterCreated,
   retryTarget,
   scanBlocker,
+  settleCreated,
 } from "@/lib/scanMissed";
 
 import { apiErrorText as errText } from "./errors";
@@ -42,10 +46,20 @@ export interface ScanBoxApi {
   blocker: () => string | null;
   /** 看完照片回來:游標回到輸入框,原本的搜尋結果還在 */
   resume: () => void;
+  /**
+   * 這串字(`kw`)用別的方式加進明細了(頁面當場找到 / 建好了商品):
+   * 它記在「沒加入」的那一筆劃掉(`entry` = 由哪一筆開始的;沒有就劃同一個碼最早的那一筆),輸入框裡還是這串字的話清掉。
+   */
+  added: (kw: string, entry: Missed | null) => void;
+  /** 「沒加入」現在有哪幾筆(頁面要帶人離開這一頁之前看:那幾筆不在草稿裡,離開就沒了) */
+  missed: () => Missed[];
 }
 
 /** 回一句話 = 沒加成(原因);其他 = 加好了 */
 type PickResult = void | string | null;
+
+/** `onScan` 的回答(見 Props 的說明) */
+export type ScanVerdict = boolean | string | { problem: string; unresolved: true };
 
 interface Props<T> {
   placeholder: string;
@@ -60,9 +74,10 @@ interface Props<T> {
    * 按 Enter(或條碼槍刷完)先問這裡,例如這串字是不是某一台設備的碼。
    * - true:已經處理好了
    * - 一句話:認得這個碼,但不能加(例如那一台在別的分店)。這句話會留在「沒加入」
+   * - `{ problem, unresolved: true }`:沒加成,而且原因是「找不到它是哪個商品」(頁面可以當場建的話,那一筆旁邊有「建立」)
    * - false:不是它的事,接著當商品找
    */
-  onScan?: (code: string) => Promise<boolean | string>;
+  onScan?: (code: string) => Promise<ScanVerdict>;
   /** 這個選項的品號 / 條碼跟輸入的字完全相同 */
   isExact?: (opt: ScanOption<T>, q: string) => boolean;
   /**
@@ -75,6 +90,12 @@ interface Props<T> {
    * `use` = 人看完決定用這一筆:照平常點下拉那樣加入。不用就呼叫 `apiRef.resume()` 回到搜尋。
    */
   onPeek?: (opt: ScanOption<T>, use: () => void) => void;
+  /**
+   * 頁面可以當場建商品:給了才會出現「建立」的入口 —— 下拉最下面一列,以及「沒加入」裡找不到是哪個商品的那幾筆旁邊。
+   * `kw` = 要找 / 要建的那串字;`entry` = 由「沒加入」的哪一筆開始的(從下拉開始、輸入框那串字又不是重查某一筆,就是 null)。
+   * 頁面把商品加進明細之後呼叫 `apiRef.added(kw, entry)`;人取消了就什麼都不用做(字與那一筆都還在)。
+   */
+  onCreate?: (kw: string, entry: Missed | null) => void;
   /** 頁面拿來問「還有沒有碼在處理」「有沒有碼沒加進去」 */
   apiRef?: MutableRefObject<ScanBoxApi | null>;
   disabled?: boolean;
@@ -108,6 +129,7 @@ export function ScanBox<T>({
   isExact,
   resetKey,
   onPeek,
+  onCreate,
   apiRef,
   disabled,
   autoFocus,
@@ -119,6 +141,8 @@ export function ScanBox<T>({
   const [items, setItems] = useState<ScanOption<T>[]>([]);
   const [open, setOpen] = useState(false);
   const [sel, setSel] = useState(0);
+  /** 人有沒有用上下鍵動過反白(畫面要跟著畫:「建立商品」那一列只有動過才反白) */
+  const [movedShown, setMovedShown] = useState(false);
   const [missed, setMissedState] = useState<Missed[]>([]);
   // 「沒加入」另外留一份當下的:頁面在送出前會馬上來問,不能等畫面重畫
   const missedNow = useRef<Missed[]>([]);
@@ -181,6 +205,7 @@ export function ScanBox<T>({
     setItems([]);
     shownFor.current = null;
     moved.current = false;
+    setMovedShown(false);
   }
 
   function showList(kw: string, list: ScanOption<T>[]) {
@@ -189,6 +214,7 @@ export function ScanBox<T>({
     shownFor.current = kw;
     shownAt.current = Date.now();
     moved.current = false;
+    setMovedShown(false);
     setOpen(true);
   }
 
@@ -220,6 +246,19 @@ export function ScanBox<T>({
         peeking.current = false;
         ref.current?.focus();
       },
+      missed: () => missedNow.current,
+      added: (kw, entry) => {
+        setMissed((cur) => settleCreated(cur, kw, entry));
+        retrying.current = retryAfterCreated(retrying.current, kw, entry, textRef.current);
+        // 輸入框裡還是這串字(放回來重查的,或人打了還沒送出的):它已經加進去了,清掉
+        if (textRef.current.trim() === kw.trim()) {
+          seq.current++;
+          window.clearTimeout(timer.current);
+          closeMenu();
+          setValue("");
+        }
+        ref.current?.focus();
+      },
     };
     return () => {
       apiRef.current = null;
@@ -230,10 +269,15 @@ export function ScanBox<T>({
    * 這個碼沒加進去:記到「沒加入」。
    * retryOf = 這次是人點了某一筆「沒加入」重查的:結果算在那一筆上(換原因),不另外多一筆。
    */
-  function miss(kw: string, reason: string, retryOf: Missed | null = null) {
+  function miss(
+    kw: string,
+    reason: string,
+    retryOf: Missed | null = null,
+    kind: MissKind = "other",
+  ) {
     toast(`${kw}:${reason}`, "err");
     setMissed((cur) =>
-      addMissed(cur, { id: ++missSeq, kw, reason }, retryOf),
+      addMissed(cur, missedEntry(++missSeq, kw, reason, kind), retryOf),
     );
   }
 
@@ -277,6 +321,7 @@ export function ScanBox<T>({
     // 同一個碼再刷一次又失敗,要多記一筆,不是算在上一筆上
     retrying.current = null;
     moved.current = false;
+    setMovedShown(false);
     const kw = v.trim();
     if (kw.length < 2) {
       window.clearTimeout(timer.current);
@@ -334,14 +379,15 @@ export function ScanBox<T>({
     if (list.length > 0) showList(kw, list);
   }
 
-  /** 沒加成:記下來,方便的話放回輸入框 */
+  /** 沒加成:記下來,方便的話放回輸入框。kind = unresolved:找不到是哪個商品(頁面可以當場建的話,這一筆旁邊有「建立」) */
   function fail(
     kw: string,
     reason: string,
     list: ScanOption<T>[],
     retryOf: Missed | null,
+    kind: MissKind = "other",
   ) {
-    miss(kw, reason, retryOf);
+    miss(kw, reason, retryOf, kind);
     const entry =
       (retryOf && missedNow.current.find((m) => m.id === retryOf.id)) ||
       missedNow.current[missedNow.current.length - 1] ||
@@ -357,7 +403,7 @@ export function ScanBox<T>({
   ) {
     const stale = () => born !== epoch.current;
     if (onScan) {
-      let result: boolean | string;
+      let result: ScanVerdict;
       try {
         result = await onScan(kw);
       } catch (e) {
@@ -367,6 +413,11 @@ export function ScanBox<T>({
       if (typeof result === "string") {
         // 認得這個碼、但不能加:放回輸入框也沒有東西可以挑,只記下來
         miss(kw, result, retryOf);
+        return;
+      }
+      if (result && typeof result === "object") {
+        // 找不到它是哪個商品(刷的是條碼,系統裡沒有):記下來,旁邊可以當場建
+        miss(kw, result.problem, retryOf, "unresolved");
         return;
       }
       if (result) {
@@ -387,7 +438,7 @@ export function ScanBox<T>({
     }
     if (stale()) return;
     if (list.length === 0) {
-      fail(kw, "找不到", [], retryOf);
+      fail(kw, "找不到", [], retryOf, "unresolved");
       return;
     }
     const exact = isExact ? list.filter((o) => isExact(o, kw)) : [];
@@ -399,6 +450,7 @@ export function ScanBox<T>({
         list.length === 1 ? "不是完全相同" : `有 ${list.length} 個相似`,
         list,
         retryOf,
+        "unresolved",
       );
       return;
     }
@@ -413,10 +465,52 @@ export function ScanBox<T>({
     else resolved(kw, retryOf);
   }
 
+  /**
+   * 人要當場建(或再仔細找一次)這串字:交給頁面。輸入框的字留著 ——
+   * 人取消的話什麼都沒變;頁面加好了會呼叫 `added` 來清。
+   */
+  function startCreate() {
+    const kw = textRef.current.trim();
+    if (!kw || !onCreate) return;
+    seq.current++;
+    window.clearTimeout(timer.current);
+    closeMenu();
+    // 游標離開輸入框:字還留在裡面,人順手再按一下 Enter 不能把同一串字又送出去一次
+    // (那一次會自己去找、找到剛建好的商品又加一行)。人取消之後點回來再按才算
+    ref.current?.blur();
+    // 這串字是點「沒加入」的某一筆放回來的:結果算在那一筆上
+    onCreate(kw, retryTarget(retrying.current, kw));
+  }
+
+  /** 點了「沒加入」某一筆旁邊的「建立」 */
+  function createFromMissed(m: Missed, button: HTMLButtonElement) {
+    if (!onCreate) return;
+    // 輸入框裡正好是這一串字(放回來重查的):還在等的搜尋不要了、下拉關掉,不然面板開著下拉又跳出來
+    if (textRef.current.trim() === m.kw.trim()) {
+      seq.current++;
+      window.clearTimeout(timer.current);
+      closeMenu();
+    }
+    // 游標不留在這顆按鈕上:不然再按一下 Enter 會再開一次
+    button.blur();
+    onCreate(m.kw, m);
+  }
+
   function submit() {
     const kw = textRef.current.trim();
     if (!kw) return;
     window.clearTimeout(timer.current);
+    // 人用上下鍵移到最下面那一列「建立商品」按 Enter
+    if (
+      onCreate &&
+      open &&
+      shownFor.current === kw &&
+      moved.current &&
+      sel === items.length
+    ) {
+      startCreate();
+      return;
+    }
     const listed = open && shownFor.current === kw && items.length > 0;
     // 人用上下鍵挑好了 → 就是反白那一筆
     if (listed && moved.current && items[sel]) {
@@ -463,10 +557,14 @@ export function ScanBox<T>({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       moved.current = true;
-      setSel((s) => Math.min(items.length - 1, s + 1));
+      setMovedShown(true);
+      // 有「建立商品」那一列的話,它排在最後、也可以移過去
+      const last = onCreate ? items.length : items.length - 1;
+      setSel((s) => Math.min(last, s + 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       moved.current = true;
+      setMovedShown(true);
       setSel((s) => Math.max(0, s - 1));
     } else if (e.key === "Escape") {
       e.stopPropagation();
@@ -537,6 +635,17 @@ export function ScanBox<T>({
                 )}
               </div>
             ))}
+            {onCreate && (
+              <div
+                className={`wb-scan-item create${sel === items.length && movedShown ? " sel" : ""}`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  startCreate();
+                }}
+              >
+                {items.length > 0 ? "都不是,建立商品" : "建立商品"}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -544,16 +653,30 @@ export function ScanBox<T>({
         <div className="wb-scan-missed">
           <span className="wb-label">沒加入</span>
           {missed.map((m) => (
-            <button
+            <span
               key={m.id}
-              type="button"
-              className="wb-badge bad"
-              title="點一下放回輸入框重查"
-              disabled={disabled}
-              onClick={() => retry(m)}
+              className={onCreate && m.creatable ? "wb-scan-miss has-create" : "wb-scan-miss"}
             >
-              {m.kw} · {m.reason}
-            </button>
+              <button
+                type="button"
+                className="wb-badge bad"
+                title="點一下放回輸入框重查"
+                disabled={disabled}
+                onClick={() => retry(m)}
+              >
+                {m.kw} · {m.reason}
+              </button>
+              {onCreate && m.creatable && (
+                <button
+                  type="button"
+                  className="wb-link"
+                  disabled={disabled}
+                  onClick={(e) => createFromMissed(m, e.currentTarget)}
+                >
+                  建立
+                </button>
+              )}
+            </span>
           ))}
           <button
             type="button"

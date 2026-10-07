@@ -6,10 +6,14 @@ import {
   carriedQty,
   draftQty,
   MAX_PREFILL,
+  notForPurchase,
   prefillReport,
   purchaseLinkFor,
   readPrefill,
   sortFetched,
+  tripBox,
+  tripOwnEntry,
+  tripSettles,
   withPrefill,
 } from "./purchasePrefill.ts";
 
@@ -181,4 +185,102 @@ test("把還沒做完的寫回網址:讀得回來、別的參數留著、做完�
   // 不是編號的不寫進去
   assert.deepEqual(readPrefill(withPrefill("", [0, -1, 2.5, 8], 0)).ids, [8]);
   assert.equal(withPrefill("", [0, -1, 2.5, 8], 0), "?add=8");
+});
+
+// ── 進貨開單頁當場找 / 當場建 ──
+
+test("當場找到 / 建好的商品:中古機、虛擬商品不能放進一般進貨單,要講原因", () => {
+  assert.equal(notForPurchase({ name: "IP15 殼" }), null);
+  assert.equal(notForPurchase({ name: "IP15 殼", is_secondhand: false, is_virtual: false }), null);
+  assert.equal(notForPurchase({ name: "中古 IP12", is_secondhand: true }), "「中古 IP12」是中古機,請到中古收購進");
+  assert.equal(notForPurchase({ name: "門號", is_virtual: true }), "「門號」是虛擬商品,不用進貨");
+  // 兩個都是:先講中古機(跟帶過來時的分法同一個順序)
+  assert.match(notForPurchase({ name: "X", is_secondhand: true, is_virtual: true }), /中古機/);
+});
+
+test("一趟只帶回一次:連按兩下、回應回來兩次,第二次拿不到", () => {
+  const trip = tripBox();
+  assert.equal(trip.active(), false);
+  assert.equal(trip.take(), null);                       // 還沒開始
+  const entry = { id: 7, kw: "T0301", reason: "找不到" };
+  trip.start("T0301", entry);
+  assert.equal(trip.active(), true);
+  assert.deepEqual(trip.peek(), { kw: "T0301", entry, detached: false });   // 看一下不會拿走
+  assert.equal(trip.active(), true);
+  assert.deepEqual(trip.take(), { kw: "T0301", entry, detached: false });
+  assert.equal(trip.peek(), null);
+  assert.equal(trip.take(), null);                       // 第二次
+  assert.equal(trip.active(), false);
+});
+
+test("取消了就不算;新的一趟蓋掉上一趟", () => {
+  const trip = tripBox();
+  trip.start("A", null);
+  trip.drop();
+  assert.equal(trip.take(), null);
+  trip.start("A", null);
+  trip.start("B", { id: 2 });
+  assert.deepEqual(trip.take(), { kw: "B", entry: { id: 2 }, detached: false });
+  // 兩個掃碼框各有各的一趟,不互相影響
+  const other = tripBox();
+  trip.start("C", null);
+  assert.equal(other.take(), null);
+  assert.deepEqual(trip.take(), { kw: "C", entry: null, detached: false });
+});
+
+test("人在表單載入了別的草稿:這一趟帶回來的商品不算在那串字上", () => {
+  const trip = tripBox();
+  const entry = { id: 9, kw: "B", reason: "找不到" };
+  trip.start("B", entry);
+  trip.detach();
+  // 還是那一趟(同一串字、同一筆),只是標成不劃帳
+  assert.deepEqual(trip.take(), { kw: "B", entry, detached: true });
+  // 沒有進行中的一趟時 detach 不做事(不會憑空生出一趟)
+  trip.detach();
+  assert.equal(trip.take(), null);
+  // 下一趟是乾淨的:上一趟的標記不會留下來
+  trip.start("C", null);
+  assert.equal(trip.take().detached, false);
+  // 上一趟標了、還沒帶回就被新的一趟蓋掉:新的一趟也是乾淨的
+  trip.start("D", null);
+  trip.detach();
+  trip.start("E", null);
+  assert.deepEqual(trip.take(), { kw: "E", entry: null, detached: false });
+});
+
+test("離開前的檢查:這一趟自己的那一筆不算;載入過別的草稿的那一趟沒有自己的那一筆", () => {
+  const entry = { id: 9, kw: "B", reason: "找不到" };
+  assert.equal(tripOwnEntry({ kw: "B", entry, detached: false }), entry);
+  // 載入了上一趟的草稿:表單裡的不是 B 的商品,B 還沒有著落 → 要照算,不能排除
+  assert.equal(tripOwnEntry({ kw: "B", entry, detached: true }), null);
+  assert.equal(tripOwnEntry({ kw: "B", entry: null, detached: false }), null);   // 從下拉開始的,本來就沒有
+  assert.equal(tripOwnEntry(null), null);                                         // 沒有進行中的一趟
+});
+
+test("帶回來的商品要不要劃帳:一般的一趟要;載入過別的草稿的,條碼正好是刷的那一串才要", () => {
+  const scanned = { kw: "4719999000079", entry: { id: 1 }, detached: false };
+  assert.equal(tripSettles(scanned, { barcode: "" }), true);                      // 一般的一趟:不看條碼
+  assert.equal(tripSettles(scanned, { barcode: "別的" }), true);
+  const loaded = { ...scanned, detached: true };
+  assert.equal(tripSettles(loaded, { barcode: "" }), false);
+  assert.equal(tripSettles(loaded, { barcode: null }), false);
+  assert.equal(tripSettles(loaded, {}), false);
+  assert.equal(tripSettles(loaded, { barcode: "4719999000086" }), false);         // 別的條碼
+  assert.equal(tripSettles(loaded, { barcode: "4719999000079" }), true);          // 人把條碼改成這一次刷的
+  assert.equal(tripSettles({ ...loaded, kw: "4719-9990 00079" }, { barcode: "4719999000079" }), true);   // 空白、連字號不算差別
+  // 從品名開始的那一趟(那串字不是條碼):載入草稿之後一律不劃;兩邊都是空的也不算相同
+  assert.equal(tripSettles({ kw: "草稿來源AA1", entry: null, detached: true }, { barcode: "4719999000079" }), false);
+  assert.equal(tripSettles({ kw: " - ", entry: null, detached: true }, { barcode: "" }), false);
+});
+
+test("品名去掉連字號剛好等於別的商品的條碼:不是同一個東西,不能劃帳", () => {
+  const entry = { id: 3, kw: "X-1", reason: "不是完全相同" };
+  // 這一次打的是商品 A 的品名 X-1;載入的草稿是商品 B(條碼 X1)
+  assert.equal(tripSettles({ kw: "X-1", entry, detached: true }, { barcode: "X1" }), false);
+  assert.equal(tripSettles({ kw: "X1", entry, detached: true }, { barcode: "X1" }), false);        // 有英文的不算條碼
+  assert.equal(tripSettles({ kw: "12-345", entry, detached: true }, { barcode: "12345" }), false);   // 不到 8 碼的數字也不算
+  assert.equal(tripSettles({ kw: "1234-5678", entry, detached: true }, { barcode: "12345678" }), true);   // 8 碼以上的數字才是條碼
+  assert.equal(tripSettles({ kw: "12345678", entry, detached: true }, { barcode: "1234 5678" }), true);   // 商品那一邊的空白也不算差別
+  // 沒載入草稿的一趟不受影響
+  assert.equal(tripSettles({ kw: "X-1", entry, detached: false }, { barcode: "X1" }), true);
 });

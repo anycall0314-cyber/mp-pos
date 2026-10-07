@@ -86,6 +86,19 @@ interface ProductFormProps {
   onPeek?: (t: PeekTarget) => void;
   /** 那個面板現在開著:這張表單整個不能動(不然可以用 Tab 繞回來,看著 A 的照片卻按到 B 的「就是這個」) */
   peeking?: boolean;
+  /**
+   * 新增時的草稿存在哪一格(不給就是商品管理那一格)。別的頁面開這張表單要用自己的:
+   * 共用的話,在那一頁打幾個字就把商品管理沒存完的草稿蓋掉,存好又把它清掉。
+   */
+  draftKey?: string;
+  /** 人按了「載入草稿」:表單現在的內容是另一次留下來的(從單據裡開表單的頁面要知道:它不是這一次刷的那一個) */
+  onDraftLoaded?: () => void;
+  /**
+   * 表單裡的「新增手機型號」被按了。不給 = 直接去那一頁;
+   * 給了 = 交給頁面決定走不走(從單據裡開的:離開前要先看這張單有沒有還沒處理的東西)。
+   * 真的要走的時候,頁面在離開前呼叫 `beforeLeave`(把表單打好的存成草稿、結束手機配對);不走就不要呼叫。
+   */
+  onPhoneWizard?: (beforeLeave: () => void) => void;
 }
 
 interface FormState {
@@ -240,6 +253,9 @@ export function ProductForm({
   prefill,
   onPeek,
   peeking = false,
+  draftKey = DRAFT_KEY,
+  onDraftLoaded,
+  onPhoneWizard,
 }: ProductFormProps) {
   // 防重複:後端說「可能已經建過」時的候選,以及使用者寫的差異
   const [dup, setDup] = useState<DuplicateBody | null>(null);
@@ -275,7 +291,7 @@ export function ProductForm({
 
   // 草稿系統共用 hook(只加了照片、欄位都沒動也算有草稿:回來才看得到「載入草稿」)
   const draftHelper = useModalDraft<FormState>({
-    key: DRAFT_KEY,
+    key: draftKey,
     open,
     state,
     isEditMode: isEdit,
@@ -638,6 +654,7 @@ export function ProductForm({
     };
     setState(saved);
     draftHelper.consumeDraft();
+    onDraftLoaded?.();
     // 欄位與照片是同一份草稿裡的:一起換過去(載入之前在這張表單上另外加的照片不留,
     // 不然會變成「草稿的欄位 + 剛才另外加的照片」)。沒接回來(斷線)的話照片區會出現「重試」
     void photos.switchTo(saved.photo_draft ?? null).then((problem) => {
@@ -877,11 +894,19 @@ export function ProductForm({
               className="btn primary"
               onClick={() => {
                 // 這張表單打好的東西留在「新增商品」的草稿(不會帶到下一頁);手機配對先結束
-                draftHelper.flush();
-                void photos.endPair();
-                if (isDirtyAgainst(state, baselineRef.current) || photos.dirty) {
-                  toast("剛才填的留在「新增商品」的草稿", "ok", { ms: 5000 });
+                const beforeLeave = () => {
+                  draftHelper.flush();
+                  void photos.endPair();
+                  if (isDirtyAgainst(state, baselineRef.current) || photos.dirty) {
+                    toast("剛才填的留在「新增商品」的草稿", "ok", { ms: 5000 });
+                  }
+                };
+                if (onPhoneWizard) {
+                  // 走不走由頁面決定;沒走的話什麼都不做(不能先說「留在草稿」卻還在原地)
+                  onPhoneWizard(beforeLeave);
+                  return;
                 }
+                beforeLeave();
                 nav("/products/new-phone-model");
               }}
             >

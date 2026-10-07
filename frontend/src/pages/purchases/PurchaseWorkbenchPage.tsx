@@ -33,10 +33,14 @@ import { QtyInput } from "@/components/workbench/QtyInput";
 import {
   ScanBox,
   ScanBoxApi,
+  ScanVerdict,
   ScanOption,
 } from "@/components/workbench/ScanBox";
 import { PhotoName, usePhotoPeek } from "@/components/photos/PhotoName";
 import { toast } from "@/components/workbench/toast";
+import { FindFirstPanel } from "@/pages/products/FindFirstPanel";
+import { ProductForm } from "@/pages/products/ProductForm";
+import type { Missed } from "@/lib/scanMissed";
 import {
   hasDeviceCode,
   mainCode,
@@ -47,11 +51,16 @@ import {
 } from "@/lib/deviceCodes";
 import { intStr, lineTotal, money, roundInt, splitTax } from "@/lib/money";
 import {
+  type CreateTrip,
   carriedQty,
   draftQty,
   prefillReport,
   readPrefill,
+  notForPurchase,
   sortFetched,
+  tripBox,
+  tripOwnEntry,
+  tripSettles,
   withPrefill,
   type PrefillOutcome,
 } from "@/lib/purchasePrefill";
@@ -388,8 +397,36 @@ export function PurchaseWorkbenchPage({
 
   const scanRef = useRef<HTMLInputElement>(null);
   const scanApi = useRef<ScanBoxApi | null>(null);
-  /** 點品名(或搜尋結果上的「照片 N」)看照片與規格:只是看,不會加進明細;關掉回到掃碼框 */
-  const peek = usePhotoPeek(() => scanApi.current?.resume());
+  // ── 找不到的商品當場找 / 當場建(只有一般進貨;中古廠商收購沒有) ──
+  /** 「先找有沒有建過」開著(帶著掃碼框那一串字) */
+  const [finding, setFinding] = useState<string | null>(null);
+  /** 新增商品的表單開著(找過、確定沒有) */
+  const [formOpen, setFormOpen] = useState(false);
+  /** 表單用到才掛上去(它一掛上去就會去抓品牌、類別;平常開單用不到),掛上去之後就留著(它的草稿與照片要它一直在) */
+  const [formUsed, setFormUsed] = useState(false);
+  const [formPrefill, setFormPrefill] = useState<{ name: string; barcode: string } | null>(null);
+  /** 這一趟是從哪一串字、「沒加入」的哪一筆開始的;帶回商品時拿走(一趟只帶回一次) */
+  const trip = useRef(tripBox<Missed>()).current;
+  /**
+   * 面板還沒開 / 已經關了,但這一趟還有事在等:背後照樣不能動。
+   * - 按了「建立」、先等還在處理的碼做完(那一筆可能剛好被重查加進去了);
+   * - 選了「就是這個」、還在把那個既有商品查回來(不然人再刷一次同一個碼,查回來又加一件)。
+   */
+  const [waiting, setWaiting] = useState(false);
+  const waitingRef = useRef(false);
+  const overlayOpen = finding !== null || formOpen || waiting;
+  const overlayRef = useRef(overlayOpen);
+  overlayRef.current = overlayOpen;
+  const wantScan = useRef(false);
+  useEffect(() => {
+    if (overlayOpen || !wantScan.current) return;
+    wantScan.current = false;
+    scanApi.current?.resume();
+  }, [overlayOpen]);
+  /** 點品名(或搜尋結果上的「照片 N」)看照片與規格:只是看,不會加進明細;關掉回到掃碼框(上面那兩個開著時留在那裡) */
+  const peek = usePhotoPeek(() => {
+    if (!overlayRef.current) scanApi.current?.resume();
+  });
   const tableRef = useRef<HTMLTableElement>(null);
   const linesRef = useRef<Line[]>(lines);
   const currentRef = useRef<string | null>(restoredCurrent);
@@ -614,6 +651,104 @@ export function PurchaseWorkbenchPage({
     return addProduct(p, via);
   }
 
+  /** 當場找 / 當場建的面板關掉之後游標回掃碼框:先記著,等畫面真的把背後那一塊放開了才放(見下面的 effect),太早放放不上去 */
+  function scanAfterOverlay() {
+    wantScan.current = true;
+  }
+
+  /** 等掃碼框把還在處理的碼做完(最多等 `CARRY_TIMEOUT_MS`;等不到回 false) */
+  async function scanSettled(): Promise<boolean> {
+    try {
+      await withTimeout(scanApi.current?.idle() ?? Promise.resolve(), CARRY_TIMEOUT_MS);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 掃碼框那一串字找不到是哪個商品,人按了「建立」:先開「先找有沒有建過」(這張單鎖住時不開)。
+   * **先等還在處理的碼做完才開**:那一筆可能正放在輸入框重查、剛按了 Enter 還沒回來 ——
+   * 不等的話,這裡帶回一件、那一次重查回來又加一件。等完那一筆已經不在「沒加入」(被加進去了)就不用建了。
+   */
+  async function startCreate(kw: string, entry: Missed | null) {
+    if (lockedRef.current || frozenRef.current || waitingRef.current) return;
+    waitingRef.current = true;
+    setWaiting(true);
+    try {
+      if (!(await scanSettled())) {
+        toast("還有碼在處理,等一下再按「建立」", "err");
+        return;
+      }
+      if (lockedRef.current || frozenRef.current) return;
+      if (entry && !(scanApi.current?.missed() ?? []).some((m) => m.id === entry.id)) return;
+      trip.start(kw, entry);
+      setFinding(kw);
+    } finally {
+      waitingRef.current = false;
+      setWaiting(false);
+      scanAfterOverlay();
+    }
+  }
+
+  /**
+   * 要去「新增手機型號」那一頁(從先找的框、或從新增表單裡按的):這張單的草稿離開時會存,那一頁建完按「前往進貨」帶回來。
+   * 但「沒加入」那幾筆不在草稿裡,離開就沒了:**先等還在處理的碼做完,還有別的碼沒處理就不走**(這一趟自己的那一筆不算)。
+   * 不走的話面板 / 表單留著、這一趟也留著。
+   */
+  async function leaveForPhone(beforeLeave?: () => void) {
+    if (waitingRef.current) return;
+    waitingRef.current = true;
+    try {
+      if (!(await scanSettled())) {
+        toast("還有碼在處理,等一下再按", "err");
+        return;
+      }
+      // 這一趟自己的那一筆不算(它正在被處理);載入過別的草稿的那一趟沒有自己的那一筆(`tripOwnEntry`)
+      const mine = tripOwnEntry(trip.peek())?.id;
+      const others = (scanApi.current?.missed() ?? []).filter((m) => m.id !== mine);
+      if (others.length > 0) {
+        toast(`還有 ${others.length} 個沒加入的碼:先處理或清掉,再建手機`, "err", { ms: 6000 });
+        return;
+      }
+      trip.drop();
+      beforeLeave?.();
+      navigate("/products/new-phone-model");
+    } finally {
+      waitingRef.current = false;
+    }
+  }
+
+  /**
+   * 當場找到 / 建好的商品帶回這張單:**跟從下拉挑到它一樣**(走 `onPick` → `addProduct`:配件 +1、序號商品回到那一行等刷序號)。
+   * 一趟只帶回一次。不能進這張單的(中古機、虛擬商品、停用的、這張單已經送出)不加、講原因,「沒加入」的那一筆留著。
+   */
+  function bringBack(p: Product) {
+    const from = trip.take();
+    if (from) void deliver(from, p);
+  }
+  /** 這一趟(`from`)帶回了 `p`。這一趟要在人按下去的那一刻就拿走(`trip.take()`),不是等查詢回來才拿:晚回來的不能算到下一趟上 */
+  async function deliver(from: CreateTrip<Missed>, p: Product) {
+    let problem = notForPurchase(p);
+    // 停用的:管理員那一邊 `onPick` 自己會跳一則帶「恢復」的訊息,這裡不再多跳一則
+    let told = false;
+    if (!problem) {
+      problem = await onPick({ key: p.id, label: p.name, payload: p }, "mouse");
+      told = p.is_active === false && canRestore;
+    }
+    if (problem) {
+      if (!told) toast(problem, "err", { ms: 6000 });
+      return;
+    }
+    // 人在表單載入了別的草稿:加進來的不是這一趟那串字的商品,那一筆「沒加入」與掃碼框的字都留著
+    // (存好的條碼正好就是刷的那一串的話,它就是這一次刷的那個,照常劃帳:`tripSettles`)
+    if (!tripSettles(from, p)) {
+      toast(`「${p.name}」加進明細了;原本那一筆「沒加入」還在`, "", { ms: 6000 });
+      return;
+    }
+    scanApi.current?.added(from.kw, from.entry);
+  }
+
   /**
    * 從商品那一邊帶過來的一個商品放進明細。跟刷條碼(`addProduct`)不一樣的地方:
    * - 已經在明細裡:什麼都不改(「帶過來」不是「再刷一件」;來回按兩次「進貨」不會多一件),只捲到那一行;
@@ -809,7 +944,7 @@ export function PurchaseWorkbenchPage({
    * 掃碼框按了 Enter(或條碼槍刷完):先看是不是要放進「正在刷序號的那一行」的設備碼。
    * 是商品的條碼 / 品號、或打的字找得到商品,就回 false 交給掃碼框當商品處理。
    */
-  async function onScan(code: string): Promise<boolean | string> {
+  async function onScan(code: string): Promise<ScanVerdict> {
     const text = code.trim();
     const onDoc = () =>
       linesRef.current.some((l) => hasDeviceCode(l.serials, l.qty, text));
@@ -854,7 +989,8 @@ export function PurchaseWorkbenchPage({
     const now = linesRef.current.find(
       (l) => l.key === currentRef.current && l.product.requires_serial,
     );
-    if (!now) return "找不到這個商品(要刷序號請先掃商品)";
+    // 不是任何商品的條碼 / 品號、系統裡也沒有這一台、又沒有正在刷序號的那一行:找不到它是哪個商品(可以當場建)
+    if (!now) return { problem: "找不到這個商品(要刷序號請先掃商品)", unresolved: true };
     if (frozenRef.current) return "這張單已經送出,沒有放進去";
     if (onDoc()) return "這張單已經有這個碼";
     const placed = placeScannedCode(
@@ -1325,7 +1461,7 @@ export function PurchaseWorkbenchPage({
   const cols = showUntaxed ? 9 : 8;
 
   /** 單據資訊開著的時候,背後整塊停用(inert:點不到、游標進不去、條碼槍刷不進明細) */
-  const behind = infoOpen || peek.isOpen ? { inert: "" } : {};
+  const behind = infoOpen || peek.isOpen || overlayOpen ? { inert: "" } : {};
 
   const moreMenu = (
     <MoreMenu disabled={busy}>
@@ -1441,6 +1577,7 @@ export function PurchaseWorkbenchPage({
               peek.open({ id: o.payload.id, name: o.payload.name, sku: o.payload.sku, onUse: use })
             }
             onPick={onPick}
+            onCreate={isSecondhandVendor ? undefined : startCreate}
           />
           <label
             className="wb-check"
@@ -1876,6 +2013,91 @@ export function PurchaseWorkbenchPage({
           </section>
         </div>
       </Drawer>
+      {!isSecondhandVendor && (
+        <>
+          <FindFirstPanel
+            open={finding !== null}
+            initialText={finding ?? ""}
+            // 中古機也列出來(人才看得到已經有一個中古的);按了由這一頁講「請到中古收購進」
+            from={{ supplierId: supplier }}
+            // 單據裡沒有地方「過去看」:停用的也是「使用這款」,按了由這一頁講(管理員可以當場恢復)
+            inactiveLabel="使用這款"
+            peeking={peek.isOpen}
+            onPeek={peek.open}
+            onClose={() => {
+              trip.drop();
+              setFinding(null);
+              scanAfterOverlay();
+            }}
+            onUse={(p) => {
+              setFinding(null);
+              bringBack(p);
+              // 加成了、被擋下來(中古機、虛擬、停用)都一樣:游標回掃碼框
+              scanAfterOverlay();
+            }}
+            onCreate={(kind, prefill) => {
+              if (kind === "phone") {
+                // 走不走由 leaveForPhone 決定;不走的話這個框留著
+                void leaveForPhone();
+                return;
+              }
+              setFinding(null);
+              setFormPrefill(prefill);
+              setFormUsed(true);
+              setFormOpen(true);
+            }}
+          />
+          {formUsed && (
+            <ProductForm
+              open={formOpen}
+              initial={null}
+              prefill={formPrefill}
+              // 這一頁的草稿自己一格,不跟商品管理共用
+              draftKey="modal-draft:product-form-purchase"
+              // 載入了之前留下的草稿:表單裡的已經不是這一次刷的那一個,存好只加商品、不劃那一筆「沒加入」
+              onDraftLoaded={() => trip.detach()}
+              // 表單裡那顆「新增手機型號」跟先找的框那一顆走同一條路(同一個離開前的檢查)
+              onPhoneWizard={(beforeLeave) => void leaveForPhone(beforeLeave)}
+              onPeek={peek.open}
+              peeking={peek.isOpen}
+              onClose={() => {
+                // 存好 / 選了既有的:那一趟在前面已經拿走了,這裡是空的;人按取消:這一趟不算了
+                trip.drop();
+                setFormOpen(false);
+                scanAfterOverlay();
+              }}
+              onSaved={bringBack}
+              onUseExisting={(id, note) => {
+                if (note) toast(note.text, note.tone, { ms: 6000 });
+                // 存檔被防重複擋下、選了「就是這個」:帶回來的是既有的那一個。
+                // 這一趟現在就拿走:等一下查回來的時候人可能已經開了下一趟,不能算到那一趟上
+                const from = trip.take();
+                if (!from) return;
+                waitingRef.current = true;
+                setWaiting(true);
+                // 最多等 `CARRY_TIMEOUT_MS`:等不到就放開(那一筆「沒加入」還在,再刷一次就好);之後才回來的不算
+                withTimeout(api<Product>(`/products/${id}/`), CARRY_TIMEOUT_MS)
+                  .then(
+                    (p) => deliver(from, p),
+                    (e) =>
+                      toast(
+                        e instanceof Error && e.message === "timeout"
+                          ? "等太久沒有回應,沒有加進去:請再刷一次"
+                          : apiErrorText(e),
+                        "err",
+                        { ms: 6000 },
+                      ),
+                  )
+                  .finally(() => {
+                    waitingRef.current = false;
+                    setWaiting(false);
+                    scanAfterOverlay();
+                  });
+              }}
+            />
+          )}
+        </>
+      )}
       {peek.panel}
     </div>
   );

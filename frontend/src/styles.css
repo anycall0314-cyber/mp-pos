@@ -6583,6 +6583,20 @@ tr.selected .intake-badge { filter: none; }
 .wb-scan-item.none:hover { background: transparent; }
 /* 沒加進去的碼留在掃碼框下面(連續刷的時候訊息條一閃就過了);點一下放回輸入框 */
 .wb-scan-missed { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+/* 一筆「沒加入」與它旁邊的「建立」:外面這一層不佔位置,版面跟只有那顆碼的時候一樣 */
+.wb-scan-miss { display: contents; }
+/* 旁邊有「建立」的:那顆碼跟它的「建立」綁在一起,換行時不拆開 */
+.wb-scan-miss.has-create { display: inline-flex; align-items: center; gap: 6px; }
+/* 下拉最下面的「建立商品」 */
+/* 候選再多也看得到:固定在下拉的最下面(下拉自己會捲) */
+.wb-scan-item.create {
+  position: sticky; bottom: 0;
+  color: var(--wb-blue); background: var(--wb-card); border-top: 1px solid var(--wb-line);
+}
+/* 反白色是半透明的:底下墊一層不透明的,捲過去的候選才不會透出來 */
+.wb-scan-item.create.sel, .wb-scan-item.create:hover {
+  background: linear-gradient(var(--wb-blue-soft), var(--wb-blue-soft)), var(--wb-card);
+}
 .wb-scan-missed .wb-badge { border: 0; cursor: pointer; font: inherit; font-size: var(--font-secondary); }
 /* 有掃碼框的那一排:往上對齊,「沒加入」冒出來時右邊的按鈕不會跟著往下掉 */
 .wb-row.scanrow { align-items: flex-start; }
