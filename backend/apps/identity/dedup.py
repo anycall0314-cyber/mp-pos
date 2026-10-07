@@ -12,6 +12,7 @@
   不能只按一個沒有理由的忽略鈕。寫下的理由會留存(`ProductDistinctDecision`)。
 """
 import hashlib
+from dataclasses import dataclass
 
 from django.db import connection
 
@@ -22,10 +23,33 @@ from .product_match import (
     Candidate,
     MatchContext,
     MatchResult,
+    has_capacity,
     identifier_hits,
+    parse_features,
 )
 
 REASON_MIN_LEN = 2
+
+
+@dataclass(frozen=True)
+class MainUnit:
+    """「新增手機型號」要建的一台主機:哪個品況、容量那一格填的是什麼(機型、顏色寫在品名裡,比對本來就看得懂)。
+
+    主機是照「機型 × 品況 × 容量 × 顏色」一格一個品號排出來的,所以有兩種「名字很像」其實一定不是同一個商品,
+    不該要人逐筆寫「哪裡不同」(owner 2026-10-07:要建 iPhone 17,40 列每一列都被要求說明,建不下去):
+    - **配件**:店裡的皮套就叫 `IP17/黑`,名字剛好只有機型與顏色。認法:**不追蹤序號、品名與規格裡也沒有寫容量**
+      (精靈排出來的主機一定有容量)。放在哪個類別不管 —— 有的店配件就建在手機類別裡。
+      「有沒有寫容量」連它的**其他叫法**一起看(`MatchContext.states_capacity`):靠一個寫了容量的叫法對上的,就是有寫。
+      不追蹤序號但寫了容量的(`iPhone 17 256G 黑`)照樣提醒:那多半是以前用一般表單建錯的手機;追蹤序號的一律照樣提醒。
+      **這一條只在「這一列容量那一格填的認得出來」時才用**:精靈的容量欄什麼都收(`256`、`1024G`),這種寫法這裡認不出是容量 ——
+      那既有商品裡同樣寫 `256` 的也認不出來,會被誤當成配件。認不出來就不排除配件(回到原本:多問)。
+      只看容量那一格,不看整串品名:機型後綴或顏色裡剛好有 `8GB`(記憶體)的話,整串看起來「有容量」,其實容量那一格還是 `256`。
+    - **另一個品況**(「中古機」與「中古機(保固內)」):一個商品只有一個品況,品況不同就是另一個品號。
+      同一個品況裡的重複照樣抓(顏色同時填了「藍」跟「藍色」);沒有記品況的舊品號也照樣提醒。
+    """
+
+    condition_id: int
+    capacity: str
 
 
 class DuplicateProduct(Exception):
@@ -102,13 +126,52 @@ def has_real_reason(reason) -> bool:
     return sum(1 for ch in (reason or "") if ch.isalnum()) >= REASON_MIN_LEN
 
 
+def _could_be_this_unit(tenant, candidates, unit, planned_units, context, skip_accessories):
+    """主機(`unit`)的相似候選裡,留下「有可能真的是同一台主機」的。規則見 `MainUnit`。
+
+    `skip_accessories`:這一列容量那一格填的認不認得出來;認不出來就不排除配件。
+    """
+    from apps.catalog.models import Product
+
+    rows = {
+        r["id"]: r for r in Product.objects.for_tenant(tenant)
+        .filter(id__in=[c.product_id for c in candidates if c.product_id > 0])
+        .values("id", "requires_serial", "condition_id")
+    }
+    kept = []
+    for c in candidates:
+        if c.product_id <= 0:
+            # 同一批裡還沒建出來的另一筆(預覽):品況不同就不是同一個
+            other = (planned_units or {}).get(c.product_id)
+            if other is not None and other.condition_id != unit.condition_id:
+                continue
+            kept.append(c)
+            continue
+        row = rows.get(c.product_id)
+        if row is None:
+            kept.append(c)
+            continue
+        if (
+            skip_accessories and not row["requires_serial"]
+            and not context.states_capacity(c.product_id)
+        ):
+            continue   # 配件
+        if row["condition_id"] and row["condition_id"] != unit.condition_id:
+            continue   # 另一個品況
+        kept.append(c)
+    return kept
+
+
 def check_new_product(tenant, *, name, spec="", color="", capacity="", barcode="",
                       is_secondhand=False, context=None, exclude_id=None,
-                      planned=None):
+                      planned=None, unit=None, planned_units=None):
     """查一個準備新增的商品會不會跟既有的重複。回 None 或 DuplicateProduct(不丟)。
 
     要在交易內呼叫(條碼鎖是交易層級的)。批次入口請傳同一份 `context`
     (`MatchContext`),並在每建好一筆後 `context.add(product)`。
+
+    `unit`(`MainUnit`):這一筆是「新增手機型號」排出來的主機時才給;相似的候選只留可能是同一台主機的。
+    條碼 / 已確認叫法 / 同名這三種硬擋不受影響。
     """
     from apps.catalog.models import Product
 
@@ -147,12 +210,19 @@ def check_new_product(tenant, *, name, spec="", color="", capacity="", barcode="
     # ② 特徵看起來是同一款(兩個方向都看)
     text = " ".join(x for x in (name, spec, color, capacity) if x)
     context = context or MatchContext(tenant)
-    similar = MatchResult(MatchResult.CANDIDATES, [
+    found = [
         c for c in context.scan(
-            text, is_secondhand=is_secondhand, limit=5,
+            # 主機要先篩掉配件與別的品況才取前五個:不然五個名額被 `IP17/黑` 這種皮套佔滿,真正重複的手機反而看不到
+            text, is_secondhand=is_secondhand, limit=None if unit else 5,
             with_related=False, symmetric=True, exclude_id=exclude_id,
         ) if c.level in SAME_ITEM_LEVELS
-    ])
+    ]
+    if unit is not None:
+        found = _could_be_this_unit(
+            tenant, found, unit, planned_units, context,
+            skip_accessories=has_capacity(parse_features(unit.capacity, context.terms)),
+        )[:5]
+    similar = MatchResult(MatchResult.CANDIDATES, found)
     if similar.candidates:
         rows = _describe(tenant, similar, planned)
         return DuplicateProduct(
@@ -214,12 +284,17 @@ class BatchGuard:
         self._acknowledged: dict[str, list] = {}
         # 預覽時還沒真的建出來的那幾筆:{假 id(負數): 品名}
         self._planned: dict[int, str] = {}
+        # 其中是主機的那幾筆:{假 id: MainUnit}(同一批裡品況不同的兩列不互相算重複)
+        self._planned_units: dict[int, MainUnit] = {}
 
-    def allow(self, name, **fields) -> bool:
-        """這一筆可不可以建。False = 呼叫端跳過這一筆(整批最後會被 finish() 擋下)。"""
+    def allow(self, name, unit=None, **fields) -> bool:
+        """這一筆可不可以建。False = 呼叫端跳過這一筆(整批最後會被 finish() 擋下)。
+
+        `unit`:這一筆是「新增手機型號」排出來的主機時給 `MainUnit`(見它的說明)。
+        """
         dup = check_new_product(
             self.tenant, name=name, context=self._context, planned=self._planned,
-            **fields,
+            unit=unit, planned_units=self._planned_units, **fields,
         )
         if self.dry_run:
             # 預覽不會真的建商品,但後面的列要看得到這一筆,不然同一批裡的重複
@@ -227,6 +302,8 @@ class BatchGuard:
             # 已經沒有地方可以填理由。
             fake_id = -(len(self._planned) + 1)
             self._planned[fake_id] = name
+            if unit is not None:
+                self._planned_units[fake_id] = unit
             self._context.add_planned(fake_id, name, fields.get("is_secondhand", False))
         if dup is None:
             return True

@@ -142,6 +142,11 @@ class Features:
         return sum(1 for s in (self.codes, self.colors, self.words) if s)
 
 
+def has_capacity(features: "Features") -> bool:
+    """這段文字有沒有寫容量(256GB、1TB)。手機 / 平板的品號一定有;皮套、保護貼這些配件沒有。"""
+    return any(_CAPACITY_TOKEN_RE.match(w) for w in features.words)
+
+
 def _norm_capacity(m: re.Match) -> str:
     num, unit = m.group(1), m.group(2)
     if unit in ("GB", "G") and num in _CAPACITY_GB:
@@ -811,6 +816,7 @@ class MatchContext:
             alt_names[pid].append(value)
 
         self.rows = []
+        self._row_at: dict[int, int] = {}   # 商品編號 → 它在 rows 的第幾列
         for pid, sku, name, spec, color, capacity, cat, active, pm_id, used in (
             Product.objects.for_tenant(tenant).values_list(
                 "id", "sku", "name", "spec", "color", "capacity", "category__name",
@@ -827,10 +833,20 @@ class MatchContext:
                 linked_ids=frozenset(), alts=()):
         own = " ".join(x for x in (name, spec, color, capacity) if x)
         soft = parse_features(cat or "", self.terms).words | {cat or ""}
+        self._row_at[pid] = len(self.rows)
         self.rows.append((
             pid, sku, active, used, parse_features(own, self.terms), soft, linked_ids,
             [(alt, parse_features(alt, self.terms)) for alt in alts],
         ))
+
+    def states_capacity(self, product_id) -> bool:
+        """這個商品有沒有寫容量:它自己的品名 / 規格 / 容量欄,**或它任何一個其他叫法** —— 比對看的就是這幾份。
+
+        只看商品自己的欄位不夠:品名寫 `iPhone 17 256 黑色`(容量認不出來)、另外登記了一個叫法
+        `iPhone 17 256GB 黑色 台版 全新` 的手機,是靠那個叫法對上的;它有寫容量。
+        """
+        _, _, _, _, mine, _, _, alts = self.rows[self._row_at[product_id]]
+        return has_capacity(mine) or any(has_capacity(feats) for _, feats in alts)
 
     def add_planned(self, fake_id, name, is_secondhand=False):
         """預覽用:還沒真的建出來、但同一批後面的列要看得到的那一筆。"""

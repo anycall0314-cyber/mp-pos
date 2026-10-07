@@ -174,7 +174,7 @@ def _build_bundle(tenant, payload, *, dry_run, user=None):
     """核心邏輯。dry_run=True 時 atomic 外殼仍會用,確保 raise 都會回滾;
     但只要不 raise、不 save,就不會有任何寫入。
     """
-    from apps.identity.dedup import BatchGuard
+    from apps.identity.dedup import BatchGuard, MainUnit
 
     # 防重複:預覽時把可能重複的列出來;正式建立時每一筆各自帶理由
     # (distinct_reasons = {品名: 哪裡不同})才放行
@@ -338,7 +338,9 @@ def _build_bundle(tenant, payload, *, dry_run, user=None):
                 bits.append(cond.name)
                 spec = _check_len("spec", " ".join(bits), "規格")
                 name = _check_len("name", f"{model_name} {' '.join(bits)}", "品名")
-                if not guard.allow(name, is_secondhand=cond.is_secondhand):
+                # 主機只跟「可能是同一台主機」的比(配件、另一個品況不算;見 MainUnit)
+                unit = MainUnit(cond.id, cap)
+                if not guard.allow(name, unit=unit, is_secondhand=cond.is_secondhand):
                     continue
                 if dry_run:
                     main_results.append(
