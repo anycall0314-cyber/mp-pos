@@ -20,6 +20,7 @@ from .product_match import (
     COVERS,
     EXACT,
     RELATED,
+    SAME_ITEM_LEVELS,
     MatchResult,
     compare,
     find_candidates,
@@ -281,6 +282,395 @@ class FindCandidatesTests(_Base):
         r = find_candidates(self.tenant, "", barcode="4710001234567")
         self.assertEqual(r.status, MatchResult.CONFLICT)
         self.assertEqual(set(r.product_ids), {self.std.id, other.id})
+
+
+class BareModelTests(_Base):
+    """沒寫品牌字首的機型寫法(11PM、13P、11 pro max、DAP 13P、單獨一個數字)要對得上機型。
+
+    新手不會打店裡的 `IP11PM`。是不是機型由機型主檔決定(`build_index` 本來就收了這些寫法);
+    原則:**只會多對上,不會讓原本找得到的變成找不到** —— 沒對上的那些字照原本當一般的字比。
+    """
+
+    def setUp(self):
+        super().setUp()
+        for name in [
+            "iPhone 11", "iPhone 11 Pro", "iPhone 11 Pro Max", "iPhone 12",
+            "iPhone 13 Pro", "iPhone 13 Pro Max", "iPhone 17 Pro Max", "iPhone 18 Pro Max",
+            "iPhone 7", "iPhone 7 Plus", "iPhone 16", "iPhone 16 Plus",
+        ]:
+            PhoneModel.objects.create(
+                tenant=self.tenant, code=name.lower().replace(" ", "-"),
+                name=name, match_key=name.lower(),
+            )
+        self.rhino = self._product("犀牛盾/IP11PM/淺灰")
+        self.rhino_pro = self._product("犀牛盾/IP11P/黑")
+        self.rhino_12 = self._product("犀牛盾/IP12/淺灰")
+        self.dap = self._product("DAP/IP13P/柔幻極光/黑")
+        self.imos = self._product("IMOS/IP18PM/17PM/歐拉盾/暮影黑")
+        self.battery = self._product("11PRO/認證電池")
+
+    def _ids(self, text, **kw):
+        return find_candidates(self.tenant, text, **kw).product_ids
+
+    def _cand(self, text, product, **kw):
+        r = find_candidates(self.tenant, text, **kw)
+        for c in r.candidates:
+            if c.product_id == product.id:
+                return c
+        self.fail(f"「{text}」找不到 {product.name};候選:{r.product_ids}")
+
+    def test_parse_records_bare_writings_without_touching_words(self):
+        f = parse_features("犀牛盾 11PM")
+        self.assertEqual(f.bare, frozenset({("11PM", ("11PM",))}))
+        self.assertIn("11PM", f.words)
+        f = parse_features("犀牛盾 11 pro max 灰")
+        self.assertEqual(f.bare, frozenset({("11PROMAX", ("11", "PRO", "MAX"))}))
+        self.assertTrue({"11", "PRO", "MAX"} <= f.words)       # 每一塊照樣各自是一個字
+        self.assertEqual(f.aux, frozenset())
+        # 11PRO MAX 講的是 11 Pro Max,不另外再當成 11PRO
+        self.assertEqual(parse_features("11PRO MAX").bare, frozenset({("11PROMAX", ("11PRO", "MAX"))}))
+        self.assertEqual(parse_features("極空戰甲 16+ 透").bare, frozenset({("16+", ("16",))}))
+        # 單位不是機型;前面有英文字首的(RENO 16 PRO、DAP 13 PRO)原本就會接成型號,不在這裡
+        self.assertEqual(parse_features("REMAX 20W 128GB 11吋 5G 4K 2M 3A").bare, frozenset())
+        self.assertEqual(parse_features("reno 16 pro").bare, frozenset())
+        self.assertEqual(parse_features("reno 16 pro").codes, frozenset({"RENO16PRO"}))
+
+    def test_bare_model_finds_the_product(self):
+        self.assertEqual(self._ids("犀牛盾 11PM"), [self.rhino.id])
+        c = self._cand("犀牛盾 11PM", self.rhino)
+        self.assertEqual(c.level, COVERS)
+        self.assertIn("機型相符", c.reasons)
+        self.assertEqual(c.differences, ["商品另有:淺灰"])   # 不會把品名的 IP11PM 當成多出來的
+        # 沒對上的照原本的:別的機型的殼列在後面當相關,講的是「商品沒有」(跟改之前一樣),不會被排除
+        ids = self._ids("犀牛盾 11PM 淺灰")
+        self.assertEqual(ids[0], self.rhino.id)
+        other = self._cand("犀牛盾 11PM 淺灰", self.rhino_12)
+        self.assertEqual(other.level, RELATED)
+        self.assertEqual(other.differences, ["商品沒有:11PM"])
+
+    def test_spaced_bare_model(self):
+        """`11 pro max`(空白隔開、沒字首):三個字合起來是 11 Pro Max;顏色不同照樣要標出來。"""
+        c = self._cand("犀牛盾 11 pro max 灰", self.rhino)
+        self.assertEqual(c.level, RELATED)
+        self.assertTrue(c.conflict)
+        self.assertEqual(c.differences, ["顏色不同(輸入 灰 / 商品 淺灰)"])
+        self.assertIn("機型相符", c.reasons)
+        # 11 Pro 的那一個:11 pro max 不是它的機型,而且裡面的 11 也不能被當成「單獨一個數字」
+        self.assertNotIn(self.rhino_pro.id, self._ids("犀牛盾 11 pro max 灰"))
+        eleven = self._product("犀牛盾/IP11/灰")
+        self.assertNotIn(eleven.id, self._ids("犀牛盾 11 pro max 灰"))
+        # (單獨打 11 的時候才會當成 iPhone 11 來比)
+        self.assertEqual(self._cand("犀牛盾 11 灰", eleven).differences, ["只寫了數字 11,當成 iPhone 11 來比"])
+        # 13 pro(不是 13 pro max)
+        self.assertEqual(self._ids("柔幻極光 13 pro")[0], self.dap.id)
+        # 講了兩個機型、只對上一個:對上的算機型,另一個照原本當一個字沒對上
+        c = self._cand("柔幻極光 13P 11PM 黑", self.dap)
+        self.assertEqual(c.level, RELATED)
+        self.assertEqual(c.differences, ["商品沒有:11PM"])
+
+    def test_brand_glued_to_bare_model(self):
+        """`DAP 13P` 會被接成 DAP13P(品牌 + 沒字首的機型):後半是這個商品的機型才拆回來。"""
+        c = self._cand("DAP 13P 黑", self.dap)
+        self.assertEqual(c.level, COVERS)               # 商品另有 柔幻 / 極光
+        self.assertIn("機型相符", c.reasons)
+        self.assertEqual(self._ids("dap 13 pro 黑")[0], self.dap.id)
+        # 品牌不一樣的列為相關、講出差在哪
+        c = self._cand("IMOS 13P 黑", self.dap)
+        self.assertEqual(c.level, RELATED)
+        self.assertEqual(c.differences, ["商品沒有:IMOS"])
+        # 後半不是這個商品的機型 → 跟改之前一樣:這個型號沒對上,不是候選
+        self.assertEqual(self._ids("DAP 13PM 黑"), [])
+        # 主檔認得接起來的那一串(RENO16)就不拆
+        PhoneModel.objects.create(tenant=self.tenant, code="reno-16", name="Reno 16", match_key="reno 16")
+        self.assertNotIn(self._product("某牌/IP16/RENO紀念殼").id, self._ids("reno 16 紀念殼"))
+
+    def test_plus_and_p(self):
+        """7 沒有 Pro → `7P` = 7 Plus;`16+` = 16 Plus,不是 16。沒對上的那一個照原本列為相關。"""
+        plus = self._product("太空盾/IP7P/透")
+        base = self._product("太空盾/IP7/透")
+        for text in ["太空盾 7 plus 透", "太空盾 7P 透"]:
+            self.assertEqual(self._ids(text)[0], plus.id, text)
+            self.assertEqual(self._cand(text, plus).level, EXACT, text)
+            self.assertEqual(self._cand(text, base).level, RELATED, text)
+        six = self._product("極空戰甲/IP16/透")
+        six_plus = self._product("極空戰甲/IP16+/透")
+        self.assertEqual(self._ids("極空戰甲 16+ 透")[0], six_plus.id)
+        self.assertEqual(self._cand("極空戰甲 16+ 透", six_plus).level, EXACT)
+        c = self._cand("極空戰甲 16+ 透", six)             # 16+ 的 16 不能被當成 iPhone 16
+        self.assertEqual(c.level, RELATED)
+        self.assertEqual(c.differences, ["商品沒有:16"])
+
+    def test_plain_number_is_weak_evidence(self):
+        """`犀牛盾 12 淺灰`、`DAP 12 全覆蓋 粉`:數字當成 iPhone 那一代 —— 找得到,但只列為相關、講清楚是猜的。"""
+        c = self._cand("犀牛盾 12 淺灰", self.rhino_12)
+        self.assertEqual(c.level, RELATED)
+        self.assertFalse(c.conflict)
+        self.assertEqual(c.differences, ["只寫了數字 12,當成 iPhone 12 來比"])
+        self.assertIn("數字 12 對上機型", c.reasons)
+        self.assertNotIn("機型相符", c.reasons)
+        # 排在「同品牌、別的機型」前面
+        self.assertEqual(self._ids("犀牛盾 12 淺灰")[0], self.rhino_12.id)
+        dap12 = self._product("DAP/IP12/全覆蓋/粉")
+        self.assertEqual(self._ids("DAP 12 全覆蓋 粉"), [dap12.id])
+        self.assertEqual(self._cand("DAP 12 全覆蓋 粉", dap12).level, RELATED)
+        # 品牌不對(前半那個字不在品名裡)不拆;數字不是這個商品的世代不算
+        self.assertEqual(self._ids("IMOS 12 全覆蓋 粉"), [])
+        self.assertNotIn(dap12.id, self._ids("DAP 11 全覆蓋 粉"))
+        # 只靠一個數字不成立(不然打到 12 就帶出所有 iPhone 12 的東西)
+        pack = self._product("某牌/保護貼/12/入門款")
+        self.assertEqual(self._ids("某牌 保護貼 12 入門款"), [pack.id])
+        # 品名照字面就有這個數字的,當一般的字比
+        literal = self._product("某牌/IP12/12/雙入")
+        c = self._cand("某牌 12 雙入", literal)
+        self.assertEqual(c.reasons, ["12、某牌、雙入 相符"])
+        # 不是 iPhone 的商品不會因為一個數字被當成對上機型
+        charger = self._product("REMAX/快充頭/白")
+        c = self._cand("REMAX 快充頭 12 白", charger)
+        self.assertEqual(c.differences, ["商品沒有:12"])
+
+    def test_plain_number_never_makes_two_products_the_same_item(self):
+        """防重複:`某牌/保護貼/12`(12 可能是 12 片)跟 `某牌/IP12/保護貼` 不能被判成同一款。"""
+        existing = self._product("某牌/IP12/保護貼")
+        r = find_candidates(self.tenant, "某牌/保護貼/12", symmetric=True)
+        self.assertNotIn(existing.id, [c.product_id for c in r.candidates if c.level in SAME_ITEM_LEVELS])
+        qty = self._product("某牌/玻璃貼/12")
+        r = find_candidates(self.tenant, "某牌/IP12/玻璃貼", symmetric=True)
+        self.assertNotIn(qty.id, [c.product_id for c in r.candidates if c.level in SAME_ITEM_LEVELS])
+        # 只打「12 黑」:iPhone 12 的黑色東西頂多是相關,不是同一款等級
+        black = self._product("太空盾/IP12/黑")
+        self.assertEqual(self._cand("12 黑", black).level, RELATED)
+
+    def test_name_lists_several_models(self):
+        self.assertEqual(self._ids("歐拉盾 18PM"), [self.imos.id])
+        self.assertEqual(self._ids("歐拉盾 17PM"), [self.imos.id])
+
+    def test_product_name_written_bare(self):
+        """品名本身沒寫字首(`11PRO/認證電池`):打全名找得到,而且不把 11PRO 當成商品多出來的東西。"""
+        c = self._cand("iPhone 11 Pro 電池", self.battery)
+        self.assertEqual(c.level, COVERS)
+        self.assertEqual(c.differences, ["商品另有:認證"])
+        self.assertIn("機型相符", c.reasons)
+        self.assertEqual(self._cand("IP11P 電池", self.battery).differences, ["商品另有:認證"])
+        self.assertEqual(self._cand("11 pro 認證電池", self.battery).level, EXACT)
+        # 照字面打的照舊排第一;同機型的別種東西(11 Pro 的殼)跟打 `IP11P 電池` 一樣列在後面
+        ids = self._ids("11PRO 電池")
+        self.assertEqual(ids[0], self.battery.id)
+        self.assertEqual(ids, self._ids("IP11P 電池"))
+        self.assertEqual(self._cand("11PRO 電池", self.rhino_pro).differences, ["商品沒有:電池"])
+        # 11 Pro Max 的電池不是這一個
+        self.assertNotIn(self.battery.id, self._ids("iPhone 11 Pro Max 電池"))
+
+    def test_bare_token_is_not_guessed_when_the_name_already_says_another_model(self):
+        """`11PRO` 可以是 iPhone 11 Pro 也可以是 Pixel 11 Pro:品名寫了別的型號的,不能被當成 iPhone 的東西。"""
+        for name in ["Pixel 11", "Pixel 11 Pro"]:
+            PhoneModel.objects.create(
+                tenant=self.tenant, code=name.lower().replace(" ", "-"),
+                name=name, match_key=name.lower(),
+            )
+        pixel = self._product("GOOGLE/PIXEL-11/11PRO黑")
+        pixel12 = self._product("GOOGLE/PIXEL-12/11PRO桃")     # 機型主檔沒有 Pixel 12 也一樣
+        for p in (pixel, pixel12):
+            self.assertNotIn(p.id, self._ids("IP11P"))
+            self.assertNotIn(p.id, self._ids("iPhone 11 Pro 黑"))
+            self.assertNotIn(p.id, find_candidates(self.tenant, "IP11P", symmetric=True).product_ids)
+        # 品名裡照字面就有這串字、但商品是別的機型:照原本當一般的字對上(不會因為「它是別的機型」被排除)
+        badge = self._product("某牌/IP12/11PM紀念款")
+        c = self._cand("某牌 11PM 紀念款", badge)
+        self.assertEqual(c.reasons, ["11PM、某牌、紀念款 相符"])
+        self.assertEqual(c.differences, ["商品另有:IP12"])
+
+    def test_ambiguous_bare_token_does_not_widen_the_product(self):
+        """主檔裡 `11PRO` 同時是 iPhone 11 Pro 與 Pixel 11 Pro:不能把兩個都算成商品的機型。"""
+        models = {}
+        for name in ["Pixel 11", "Pixel 11 Pro"]:
+            models[name] = PhoneModel.objects.create(
+                tenant=self.tenant, code=name.lower().replace(" ", "-"),
+                name=name, match_key=name.lower(),
+            )
+        iphone = PhoneModel.objects.get(tenant=self.tenant, name="iPhone 11 Pro")
+        # 商品已經指定是 iPhone 11 Pro:Pixel 11 Pro 的東西不是它(改之前是 None,現在也要是)
+        fixed = self._product("11PRO/電池", phone_model=iphone)
+        for text in ["PIXEL11PRO/電池", "pixel 11 pro 電池"]:
+            self.assertNotIn(fixed.id, self._ids(text), text)
+            self.assertNotIn(fixed.id, find_candidates(self.tenant, text, symmetric=True).product_ids, text)
+        self.assertEqual(self._cand("iPhone 11 Pro 電池", fixed).level, EXACT)
+        # 指定的那一個機型還是認得品名的 11PRO(用店裡的寫法找,11PRO 不算商品多出來的)
+        c = self._cand("IP11P 電池", fixed)
+        self.assertEqual((c.level, c.differences), (EXACT, []))
+        # 沒指定機型、又分不出是哪一牌:不猜(跟改之前一樣找不到),照字面打的照舊
+        self.assertNotIn(self.battery.id, self._ids("iPhone 11 Pro 電池"))
+        self.assertNotIn(self.battery.id, self._ids("pixel 11 pro 電池"))
+        self.assertEqual(self._ids("11PRO 認證電池")[0], self.battery.id)
+
+    def test_brand_plus_plain_number_never_uses_another_brands_number(self):
+        """主檔有 Reno 12(縮寫表會登記 `12`):`DAP 12 黑` 不能因此跟 `DAP/RENO12/黑` 變成同一款。"""
+        PhoneModel.objects.create(tenant=self.tenant, code="reno-12", name="Reno 12", match_key="reno 12")
+        reno = self._product("DAP/RENO12/黑")
+        self.assertEqual(self._ids("DAP 12 黑"), [])               # 改之前也是沒有候選
+        # 用斜線寫(不會被接成 DAP12)的時候跟改之前一樣:只是「相關、商品沒有 12」,防重複不會當成同一款
+        r = find_candidates(self.tenant, "DAP/12/黑", symmetric=True)
+        hit = [c for c in r.candidates if c.product_id == reno.id]
+        self.assertEqual([(c.level, c.differences) for c in hit], [(RELATED, ["商品沒有:12"])])
+        # iPhone 12 的那一個還是找得到,而且只是相關
+        dap12 = self._product("DAP/IP12/黑")
+        c = self._cand("DAP 12 黑", dap12)
+        self.assertEqual(c.level, RELATED)
+        self.assertEqual(c.differences, ["只寫了數字 12,當成 iPhone 12 來比"])
+
+    def test_a_guessed_number_stays_a_doubt_even_next_to_a_named_model(self):
+        """`某牌/IP11PM/保護貼/12` 的 12 可能是 12 片:旁邊的 IP11PM 對上了,不能證明 12 也是機型。"""
+        both = self._product("某牌/IP11PM/IP12/保護貼")
+        c = self._cand("某牌/IP11PM/保護貼/12", both)
+        self.assertEqual(c.level, RELATED)
+        self.assertEqual(c.differences, ["只寫了數字 12,當成 iPhone 12 來比"])
+        self.assertEqual(c.reasons[:2], ["機型相符", "數字 12 對上機型"])
+        same = [x.product_id for x in find_candidates(self.tenant, "某牌/IP11PM/保護貼/12", symmetric=True).candidates
+                if x.level in SAME_ITEM_LEVELS]
+        self.assertNotIn(both.id, same)
+        # 反過來(既有的是寫 12 的那個,要新建寫 IP12 的)也不能變成同一款
+        qty = self._product("某廠/IP11PM/玻璃貼/12")
+        same = [x.product_id for x in find_candidates(self.tenant, "某廠/IP11PM/IP12/玻璃貼", symmetric=True).candidates
+                if x.level in SAME_ITEM_LEVELS]
+        self.assertNotIn(qty.id, same)
+
+    def test_plain_mode_is_the_old_comparison(self):
+        """`plain=True` = 不認這些新寫法,就是改之前的比法(防重複拿它回答「這個結果以前有沒有」)。"""
+        from .product_match import MatchContext
+        ids = MatchContext(self.tenant)._model_ids
+        f = parse_features
+
+        def both(q, name):
+            return (compare(f(q), f(name), model_ids=ids), compare(f(q), f(name), model_ids=ids, plain=True))
+
+        new, old = both("犀牛盾 11PM", "犀牛盾/IP11PM/淺灰")              # 沒字首的寫法
+        self.assertEqual((new.level, old), (COVERS, None))
+        new, old = both("iPhone 11 Pro 電池", "11PRO/認證電池")           # 品名自己沒字首
+        self.assertEqual((new.level, old), (COVERS, None))
+        new, old = both("DAP 13P 黑", "DAP/IP13P/柔幻極光/黑")            # 品牌 + 機型被接成一串
+        self.assertEqual((new.level, old), (COVERS, None))
+        new, old = both("犀牛盾 12 淺灰", "犀牛盾/IP12/淺灰")             # 單獨一個數字
+        self.assertEqual(new.differences, ["只寫了數字 12,當成 iPhone 12 來比"])
+        self.assertEqual((old.level, old.differences, old.via_new), (RELATED, ["商品沒有:12"], False))
+
+    def test_an_old_explicit_difference_is_not_turned_into_the_same_item(self):
+        """防重複:以前就是「相關、顏色明確不同」的,不能因為新寫法也對上了就去做反向比對、變成同一款。"""
+        black = self._product("犀牛盾/11PM/黑")
+        r = find_candidates(self.tenant, "犀牛盾/11PM/透/黑", symmetric=True)
+        hit = [c for c in r.candidates if c.product_id == black.id]
+        self.assertEqual([(c.level, c.conflict) for c in hit], [(RELATED, True)])
+        self.assertEqual(hit[0].differences, ["顏色不同(輸入 透 / 商品 黑)"])
+        self.assertNotIn(black.id, find_candidates(
+            self.tenant, "犀牛盾/11PM/透/黑", symmetric=True, with_related=False).product_ids)
+        # 帶一個單獨數字的也一樣
+        film = self._product("某牌/IP12/黑/保護貼")
+        r = find_candidates(self.tenant, "某牌/12/IP12/黑/白/保護貼", symmetric=True)
+        hit = [c for c in r.candidates if c.product_id == film.id]
+        self.assertEqual([(c.level, c.conflict) for c in hit], [(RELATED, True)])
+
+    def test_reverse_check_does_not_use_the_new_reading_to_merge_different_colours(self):
+        """防重複:`11PM/透/黑` 對 `IP11PM/黑` —— 寫成 `IP11PM/透/黑` 時是顏色不同的兩個東西,沒寫字首也一樣。"""
+        black = self._product("IP11PM/黑")
+        for new_name in ["11PM/透/黑", "IP11PM/透/黑"]:
+            r = find_candidates(self.tenant, new_name, symmetric=True)
+            same = [c.product_id for c in r.candidates if c.level in SAME_ITEM_LEVELS]
+            self.assertNotIn(black.id, same, new_name)
+        hit = [c for c in find_candidates(self.tenant, "11PM/透/黑", symmetric=True).candidates
+               if c.product_id == black.id]
+        self.assertEqual([(c.level, c.conflict) for c in hit], [(RELATED, True)])
+        # 反過來(既有的沒寫字首、要新建寫了字首而且多一個顏色的)也一樣
+        bare = self._product("某殼/11PM/黑")
+        same = [c.product_id for c in find_candidates(self.tenant, "某殼/IP11PM/透/黑", symmetric=True).candidates
+                if c.level in SAME_ITEM_LEVELS]
+        self.assertNotIn(bare.id, same)
+        # 沒有明確不同、只是新品名多寫了東西:列為相關(「既有商品沒寫機型字首」在反向比對裡仍算太籠統 —— 原本的規則,沒動)
+        more = self._product("某套/11PM/黑")
+        hit = [c for c in find_candidates(self.tenant, "某套/IP11PM/磁吸/黑", symmetric=True).candidates
+               if c.product_id == more.id]
+        self.assertEqual([(c.level, c.conflict, c.differences) for c in hit], [(RELATED, False, ["商品沒有:磁吸"])])
+
+    def test_an_alias_result_cannot_hide_the_main_names_explicit_difference(self):
+        """防重複:主品名顏色明確不同;現在某個其他叫法的結果比較好看,也不能因此升成同一款。"""
+        black = self._product("IP11PM/黑")
+        ProductAlias.objects.create(
+            tenant=self.tenant, product=black, kind=ProductAlias.Kind.LEGACY_NAME,
+            value="DAP/11PM", verified=False,
+        )
+        r = find_candidates(self.tenant, "DAP 11PM / IP11PM / 透 / 黑", symmetric=True)
+        same = [c.product_id for c in r.candidates if c.level in SAME_ITEM_LEVELS]
+        self.assertNotIn(black.id, same)
+
+    def test_a_short_alias_cannot_guess_a_model_the_main_name_contradicts(self):
+        """主品名寫了 PIXEL11PRO(主檔還沒有這一支),其他叫法是 `11PRO/電池`:不能從叫法猜成 iPhone 11 Pro。"""
+        pixel = self._product("GOOGLE/PIXEL11PRO/電池")
+        ProductAlias.objects.create(
+            tenant=self.tenant, product=pixel, kind=ProductAlias.Kind.LEGACY_NAME,
+            value="11PRO/電池", verified=False,
+        )
+        for sym in (False, True):
+            self.assertNotIn(
+                pixel.id, find_candidates(self.tenant, "iPhone 11 Pro 電池", symmetric=sym).product_ids, sym)
+        # 照字面打這個叫法,照舊找得到(跟改之前一樣:叫法字面完全相同)
+        c = self._cand("11PRO 電池", pixel)
+        self.assertEqual(c.level, EXACT)
+        self.assertEqual(c.reasons[0], "其他叫法「11PRO/電池」")
+        self.assertNotIn("機型相符", c.reasons)
+        # 主品名沒有寫型號的,叫法裡的沒字首機型可以用
+        plain_named = self._product("某牌/行動電源/白")
+        ProductAlias.objects.create(
+            tenant=self.tenant, product=plain_named, kind=ProductAlias.Kind.LEGACY_NAME,
+            value="13P/行動電源", verified=False,
+        )
+        self.assertIn(plain_named.id, self._ids("iPhone 13 Pro 行動電源"))
+
+    def test_new_related_does_not_cancel_the_reverse_check(self):
+        """防重複:正向因為新認得的寫法冒出一個「相關(顏色不同)」時,原本靠反向成立的同一款不能不見。"""
+        PhoneModel.objects.create(tenant=self.tenant, code="reno-16-pro", name="Reno 16 Pro", match_key="reno 16 pro")
+        existing = self._product("RENO 16 PRO / 黑")
+        r = find_candidates(self.tenant, "DAP 16PRO / RENO / 16PRO / 黑 / 白", symmetric=True, with_related=False)
+        hit = [c for c in r.candidates if c.product_id == existing.id]
+        self.assertEqual([c.level for c in hit], ["subset"])
+
+    def test_unknown_or_ambiguous_tokens_stay_plain_words(self):
+        """主檔不認得的寫法、或認得但不是這個商品的機型:照原本當一個字,**不會排除原本找得到的**。"""
+        charger = self._product("REMAX/20W/快充頭")
+        self.assertEqual(self._ids("REMAX 20W 快充頭"), [charger.id])
+        other = self._product("某牌/IP12/線/黑")
+        c = self._cand("某牌 99ZZ 線 黑", other)            # 主檔不認得 99ZZ
+        self.assertEqual((c.level, c.differences), (RELATED, ["商品沒有:99ZZ"]))
+        c = self._cand("某牌 13P 線 黑", other)             # 主檔認得 13P,但這個商品是 iPhone 12 的
+        self.assertEqual((c.level, c.differences), (RELATED, ["商品沒有:13P"]))
+        generic = self._product("某牌/快充線/白")            # 通用配件,沒有任何機型資訊
+        c = self._cand("某牌 快充線 13P 白", generic)
+        self.assertEqual((c.level, c.differences), (RELATED, ["商品沒有:13P"]))
+
+    def test_without_a_model_master_nothing_changes(self):
+        """沒有機型主檔的公司:這些寫法就只是字,結果跟改之前一樣。"""
+        other = Tenant.objects.create(name="沒有機型主檔", code="nomaster")
+        cat = Category.objects.create(tenant=other, code="BC", name="背蓋")
+        p = Product.objects.create(tenant=other, name="犀牛盾/IP11PM/淺灰", category=cat, requires_serial=False)
+        for text in ["犀牛盾 11PM", "犀牛盾 11 pro max 淺灰", "犀牛盾 11 pro max", "DAP 13P 黑", "犀牛盾 11"]:
+            self.assertEqual(find_candidates(other, text).product_ids, [], text)
+        self.assertEqual(find_candidates(other, "犀牛盾 IP11PM").product_ids, [p.id])
+        c = find_candidates(other, "犀牛盾 11PM 淺灰").candidates[0]
+        self.assertEqual((c.level, c.differences), (RELATED, ["商品沒有:11PM"]))
+
+    def test_new_name_written_bare_is_seen_as_the_same_item(self):
+        """防重複用的對稱比對:要建 `犀牛盾/11PM/淺灰`,已經有 `犀牛盾/IP11PM/淺灰` → 同一款。"""
+        r = find_candidates(self.tenant, "犀牛盾/11PM/淺灰", symmetric=True)
+        self.assertEqual(r.candidates[0].product_id, self.rhino.id)
+        self.assertEqual(r.candidates[0].level, EXACT)
+
+    def test_words_written_apart_still_match_literally(self):
+        """空白隔開的那幾塊照樣各自是一個字:另一邊用斜線分開寫、或只打其中一塊,都跟以前一樣。"""
+        band = self._product("小米手環/8/PRO/黑")
+        self.assertEqual(self._cand("小米手環 8 pro 黑", band).level, EXACT)
+        glued = self._product("某手環 9 PRO 黑")
+        c = self._cand("某手環 9 黑", glued)
+        self.assertEqual((c.level, c.differences), (COVERS, ["商品另有:PRO"]))
+        odd = self._product("某牌/11/PRO/MAX/收納包")        # 主檔認得 11 PRO MAX,但品名照字面就有這三塊
+        c = self._cand("某牌 11 pro max 收納包", odd)
+        self.assertEqual(c.level, EXACT)
+        self.assertNotIn("機型相符", c.reasons)
 
 
 class MatchLineIdentifierConflictTests(_Base):

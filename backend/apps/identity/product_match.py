@@ -99,6 +99,10 @@ _ATOM_RE = re.compile(r"[A-Z]+|\d+(?:\.\d+)?|[一-鿿]+|\+")
 _CAP_RE = re.compile(r"(?<![\d.])(\d+)\s*(GB|G|TB|T)(?![A-Z])")
 _CAPACITY_TOKEN_RE = re.compile(r"^\d+(GB|TB)$")
 _BARE_MODEL_RE = re.compile(r"^(\d{1,3})([A-Z+]{0,5})$")
+# 沒寫品牌字首的機型寫法:數字 + 英文後綴(`11PM`、`13P`、`11PROMAX`)。是不是機型由機型主檔決定,這裡只認形狀
+_BARE_TOKEN_RE = re.compile(r"^\d{1,3}[A-Z]{1,8}$")
+# 用空白隔開打的那一種的開頭:`11`、`11PRO`(後面接 PRO / MAX …)
+_BARE_HEAD_RE = re.compile(r"^\d{1,3}(?:%s)?$" % "|".join(sorted(_SUFFIX_WORDS)))
 _MODEL_HEAD_RE = re.compile(r"^[A-Z]+\d")
 _ALPHA_RE = re.compile(r"^[A-Z]+$")
 _CJK_RE = re.compile(r"^[一-鿿]+$")
@@ -118,6 +122,11 @@ class Features:
     joined: frozenset = frozenset()
     # 只留中文的原字串,給「沒切出來但字是連著的」做包含比對
     compact: str = ""
+    # 沒寫品牌字首的機型寫法:(寫法, 它在 words 裡是哪幾個字)。
+    #   `11PM` → ("11PM", ("11PM",));`11 PRO MAX` → ("11PROMAX", ("11", "PRO", "MAX"));`16+` → ("16+", ("16",))
+    # **words 完全不變**(這些字照樣在 words 裡,照字面比對的路跟以前一模一樣);
+    # 多記這一份只是讓比對去問機型主檔:主檔認得、而且就是商品的機型,才算機型對上。
+    bare: frozenset = frozenset()
 
     @property
     def empty(self) -> bool:
@@ -198,6 +207,33 @@ def _join_spaced_models(segments: list[str], separators: list[str]):
     return out, parts
 
 
+def _spaced_bare(segments: list[str], separators: list[str]) -> list[tuple[str, tuple]]:
+    """用空白隔開打的沒字首機型:`11 PRO MAX`、`13 PRO` → [("11PROMAX", ("11", "PRO", "MAX"))]。
+
+    只看、不改 segments(那幾塊照樣各自是一個字)。前面有英文字首的(`RENO 16 PRO`、`DAP 13 PRO`)
+    會被 `_join_spaced_models` 接成一個型號、那幾塊不再是 words 裡的字 —— 由呼叫的地方濾掉。
+    """
+    out = []
+    i = 0
+    while i < len(segments):
+        seg = segments[i]
+        if _BARE_HEAD_RE.match(seg):
+            pieces = [seg]
+            j = i
+            while (
+                j + 1 < len(segments)
+                and separators[j] == " "
+                and segments[j + 1] in _SUFFIX_WORDS
+            ):
+                pieces.append(segments[j + 1])
+                j += 1
+            if len(pieces) > 1:
+                out.append(("".join(pieces), tuple(pieces)))
+                i = j
+        i += 1
+    return out
+
+
 def _segment(run: str, terms: frozenset) -> list[str]:
     """照詞典做最長比對切詞;不認得的字連在一起當一塊。"""
     out: list[str] = []
@@ -270,12 +306,14 @@ def _parse(text: str, terms: frozenset) -> Features:
         sep = pieces[k + 1] if k + 1 < len(pieces) else ""
         segments.append(pieces[k])
         separators.append("" if not sep else (" " if not sep.strip() else "/"))
+    spaced_bare = _spaced_bare(segments, separators)
     segments, joined_parts = _join_spaced_models(segments, separators)
 
     codes: set[str] = set()
     colors: set[str] = set()
     words: set[str] = set()
     aux: set[str] = set()
+    bare_writings: set[tuple] = set()   # 沒字首的機型寫法(見 Features.bare)
     cjk_parts: list[str] = []
     prev_prefix = ""  # 上一個片段的型號字首(RENO15/15F 的 15F 要補回 RENO)
 
@@ -309,6 +347,12 @@ def _parse(text: str, terms: frozenset) -> Features:
             elif a[0].isdigit():
                 if nxt and _ALPHA_RE.match(nxt):
                     words.add(a + nxt)  # 規格(20W、128GB)或沒字首的型號(10C)
+                    if nxt not in _UNITS and _BARE_TOKEN_RE.match(a + nxt):
+                        bare_writings.add((a + nxt, (a + nxt,)))
+                    i += 2
+                elif nxt == "+" and a.isdigit() and len(a) <= 3:
+                    words.add(a)  # 跟以前一樣只留數字
+                    bare_writings.add((a + "+", (a,)))  # 16+ = 16 Plus
                     i += 2
                 elif nxt and _CJK_RE.match(nxt) and nxt[0] in _CJK_UNITS:
                     words.add(a + nxt[0])  # 11吋、3代
@@ -339,6 +383,11 @@ def _parse(text: str, terms: frozenset) -> Features:
     joined = {(c, *joined_parts[c]) for c in codes if c in joined_parts}
     for _, head, rest in joined:
         aux.update((head, rest))
+    # 空白隔開的那一種:每一塊都真的是 words 裡的字才算;`11PRO MAX` 講的是 11 Pro Max,不再另外當成 11PRO
+    for token, pieces in spaced_bare:
+        if all(piece in words for piece in pieces):
+            bare_writings.discard((pieces[0], (pieces[0],)))
+            bare_writings.add((token, pieces))
     return Features(
         codes=frozenset(codes),
         colors=frozenset(colors),
@@ -346,6 +395,7 @@ def _parse(text: str, terms: frozenset) -> Features:
         aux=frozenset(aux - codes - words),
         joined=frozenset(joined),
         compact="".join(cjk_parts),
+        bare=frozenset(bare_writings),
     )
 
 
@@ -396,6 +446,10 @@ class Verdict:
     differences: list = field(default_factory=list)
     # 有「明確不同」(顏色不同、容量不同),不只是缺資訊
     conflict: bool = False
+    # 這個結果可能用到了「沒字首的機型寫法 / 單獨數字」(2026-10-07 加的認法;寧可多標)。
+    # False = 一定跟以前一樣。True 不代表以前沒有這個結果(那幾個字可能照字面也對得上);
+    # 要知道以前是什麼,用 `compare(..., plain=True)` 再比一次。
+    via_new: bool = False
 
     def sort_key(self):
         return (_LEVEL_RANK[self.level], -self.score)
@@ -410,12 +464,20 @@ def _no_ids(code):
 
 
 def compare(q: Features, p: Features, *, soft=frozenset(), model_ids=_no_ids,
-            linked_ids=frozenset()) -> Verdict | None:
+            linked_ids=frozenset(), plain=False, named_elsewhere=False) -> Verdict | None:
     """查詢特徵對一個商品的特徵。回 None = 不算候選。
 
     soft:商品的背景詞(類別名稱)。可以滿足查詢,但不算商品多出來的特徵。
     model_ids:型號字串 → 機型主檔 id 集合(認店內縮寫用);查不到回空集合。
     linked_ids:這個商品透過相容關係 / 機型欄位掛到的機型 id。
+    plain:不認「沒字首的機型寫法 / 單獨數字」—— 就是 2026-10-07 之前的比法。
+          防重複的對稱比對用它回答「這個結果以前有沒有」(見 `MatchContext.scan`)。
+    named_elsewhere:`p` 是這個商品的其他叫法,而商品的主品名已經寫了型號 ——
+          不能再從這個短的叫法替商品猜機型(主品名 `GOOGLE/PIXEL11PRO/電池`、叫法 `11PRO/電池`:11PRO 是 Pixel 的)。
+
+    沒寫品牌字首的機型寫法(`11PM`、`11 pro max`、`DAP 13P`、單獨一個數字)—— 2026-10-07 加的,原則只有一條:
+    **只會多對上,不會讓原本找得到的變成找不到**。主檔認得、而且就是這個商品的機型才算機型對上;
+    其他情況那些字照原本當一般的字比(沒有機型主檔的公司因此完全不變)。
     """
     if q.empty:
         return None
@@ -423,11 +485,43 @@ def compare(q: Features, p: Features, *, soft=frozenset(), model_ids=_no_ids,
     p_ids = frozenset(linked_ids)
     for c in p.codes:
         p_ids |= model_ids(c)
+    # 品名裡沒寫字首的機型(`11PRO/認證電池`):機型主檔認得的,也算這個商品的機型。
+    # 只在品名沒有寫別的型號時才這樣算:`11PRO` 可以是 iPhone 也可以是 Pixel,
+    # `GOOGLE/PIXEL-11/11PRO黑` 已經寫了 PIXEL11(就算機型主檔還沒有這一支),就不把 11PRO 當成 iPhone 11 Pro。
+    # 實測 3003 個真的品名,有這種寫法的 9 個:沒有別的型號的 6 個都對;有別的型號的 3 個裡 2 個會猜錯。寧可不猜。
+    # 而且不能把商品的機型「擴大」:`11PRO` 在主檔裡同時是 iPhone 11 Pro 與 Pixel 11 Pro 時 ——
+    # 商品已經指定機型(相容關係 / 機型欄位)的,只認其中指定的那一個;沒指定的就分不出來,不猜。
+    p_bare: dict = {}
+    if not p.codes and not plain and not named_elsewhere:
+        for token, pieces in p.bare:
+            ids = model_ids(token)
+            if linked_ids:
+                ids = ids & frozenset(linked_ids)
+            elif len(ids) != 1:
+                ids = frozenset()
+            if ids:
+                p_bare[token] = (ids, pieces)
+                p_ids |= ids
+
+    def named_in_product(ids) -> bool:
+        """這個機型是品名自己寫的(不管哪一種寫法),不是靠「相容機型」關係掛上去的。"""
+        return any(ids & model_ids(pc) for pc in p.codes) or any(
+            ids & pids for pids, _ in p_bare.values()
+        )
+
     q_ids = frozenset()
     q_parts = {c: (head, rest) for c, head, rest in q.joined}
     p_loose = p.words | p.aux
     hit_codes, miss_codes = set(), set()
     by_relation = False
+    # 沒字首的寫法對上機型的:named = 寫了後綴的(11PM、13P);numbers = 只有數字(12),線索很弱
+    named: set = set()
+    numbers: set = set()
+    # 用空白接起來的「型號」其實是「品牌 + 沒字首的機型」(`DAP 13P` 被接成 DAP13P):
+    # 機型主檔不認得接起來的那一串、**而後半就是這個商品的機型** → 拆回一個字(DAP)加一個對上的機型(13P)。
+    # 後半只有數字(`DAP 12`)時只當成 iPhone 那一代(弱線索,算進 numbers),而且多要一個條件:前半那個字在這個商品的品名裡。
+    # 不是這個商品的機型就照原本的:這個型號沒對上。
+    split_words: set = set()
     for c in q.codes:
         ids = model_ids(c)
         q_ids |= ids
@@ -435,32 +529,75 @@ def compare(q: Features, p: Features, *, soft=frozenset(), model_ids=_no_ids,
             hit_codes.add(c)
         elif ids and ids & p_ids:
             hit_codes.add(c)
-            by_relation = by_relation or not any(ids & model_ids(pc) for pc in p.codes)
+            by_relation = by_relation or not named_in_product(ids)
         else:
-            miss_codes.add(c)
+            rest_ids, into = frozenset(), named
+            if not ids and c in q_parts and not plain:
+                head, rest = q_parts[c]
+                if not rest.isdigit():
+                    rest_ids = model_ids(rest)
+                elif head in p_loose:
+                    # 純數字不查主檔裡別牌的「12」(Reno 12、小米 12 都會登記成 12):那樣就變成有把握的對上了
+                    rest_ids, into = model_ids("IP" + rest), numbers
+            if rest_ids & p_ids:
+                split_words.add(q_parts[c][0])
+                into.add(q_parts[c][1])
+                q_ids |= rest_ids
+                by_relation = by_relation or not named_in_product(rest_ids)
+            else:
+                miss_codes.add(c)
     # 講了型號卻一個都對不上 → 不是同一款的候選(Reno16 不該帶出 Reno16 Pro)
-    if q.codes and not hit_codes:
+    if q.codes and not (hit_codes or named or numbers):
         return None
 
     hit_colors = q.colors & p.colors
     miss_colors = q.colors - p.colors
 
-    hit_words, miss_words = set(), set()
     p_words = p.words | p.aux | soft
-    for w in q.words:
+    q_words = q.words | split_words
+    consumed: set = set()   # 已經當機型對上的那幾個字(下面不再當一般的字比一次)
+    reserved: set = set()   # 屬於某個沒字首寫法的字(`11 PRO MAX` 的 11、`16+` 的 16):不能再被當成單獨一個數字
+    for token, pieces in (() if plain else q.bare):
+        reserved.update(pieces)
+        ids = model_ids(token)
+        if ids & p_ids:
+            named.add(token)
+            consumed.update(pieces)
+            q_ids |= ids
+            by_relation = by_relation or not named_in_product(ids)
+    # 單獨一個數字(`犀牛盾 12 黑` 的 12):品名照字面沒有這個數字、而它剛好是這個商品的 iPhone 世代
+    for w in (() if plain else q.words):
+        if w.isdigit() and len(w) <= 2 and w not in p_words and w not in reserved:
+            ids = model_ids("IP" + w)
+            if ids & p_ids:
+                numbers.add(w)
+                consumed.add(w)
+                q_ids |= ids
+                by_relation = by_relation or not named_in_product(ids)
+
+    hit_words, miss_words = set(), set()
+    for w in q_words:
+        if w in consumed:
+            continue
         if w in p_words or (len(w) >= 2 and _CJK_RE.match(w) and w in p.compact):
             hit_words.add(w)
         else:
             miss_words.add(w)
 
-    matched = len(hit_codes) + len(hit_colors) + len(hit_words)
+    matched = len(hit_codes) + len(named) + len(numbers) + len(hit_colors) + len(hit_words)
     if not matched:
         return None
 
+    # 有沒有「講明的機型」對上。只靠單獨一個數字的不算(數字太容易是別的意思)
+    model_named = bool(hit_codes or named)
+    # 寧可多標:品名那一邊認出沒字首的機型(p_bare)也算,它會讓有字首的型號對上、讓多出來的字變少
+    via_new = bool(named or numbers or p_bare)
     reasons, differences = [], []
-    if hit_codes:
+    if model_named:
         # 品名裡沒寫這個型號,是靠「相容機型」關係對上的,要講清楚
         reasons.append("相容機型相符" if by_relation else "機型相符")
+    if numbers:
+        reasons.append(f"數字 {_join(numbers)} 對上機型")
     if hit_colors:
         reasons.append("顏色相符")
     if hit_words:
@@ -485,13 +622,20 @@ def compare(q: Features, p: Features, *, soft=frozenset(), model_ids=_no_ids,
         miss_words -= q_caps
     if miss_words:
         differences.append(f"商品沒有:{_join(miss_words)}")
+    # 只要有哪一個機型是靠單獨一個數字認出來的:最多列為「相關」、講清楚是把數字當成機型比的 ——
+    # 不能變成「同一款」(那會讓防重複擋錯:`某牌/保護貼/12` 的 12 可能是 12 片,不是 iPhone 12)。
+    # 旁邊另外有講明的機型對上也一樣:那不能證明這個數字也是機型(`某牌/IP11PM/保護貼/12`)。
+    if numbers:
+        differences.append(f"只寫了數字 {_join(numbers)},當成 iPhone {_join(numbers)} 來比")
 
     if differences:
         # 沒講型號時,至少要對上兩項且過半,才值得拿出來當「相關」
-        if not q.codes and (matched < 2 or matched * 2 < q.size):
+        if not model_named and (matched < 2 or matched * 2 < q.size):
             return None
         score = max(40, 70 - 6 * len(differences))
-        return Verdict(RELATED, score, reasons, differences, conflict)
+        if numbers:
+            score += 10     # 比「同品牌、別的機型」那種相關排前面
+        return Verdict(RELATED, score, reasons, differences, conflict, via_new)
 
     # 商品自己的特徵裡,輸入沒講到的部分
     # 一邊用空白接成型號、另一邊用斜線分開寫的,兩塊都對上了就不算多出來
@@ -506,16 +650,21 @@ def compare(q: Features, p: Features, *, soft=frozenset(), model_ids=_no_ids,
         and not (model_ids(c) and model_ids(c) & q_ids)
         and not (c in p_parts and p_parts[c] <= q_loose)
     }
+    # 品名裡沒字首的機型,輸入用別的寫法講到了(`11PRO` 對 `iPhone 11 Pro`)→ 那幾個字不算商品多出來的
+    same_model = set()
+    for ids, pieces in p_bare.values():
+        if ids & q_ids:
+            same_model.update(pieces)
     extras = (
         extra_codes
         | (p.colors - q.colors)
-        | (p.words - q.words - soft - via_parts)
+        | (p.words - q_words - soft - via_parts - same_model)
     )
     if not extras:
-        return Verdict(EXACT, 96, reasons, [], False)
+        return Verdict(EXACT, 96, reasons, [], False, via_new)
     return Verdict(
         COVERS, max(85, 93 - 2 * len(extras)), reasons,
-        [f"商品另有:{_join(extras)}"], False,
+        [f"商品另有:{_join(extras)}"], False, via_new,
     )
 
 
@@ -613,6 +762,11 @@ def identifier_hits(tenant, text, supplier=None, barcode="", vendor_sku=""):
     return hits
 
 
+def _wants_reverse(v) -> bool:
+    """防重複的對稱比對:正向是這種結果時,要不要再反過來比一次(既有商品的特徵是不是都在這個品名裡)。"""
+    return v is None or (v.level == RELATED and not v.conflict)
+
+
 class MatchContext:
     """一個租戶的比對資料:詞典、機型縮寫索引、每個商品拆好的特徵。
 
@@ -690,6 +844,19 @@ class MatchContext:
             product.is_secondhand,
         )
 
+    def _forward(self, q, mine, soft, linked_ids, alts, plain=False):
+        """查詢對一個商品(品名本身 + 它的其他叫法)最好的那個結果。"""
+        best = compare(q, mine, soft=soft, model_ids=self._model_ids,
+                       linked_ids=linked_ids, plain=plain)
+        for alt, feats in alts:
+            v = compare(q, feats, soft=soft, model_ids=self._model_ids,
+                        linked_ids=linked_ids, plain=plain,
+                        named_elsewhere=bool(mine.codes))
+            if v is not None and (best is None or v.sort_key() < best.sort_key()):
+                v.reasons = [f"其他叫法「{alt}」"] + v.reasons
+                best = v
+        return best
+
     def scan(self, text, *, is_secondhand=None, with_related=True, symmetric=False,
              limit=20, exclude_id=None):
         q = parse_features(text, self.terms)
@@ -701,28 +868,38 @@ class MatchContext:
                 continue
             if is_secondhand is not None and used != is_secondhand:
                 continue
-            best = compare(q, mine, soft=soft, model_ids=self._model_ids,
-                           linked_ids=linked_ids)
-            for alt, feats in alts:
-                v = compare(q, feats, soft=soft, model_ids=self._model_ids,
-                            linked_ids=linked_ids)
-                if v is not None and (best is None or v.sort_key() < best.sort_key()):
-                    v.reasons = [f"其他叫法「{alt}」"] + v.reasons
-                    best = v
+            best = self._forward(q, mine, soft, linked_ids, alts)
+            # 防重複的對稱比對:正向沒有結果、或只是「資訊不足的相關」時,反過來再比一次 ——
+            # 既有商品的特徵都在這個品名裡,就是同一款(SUBSET)。正向是「相關、而且有明確不同」的不做(那是兩個不同的東西)。
+            #
+            # 新認得的寫法不能改掉這裡以前的結論,兩個方向都要守住:
+            # (1) 以前靠反向成立的同一款不能不見:正向現在因為新認法冒出一個「相關(明確不同)」時,照樣去看反向 ——
+            #     但只認**以前的比法**(plain)就成立的反向,不能用新認法在反向再多認一次
+            #     (`11PM/透/黑` 對 `IP11PM/黑`:寫成 `IP11PM/透/黑` 時明明是顏色不同的兩個東西)。
+            # (2) 以前不是同一款的不能變成同一款:要升成同一款之前,**以前的正向**也必須是會做反向比對的那一種
+            #     (主品名顏色明確不同、現在只是被某個其他叫法的結果蓋過去的,不能升)。
             if symmetric and (
-                best is None or (best.level == RELATED and not best.conflict)
+                _wants_reverse(best) or (best.level == RELATED and best.via_new)
             ):
                 # 既有商品本身太籠統就不算,不然什麼新品都會被它擋:
                 # 只叫「皮套」,或新品有寫機型而它沒有(「皮套 藍」對上
                 # 「Reno16 側翻皮套 藍」)—— 少了機型,它不是同一款的舊寫法。
                 generic = mine.kinds < 2 or (q.codes and not mine.codes)
-                back = None if generic else compare(mine, q, model_ids=self._model_ids)
+                differs_now = best is not None and best.conflict
+                back = None if generic else compare(
+                    mine, q, model_ids=self._model_ids, plain=differs_now,
+                )
                 if back is not None and back.level in (EXACT, COVERS):
-                    best = Verdict(
-                        SUBSET, 88, ["既有商品的特徵都在這個品名裡"],
-                        [d.replace("商品另有", "這個品名多了") for d in back.differences],
-                        False,
-                    )
+                    # 現在沒有正向結果的,以前也沒有(新認法只會多對上);用不到新認法的,以前就是這個結果
+                    before = best
+                    if best is not None and best.via_new:
+                        before = self._forward(q, mine, soft, linked_ids, alts, plain=True)
+                    if _wants_reverse(before):
+                        best = Verdict(
+                            SUBSET, 88, ["既有商品的特徵都在這個品名裡"],
+                            [d.replace("商品另有", "這個品名多了") for d in back.differences],
+                            False,
+                        )
             if best is None or (best.level == RELATED and not with_related):
                 continue
             found.append(Candidate(pid, best.level, best.score, best.reasons,
