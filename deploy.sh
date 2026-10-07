@@ -8,7 +8,7 @@
 #  2. backend:同步 requirements、跑 migration、collectstatic
 #  3. frontend:同步 npm 套件、npm run build
 #  4. 重啟 launchd 服務(網站 + 備份背景程式;備份背景程式第一次會自動安裝)
-#  5. 有裝測試站(~/mppos-test/)的話一併重啟
+#  5. 有裝測試站(~/mppos-test/)的話一併更新到同一版(只更新測試站:ops/deploy-test.sh)
 # ─────────────────────────────────────────────────────────
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -86,11 +86,21 @@ fi
 
 echo ""
 echo "── 測試站(有裝才做)────────────────────────"
-# 測試站 pos-test.mptw-system.com:同一份程式、另一個資料庫(mppos_test),設定在 ~/mppos-test/。
-# 它的啟動腳本每次啟動都會先把測試資料庫升到跟程式一樣的版本,所以這裡只要重啟它。
-# 不重啟的話,測試站會拿舊程式配新畫面,資料庫也少了新的欄位。
+# 測試站 pos-test.mptw-system.com:另一個資料庫(mppos_test),設定在 ~/mppos-test/。
+# 2026-10-07 起它有自己的一份程式(~/mppos-test/app),可以先上測試站、試過再上正式站
+# (只更新測試站:~/mppos-test/app/ops/deploy-test.sh)。
+# 正式站更新完,這裡把測試站也更新到同一版(已經是同一版就只是重建、重啟);失敗不影響正式站。
+# 還沒有自己那一份程式的舊裝法(跟正式站共用這一份):照舊只重啟它 ——
+# 它的啟動腳本每次啟動都會先把測試資料庫升到跟程式一樣的版本。
 TLABEL="com.mppos.test.backend"
-if [ -f "$HOME/Library/LaunchAgents/$TLABEL.plist" ]; then
+TAPP="$HOME/mppos-test/app"
+if [ -f "$HOME/Library/LaunchAgents/$TLABEL.plist" ] && [ -x "$TAPP/ops/deploy-test.sh" ]; then
+  if "$TAPP/ops/deploy-test.sh"; then
+    echo "✓ 測試站已更新到同一版"
+  else
+    echo "⚠ 測試站更新失敗(不影響正式站);之後手動:$TAPP/ops/deploy-test.sh"
+  fi
+elif [ -f "$HOME/Library/LaunchAgents/$TLABEL.plist" ]; then
   if launchctl kickstart -k "gui/$(id -u)/$TLABEL" 2>/dev/null; then
     echo "✓ 已重啟 $TLABEL"
   else
