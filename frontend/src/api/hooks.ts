@@ -43,6 +43,7 @@ import {
   PlatformWarehouse,
   Product,
   ProductAlias,
+  ProductUsage,
   ProductSerial,
   IntakeBatch,
   IntakeItem,
@@ -95,6 +96,19 @@ export const useProduct = (id: number | null) =>
     queryKey: ["product", id],
     queryFn: () => api<Product>(`/products/${id}/`),
     enabled: id != null,
+  });
+
+/**
+ * 這個商品用過沒有(編輯表單打開時問)。不留舊的:每次打開重新問 ——
+ * 剛作廢完那張單回來改,不能還拿到「用過」。
+ */
+export const useProductUsage = (id: number | null) =>
+  useQuery({
+    queryKey: ["product", id, "usage"],
+    queryFn: () => api<ProductUsage>(`/products/${id}/usage/`),
+    enabled: id != null,
+    staleTime: 0,
+    gcTime: 0,
   });
 
 export const useCategories = () =>

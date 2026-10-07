@@ -28,17 +28,24 @@ export function Checkbox({
   onChange,
   label,
   hint,
+  disabled,
+  title,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   label: string;
   hint?: string;
+  /** 不能改(例:用過的商品不能改「需追蹤序號」) */
+  disabled?: boolean;
+  /** 滑鼠移上去的說明(為什麼不能改、怎麼辦) */
+  title?: string;
 }) {
   return (
-    <label className="checkbox">
+    <label className={disabled ? "checkbox disabled" : "checkbox"} title={title}>
       <input
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
       />
       <span>

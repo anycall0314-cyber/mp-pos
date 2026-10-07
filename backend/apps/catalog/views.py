@@ -21,6 +21,7 @@ from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 
 from apps.core.filters import _is_postgres
@@ -70,6 +71,18 @@ from .services_model_bundle import (
     preview_phone_model_bundle,
 )
 from .services_parts import bulk_create_parts, build_preview
+
+
+def _own_category_id(tenant, value):
+    """批次修改送來的類別編號:是這家公司的類別才回編號;沒帶、亂填、別家的都回 None(那些由序列化器擋)。"""
+    try:
+        pk = int(value)
+    except (TypeError, ValueError):
+        return None
+    return (
+        Category.objects.for_tenant(tenant).filter(pk=pk)
+        .values_list("pk", flat=True).first()
+    )
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -412,6 +425,22 @@ class ProductViewSet(viewsets.ModelViewSet):
             })
         status_out = found.status if rows else MatchResult.NONE
         return Response({"status": status_out, "candidates": rows})
+
+    @action(detail=True, methods=["get"], url_path="usage")
+    def usage(self, request, pk=None):
+        """這個商品用過沒有(編輯表單打開時問):用過的話「需追蹤序號 / 中古機 / 虛擬商品」不能改。
+
+        回 `{locked, reasons, fields, way_out}`;規則在 `catalog/usage.py`,存檔時伺服器會再擋一次。
+        """
+        from .usage import STOCK_FLAGS, product_usage
+
+        found = product_usage(self.get_object())
+        return Response({
+            "locked": found.locked,
+            "reasons": list(found.reasons),
+            "fields": list(STOCK_FLAGS),
+            "way_out": found.way_out if found.locked else "",
+        })
 
     @action(detail=True, methods=["post"], url_path="restore")
     def restore(self, request, pk=None):
@@ -1145,11 +1174,18 @@ class ProductViewSet(viewsets.ModelViewSet):
                 {"detail": "找不到任何符合的商品"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        from .usage import lock_category
+
         updated_ids: list[int] = []
         errors: list[dict] = []
         try:
             with transaction.atomic():
-                for p in qs:
+                # 鎖的順序固定(跟類別連帶改商品、進貨鎖商品同一個方向):先類別、後商品,商品照編號。
+                # 要換類別的話,動任何商品之前先拿好那個類別的鎖;改到一半才拿,會跟正在把它勾成中古機類別的人互等
+                target = _own_category_id(request.tenant, patch.get("category"))
+                if target is not None:
+                    lock_category(target)
+                for p in qs.order_by("pk"):
                     ser = ProductSerializer(
                         p,
                         data=patch,
@@ -1164,6 +1200,12 @@ class ProductViewSet(viewsets.ModelViewSet):
                             # 例:把同一個條碼批次套到好幾個商品上
                             errors.append(
                                 {"id": p.id, "name": p.name, "errors": dup.message}
+                            )
+                            continue
+                        except DRFValidationError as blocked:
+                            # 例:用過的商品不能批次改「需追蹤序號 / 中古機 / 虛擬商品」(存檔那一刻才知道)
+                            errors.append(
+                                {"id": p.id, "name": p.name, "errors": blocked.detail}
                             )
                             continue
                         updated_ids.append(p.id)

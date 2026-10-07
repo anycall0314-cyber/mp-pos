@@ -8,6 +8,7 @@ import {
   useSaveBrand,
   useSaveCategory,
   useSavePhoneSeries,
+  useProductUsage,
   useRememberPhrase,
   useSaveProduct,
 } from "@/api/hooks";
@@ -278,6 +279,31 @@ export function ProductForm({
   const baselineRef = useRef<FormState>(toState(initial));
 
   const isEdit = !!initial?.id;
+  // 編輯既有商品:用過的話「需追蹤序號 / 中古機 / 虛擬商品」不能改(作廢、退貨時庫存是照這幾個屬性加減回去的)。
+  // 表單一打開就鎖起來、講原因,不是等按儲存才被退回;伺服器存檔時會再擋一次(以它為準)。
+  // 還沒問到 / 沒問成功就先不鎖 —— 那時候照樣由伺服器擋
+  const usage = useProductUsage(open && isEdit ? (initial?.id ?? null) : null);
+  const flagsLocked = isEdit && !!usage.data?.locked;
+  const lockTitle = flagsLocked ? (usage.data?.way_out ?? "") : undefined;
+  // 「用過沒有」回來得比較慢、人已經先動了那三格:鎖上的同時放回商品原本的值
+  // (不然會鎖在改過的值上,按儲存一定被退回、又改不回來;別的欄位改的照留)
+  useEffect(() => {
+    if (!flagsLocked || !initial) return;
+    setState((s) =>
+      s.requires_serial === initial.requires_serial &&
+      s.is_secondhand === initial.is_secondhand &&
+      s.is_virtual === initial.is_virtual
+        ? s
+        : {
+            ...s,
+            requires_serial: initial.requires_serial,
+            is_secondhand: initial.is_secondhand,
+            is_virtual: initial.is_virtual,
+          },
+    );
+    // 只在鎖上的那一刻做一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flagsLocked]);
   // 商品照片:先放在這一次編輯上,按儲存才跟商品一起存;取消就丟掉,商品原本的照片不動
   const photos = usePhotoDraft({
     active: open,
@@ -1365,16 +1391,27 @@ export function ProductForm({
         <details className="pf-details" open>
           <summary>屬性</summary>
           <div className="pf-details-body">
+            {flagsLocked && (
+              <div className="pf-lock-note">
+                已經用過({usage.data?.reasons.join("、")}):需追蹤序號、中古機、虛擬商品不能改。
+                {/* 怎麼辦直接寫出來(平板沒有滑鼠,看不到提示) */}
+                {usage.data?.way_out}
+              </div>
+            )}
             <Checkbox
               checked={state.requires_serial}
               onChange={(v) => setState((s) => withSerialByHand(s, v))}
               label="需追蹤序號"
+              disabled={flagsLocked}
+              title={lockTitle}
             />
             {/* 中古機放在看得到的地方(以前收在「會計處理」裡,新手找不到) */}
             <Checkbox
               checked={state.is_secondhand}
               onChange={(v) => pinSerial("secondhand", v)}
               label="中古機(逐隻記成色 / 電池 / 自定售價)"
+              disabled={flagsLocked}
+              title={lockTitle}
             />
             <Checkbox
               checked={state.allows_telecom_line}
@@ -1401,6 +1438,8 @@ export function ProductForm({
             checked={state.is_virtual}
             onChange={(v) => pinSerial("virtual", v)}
             label="虛擬商品"
+            disabled={flagsLocked}
+            title={lockTitle}
           />
           <Checkbox
             checked={state.counts_cash}

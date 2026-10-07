@@ -236,6 +236,17 @@ class CategorySerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, ser
     def validate_name(self, value):
         return self._tenant_unique(Category.objects, "name", value)
 
+    def update(self, instance, validated_data):
+        from .usage import StockFlagsLocked
+
+        try:
+            return super().update(instance, validated_data)
+        except StockFlagsLocked as locked:
+            # 勾「中古機類別」會把底下所有商品一起改成中古機:底下有用過的商品就不能勾(規則見 `catalog/usage.py`)。
+            # 檢查只有模型存檔那一份(`Category.save`:鎖著這個類別做完檢查、存、連動);這裡只負責講成 400。
+            # 放在 detail:畫面的錯誤訊息只認這一格(放在欄位名底下會顯示成「400 Bad Request」)
+            raise serializers.ValidationError({"detail": str(locked)}) from locked
+
 
 class ProductSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
     stock_qty = serializers.IntegerField(read_only=True)
@@ -488,7 +499,16 @@ class ProductSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, seri
                 distinct_reason=reason,
                 exclude_id=instance.id,
             )
-        instance = super().update(instance, validated_data)
+        from .usage import StockFlagsLocked
+
+        try:
+            instance = super().update(instance, validated_data)
+        except StockFlagsLocked as locked:
+            # 用過的商品不能改「需追蹤序號 / 中古機 / 虛擬商品」(規則見 `catalog/usage.py`)。
+            # 檢查只有模型存檔那一份(`Product.save`:鎖著類別、看類別現在的設定、比存檔之後實際的值,
+            # 所以換到「中古機類別」連帶的變動也擋得到);這裡只負責把它講成 400 與一句話。
+            # 放在 detail:畫面的錯誤訊息只認這一格
+            raise serializers.ValidationError({"detail": str(locked)}) from locked
         request = self.context.get("request")
         record_distinct_decision(
             instance.tenant, instance, similar, reason, getattr(request, "user", None)

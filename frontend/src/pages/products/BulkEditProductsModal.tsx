@@ -5,12 +5,14 @@ import {
   useBulkEditProducts,
   usePhoneSeriesList,
 } from "@/api/hooks";
+import { ApiHttpError } from "@/api/client";
 import type { Brand, PhoneSeries } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { DraftBanner } from "@/components/DraftBanner";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { useModalDraft } from "@/hooks/useModalDraft";
 import { MoneyInput } from "@/components/MoneyInput";
+import { bulkFailureLines } from "@/lib/bulkErrors";
 import { intStr } from "@/lib/money";
 
 const DRAFT_KEY = "modal-draft:bulk-edit-products";
@@ -42,6 +44,8 @@ export function BulkEditProductsModal({
 }: Props) {
   const save = useBulkEditProducts();
   const [error, setError] = useState<string | null>(null);
+  // 整批被退回時:哪一個商品、為什麼(伺服器逐個回報;例:用過的商品不能改「需追蹤序號」)
+  const [failures, setFailures] = useState<string[]>([]);
 
   // 各區塊啟用旗標
   const [enPrice, setEnPrice] = useState(false);
@@ -75,6 +79,7 @@ export function BulkEditProductsModal({
   useEffect(() => {
     if (!open) return;
     setError(null);
+    setFailures([]);
     setEnPrice(false);
     setEnKind(false);
     setEnLifecycle(false);
@@ -150,6 +155,7 @@ export function BulkEditProductsModal({
 
   async function submit() {
     setError(null);
+    setFailures([]);
     const patch: Record<string, unknown> = {};
     if (enPrice) {
       if (listPrice.trim()) patch.list_price = intStr(listPrice);
@@ -190,6 +196,7 @@ export function BulkEditProductsModal({
       onSuccess(res.updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      setFailures(e instanceof ApiHttpError ? bulkFailureLines(e.body) : []);
     }
   }
 
@@ -205,6 +212,13 @@ export function BulkEditProductsModal({
         </div>
         <div className="modal-body be-body">
           {error && <Banner kind="error" message={error} />}
+          {error && failures.length > 0 && (
+            <ul className="be-failures">
+              {failures.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          )}
           {draftHelper.draft && (
             <DraftBanner
               savedAt={draftHelper.draft.savedAt}

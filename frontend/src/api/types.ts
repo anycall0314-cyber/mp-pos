@@ -1321,6 +1321,17 @@ export interface ProductAlias {
   updated_at?: string;
 }
 
+/** 這個商品用過沒有(`GET /products/{id}/usage/`)。用過的話會影響庫存怎麼算的那幾個屬性不能改 */
+export interface ProductUsage {
+  locked: boolean;
+  /** 用在哪裡,一項一句(例:「1 張進貨單」「庫存 5 件」) */
+  reasons: string[];
+  /** 不能改的是哪幾個欄位 */
+  fields: string[];
+  /** 改錯了怎麼辦 */
+  way_out: string;
+}
+
 /** 一句叫法對到的既有商品(進貨搜尋 / 新增前防重複共用) */
 export interface ResolveCandidate {
   product: Product;

@@ -4789,6 +4789,17 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   font-size: var(--font-secondary);
   padding: 8px 0;
 }
+/* 整批被退回:哪一個商品、為什麼(一個商品一行) */
+.be-failures {
+  margin: 0 0 8px;
+  padding: 0 0 0 20px;
+  color: var(--danger-text);
+  font-size: var(--font-secondary);
+  line-height: 1.5;
+}
+.be-failures li + li {
+  margin-top: 4px;
+}
 .be-section {
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -6106,6 +6117,15 @@ tr.selected .intake-badge { filter: none; }
 .dup-proceed input { flex: 1; min-width: 0; }
 .dup-remember { margin: -4px 0 12px; font-size: var(--font-secondary); }
 .dup-row .ph-mini { margin: 0; }
+
+/* 用過的商品:那幾格不能改,講原因 */
+.pf-lock-note {
+  margin-bottom: 8px; padding: 6px 10px;
+  border-left: 3px solid var(--warn-text-orange);
+  background: var(--panel-2); color: var(--text-dim); font-size: var(--font-secondary);
+}
+.checkbox.disabled { opacity: 0.55; cursor: not-allowed; }
+.checkbox.disabled input { cursor: not-allowed; }
 
 /* ─── 新增商品先找一次(FindFirstPanel) ───────────────── */
 .ff-search { display: flex; gap: 8px; }

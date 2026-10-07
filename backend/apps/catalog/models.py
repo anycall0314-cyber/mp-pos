@@ -50,25 +50,45 @@ class Category(TenantOwnedModel):
         return f"[{self.code}] {self.name}"
 
     def save(self, *args, **kwargs):
-        """偵測 is_secondhand_default 由 False → True 時,
-        把底下所有商品 is_secondhand=True、requires_serial=True、is_virtual=False。
-        反向(True → False)不 cascade,避免誤動既有資料。"""
-        cascade_to_products = False
-        if self.pk:
-            try:
-                prev = Category.objects.only("is_secondhand_default").get(pk=self.pk)
-                if not prev.is_secondhand_default and self.is_secondhand_default:
-                    cascade_to_products = True
-            except Category.DoesNotExist:
-                pass
-        super().save(*args, **kwargs)
-        if cascade_to_products:
-            # 用 .update 批次跑,避免逐筆觸發 Product.save() 的其他副作用
-            Product.objects.filter(category=self).update(
-                is_secondhand=True,
-                requires_serial=True,
-                is_virtual=False,
-            )
+        """`is_secondhand_default` 由 False → True 時,把底下所有商品 is_secondhand=True、requires_serial=True、is_virtual=False。
+        反向(True → False)不連動,避免誤動既有資料。
+
+        底下有**用過**的商品會被連帶改到 → 不能改(`usage.py`;作廢 / 退貨時庫存是照這幾個屬性加減回去的)。
+        畫面那一條路在序列化器先擋、回得出好懂的訊息;這裡是最後一道(後台、指令也過不去),
+        而且**鎖著這個類別**做完「看以前是不是 → 檢查 → 存 → 連動」:這段時間別人不能把商品移進來。
+        只存部分欄位、而且沒有要寫 `is_secondhand_default` 的存檔不連動(那個值沒有真的被寫進去)。
+        """
+        from .usage import (
+            StockFlagsLocked,
+            cascade_message,
+            cascade_targets,
+            category_cascade_blockers,
+            lock_category,
+            lock_category_products,
+            save_arguments,
+        )
+
+        # 參數換成整理過、全部用關鍵字的那一份再往下傳(見 save_arguments)
+        fields, kwargs = save_arguments(args, kwargs)
+        writes_default = fields is None or "is_secondhand_default" in fields
+        if not (self.pk and writes_default and self.is_secondhand_default):
+            return super().save(**kwargs)
+        with transaction.atomic():
+            cascade_to_products = lock_category(self.pk) is False
+            if cascade_to_products:
+                # 先把底下**全部**的商品照編號鎖住(等正在存檔的做完),才看哪些要改、哪些用過
+                lock_category_products(self)
+                blockers = category_cascade_blockers(self)
+                if blockers.exists():
+                    raise StockFlagsLocked(cascade_message(blockers))
+            super().save(**kwargs)
+            if cascade_to_products:
+                # 只改還不是那樣的(都已經鎖在手上)。用 .update 批次跑,避免逐筆觸發 Product.save() 的其他副作用
+                cascade_targets(self).update(
+                    is_secondhand=True,
+                    requires_serial=True,
+                    is_virtual=False,
+                )
 
     def issue_next_sku(self) -> str:
         """原子地取下一個 SKU,回傳 `{code}-{6位流水}`。"""
@@ -415,20 +435,70 @@ class Product(TenantOwnedModel):
             if self.category_id is None:
                 raise ValueError("建立商品必須先指定 category")
             self.sku = self.category.issue_next_sku()
-        # 類別標記為「中古機類別」時自動把商品帶成中古機
-        # (使用者不用每筆都勾,新增 / 型號展開 / 批次匯入皆生效)
-        if self.category_id and not self.is_secondhand:
-            try:
-                cat = self.category
-            except Category.DoesNotExist:
-                cat = None
-            if cat and cat.is_secondhand_default:
-                self.is_secondhand = True
-        # 中古機一定追蹤序號 / 不能是虛擬商品(跟 ProductForm UI 行為一致)
-        if self.is_secondhand:
-            self.requires_serial = True
-            self.is_virtual = False
-        super().save(*args, **kwargs)
+        # 類別標記為「中古機類別」時自動把商品帶成中古機(使用者不用每筆都勾,新增 / 型號展開 / 批次匯入皆生效);
+        # 中古機一定追蹤序號 / 不能是虛擬商品(跟 ProductForm UI 行為一致)。規則只有 usage.flags_after_save 一份
+        from .usage import (
+            STOCK_FLAGS,
+            category_is_secondhand,
+            check_stock_flags,
+            flags_after_save,
+            lock_category,
+            save_arguments,
+            stored_flags,
+        )
+
+        # 參數換成整理過、全部用關鍵字的那一份再往下傳(見 save_arguments)
+        fields, kwargs = save_arguments(args, kwargs)
+        # 這一次真的會寫進去的那幾個屬性(只存部分欄位時,沒列到的不會被寫,記憶體裡改了什麼都不算)
+        written = tuple(f for f in STOCK_FLAGS if fields is None or f in fields)
+        writes_category = fields is None or "category" in fields or "category_id" in fields
+        # 用過的商品不能改這三個屬性(見 usage.py);檢查只有這一份,畫面、批次修改、匯入、指令都過這裡。
+        # 既有的商品(看資料庫裡有沒有這一筆,不看這個物件是不是剛 new 出來的)、而且這次會寫到屬性或類別才需要;
+        # 只寫別的欄位(例:只更新加權平均成本)的存檔不會動到它們,不用鎖也不用查
+        before = stored_flags(self) if (written or writes_category) else None
+        if before is None:
+            category_secondhand = False
+            if self.category_id and not self.is_secondhand:
+                try:
+                    category_secondhand = bool(self.category.is_secondhand_default)
+                except Category.DoesNotExist:
+                    category_secondhand = False
+            self._apply_stock_flags(flags_after_save(
+                category_secondhand=category_secondhand,
+                is_secondhand=self.is_secondhand,
+                requires_serial=self.requires_serial,
+                is_virtual=self.is_virtual,
+            ))
+            return super().save(**kwargs)
+        with transaction.atomic():
+            # 鎖的順序固定:先類別(只有換類別才拿)、後商品這一列。
+            # 移進另一個類別:鎖住那個類別、重讀它**現在**是不是中古機類別 ——
+            # 同一時間有人正把它勾成中古機類別的話,兩邊排隊做,不會一個剛檢查完、另一個就把用過的商品移進來。
+            # 沒有換類別:不拿類別的鎖(見 lock_category 的說明)
+            moving = writes_category and before["category_id"] != self.category_id
+            category_now = lock_category(self.category_id) if moving else None
+            # 鎖住這一列再讀一次:屬性「有沒有變」比的是這一份(鎖到的當下),不是剛剛沒鎖時讀的
+            current = stored_flags(self, lock=True)
+            if current and writes_category and not moving and current["category_id"] != self.category_id:
+                # 剛剛讀的時候還在這個類別、鎖到時已經被別人移走了(同一個商品三個人同時改才會):
+                # 這一次存檔等於把它移回來,一樣要拿類別的鎖
+                moving = True
+                category_now = lock_category(self.category_id)
+            if not moving:
+                category_now = category_is_secondhand(self.category_id)
+            flags = flags_after_save(
+                category_secondhand=bool(category_now) and not self.is_secondhand,
+                is_secondhand=self.is_secondhand,
+                requires_serial=self.requires_serial,
+                is_virtual=self.is_virtual,
+            )
+            self._apply_stock_flags(flags)
+            check_stock_flags(self, flags, written, current)
+            return super().save(**kwargs)
+
+    def _apply_stock_flags(self, flags):
+        for name, value in flags.items():
+            setattr(self, name, value)
 
     @property
     def tracks_unit_condition(self) -> bool:
