@@ -57,6 +57,12 @@ export const NAV_MODULES: NavModule[] = [
     to: "/purchases",
     tabs: [
       { to: "/purchases", label: "進貨單", aliases: ["進貨", "進貨作業"] },
+      // 商品管理放在進貨這裡(2026-10-07 owner:建好品號的下一步就是進貨)。以前在「商品庫存」底下
+      {
+        to: "/products",
+        label: "商品管理",
+        aliases: ["建立商品", "商品建立", "類別", "新增商品"],
+      },
       {
         to: "/secondhand-acquisition",
         label: "中古收購",
@@ -69,21 +75,7 @@ export const NAV_MODULES: NavModule[] = [
       },
       { to: "/suppliers", label: "供應商" },
     ],
-  },
-  {
-    key: "stock",
-    label: "商品庫存",
-    to: "/inventory",
-    tabs: [
-      { to: "/inventory", label: "庫存查詢", aliases: ["庫存"] },
-      {
-        to: "/products",
-        label: "商品管理",
-        aliases: ["建立商品", "商品建立", "類別"],
-      },
-      { to: "/inventory/alerts", label: "庫存警示" },
-      { to: "/transfers", label: "調撥作業", aliases: ["調撥"] },
-    ],
+    // 跟著商品管理一起搬過來:建商品時才用得到的幾個主檔
     tools: {
       label: "商品設定",
       items: [
@@ -97,6 +89,16 @@ export const NAV_MODULES: NavModule[] = [
         { to: "/conditions", label: "商品品況", aliases: ["商品狀態", "品況"] },
       ],
     },
+  },
+  {
+    key: "stock",
+    label: "商品庫存",
+    to: "/inventory",
+    tabs: [
+      { to: "/inventory", label: "庫存查詢", aliases: ["庫存"] },
+      { to: "/inventory/alerts", label: "庫存警示" },
+      { to: "/transfers", label: "調撥作業", aliases: ["調撥"] },
+    ],
   },
   {
     key: "people",

@@ -479,7 +479,7 @@ export function PartTemplatesPage() {
               padding: "4px 0 8px",
             }}
           >
-            建立後可在「庫存 → 商品 → 零件批次建立」一鍵展開
+            建立後可在「進貨入庫 → 商品管理 → 零件批次建立」一鍵展開
           </div>
           {list.isLoading && <div>載入中…</div>}
           {!list.isLoading && (list.data?.length ?? 0) === 0 && !editing && (

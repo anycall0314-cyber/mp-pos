@@ -18,6 +18,7 @@ import { MoneyInput } from "@/components/MoneyInput";
 import { intStr } from "@/lib/money";
 import { hasRealReason } from "./DuplicatePanel";
 import { defaultConditionIds } from "@/lib/productDefaults";
+import { purchaseLinkFor } from "@/lib/purchasePrefill";
 
 /**
  * 「新增手機型號」3 步 wizard。
@@ -1058,15 +1059,35 @@ export function NewPhoneModelWizardPage() {
                       setStep(1);
                     }}
                   >
-                    再建另一支機型
+                    再建機型
                   </button>
-                  <button
-                    type="button"
-                    className="btn primary btn-save"
-                    onClick={() => nav("/products")}
-                  >
-                    去看商品列表
+                  <button type="button" className="btn" onClick={() => nav("/products")}>
+                    商品列表
                   </button>
+                  {/* 建好品號的下一步多半是進貨:帶著這次建的品項去進貨開單頁。
+                      中古的品項不走一般進貨單,另外一顆「中古收購」—— 兩種都建了就兩顆都有,不會只帶一半又不講 */}
+                  {(() => {
+                    const to = purchaseLinkFor(created.main.filter((m) => !m.is_secondhand));
+                    const used = created.main.some((m) => m.is_secondhand);
+                    return (
+                      <>
+                        {used && (
+                          <button
+                            type="button"
+                            className={to ? "btn" : "btn primary btn-save"}
+                            onClick={() => nav("/secondhand-acquisition")}
+                          >
+                            中古收購
+                          </button>
+                        )}
+                        {to && (
+                          <button type="button" className="btn primary btn-save" onClick={() => nav(to)}>
+                            前往進貨
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </>
             )}

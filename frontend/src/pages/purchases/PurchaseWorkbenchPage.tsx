@@ -1,8 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
-import { ApiHttpError } from "@/api/client";
+import { api, ApiHttpError } from "@/api/client";
 import {
   useCreatePurchaseOrder,
   useInvoiceTypes,
@@ -46,6 +46,15 @@ import {
   resizeUnits,
 } from "@/lib/deviceCodes";
 import { intStr, lineTotal, money, roundInt, splitTax } from "@/lib/money";
+import {
+  carriedQty,
+  draftQty,
+  prefillReport,
+  readPrefill,
+  sortFetched,
+  withPrefill,
+  type PrefillOutcome,
+} from "@/lib/purchasePrefill";
 
 import {
   BatchPasteResult,
@@ -156,6 +165,51 @@ function remember(key: string, value: string) {
   }
 }
 
+/** 進貨開單頁自己改寫網址(把還沒做完的批次寫回去 / 做完了拿掉)時帶的記號:不是人按了新的「進貨」 */
+const CARRY_SYNC = { carrySync: true } as const;
+function isCarrySync(state: unknown): boolean {
+  return !!state && typeof state === "object" && (state as { carrySync?: unknown }).carrySync === true;
+}
+
+/** 帶過來卻沒加進去的提醒:這個分頁裡一直留著,到人按「知道了」為止 */
+const CARRY_NOTICE_KEY = "purchase-carry-notice";
+function loadCarryNotice(key: string): string[] | null {
+  try {
+    const v: unknown = JSON.parse(sessionStorage.getItem(key) ?? "null");
+    return Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "string")
+      ? (v as string[])
+      : null;
+  } catch {
+    return null;
+  }
+}
+function storeCarryNotice(key: string, lines: string[] | null) {
+  try {
+    if (lines && lines.length > 0) sessionStorage.setItem(key, JSON.stringify(lines));
+    else sessionStorage.removeItem(key);
+  } catch {
+    /* 存不了:這一頁開著的時候提醒還在,只是重新整理之後不會回來 */
+  }
+}
+
+/** 帶過來的商品,查一個最多等多久(逾時當作查不到、講出來;不然整張單會一直等) */
+const CARRY_TIMEOUT_MS = 15000;
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error("timeout")), ms);
+    work.then(
+      (v) => {
+        window.clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        window.clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 function today(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -185,10 +239,10 @@ function loadDraft(key: string): Draft | null {
       note: d.note ?? "",
       lines: lines.map((l) => ({
         ...l,
-        qty: Math.max(1, Number(l.qty) || 1),
+        qty: draftQty(l),
         // 計價數量不會比進貨數量多
         billedQty: Math.min(
-          Math.max(1, Number(l.qty) || 1),
+          draftQty(l),
           Math.max(0, Number(l.billedQty ?? l.qty) || 0),
         ),
         billedTouched: !!l.billedTouched,
@@ -247,7 +301,8 @@ export function PurchaseWorkbenchPage({
   const listPath = "/purchases";
 
   const me = useDefaultWarehouse();
-  const role = useCurrentUser()?.profile?.role;
+  const user = useCurrentUser();
+  const role = user?.profile?.role;
   const canRestore = role === "tenant_admin" || role === "platform_admin";
   const warehousesQ = useWarehouses();
   const stores = useMemo(
@@ -306,6 +361,29 @@ export function PurchaseWorkbenchPage({
   const [tool, setTool] = useState<"picker" | "paste" | null>(null);
   /** 勾選商品 / 批次貼上之後要人看一眼的結果(併了哪些、哪些沒加):留在明細上方,按了才收 */
   const [notice, setNotice] = useState<string[] | null>(null);
+  /**
+   * 從商品那一邊帶過來、卻沒加進明細的(中古機、停用、查不到、帶不完…)。跟上面那一條分開記:
+   * 勾選商品 / 批次貼上會換掉上面那一條,這一條**只有人按「知道了」才消失**,沒按之前不能儲存
+   * (以為都帶到了、其實少了幾項,存下去就是少進貨)。換一張新單、重新整理、切到別頁再回來都還在
+   * (自己存一份,不跟著草稿:草稿空了會被清掉;一個帳號一份,同一個分頁換人登入看不到上一個人的)。
+   */
+  const carryNoticeKey = `${CARRY_NOTICE_KEY}:${user?.id ?? 0}`;
+  const [carryNotice, setCarryNotice] = useState<string[] | null>(() =>
+    embedded || isSecondhandVendor ? null : loadCarryNotice(carryNoticeKey),
+  );
+  /** 儲存是等帶過來的做完就接著往下走的,那時候畫面還沒重畫:要看的是這裡(當下就寫),不是上面那個 state */
+  const carryNoticeRef = useRef<string[] | null>(carryNotice);
+  function addCarryNotice(lines: string[]) {
+    const next = [...new Set([...(carryNoticeRef.current ?? []), ...lines])];
+    carryNoticeRef.current = next;
+    storeCarryNotice(carryNoticeKey, next);
+    setCarryNotice(next);
+  }
+  function clearCarryNotice() {
+    carryNoticeRef.current = null;
+    storeCarryNotice(carryNoticeKey, null);
+    setCarryNotice(null);
+  }
   const [infoOpen, setInfoOpen] = useState(false);
 
   const scanRef = useRef<HTMLInputElement>(null);
@@ -535,6 +613,197 @@ export function PurchaseWorkbenchPage({
     }
     return addProduct(p, via);
   }
+
+  /**
+   * 從商品那一邊帶過來的一個商品放進明細。跟刷條碼(`addProduct`)不一樣的地方:
+   * - 已經在明細裡:什麼都不改(「帶過來」不是「再刷一件」;來回按兩次「進貨」不會多一件),只捲到那一行;
+   * - 配件(不追序號)新的一行**數量是 0**(`carriedQty`):帶過來不代表進了幾件,要刷或打數量才算,0 存不了。
+   *   序號商品照舊是一個空位:刷到序號才算一台,空位沒刷存不了。
+   * `retarget` = 可不可以把「正在刷序號的那一行」換成它(人正在刷別的那一行時不換,見下面)。
+   * 回一句話 = 沒加成。
+   */
+  function carryIn(p: Product, retarget: boolean): "added" | "already" | { problem: string } {
+    if (frozenRef.current) return { problem: "這張單已經送出,帶過來的商品沒有加進去" };
+    const here = linesRef.current.find((l) => l.product.id === p.id);
+    if (here) {
+      if (p.requires_serial && retarget) setCurrent(here.key);
+      reveal(here.key);
+      return "already";
+    }
+    const line = newLineOf(p, carriedQty(p));
+    commit((ls) => [line, ...ls]);
+    if (p.requires_serial && retarget) setCurrent(line.key);
+    reveal(line.key);
+    return "added";
+  }
+  // 下面那一段是晚一點才回來的,它要用的是「現在」的這一支(明細現在有什麼),不是發出去那一刻畫面的那一份
+  const carryInRef = useRef(carryIn);
+  carryInRef.current = carryIn;
+  /** 掃碼框裡有還沒送出的字 */
+  function scanBoxHasText(): boolean {
+    return (scanRef.current?.value ?? "").trim() !== "";
+  }
+  /** 游標在某一行的序號格子裡(人正要直接打 IMEI / SN) */
+  function focusInSerials(): boolean {
+    return !!document.activeElement?.closest?.(".wb-serials");
+  }
+
+  /**
+   * 從商品那一邊帶過來的(「建好品號 → 按進貨」):網址 `?add=商品編號,…`。
+   * 把那幾個商品放進明細(`carryIn`):已經有進行中的草稿就是加在草稿上、同一個商品不會變兩行。
+   * 查回來的以伺服器現在回的為準再分一次(`sortFetched`):中古機(不走一般進貨單)、虛擬商品、停用的、查不到的都不加。
+   * **沒加進去的一律留在明細上方那一條**(`carryNotice`:只有人按「知道了」才消失,沒按不能儲存),一次帶不完的(`more`)也講。
+   *
+   * 這一段是晚一點才回來的,所以跟人手上正在做的事要排好順序:
+   * - **一批一批排隊做**(`carryQueue`;這一頁開著的時候,訊息條上的「進貨」會送來新的一批)。
+   *   **網址永遠寫著「所有還沒做完的」**(新的一批進來就把前面還沒做完的併回網址;做完一批拿掉一批),
+   *   所以還在查的時候重新整理、離開再回來,一個都不會少 —— 再帶一次也不會多(已經有的不動);
+   * - 一批做完:**先把加進去的明細存進草稿、沒加進去的寫進提醒,才把它從網址拿掉**(不等草稿那 250 毫秒);
+   * - **還在處理的掃碼先做完才動明細**(`scanApi.idle()`);
+   * - **不搶「正在刷序號的那一行」**:原本有在刷的那一行,而且從收到這一批到現在人動過任何東西
+   *   (點了哪裡、按了鍵、打了字 —— 包含點別行的「已刷」去刷那一行、直接在序號格子裡打字),或正在刷的那一行已經換過、
+   *   掃碼框裡有沒送出的字、游標在序號格子裡 —— 都不換。帶過來的照樣加進明細,要刷它再點那一行。
+   *   原本沒有在刷的那一行(剛開的單)、或人什麼都沒碰,才換成帶過來的(他剛剛按的就是它的「進貨」);
+   * - **這張單正在儲存、或已經送出還不知道結果:不加,當下就講、留著**(不等查回來:那時候可能已經存好換頁了);
+   *   儲存按下去之前就在查的,儲存會等它做完(`prefillRef`),等的時候人離開了就不送。
+   */
+  const location = useLocation();
+  const locationRef = useRef(location);
+  locationRef.current = location;
+  /** 還沒做完的批次(第一個是正在做的)。`seq` / `current` / `busy` = 收到那一刻人手上的狀況,套用時拿來比 */
+  const carryQueue = useRef<
+    { ids: number[]; more: number; seq: number; current: string | null; busy: boolean }[]
+  >([]);
+  /** 上一次看過的網址參數(同一份接連出現兩次是 React 開發模式重跑,不是新的一批) */
+  const seenSearch = useRef<string | null>(null);
+  const prefillRef = useRef<Promise<void>>(Promise.resolve());
+  const onPageRef = useRef(true);
+  /** 人每動一下(點、按鍵、打字)加一 */
+  const inputSeq = useRef(0);
+  useEffect(() => {
+    onPageRef.current = true;
+    const bump = () => {
+      inputSeq.current += 1;
+    };
+    const events = ["pointerdown", "keydown", "input"] as const;
+    events.forEach((name) => document.addEventListener(name, bump, true));
+    return () => {
+      onPageRef.current = false;
+      events.forEach((name) => document.removeEventListener(name, bump, true));
+    };
+  }, []);
+  /**
+   * 把網址寫成「所有還沒做完的批次」(都做完了就是把 `add` / `more` 拿掉);別的參數原樣留著。
+   * 現在的網址直接問瀏覽器(剛寫完、畫面還沒重畫的時候 `location` 是舊的)。
+   * 自己寫的這一筆帶著記號(`CARRY_SYNC`):下面看網址的那一段看到記號就知道不是新的一批。
+   */
+  function syncCarryUrl() {
+    const here = window.location.search;
+    const next = withPrefill(
+      here,
+      carryQueue.current.flatMap((b) => b.ids),
+      carryQueue.current.reduce((sum, b) => sum + b.more, 0),
+    );
+    if (next === here) return;
+    const now = locationRef.current;
+    navigate(
+      { pathname: now.pathname, search: next, hash: now.hash },
+      { replace: true, state: CARRY_SYNC },
+    );
+  }
+  async function drainCarry() {
+    while (carryQueue.current.length > 0) {
+      const batch = carryQueue.current[0];
+      const found = await Promise.allSettled(
+        batch.ids.map((id) => withTimeout(api<Product>(`/products/${id}/`), CARRY_TIMEOUT_MS)),
+      );
+      if (!onPageRef.current) return;
+      await scanApi.current?.idle();
+      if (!onPageRef.current) return;
+      const sorted = sortFetched(found);
+      const outcome: PrefillOutcome = {
+        secondhand: sorted.secondhand,
+        virtual: sorted.virtual,
+        inactive: sorted.inactive,
+        missing: sorted.missing,
+        other: [],
+        more: batch.more,
+      };
+      const scanningKey = currentRef.current;
+      const scanning = !!scanningKey && linesRef.current.some((l) => l.key === scanningKey);
+      const untouched =
+        !batch.busy &&
+        inputSeq.current === batch.seq &&
+        currentRef.current === batch.current &&
+        !scanBoxHasText() &&
+        !focusInSerials();
+      const retarget = !scanning || untouched;
+      // 新的一行是加在最上面:倒著加,帶過來的第一個才會在最上面(可以換的話,也是「正在刷序號的那一行」)
+      let added = 0;
+      let already = 0;
+      for (const p of sorted.fresh.reverse()) {
+        const result = carryInRef.current(p, retarget);
+        if (result === "added") added += 1;
+        else if (result === "already") already += 1;
+        else outcome.other.push(result.problem);
+      }
+      // 先把結果留下來(加進去的明細進草稿、沒加進去的進提醒),才把這一批從網址拿掉:
+      // 這中間重新整理,明細 / 提醒 / 網址至少有一邊還記著它
+      saveDraftRef.current();
+      const report = prefillReport(outcome);
+      if (report.length > 0) addCarryNotice(report);
+      carryQueue.current.shift();
+      syncCarryUrl();
+      if (report.length === 0) {
+        if (added > 0) toast(`已加入 ${added} 項`, "ok");
+        else if (already > 0) toast("這張單已經有了", "");
+      }
+    }
+  }
+  const carryToolsRef = useRef({ drainCarry, syncCarryUrl });
+  carryToolsRef.current = { drainCarry, syncCarryUrl };
+  useEffect(() => {
+    if (embedded || isSecondhandVendor) return;
+    const search = location.search;
+    if (search === seenSearch.current) return;
+    // 這一頁剛打開的那一次一定要讀(重新整理之後,自己寫的那個記號還留在瀏覽器的紀錄裡)
+    const opening = seenSearch.current === null;
+    seenSearch.current = search;
+    if (!opening && isCarrySync(location.state)) return;
+    const { ids, more } = readPrefill(search);
+    if (ids.length === 0) return;
+    if (submitting.current || frozenRef.current) {
+      const text = `這張單${frozenRef.current ? "已經送出" : "正在儲存"},帶過來的 ${ids.length + more} 項沒有加入:之後再按一次「進貨」`;
+      addCarryNotice([text]);
+      // 剛打開這一頁的那一刻訊息條還沒準備好(它比這一頁晚一步),晚一拍再跳;留著的那一條不受影響
+      window.setTimeout(() => toast(text, "err", { ms: 9000 }), 0);
+      carryToolsRef.current.syncCarryUrl();
+      return;
+    }
+    const idle = carryQueue.current.length === 0;
+    carryQueue.current.push({
+      ids,
+      more,
+      seq: inputSeq.current,
+      current: currentRef.current,
+      busy: scanBoxHasText() || focusInSerials(),
+    });
+    // 前面還有沒做完的:併回網址(這時候重新整理,前面那幾批才不會不見)
+    carryToolsRef.current.syncCarryUrl();
+    if (!idle) return;
+    prefillRef.current = prefillRef.current
+      .then(() => carryToolsRef.current.drainCarry())
+      .catch((e) => {
+        // 不該發生的錯:這幾批都沒做,講出來、從網址拿掉(不然每次打開都再錯一次)
+        const lost = carryQueue.current.reduce((sum, b) => sum + b.ids.length + b.more, 0);
+        carryQueue.current = [];
+        if (!onPageRef.current) return;
+        addCarryNotice([`帶過來的 ${lost} 項沒有加入:${apiErrorText(e)}`]);
+        carryToolsRef.current.syncCarryUrl();
+      });
+    // 只看網址上帶的內容有沒有換
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   /**
    * 掃碼框按了 Enter(或條碼槍刷完):先看是不是要放進「正在刷序號的那一行」的設備碼。
@@ -862,8 +1131,23 @@ export function PurchaseWorkbenchPage({
       const resend = unsure && sentRef.current ? sentRef.current : null;
       let sent = new Set<string>();
       if (!resend) {
-        // 剛刷的碼可能還在查:等它們全部處理完(進明細,或記到「沒加入」)才定要送的內容
-        await scanApi.current?.idle();
+        // 要送的內容定下來之前,先等還在路上的都做完:
+        // - 從商品那一邊帶過來的還在查:等它放進明細(或講出為什麼沒放)。按了儲存之後才收到的新的一批
+        //   不會排進來(直接不加、當下就講),這裡照樣等到佇列不再變,不只等按下去那一刻的那一份;
+        // - 剛刷的碼可能還在查:等它們全部處理完(進明細,或記到「沒加入」)。
+        for (;;) {
+          const tail = prefillRef.current;
+          await tail;
+          await scanApi.current?.idle();
+          if (tail === prefillRef.current) break;
+        }
+        // 等的時候人已經離開這一頁:帶過來的那一段沒做(離開就不做了),這時候送出去的是少了那幾項的單
+        if (!onPageRef.current) return;
+        // 帶過來有沒加進去的、人還沒按「知道了」:先停下來(可能是剛剛等到的結果,人還沒看到)
+        if (carryNoticeRef.current) {
+          toast("有商品沒有加入:看過上面那一條、按「知道了」再儲存", "err", { ms: 6000 });
+          return;
+        }
         const blocker = scanApi.current?.blocker();
         if (blocker) {
           toast(blocker, "err", { ms: 6000 });
@@ -1213,6 +1497,27 @@ export function PurchaseWorkbenchPage({
             </button>
           </div>
         )}
+        {carryNotice && (
+          <div className="wb-warn ws-msg carry">
+            <span>
+              {carryNotice.map((line) => (
+                <span key={line} className="ws-msg-line">
+                  {line}
+                </span>
+              ))}
+            </span>
+            <button
+              type="button"
+              className="wb-btn small"
+              onClick={() => {
+                clearCarryNotice();
+                backToScan();
+              }}
+            >
+              知道了
+            </button>
+          </div>
+        )}
         {error && <div className="wb-warn err ws-msg">{error}</div>}
       </div>
 
@@ -1291,8 +1596,9 @@ export function PurchaseWorkbenchPage({
                     <td className="spec">{p.spec || ""}</td>
                     <td className="num">
                       <QtyInput
-                        className="qty num num-input"
+                        className={`qty num num-input${l.qty === 0 ? " need" : ""}`}
                         aria-label="進貨數量"
+                        title={l.qty === 0 ? "還沒填進幾件" : undefined}
                         min={Math.max(1, filled.length)}
                         disabled={locked}
                         value={l.qty}

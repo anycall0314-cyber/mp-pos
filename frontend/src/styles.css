@@ -6846,6 +6846,11 @@ button.wb-chip-count:hover { color: var(--wb-blue); }
 }
 .ws-msg > .wb-btn { margin-left: 4px; }
 .ws-msg-line { display: block; }
+/* 帶過來卻沒加進去的那一條:行數多的時候裡面自己捲,「知道了」一直在看得到的地方
+   (沒按不能儲存;被擠到畫面外就解不開了) */
+.ws-msg.carry { align-items: flex-start; flex-wrap: nowrap; }
+.ws-msg.carry > span { flex: 1 1 auto; min-width: 0; max-height: 132px; overflow-y: auto; }
+.ws-msg.carry > .wb-btn { flex: none; }
 
 /* 明細:這一塊自己捲(桌面上整頁只有它在捲),表頭黏在最上面 */
 .ws-lines {
@@ -6891,6 +6896,8 @@ button.wb-chip-count:hover { color: var(--wb-blue); }
 }
 .ws-count:hover { border-color: var(--wb-blue); }
 .ws-count.bad { color: var(--wb-red); border-color: var(--wb-red); font-weight: 600; }
+/* 從商品那一邊帶過來、還沒填進幾件的配件(數量 0,存不了) */
+.ws-table input.qty.need { color: var(--wb-red); border-color: var(--wb-red); font-weight: 600; }
 .ws-count:disabled { cursor: default; opacity: 0.6; }
 .ws-table td.rel .wb-chips { gap: 4px; }
 .ws-table td.rel .wb-chip { min-height: 36px; }

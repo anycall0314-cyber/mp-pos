@@ -12,7 +12,9 @@ import { api } from "@/api/client";
 import type { Product } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { toast } from "@/components/workbench/toast";
 import { money } from "@/lib/money";
+import { purchaseLinkFor } from "@/lib/purchasePrefill";
 
 import { BulkAddProductsModal } from "./BulkAddProductsModal";
 import { BulkCreatePartsModal } from "./BulkCreatePartsModal";
@@ -732,6 +734,15 @@ export function ProductsPage() {
                     >
                       編輯
                     </button>
+                    {/* 建好品號的下一步多半是進貨:帶著這個商品去進貨開單頁(中古機去中古收購;虛擬、停用的沒有這顆) */}
+                    {(() => {
+                      const to = purchaseLinkFor([selectedProduct]);
+                      return to ? (
+                        <button className="btn" onClick={() => nav(to)}>
+                          進貨
+                        </button>
+                      ) : null;
+                    })()}
                   </div>
                 </>
               )}
@@ -1029,6 +1040,22 @@ export function ProductsPage() {
         open={drawerOpen}
         initial={drawerInitial}
         onClose={() => setDrawerOpen(false)}
+        onSaved={(p) => {
+          // 新建的:選到那一筆(右邊看得到「進貨」),並且跳一句可以直接按的
+          if (drawerInitial?.id) return;
+          // 正在搜尋別的東西時,新的那一筆不在結果裡、右邊就看不到:回到「近期新增」(它在最上面)
+          setProductQuery("");
+          setAppliedProductQuery("");
+          setLeftTab("products");
+          setDetailTab("basic");
+          setSelection({ kind: "product", id: p.id });
+          const to = purchaseLinkFor([p]);
+          toast(
+            `已建立 ${p.sku} ${p.name}`,
+            "ok",
+            to ? { ms: 9000, action: { label: "進貨", fn: () => nav(to) } } : undefined,
+          );
+        }}
         onUseExisting={(id, note) => {
           if (note) {
             setBulkResult(note);

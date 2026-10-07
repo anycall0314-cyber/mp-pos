@@ -75,10 +75,36 @@ test("網址屬於哪個入口", () => {
   const mod = (path) => matchNav(path, admin)?.module.key;
   assert.equal(mod("/transfers"), "stock");
   assert.equal(mod("/secondhand-acquisition"), "purchasing");
+  // 商品管理與建商品用的主檔在「進貨入庫」底下(2026-10-07:建好品號的下一步就是進貨)
+  assert.equal(mod("/products"), "purchasing");
+  assert.equal(mod("/products/new-phone-model"), "purchasing");
+  assert.equal(mod("/conditions"), "purchasing");
+  assert.equal(mod("/brand-series"), "purchasing");
+  assert.equal(mod("/product-types"), "purchasing");
+  assert.equal(mod("/inventory"), "stock");
+  assert.equal(mod("/inventory/alerts"), "stock");
   assert.equal(mod("/expenses"), "cash");
   assert.equal(mod("/reports/explore"), "reports");
   assert.equal(mod("/part-templates"), "repairs");
   assert.equal(mod("/settings/backup"), "settings");
+});
+
+test("「商品設定」選單跟著商品管理在「進貨入庫」;「商品庫存」只剩看庫存與調撥", () => {
+  const byKey = (key) => NAV_MODULES.find((m) => m.key === key);
+  assert.equal(byKey("purchasing").tools?.label, "商品設定");
+  assert.deepEqual(
+    byKey("purchasing").tools.items.map((t) => t.to),
+    ["/brand-series", "/product-types", "/conditions"],
+  );
+  assert.equal(byKey("stock").tools, undefined);
+  assert.deepEqual(byKey("stock").tabs.map((t) => t.to), ["/inventory", "/inventory/alerts", "/transfers"]);
+  // 店員一樣看得到商品管理;功能搜尋打「商品管理」找得到,而且是在進貨入庫底下
+  assert.ok(pagesOf(clerk).some((p) => p.to === "/products"));
+  const hit = searchNav("商品管理", clerk)[0];
+  assert.equal(hit.page.to, "/products");
+  assert.equal(matchNav(hit.page.to, clerk).module.key, "purchasing");
+  // 分頁的順序:進貨單之後就是商品管理
+  assert.deepEqual(byKey("purchasing").tabs.slice(0, 2).map((t) => t.to), ["/purchases", "/products"]);
 });
 
 test("只給管理員的頁面,店員的導覽裡沒有", () => {
