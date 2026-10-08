@@ -44,6 +44,7 @@ from apps.sales.models import SalesOrderItem
 from apps.tenants.permissions import IsPlatformAdmin, is_tenant_admin
 from apps.transfers.models import TransferOrder, TransferOrderItem
 
+from . import shop_terms
 from .brand_import import import_brands_series
 from .import_service import import_products_from_file
 from .models import (
@@ -915,13 +916,34 @@ class ProductViewSet(viewsets.ModelViewSet):
         data = insights_trending(request.tenant, limit=limit)
         return Response(data)
 
+    # 店裡的寫法只拿來對「描述」:品名 / 規格 / 類別。品號、條碼是整串在比的碼(上面照字面那一條會比),
+    # 拆成一個字一個字去對的話,「iphone 17」的 17 會對到每一個條碼裡有 17 的 iPhone。
+    SHOP_WORDING_FIELDS = ("name", "spec", "category__name")
+
+    def _shop_wording(self, search):
+        """一個字一個字比,每個字都要在品名 / 規格 / 類別裡對得上;每個字可以是店裡的另一種寫法。
+
+        `IP17 256 黑`、`iphone 17 pro max`(= IP17PM)、`S25 ultra`(= S25U)、`16 plus`(= 16+)、`三星`(= SAM)。
+        語彙表與每個字的比法在 `shop_terms.py`。
+        """
+        every_word = Q()
+        for pattern in shop_terms.word_patterns(search):
+            somewhere = Q()
+            for field in self.SHOP_WORDING_FIELDS:
+                # 分大小寫的比對:大小寫已經寫在比對式裡(shop_terms._portable),不靠資料庫的「不分大小寫」
+                somewhere |= Q(**{f"{field}__regex": pattern})
+            every_word &= somewhere
+        # 沒有可以用的字(空的、太長、字太多)時是空的條件:接在別的條件後面等於沒接
+        return every_word
+
     @action(detail=False, methods=["get"], url_path="stock-matrix")
     def stock_matrix(self, request):
         """庫存矩陣:每個商品在多個指定倉的庫存,給庫存查詢頁用。
 
         Query params:
         - warehouse_ids:逗號分隔的倉 ID;空白 → 該 tenant 所有 active 倉
-        - search:關鍵字(走 sku/name/spec/barcode/category)
+        - search:關鍵字。整串照字面(sku/name/spec/barcode/category、設備的碼),
+          加上一個字一個字比、每個字可以是店裡的另一種寫法(`_shop_wording`),再加上共用比對
         - category:類別 ID
         - in_stock_only:預設 true,只列「有貨」的商品
         """
@@ -954,7 +976,8 @@ class ProductViewSet(viewsets.ModelViewSet):
             .select_related("category", "condition", "series", "phone_model")
             .filter(is_active=True)
         )
-        search = request.query_params.get("search", "").strip()
+        # 空字元資料庫不收(整個查詢會出錯);商品清單那邊的搜尋也是先拿掉
+        search = request.query_params.get("search", "").replace("\x00", "").strip()
         if search:
             cond = (
                 Q(sku__icontains=search)
@@ -973,6 +996,10 @@ class ProductViewSet(viewsets.ModelViewSet):
                 cond |= Q(pk__in=ProductSerialIdentifier.objects.filter(
                     tenant=tenant, normalized_value__contains=search,
                 ).values("serial__product_id"))
+            # 上面是原本的(整串字照字面),下面兩種是多的:只會多找到,不會少找到。
+            cond |= self._shop_wording(search)
+            # 跟商品清單同一套共用比對:用「其他叫法」叫的、寫法不同的(reno-16 / reno16)。只收每一項都對得上的。
+            cond |= Q(pk__in=find_candidates(tenant, search, limit=200, with_related=False).product_ids)
             qs = qs.filter(cond)
         # category 單選(舊版相容);category_ids 多選 CSV
         category_id = request.query_params.get("category")
