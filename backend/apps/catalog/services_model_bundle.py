@@ -12,7 +12,7 @@
 """
 from collections import Counter
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Optional
 
 from django.db import IntegrityError, transaction
@@ -29,6 +29,7 @@ from .models import (
     ProductRelation,
 )
 from .phone_model import compute_phone_model_key, compute_phone_model_name
+from apps.core.money import round_money
 
 
 @dataclass
@@ -68,6 +69,76 @@ def _check_len(field: str, value: str, label: str):
     if limit is not None and len(value) > limit:
         raise ValueError(f"{label}「{value}」超過 {limit} 字上限")
     return value
+
+
+def _price_ceiling() -> Decimal:
+    """建議售價那一欄放得下的最大整數(照欄位的定義算,不另外寫死一個數字)。"""
+    field = Product._meta.get_field("list_price")
+    return Decimal(10) ** (field.max_digits - field.decimal_places) - 1
+
+
+def _price(value, label: str) -> Decimal:
+    """建議售價:要是 0 以上、欄位放得下的數字,收成整數元(金額一律整數)。沒填的由呼叫的人決定當成什麼,不會進來這裡。
+
+    預覽與建立都過這裡:預覽放行的,存檔時不能才因為數字太大而失敗。
+    """
+    try:
+        price = Decimal(str(value).strip())
+    except InvalidOperation:
+        raise ValueError(f"{label}要是數字") from None
+    if not price.is_finite():
+        raise ValueError(f"{label}要是數字")
+    if price < 0:
+        raise ValueError(f"{label}不能是負的")
+    ceiling = _price_ceiling()
+    # 先擋再收整數:位數多到離譜的(1e28)連四捨五入都做不了
+    if price > ceiling + 1:
+        raise ValueError(f"{label}太大了")
+    price = round_money(price)
+    if price > ceiling:
+        raise ValueError(f"{label}太大了")
+    return price
+
+
+def _blank(value) -> bool:
+    """沒填:沒給,或只有空白。(`0` 是有填。)"""
+    return value is None or str(value).strip() == ""
+
+
+def _prices_by_capacity(payload, capacities) -> dict:
+    """每一個容量的建議售價 {容量: 整數元}。
+
+    `list_prices` = {容量: 價錢}:手機同一款不同容量價錢不一樣(owner 2026-10-08:以前整批只有一個價錢,建完要一個一個改)。
+    那個容量沒給、或給空的,用整批的 `list_price`(沒給就是 0)—— 舊的呼叫端(型錄匯入)只給 `list_price`,照舊。
+    指到沒有要建的容量是寫錯了(`256G` 寫成 `256GB` 的話,那個容量會悄悄變成 0 元),直接講。
+    同一個容量不分品況都是這個價錢:已拆封、中古機本來就每一台另外定價,這個數字只是沒定價時的預設。
+    """
+    # 整批那一個:空的、只有空白、沒給(以及以前就當成 0 的 False / [] / {})都是 0
+    single = payload.get("list_price")
+    base = _price("0" if not single or _blank(single) else single, "建議售價")
+    given = payload.get("list_prices")
+    if given is None:
+        given = {}
+    if not isinstance(given, dict):
+        raise ValueError("list_prices 要是 {容量: 價錢}")
+    by_capacity = {}
+    for raw, value in given.items():
+        cap = str(raw).strip()
+        if not cap:
+            # 空白的容量不會被建(容量那一串也是先去空白、丟掉空的),它的價錢跟著丟掉,不算寫錯
+            continue
+        if cap in by_capacity:
+            # `"256GB"` 與 `" 256GB "` 去掉空白是同一個:哪一個算數要看順序,不猜
+            raise ValueError(f"{cap} 的建議售價給了兩次")
+        by_capacity[cap] = value
+    unknown = [k for k in by_capacity if k not in capacities]
+    if unknown:
+        raise ValueError("建議售價指到沒有要建的容量:" + "、".join(unknown[:5]))
+    prices = {}
+    for cap in capacities:
+        value = by_capacity.get(cap)
+        prices[cap] = base if _blank(value) else _price(value, f"{cap} 的建議售價")
+    return prices
 
 
 def _get_or_create_phone_model(tenant, model_name, brand, series, generation, model_suffix):
@@ -202,8 +273,6 @@ def _build_bundle(tenant, payload, *, dry_run, user=None):
         raise ValueError("main_category_id 必填(主機類別)")
     main_category = _resolve_or_error(Category, tenant, id=main_category_id)
 
-    list_price = payload.get("list_price") or "0"
-
     # 配件 / 零件用的 Category — 沒指定就退回 main_category
     accessory_category_id = payload.get("accessory_category_id") or main_category_id
     accessory_category = _resolve_or_error(
@@ -238,6 +307,7 @@ def _build_bundle(tenant, payload, *, dry_run, user=None):
         raise ValueError("至少要選 1 個容量")
     if not colors:
         raise ValueError("至少要選 1 個顏色")
+    price_of = _prices_by_capacity(payload, capacities)
 
     # 地區版本:整批一個值(台版 / 港版 …),不當成第 4 個維度爆 SKU 數。
     # 要建不同版本就再跑一次精靈。有值時會併進品名,避免撞 uniq_product_tenant_name。
@@ -353,6 +423,7 @@ def _build_bundle(tenant, payload, *, dry_run, user=None):
                             "color": col,
                             "region_version": region_version,
                             "is_secondhand": cond.is_secondhand,
+                            "list_price": str(price_of[cap]),
                         }
                     )
                     continue
@@ -372,7 +443,7 @@ def _build_bundle(tenant, payload, *, dry_run, user=None):
                     condition=cond,
                     is_secondhand=cond.is_secondhand,
                     requires_serial=True,
-                    list_price=Decimal(str(list_price)),
+                    list_price=price_of[cap],
                     accessory_type=Product.AccessoryType.NONE,
                     warehouse_type=Product.WarehouseType.PRODUCT,
                 )
@@ -390,6 +461,7 @@ def _build_bundle(tenant, payload, *, dry_run, user=None):
                         "condition_id": p.condition_id,
                         "condition_name": cond.name,
                         "is_secondhand": p.is_secondhand,
+                        "list_price": str(price_of[cap]),
                     }
                 )
                 if main_first_product is None:

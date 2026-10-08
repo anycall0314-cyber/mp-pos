@@ -15,7 +15,15 @@ import {
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { MoneyInput } from "@/components/MoneyInput";
-import { intStr } from "@/lib/money";
+import { money } from "@/lib/money";
+import {
+  planKey,
+  priceOf,
+  pricesPayload,
+  tidyChips,
+  withPrice,
+  type CapacityPrices,
+} from "@/lib/phonePrices";
 import { hasRealReason } from "./DuplicatePanel";
 import { defaultConditionIds } from "@/lib/productDefaults";
 import { purchaseLinkFor } from "@/lib/purchasePrefill";
@@ -219,7 +227,8 @@ interface WizardState {
   accessory_category_id: number | null;
   parts_category_id: number | null;
   template_id: number | null;
-  list_price: string;
+  /** 每個容量的建議售價(打在格子裡的字) */
+  prices: CapacityPrices;
   condition_ids: number[];
   capacities: string[];
   colors: string[];
@@ -237,7 +246,7 @@ const INITIAL: WizardState = {
   accessory_category_id: null,
   parts_category_id: null,
   template_id: null,
-  list_price: "",
+  prices: {},
   condition_ids: [],
   capacities: [],
   colors: [],
@@ -254,6 +263,8 @@ export function NewPhoneModelWizardPage() {
   const [state, setState] = useState<WizardState>(INITIAL);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<PhoneModelBundleResult | null>(null);
+  // 預覽的是哪一批(lib/phonePrices 的 planKey);按「確認建立」時要還是這一批才建
+  const [previewedPlan, setPreviewedPlan] = useState<string | null>(null);
   // 預覽列出「可能已經建過」的 SKU 時,每一筆各自寫下差異才能建
   const [distinctReasons, setDistinctReasons] = useState<Record<string, string>>(
     {},
@@ -291,8 +302,8 @@ export function NewPhoneModelWizardPage() {
     ) {
       setState((s) => ({
         ...s,
-        capacities: template.data.default_capacities ?? [],
-        colors: template.data.default_colors ?? [],
+        capacities: tidyChips(template.data.default_capacities ?? []),
+        colors: tidyChips(template.data.default_colors ?? []),
         accessory_categories: template.data.default_accessory_categories ?? [],
         parts_items: (template.data.items ?? []).map((it) => ({
           name: it.name,
@@ -341,7 +352,8 @@ export function NewPhoneModelWizardPage() {
         state.accessory_category_id ?? state.main_category_id,
       parts_category_id: state.parts_category_id ?? state.main_category_id,
       template_id: state.template_id,
-      list_price: intStr(state.list_price),
+      list_price: "0",
+      list_prices: pricesPayload(state.capacities, state.prices),
       condition_ids: state.condition_ids,
       capacities: state.capacities,
       colors: state.colors,
@@ -361,8 +373,10 @@ export function NewPhoneModelWizardPage() {
     }
     setError(null);
     try {
-      const res = await create.mutateAsync(buildPayload(true));
+      const body = buildPayload(true);
+      const res = await create.mutateAsync(body);
       setPreview(res);
+      setPreviewedPlan(planKey(body));
       // 重新預覽後,只留下這次仍然被標出來的那幾筆的理由
       const flagged = new Set((res.possible_duplicates ?? []).map((d) => d.name));
       setDistinctReasons((s) =>
@@ -376,8 +390,16 @@ export function NewPhoneModelWizardPage() {
 
   async function commitCreate() {
     setError(null);
+    const body = buildPayload(false);
+    // 預覽之後內容被換掉了(例:範本的資料比較晚才回來):畫面上的清單與價錢已經不是要建的那一批,不建
+    if (previewedPlan !== planKey(body)) {
+      setPreview(null);
+      setStep(2);
+      setError("內容改過了,請重新預覽");
+      return;
+    }
     try {
-      const res = await create.mutateAsync(buildPayload(false));
+      const res = await create.mutateAsync(body);
       setCreated(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -525,7 +547,7 @@ export function NewPhoneModelWizardPage() {
               </div>
             </div>
 
-            <div className="form-row-2col" style={{ marginTop: 14 }}>
+            <div style={{ marginTop: 14 }}>
               <div className="form-field" style={{ marginBottom: 0 }}>
                 <label className="form-field-label">
                   主機類別<span className="required">*</span>
@@ -550,18 +572,6 @@ export function NewPhoneModelWizardPage() {
                       </option>
                     ))}
                 </select>
-              </div>
-              <div className="form-field" style={{ marginBottom: 0 }}>
-                <label className="form-field-label">建議售價(主機)</label>
-                <MoneyInput
-                  value={state.list_price}
-                  onChange={(v) => patch("list_price", v)}
-                  placeholder="39900"
-                  style={{ textAlign: "right" }}
-                />
-                <div className="form-field-hint">
-                  套用到這次建立的每一個品項,之後可以各別改
-                </div>
               </div>
             </div>
 
@@ -725,6 +735,28 @@ export function NewPhoneModelWizardPage() {
                 placeholder="輸入後按 Enter,例:128GB"
               />
             </div>
+
+            {state.capacities.length > 0 && (
+              <div className="form-field">
+                <label className="form-field-label">建議售價</label>
+                <div className="npm-prices">
+                  {state.capacities.map((cap) => (
+                    <label key={cap} className="npm-price">
+                      <span className="npm-price-cap">{cap}</span>
+                      <MoneyInput
+                        min={0}
+                        value={priceOf(state.prices, cap)}
+                        onChange={(v) =>
+                          patch("prices", withPrice(state.prices, cap, v))
+                        }
+                        placeholder="0"
+                        style={{ textAlign: "right" }}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="form-field">
               <label className="form-field-label">
@@ -1125,7 +1157,7 @@ function PreviewTable({
   items,
   kind,
 }: {
-  items: Array<{ name: string; is_secondhand?: boolean }>;
+  items: Array<{ name: string; is_secondhand?: boolean; list_price?: string }>;
   kind: "main" | "accessory" | "parts";
 }) {
   const titles = {
@@ -1167,6 +1199,15 @@ function PreviewTable({
             }}
           >
             <span style={{ flex: 1 }}>{it.name}</span>
+            {kind === "main" && it.list_price !== undefined && (
+              <span
+                className={
+                  Number(it.list_price) > 0 ? "npm-row-price" : "npm-row-price none"
+                }
+              >
+                {Number(it.list_price) > 0 ? money(it.list_price) : "未填售價"}
+              </span>
+            )}
             {it.is_secondhand && (
               <span
                 style={{

@@ -1951,7 +1951,10 @@ export interface PhoneModelBundlePayload {
   accessory_category_id: number | null;
   parts_category_id: number | null;
   template_id: number | null;
+  /** 整批共用的建議售價;`list_prices` 沒給的容量才用它(畫面現在都給 `list_prices`,這一格送 "0") */
   list_price: string;
+  /** 每個容量的建議售價 {容量: 整數元};只能指到 `capacities` 裡有的 */
+  list_prices?: Record<string, string>;
   condition_ids: number[];
   capacities: string[];
   colors: string[];
@@ -1994,6 +1997,8 @@ export interface PhoneModelBundleResult {
     capacity?: string;
     color?: string;
     region_version?: string;
+    /** 這一個品項的建議售價(整數元) */
+    list_price?: string;
   }>;
   parts: Array<{
     id?: number;

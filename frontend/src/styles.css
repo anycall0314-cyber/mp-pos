@@ -7464,3 +7464,31 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   .ct-bar select { flex: 1 1 7rem; min-width: 0; }
   .ct-bar .ct-search { flex: 1 1 100%; width: auto; }
 }
+
+/* ─── 新增手機型號:每個容量的建議售價 ─── */
+.npm-prices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+.npm-price {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.npm-price-cap {
+  min-width: 64px;
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+}
+.npm-price input {
+  width: 130px;
+}
+/* 預覽清單每一列右邊的價錢 */
+.npm-row-price {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.npm-row-price.none {
+  color: var(--warn-text);
+}
