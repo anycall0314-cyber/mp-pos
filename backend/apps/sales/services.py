@@ -16,6 +16,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.catalog.models import Category, Product
+from apps.core import staff_cost
 from apps.core.dates import add_months
 from apps.core.money import CENTS, ONE, money_text, round_money
 from apps.core.tenant_fields import same_company as _same_company
@@ -23,6 +24,7 @@ from apps.inventory.locking import lock_document, lock_stock_rows, locked_balanc
 from apps.inventory.identifiers import IdentifierError, create_serial, main_code, split_codes, taken
 from apps.inventory.models import ProductSerial, StockBalance, StockMovement
 from apps.parties.models import Customer, SimCard, TelecomPlan
+from apps.tenants.models import Tenant
 from apps.tenants.services import InvoiceTrackError, assign_invoice_no
 
 from .models import (
@@ -397,6 +399,15 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
         _validate_items(so, items)
         now = timezone.now()
         subtotal_raw = Decimal("0")
+        # 業務員成本要看的東西,**鎖到之後**重新讀:全公司的那一條、每個商品的平均成本與它自己的設定。
+        # 明細(連同商品)是進交易之前讀的;等鎖的這段時間,另一張進貨單可能已經把平均成本改掉並提交了 ——
+        # 拿等之前讀到的舊平均去算,會跟同一行的實際成本(鎖到之後才讀的)對不起來
+        company = Tenant.objects.only("staff_cost_mode", "staff_cost_value").get(pk=so.tenant_id)
+        costing = {
+            p.pk: p for p in Product.objects.filter(
+                tenant_id=so.tenant_id, pk__in={it.product_id for it in items}
+            ).only("weighted_avg_cost", "staff_cost_mode", "staff_cost_value", "is_virtual", "is_secondhand")
+        }
 
         for it in items:
             product = it.product
@@ -410,14 +421,13 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
             # - 虛擬:0
             # - 序號實體:sum 各 serial 的 purchase_unit_cost
             # - 配件(無序號實體):本倉 balance.weighted_avg_cost × qty
+            unit_costs = []
             if product.is_virtual:
                 it.cost_at_post = Decimal("0")
             elif product.requires_serial:
                 item_serials = list(it.serials.select_related("serial").all())
-                it.cost_at_post = sum(
-                    (sos.serial.purchase_unit_cost for sos in item_serials),
-                    Decimal("0"),
-                ).quantize(CENTS)
+                unit_costs = [sos.serial.purchase_unit_cost for sos in item_serials]
+                it.cost_at_post = sum(unit_costs, Decimal("0")).quantize(CENTS)
             else:
                 bal = StockBalance.objects.filter(
                     tenant=so.tenant,
@@ -426,10 +436,17 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
                 ).first()
                 unit_cost = bal.weighted_avg_cost if bal else Decimal("0")
                 it.cost_at_post = (Decimal(it.qty) * unit_cost).quantize(CENTS)
+            # 業務員成本(算獎金看的毛利用的):成交當下照公司 / 商品的規則算好記下來,
+            # 之後改規則、進價變了都不影響這張單。不動上面的實際成本。規則在 apps/core/staff_cost.py
+            it.staff_cost, it.staff_cost_rule = staff_cost.line_cost(
+                costing.get(product.pk, product), company,
+                qty=it.qty, actual_cost=it.cost_at_post, unit_costs=unit_costs,
+            )
             # 直接寫進資料庫,不走 save():save() 把金額 0 當成「沒填」會重算一次,
             # 四捨五入成 0 的金額(0.40)就又被改回去了
             SalesOrderItem.objects.filter(pk=it.pk).update(
-                amount=it.amount, cost_at_post=it.cost_at_post
+                amount=it.amount, cost_at_post=it.cost_at_post,
+                staff_cost=it.staff_cost, staff_cost_rule=it.staff_cost_rule,
             )
             subtotal_raw += it.amount
 
@@ -917,7 +934,8 @@ def commit_sales_return(sr: SalesReturn) -> SalesReturn:
             oi = it.original_item
             it.amount, it.untaxed_amount, it.tax_amount = oi.amount, oi.untaxed_amount, oi.tax_amount
             it.cost_at_post = oi.cost_at_post
-            it.save(update_fields=["amount", "untaxed_amount", "tax_amount", "cost_at_post"])
+            it.staff_cost = oi.staff_cost          # 業務員成本也照抄(原行沒有記的這裡也空著)
+            it.save(update_fields=["amount", "untaxed_amount", "tax_amount", "cost_at_post", "staff_cost"])
 
             # 序號狀態 → returned,warehouse 回到銷退倉
             for sos in it.serials.select_related("serial").all():

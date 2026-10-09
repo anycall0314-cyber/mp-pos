@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from apps.core import staff_cost
+from apps.core.manager_fields import ManagerOnlyFieldsMixin
 from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
 from rest_framework.exceptions import PermissionDenied
 
@@ -249,7 +251,11 @@ class CategorySerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, ser
             raise serializers.ValidationError({"detail": str(locked)}) from locked
 
 
-class ProductSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
+class ProductSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
+    # 業務員成本怎麼算是績效的基準:只有管理員拿得到設定、改得動;算出來的數字(staff_cost)大家都看得到
+    manager_only_fields = ("staff_cost_mode", "staff_cost_value")
+    # 一件的業務員成本(照現在的平均成本與規則算;沒有規則 = 平均成本)。成交時記在單上的以那一刻為準
+    staff_cost = serializers.SerializerMethodField()
     stock_qty = serializers.IntegerField(read_only=True)
     category_code = serializers.CharField(source="category.code", read_only=True)
     category_name = serializers.CharField(source="category.name", read_only=True)
@@ -294,6 +300,27 @@ class ProductSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, seri
         help_text="配件相容的機型 key 清單",
     )
 
+    def get_staff_cost(self, obj) -> str:
+        request = self.context.get("request")
+        tenant = getattr(request, "tenant", None) or obj.tenant
+        return str(staff_cost.shown_unit_cost(obj, tenant))
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if "staff_cost_mode" in attrs or "staff_cost_value" in attrs:
+            mode = attrs.get("staff_cost_mode", getattr(self.instance, "staff_cost_mode", ""))
+            if "staff_cost_mode" in attrs:
+                # 換算法的時候數字要一起送(畫面一定一起送);沒送不沿用原本的
+                value = attrs.get("staff_cost_value")
+            else:
+                value = attrs["staff_cost_value"]
+            problem = staff_cost.check(mode, value, staff_cost.PRODUCT_MODES)
+            if problem:
+                raise serializers.ValidationError({"detail": f"業務員成本{problem}"})
+            if not mode:
+                attrs["staff_cost_value"] = 0          # 照全公司:自己的數值不留
+        return attrs
+
     def get_photo_count(self, obj) -> int:
         # 清單查詢已經算好(photo_count_n);單筆(剛建好那一筆)才另外查
         n = getattr(obj, "photo_count_n", None)
@@ -325,6 +352,9 @@ class ProductSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, seri
             "category_code",
             "category_name",
             "weighted_avg_cost",
+            "staff_cost",
+            "staff_cost_mode",
+            "staff_cost_value",
             "list_price",
             "last_purchase_price",
             "requires_serial",

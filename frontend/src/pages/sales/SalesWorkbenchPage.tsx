@@ -51,6 +51,7 @@ import { PhotoName, usePhotoPeek } from "@/components/photos/PhotoName";
 import { toast } from "@/components/workbench/toast";
 import { addMonths } from "@/lib/dates";
 import { codesLabel, mainCode, normalizeCode } from "@/lib/deviceCodes";
+import { estimateStaffCost } from "@/lib/staffCost";
 import {
   intStr,
   lineTotal,
@@ -90,6 +91,8 @@ interface Unit {
   serial_no: string;
   /** 這一台自己的核定售價(逐台定價的商品才有) */
   price: string | null;
+  /** 這一台的業務員成本(中古機每一台不同;估業務員毛利用)。舊草稿裡的沒有這一欄 */
+  staffCost?: string | null;
 }
 
 interface Line {
@@ -216,6 +219,7 @@ function toUnit(s: {
   sn?: string;
   serial_no: string;
   custom_unit_price?: string | null;
+  staff_cost?: string;
 }): Unit {
   return {
     id: s.id,
@@ -226,6 +230,7 @@ function toUnit(s: {
       s.custom_unit_price != null && Number(s.custom_unit_price) > 0
         ? intStr(s.custom_unit_price)
         : null,
+    staffCost: s.staff_cost ?? null,
   };
 }
 function tailOf(u: Unit): string {
@@ -1107,15 +1112,20 @@ export function SalesWorkbenchPage() {
   // 試算跟伺服器存檔用同一套算法(整數元、四捨五入)
   const amounts = lines.map(amountOf);
   const [estSubtotal, estTax, estTotal] = splitTax(amounts, taxMethod);
-  // 預估毛利 = 計毛利那幾行的(未稅金額 − 平均成本 × 數量 + 佣金)
+  // 預估的業務員毛利 = 計毛利那幾行的(未稅金額 − 業務員成本 + 佣金)。
+  // 業務員成本是伺服器照公司 / 商品的設定算好的(沒有設定 = 平均成本,跟以前的估法一樣);
+  // 中古機用挑到的那幾台各自的數字。存檔時伺服器再算一次記在單上,以那一次為準
   const estMargin = (() => {
     const untaxed = splitUntaxedByLine(amounts, taxMethod);
     return lines.reduce((sum, l, i) => {
       const p = l.product;
       if (p.counts_margin === false) return sum;
-      const cost = p.is_virtual
-        ? 0
-        : (Number(p.weighted_avg_cost) || 0) * qtyOf(l);
+      const picked = (l.units ?? []).filter((u) => l.picked.includes(u.id));
+      const cost = estimateStaffCost(
+        p,
+        qtyOf(l),
+        picked.length === l.picked.length ? picked.map((u) => u.staffCost) : [],
+      );
       return sum + untaxed[i] - cost + roundInt(l.commission);
     }, 0);
   })();
@@ -2260,7 +2270,7 @@ export function SalesWorkbenchPage() {
           未稅 {money(estSubtotal)} · 稅 {money(estTax)}
         </span>
         <span className="ws-sub">
-          毛利 {marginHidden ? "•••" : money(estMargin)}{" "}
+          業務員毛利 {marginHidden ? "•••" : money(estMargin)}{" "}
           <button
             type="button"
             className="wb-link"

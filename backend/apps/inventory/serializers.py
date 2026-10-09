@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from apps.core import staff_cost
 from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
 
 from .identifiers import codes_of
@@ -58,6 +59,8 @@ class ProductSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelS
     acquired_via_sales_order_no = serializers.CharField(
         source="acquired_via_sales_order.no", read_only=True, default=""
     )
+    # 這一台的業務員成本(算獎金看的毛利用的):中古機拿這一台自己的成本當基準,一般商品跟商品上的那個數字一樣
+    staff_cost = serializers.SerializerMethodField()
     # 這一台的兩個碼(可能只有一個);serial_no 是主碼(有 IMEI 用 IMEI,沒有才用 SN)
     imei = serializers.SerializerMethodField()
     sn = serializers.SerializerMethodField()
@@ -67,6 +70,11 @@ class ProductSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelS
         if cached is None:
             cached = obj._codes_cache = codes_of(obj)
         return cached
+
+    def get_staff_cost(self, obj) -> str:
+        request = self.context.get("request")
+        tenant = getattr(request, "tenant", None) or obj.tenant
+        return str(staff_cost.shown_unit_cost(obj.product, tenant, own_cost=obj.purchase_unit_cost))
 
     def get_imei(self, obj):
         return self._codes(obj)["imei"]
@@ -90,6 +98,7 @@ class ProductSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelS
             "status",
             "status_label",
             "purchase_unit_cost",
+            "staff_cost",
             "condition_grade",
             "condition_grade_label",
             "custom_unit_price",

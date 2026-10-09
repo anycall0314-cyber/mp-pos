@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db import models, transaction
 
 from apps.core.models import TenantOwnedModel
+from apps.core.staff_cost import PRODUCT_MODES
 
 
 class Category(TenantOwnedModel):
@@ -135,6 +136,16 @@ class Product(TenantOwnedModel):
         decimal_places=2,
         default=0,
         help_text="當下加權平均成本;每次進貨過帳時重算",
+    )
+    # 業務員成本(算獎金看的毛利用的成本):這個商品自己的設定;空的 = 照全公司的那一條。
+    # 只是另外算的一個數字,不會寫回上面的實際成本。規則在 apps/core/staff_cost.py
+    staff_cost_mode = models.CharField(
+        "業務員成本算法", max_length=10, blank=True, default="", choices=PRODUCT_MODES,
+        help_text="空的 = 照全公司的設定",
+    )
+    staff_cost_value = models.DecimalField(
+        "業務員成本數值", max_digits=14, decimal_places=2, default=0,
+        help_text="固定金額 = 每一件幾元;加固定額 = 成本加幾元;加百分比 = 成本加幾 %",
     )
     list_price = models.DecimalField(
         "建議零售價",

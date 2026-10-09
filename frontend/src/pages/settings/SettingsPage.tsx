@@ -20,6 +20,14 @@ import { openLabelPrint } from "@/components/labels/openLabelPrint";
 import { Toolbar } from "@/components/Toolbar";
 import { apiErrorText } from "@/components/workbench/errors";
 import { toast } from "@/components/workbench/toast";
+import {
+  COMPANY_MODES,
+  canSetStaffCost,
+  ruleProblem,
+  rulePayload,
+  valueInput,
+  valueUnit,
+} from "@/lib/staffCost";
 
 const PM_KINDS: { value: PaymentMethodKind; label: string }[] = [
   { value: "cash", label: "現金" },
@@ -68,6 +76,36 @@ export function SettingsPage() {
     }
     try {
       await saveTenantSettings.mutateAsync({ contract_remind_months: n });
+      toast("已儲存", "ok");
+    } catch (e) {
+      toast(apiErrorText(e), "err");
+    }
+  }
+
+  // 業務員成本全公司的那一條(只有管理員的資料裡有;店員看不到這一段)
+  const canSetStaff = canSetStaffCost(tenantSettings.data);
+  const [staffMode, setStaffMode] = useState("");
+  const [staffValue, setStaffValue] = useState("");
+  const [staffTouched, setStaffTouched] = useState(false);
+  const savedStaffMode = tenantSettings.data?.staff_cost_mode ?? "";
+  const savedStaffValue = valueInput(savedStaffMode, tenantSettings.data?.staff_cost_value);
+  useEffect(() => {
+    // 人動過之後,伺服器的值不再蓋進來(打到一半不會被填回去)
+    if (tenantSettings.data && !staffTouched) {
+      setStaffMode(savedStaffMode);
+      setStaffValue(savedStaffValue);
+    }
+  }, [tenantSettings.data, staffTouched]);
+
+  async function saveStaffCost() {
+    const problem = ruleProblem(staffMode, staffValue);
+    if (problem) {
+      toast(`業務員成本:${problem}`, "err");
+      return;
+    }
+    try {
+      await saveTenantSettings.mutateAsync(rulePayload(staffMode, staffValue));
+      setStaffTouched(false);
       toast("已儲存", "ok");
     } catch (e) {
       toast(apiErrorText(e), "err");
@@ -189,6 +227,66 @@ export function SettingsPage() {
             {saveTenantSettings.isPending ? "儲存中…" : "儲存"}
           </button>
         </div>
+
+        {canSetStaff && (
+          <>
+            <h3>業務員成本</h3>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                marginBottom: 24,
+                flexWrap: "wrap",
+              }}
+            >
+              <label style={{ fontSize: 14 }}>全公司</label>
+              <select
+                value={staffMode}
+                aria-label="業務員成本全公司的算法"
+                onChange={(e) => {
+                  setStaffTouched(true);
+                  setStaffMode(e.target.value);
+                }}
+              >
+                {COMPANY_MODES.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              {staffMode && (
+                <>
+                  <input
+                    inputMode="decimal"
+                    value={staffValue}
+                    aria-label="業務員成本加多少"
+                    onChange={(e) => {
+                      setStaffTouched(true);
+                      setStaffValue(e.target.value);
+                    }}
+                    style={{ width: 120 }}
+                  />
+                  <span style={{ fontSize: 14, color: "var(--text-dim)" }}>
+                    {valueUnit(staffMode)}
+                  </span>
+                </>
+              )}
+              <button
+                type="button"
+                className="btn primary"
+                onClick={saveStaffCost}
+                disabled={
+                  saveTenantSettings.isPending ||
+                  (staffMode === savedStaffMode &&
+                    (staffMode === "" || staffValue.trim() === savedStaffValue))
+                }
+              >
+                {saveTenantSettings.isPending ? "儲存中…" : "儲存"}
+              </button>
+            </div>
+          </>
+        )}
 
         <h3>標籤</h3>
         <div style={{ marginBottom: 24 }}>

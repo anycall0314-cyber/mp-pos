@@ -838,6 +838,36 @@ class RollbackTests(_Base):
         state = contract_rules.contracts(self.a.tenant).get(msisdn="0911000001").state
         self.assertEqual(state, contract_rules.DECLINED)
 
+    def test_the_staff_cost_rules_and_what_was_recorded_come_back(self):
+        """業務員成本:全公司的那一條、商品自己的設定、成交時記在單上的數字,跟著備份回來。"""
+        from decimal import Decimal
+
+        from apps.sales.models import SalesOrderItem
+
+        t = self.a.tenant
+        Tenant.objects.filter(pk=t.pk).update(staff_cost_mode="percent", staff_cost_value=Decimal("20"))
+        Product.objects.filter(pk=self.a.case.pk).update(staff_cost_mode="plus", staff_cost_value=Decimal("35.50"))
+        self.a.purchase(case_qty=4)
+        sold = self.a.sell(case_qty=2)
+        line = lambda: SalesOrderItem.objects.filter(tenant=t, so__no=sold["no"]).values_list(
+            "cost_at_post", "staff_cost", "staff_cost_rule").get()
+        recorded = line()
+        self.assertEqual(recorded[1:], (Decimal("271.00"), "product:plus:35.50"))     # (100 + 35.5) × 2
+        saved = self.path(self.backup(self.a))
+
+        # 備份之後:規則都改掉、單上記的被清掉
+        Tenant.objects.filter(pk=t.pk).update(staff_cost_mode="", staff_cost_value=0)
+        Product.objects.filter(pk=self.a.case.pk).update(staff_cost_mode="fixed", staff_cost_value=1)
+        SalesOrderItem.objects.filter(tenant=t, so__no=sold["no"]).update(staff_cost=None, staff_cost_rule="")
+
+        job = self.rollback(self.a, saved)
+        self.assertEqual(job.status, RestoreJob.Status.DONE, job.error)
+        company = Tenant.objects.get(pk=t.pk)
+        self.assertEqual((company.staff_cost_mode, company.staff_cost_value), ("percent", Decimal("20")))
+        self.a.reload()
+        self.assertEqual((self.a.case.staff_cost_mode, self.a.case.staff_cost_value), ("plus", Decimal("35.50")))
+        self.assertEqual(line(), recorded)
+
     def test_numbers_only_move_forward(self):
         self.change_things_after_backup()
         job = self.rollback(self.a, self.saved)

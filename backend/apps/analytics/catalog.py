@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 from django.db.models import Count, F, Q, Sum
+from django.db.models.functions import Coalesce
 
 CENT = Decimal("0.01")
 
@@ -294,6 +295,10 @@ BASES = [
          lambda: Sum(F("untaxed_amount") + F("tax_amount"), filter=COUNTED)),
     Base("sales_qty", "銷量", "sales", lambda: Sum("qty", filter=COUNTED), "int"),
     Base("sales_cost", "銷貨成本", "sales", lambda: Sum("cost_at_post", filter=COUNTED), group="毛利"),
+    # 業務員成本(owner 2026-10-09;算獎金看的毛利用的):成交當下記在明細上的數字,不是現在的規則。
+    # 沒有記的舊單 = 實際成本(owner:沒設定就用實際成本算),所以沒設定規則時 業務員毛利 = 毛利
+    Base("sales_staff_cost", "業務員成本", "sales",
+         lambda: Sum(Coalesce("staff_cost", "cost_at_post"), filter=COUNTED), group="毛利"),
     Base("sales_orders", "銷貨單數", "sales",
          lambda: Count("so_id", distinct=True, filter=COUNTED), "int"),
     Base("non_margin_amount", "不計毛利金額(收購等)", "sales",
@@ -307,6 +312,8 @@ BASES = [
     Base("return_untaxed", "銷退額(未稅)", "returns", lambda: Sum("untaxed_amount", filter=COUNTED)),
     Base("return_qty", "銷退量", "returns", lambda: Sum("qty", filter=COUNTED), "int"),
     Base("return_cost", "沖回成本", "returns", lambda: Sum("cost_at_post", filter=COUNTED)),
+    Base("return_staff_cost", "沖回業務員成本", "returns",
+         lambda: Sum(Coalesce("staff_cost", "cost_at_post"), filter=COUNTED)),
     Base("return_orders", "銷退單數", "returns",
          lambda: Count("sr_id", distinct=True, filter=COUNTED), "int"),
 
@@ -355,6 +362,13 @@ DERIVED = [
                 (v["sales_untaxed"] - v["sales_cost"]) - (v["return_untaxed"] - v["return_cost"]),
                 v["sales_untaxed"] - v["return_untaxed"],
             ), "pct", group="毛利"),
+    # 業務員毛利 = 未稅金額 − 業務員成本(跟上面的毛利同一批明細,只是成本換成加權過的那一個)
+    Derived("staff_profit", "業務員毛利(未扣銷退)", ("sales_untaxed", "sales_staff_cost"),
+            lambda v: v["sales_untaxed"] - v["sales_staff_cost"], group="毛利"),
+    Derived("staff_gross_profit", "業務員毛利(扣銷退)",
+            ("sales_untaxed", "sales_staff_cost", "return_untaxed", "return_staff_cost"),
+            lambda v: (v["sales_untaxed"] - v["sales_staff_cost"])
+            - (v["return_untaxed"] - v["return_staff_cost"]), group="毛利"),
     Derived("avg_ticket", "客單價", ("sales_gross", "sales_orders"),
             lambda v: _ratio(v["sales_gross"], v["sales_orders"])),
     Derived("net_received", "實收", ("received", "refunded"),

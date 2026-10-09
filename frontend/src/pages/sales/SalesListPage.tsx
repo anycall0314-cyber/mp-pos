@@ -19,6 +19,7 @@ import { toast } from "@/components/workbench/toast";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { hasCompanyCommission, showCompanyCommission } from "@/lib/commission";
 import { money } from "@/lib/money";
+import { orderActualMargin, orderStaffMargin } from "@/lib/staffCost";
 
 import { SALES_DRAFT_KEY, SALES_MARGIN_KEY } from "./SalesWorkbenchPage";
 
@@ -49,18 +50,16 @@ function draftLineCount(): number {
   }
 }
 
-/** 這張單的毛利:計毛利那幾行的(未稅金額 − 存檔當下的成本 + 佣金),全部用存下來的數字 */
-function marginOf(t: SalesOrder): number {
-  return t.items.reduce(
-    (sum, it) =>
-      it.product_counts_margin === false
-        ? sum
-        : sum +
-          Number(it.untaxed_amount || 0) -
-          Number(it.cost_at_post || 0) +
-          Number(it.commission || 0),
-    0,
-  );
+/**
+ * 這張單的毛利那一段字,全部用存下來的數字(規則在 lib/staffCost.ts):
+ * 業務員毛利 = 計毛利那幾行的(未稅金額 − 業務員成本 + 業務員佣金),大家都看得到;
+ * 實際毛利 = 未稅金額 − 實際成本 + 公司佣金,只有管理員的資料算得出來(有門號還沒設定公司佣金 → 未設定)。
+ */
+function marginText(t: SalesOrder): string {
+  const staff = ` · 業務員毛利 ${money(orderStaffMargin(t.items))}`;
+  if (!t.items.some(hasCompanyCommission)) return staff;
+  const actual = orderActualMargin(t.items);
+  return `${staff} · 實際毛利 ${actual === null ? "未設定" : money(actual)}`;
 }
 
 export function SalesListPage() {
@@ -278,7 +277,7 @@ export function SalesListPage() {
             : ""}
           {t.buyer_tax_id ? ` · 統編 ${t.buyer_tax_id}` : ""}
           {" · "}小計 {money(t.subtotal)} · 稅 {money(t.tax_amount)}
-          {!marginHidden && ` · 毛利 ${money(marginOf(t))}`}
+          {!marginHidden && marginText(t)}
           {t.note ? ` · ${t.note}` : ""}
         </div>
         <table className="wb-detail-lines">

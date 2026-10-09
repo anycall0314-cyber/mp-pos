@@ -196,6 +196,21 @@ class SalesOrderItem(TenantOwnedModel):
         editable=False,
         help_text="過帳時鎖定為 Product.weighted_avg_cost,供毛利報表用",
     )
+    # 業務員成本:成交當下照公司 / 商品的規則算好記下來(整行,不是一件),之後改規則不影響這張單。
+    # 業務員毛利 = 未稅金額 − 這個數字。空的 = 2026-10-09 之前開的單,沒有記 → 當成實際成本(cost_at_post)。
+    staff_cost = models.DecimalField(
+        "業務員成本", max_digits=14, decimal_places=2, null=True, blank=True, editable=False,
+        help_text="成交當下算好的(整行);空的 = 當時還沒有這個數字,看的時候用實際成本",
+    )
+    staff_cost_rule = models.CharField(
+        "業務員成本當時的規則", max_length=40, blank=True, default="", editable=False,
+        help_text="例 company:percent:20.00;空的 = 當時沒有規則,用的是實際成本",
+    )
+
+    @property
+    def staff_cost_or_actual(self):
+        """看的時候用這個:沒有記業務員成本的舊單 = 實際成本(owner:沒設定就用實際成本算)。"""
+        return self.cost_at_post if self.staff_cost is None else self.staff_cost
     # 過帳當下把未稅 / 稅額存死,報表不再回推單頭稅別。整單加總 = 單頭 subtotal / tax_amount。
     untaxed_amount = models.DecimalField(
         "未稅金額", max_digits=14, decimal_places=2, default=0, editable=False
@@ -561,6 +576,14 @@ class SalesReturnItem(TenantOwnedModel):
     cost_at_post = models.DecimalField(
         "沖回成本", max_digits=14, decimal_places=2, default=0, editable=False
     )
+    # 照抄原銷貨明細的業務員成本(跟成本一樣整張對沖);原行是空的這裡也是空的
+    staff_cost = models.DecimalField(
+        "沖回業務員成本", max_digits=14, decimal_places=2, null=True, blank=True, editable=False
+    )
+
+    @property
+    def staff_cost_or_actual(self):
+        return self.cost_at_post if self.staff_cost is None else self.staff_cost
 
     class Meta:
         ordering = ["sr", "line_no", "id"]

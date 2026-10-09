@@ -251,6 +251,8 @@ export interface SalesProductHit extends Product {
     imei: string;
     sn: string;
     custom_unit_price?: string | null;
+    /** 這一台的業務員成本(中古機每一台不同) */
+    staff_cost?: string;
     /** 輸入的字跟這一台登記的碼完全相同(刷條碼刷到的就是這一台) */
     exact: boolean;
   };
@@ -345,6 +347,7 @@ export async function searchProductsForSales(
             imei: matched.imei,
             sn: matched.sn,
             custom_unit_price: matched.custom_unit_price,
+            staff_cost: matched.staff_cost,
             exact: !!exactHit,
           },
         }

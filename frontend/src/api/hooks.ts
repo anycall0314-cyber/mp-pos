@@ -1700,6 +1700,9 @@ export interface TenantSettings {
   repair_warranty_days: number;
   /** 門號合約到期前幾個月開始出現在待聯絡名單 */
   contract_remind_months: number;
+  /** 業務員成本全公司的那一條:只有管理員的資料裡有。"" = 尚未設定 */
+  staff_cost_mode?: string;
+  staff_cost_value?: string;
 }
 
 export const useTenantSettings = () =>
@@ -1722,6 +1725,8 @@ export function useSaveTenantSettings() {
       // 「到期前幾個月提醒」改了:合約到期的名單與今日總覽的筆數要跟著重抓
       qc.invalidateQueries({ queryKey: ["telecom-contracts"] });
       qc.invalidateQueries({ queryKey: ["home-summary"] });
+      // 業務員成本全公司的那一條改了:商品上算出來的數字要跟著重抓
+      qc.invalidateQueries({ queryKey: ["products"] });
     },
   });
 }

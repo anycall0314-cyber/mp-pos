@@ -1,8 +1,12 @@
+from decimal import Decimal, InvalidOperation
+
 from django.db import transaction
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+
+from apps.core import staff_cost
 
 from .models import InvoiceTrack, InvoiceType, PaymentMethod
 from .serializers import (
@@ -102,6 +106,14 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
 def tenant_settings(request):
     """GET 回租戶層級設定;PATCH 更新(限 tenant_admin / platform_admin)。"""
     tenant = request.tenant
+    profile = getattr(request.user, "profile", None)
+    role = profile.role if profile else None
+    is_manager = role in ("platform_admin", "tenant_admin")
+    # 業務員成本全公司的那一條(績效的基準):只有管理員拿得到、改得動
+    staff_rule = {
+        "staff_cost_mode": tenant.staff_cost_mode,
+        "staff_cost_value": str(tenant.staff_cost_value),
+    }
     if request.method == "GET":
         return Response(
             {
@@ -110,11 +122,10 @@ def tenant_settings(request):
                 "code": tenant.code,
                 "repair_warranty_days": tenant.repair_warranty_days,
                 "contract_remind_months": tenant.contract_remind_months,
+                **(staff_rule if is_manager else {}),
             }
         )
-    profile = getattr(request.user, "profile", None)
-    role = profile.role if profile else None
-    if role not in ("platform_admin", "tenant_admin"):
+    if not is_manager:
         return Response({"detail": "權限不足"}, status=status.HTTP_403_FORBIDDEN)
     days = request.data.get("repair_warranty_days")
     if days is not None:
@@ -144,6 +155,28 @@ def tenant_settings(request):
                 {"detail": "提醒的月數需在 1 ~ 24 之間"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+    mode = request.data.get("staff_cost_mode")
+    value = request.data.get("staff_cost_value")
+    if mode is not None or value is not None:
+        changing_mode = mode is not None
+        mode = tenant.staff_cost_mode if mode is None else mode
+        try:
+            if value is not None:
+                value = Decimal(str(value))
+                if not value.is_finite():
+                    raise InvalidOperation
+                value = staff_cost.cents(value)          # 先收到分(四捨五入),再看放不放得下
+            elif not changing_mode:
+                value = tenant.staff_cost_value
+            # 換算法而沒有送數字:value 留著 None,下面會講「請填數字」(不沿用原本的)
+        except (InvalidOperation, ValueError, TypeError):
+            return Response({"detail": "業務員成本的數字不對"}, status=status.HTTP_400_BAD_REQUEST)
+        problem = staff_cost.check(mode, value, staff_cost.COMPANY_MODES)
+        if problem is None and value is not None and value >= Decimal("1000000000000"):
+            problem = "數字太大"
+        if problem:
+            return Response({"detail": f"業務員成本{problem}"}, status=status.HTTP_400_BAD_REQUEST)
+        value = Decimal("0") if not mode else value            # 尚未設定:數值不留
     # 全部檢查過才存:其中一個不對就整筆不動(不會回了錯誤、另一個欄位卻已經改掉)
     changed = []
     if days is not None:
@@ -152,6 +185,9 @@ def tenant_settings(request):
     if months is not None:
         tenant.contract_remind_months = months
         changed.append("contract_remind_months")
+    if mode is not None:
+        tenant.staff_cost_mode, tenant.staff_cost_value = mode, value
+        changed += ["staff_cost_mode", "staff_cost_value"]
     if changed:
         tenant.save(update_fields=changed)
     return Response(
@@ -159,5 +195,7 @@ def tenant_settings(request):
             "id": tenant.id,
             "repair_warranty_days": tenant.repair_warranty_days,
             "contract_remind_months": tenant.contract_remind_months,
+            "staff_cost_mode": tenant.staff_cost_mode,
+            "staff_cost_value": str(tenant.staff_cost_value),
         }
     )

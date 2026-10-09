@@ -39,6 +39,9 @@ import { useModalDraft } from "@/hooks/useModalDraft";
 import { MoneyInput } from "@/components/MoneyInput";
 import { toast } from "@/components/workbench/toast";
 import { rememberNote, rememberTone } from "@/lib/findFirst";
+import { isManager } from "@/lib/roles";
+import { PRODUCT_MODES, ruleProblem, rulePayload, valueInput, valueUnit } from "@/lib/staffCost";
+import { useCurrentUser } from "@/auth/AuthContext";
 import {
   defaultRequiresSerial,
   phoneNeedsWizard as needsWizard,
@@ -132,6 +135,9 @@ interface FormState {
   external_sale_price: string;
   min_sale_price: string;
   is_active: boolean;
+  /** 業務員成本怎麼算(只有管理員的表單有這一段、才會送出去)。"" = 照全公司 */
+  staff_cost_mode: string;
+  staff_cost_value: string;
   /**
    * 這次加的照片(哪一份照片作業、順序、說明、主圖)。不是商品的欄位,不會送出去;
    * 放在這裡是為了跟欄位**存在同一份草稿裡**:「存成草稿先離開」再回來,欄位與照片一起接回來。
@@ -176,6 +182,8 @@ const EMPTY: FormState = {
   external_sale_price: "0",
   min_sale_price: "0",
   is_active: true,
+  staff_cost_mode: "",
+  staff_cost_value: "",
   photo_draft: null,
   serial_touched: false,
   serial_before_pin: null,
@@ -214,6 +222,8 @@ function toState(p: Product | null | undefined): FormState {
     external_sale_price: p.external_sale_price ?? "0",
     min_sale_price: p.min_sale_price ?? "0",
     is_active: p.is_active,
+    staff_cost_mode: p.staff_cost_mode ?? "",
+    staff_cost_value: valueInput(p.staff_cost_mode, p.staff_cost_value),
     photo_draft: null,
     serial_touched: false,
     serial_before_pin: null,
@@ -279,6 +289,8 @@ export function ProductForm({
   const baselineRef = useRef<FormState>(toState(initial));
 
   const isEdit = !!initial?.id;
+  // 業務員成本怎麼算是績效的基準:只有管理員的表單有這一段(伺服器也只收管理員送的)
+  const canSetStaff = isManager(useCurrentUser()?.profile?.role);
   // 編輯既有商品:用過的話「需追蹤序號 / 中古機 / 虛擬商品」不能改(作廢、退貨時庫存是照這幾個屬性加減回去的)。
   // 表單一打開就鎖起來、講原因,不是等按儲存才被退回;伺服器存檔時會再擋一次(以它為準)。
   // 還沒問到 / 沒問成功就先不鎖 —— 那時候照樣由伺服器擋
@@ -556,6 +568,11 @@ export function ProductForm({
       setFieldErrors({ name: ["請填品名"] });
       return;
     }
+    const staffProblem = canSetStaff ? ruleProblem(state.staff_cost_mode, state.staff_cost_value) : null;
+    if (staffProblem) {
+      setFieldErrors({ staff_cost_value: [staffProblem] });
+      return;
+    }
     if (saving.current) return;
     saving.current = true;
     rememberFocus();
@@ -594,6 +611,8 @@ export function ProductForm({
         external_sale_price: state.external_sale_price || "0",
         min_sale_price: state.min_sale_price || "0",
         is_active: state.is_active,
+        // 業務員成本怎麼算:只有管理員送(店員送了伺服器也不收)
+        ...(canSetStaff ? rulePayload(state.staff_cost_mode, state.staff_cost_value) : {}),
         ...(dup && distinctReason.trim()
           ? { distinct_reason: distinctReason.trim() }
           : {}),
@@ -1362,6 +1381,35 @@ export function ProductForm({
             </Field>
           )}
         </div>
+
+        {canSetStaff && !state.is_virtual && (
+          <div className="field-row">
+            <Field label="業務員成本">
+              <select
+                value={state.staff_cost_mode}
+                onChange={(e) => patch("staff_cost_mode", e.target.value)}
+              >
+                {PRODUCT_MODES.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {state.staff_cost_mode && (
+              <Field
+                label={`數值(${valueUnit(state.staff_cost_mode)})`}
+                error={fieldErrors.staff_cost_value}
+              >
+                <input
+                  inputMode="decimal"
+                  value={state.staff_cost_value}
+                  onChange={(e) => patch("staff_cost_value", e.target.value)}
+                />
+              </Field>
+            )}
+          </div>
+        )}
 
         <PhotoSection
           photos={photos}

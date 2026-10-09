@@ -94,6 +94,10 @@ class SalesOrderItemSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFields
     product_warehouse_type = serializers.CharField(
         source="product.warehouse_type", read_only=True
     )
+    # 業務員成本(整行):成交當下記的;沒有記的舊單 = 實際成本。業務員毛利 = 未稅金額 − 這個數字
+    staff_cost = serializers.DecimalField(
+        source="staff_cost_or_actual", max_digits=14, decimal_places=2, read_only=True
+    )
     # read:序號物件列表;write:接 serial_ids 陣列
     serials = SalesOrderItemSerialSerializer(many=True, read_only=True)
     serial_ids = serializers.PrimaryKeyRelatedField(
@@ -138,6 +142,8 @@ class SalesOrderItemSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFields
             "serials",
             "serial_ids",
             "cost_at_post",
+            "staff_cost",
+            "staff_cost_rule",
             "untaxed_amount",
             "tax_amount",
             "sim_card",
@@ -161,6 +167,8 @@ class SalesOrderItemSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFields
             "contract_end",
             "company_commission",
             "cost_at_post",
+            "staff_cost",
+            "staff_cost_rule",
             "untaxed_amount",
             "tax_amount",
             "product_sku",
@@ -364,6 +372,10 @@ class SalesReturnItemSerializer(TenantScopedRelatedFieldsMixin, serializers.Mode
     product_is_virtual = serializers.BooleanField(
         source="product.is_virtual", read_only=True
     )
+    # 沖回的業務員成本:照抄原行;原行沒有記的 = 實際成本
+    staff_cost = serializers.DecimalField(
+        source="staff_cost_or_actual", max_digits=14, decimal_places=2, read_only=True
+    )
     serials = SalesReturnItemSerialSerializer(many=True, read_only=True)
     serial_ids = serializers.PrimaryKeyRelatedField(
         many=True,
@@ -389,6 +401,7 @@ class SalesReturnItemSerializer(TenantScopedRelatedFieldsMixin, serializers.Mode
             "untaxed_amount",
             "tax_amount",
             "cost_at_post",
+            "staff_cost",
             "serials",
             "serial_ids",
         ]
@@ -400,6 +413,7 @@ class SalesReturnItemSerializer(TenantScopedRelatedFieldsMixin, serializers.Mode
             "untaxed_amount",
             "tax_amount",
             "cost_at_post",
+            "staff_cost",
             "product",
             "product_sku",
             "product_name",

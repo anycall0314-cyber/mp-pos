@@ -14,6 +14,9 @@ import { useModalDraft } from "@/hooks/useModalDraft";
 import { MoneyInput } from "@/components/MoneyInput";
 import { bulkFailureLines } from "@/lib/bulkErrors";
 import { intStr } from "@/lib/money";
+import { isManager } from "@/lib/roles";
+import { PRODUCT_MODES, ruleProblem, rulePayload, valueUnit } from "@/lib/staffCost";
+import { useCurrentUser } from "@/auth/AuthContext";
 
 const DRAFT_KEY = "modal-draft:bulk-edit-products";
 
@@ -54,6 +57,11 @@ export function BulkEditProductsModal({
   const [enAttrs, setEnAttrs] = useState(false);
   const [enHost, setEnHost] = useState(false);
   const [enCompat, setEnCompat] = useState(false);
+  // 業務員成本怎麼算:只有管理員有這一段(伺服器也只收管理員送的)
+  const canSetStaff = isManager(useCurrentUser()?.profile?.role);
+  const [enStaff, setEnStaff] = useState(false);
+  const [staffMode, setStaffMode] = useState("");
+  const [staffValue, setStaffValue] = useState("");
 
   // 各區塊值
   const [listPrice, setListPrice] = useState("");
@@ -86,6 +94,9 @@ export function BulkEditProductsModal({
     setEnAttrs(false);
     setEnHost(false);
     setEnCompat(false);
+    setEnStaff(false);
+    setStaffMode("");
+    setStaffValue("");
     setListPrice("");
     setSafetyStock("");
     setAccessoryType("none");
@@ -110,12 +121,14 @@ export function BulkEditProductsModal({
       requiresSerial, allowsTelecomLine, allowsCommission, countsCash, countsMargin,
       brand, series, generation, modelSuffix,
       compat: Array.from(compat.entries()),
+      enStaff, staffMode, staffValue,
     }),
     [
       enPrice, enKind, enLifecycle, enAttrs, enHost, enCompat,
       listPrice, safetyStock, accessoryType, lifecycleStatus,
       requiresSerial, allowsTelecomLine, allowsCommission, countsCash, countsMargin,
       brand, series, generation, modelSuffix, compat,
+      enStaff, staffMode, staffValue,
     ],
   );
   const draftHelper = useModalDraft({
@@ -124,7 +137,7 @@ export function BulkEditProductsModal({
     state: draftState,
     isEditMode: false,
     isEmpty: (s) =>
-      !s.enPrice && !s.enKind && !s.enLifecycle && !s.enAttrs && !s.enHost && !s.enCompat,
+      !s.enPrice && !s.enKind && !s.enLifecycle && !s.enAttrs && !s.enHost && !s.enCompat && !s.enStaff,
   });
   function loadDraftToState() {
     const d = draftHelper.draft;
@@ -150,6 +163,10 @@ export function BulkEditProductsModal({
     setGeneration(s.generation);
     setModelSuffix(s.modelSuffix);
     setCompat(new Map(s.compat));
+    // 這一段是後來才加的:以前存的草稿沒有這三格
+    setEnStaff(s.enStaff ?? false);
+    setStaffMode(s.staffMode ?? "");
+    setStaffValue(s.staffValue ?? "");
     draftHelper.consumeDraft();
   }
 
@@ -179,6 +196,14 @@ export function BulkEditProductsModal({
     }
     if (enCompat) {
       patch.related_host_keys = Array.from(compat.keys());
+    }
+    if (enStaff && canSetStaff) {
+      const problem = ruleProblem(staffMode, staffValue);
+      if (problem) {
+        setError(`業務員成本:${problem}`);
+        return;
+      }
+      Object.assign(patch, rulePayload(staffMode, staffValue));
     }
     if (Object.keys(patch).length === 0) {
       setError("沒有勾選任何要修改的欄位");
@@ -264,6 +289,44 @@ export function BulkEditProductsModal({
               </div>
             )}
           </section>
+
+          {/* 業務員成本怎麼算(管理員才有) */}
+          {canSetStaff && (
+            <section className={"be-section" + (enStaff ? " on" : "")}>
+              <label className="be-section-head">
+                <input
+                  type="checkbox"
+                  checked={enStaff}
+                  onChange={(e) => setEnStaff(e.target.checked)}
+                />
+                <b>修改 業務員成本</b>
+              </label>
+              {enStaff && (
+                <div className="be-section-body">
+                  <label>
+                    算法
+                    <select value={staffMode} onChange={(e) => setStaffMode(e.target.value)}>
+                      {PRODUCT_MODES.map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {staffMode && (
+                    <label>
+                      數值({valueUnit(staffMode)})
+                      <input
+                        inputMode="decimal"
+                        value={staffValue}
+                        onChange={(e) => setStaffValue(e.target.value)}
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
 
           {/* 區塊 2: 商品性質 */}
           <section className={"be-section" + (enKind ? " on" : "")}>

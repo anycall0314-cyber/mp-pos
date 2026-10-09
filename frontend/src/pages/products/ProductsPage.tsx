@@ -17,6 +17,7 @@ import { useReorder } from "@/hooks/useReorder";
 import { toast } from "@/components/workbench/toast";
 import { money } from "@/lib/money";
 import { purchaseLinkFor } from "@/lib/purchasePrefill";
+import { canSetStaffCost, ruleText } from "@/lib/staffCost";
 
 import { BulkAddProductsModal } from "./BulkAddProductsModal";
 import { BulkCreatePartsModal } from "./BulkCreatePartsModal";
@@ -732,6 +733,24 @@ export function ProductsPage() {
                     <dd>{formatMoney(selectedProduct.list_price)}</dd>
                     <dt>加權平均成本</dt>
                     <dd>{formatMoney(selectedProduct.weighted_avg_cost)}</dd>
+                    {!selectedProduct.is_virtual && (
+                      <>
+                        <dt>業務員成本</dt>
+                        <dd>
+                          {formatMoney(
+                            selectedProduct.staff_cost ?? selectedProduct.weighted_avg_cost,
+                          )}
+                          {/* 怎麼算只有管理員的資料裡有 */}
+                          {canSetStaffCost(selectedProduct) &&
+                            `(${
+                              ruleText(
+                                selectedProduct.staff_cost_mode,
+                                selectedProduct.staff_cost_value,
+                              ) || "照全公司"
+                            })`}
+                        </dd>
+                      </>
+                    )}
                     <dt>屬性</dt>
                     <dd>{flagText(selectedProduct)}</dd>
                     <dt>狀態</dt>

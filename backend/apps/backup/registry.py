@@ -132,7 +132,10 @@ TENANT_HIGH_WATER = [
     "next_expense_seq", "next_cash_adj_seq", "next_phone_bill_seq", "next_repair_seq",
 ]
 # 公司那一列要帶走的設定欄位(流水號另外用 TENANT_HIGH_WATER)
-TENANT_SETTINGS = ["name", "repair_warranty_days", "contract_remind_months"]
+TENANT_SETTINGS = [
+    "name", "repair_warranty_days", "contract_remind_months",
+    "staff_cost_mode", "staff_cost_value",          # 業務員成本全公司的那一條
+]
 
 # 單號靠「最後一張單 + 1」取號的單據:{表: 字首}。還原前把已用過的最大號記進
 # DocNumberFloor。

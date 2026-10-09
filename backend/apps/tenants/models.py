@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db import models, transaction
 
 from apps.core.models import TenantOwnedModel, TimestampedModel
+from apps.core.staff_cost import COMPANY_MODES
 
 
 class Tenant(TimestampedModel):
@@ -50,6 +51,15 @@ class Tenant(TimestampedModel):
         "門號合約到期前幾個月提醒",
         default=3,
         help_text="門號合約到期前幾個月開始出現在「合約到期」的待聯絡名單",
+    )
+    # 業務員成本(算獎金看的毛利用的成本)全公司的那一條;商品自己有設的用商品的。規則在 apps/core/staff_cost.py
+    staff_cost_mode = models.CharField(
+        "業務員成本算法", max_length=10, blank=True, default="", choices=COMPANY_MODES,
+        help_text="空的 = 尚未設定(業務員成本 = 實際成本)",
+    )
+    staff_cost_value = models.DecimalField(
+        "業務員成本加多少", max_digits=14, decimal_places=2, default=0,
+        help_text="加固定額 = 每一件加幾元;加百分比 = 加幾 %",
     )
 
     class Meta:
