@@ -548,8 +548,9 @@ class ProductViewSet(viewsets.ModelViewSet):
         # 可選 search 過濾
         q = request.query_params.get("search", "").strip()
         if q:
+            # `series` 是關聯欄位(migration 0016 之後):要比的是系列的名稱,直接對它做文字比對會出錯
             qs = qs.filter(
-                Q(name__icontains=q) | Q(series__icontains=q)
+                Q(name__icontains=q) | Q(series__name__icontains=q)
             )
 
         # group by model_key — 優先用 Product.brand FK 的 code;沒設就退回從品名推斷

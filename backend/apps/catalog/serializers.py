@@ -9,6 +9,7 @@ from .models import (
     Condition,
     PartTemplate,
     PartTemplateItem,
+    PhoneModel,
     PhoneSeries,
     Product,
     ProductRelation,
@@ -420,7 +421,11 @@ class ProductSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, seri
             host = r.host_product
             seen[key] = {
                 "model_key": key,
-                "model_name": host.phone_model_name if host else key,
+                # 沒有代表商品的關係(掛在機型主檔上):用主檔的名稱,不要顯示成小寫的 key
+                "model_name": (
+                    host.phone_model_name if host
+                    else r.host_model.name if r.host_model_id else key
+                ),
                 "sample_sku_id": host.id if host else None,
                 "sample_sku_name": host.name if host else "",
                 "lifecycle_status": host.lifecycle_status if host else "",
@@ -520,35 +525,46 @@ class ProductSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, seri
         return instance
 
     def _sync_host_relations_by_keys(self, accessory, host_keys):
-        """同步配件 → 機型關聯(以 model_key 為單位,涵蓋該款所有 SKU 變體)。"""
+        """同步配件 → 機型關聯(以 model_key 為單位,涵蓋該款所有 SKU 變體)。
+
+        **先確認每一個新的機型都對得到東西,才動資料。** 對得到 = 有啟用中的主機商品(拿它當代表),
+        或機型主檔裡有(關係直接掛在主檔上,不需要代表商品)。有對不到的就整筆退回、講是哪幾個 ——
+        以前是先刪掉不在清單裡的舊關係、再把對不到的默默跳過、照樣回成功:批次「覆寫」會刪了舊的、新的又沒建。
+        """
         tenant = accessory.tenant
         target_keys = {k.strip().lower() for k in host_keys if k and k.strip()}
         existing = {r.host_model_key: r for r in accessory.host_relations.all()}
+        new_keys = target_keys - set(existing)
+        if accessory.accessory_type == Product.AccessoryType.NONE and accessory.is_active:
+            # 這個商品自己就是主機:不跟自己的機型建關係(照舊不建、也不算錯)
+            new_keys.discard(accessory.phone_model_key)
+        hosts, models = {}, {}
+        if new_keys:
+            # 代表 SKU:任一個啟用中的主機商品(只用來在畫面上舉例)
+            for p in Product.objects.for_tenant(tenant).filter(
+                accessory_type=Product.AccessoryType.NONE, is_active=True,
+            ).exclude(pk=accessory.pk).select_related("phone_model", "series").order_by("pk"):
+                key = p.phone_model_key
+                if key in new_keys and key not in hosts:
+                    hosts[key] = p
+            for m in PhoneModel.objects.for_tenant(tenant).filter(match_key__in=new_keys - set(hosts)):
+                models[m.match_key] = m
+            unknown = sorted(new_keys - set(hosts) - set(models))
+            if unknown:
+                names = "、".join(unknown[:5]) + (f" 等 {len(unknown)} 個" if len(unknown) > 5 else "")
+                # 放在 detail:畫面的錯誤訊息只認這一格
+                raise serializers.ValidationError({
+                    "detail": f"找不到這幾個機型:{names}。相容機型請從清單選;清單裡沒有的,要先有那個機型(新增手機型號)才能綁。"
+                })
         for key, rel in existing.items():
             if key not in target_keys:
                 rel.delete()
-        if not target_keys - set(existing):
-            return
-        # 為了 host_product FK,撈一遍主機清單找代表 SKU
-        candidate_hosts = list(
-            Product.objects.for_tenant(tenant).filter(
-                accessory_type=Product.AccessoryType.NONE,
-                is_active=True,
-            ).select_related("phone_model", "series")
-        )
-        for key in target_keys:
-            if key in existing:
-                continue
-            sample = next(
-                (p for p in candidate_hosts if p.phone_model_key == key),
-                None,
-            )
-            if sample is None or sample.id == accessory.id:
-                continue
+        for key in sorted(new_keys):
+            host = hosts.get(key)
             ProductRelation.objects.create(
                 tenant=tenant,
-                host_product=sample,
-                host_model=sample.phone_model,
+                host_product=host,
+                host_model=host.phone_model if host is not None else models[key],
                 host_model_key=key,
                 accessory_product=accessory,
             )
