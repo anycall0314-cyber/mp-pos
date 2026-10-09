@@ -3,14 +3,19 @@
 用法(先預覽,確認數字後再正式寫入):
 
     # 1) 預覽(不會改任何資料)
-    python manage.py import_legacy_inventory \
+    python manage.py import_legacy_inventory --tenant 公司編號 \
         --xls "/path/庫存明細表.xls" \
         --mapping "/path/庫存匯入_類別對照表.xlsx"
 
     # 2) 正式執行(會先清空再匯入,全程包在一個交易裡)
-    python manage.py import_legacy_inventory \
+    python manage.py import_legacy_inventory --tenant 公司編號 \
         --xls "/path/庫存明細表.xls" \
-        --mapping "/path/庫存匯入_類別對照表.xlsx" --confirm
+        --mapping "/path/庫存匯入_類別對照表.xlsx" --confirm --wipe-company 公司代碼
+
+**這支會先把那家公司的單據、序號、商品、類別、門市全部刪掉。** 所以:
+- `--tenant` 一定要給(以前預設是 1 號公司,少打就清到別家);
+- 那家公司只要有東西會被刪,`--confirm` 之外還要 `--wipe-company 那家公司的代碼`,打錯或沒打就不做;
+- 只用在測試資料上。正式資料不用這支(owner 2026-10-09:舊庫存不搬,重新盤點再入庫)。
 
 規則(已與使用者確認):
 - 清空:現有銷貨/進貨/調撥單及明細、序號、庫存變動、庫存餘額、商品、類別、倉別
@@ -49,6 +54,30 @@ from apps.transfers.models import (
     TransferOrder,
     TransferOrderItem,
     TransferOrderItemSerial,
+)
+
+# 清空時照這個順序刪;保護(`_doomed`)數的也是這一份 —— 兩邊各寫一份的話,會有「會刪、卻沒數到」的表
+# (公司裡只剩那一種資料時,保護就被跳過)。
+# 順序重點:ProductSerial 透過 PROTECT 外鍵指向 PurchaseOrderItem / SalesOrder / Product / Warehouse,
+# 所以必須「先刪序號」才能刪那些;而序號又被 SalesOrderItemSerial / SalesOrderItem / StockMovement /
+# TransferOrderItemSerial PROTECT 參照,所以這些得在序號之前刪。
+WIPED = (
+    ("銷貨明細序號", SalesOrderItemSerial),
+    ("銷貨付款", SalesOrderPayment),
+    ("銷貨明細", SalesOrderItem),
+    ("庫存異動", StockMovement),
+    ("調撥明細序號", TransferOrderItemSerial),
+    ("調撥明細", TransferOrderItem),
+    ("調撥單", TransferOrder),
+    ("序號", ProductSerial),
+    ("進貨明細", PurchaseOrderItem),
+    ("進貨單", PurchaseOrder),
+    ("銷貨單", SalesOrder),
+    ("庫存餘額", StockBalance),
+    ("進貨單別", PurchaseOrderCategory),
+    ("商品", Product),
+    ("類別", Category),
+    ("倉別", Warehouse),
 )
 
 EXCLUDE_WAREHOUSE = "亞太巨城"
@@ -130,7 +159,12 @@ class Command(BaseCommand):
         parser.add_argument("--xls", required=True, help="庫存明細表.xls 路徑")
         parser.add_argument("--mapping", required=True, help="類別對照表.xlsx 路徑")
         parser.add_argument("--confirm", action="store_true", help="實際清空並寫入")
-        parser.add_argument("--tenant", type=int, default=1, help="租戶 ID(預設 1)")
+        # 沒有預設值:這支會清空整家公司,不能少打一個參數就清到 1 號公司
+        parser.add_argument("--tenant", type=int, required=True, help="租戶 ID(一定要給)")
+        parser.add_argument(
+            "--wipe-company", default="",
+            help="那家公司的代碼。公司裡有東西會被刪的時候一定要給、而且要打對,才會真的執行",
+        )
 
     def handle(self, *args, **opts):
         try:
@@ -178,18 +212,12 @@ class Command(BaseCommand):
         )
 
         # 清空現況統計
-        self.stdout.write(self.style.MIGRATE_HEADING("=== 將清空(目前筆數)==="))
+        doomed = self._doomed(tenant)
+        self.stdout.write(self.style.MIGRATE_HEADING(
+            f"=== 將清空「{tenant.name}」(代碼 {tenant.code})(目前筆數)==="
+        ))
         self.stdout.write(
-            f"  銷貨單 {SalesOrder.objects.filter(tenant=tenant).count()} / "
-            f"進貨單 {PurchaseOrder.objects.filter(tenant=tenant).count()} / "
-            f"調撥單 {TransferOrder.objects.filter(tenant=tenant).count()}"
-        )
-        self.stdout.write(
-            f"  序號 {ProductSerial.objects.filter(tenant=tenant).count()} / "
-            f"庫存餘額 {StockBalance.objects.filter(tenant=tenant).count()} / "
-            f"商品 {Product.objects.filter(tenant=tenant).count()} / "
-            f"類別 {Category.objects.filter(tenant=tenant).count()} / "
-            f"倉別 {Warehouse.objects.filter(tenant=tenant).count()}"
+            "  " + (" / ".join(f"{label} {count}" for label, count in doomed if count) or "(這家公司現在是空的)")
         )
 
         if not opts["confirm"]:
@@ -199,6 +227,14 @@ class Command(BaseCommand):
                 )
             )
             return
+
+        # 會刪到東西就要再指名一次是哪家公司:只打 --confirm 不夠
+        if any(count for _label, count in doomed) and opts["wipe_company"] != tenant.code:
+            raise CommandError(
+                f"沒有執行。這支會先把「{tenant.name}」(代碼 {tenant.code})的 "
+                + "、".join(f"{label} {count} 筆" for label, count in doomed if count)
+                + f" 全部刪掉。確定要的話再加上 --wipe-company {tenant.code}(只用在測試資料上)。"
+            )
 
         with transaction.atomic():
             self._wipe(tenant)
@@ -214,28 +250,13 @@ class Command(BaseCommand):
         )
 
     # ---- 清空 ----
+    def _doomed(self, tenant):
+        """這家公司現在有哪些東西會被刪掉:[(叫什麼, 幾筆)]。數的就是 `_wipe` 會刪的那一份清單。"""
+        return [(label, model.objects.filter(tenant=tenant).count()) for label, model in WIPED]
+
     def _wipe(self, tenant):
-        f = dict(tenant=tenant)
-        # 順序重點:ProductSerial 透過 PROTECT 外鍵指向 PurchaseOrderItem /
-        # SalesOrder / Product / Warehouse,所以必須「先刪序號」才能刪那些;
-        # 而序號又被 SalesOrderItemSerial / SalesOrderItem / StockMovement /
-        # TransferOrderItemSerial PROTECT 參照,所以這些得在序號之前刪。
-        SalesOrderItemSerial.objects.filter(**f).delete()
-        SalesOrderPayment.objects.filter(**f).delete()
-        SalesOrderItem.objects.filter(**f).delete()
-        StockMovement.objects.filter(**f).delete()
-        TransferOrderItemSerial.objects.filter(**f).delete()
-        TransferOrderItem.objects.filter(**f).delete()
-        TransferOrder.objects.filter(**f).delete()
-        ProductSerial.objects.filter(**f).delete()
-        PurchaseOrderItem.objects.filter(**f).delete()
-        PurchaseOrder.objects.filter(**f).delete()
-        SalesOrder.objects.filter(**f).delete()
-        StockBalance.objects.filter(**f).delete()
-        PurchaseOrderCategory.objects.filter(**f).delete()
-        Product.objects.filter(**f).delete()
-        Category.objects.filter(**f).delete()
-        Warehouse.objects.filter(**f).delete()
+        for _label, model in WIPED:     # 順序的理由寫在 WIPED 上面
+            model.objects.filter(tenant=tenant).delete()
         self.stdout.write("  已清空現有資料")
 
     # ---- 建倉 ----
