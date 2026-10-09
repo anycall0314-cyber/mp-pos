@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useSaveTelecomPlan, useTelecomPlans } from "@/api/hooks";
 import type { TelecomPlan } from "@/api/types";
+import { useCurrentUser } from "@/auth/AuthContext";
 import { Toolbar } from "@/components/Toolbar";
 import {
   MasterDetail,
@@ -9,6 +10,7 @@ import {
   DetailTab,
 } from "@/components/master-detail/MasterDetail";
 import { intStr, money } from "@/lib/money";
+import { isManager } from "@/lib/roles";
 import { MoneyInput } from "@/components/MoneyInput";
 
 import { BulkAddTelecomPlansModal } from "./BulkAddTelecomPlansModal";
@@ -19,6 +21,8 @@ export function TelecomPlansPage() {
     includeInactive: true,
   });
   const savePlan = useSaveTelecomPlan();
+  // 方案(含佣金)只有管理員能改:店員看得到,但沒有會改資料的按鈕與輸入框(伺服器也會擋)
+  const canEdit = isManager(useCurrentUser()?.profile?.role);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerInitial, setDrawerInitial] = useState<TelecomPlan | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -182,7 +186,7 @@ export function TelecomPlansPage() {
   }
 
   const columns: MasterColumn<TelecomPlan>[] = useMemo(
-    () => [
+    () => ([
       {
         key: "select",
         header: (
@@ -228,6 +232,7 @@ export function TelecomPlansPage() {
         key: "commission",
         header: "佣金",
         render: (r) => {
+          if (!canEdit) return <span className="num">{money(r.commission)}</span>;
           const original = intStr(r.commission);
           const editing = editCommission[r.id];
           const value = editing ?? original;
@@ -260,7 +265,9 @@ export function TelecomPlansPage() {
       {
         key: "is_active",
         header: "啟用",
-        render: (r) => (
+        render: (r) => !canEdit ? (
+          r.is_active ? "啟用" : "停用"
+        ) : (
           <input
             type="checkbox"
             checked={r.is_active}
@@ -270,8 +277,8 @@ export function TelecomPlansPage() {
           />
         ),
       },
-    ],
-    [allFilteredSelected, selectedIds, editCommission, savingIds],
+    ] as MasterColumn<TelecomPlan>[]).filter((c) => canEdit || c.key !== "select"),
+    [allFilteredSelected, selectedIds, editCommission, savingIds, canEdit],
   );
 
   const tabs: DetailTab<TelecomPlan>[] = [
@@ -300,17 +307,19 @@ export function TelecomPlansPage() {
             <dt>狀態</dt>
             <dd>{r.is_active ? "啟用" : "停用"}</dd>
           </dl>
-          <div style={{ marginTop: 12 }}>
-            <button
-              className="btn primary"
-              onClick={() => {
-                setDrawerInitial(r);
-                setDrawerOpen(true);
-              }}
-            >
-              編輯
-            </button>
-          </div>
+          {canEdit && (
+            <div style={{ marginTop: 12 }}>
+              <button
+                className="btn primary"
+                onClick={() => {
+                  setDrawerInitial(r);
+                  setDrawerOpen(true);
+                }}
+              >
+                編輯
+              </button>
+            </div>
+          )}
         </div>
       ),
     },
@@ -321,7 +330,7 @@ export function TelecomPlansPage() {
       <Toolbar
         title="電信方案"
         actions={
-          <>
+          canEdit && <>
             <button className="btn" onClick={() => setBulkOpen(true)}>
               批次新增
             </button>
@@ -339,7 +348,7 @@ export function TelecomPlansPage() {
       />
 
       {/* 批次操作工具列(僅 上/下架);佣金已改為列表 inline 直接編輯 */}
-      {selectedIds.size > 0 && (
+      {canEdit && selectedIds.size > 0 && (
         <div
           style={{
             padding: "8px 16px",
@@ -410,27 +419,31 @@ export function TelecomPlansPage() {
           onSearch={setQuery}
           emptyDetailHint={
             (data ?? []).length === 0
-              ? "尚無方案,點右上「+ 新增方案」開始建立"
+              ? canEdit ? "尚無方案,點右上「+ 新增方案」開始建立" : "尚無方案"
               : filtered.length === 0
                 ? `查無符合「${query}」的方案`
                 : "從左側選擇方案檢視詳細"
           }
         />
       )}
-      <TelecomPlanForm
-        open={drawerOpen}
-        initial={drawerInitial}
-        onClose={() => setDrawerOpen(false)}
-      />
-      <BulkAddTelecomPlansModal
-        open={bulkOpen}
-        onClose={() => setBulkOpen(false)}
-        onSuccess={(count) => {
-          setBulkOpen(false);
-          setBulkResult(`成功建立 ${count} 筆方案`);
-          setTimeout(() => setBulkResult(null), 4000);
-        }}
-      />
+      {canEdit && (
+        <>
+          <TelecomPlanForm
+            open={drawerOpen}
+            initial={drawerInitial}
+            onClose={() => setDrawerOpen(false)}
+          />
+          <BulkAddTelecomPlansModal
+            open={bulkOpen}
+            onClose={() => setBulkOpen(false)}
+            onSuccess={(count) => {
+              setBulkOpen(false);
+              setBulkResult(`成功建立 ${count} 筆方案`);
+              setTimeout(() => setBulkResult(null), 4000);
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }

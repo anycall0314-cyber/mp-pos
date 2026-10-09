@@ -1,8 +1,10 @@
 import django_filters
 from django.db import transaction
-from rest_framework import status, viewsets
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+
+from apps.tenants.permissions import is_tenant_admin
 
 from .models import Carrier, Customer, Member, SalesPerson, SimCard, Supplier, TelecomPlan
 
@@ -164,8 +166,22 @@ TELECOM_KIND_ALIASES = {
 }
 
 
+class ManagersChangeTelecomPlans(permissions.BasePermission):
+    """電信方案:看的人不限(開單要找得到方案),**改的只有管理員**。
+
+    方案上的佣金會被帶到每一張銷貨單的明細,是績效的基準;以前任何登入的店員都能新增 / 修改 / 刪除 / 批次建立。
+    """
+
+    message = "只有管理員可以新增或修改電信方案"
+
+    def has_permission(self, request, view):
+        return request.method in permissions.SAFE_METHODS or is_tenant_admin(request.user)
+
+
 class TelecomPlanViewSet(viewsets.ModelViewSet):
     serializer_class = TelecomPlanSerializer
+    # 全域預設的「要登入」之外再加這一條(自訂的 action 也吃得到:批次新增是 POST)
+    permission_classes = [permissions.IsAuthenticated, ManagersChangeTelecomPlans]
     search_fields = ["name", "code", "carrier__code", "carrier__name", "note"]
     ordering_fields = ["code", "monthly_fee", "contract_months", "commission"]
     ordering = ["carrier__code", "monthly_fee", "contract_months"]
