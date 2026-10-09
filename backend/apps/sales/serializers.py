@@ -2,6 +2,7 @@ from datetime import date
 
 from rest_framework import serializers
 
+from apps.core.manager_fields import ManagerOnlyFieldsMixin
 from apps.core.money import round_money
 from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
 from apps.inventory.models import ProductSerial
@@ -66,7 +67,10 @@ class SalesOrderItemSerialSerializer(TenantScopedRelatedFieldsMixin, serializers
         read_only_fields = ["id", "serial_no"]
 
 
-class SalesOrderItemSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
+class SalesOrderItemSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
+    # 公司實際拿的佣金(開單當下從方案抄的):只有管理員拿得到
+    manager_only_fields = ("company_commission",)
+
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_requires_serial = serializers.BooleanField(
@@ -144,6 +148,7 @@ class SalesOrderItemSerializer(TenantScopedRelatedFieldsMixin, serializers.Model
             "telecom_plan_kind",
             "telecom_plan_display",
             "commission",
+            "company_commission",
             "activation_date",
             "prev_contract_end",
             "contract_months",
@@ -154,6 +159,7 @@ class SalesOrderItemSerializer(TenantScopedRelatedFieldsMixin, serializers.Model
             "id",
             "contract_months",
             "contract_end",
+            "company_commission",
             "cost_at_post",
             "untaxed_amount",
             "tax_amount",
@@ -261,8 +267,13 @@ class SalesOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSeri
             if plan is not None:
                 # 存進明細的佣金是金額,整數元(方案主檔以前存的 100.50 不回頭改,畫面顯示與試算是 101)
                 item_data["commission"] = round_money(plan.commission)
+                # 公司佣金一樣是當下的快照;方案還沒設定就是空的(不是 0)
+                item_data["company_commission"] = (
+                    None if plan.company_commission is None else round_money(plan.company_commission)
+                )
             else:
                 item_data["commission"] = 0
+                item_data["company_commission"] = None
             item = SalesOrderItem.objects.create(so=so, tenant=so.tenant, **item_data)
             for pos, sn in enumerate(serial_objs):
                 SalesOrderItemSerial.objects.create(

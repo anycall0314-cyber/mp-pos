@@ -9,6 +9,11 @@ import {
   MasterColumn,
   DetailTab,
 } from "@/components/master-detail/MasterDetail";
+import {
+  companyCommissionInput,
+  companyCommissionPayload,
+  showCompanyCommission,
+} from "@/lib/commission";
 import { intStr, money } from "@/lib/money";
 import { isManager } from "@/lib/roles";
 import { MoneyInput } from "@/components/MoneyInput";
@@ -34,6 +39,8 @@ export function TelecomPlansPage() {
   const [editCommission, setEditCommission] = useState<Record<number, string>>(
     {},
   );
+  // 公司佣金(只有管理員有這一欄)一樣可以在清單上直接改;空的 = 還沒設定
+  const [editCompany, setEditCompany] = useState<Record<number, string>>({});
   // 正在 inline PATCH 的方案 id(視覺提示用)
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
   const [batchPending, setBatchPending] = useState(false);
@@ -107,6 +114,19 @@ export function TelecomPlansPage() {
       }
       return changed ? next : prev;
     });
+    setEditCompany((prev) => {
+      const next: Record<number, string> = {};
+      let changed = false;
+      for (const [idStr, v] of Object.entries(prev)) {
+        const plan = data.find((p) => p.id === Number(idStr));
+        if (plan && companyCommissionPayload(v) === companyCommissionPayload(companyCommissionInput(plan.company_commission))) {
+          changed = true;
+        } else {
+          next[Number(idStr)] = v;
+        }
+      }
+      return changed ? next : prev;
+    });
   }, [data]);
 
   function markSaving(id: number, on: boolean) {
@@ -140,6 +160,33 @@ export function TelecomPlansPage() {
     } catch (e) {
       setBulkResult(
         `${plan.name}:佣金更新失敗:${e instanceof Error ? e.message : e}`,
+      );
+      setTimeout(() => setBulkResult(null), 6000);
+    } finally {
+      markSaving(plan.id, false);
+    }
+  }
+
+  // 一筆 inline 編輯公司佣金:離開欄位才存;清空 = 回到還沒設定
+  async function commitCompany(plan: TelecomPlan) {
+    const v = editCompany[plan.id];
+    if (v == null) return;
+    const next = companyCommissionPayload(v);
+    const original = companyCommissionPayload(companyCommissionInput(plan.company_commission));
+    if (next === original) {
+      setEditCompany((s) => {
+        const rest = { ...s };
+        delete rest[plan.id];
+        return rest;
+      });
+      return;
+    }
+    markSaving(plan.id, true);
+    try {
+      await savePlan.mutateAsync({ id: plan.id, company_commission: next });
+    } catch (e) {
+      setBulkResult(
+        `${plan.name}:公司佣金更新失敗:${e instanceof Error ? e.message : e}`,
       );
       setTimeout(() => setBulkResult(null), 6000);
     } finally {
@@ -230,7 +277,7 @@ export function TelecomPlansPage() {
       { key: "kind", header: "類型", render: (r) => r.kind_label },
       {
         key: "commission",
-        header: "佣金",
+        header: "業務員佣金",
         render: (r) => {
           if (!canEdit) return <span className="num">{money(r.commission)}</span>;
           const original = intStr(r.commission);
@@ -263,6 +310,36 @@ export function TelecomPlansPage() {
         },
       },
       {
+        // 公司實際拿的:只有管理員的資料裡有,這一欄也只給管理員
+        key: "company_commission",
+        header: "公司佣金",
+        render: (r) => {
+          const original = companyCommissionInput(r.company_commission);
+          const editing = editCompany[r.id];
+          const dirty = editing != null && companyCommissionPayload(editing) !== companyCommissionPayload(original);
+          return (
+            <MoneyInput
+              min="0"
+              className="num-input"
+              value={editing ?? original}
+              placeholder="未設定"
+              onChange={(v) => setEditCompany((s) => ({ ...s, [r.id]: v }))}
+              onBlur={() => commitCompany(r)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              }}
+              onClick={(e) => e.stopPropagation()}
+              disabled={savingIds.has(r.id)}
+              style={{
+                width: 90,
+                textAlign: "right",
+                background: dirty ? "rgba(255, 200, 0, 0.12)" : undefined,
+              }}
+            />
+          );
+        },
+      },
+      {
         key: "is_active",
         header: "啟用",
         render: (r) => !canEdit ? (
@@ -277,8 +354,10 @@ export function TelecomPlansPage() {
           />
         ),
       },
-    ] as MasterColumn<TelecomPlan>[]).filter((c) => canEdit || c.key !== "select"),
-    [allFilteredSelected, selectedIds, editCommission, savingIds, canEdit],
+    ] as MasterColumn<TelecomPlan>[]).filter(
+      (c) => canEdit || (c.key !== "select" && c.key !== "company_commission"),
+    ),
+    [allFilteredSelected, selectedIds, editCommission, editCompany, savingIds, canEdit],
   );
 
   const tabs: DetailTab<TelecomPlan>[] = [
@@ -300,8 +379,14 @@ export function TelecomPlansPage() {
             <dd>{r.contract_months}</dd>
             <dt>類型</dt>
             <dd>{r.kind_label}</dd>
-            <dt>佣金</dt>
+            <dt>業務員佣金</dt>
             <dd>{money(r.commission)}</dd>
+            {canEdit && (
+              <>
+                <dt>公司佣金</dt>
+                <dd>{showCompanyCommission(r.company_commission)}</dd>
+              </>
+            )}
             <dt>備註</dt>
             <dd>{r.note || "—"}</dd>
             <dt>狀態</dt>
@@ -390,7 +475,7 @@ export function TelecomPlansPage() {
             <span style={{ color: "var(--text-dim)" }}>處理中…</span>
           )}
           <span style={{ marginLeft: "auto", fontSize: 14, color: "var(--text-dim)" }}>
-            佣金請直接於下方列表佣金欄位輸入(離開欄位自動儲存)
+            佣金直接在下方列表輸入(離開欄位自動儲存)
           </span>
         </div>
       )}

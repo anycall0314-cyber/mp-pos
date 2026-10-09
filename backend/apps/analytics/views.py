@@ -20,7 +20,7 @@ def _bad(message, code=status.HTTP_400_BAD_REQUEST):
 
 @api_view(["GET"])
 def catalog(request):
-    return Response(engine.describe())
+    return Response(engine.describe(request.user))
 
 
 @api_view(["GET"])

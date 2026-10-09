@@ -23,6 +23,8 @@ interface FormState {
   contract_months: string;
   kind: TelecomPlanKind;
   commission: string;
+  /** 公司佣金;空的 = 還沒設定 */
+  company_commission: string;
   note: string;
   is_active: boolean;
 }
@@ -40,6 +42,7 @@ const EMPTY: FormState = {
   contract_months: "24",
   kind: "new",
   commission: "0",
+  company_commission: "",
   note: "",
   is_active: true,
 };
@@ -53,6 +56,8 @@ function toState(p?: TelecomPlan | null): FormState {
     contract_months: String(p.contract_months),
     kind: p.kind,
     commission: p.commission,
+    // 放資料庫原本的字串(跟業務員佣金一樣):沒動過就原樣送回去,不因為只改備註就把 10000.50 存成 10001
+    company_commission: p.company_commission ?? "",
     note: p.note,
     is_active: p.is_active,
   };
@@ -131,6 +136,8 @@ export function TelecomPlanForm({ open, initial, onClose }: Props) {
         contract_months: Number(state.contract_months) || 0,
         kind: state.kind,
         commission: state.commission || "0",
+        // 空的 = 還沒設定(送 null);有打字的話 MoneyInput 給的本來就是整數
+        company_commission: state.company_commission.trim() === "" ? null : state.company_commission,
         note: state.note,
         is_active: state.is_active,
       });
@@ -269,10 +276,19 @@ export function TelecomPlanForm({ open, initial, onClose }: Props) {
               ))}
             </select>
           </Field>
-          <Field label="佣金" required error={fieldErrors.commission}>
+          <Field label="業務員佣金" required error={fieldErrors.commission}>
             <MoneyInput
+              min="0"
               value={state.commission}
               onChange={(v) => patch("commission", v)}
+            />
+          </Field>
+          <Field label="公司佣金" error={fieldErrors.company_commission}>
+            <MoneyInput
+              min="0"
+              value={state.company_commission}
+              placeholder="未設定"
+              onChange={(v) => patch("company_commission", v)}
             />
           </Field>
         </div>

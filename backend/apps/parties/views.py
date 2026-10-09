@@ -260,7 +260,9 @@ class TelecomPlanViewSet(viewsets.ModelViewSet):
                     )
                     if serializer.is_valid():
                         instance = serializer.save(tenant=tenant)
-                        created.append(TelecomPlanSerializer(instance).data)
+                        created.append(
+                            TelecomPlanSerializer(instance, context=self.get_serializer_context()).data
+                        )
                     else:
                         errors.append({"line": idx, "errors": serializer.errors})
                 if errors:

@@ -227,7 +227,17 @@ class SalesOrderItem(TenantOwnedModel):
         max_digits=14,
         decimal_places=2,
         default=0,
-        help_text="選方案後自動帶入,可手動覆寫",
+        help_text="存檔時從方案抄過來(門市看的那一個)",
+    )
+    # 公司實際拿的佣金:存檔時從方案抄過來的快照,之後改方案不影響這張單。只有管理員看得到。
+    # 空的 = 開單當時方案還沒設定公司佣金(2026-10-09 之前開的單都是空的,不補)
+    company_commission = models.DecimalField(
+        "公司佣金",
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="存檔時從方案抄過來;空的 = 當時沒有設定",
     )
     # 合約從哪一天起算:新辦 = 單據日期(伺服器存檔時決定,不看送來的值);攜碼 = 人填的合約生效日;續約 = 續約日
     # (遠傳、台哥大當天就續約 = 開單當天;中華電信等手機到貨才續約,先入帳、續約日往後,事後可以改)

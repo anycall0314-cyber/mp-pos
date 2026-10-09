@@ -17,6 +17,7 @@ import { ArmButton } from "@/components/workbench/ArmButton";
 import { apiErrorText } from "@/components/workbench/errors";
 import { toast } from "@/components/workbench/toast";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { hasCompanyCommission, showCompanyCommission } from "@/lib/commission";
 import { money } from "@/lib/money";
 
 import { SALES_DRAFT_KEY, SALES_MARGIN_KEY } from "./SalesWorkbenchPage";
@@ -227,6 +228,10 @@ export function SalesListPage() {
             : null,
           it.contract_end ? `合約到期 ${it.contract_end}` : null,
           it.prev_contract_end ? `原合約到期 ${it.prev_contract_end}` : null,
+          // 公司實際拿的佣金:只有管理員的資料裡有這一欄(開單當下記的;當時方案沒設定就是未設定)
+          it.telecom_plan && hasCompanyCommission(it)
+            ? `公司佣金 ${showCompanyCommission(it.company_commission)}`
+            : null,
         ]
           .filter(Boolean)
           .join(" · ")}

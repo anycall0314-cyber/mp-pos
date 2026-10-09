@@ -113,8 +113,15 @@ class TelecomPlan(TenantOwnedModel):
     kind = models.CharField(
         "類型", max_length=10, choices=Kind.choices, default=Kind.NEW
     )
+    # 兩個佣金(owner 2026-10-09:每個方案各填兩個數字):
+    # - commission = 業務員佣金(門市看的);開單時帶到銷貨明細,門市的佣金與毛利用它算。原本就有的那一欄,數字與行為不變
+    # - company_commission = 公司佣金(公司實際從電信商拿的);只有管理員看得到、填得到。空的 = 還沒設定(不是 0)
     commission = models.DecimalField(
-        "佣金", max_digits=14, decimal_places=2, default=0
+        "業務員佣金", max_digits=14, decimal_places=2, default=0
+    )
+    company_commission = models.DecimalField(
+        "公司佣金", max_digits=14, decimal_places=2, null=True, blank=True,
+        help_text="公司實際拿的佣金;只有管理員看得到。空的 = 還沒設定",
     )
     note = models.CharField("備註", max_length=200, blank=True)
     is_active = models.BooleanField("啟用", default=True)

@@ -285,6 +285,8 @@ FACTS = {f.key: f for f in [
 # 「銷售」只算計入毛利的明細:收購二手那一類(只算現金、不算毛利)不是營收,另外一欄看。
 # 這樣 銷售額 − 成本 = 毛利,三個數字是同一批明細。
 COUNTED = Q(product__counts_margin=True)
+# 只有管理員看得到的指標(公司實際拿的佣金、之後的實際成本)
+MANAGERS = ("tenant_admin", "platform_admin")
 
 BASES = [
     Base("sales_untaxed", "銷售額(未稅)", "sales", lambda: Sum("untaxed_amount", filter=COUNTED)),
@@ -296,6 +298,11 @@ BASES = [
          lambda: Count("so_id", distinct=True, filter=COUNTED), "int"),
     Base("non_margin_amount", "不計毛利金額(收購等)", "sales",
          lambda: Sum("untaxed_amount", filter=~COUNTED), group="毛利"),
+    # 門號的兩個佣金(owner 2026-10-09):成交當下記在明細上的數字,不是方案現在的設定。
+    # 公司佣金只有管理員選得到;開單當時方案沒設定的那幾筆是空的,不算進合計(不當成 0 元的佣金,但加總看不出差別)
+    Base("staff_commission", "門號業務員佣金", "sales", lambda: Sum("commission"), group="佣金"),
+    Base("company_commission", "門號公司佣金", "sales", lambda: Sum("company_commission"),
+         roles=MANAGERS, group="佣金"),
 
     Base("return_untaxed", "銷退額(未稅)", "returns", lambda: Sum("untaxed_amount", filter=COUNTED)),
     Base("return_qty", "銷退量", "returns", lambda: Sum("qty", filter=COUNTED), "int"),
@@ -359,7 +366,7 @@ DERIVED = [
 ]
 
 MEASURES = {m.key: m for m in [*BASES, *DERIVED]}
-GROUPS = ["銷貨", "毛利", "銷退", "進貨", "收款", "庫存", "門號合約", "舊 POS"]
+GROUPS = ["銷貨", "毛利", "佣金", "銷退", "進貨", "收款", "庫存", "門號合約", "舊 POS"]
 
 
 def group_of(measure):
@@ -375,6 +382,17 @@ def base_keys(measure_key):
     for dep in m.deps:
         out += base_keys(dep)
     return out
+
+
+def may_see(measure_key, role) -> bool:
+    """這個角色看不看得到這個指標。**算它要用到的每一個基本指標也都要看得到**:
+    不然另外定一個「由公司佣金算出來的」指標、忘了寫 roles,店員就看得到了。"""
+    m = MEASURES[measure_key]
+    if m.roles and role not in m.roles:
+        return False
+    return all(
+        not MEASURES[k].roles or role in MEASURES[k].roles for k in base_keys(measure_key)
+    )
 
 
 def supported_dims(measure_key):

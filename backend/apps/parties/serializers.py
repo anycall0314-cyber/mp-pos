@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from apps.core.manager_fields import ManagerOnlyFieldsMixin
 from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
 
 from .models import Carrier, Customer, Member, SalesPerson, SimCard, Supplier, TelecomPlan
@@ -149,7 +150,10 @@ class SimCardSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, seri
         return self._tenant_unique(SimCard.objects, "card_no", value)
 
 
-class TelecomPlanSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
+class TelecomPlanSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
+    # 公司實際拿的佣金:只有管理員拿得到、填得到(店員的回應裡沒有這一欄)
+    manager_only_fields = ("company_commission",)
+
     carrier_code = serializers.CharField(source="carrier.code", read_only=True)
     carrier_name = serializers.CharField(source="carrier.name", read_only=True)
     kind_label = serializers.CharField(source="get_kind_display", read_only=True)
@@ -168,6 +172,7 @@ class TelecomPlanSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, 
             "kind",
             "kind_label",
             "commission",
+            "company_commission",
             "note",
             "is_active",
             "created_at",
@@ -185,3 +190,9 @@ class TelecomPlanSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, 
 
     def validate_name(self, value):
         return self._tenant_unique(TelecomPlan.objects, "name", value)
+
+    def validate_company_commission(self, value):
+        # 空的 = 還沒設定(不是 0)
+        if value is not None and value < 0:
+            raise serializers.ValidationError("公司佣金不能是負的")
+        return value

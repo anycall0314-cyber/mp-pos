@@ -435,7 +435,10 @@ export interface TelecomPlan {
   contract_months: number;
   kind: TelecomPlanKind;
   kind_label: string;
+  /** 業務員佣金(門市看的) */
   commission: string;
+  /** 公司佣金(公司實際拿的)。**只有管理員的資料裡有這一欄**;null = 還沒設定 */
+  company_commission?: string | null;
   note: string;
   is_active: boolean;
 }
@@ -612,6 +615,8 @@ export interface SalesOrderItem {
   telecom_plan_kind: TelecomPlanKind | "";
   telecom_plan_display: string;
   commission: string;
+  /** 公司佣金(開單當下從方案抄的)。只有管理員的資料裡有;null = 當時方案沒設定 */
+  company_commission?: string | null;
   activation_date: string | null;
   /** 續約才有:原本那份合約哪一天到期 */
   prev_contract_end?: string | null;

@@ -33,6 +33,7 @@ from .catalog import (
     Base,
     base_keys,
     group_of,
+    may_see,
     supported_dims,
 )
 
@@ -138,7 +139,7 @@ def parse(spec, user=None) -> Query:
         item = MEASURES.get(m) if isinstance(m, str) else None
         if item is None or getattr(item, "hidden", False):
             raise QueryError(f"沒有「{m}」這個指標")
-        if item.roles and role not in item.roles:
+        if not may_see(m, role):
             raise QueryError(f"沒有權限看「{item.label}」")
     for d in dimensions:
         if not isinstance(d, str) or d not in DIMENSIONS:
@@ -526,13 +527,15 @@ def options(tenant, dimension, search=""):
     return [{"value": k, "label": v} for k, v in dim.labels(tenant).items()]
 
 
-def describe():
-    """給畫面(與之後的自然語言)用的清單:有哪些指標、每個指標能用哪些角度。"""
+def describe(user=None):
+    """給畫面(與之後的自然語言)用的清單:有哪些指標、每個指標能用哪些角度。
+    這個人看不到的指標(只給管理員的)不列出來。"""
+    role = getattr(getattr(user, "profile", None), "role", None)
     return {
         "measures": [
             {"key": m.key, "label": m.label, "format": m.fmt, "group": group_of(m),
              "dimensions": sorted(supported_dims(m.key))}
-            for m in MEASURES.values() if not getattr(m, "hidden", False)
+            for m in MEASURES.values() if not getattr(m, "hidden", False) and may_see(m.key, role)
         ],
         "dimensions": [
             {"key": d.key, "label": d.label, "kind": d.kind} for d in DIMENSIONS.values()

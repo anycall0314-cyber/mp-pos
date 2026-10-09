@@ -558,7 +558,8 @@ class ShapeTests(_Shop):
             dims = sorted(supported_dims(m.key))
             self.assertIn("date", dims)
             for d in dims:
-                engine.run(self.t, {"measures": [m.key], "dimensions": [d], "period": AUG_SEP})
+                # 用管理員的身分跑:有的指標只有管理員看得到(公司實際拿的佣金)
+                engine.run(self.t, {"measures": [m.key], "dimensions": [d], "period": AUG_SEP}, self.c.admin_user)
         for fact in FACTS.values():
             self.assertFalse(set(fact.paths) - set(DIMENSIONS), fact.key)
         for b in BASES:
