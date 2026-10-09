@@ -303,6 +303,7 @@ export function BulkEditProductsModal({
               </label>
               {enStaff && (
                 <div className="be-section-body">
+                  <div className="be-hint">帶序號的商品不套用</div>
                   <label>
                     算法
                     <select value={staffMode} onChange={(e) => setStaffMode(e.target.value)}>

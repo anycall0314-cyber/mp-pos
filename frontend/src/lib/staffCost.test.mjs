@@ -13,6 +13,7 @@ import {
   ruleProblem,
   rulePayload,
   ruleText,
+  staffCostApplies,
   staffCostOf,
   staffMargin,
   valueInput,
@@ -25,6 +26,14 @@ test("選項的字數一樣", () => {
   }
   assert.deepEqual(PRODUCT_MODES.map(([m]) => m), ["", "fixed", "plus", "percent"]);
   assert.deepEqual(COMPANY_MODES.map(([m]) => m), ["", "plus", "percent"]); // 全公司沒有「固定金額」
+});
+
+test("帶序號的商品與虛擬商品先不做(不顯示、不能設定)", () => {
+  assert.equal(staffCostApplies({ requires_serial: false, is_virtual: false }), true);
+  assert.equal(staffCostApplies({ requires_serial: true, is_virtual: false }), false); // 手機、中古機
+  assert.equal(staffCostApplies({ requires_serial: false, is_virtual: true }), false); // 門號、手續費
+  assert.equal(staffCostApplies({}), false); // 沒有這一欄:不確定就不顯示
+  assert.equal(staffCostApplies({ requires_serial: false }), true);
 });
 
 test("資料裡有「怎麼算」那一欄才是管理員", () => {

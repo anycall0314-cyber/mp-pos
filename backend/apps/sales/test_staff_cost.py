@@ -5,6 +5,7 @@ owner 2026-10-09:全公司一條 + 個別商品另設;沒設定 = 實際成本;�
 """
 from decimal import Decimal
 from types import SimpleNamespace
+from unittest import mock
 
 import threading
 import time
@@ -28,9 +29,14 @@ SALES = "/api/v1/sales-orders/"
 QUERY = "/api/v1/analytics/query/"
 
 
-def thing(avg="0", mode="", value="0", virtual=False, secondhand=False):
+def thing(avg="0", mode="", value="0", virtual=False, secondhand=False, serial=False):
+    """serial = 帶序號(手機…);中古機一定帶序號。"""
     return SimpleNamespace(weighted_avg_cost=D(avg), staff_cost_mode=mode, staff_cost_value=D(value),
-                           is_virtual=virtual, is_secondhand=secondhand)
+                           is_virtual=virtual, is_secondhand=secondhand, requires_serial=serial or secondhand)
+
+
+# 帶序號的商品「先不做」(owner 2026-10-10);規則還在、開關打開就會生效 —— 這幾個測試在開關打開的狀況下驗那兩段規則
+serial_goods_switched_on = mock.patch.object(staff_cost, "SERIAL_GOODS_TOO", True)
 
 
 def firm(mode="", value="0"):
@@ -64,11 +70,29 @@ class RuleTests(SimpleTestCase):
         self.assertEqual(self.line(thing("50", "fixed", "80"), firm("percent", "20"), qty=3, actual="150"),
                          (D("240.00"), "product:fixed:80.00"))
 
+    def test_serial_goods_are_left_out_for_now(self):
+        """owner 2026-10-10:帶序號的先不做業務員成本。手機、中古機不管公司或商品自己設了什麼,都是實際成本。"""
+        phone = thing("20000", "percent", "10", serial=True)
+        self.assertEqual(self.line(phone, firm("plus", "500"), qty=1, actual="18000", units=["18000"]), (D("18000.00"), ""))
+        used = thing("14000", "fixed", "1", secondhand=True)
+        self.assertEqual(self.line(used, firm("percent", "20"), qty=2, actual="13000", units=["5000", "8000"]),
+                         (D("13000.00"), ""))
+        self.assertIsNone(staff_cost.rule_for(phone, firm("percent", "20")))
+        # 「中古但沒標帶序號」(只有繞過存檔直接改資料庫才會有):一樣不加
+        odd = SimpleNamespace(weighted_avg_cost=D("14000"), staff_cost_mode="percent", staff_cost_value=D("10"),
+                              is_virtual=False, is_secondhand=True, requires_serial=False)
+        self.assertEqual(self.line(odd, firm("plus", "5"), qty=1, actual="8000", units=["8000"]), (D("8000.00"), ""))
+        # 畫面上的一件:手機是平均成本、中古機是那一台自己的成本,都不加成
+        self.assertEqual(staff_cost.shown_unit_cost(phone, firm("percent", "20")), D("20000.00"))
+        self.assertEqual(staff_cost.shown_unit_cost(used, firm("percent", "20"), own_cost=D("8000")), D("8000.00"))
+
+    @serial_goods_switched_on
     def test_regular_goods_use_the_average_not_the_units_own_cost(self):
-        """一般的手機(不是中古機):就算這一台進得比較便宜,基準還是平均成本(不讓人挑便宜的那一台賣)。"""
-        phone = thing("20000", "percent", "10")
+        """(開關打開時)一般的手機:就算這一台進得比較便宜,基準還是平均成本(不讓人挑便宜的那一台賣)。"""
+        phone = thing("20000", "percent", "10", serial=True)
         self.assertEqual(self.line(phone, firm(), qty=1, actual="18000", units=["18000"])[0], D("22000.00"))
 
+    @serial_goods_switched_on
     def test_secondhand_units_each_use_their_own_cost(self):
         used = thing("0", "percent", "10", secondhand=True)
         self.assertEqual(self.line(used, firm(), qty=2, actual="13000", units=["5000", "8000"])[0], D("14300.00"))
@@ -95,8 +119,9 @@ class RuleTests(SimpleTestCase):
         self.assertEqual(staff_cost.shown_unit_cost(thing("50"), firm()), D("50.00"))                    # 沒有規則 = 平均成本
         self.assertEqual(staff_cost.shown_unit_cost(thing("50"), firm("plus", "30")), D("80.00"))
         self.assertEqual(staff_cost.shown_unit_cost(thing("50", "fixed", "70"), firm("plus", "30")), D("70.00"))
-        used = thing("50", secondhand=True)
-        self.assertEqual(staff_cost.shown_unit_cost(used, firm("percent", "10"), own_cost=D("8000")), D("8800.00"))
+        with serial_goods_switched_on:                                     # 開關打開時:中古機拿那一台自己的成本加成
+            used = thing("50", secondhand=True)
+            self.assertEqual(staff_cost.shown_unit_cost(used, firm("percent", "10"), own_cost=D("8000")), D("8800.00"))
         # 中古機沒有任何規則:那一台的業務員成本 = 那一台自己的成本(= 存檔時記的實際成本),不是商品的平均。
         # 開單頁用這個數字估,所以中古機的預估跟存檔後清單上的數字一樣(改之前是拿商品的平均去估,兩邊對不起來)
         self.assertEqual(staff_cost.shown_unit_cost(thing("14000", secondhand=True), firm(), own_cost=D("8000")),
@@ -271,7 +296,7 @@ class ProductSettingTests(_Shop):
         self.assertEqual(D(self.one(self.c.clerk)["staff_cost"]), D("100"))
         self.company_rule("percent", "20")
         self.assertEqual(D(self.one(self.c.clerk)["staff_cost"]), D("120"))
-        self.assertEqual(D(self.one(self.c.clerk, self.c.phone)["staff_cost"]), D("24000"))
+        self.assertEqual(D(self.one(self.c.clerk, self.c.phone)["staff_cost"]), D("20000"))     # 帶序號的先不加
         self.product_rule(self.c.case, "fixed", "77")
         self.assertEqual(D(self.one(self.c.clerk)["staff_cost"]), D("77"))
 
@@ -332,27 +357,81 @@ class ProductSettingTests(_Shop):
             "ids": [self.c.case.id, self.c.phone.id],
             "patch": {"staff_cost_mode": "percent", "staff_cost_value": "12"}}, format="json")
         self.assertEqual(r.status_code, 200, r.content.decode())
-        for p in (self.c.case, self.c.phone):
-            p.refresh_from_db()
-            self.assertEqual((p.staff_cost_mode, p.staff_cost_value), ("percent", D("12")))
+        self.c.case.refresh_from_db()
+        self.c.phone.refresh_from_db()
+        self.assertEqual((self.c.case.staff_cost_mode, self.c.case.staff_cost_value), ("percent", D("12")))
+        # 一起勾到的手機(帶序號):不擋,也不存設定
+        self.assertEqual((self.c.phone.staff_cost_mode, self.c.phone.staff_cost_value), ("", D("0")))
         # 店員送同一個請求:什麼都不會變
         r = self.c.clerk.post(f"{PRODUCTS}bulk-edit/", {
             "ids": [self.c.case.id], "patch": {"staff_cost_mode": "fixed", "staff_cost_value": "1"}}, format="json")
         self.c.case.refresh_from_db()
         self.assertEqual((self.c.case.staff_cost_mode, self.c.case.staff_cost_value), ("percent", D("12")))
 
-    def test_each_unit_shows_its_own_number_only_for_secondhand(self):
-        """開單頁挑到某一台時用的數字:中古機是那一台自己的成本加成,一般的手機每一台都跟商品的一樣。"""
+    def units(self):
+        rows = self.c.clerk.get("/api/v1/serials/", {"product": self.c.phone.id}).json()["results"]
+        return {x["serial_no"]: D(x["staff_cost"]) for x in rows}
+
+    def test_each_unit_shows_a_number_without_any_markup_for_now(self):
+        """開單頁挑到某一台時用的數字。帶序號的先不加成:一般的手機每一台都是商品的平均成本,中古機是那一台自己的成本。"""
         ProductSerial.objects.filter(tenant=self.t, serial_no="甲P2").update(purchase_unit_cost=D("8000"))
         self.company_rule("percent", "10")
-
-        def units():
-            rows = self.c.clerk.get("/api/v1/serials/", {"product": self.c.phone.id}).json()["results"]
-            return {x["serial_no"]: D(x["staff_cost"]) for x in rows}
-
-        self.assertEqual(units(), {"甲P1": D("22000"), "甲P2": D("22000")})          # 平均成本 20000 × 1.1
+        self.assertEqual(self.units(), {"甲P1": D("20000"), "甲P2": D("20000")})
         Product.objects.filter(pk=self.c.phone.pk).update(is_secondhand=True)
-        self.assertEqual(units(), {"甲P1": D("22000"), "甲P2": D("8800")})
+        self.assertEqual(self.units(), {"甲P1": D("20000"), "甲P2": D("8000")})
+
+    @serial_goods_switched_on
+    def test_each_unit_shows_its_own_number_only_for_secondhand(self):
+        """(開關打開時)中古機是那一台自己的成本加成,一般的手機每一台都跟商品的一樣。"""
+        ProductSerial.objects.filter(tenant=self.t, serial_no="甲P2").update(purchase_unit_cost=D("8000"))
+        self.company_rule("percent", "10")
+        self.assertEqual(self.units(), {"甲P1": D("22000"), "甲P2": D("22000")})          # 平均成本 20000 × 1.1
+        Product.objects.filter(pk=self.c.phone.pk).update(is_secondhand=True)
+        self.assertEqual(self.units(), {"甲P1": D("22000"), "甲P2": D("8800")})
+
+    def test_a_serial_product_does_not_keep_a_setting(self):
+        """帶序號的商品先不做:管理員送設定過來不擋、也不存(之後開關打開時不會冒出一條沒人記得的規則)。"""
+        one = f"{PRODUCTS}{self.c.phone.id}/"
+        r = self.c.admin.patch(one, {"staff_cost_mode": "fixed", "staff_cost_value": "1"}, format="json")
+        self.assertEqual(r.status_code, 200, r.content.decode())
+        self.c.phone.refresh_from_db()
+        self.assertEqual((self.c.phone.staff_cost_mode, self.c.phone.staff_cost_value), ("", D("0")))
+        self.assertEqual(D(r.json()["staff_cost"]), D("20000"))
+        r = self.c.admin.patch(one, {"staff_cost_mode": "fixed"}, format="json")     # 沒送數字也一樣不擋(本來就不存)
+        self.assertEqual(r.status_code, 200, r.content.decode())
+        # 配件改成帶序號的同一次請求:設定也不留
+        r = self.c.admin.post(PRODUCTS, {"name": "新的序號商品 X1", "category": self.c.cat_phone.id, "requires_serial": True,
+                                         "staff_cost_mode": "plus", "staff_cost_value": "50"}, format="json")
+        self.assertEqual(r.status_code, 201, r.content.decode())
+        self.assertEqual(Product.objects.get(tenant=self.t, name="新的序號商品 X1").staff_cost_mode, "")
+        r = self.c.admin.post(PRODUCTS, {"name": "新的配件 X2", "category": self.c.cat_case.id, "requires_serial": False,
+                                         "staff_cost_mode": "plus", "staff_cost_value": "50"}, format="json")
+        self.assertEqual(r.status_code, 201, r.content.decode())
+        made = Product.objects.get(tenant=self.t, name="新的配件 X2")
+        self.assertEqual((made.staff_cost_mode, made.staff_cost_value), ("plus", D("50")))
+        # 放進「中古機類別」的商品,存檔時會被連帶改成中古機、帶序號(就算送來的是不帶序號):設定一樣不留
+        from apps.catalog.models import Category
+
+        used = Category.objects.create(tenant=self.t, code="UH", name="中古手機", is_secondhand_default=True)
+        r = self.c.admin.post(PRODUCTS, {"name": "中古類別裡的東西 X3", "category": used.id, "requires_serial": False,
+                                         "is_secondhand": False, "staff_cost_mode": "plus", "staff_cost_value": "50"},
+                              format="json")
+        self.assertEqual(r.status_code, 201, r.content.decode())
+        made = Product.objects.get(tenant=self.t, name="中古類別裡的東西 X3")
+        self.assertEqual((made.requires_serial, made.staff_cost_mode, made.staff_cost_value), (True, "", D("0")))
+        # 直接勾「中古機」(送來的 requires_serial 是 False,存檔會被改成帶序號):也不留
+        r = self.c.admin.post(PRODUCTS, {"name": "勾了中古機的東西 X4", "category": self.c.cat_case.id,
+                                         "requires_serial": False, "is_secondhand": True,
+                                         "staff_cost_mode": "plus", "staff_cost_value": "50"}, format="json")
+        self.assertEqual(r.status_code, 201, r.content.decode())
+        made = Product.objects.get(tenant=self.t, name="勾了中古機的東西 X4")
+        self.assertEqual((made.requires_serial, made.staff_cost_mode, made.staff_cost_value), (True, "", D("0")))
+        # 既有的配件搬進中古機類別、同一次送設定:也不留
+        r = self.c.admin.patch(f"{PRODUCTS}{Product.objects.get(tenant=self.t, name='新的配件 X2').id}/",
+                               {"category": used.id, "staff_cost_mode": "fixed", "staff_cost_value": "9"}, format="json")
+        self.assertEqual(r.status_code, 200, r.content.decode())
+        moved = Product.objects.get(tenant=self.t, name="新的配件 X2")
+        self.assertEqual((moved.requires_serial, moved.staff_cost_mode, moved.staff_cost_value), (True, "", D("0")))
 
     def test_setting_it_never_touches_the_actual_cost(self):
         self.c.admin.patch(f"{PRODUCTS}{self.c.case.id}/", {"staff_cost_mode": "fixed", "staff_cost_value": "999"},
@@ -371,7 +450,7 @@ class SaleTests(_Shop):
         self.company_rule("percent", "20")
         doc = self.sell(self.cases(2), self.phone("甲P1"))
         self.assertEqual(self.stored(doc, 0), (D("200"), D("240"), "company:percent:20.00"))
-        self.assertEqual(self.stored(doc, 1), (D("20000"), D("24000"), "company:percent:20.00"))
+        self.assertEqual(self.stored(doc, 1), (D("20000"), D("20000"), ""))          # 手機帶序號:先不加,記實際成本
         # 回應裡兩個都有:實際成本不藏
         line = doc["items"][0]
         self.assertEqual((D(line["cost_at_post"]), D(line["staff_cost"]), line["staff_cost_rule"]),
@@ -434,8 +513,21 @@ class SaleTests(_Shop):
                         client=self.c.admin)
         self.assertEqual(self.stored(doc), (D("200"), D("240"), "company:percent:20.00"))
 
+    def test_serial_goods_record_the_actual_cost_whatever_the_rules(self):
+        """owner 2026-10-10:帶序號的先不做。公司有規則、商品自己也被寫了規則(直接改資料庫),手機與中古機照樣記實際成本。"""
+        ProductSerial.objects.filter(tenant=self.t, serial_no="甲P2").update(purchase_unit_cost=D("8000"))
+        self.company_rule("percent", "20")
+        self.product_rule(self.c.phone, "fixed", "1")
+        doc = self.sell(self.phone("甲P1"), self.cases(1))
+        self.assertEqual(self.stored(doc, 0), (D("20000"), D("20000"), ""))
+        self.assertEqual(self.stored(doc, 1), (D("100"), D("120"), "company:percent:20.00"))      # 同一張單的配件照加
+        Product.objects.filter(pk=self.c.phone.pk).update(is_secondhand=True)
+        doc = self.sell(self.phone("甲P2"))
+        self.assertEqual(self.stored(doc, 0), (D("8000"), D("8000"), ""))
+
+    @serial_goods_switched_on
     def test_a_regular_phone_uses_the_average_not_its_own_cost(self):
-        """兩支手機進價不同(20000 與 18000),平均 19000:賣哪一支業務員成本都一樣。"""
+        """(開關打開時)兩支手機進價不同(20000 與 18000),平均 19000:賣哪一支業務員成本都一樣。"""
         ProductSerial.objects.filter(tenant=self.t, serial_no="甲P2").update(purchase_unit_cost=D("18000"))
         Product.objects.filter(pk=self.c.phone.pk).update(weighted_avg_cost=D("19000"))
         self.company_rule("percent", "10")
@@ -443,6 +535,7 @@ class SaleTests(_Shop):
         self.assertEqual(self.stored(cheap), (D("18000"), D("20900"), "company:percent:10.00"))
         self.assertEqual(self.stored(dear), (D("20000"), D("20900"), "company:percent:10.00"))
 
+    @serial_goods_switched_on
     def test_a_secondhand_unit_uses_its_own_cost(self):
         ProductSerial.objects.filter(tenant=self.t, serial_no="甲P2").update(purchase_unit_cost=D("8000"))
         Product.objects.filter(pk=self.c.phone.pk).update(is_secondhand=True, weighted_avg_cost=D("14000"))
@@ -456,6 +549,23 @@ class SaleTests(_Shop):
         self.company_rule("percent", "20")
         doc = self.sell(self.cases(2))
         self.assertEqual(self.stored(doc), (D("200"), D("240"), "company:percent:20.00"))
+
+    def test_reading_the_product_again_does_not_cost_a_query_per_line(self):
+        """鎖到之後重新讀商品是一次查完的(要看的欄位都在那一次裡,不會每一行再回去補查)。"""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        self.company_rule("percent", "20")
+        other = Product.objects.create(tenant=self.t, category=self.c.cat_case, name="另一個配件 Q9", requires_serial=False)
+        self.c.admin.post("/api/v1/purchase-orders/", {
+            "supplier": self.c.supplier.id, "warehouse": self.c.wh.id, "tax_method": "untaxed",
+            "items": [{"product": other.id, "qty": 3, "unit_price": "50"}]}, format="json")
+        with CaptureQueriesContext(connection) as ctx:
+            self.sell(self.cases(1), {"product": other.id, "qty": 1, "unit_price": "390"}, self.phone("甲P1"))
+        refetch = [q["sql"] for q in ctx.captured_queries
+                   if 'FROM "catalog_product"' in q["sql"] and '"requires_serial"' in q["sql"]
+                   and '"catalog_product"."name"' not in q["sql"]]
+        self.assertEqual(len(refetch), 1, refetch)
 
     def test_a_rule_type_nobody_knows_does_not_break_the_sale(self):
         Product.objects.filter(pk=self.c.case.pk).update(staff_cost_mode="weird", staff_cost_value=D("30"))

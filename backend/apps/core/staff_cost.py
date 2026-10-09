@@ -50,8 +50,17 @@ class Rule:
         return f"{self.source}:{self.mode}:{_cents(self.value)}"
 
 
+# owner 2026-10-10:「目前帶序號的產品先不做業務員成本,先針對一般商品」。
+# 帶序號的(手機、中古機…)一律當成沒有規則 = 實際成本,商品上也不存設定。
+# 之後要做再把這個開關打開:「一般的手機用平均成本、中古機用那一台自己的成本」那兩段都還在、測試也留著。
+SERIAL_GOODS_TOO = False
+
+
 def rule_for(product, tenant) -> Rule | None:
     """這個商品現在適用哪一條;兩邊都沒設定回 None(= 用實際成本)。"""
+    # 中古機存檔時一定會被標成帶序號;這裡兩個都看,繞過存檔直接改資料庫留下的「中古但沒標帶序號」也不加
+    if not SERIAL_GOODS_TOO and (getattr(product, "requires_serial", False) or getattr(product, "is_secondhand", False)):
+        return None
     # 只認這三種;資料庫裡萬一是別的字(只有直接改資料庫才會),當成沒有設定,不拿去亂算
     mode = getattr(product, "staff_cost_mode", "") or ""
     if mode in KNOWN:

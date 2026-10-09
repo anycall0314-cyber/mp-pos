@@ -40,7 +40,14 @@ import { MoneyInput } from "@/components/MoneyInput";
 import { toast } from "@/components/workbench/toast";
 import { rememberNote, rememberTone } from "@/lib/findFirst";
 import { isManager } from "@/lib/roles";
-import { PRODUCT_MODES, ruleProblem, rulePayload, valueInput, valueUnit } from "@/lib/staffCost";
+import {
+  PRODUCT_MODES,
+  ruleProblem,
+  rulePayload,
+  staffCostApplies,
+  valueInput,
+  valueUnit,
+} from "@/lib/staffCost";
 import { useCurrentUser } from "@/auth/AuthContext";
 import {
   defaultRequiresSerial,
@@ -568,7 +575,9 @@ export function ProductForm({
       setFieldErrors({ name: ["請填品名"] });
       return;
     }
-    const staffProblem = canSetStaff ? ruleProblem(state.staff_cost_mode, state.staff_cost_value) : null;
+    // 帶序號的商品(與虛擬商品)先不做業務員成本:表單沒有那一段,送出去的是「沒有設定」
+    const staffShown = canSetStaff && staffCostApplies(state);
+    const staffProblem = staffShown ? ruleProblem(state.staff_cost_mode, state.staff_cost_value) : null;
     if (staffProblem) {
       setFieldErrors({ staff_cost_value: [staffProblem] });
       return;
@@ -612,7 +621,9 @@ export function ProductForm({
         min_sale_price: state.min_sale_price || "0",
         is_active: state.is_active,
         // 業務員成本怎麼算:只有管理員送(店員送了伺服器也不收)
-        ...(canSetStaff ? rulePayload(state.staff_cost_mode, state.staff_cost_value) : {}),
+        ...(canSetStaff
+          ? rulePayload(staffShown ? state.staff_cost_mode : "", state.staff_cost_value)
+          : {}),
         ...(dup && distinctReason.trim()
           ? { distinct_reason: distinctReason.trim() }
           : {}),
@@ -1382,7 +1393,7 @@ export function ProductForm({
           )}
         </div>
 
-        {canSetStaff && !state.is_virtual && (
+        {canSetStaff && staffCostApplies(state) && (
           <div className="field-row">
             <Field label="業務員成本">
               <select

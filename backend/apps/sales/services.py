@@ -406,7 +406,8 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
         costing = {
             p.pk: p for p in Product.objects.filter(
                 tenant_id=so.tenant_id, pk__in={it.product_id for it in items}
-            ).only("weighted_avg_cost", "staff_cost_mode", "staff_cost_value", "is_virtual", "is_secondhand")
+            ).only("weighted_avg_cost", "staff_cost_mode", "staff_cost_value",
+                   "is_virtual", "is_secondhand", "requires_serial")
         }
 
         for it in items:

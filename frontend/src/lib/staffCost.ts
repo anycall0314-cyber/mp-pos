@@ -27,6 +27,15 @@ function num(v: Num): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/**
+ * 這個商品現在算不算業務員成本的加成。owner 2026-10-10:「帶序號的產品先不做,先針對一般商品」——
+ * 帶序號的(手機、中古機)與虛擬商品不顯示這一列、表單也沒有設定那一段(伺服器同樣不算、不存)。
+ */
+export function staffCostApplies(product: { is_virtual?: boolean; requires_serial?: boolean }): boolean {
+  // 資料裡沒有「帶不帶序號」那一欄時當成不適用(不確定就不顯示)
+  return product.requires_serial === false && !product.is_virtual;
+}
+
 /** 資料裡有沒有「怎麼算」那一欄(有 = 伺服器認定現在看的人是管理員,可以設定)。 */
 export function canSetStaffCost(row: object | null | undefined): boolean {
   return !!row && Object.hasOwn(row, "staff_cost_mode");

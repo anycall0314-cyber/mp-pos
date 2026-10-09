@@ -17,7 +17,7 @@ import { useReorder } from "@/hooks/useReorder";
 import { toast } from "@/components/workbench/toast";
 import { money } from "@/lib/money";
 import { purchaseLinkFor } from "@/lib/purchasePrefill";
-import { canSetStaffCost, ruleText } from "@/lib/staffCost";
+import { canSetStaffCost, ruleText, staffCostApplies } from "@/lib/staffCost";
 
 import { BulkAddProductsModal } from "./BulkAddProductsModal";
 import { BulkCreatePartsModal } from "./BulkCreatePartsModal";
@@ -733,7 +733,7 @@ export function ProductsPage() {
                     <dd>{formatMoney(selectedProduct.list_price)}</dd>
                     <dt>加權平均成本</dt>
                     <dd>{formatMoney(selectedProduct.weighted_avg_cost)}</dd>
-                    {!selectedProduct.is_virtual && (
+                    {staffCostApplies(selectedProduct) && (
                       <>
                         <dt>業務員成本</dt>
                         <dd>

@@ -308,6 +308,23 @@ class ProductSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, 
     def validate(self, attrs):
         attrs = super().validate(attrs)
         if "staff_cost_mode" in attrs or "staff_cost_value" in attrs:
+            # 帶序號的商品先不做業務員成本(owner 2026-10-10):送來的設定不留(批次修改勾到手機時不擋、也不存)
+            # 「存檔之後帶不帶序號」跟 Product.save 用同一份算法(放進中古機類別的商品會被連帶改成帶序號)
+            from .usage import flags_after_save
+
+            def after(name, default):
+                return attrs.get(name, getattr(self.instance, name, default))
+
+            category = after("category", None)
+            serial = flags_after_save(
+                category_secondhand=bool(category is not None and category.is_secondhand_default),
+                is_secondhand=after("is_secondhand", False),
+                requires_serial=after("requires_serial", True),
+                is_virtual=after("is_virtual", False),
+            )["requires_serial"]
+            if serial and not staff_cost.SERIAL_GOODS_TOO:
+                attrs["staff_cost_mode"], attrs["staff_cost_value"] = "", 0
+                return attrs
             mode = attrs.get("staff_cost_mode", getattr(self.instance, "staff_cost_mode", ""))
             if "staff_cost_mode" in attrs:
                 # 換算法的時候數字要一起送(畫面一定一起送);沒送不沿用原本的
