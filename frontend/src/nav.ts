@@ -188,6 +188,12 @@ export const NAV_MODULES: NavModule[] = [
         aliases: ["備份與還原"],
         adminOnly: true,
       },
+      {
+        to: "/settings/users",
+        label: "員工帳號",
+        aliases: ["人員權限", "權限", "帳號權限"],
+        adminOnly: true,
+      },
       { to: "/settings/legacy", label: "舊系統對照", adminOnly: true },
       { to: "/settings/ledger", label: "每日對帳", adminOnly: true },
     ],

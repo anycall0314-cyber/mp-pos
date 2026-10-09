@@ -125,7 +125,7 @@ def export_company(tenant, zip_path, backup_id) -> dict:
         profiles = {
             p["user_id"]: p for p in UserProfile.objects.filter(tenant=company).values(
                 "user_id", "role", "default_warehouse_id", "is_warehouse_locked",
-                "account_uuid",
+                "account_uuid", "denied_abilities",
             )
         }
 
@@ -197,6 +197,8 @@ def export_company(tenant, zip_path, backup_id) -> dict:
                 "role": p["role"],
                 "default_warehouse_id": p["default_warehouse_id"],
                 "is_warehouse_locked": p["is_warehouse_locked"],
+                # 這個帳號被關掉的權限項目:搬到新環境還原時要跟著回來(不然大家變回全開)
+                "denied_abilities": [k for k in (p["denied_abilities"] or []) if isinstance(k, str)],
             })
         zf.writestr("accounts.json", _dump(accounts))
 

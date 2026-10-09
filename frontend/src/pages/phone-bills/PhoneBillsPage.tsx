@@ -1,3 +1,4 @@
+import { useCan } from "@/auth/AuthContext";
 import { useMemo, useState } from "react";
 
 import { usePhoneBills, useVoidPhoneBill } from "@/api/hooks";
@@ -16,6 +17,8 @@ import { maskIdNo } from "./mask";
 export function PhoneBillsPage() {
   const { data, isLoading, isError, error } = usePhoneBills();
   const voidMutation = useVoidPhoneBill();
+  // 員工帳號的權限(作廢其他單):關掉的人沒有這顆(伺服器也會擋)
+  const canVoid = useCan("void_others");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -143,7 +146,7 @@ export function PhoneBillsPage() {
             >
               列印收據
             </button>
-            {!r.is_void && (
+            {!r.is_void && canVoid && (
               <button
                 className="btn danger"
                 onClick={() => handleVoid(r)}

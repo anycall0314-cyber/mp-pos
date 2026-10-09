@@ -1,3 +1,4 @@
+import { useCan } from "@/auth/AuthContext";
 import { useMemo, useState } from "react";
 
 import {
@@ -18,6 +19,8 @@ import { PettyExpenseForm } from "./PettyExpenseForm";
 export function PettyExpensesPage() {
   const { data, isLoading, isError, error } = usePettyExpenses();
   const voidMutation = useVoidPettyExpense();
+  // 員工帳號的權限(作廢其他單):關掉的人沒有這顆(伺服器也會擋)
+  const canVoid = useCan("void_others");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerInitial, setDrawerInitial] = useState<PettyExpense | null>(
     null,
@@ -142,13 +145,15 @@ export function PettyExpensesPage() {
               >
                 編輯
               </button>
-              <button
-                className="btn danger"
-                onClick={() => handleVoid(r)}
-                disabled={voidMutation.isPending}
-              >
-                作廢
-              </button>
+              {canVoid && (
+                <button
+                  className="btn danger"
+                  onClick={() => handleVoid(r)}
+                  disabled={voidMutation.isPending}
+                >
+                  作廢
+                </button>
+              )}
             </div>
           )}
         </div>

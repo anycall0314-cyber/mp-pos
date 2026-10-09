@@ -22,7 +22,7 @@ import type {
   PurchaseTransferable,
   TransferOrder,
 } from "@/api/types";
-import { useDefaultWarehouse } from "@/auth/AuthContext";
+import { useCan, useDefaultWarehouse } from "@/auth/AuthContext";
 import { ArmButton } from "@/components/workbench/ArmButton";
 import { apiErrorText } from "@/components/workbench/errors";
 import {
@@ -226,6 +226,8 @@ export function TransferWorkbenchPage() {
   const createMutation = useCreateTransferOrder();
   const confirmMutation = useConfirmTransferOrder();
   const voidMutation = useVoidTransferOrder();
+  // 員工帳號的權限(作廢其他單):關掉的人沒有作廢這顆(伺服器也會擋)
+  const canVoid = useCan("void_others");
 
   const [from, setFrom] = useState<number | "">(() =>
     me.locked && me.id ? me.id : (readNum(K_FROM) ?? me.id ?? ""),
@@ -1034,11 +1036,13 @@ export function TransferWorkbenchPage() {
             onConfirm={() => confirmOrder(t)}
           />
         )}{" "}
-        <ArmButton
-          label="作廢"
-          className="wb-btn danger small"
-          onConfirm={() => voidOrder(t)}
-        />
+        {canVoid && (
+          <ArmButton
+            label="作廢"
+            className="wb-btn danger small"
+            onConfirm={() => voidOrder(t)}
+          />
+        )}
       </>
     );
   }
@@ -1060,7 +1064,7 @@ export function TransferWorkbenchPage() {
             ))}
           </tbody>
         </table>
-        {!t.is_void && !pending && (
+        {!t.is_void && !pending && canVoid && (
           <div className="wb-detail-actions">
             <ArmButton
               label="作廢"

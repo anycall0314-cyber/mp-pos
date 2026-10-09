@@ -12,6 +12,7 @@ from apps.core.warehouse_scoping import WarehouseScopedMixin, report_warehouse_i
 from apps.inventory.models import ProductSerial, StockBalance, Warehouse
 from apps.purchasing.models import PurchaseOrder
 from apps.sales.models import SalesOrder, SalesOrderPayment
+from apps.tenants import abilities
 from apps.tenants.models import PaymentMethod
 
 from .models import CashAdjustment, PettyExpense, PhoneBillCollection
@@ -45,8 +46,13 @@ class PettyExpenseViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
         self.check_create_warehouse(serializer)
         serializer.save(tenant=self.request.tenant)
 
+    def destroy(self, request, *args, **kwargs):
+        # 單據不刪除、只作廢(刪掉的話帳上就沒有這一筆、也沒有紀錄;被關掉「作廢其他單」的人也不能改用刪的)
+        return Response({"detail": "雜支單不能刪除,請用作廢"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
     @action(detail=True, methods=["post"])
     def void(self, request, pk=None):
+        abilities.require(request.user, abilities.VOID_OTHERS)      # 作廢雜支單
         obj = self.get_object()
         if obj.is_void:
             return Response(
@@ -80,8 +86,13 @@ class PhoneBillCollectionViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
         self.check_create_warehouse(serializer)
         serializer.save(tenant=self.request.tenant)
 
+    def destroy(self, request, *args, **kwargs):
+        # 單據不刪除、只作廢(刪掉的話帳上就沒有這一筆、也沒有紀錄;被關掉「作廢其他單」的人也不能改用刪的)
+        return Response({"detail": "現金調整不能刪除,請用作廢"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
     @action(detail=True, methods=["post"])
     def void(self, request, pk=None):
+        abilities.require(request.user, abilities.VOID_OTHERS)      # 作廢現金調整
         obj = self.get_object()
         if obj.is_void:
             return Response(
@@ -115,8 +126,13 @@ class CashAdjustmentViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
         self.check_create_warehouse(serializer)
         serializer.save(tenant=self.request.tenant)
 
+    def destroy(self, request, *args, **kwargs):
+        # 單據不刪除、只作廢(刪掉的話帳上就沒有這一筆、也沒有紀錄;被關掉「作廢其他單」的人也不能改用刪的)
+        return Response({"detail": "代收話費單不能刪除,請用作廢"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
     @action(detail=True, methods=["post"])
     def void(self, request, pk=None):
+        abilities.require(request.user, abilities.VOID_OTHERS)      # 作廢代收話費
         obj = self.get_object()
         if obj.is_void:
             return Response(

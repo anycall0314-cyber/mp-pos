@@ -1,3 +1,4 @@
+import { useCan } from "@/auth/AuthContext";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -15,6 +16,8 @@ function today(): string {
  */
 export function SalesReturnsPage() {
   const navigate = useNavigate();
+  // 員工帳號的權限:不能開立銷退單的人沒有這顆(伺服器也會擋)
+  const canReturn = useCan("sales_return");
 
   const [from, setFrom] = useState<string>(today);
   const [to, setTo] = useState<string>(today);
@@ -25,12 +28,14 @@ export function SalesReturnsPage() {
       <Toolbar
         title="銷退單"
         actions={
-          <button
-            className="btn primary"
-            onClick={() => navigate("/sales/returns/new")}
-          >
-            + 新增銷退單
-          </button>
+          canReturn ? (
+            <button
+              className="btn primary"
+              onClick={() => navigate("/sales/returns/new")}
+            >
+              + 新增銷退單
+            </button>
+          ) : null
         }
       />
 

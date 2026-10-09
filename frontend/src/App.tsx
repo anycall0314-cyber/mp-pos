@@ -46,6 +46,7 @@ import { BackupPage } from "@/pages/backup/BackupPage";
 import { LegacyMappingPage } from "@/pages/legacy/LegacyMappingPage";
 import { LedgerChecksPage } from "@/pages/ledger/LedgerChecksPage";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
+import { StaffAccountsPage } from "@/pages/settings/StaffAccountsPage";
 import { SimCardsPage } from "@/pages/sim-cards/SimCardsPage";
 import { SuppliersPage } from "@/pages/suppliers/SuppliersPage";
 import { ContractsPage } from "@/pages/telecom/ContractsPage";
@@ -320,7 +321,7 @@ export function App() {
           />
           <Route
             path="/settings/users"
-            element={<Placeholder title="人員權限" />}
+            element={<StaffAccountsPage />}
           />
           <Route
             path="/reports/sales-daily"

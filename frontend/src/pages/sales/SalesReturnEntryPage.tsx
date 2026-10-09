@@ -1,3 +1,4 @@
+import { useCan } from "@/auth/AuthContext";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
@@ -34,6 +35,8 @@ export function SalesReturnEntryPage() {
   const existing = useSalesReturn(srId);
   const create = useCreateSalesReturn();
   const voidMutation = useVoidSalesReturn();
+  // 員工帳號的權限:關掉的人不能送出、不能作廢(伺服器也會擋)
+  const canReturn = useCan("sales_return");
   const paymentMethodsQ = usePaymentMethods({ activeOnly: true });
 
   const [originalSOId, setOriginalSOId] = useState<number | null>(null);
@@ -157,7 +160,7 @@ export function SalesReturnEntryPage() {
               <button className="btn" onClick={() => navigate("/sales/returns")}>
                 回列表
               </button>
-              {!isNew && sr && !sr.is_void && (
+              {!isNew && sr && !sr.is_void && canReturn && (
                 <button
                   className="btn danger"
                   onClick={handleVoid}
@@ -166,7 +169,7 @@ export function SalesReturnEntryPage() {
                   {voidMutation.isPending ? "作廢中" : "作廢單"}
                 </button>
               )}
-              {isNew && (
+              {isNew && canReturn && (
                 <button
                   className="btn primary"
                   onClick={handleSubmit}
@@ -181,6 +184,7 @@ export function SalesReturnEntryPage() {
       />
 
       {error && <Banner kind="error" message={error} />}
+      {!canReturn && <Banner kind="error" message="這個帳號不能開立銷退單" />}
       {isNew && blocked && <Banner kind="error" message={blocked} />}
 
       <div style={{ padding: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>

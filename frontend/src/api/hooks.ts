@@ -72,6 +72,8 @@ import {
   AnalyticsSpec,
   LedgerOverview,
   SavedReport,
+  StaffAccount,
+  StaffAccountsResponse,
 } from "./types";
 
 // 通用：把分頁 results 攤平回傳（MVP 一頁 50 筆夠用）
@@ -1692,6 +1694,24 @@ export const useRepairHistoryByPhone = (phone: string) =>
     enabled: !!phone && phone.trim().length >= 4,
     staleTime: 60_000,
   });
+
+// ── 員工帳號的權限(系統設定 → 員工帳號;只有管理員)
+export const useStaffAccounts = () =>
+  useQuery({
+    queryKey: ["staff-accounts"],
+    queryFn: () => api<StaffAccountsResponse>(`/staff-accounts/`),
+  });
+
+export function useSaveStaffAbilities() {
+  return useMutation({
+    mutationFn: ({ id, abilities }: { id: number; abilities: Record<string, boolean> }) =>
+      api<StaffAccount>(`/staff-accounts/${id}/`, {
+        method: "PATCH",
+        body: JSON.stringify({ abilities }),
+      }),
+    // 重抓由頁面決定(全部存完才抓一次:不拿半路的結果蓋掉還在存的那幾格)
+  });
+}
 
 export interface TenantSettings {
   id: number;

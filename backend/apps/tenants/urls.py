@@ -7,6 +7,7 @@ from .platform_views import (
     PlatformUserViewSet,
     PlatformWarehouseViewSet,
 )
+from .staff_views import staff_account, staff_accounts
 from .views import (
     InvoiceTrackViewSet,
     InvoiceTypeViewSet,
@@ -35,4 +36,6 @@ urlpatterns = router.urls + [
     path("auth/me/", me, name="auth-me"),
     path("auth/logout/", logout, name="auth-logout"),
     path("tenant-settings/", tenant_settings, name="tenant-settings"),
+    path("staff-accounts/", staff_accounts, name="staff-accounts"),
+    path("staff-accounts/<int:pk>/", staff_account, name="staff-account"),
 ]

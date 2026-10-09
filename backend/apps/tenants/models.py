@@ -360,6 +360,11 @@ class UserProfile(TimestampedModel):
     account_uuid = models.UUIDField(
         "帳號識別碼", default=uuid.uuid4, unique=True, editable=False
     )
+    # 這個帳號被關掉的權限項目(清單與判斷在 apps/tenants/abilities.py)。空的 = 全開;只對店員帳號有用
+    denied_abilities = models.JSONField(
+        "關掉的權限", default=list, blank=True,
+        help_text="項目代碼的清單;空的 = 全部可以做(管理員永遠全開)",
+    )
 
     class Meta:
         verbose_name = "使用者設定"

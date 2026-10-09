@@ -7492,3 +7492,27 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .npm-row-price.none {
   color: var(--warn-text);
 }
+
+/* ── 系統設定 → 員工帳號:每個帳號一列、每一項一個勾 ─────────────── */
+.staff-table { border-collapse: collapse; }
+.staff-table th,
+.staff-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+  font-size: var(--fs-body);
+}
+.staff-table thead th { color: var(--text-dim); font-weight: 600; font-size: var(--fs-sub); }
+.staff-table th.staff-group { text-align: center; border-bottom: none; padding-bottom: 2px; }
+.staff-table th.staff-item,
+.staff-table td.staff-check { text-align: center; }
+/* 名稱不折行(字放大也是一行);項目底下的說明才折 */
+.staff-table th.staff-item,
+.staff-table td { white-space: nowrap; }
+.staff-table th.staff-item .staff-note { white-space: normal; max-width: 11em; margin: 0 auto; }
+.staff-scroll { overflow-x: auto; }
+.staff-table td.staff-check input { width: 22px; height: 22px; }
+.staff-note { color: var(--text-dim); font-size: var(--fs-sub); font-weight: 400; }
+.staff-table tr.staff-off td { opacity: 0.55; }
+

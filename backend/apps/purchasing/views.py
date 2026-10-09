@@ -5,6 +5,7 @@ from rest_framework.response import Response
 
 from apps.core.idempotency import IdempotentCreateMixin
 from apps.core.warehouse_scoping import WarehouseScopedMixin
+from apps.tenants import abilities
 
 from .models import PurchaseOrder, PurchaseOrderCategory
 from .serializers import (
@@ -78,6 +79,7 @@ class PurchaseOrderViewSet(
 
     @action(detail=True, methods=["post"])
     def void(self, request, pk=None):
+        abilities.require(request.user, abilities.VOID_PURCHASE)
         po = self.get_object()
         try:
             void_purchase_order(po)

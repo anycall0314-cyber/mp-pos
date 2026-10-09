@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.core.warehouse_scoping import WarehouseScopedMixin
+from apps.tenants import abilities
 
 from .models import RepairItem, RepairOrder
 from .serializers import RepairItemSerializer, RepairOrderSerializer
@@ -163,6 +164,7 @@ class RepairOrderViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="void")
     def void(self, request, pk=None):
+        abilities.require(request.user, abilities.VOID_OTHERS)
         order = self.get_object()
         try:
             void_repair_order(order)

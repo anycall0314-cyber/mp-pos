@@ -5,6 +5,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from apps.core.warehouse_scoping import TransferWarehouseScopedMixin
+from apps.tenants import abilities
 
 from .models import TransferOrder
 from .serializers import TransferOrderSerializer
@@ -86,6 +87,7 @@ class TransferOrderViewSet(
 
     @action(detail=True, methods=["post"])
     def void(self, request, pk=None):
+        abilities.require(request.user, abilities.VOID_OTHERS)
         to = self.get_object()
         try:
             void_transfer_order(to)

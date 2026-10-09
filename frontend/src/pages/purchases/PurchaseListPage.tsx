@@ -1,3 +1,4 @@
+import { useCan } from "@/auth/AuthContext";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   useLocation,
@@ -63,6 +64,8 @@ export function PurchaseListPage() {
     (useLocation().state as { created?: number } | null)?.created ?? null;
 
   const voidMutation = useVoidPurchaseOrder();
+  // 員工帳號的權限:關掉的人沒有這顆(伺服器也會擋)
+  const canVoid = useCan("void_purchase");
   const [day, setDay] = useState("");
   const [showAll, setShowAll] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(focusId);
@@ -166,12 +169,14 @@ export function PurchaseListPage() {
             >
               整張調撥
             </button>
-            <ArmButton
-              label="作廢"
-              className="wb-btn danger small"
-              title="把這張單進的東西退掉(序號作廢、庫存扣回)"
-              onConfirm={() => voidOrder(t)}
-            />
+            {canVoid && (
+              <ArmButton
+                label="作廢"
+                className="wb-btn danger small"
+                title="把這張單進的東西退掉(序號作廢、庫存扣回)"
+                onConfirm={() => voidOrder(t)}
+              />
+            )}
           </div>
         )}
       </>

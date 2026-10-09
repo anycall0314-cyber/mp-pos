@@ -1,3 +1,4 @@
+import { useCan } from "@/auth/AuthContext";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   useLocation,
@@ -75,6 +76,9 @@ export function SalesListPage() {
     (useLocation().state as { created?: number } | null)?.created ?? null;
 
   const voidMutation = useVoidSalesOrder();
+  // 員工帳號的權限:關掉的人沒有這兩顆(伺服器也會擋)
+  const canVoid = useCan("void_sales");
+  const canReturn = useCan("sales_return");
   const datesMutation = useUpdateContractDates();
   /** 正在改哪一行的合約日期 */
   const [editing, setEditing] = useState<{
@@ -331,7 +335,7 @@ export function SalesListPage() {
                 列印發票
               </button>
             )}
-            {!t.is_void && (
+            {!t.is_void && canReturn && (
               <button
                 type="button"
                 className="wb-btn small"
@@ -345,7 +349,7 @@ export function SalesListPage() {
                 整張銷退
               </button>
             )}
-            {!t.is_void && (
+            {!t.is_void && canVoid && (
               <ArmButton
                 label="作廢"
                 className="wb-btn danger small"

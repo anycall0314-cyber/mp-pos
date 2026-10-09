@@ -608,6 +608,19 @@ class NewEnvironmentRestoreTests(_Base):
         }, format="json")
         self.assertIn(r.status_code, (400, 403), r.content)
 
+    def test_turned_off_permissions_come_back_with_the_accounts(self):
+        """員工帳號被關掉的權限,搬到新環境還原時跟著回來 —— 不然還原之後大家變回全開。"""
+        UserProfile.objects.filter(user=self.a.clerk_user).update(denied_abilities=["void_sales", "sales_return"])
+        tenant, result, _, _ = self.restore_as_new()
+        clerk = UserProfile.objects.get(tenant=tenant, role="tenant_user")
+        self.assertEqual(clerk.denied_abilities, ["void_sales", "sales_return"])
+        so = SalesOrder.objects.get(tenant=tenant)
+        r = Company.client(clerk.user).post(f"/api/v1/sales-orders/{so.id}/void/", {}, format="json")
+        self.assertEqual(r.status_code, 403, r.content)
+        self.assertFalse(SalesOrder.objects.get(pk=so.pk).is_void)
+        boss = UserProfile.objects.get(tenant=tenant, user__username="a-boss-a2")
+        self.assertEqual(boss.denied_abilities, [])
+
     def test_account_names_never_collide_or_overflow(self):
         """改名後的名字也被用掉、或原名已經頂到長度上限:都要找得到一個放得下、沒人用的名字。"""
         from django.contrib.auth import get_user_model
@@ -1552,6 +1565,13 @@ class RejectionTests(_Base):
             ("accounts.json", lambda d: [d[0], {**d[1], "uuid": d[0]["uuid"]}]),
             ("accounts.json", lambda d: [{**d[0], "uuid": d[0]["uuid"].upper()}, d[1]]),
             ("accounts.json", lambda d: {"id": 1}),
+            # 帳號被關掉的權限:要是字串的清單(少了這一格、不是清單、裡面不是字串、太長都不收)
+            ("accounts.json", lambda d: [{k: v for k, v in d[0].items() if k != "denied_abilities"}, d[1]]),
+            ("accounts.json", lambda d: [{**d[0], "denied_abilities": "void_sales"}, d[1]]),
+            ("accounts.json", lambda d: [{**d[0], "denied_abilities": [7]}, d[1]]),
+            ("accounts.json", lambda d: [{**d[0], "denied_abilities": [""]}, d[1]]),
+            ("accounts.json", lambda d: [{**d[0], "denied_abilities": ["x" * 61]}, d[1]]),
+            ("accounts.json", lambda d: [{**d[0], "denied_abilities": ["a"] * 201}, d[1]]),
             ("manifest.json", lambda d: d.update(tables={k: "3" for k in d["tables"]})),
             ("manifest.json", lambda d: d.update(warehouses="w1")),
             ("manifest.json", lambda d: d.update(snapshot_at=None)),

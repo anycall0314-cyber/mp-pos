@@ -760,6 +760,27 @@ export interface CurrentUser {
     code: string;
     name: string;
   } | null;
+  /** 這個帳號每一項能不能做(管理員全開)。畫面照它收按鈕;真正擋的是伺服器。見 lib/abilities.ts */
+  abilities?: Record<string, boolean>;
+}
+
+/** 系統設定 → 員工帳號:一個帳號一列 */
+export interface StaffAccount {
+  id: number;
+  username: string;
+  name: string;
+  role: UserRole;
+  role_label: string;
+  warehouse: string;
+  is_active: boolean;
+  /** 管理員永遠全開,不能在這一頁關 */
+  editable: boolean;
+  abilities: Record<string, boolean>;
+}
+
+export interface StaffAccountsResponse {
+  abilities: { key: string; label: string; group: string; note: string }[];
+  accounts: StaffAccount[];
 }
 
 export interface LoginResponse {

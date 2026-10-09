@@ -1,3 +1,4 @@
+import { type AbilityKey, can } from "@/lib/abilities";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   createContext,
@@ -132,6 +133,11 @@ export function useAuth(): AuthState {
 
 export function useCurrentUser(): CurrentUser | null {
   return useAuth().user;
+}
+
+/** 這個帳號能不能做這一項(員工帳號的權限)。只決定按鈕要不要出現;真正擋的是伺服器。 */
+export function useCan(key: AbilityKey): boolean {
+  return can(useAuth().user, key);
 }
 
 /**

@@ -19,6 +19,8 @@ from rest_framework.decorators import (
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from . import abilities
+
 
 def _serialize_user(user: User) -> dict:
     profile = getattr(user, "profile", None)
@@ -31,6 +33,8 @@ def _serialize_user(user: User) -> dict:
         "is_superuser": user.is_superuser,
         "profile": None,
         "sales_person": None,
+        # 這個帳號每一項能不能做(管理員全開)。畫面照它收按鈕;真正擋的是伺服器
+        "abilities": abilities.for_user(user),
     }
     if profile:
         data["profile"] = {

@@ -286,7 +286,10 @@ class Package:
                 and acc.get("role") in ("tenant_admin", "tenant_user")
                 and (acc.get("default_warehouse_id") is None
                      or _is_int(acc["default_warehouse_id"]))
-                and isinstance(acc.get("is_warehouse_locked"), bool),
+                and isinstance(acc.get("is_warehouse_locked"), bool)
+                and isinstance(acc.get("denied_abilities"), list)
+                and len(acc["denied_abilities"]) <= 200
+                and all(isinstance(k, str) and 0 < len(k) <= 60 for k in acc["denied_abilities"]),
                 "帳號對照",
             )
             ids.add(acc["id"])
@@ -1543,6 +1546,8 @@ def restore_new_company(enc_path, credential, *, code, admin_username, name="",
                     UserProfile.objects.create(
                         user=u, tenant=tenant, role=acc["role"] or "tenant_user",
                         default_warehouse_id=store, **identity,
+                        # 被關掉的權限照備份的帶回來(不放寬)
+                        denied_abilities=list(acc["denied_abilities"]),
                         # 門市對不回來的一律維持鎖定(= 沒有門市可用),不放寬
                         is_warehouse_locked=acc["is_warehouse_locked"] or store is None
                         if acc["role"] != "tenant_admin" else acc["is_warehouse_locked"],

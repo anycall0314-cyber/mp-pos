@@ -11,6 +11,7 @@ from apps.core.warehouse_scoping import WarehouseScopedMixin
 from apps.inventory.models import Warehouse
 from apps.inventory.serializers import ProductSerialSerializer
 from apps.parties.models import Member
+from apps.tenants import abilities
 
 from .models import LegacyPurchase, SalesOrder, SalesReturn
 from .serializers import (
@@ -202,6 +203,7 @@ class SalesOrderViewSet(
 
     @action(detail=True, methods=["post"])
     def void(self, request, pk=None):
+        abilities.require(request.user, abilities.VOID_SALES)
         so = self.get_object()
         try:
             void_sales_order(so)
@@ -364,6 +366,11 @@ class SalesReturnViewSet(
             )
         )
 
+    def create(self, request, *args, **kwargs):
+        # 沒有權限的先擋(在檢查送來的內容之前:不讓人靠錯誤訊息探別人的單)
+        abilities.require(request.user, abilities.SALES_RETURN)
+        return super().create(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         user = (
             self.request.user
@@ -385,6 +392,7 @@ class SalesReturnViewSet(
 
     @action(detail=True, methods=["post"])
     def void(self, request, pk=None):
+        abilities.require(request.user, abilities.SALES_RETURN)
         sr = self.get_object()
         try:
             void_sales_return(sr)
