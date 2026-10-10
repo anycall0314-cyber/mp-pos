@@ -68,7 +68,8 @@ def can(user, key: str) -> bool:
 def require(user, key: str) -> None:
     """不能做就丟 403(DRF 會回 `{"detail": …}`,畫面的錯誤訊息只認這一格)。"""
     if not can(user, key):
-        raise PermissionDenied(f"這個帳號不能{LABELS[key]},請管理員到「系統設定 → 員工帳號」開啟")
+        # 項目的名稱有的是動作(作廢銷貨單)、有的是名詞(營業日報):用「沒有…的權限」兩種都通順
+        raise PermissionDenied(f"這個帳號沒有「{LABELS[key]}」的權限,請管理員到「系統設定 → 員工帳號」開啟")
 
 
 class WritesNeed:

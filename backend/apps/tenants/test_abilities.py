@@ -46,8 +46,10 @@ class RuleTests(SimpleTestCase):
     def test_require_says_which_and_where_to_turn_it_on(self):
         with self.assertRaises(abilities.PermissionDenied) as caught:
             abilities.require(someone(off=["void_purchase"]), "void_purchase")
-        self.assertIn("作廢進貨單", str(caught.exception.detail))
-        self.assertIn("員工帳號", str(caught.exception.detail))
+        self.assertEqual(str(caught.exception.detail), "這個帳號沒有「作廢進貨單」的權限,請管理員到「系統設定 → 員工帳號」開啟")
+        with self.assertRaises(abilities.PermissionDenied) as caught:          # 名稱是名詞的也通順
+            abilities.require(someone(off=["view_business_daily"]), "view_business_daily")
+        self.assertIn("沒有「營業日報」的權限", str(caught.exception.detail))
 
     def test_a_misspelt_item_is_an_error_not_a_yes(self):
         with self.assertRaises(KeyError):
