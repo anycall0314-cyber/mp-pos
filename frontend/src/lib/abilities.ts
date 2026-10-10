@@ -12,6 +12,7 @@ export type AbilityKey =
   | "secondhand_buy"
   | "cash_ops"
   | "view_business_daily"
+  | "vendor_order"
   // 第三批:報表一張一個勾
   | "report_sales_daily"
   | "report_explore"

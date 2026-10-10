@@ -7603,3 +7603,129 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .staff-note { color: var(--text-dim); font-size: var(--fs-sub); font-weight: 400; }
 .staff-table tr.staff-off td { opacity: 0.55; }
 
+
+/* ─────────────────────────────────────────────────────────
+ * 廠商叫貨(膜總裁):商品清單填包數、最下面固定合計與主要按鈕;叫貨串接設定
+ * ───────────────────────────────────────────────────────── */
+.vo-vendor { color: var(--text-dim); font-size: var(--font-secondary); }
+.vo-test {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 8px;
+  font-size: var(--font-secondary);
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--warn-text);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.report-table.vo-table { flex: 1; min-height: 0; height: auto; }
+.vo-grid td.vo-name, .vo-confirm td.vo-name { white-space: normal; min-width: 12rem; overflow-wrap: anywhere; }
+.vo-grid tr.vo-picked td { background: rgba(120, 160, 255, 0.07); }
+.vo-grid tr.vo-order { cursor: pointer; }
+.vo-grid tr.vo-unsure td { background: rgba(255, 180, 60, 0.08); }
+.vo-grid tr.vo-detail td { background: var(--panel); padding: 8px 16px 12px; white-space: normal; }
+.vo-qty {
+  width: 5.5rem;
+  min-height: var(--control-height);
+  padding: 0 8px;
+  text-align: right;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.vo-qty:disabled { opacity: 0.45; }
+.vo-sub { font-size: var(--font-secondary); color: var(--text-dim); font-weight: 400; }
+.vo-search {
+  flex: 1 1 14rem;
+  max-width: 24rem;
+  min-height: var(--control-height);
+  padding: 0 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.vo-filter .vo-check { gap: 6px; color: var(--text); }
+.vo-filter .vo-check input { width: 1.15rem; height: 1.15rem; }
+.vo-diff { color: var(--warn-text); }
+.vo-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+}
+.vo-bar-sum { color: var(--text-dim); }
+.vo-bar-total { margin-left: auto; font-size: var(--font-section); font-variant-numeric: tabular-nums; }
+.vo-pending {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  color: var(--warn-text);
+  background: rgba(255, 180, 60, 0.1);
+  border-bottom: 1px solid var(--border);
+}
+.vo-pending span { flex: 1; }
+.vo-section {
+  padding: 10px 16px;
+  margin-top: 16px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--panel-2);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.vo-confirm { margin-bottom: 12px; }
+.vo-confirm tr.vo-confirm-total td { border-top: 2px solid var(--border); font-weight: 600; }
+.vo-form, .vl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 10px 12px;
+}
+.vo-form label, .vl-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+  min-width: 0;
+}
+.vo-form .vo-form-wide, .vl-grid .vl-wide { grid-column: 1 / -1; }
+.vo-form input, .vo-form select, .vl-grid input, .vl-grid select, .vo-page .page-toolbar-mid select {
+  min-height: var(--control-height);
+  padding: 0 10px;
+  font: inherit;
+  font-size: var(--font-body);
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-width: 0;
+}
+.vo-facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 14px 0 0; }
+.vo-facts dt { color: var(--text-dim); }
+.vo-facts dd { margin: 0; }
+.vo-warn { margin-top: 14px; color: var(--warn-text); }
+.vl-card {
+  max-width: 46rem;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.vl-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; font-size: var(--font-section); }
+.vl-vendor, .vl-state { font-size: var(--font-secondary); font-weight: 400; color: var(--text-dim); }
+.vl-state.vl-on { color: var(--success-text); }
+.vl-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+/* 金鑰那一格:打進去的字遮成圓點(不是密碼框,瀏覽器不會把存過的密碼填進來) */
+.vl-grid input.vl-secret { -webkit-text-security: disc; font-family: monospace; }
+.vl-grid input.vl-secret::placeholder { -webkit-text-security: none; font-family: inherit; }

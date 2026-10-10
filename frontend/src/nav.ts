@@ -78,6 +78,12 @@ export const NAV_MODULES: NavModule[] = [
         aliases: ["待確認入庫", "進貨單匯入"],
         needs: ["purchase"],
       },
+      {
+        to: "/vendor-orders",
+        label: "廠商叫貨",
+        aliases: ["叫貨", "膜總裁", "補貨", "供應商叫貨"],
+        needs: ["vendor_order"],
+      },
       { to: "/suppliers", label: "供應商" },
     ],
     // 跟著商品管理一起搬過來:建商品時才用得到的幾個主檔
@@ -240,6 +246,12 @@ export const NAV_MODULES: NavModule[] = [
         to: "/settings/users",
         label: "員工帳號",
         aliases: ["人員權限", "權限", "帳號權限"],
+        adminOnly: true,
+      },
+      {
+        to: "/settings/vendors",
+        label: "叫貨串接",
+        aliases: ["膜總裁金鑰", "廠商金鑰", "叫貨設定"],
         adminOnly: true,
       },
       { to: "/settings/legacy", label: "舊系統對照", adminOnly: true },

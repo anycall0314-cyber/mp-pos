@@ -221,6 +221,20 @@ test("報表一張一個勾:關掉的那一張收起來,七張都關掉整個入
   assert.ok(!hits({ report_commission: false }).includes("/reports/commissions"));
 });
 
+test("廠商叫貨:沒有那一項的帳號看不到;叫貨串接只有管理員看得到", () => {
+  const pages = (who) => visibleModules(who).flatMap((m) => [...m.tabs, ...(m.tools?.items ?? [])].map((p) => p.to));
+  assert.ok(pages({ role: "tenant_user" }).includes("/vendor-orders"));
+  assert.ok(!pages({ role: "tenant_user", abilities: { vendor_order: false } }).includes("/vendor-orders"));
+  assert.ok(pages({ role: "tenant_user", abilities: { purchase: false } }).includes("/vendor-orders")); // 進貨入庫是另一項
+  assert.ok(!pages({ role: "tenant_user" }).includes("/settings/vendors"));
+  assert.ok(pages({ role: "tenant_admin" }).includes("/settings/vendors"));
+  const purchasing = NAV_MODULES.find((m) => m.key === "purchasing");
+  assert.equal(purchasing.tabs.find((p) => p.to === "/vendor-orders").label, "廠商叫貨");
+  const hits = (q) => searchNav(q, visibleModules({ role: "tenant_user" })).map((h) => h.page.to);
+  assert.ok(hits("叫貨").includes("/vendor-orders"));
+  assert.ok(hits("膜總裁").includes("/vendor-orders"));
+});
+
 test("入口的預設頁被收起來時,點入口去第一個看得到的頁", () => {
   const cash = (abilities) => visibleModules({ role: "tenant_user", abilities }).find((m) => m.tabs.some((p) => p.to === "/expenses"));
   assert.equal(cash(undefined).to, "/reports/business-daily");

@@ -9,6 +9,7 @@ import {
 } from "./contracts";
 import { listProductPhotos, type PhotosPayload } from "./photos";
 import { rangeQuery, rangeReady, type ReportRange } from "@/lib/fixedReports";
+import type { CatalogRow } from "@/lib/vendorOrder";
 import {
   Carrier,
   Category,
@@ -74,6 +75,9 @@ import {
   CommissionLines,
   FixedReportResult,
   LedgerOverview,
+  VendorLinkRow,
+  VendorOrder,
+  VendorOutsideOrder,
   SavedReport,
   StaffAccount,
   StaffAccountsResponse,
@@ -2527,6 +2531,88 @@ export const useAnalyticsQuery = (spec: AnalyticsSpec | null) =>
     enabled: !!spec,
     placeholderData: (prev) => prev,
     retry: false,
+  });
+
+// ── 廠商叫貨(膜總裁)────────────────────────────────────────────────────────
+export const useVendorLinks = () =>
+  useQuery({
+    queryKey: ["vendor-links"],
+    queryFn: () => api<{ results: VendorLinkRow[] }>(`/vendor-links/`),
+  });
+
+/** 存一家門市的串接設定;`key` 有給才換金鑰(伺服器會拿它去問廠商一次)。 */
+export const useSaveVendorLink = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Partial<VendorLinkRow> & { warehouse: number; key?: string }) =>
+      api<VendorLinkRow>(`/vendor-links/`, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendor-links"] });
+      qc.invalidateQueries({ queryKey: ["vendor-catalog"] });
+    },
+  });
+};
+
+export const useRemoveVendorKey = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (warehouse: number) =>
+      api<VendorLinkRow>(`/vendor-links/${warehouse}/remove-key/`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendor-links"] });
+      qc.invalidateQueries({ queryKey: ["vendor-catalog"] });
+    },
+  });
+};
+
+/** 廠商現在的商品與這家門市的進價。每次進這一頁現抓(價錢是廠商的,不留舊的)。 */
+export const useVendorCatalog = (warehouse: number | null) =>
+  useQuery({
+    queryKey: ["vendor-catalog", warehouse],
+    queryFn: () =>
+      api<{ warehouse: number; rows: CatalogRow[] }>(`/vendor-orders/catalog/?warehouse=${warehouse}`),
+    enabled: warehouse !== null,
+    retry: false,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+  });
+
+export const useVendorOrders = (warehouse: number | null) =>
+  useQuery({
+    queryKey: ["vendor-orders", warehouse],
+    queryFn: () => api<{ results: VendorOrder[] }>(`/vendor-orders/?warehouse=${warehouse}`),
+    enabled: warehouse !== null,
+  });
+
+/** 送出一張叫貨單。**不自動重試**:沒有答覆時要不要再送由畫面照同一把鑰匙決定。 */
+export const usePlaceVendorOrder = () =>
+  useMutation({
+    retry: false,
+    mutationFn: (body: {
+      request_key: string;
+      warehouse: number;
+      lines: { key: string; packs: number }[];
+      payment_method: string;
+      delivery_method: string;
+      note: string;
+    }) => api<VendorOrder>(`/vendor-orders/`, { method: "POST", body: JSON.stringify(body) }),
+  });
+
+export const useResendVendorOrder = () =>
+  useMutation({
+    retry: false,
+    mutationFn: (id: number) => api<VendorOrder>(`/vendor-orders/${id}/resend/`, { method: "POST" }),
+  });
+
+/** 跟廠商要最新進度;順便帶回「不是從 POS 叫的」訂單。 */
+export const useSyncVendorOrders = () =>
+  useMutation({
+    retry: false,
+    mutationFn: (warehouse: number) =>
+      api<{ results: VendorOrder[]; others: VendorOutsideOrder[] }>(`/vendor-orders/sync/`, {
+        method: "POST",
+        body: JSON.stringify({ warehouse }),
+      }),
   });
 
 // 固定的報表:內容由伺服器定,畫面只送日期 / 門市 /(商品排行)照什麼分。

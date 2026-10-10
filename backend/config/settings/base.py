@@ -15,6 +15,11 @@ DEFAULT_TENANT_ID = int(os.environ.get("DEFAULT_TENANT_ID", "1"))
 # ── AI 指令助理(apps.assistant)──────────────────────────────
 # 預設關閉:未設定時走 DeterministicParser(規則解析,無需外部服務)。
 # 要啟用自然語言解析:設 ASSISTANT_LLM_ENABLED=true 並提供 API 金鑰。
+# 廠商叫貨:膜總裁 B2B 對外下單 API 的位址(金鑰不在這裡,在各門市的叫貨串接設定)
+MOCEO_API_BASE = os.environ.get("MOCEO_API_BASE", "https://moceo.mptw-system.com/api/v1")
+# 測試環境設成 true:只收廠商明講是沙盒的金鑰(不然有人把正式金鑰貼到測試站,測試時下的就是真的單)。正式站不設
+VENDOR_SANDBOX_ONLY = os.environ.get("VENDOR_SANDBOX_ONLY", "false").lower() == "true"
+
 ASSISTANT_LLM_ENABLED = os.environ.get("ASSISTANT_LLM_ENABLED", "false").lower() == "true"
 ASSISTANT_LLM_PROVIDER = os.environ.get("ASSISTANT_LLM_PROVIDER", "anthropic")
 ASSISTANT_LLM_MODEL = os.environ.get("ASSISTANT_LLM_MODEL", "claude-sonnet-4-6")
@@ -71,6 +76,7 @@ INSTALLED_APPS = [
     "apps.ledger",
     "apps.analytics",
     "apps.photos",
+    "apps.vendor_orders",
 ]
 
 MIDDLEWARE = [

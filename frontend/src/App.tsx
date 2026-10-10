@@ -48,6 +48,8 @@ import { BackupPage } from "@/pages/backup/BackupPage";
 import { LegacyMappingPage } from "@/pages/legacy/LegacyMappingPage";
 import { LedgerChecksPage } from "@/pages/ledger/LedgerChecksPage";
 import { NeedsAbility } from "@/components/NeedsAbility";
+import { VendorLinksPage } from "@/pages/settings/VendorLinksPage";
+import { VendorOrdersPage } from "@/pages/vendor-orders/VendorOrdersPage";
 import { FIXED_REPORTS } from "@/lib/fixedReports";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { StaffAccountsPage } from "@/pages/settings/StaffAccountsPage";
@@ -340,6 +342,15 @@ export function App() {
           <Route
             path="/settings/users"
             element={<StaffAccountsPage />}
+          />
+          <Route path="/settings/vendors" element={<VendorLinksPage />} />
+          <Route
+            path="/vendor-orders"
+            element={
+              <NeedsAbility ability="vendor_order" doing="叫貨">
+                <VendorOrdersPage />
+              </NeedsAbility>
+            }
           />
           <Route
             path="/reports/sales-daily"

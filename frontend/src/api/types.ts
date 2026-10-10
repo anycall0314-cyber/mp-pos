@@ -1756,6 +1756,90 @@ export interface AnalyticsResult {
   };
 }
 
+/** 廠商叫貨:一家門市的串接設定。金鑰原文任何回應都沒有;`key_hint`(前幾碼)只有管理員的回應裡有 */
+export interface VendorLinkRow {
+  warehouse: number;
+  warehouse_name: string;
+  provider: string;
+  provider_label: string;
+  saved: boolean;
+  has_key: boolean;
+  key_hint?: string;
+  /** 廠商說這把是測試(沙盒)金鑰:用它叫的是測試單。null = 沒有金鑰、或廠商沒有講 */
+  sandbox: boolean | null;
+  payment_method: string;
+  delivery_method: string;
+  ship_name: string;
+  ship_phone: string;
+  ship_address: string;
+  invoice_type: string;
+  buyer_tax_id: string;
+  buyer_name: string;
+  invoice_email: string;
+  choices: { payment_method: string[]; delivery_method: string[]; invoice_type: string[] };
+}
+
+export interface VendorOrderLine {
+  line_no: number;
+  sku: string;
+  spec_id: number | null;
+  spec_label: string;
+  name: string;
+  unit: string;
+  pack_qty: number;
+  packs: number;
+  qty: number;
+  unit_price: string;
+}
+
+export interface VendorOrder {
+  id: number;
+  warehouse: number;
+  warehouse_name: string;
+  request_key: string;
+  /** sending 送出中 / placed 已成立 / unknown 不確定有沒有成立 */
+  state: "sending" | "placed" | "unknown";
+  state_label: string;
+  problem: string;
+  vendor_order_no: string;
+  total_amount: string | null;
+  shipping_fee: string | null;
+  expected_goods: string;
+  /** 廠商回的總額 − 運費 是不是等於叫貨當下的貨款;null = 還不知道 */
+  amount_matches: boolean | null;
+  /** 廠商說這張是測試單(沙盒金鑰下的);null = 廠商沒有講 */
+  is_test: boolean | null;
+  payment_method: string;
+  delivery_method: string;
+  ship_name: string;
+  ship_phone: string;
+  ship_address: string;
+  invoice_type: string;
+  note: string;
+  vendor_status: string;
+  vendor_payment_status: string;
+  vendor_logistics_status: string;
+  vendor_shipping_method: string;
+  vendor_tracking_no: string;
+  vendor_ordered_at: string | null;
+  status_checked_at: string | null;
+  created_at: string;
+  created_by: string;
+  items: VendorOrderLine[];
+}
+
+/** 廠商那邊「不是從 POS 叫的」訂單(電話、LINE、廠商後台代下的) */
+export interface VendorOutsideOrder {
+  order_no: string;
+  ordered_at: string;
+  status: string;
+  payment_status: string;
+  logistics_status: string;
+  shipping_method: string;
+  tracking_no: string;
+  total_amount: string | null;
+}
+
 /** 固定的報表(業績彙總 / 商品排行 / 每日彙總):欄位、欄名都是伺服器定的 */
 export interface FixedReportResult extends AnalyticsResult {
   key: string;

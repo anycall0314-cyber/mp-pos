@@ -80,6 +80,8 @@ REGISTRY: dict[str, Entry] = {
         "analytics.SavedReport",
         # 商品照片(掛在商品上的;檔案一起打包)
         "photos.ProductPhoto",
+        # 廠商叫貨:串接設定(不含金鑰)與叫貨單
+        "vendor_orders.VendorLink", "vendor_orders.VendorOrder", "vendor_orders.VendorOrderItem",
     ),
     "auth.User": Entry(ACCOUNT, "只留帳號名稱等對照資訊;不含密碼"),
     "tenants.UserProfile": Entry(ACCOUNT, "角色、預設門市、鎖倉;還原時依對照處理"),
@@ -100,6 +102,7 @@ REGISTRY: dict[str, Entry] = {
     "core.IdempotencyKey": Entry(EXCLUDED, "建單鑰匙只留幾天,記的是單號;還原後照樣對得回來"),
     "photos.PhotoDraft": Entry(EXCLUDED, "新增 / 編輯商品時的照片作業,暫存;存檔後照片已經在 ProductPhoto"),
     "photos.PhotoUpload": Entry(EXCLUDED, "還沒隨商品存檔的暫存照片"),
+    "vendor_orders.VendorSecret": Entry(EXCLUDED, "外部下單系統的金鑰不跟著備份檔走;還原之後請管理員重新貼"),
 }
 
 # 帶檔案的欄位:{表: [欄位]}。只存路徑不算備份,檔案本體要一起打包。
@@ -116,6 +119,7 @@ FILE_FIELDS: dict[str, list[str]] = {
 CLEARED_ON_RESTORE: dict[str, list[str]] = {
     "photos.PhotoUpload": ["image", "thumb"],
     "photos.PhotoDraft": [],
+    "vendor_orders.VendorSecret": [],
 }
 
 # 流水號 / 字軌這類「只能往前、不能倒退」的欄位。
