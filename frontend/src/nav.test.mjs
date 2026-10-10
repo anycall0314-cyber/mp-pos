@@ -195,6 +195,32 @@ test("員工帳號的權限:需要的幾項都被關掉的頁面收起來,有一
   for (const to of ["/sales", "/purchases", "/products", "/inventory", "/expenses", "/cash-adjustments"]) assert.ok(off.includes(to), to);
 });
 
+test("報表一張一個勾:關掉的那一張收起來,七張都關掉整個入口不見", () => {
+  const reports = (abilities) => visibleModules({ role: "tenant_user", abilities }).find((m) => m.key === "reports");
+  const order = ["/reports/sales-daily", "/reports/daily", "/reports/staff", "/reports/products",
+    "/reports/commissions", "/reports/explore", "/reports/parts-usage"];
+  assert.deepEqual(reports(undefined).tabs.map((p) => p.to), order);
+  assert.deepEqual(reports(undefined).tabs.map((p) => p.label.length), [4, 4, 4, 4, 4, 4, 4]);
+  const keys = ["report_sales_daily", "report_daily", "report_staff", "report_products",
+    "report_commission", "report_explore", "report_parts"];
+  keys.forEach((key, i) => {
+    const left = reports({ [key]: false }).tabs.map((p) => p.to);
+    assert.deepEqual(left, order.filter((_, j) => j !== i), key); // 只少那一張
+  });
+  // 預設頁(銷貨日報)關掉 → 點入口去下一張
+  assert.equal(reports({ report_sales_daily: false }).to, "/reports/daily");
+  const allOff = Object.fromEntries(keys.map((k) => [k, false]));
+  assert.equal(reports(allOff), undefined);
+  // 別的入口不受影響、管理員照舊
+  assert.equal(visibleModules({ role: "tenant_user", abilities: allOff }).length,
+    visibleModules({ role: "tenant_user" }).length - 1);
+  assert.equal(visibleModules({ role: "tenant_admin" }).find((m) => m.key === "reports").tabs.length, 7);
+  // 功能搜尋找不到收起來的那一張
+  const hits = (abilities) => searchNav("佣金", visibleModules({ role: "tenant_user", abilities })).map((h) => h.page.to);
+  assert.ok(hits(undefined).includes("/reports/commissions"));
+  assert.ok(!hits({ report_commission: false }).includes("/reports/commissions"));
+});
+
 test("入口的預設頁被收起來時,點入口去第一個看得到的頁", () => {
   const cash = (abilities) => visibleModules({ role: "tenant_user", abilities }).find((m) => m.tabs.some((p) => p.to === "/expenses"));
   assert.equal(cash(undefined).to, "/reports/business-daily");

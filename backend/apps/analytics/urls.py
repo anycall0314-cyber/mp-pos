@@ -8,4 +8,5 @@ urlpatterns = [
     path("analytics/query/", views.query),
     path("analytics/reports/", views.reports),
     path("analytics/reports/<int:pk>/", views.report_detail),
+    path("analytics/presets/<slug:key>/", views.preset),
 ]

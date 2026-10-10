@@ -32,6 +32,13 @@ PURCHASE = "purchase"
 SECONDHAND_BUY = "secondhand_buy"
 CASH_OPS = "cash_ops"
 VIEW_BUSINESS_DAILY = "view_business_daily"
+REPORT_SALES_DAILY = "report_sales_daily"
+REPORT_EXPLORE = "report_explore"
+REPORT_PARTS = "report_parts"
+REPORT_STAFF = "report_staff"
+REPORT_PRODUCTS = "report_products"
+REPORT_COMMISSION = "report_commission"
+REPORT_DAILY = "report_daily"
 
 ABILITIES = [
     Ability(VOID_SALES, "作廢銷貨單", "作廢與銷退"),
@@ -44,19 +51,45 @@ ABILITIES = [
     Ability(SECONDHAND_BUY, "中古收購", "進貨與帳務", "跟客人收購二手機"),
     Ability(CASH_OPS, "雜支調整", "進貨與帳務", "新增、修改雜支與現金調整"),
     Ability(VIEW_BUSINESS_DAILY, "營業日報", "進貨與帳務", "看營業日報"),
+    # 第三批:報表一張一個勾(鎖在門市的帳號本來就只看自己門市)
+    Ability(REPORT_SALES_DAILY, "銷貨日報", "報表", "只收起這一頁;內容跟銷貨單清單看得到的一樣"),
+    Ability(REPORT_EXPLORE, "自訂分析", "報表", "要業績彙總、商品排行、每日彙總、營業日報都開著"),
+    Ability(REPORT_PARTS, "零件耗用", "報表"),
+    Ability(REPORT_STAFF, "業績彙總", "報表"),
+    Ability(REPORT_PRODUCTS, "商品排行", "報表"),
+    Ability(REPORT_COMMISSION, "佣金明細", "報表"),
+    Ability(REPORT_DAILY, "每日彙總", "報表"),
 ]
 KEYS = frozenset(a.key for a in ABILITIES)
 LABELS = {a.key: a.label for a in ABILITIES}
 
+# 這一項要另外那幾項都開著才能用。自訂分析什麼數字都組得出來(照業務員分、照商品分、一天一列、每天收了多少錢):
+# 那幾張報表有一張被關掉的帳號,自訂分析也跟著不能用 —— 不然關掉「業績彙總」的人到自訂分析挑同樣的指標與分組就看到了
+# (複審 2026-10-10 抓到的)。固定的報表(analytics/presets.py)每加一張都要列進來,有測試擋。
+ALSO_NEEDS = {REPORT_EXPLORE: (REPORT_STAFF, REPORT_PRODUCTS, REPORT_DAILY, VIEW_BUSINESS_DAILY)}
+
+
+def switched_off(profile) -> set[str]:
+    """管理員在員工帳號頁關掉的那幾項(資料庫裡記的)。只認清單裡有的、而且是字串的;怪東西不當成任何項目。"""
+    stored = getattr(profile, "denied_abilities", None) or []
+    return {k for k in stored if isinstance(k, str)} & KEYS
+
+
+def blocked_by(off: set[str], key: str) -> list[str]:
+    """這一項是被哪幾項連帶關掉的(那幾項的代碼,照清單的順序);自己被關掉、或沒有連帶 → 空的。"""
+    return [] if key in off else [k for k in ALSO_NEEDS.get(key, ()) if k in off]
+
+
+def with_blocked(off: set[str]) -> set[str]:
+    """關掉的那幾項,加上被它們連帶關掉的。"""
+    return off | {key for key in ALSO_NEEDS if blocked_by(off, key)}
+
 
 def denied(user) -> set[str]:
-    """這個帳號被關掉的項目。管理員、沒有帳號設定的(只有平台的超級帳號會這樣)都是空的。"""
+    """這個帳號不能做的項目(關掉的 + 連帶的)。管理員、沒有帳號設定的(只有平台的超級帳號會這樣)都是空的。"""
     if is_tenant_admin(user):
         return set()
-    profile = getattr(user, "profile", None)
-    stored = getattr(profile, "denied_abilities", None) or []
-    # 只認清單裡有的、而且是字串的;資料庫裡的怪東西不當成任何項目
-    return {k for k in stored if isinstance(k, str)} & KEYS
+    return with_blocked(switched_off(getattr(user, "profile", None)))
 
 
 def can(user, key: str) -> bool:
@@ -68,6 +101,12 @@ def can(user, key: str) -> bool:
 def require(user, key: str) -> None:
     """不能做就丟 403(DRF 會回 `{"detail": …}`,畫面的錯誤訊息只認這一格)。"""
     if not can(user, key):
+        because = blocked_by(switched_off(getattr(user, "profile", None)), key)
+        if because:
+            # 這一項本身沒有被關,是連帶的:講是哪幾項(管理員照著「開啟自訂分析」去找會找不到問題在哪)
+            names = "、".join(LABELS[k] for k in because)
+            raise PermissionDenied(
+                f"這個帳號的「{names}」被關掉了,「{LABELS[key]}」也不能用,請管理員到「系統設定 → 員工帳號」開啟")
         # 項目的名稱有的是動作(作廢銷貨單)、有的是名詞(營業日報):用「沒有…的權限」兩種都通順
         raise PermissionDenied(f"這個帳號沒有「{LABELS[key]}」的權限,請管理員到「系統設定 → 員工帳號」開啟")
 

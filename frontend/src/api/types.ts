@@ -1756,6 +1756,38 @@ export interface AnalyticsResult {
   };
 }
 
+/** 固定的報表(業績彙總 / 商品排行 / 每日彙總):欄位、欄名都是伺服器定的 */
+export interface FixedReportResult extends AnalyticsResult {
+  key: string;
+  title: string;
+  /** 可以照哪幾種分(商品排行:商品 / 品類 / 品牌) */
+  by: { key: string; label: string }[];
+}
+
+/** 門號佣金明細的一列;公司佣金只有管理員的回應裡有(沒有這一格 = 不是管理員) */
+export interface CommissionLine {
+  kind: "sale" | "return";
+  date: string;
+  doc_id: number;
+  doc_no: string;
+  warehouse: string;
+  msisdn: string;
+  carrier: string;
+  plan: string;
+  sales_person: string;
+  commission: string | null;
+  company_commission?: string | null;
+}
+
+export interface CommissionLines {
+  rows: CommissionLine[];
+  row_count: number;
+  truncated: boolean;
+  totals: { commission: string; company_commission?: string };
+  manager: boolean;
+  applied: { from: string; to: string; warehouse: number | null };
+}
+
 export interface SavedReport {
   id: number;
   name: string;

@@ -18,6 +18,16 @@ destination 都算自己倉)。
 from rest_framework.exceptions import PermissionDenied
 
 
+def locked_warehouse_id(user):
+    """鎖在門市的帳號 → 那一家的編號;沒鎖 → None。鎖了卻沒有設定門市 → 403(不能因此變成看全公司)。"""
+    profile = getattr(user, "profile", None)
+    if profile and profile.is_warehouse_locked:
+        if not profile.default_warehouse_id:
+            raise PermissionDenied("這個帳號鎖定門市但還沒有設定門市")
+        return profile.default_warehouse_id
+    return None
+
+
 def report_warehouse_id(request):
     """報表 / 首頁摘要用的門市範圍。
 

@@ -28,7 +28,9 @@ import { PurchaseListPage } from "@/pages/purchases/PurchaseListPage";
 import { PurchaseWorkbenchPage } from "@/pages/purchases/PurchaseWorkbenchPage";
 import { LabelPrintPage } from "@/pages/labels/LabelPrintPage";
 import { BusinessDailyReportPage } from "@/pages/reports/BusinessDailyReport";
+import { CommissionLinesPage } from "@/pages/reports/CommissionLinesPage";
 import { ExploreReportPage } from "@/pages/reports/ExploreReportPage";
+import { FixedReportPage } from "@/pages/reports/FixedReportPage";
 import { PartsUsageReportPage } from "@/pages/reports/PartsUsageReportPage";
 import { SalesDailyReportPage } from "@/pages/reports/SalesDailyReport";
 import { SecondhandAcquisitionPage } from "@/pages/secondhand-acquisition/SecondhandAcquisitionPage";
@@ -46,6 +48,7 @@ import { BackupPage } from "@/pages/backup/BackupPage";
 import { LegacyMappingPage } from "@/pages/legacy/LegacyMappingPage";
 import { LedgerChecksPage } from "@/pages/ledger/LedgerChecksPage";
 import { NeedsAbility } from "@/components/NeedsAbility";
+import { FIXED_REPORTS } from "@/lib/fixedReports";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { StaffAccountsPage } from "@/pages/settings/StaffAccountsPage";
 import { SimCardsPage } from "@/pages/sim-cards/SimCardsPage";
@@ -340,7 +343,31 @@ export function App() {
           />
           <Route
             path="/reports/sales-daily"
-            element={<SalesDailyReportPage />}
+            element={
+              <NeedsAbility ability="report_sales_daily" doing="看銷貨日報">
+                <SalesDailyReportPage />
+              </NeedsAbility>
+            }
+          />
+          {FIXED_REPORTS.map((r) => (
+            <Route
+              key={r.key}
+              path={r.path}
+              element={
+                <NeedsAbility ability={r.ability} doing={`看${r.title}`}>
+                  {/* key:三張共用同一個元件,換一張要整個重來(日期、門市不沿用上一張的) */}
+                  <FixedReportPage key={r.key} report={r} />
+                </NeedsAbility>
+              }
+            />
+          ))}
+          <Route
+            path="/reports/commissions"
+            element={
+              <NeedsAbility ability="report_commission" doing="看佣金明細">
+                <CommissionLinesPage />
+              </NeedsAbility>
+            }
           />
           <Route
             path="/reports/business-daily"
@@ -352,9 +379,20 @@ export function App() {
           />
           <Route
             path="/reports/parts-usage"
-            element={<PartsUsageReportPage />}
+            element={
+              <NeedsAbility ability="report_parts" doing="看零件耗用">
+                <PartsUsageReportPage />
+              </NeedsAbility>
+            }
           />
-          <Route path="/reports/explore" element={<ExploreReportPage />} />
+          <Route
+            path="/reports/explore"
+            element={
+              <NeedsAbility ability="report_explore" doing="用自訂分析">
+                <ExploreReportPage />
+              </NeedsAbility>
+            }
+          />
           <Route
             path="/reports/margin-summary"
             element={<Placeholder title="毛利彙總" />}

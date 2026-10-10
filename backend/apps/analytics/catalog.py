@@ -314,6 +314,11 @@ BASES = [
     Base("return_cost", "沖回成本", "returns", lambda: Sum("cost_at_post", filter=COUNTED)),
     Base("return_staff_cost", "沖回業務員成本", "returns",
          lambda: Sum(Coalesce("staff_cost", "cost_at_post"), filter=COUNTED)),
+    # 被退掉的那幾行當初記的佣金(門號那一行整張退掉,佣金也不算了);公司的那一個一樣只有管理員看得到
+    Base("return_staff_commission", "沖回業務員佣金", "returns",
+         lambda: Sum("original_item__commission"), group="佣金"),
+    Base("return_company_commission", "沖回公司佣金", "returns",
+         lambda: Sum("original_item__company_commission"), roles=MANAGERS, group="佣金"),
     Base("return_orders", "銷退單數", "returns",
          lambda: Count("sr_id", distinct=True, filter=COUNTED), "int"),
 
@@ -369,6 +374,17 @@ DERIVED = [
             ("sales_untaxed", "sales_staff_cost", "return_untaxed", "return_staff_cost"),
             lambda v: (v["sales_untaxed"] - v["sales_staff_cost"])
             - (v["return_untaxed"] - v["return_staff_cost"]), group="毛利"),
+    Derived("net_staff_commission", "門號業務員佣金(扣銷退)", ("staff_commission", "return_staff_commission"),
+            lambda v: v["staff_commission"] - v["return_staff_commission"], group="佣金"),
+    Derived("net_company_commission", "門號公司佣金(扣銷退)", ("company_commission", "return_company_commission"),
+            lambda v: v["company_commission"] - v["return_company_commission"], group="佣金"),
+    # 銷貨單清單與開單頁上的「業務員毛利」是含佣金的(每張單:業務員毛利 + 業務員佣金);這個數字就是它們加起來、再扣掉銷退
+    Derived("staff_total", "業務員毛利加佣金(扣銷退)",
+            ("sales_untaxed", "sales_staff_cost", "return_untaxed", "return_staff_cost",
+             "staff_commission", "return_staff_commission"),
+            lambda v: (v["sales_untaxed"] - v["sales_staff_cost"])
+            - (v["return_untaxed"] - v["return_staff_cost"])
+            + (v["staff_commission"] - v["return_staff_commission"]), group="毛利"),
     Derived("avg_ticket", "客單價", ("sales_gross", "sales_orders"),
             lambda v: _ratio(v["sales_gross"], v["sales_orders"])),
     Derived("net_received", "實收", ("received", "refunded"),

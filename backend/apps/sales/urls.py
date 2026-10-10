@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
+from .commission_views import commission_lines
 from .contract_views import contract_follow_up, contract_list
 from .views import LegacyPurchaseViewSet, SalesOrderViewSet, SalesReturnViewSet
 
@@ -13,4 +14,6 @@ urlpatterns = router.urls + [
     # 門號合約到期的名單與聯絡紀錄
     path("telecom-contracts/", contract_list),
     path("telecom-contracts/<int:pk>/follow-up/", contract_follow_up),
+    # 門號佣金明細(一筆門號一列;員工帳號的權限「佣金明細」)
+    path("telecom-commissions/", commission_lines),
 ]

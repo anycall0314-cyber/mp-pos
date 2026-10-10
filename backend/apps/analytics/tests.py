@@ -722,11 +722,13 @@ class ApiTests(_Shop):
             r = getattr(anon, method)(f"/api/v1/analytics/{url}")
             self.assertEqual(r.status_code, 401, url)
 
-    def test_store_clerk_sees_the_whole_company(self):
-        # 產品決定(2026-10-04):報表暫時不依門市上鎖。要鎖時改 Base.roles 與這支測試。
+    def test_store_clerk_sees_only_the_own_store(self):
+        # owner 2026-10-10(員工帳號權限第三批):鎖在門市的帳號只算自己門市。
+        # 2026-10-04 定的「報表暫時不依門市上鎖」到這裡為止;細的在 test_report_access.py
         r = self.c.clerk.post("/api/v1/analytics/query/", self.SPEC, format="json")
         self.assertEqual(r.status_code, 200, r.content)
-        self.assertEqual({row["dims"][0]["label"] for row in r.json()["rows"]}, {"甲湳雅店", "甲民生店"})
+        self.assertEqual({row["dims"][0]["label"] for row in r.json()["rows"]}, {"甲湳雅店"})
+        self.assertEqual(r.json()["totals"], {"net_sales": "25780.00", "gross_profit": "5580.00"})
 
     def test_query_only_reads(self):
         from django.db import connection

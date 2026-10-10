@@ -415,8 +415,14 @@ def _compare_period(q: Query):
     return year_back(q.start), year_back(q.end)
 
 
-def run(tenant, spec, user=None):
+def run(tenant, spec, user=None, *, only_warehouse=None):
+    """only_warehouse = 鎖在門市的帳號那一家的編號:不管查詢單怎麼寫,只算那一家(owner 2026-10-10:業務員看自己門市)。"""
     q = parse(spec, user)
+    if only_warehouse is not None:
+        for m in q.measures:
+            if "warehouse" not in supported_dims(m):
+                raise QueryError(f"「{_label(m)}」分不出門市,這個帳號不能看")
+        q.filters["warehouse"] = [only_warehouse]
     filters, shown = _filter_values(tenant, q)
     choice_labels = {
         key: DIMENSIONS[key].labels(tenant)

@@ -18,7 +18,7 @@ import type {
   AnalyticsValue,
   SavedReport,
 } from "@/api/types";
-import { useCurrentUser } from "@/auth/AuthContext";
+import { useCurrentUser, useDefaultWarehouse } from "@/auth/AuthContext";
 import { Banner, errorMessageOf } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { intStr, money } from "@/lib/money";
@@ -581,6 +581,8 @@ function ResultView({
 }) {
   const { columns, applied } = result;
   const comparing = !!applied.compare;
+  // 鎖在門市的帳號伺服器只算自己那一家(不管條件怎麼選):講出來,不要讓人以為是全公司
+  const store = useDefaultWarehouse();
   const mark = (key: string) => (sort === key ? " ▲" : sort === `-${key}` ? " ▼" : "");
 
   return (
@@ -589,6 +591,7 @@ function ResultView({
         {applied.period.from} ~ {applied.period.to}
         {applied.compare_period &&
           `　對比 ${applied.compare_period.from} ~ ${applied.compare_period.to}`}
+        {store.locked && `　只算${store.name || "自己門市"}`}
       </div>
 
       <div className="sd-summary ex-summary">

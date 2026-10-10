@@ -161,13 +161,48 @@ export const NAV_MODULES: NavModule[] = [
     // 不叫「經營報表」:打烊要看的營業日報在「門市帳務」,名字裡有「報表」會讓人點錯這裡
     label: "統計分析",
     to: "/reports/sales-daily",
+    // 員工帳號的權限:報表一張一個勾(第三批)。名稱一律 4 個字,跟員工帳號頁的項目同一個字
     tabs: [
-      { to: "/reports/sales-daily", label: "銷貨日報" },
-      { to: "/reports/explore", label: "自訂分析", aliases: ["自由組合"] },
+      {
+        to: "/reports/sales-daily",
+        label: "銷貨日報",
+        needs: ["report_sales_daily"],
+      },
+      {
+        to: "/reports/daily",
+        label: "每日彙總",
+        aliases: ["每日營業彙總"],
+        needs: ["report_daily"],
+      },
+      {
+        to: "/reports/staff",
+        label: "業績彙總",
+        aliases: ["業務員業績", "業務員業績彙總", "獎金"],
+        needs: ["report_staff"],
+      },
+      {
+        to: "/reports/products",
+        label: "商品排行",
+        aliases: ["商品銷售排行", "銷售排行"],
+        needs: ["report_products"],
+      },
+      {
+        to: "/reports/commissions",
+        label: "佣金明細",
+        aliases: ["門號佣金", "門號佣金明細"],
+        needs: ["report_commission"],
+      },
+      {
+        to: "/reports/explore",
+        label: "自訂分析",
+        aliases: ["自由組合"],
+        needs: ["report_explore"],
+      },
       {
         to: "/reports/parts-usage",
         label: "零件耗用",
         aliases: ["零件耗用報表"],
+        needs: ["report_parts"],
       },
     ],
   },
@@ -231,21 +266,24 @@ function pageVisible(page: NavPage, who: NavRole): boolean {
 export function visibleModules(who: NavRole): NavModule[] {
   return NAV_MODULES.filter(
     (m) => !m.platformOnly || who.role === "platform_admin",
-  ).map((m) => {
-    const tabs = m.tabs.filter((p) => pageVisible(p, who));
-    return {
-      ...m,
-      // 入口原本的預設頁這個帳號看不到(例:沒有「營業日報」)→ 點入口改去第一個看得到的頁,不要把人帶去「不能看」的那一頁
-      to: tabs.some((p) => p.to === m.to) ? m.to : (tabs[0]?.to ?? m.to),
-      tabs,
-      tools: m.tools
-        ? {
-            ...m.tools,
-            items: m.tools.items.filter((p) => pageVisible(p, who)),
-          }
-        : undefined,
-    };
-  });
+  )
+    .map((m) => {
+      const tabs = m.tabs.filter((p) => pageVisible(p, who));
+      return {
+        ...m,
+        // 入口原本的預設頁這個帳號看不到(例:沒有「營業日報」)→ 點入口改去第一個看得到的頁,不要把人帶去「不能看」的那一頁
+        to: tabs.some((p) => p.to === m.to) ? m.to : (tabs[0]?.to ?? m.to),
+        tabs,
+        tools: m.tools
+          ? {
+              ...m.tools,
+              items: m.tools.items.filter((p) => pageVisible(p, who)),
+            }
+          : undefined,
+      };
+    })
+    // 底下一個分頁都看不到的入口整個收起來(例:報表七張全部關掉的帳號沒有「統計分析」)
+    .filter((m) => m.tabs.length > 0);
 }
 
 /**

@@ -761,6 +761,9 @@ def parts_usage_report(request):
     """
     from datetime import date as date_cls
 
+    from apps.tenants import abilities
+
+    abilities.require(request.user, abilities.REPORT_PARTS)
     tenant = request.tenant
 
     today = date_cls.today()

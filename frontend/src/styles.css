@@ -1557,6 +1557,8 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+/* 負的數字(銷退扣回去的那幾格):顏色跟主題走 */
+.report-grid td.report-neg { color: var(--danger-text); }
 /* 同單第一行加上方分隔線比較粗,代表新一張單開始 */
 .report-grid tr.order-first td {
   border-top: 2px solid var(--border);

@@ -1,6 +1,11 @@
-"""報表語意層的 API。任何登入的公司帳號都能用(報表權限目前不鎖);一律只看自己公司。
+"""報表語意層的 API。一律只看自己公司。
 
 查詢只接受「查詢單」(見 engine.py),沒有任何入口可以送資料庫指令或欄位名稱。
+
+員工帳號的權限(owner 2026-10-10,第三批):
+- 自訂分析這一組(清單、條件、查詢、存起來的報表)要有「自訂分析」;固定的報表一張一個勾。
+- **鎖在門市的帳號只算自己門市**,不管查詢單怎麼寫(引擎強制,見 `engine.run(only_warehouse=…)`)。
+  2026-10-04 定的「報表暫時不依門市上鎖」到這裡為止。
 """
 from django.db import IntegrityError, transaction
 from django.db.models import Q
@@ -8,9 +13,11 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
+from apps.core.warehouse_scoping import locked_warehouse_id, report_warehouse_id
+from apps.tenants import abilities
 from apps.tenants.permissions import is_tenant_admin
 
-from . import engine, saved
+from . import engine, presets, saved
 from .models import SavedReport
 
 
@@ -20,11 +27,13 @@ def _bad(message, code=status.HTTP_400_BAD_REQUEST):
 
 @api_view(["GET"])
 def catalog(request):
+    abilities.require(request.user, abilities.REPORT_EXPLORE)
     return Response(engine.describe(request.user))
 
 
 @api_view(["GET"])
 def options(request):
+    abilities.require(request.user, abilities.REPORT_EXPLORE)
     try:
         return Response({"results": engine.options(
             request.tenant, request.query_params.get("dimension"), request.query_params.get("q", ""))})
@@ -34,8 +43,29 @@ def options(request):
 
 @api_view(["POST"])
 def query(request):
+    abilities.require(request.user, abilities.REPORT_EXPLORE)
     try:
-        return Response(engine.run(request.tenant, request.data, request.user))
+        return Response(engine.run(
+            request.tenant, request.data, request.user,
+            only_warehouse=locked_warehouse_id(request.user)))
+    except engine.QueryError as exc:
+        return _bad(exc)
+
+
+@api_view(["GET"])
+def preset(request, key):
+    """固定的報表:?from= ?to=(必填)?warehouse=(沒鎖門市的才有用)?by=(商品排行:商品 / 品類 / 品牌)"""
+    report = presets.REPORTS.get(key)
+    if report is None:
+        return _bad("沒有這張報表", status.HTTP_404_NOT_FOUND)
+    abilities.require(request.user, report.ability)
+    params = request.query_params
+    try:
+        return Response(presets.run(
+            report, request.tenant, request.user,
+            start=params.get("from"), end=params.get("to"), by=params.get("by") or "",
+            warehouse=report_warehouse_id(request),
+            only_warehouse=locked_warehouse_id(request.user)))
     except engine.QueryError as exc:
         return _bad(exc)
 
@@ -97,6 +127,7 @@ def _clean(request, partial=False):
 
 @api_view(["GET", "POST"])
 def reports(request):
+    abilities.require(request.user, abilities.REPORT_EXPLORE)
     if request.method == "GET":
         return Response({"results": [_report_data(r, request) for r in _visible(request)]})
     try:
@@ -115,6 +146,7 @@ def reports(request):
 
 @api_view(["PATCH", "DELETE"])
 def report_detail(request, pk):
+    abilities.require(request.user, abilities.REPORT_EXPLORE)
     report = _visible(request).filter(pk=pk).first()
     if report is None:
         return _bad("找不到這份報表", status.HTTP_404_NOT_FOUND)

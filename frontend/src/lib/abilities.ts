@@ -11,7 +11,15 @@ export type AbilityKey =
   | "purchase"
   | "secondhand_buy"
   | "cash_ops"
-  | "view_business_daily";
+  | "view_business_daily"
+  // 第三批:報表一張一個勾
+  | "report_sales_daily"
+  | "report_explore"
+  | "report_parts"
+  | "report_staff"
+  | "report_products"
+  | "report_commission"
+  | "report_daily";
 
 export interface AbilityInfo {
   key: string;

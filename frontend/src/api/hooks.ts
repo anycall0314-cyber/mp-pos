@@ -8,6 +8,7 @@ import {
   setContractFollowUp,
 } from "./contracts";
 import { listProductPhotos, type PhotosPayload } from "./photos";
+import { rangeQuery, rangeReady, type ReportRange } from "@/lib/fixedReports";
 import {
   Carrier,
   Category,
@@ -70,6 +71,8 @@ import {
   AnalyticsOption,
   AnalyticsResult,
   AnalyticsSpec,
+  CommissionLines,
+  FixedReportResult,
   LedgerOverview,
   SavedReport,
   StaffAccount,
@@ -2523,6 +2526,26 @@ export const useAnalyticsQuery = (spec: AnalyticsSpec | null) =>
       }),
     enabled: !!spec,
     placeholderData: (prev) => prev,
+    retry: false,
+  });
+
+// 固定的報表:內容由伺服器定,畫面只送日期 / 門市 /(商品排行)照什麼分。
+// 不留上一份當佔位:三張報表共用同一個元件,欄位不一樣,換一張時不能先畫上一張的。
+export const useFixedReport = (key: string, range: ReportRange) =>
+  useQuery({
+    queryKey: ["fixed-report", key, range],
+    queryFn: () =>
+      api<FixedReportResult>(`/analytics/presets/${key}/?${rangeQuery(range)}`),
+    enabled: rangeReady(range),
+    retry: false,
+  });
+
+export const useCommissionLines = (range: ReportRange) =>
+  useQuery({
+    queryKey: ["commission-lines", range],
+    queryFn: () =>
+      api<CommissionLines>(`/telecom-commissions/?${rangeQuery(range)}`),
+    enabled: rangeReady(range),
     retry: false,
   });
 

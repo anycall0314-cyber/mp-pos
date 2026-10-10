@@ -96,7 +96,7 @@ class AccountPageTests(_Shop):
         self.assertEqual(r.status_code, 200, r.content.decode())
         body = r.json()
         self.assertEqual([a["key"] for a in body["abilities"]], ALL)
-        self.assertEqual({a["group"] for a in body["abilities"]}, {"作廢與銷退", "商品", "進貨與帳務"})
+        self.assertEqual({a["group"] for a in body["abilities"]}, {"作廢與銷退", "商品", "進貨與帳務", "報表"})
         rows = {a["username"]: a for a in body["accounts"]}
         self.assertEqual(set(rows), {"a-boss", "a-clerk"})
         self.assertEqual((rows["a-clerk"]["editable"], rows["a-boss"]["editable"]), (True, False))

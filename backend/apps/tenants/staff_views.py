@@ -75,6 +75,15 @@ def staff_account(request, pk: int):
         if profile.role != UserProfile.Role.TENANT_USER:
             return Response({"detail": "管理員帳號永遠全開,不能在這裡關"}, status=status.HTTP_400_BAD_REQUEST)
         profile.denied_abilities = abilities.change(profile, wanted)
+        # 這一次要開的項目,開了也還是不能用(它要的另外幾項關著)→ 不存、講要先開哪幾項(不然那一格會自己彈回去,人不知道為什麼)
+        off = abilities.switched_off(profile)
+        for key, allowed in wanted.items():
+            because = abilities.blocked_by(off, key) if allowed else []
+            if because:
+                names = "、".join(abilities.LABELS[k] for k in because)
+                return Response(
+                    {"detail": f"「{abilities.LABELS[key]}」要先開:{names}"},
+                    status=status.HTTP_400_BAD_REQUEST)
         profile.save(update_fields=["denied_abilities", "updated_at"])
     profile = _company_accounts(request.tenant).get(pk=profile.pk)
     return Response(_row(profile))
