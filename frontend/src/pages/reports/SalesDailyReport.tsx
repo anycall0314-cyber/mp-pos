@@ -272,7 +272,30 @@ export function SalesDailyReportPage() {
             轉 Excel
           </button>
         }
-      />
+      >
+        {/* 合計:標題旁邊的小表格(上面一列名稱、下面一列數字)。算式放在滑鼠提示 */}
+        <div className="sd-sum">
+          <SumCell label="正常單" value={String(activeOrders.length)} />
+          <SumCell label="明細" value={String(totals.lines)} />
+          <SumCell label="含稅金額" value={`$${fmtMoney(totals.amountIncl)}`} />
+          <SumCell label="成本" value={`$${fmtMoney(totals.cost)}`} />
+          <SumCell
+            label="毛利"
+            title="毛利 = 未稅金額 − 成本"
+            value={`$${fmtMoney(totals.profit)}`}
+            negative={totals.profit < 0}
+          />
+          <SumCell
+            label="業務員毛利"
+            title="業務員毛利 = 未稅金額 − 業務員成本"
+            value={`$${fmtMoney(totals.staffProfit)}`}
+            negative={totals.staffProfit < 0}
+          />
+          {voidOrders.length > 0 && (
+            <SumCell label="作廢" value={`${voidOrders.length} 筆`} negative />
+          )}
+        </div>
+      </Toolbar>
       {/* 桌機:整排只有一行(欄名收起來,靠框裡的字);手機:一項一排、欄名在上面 */}
       <div className="list-filterbar sd-filter">
         <div className="sd-filter-group sd-filter-dates">
@@ -397,28 +420,7 @@ export function SalesDailyReportPage() {
         </div>
       </div>
 
-      {/* 合計:一排字(以前是七張卡片,佔掉明細的高度)。算式放在滑鼠提示 */}
-      <div className="sd-strip">
-        <StripItem label="正常單" value={String(activeOrders.length)} />
-        <StripItem label="明細" value={String(totals.lines)} />
-        <StripItem label="含稅金額" value={`$${fmtMoney(totals.amountIncl)}`} />
-        <StripItem label="成本" value={`$${fmtMoney(totals.cost)}`} />
-        <StripItem
-          label="毛利"
-          title="毛利 = 未稅金額 − 成本"
-          value={`$${fmtMoney(totals.profit)}`}
-          negative={totals.profit < 0}
-        />
-        <StripItem
-          label="業務員毛利"
-          title="業務員毛利 = 未稅金額 − 業務員成本"
-          value={`$${fmtMoney(totals.staffProfit)}`}
-          negative={totals.staffProfit < 0}
-        />
-        {voidOrders.length > 0 && (
-          <StripItem label="作廢" value={`${voidOrders.length} 筆`} negative />
-        )}
-      </div>
+      {/* 零件調貨另外一排(有零件才出現);商品的合計在標題旁邊 */}
       {totals.partsLines > 0 && (
         <div className="sd-strip sd-strip-parts" title="零件調貨獨立列計,不污染商品毛利">
           <StripItem label="零件調貨" value={String(totals.partsLines)} />
@@ -587,7 +589,27 @@ interface ReportTableProps {
   voided: boolean;
 }
 
-/** 合計那一排的一項:小字的名稱 + 粗體的數字。 */
+/** 標題旁邊那張小表格的一格:上面是名稱、下面是數字。 */
+function SumCell({
+  label,
+  value,
+  title,
+  negative,
+}: {
+  label: string;
+  value: string;
+  title?: string;
+  negative?: boolean;
+}) {
+  return (
+    <div className="sd-sum-cell" title={title}>
+      <span className="sd-sum-label">{label}</span>
+      <b className={negative ? "sd-sum-neg" : undefined}>{value}</b>
+    </div>
+  );
+}
+
+/** 零件調貨那一排的一項:小字的名稱 + 粗體的數字。 */
 function StripItem({
   label,
   value,

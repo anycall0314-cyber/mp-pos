@@ -167,7 +167,7 @@ inventory-3c/
         │   ├── sales/           SalesListPage(銷貨單清單:點一列展開、列印 / 整張銷退 / 作廢;`/sales/編號` 展開那一張)+ SalesWorkbenchPage(開單頁 `/sales/new`:商品明細優先;單據資訊、結帳、新增客戶 / 會員在右邊的抽屜;門號欄位接在商品正下方)+ SalesPage(只剩銷退單清單 `SalesReturnsPage`,`/sales/returns`)+ SalesPrintPage + SalesReturnEntryPage(搜尋原單 → 整張退,明細唯讀;`?so=編號` 直接帶好原單)
         │   ├── customers/       CustomersPage(客戶管理;tabs:全部/個人/同業/企業/其他;Detail 下半顯示該客戶銷售紀錄)
         │   ├── members/         MembersPage(會員獨立主檔;欄位姓名/電話/身分證/生日/地址/備註;Detail 下半顯示該會員銷售紀錄)
-        │   ├── reports/         SalesDailyReport(銷貨日報,按單分組純表格 + 作廢區塊 + CSV 匯出;收購二手不計毛利;桌機版面 2026-10-10 壓過:篩選一排、合計一排字、明細吃掉剩下的高度而且排進畫面寬度,樣式是 `.sd-page` / `.sd-strip` / `.sd-grid`,手機照舊一項一排 + 卡片) + ExploreReportPage(自由組合:挑指標 × 分組 × 條件 × 期間 × 比較,可存成我的報表)+ FixedReportPage(業績彙總 / 商品排行 / 每日彙總共用,內容由伺服器定)+ CommissionLinesPage(佣金明細)+ ReportRangeBar(這幾頁上面的起迄日與門市)
+        │   ├── reports/         SalesDailyReport(銷貨日報,按單分組純表格 + 作廢區塊 + CSV 匯出;收購二手不計毛利;桌機版面 2026-10-10 壓過:合計是標題旁邊的小表格(`.sd-sum`,上面名稱、下面數字)、篩選一排、明細吃掉剩下的高度而且排進畫面寬度(`.sd-page` / `.sd-grid`);零件調貨的合計另外一排字(`.sd-strip`,有零件才出現);手機照舊一項一排 + 卡片) + ExploreReportPage(自由組合:挑指標 × 分組 × 條件 × 期間 × 比較,可存成我的報表)+ FixedReportPage(業績彙總 / 商品排行 / 每日彙總共用,內容由伺服器定)+ CommissionLinesPage(佣金明細)+ ReportRangeBar(這幾頁上面的起迄日與門市)
         │   ├── settings/        SettingsPage(發票類型 / 字軌 / 付款方式)+ StaffAccountsPage(員工帳號:每個店員帳號逐項勾權限)
         │   ├── sim-cards/       SimCardsPage + SimCardForm
         │   ├── telecom-plans/   TelecomPlansPage + TelecomPlanForm
