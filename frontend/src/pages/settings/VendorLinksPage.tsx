@@ -1,8 +1,10 @@
 import { useState } from "react";
 
 import { useRemoveVendorKey, useSaveVendorLink, useVendorLinks } from "@/api/hooks";
+import { searchSuppliers } from "@/api/search";
 import type { VendorLinkRow } from "@/api/types";
 import { useCurrentUser } from "@/auth/AuthContext";
+import { ComboBox } from "@/components/ComboBox";
 import { Toolbar } from "@/components/Toolbar";
 import { ArmButton } from "@/components/workbench/ArmButton";
 import { apiErrorText } from "@/components/workbench/errors";
@@ -46,12 +48,23 @@ function LinkCard({ row }: { row: VendorLinkRow }) {
     () => Object.fromEntries(FIELDS.map((f) => [f, row[f]])) as Record<FieldName, string>,
   );
   const [key, setKey] = useState("");
+  // 到貨入庫:進貨單記在哪個供應商(空的 = 第一次入庫時自動用 / 建一筆跟廠商同名的)、運費算不算進成本
+  const [supplier, setSupplier] = useState<{ id: number; label: string } | null>(
+    row.supplier === null ? null : { id: row.supplier, label: row.supplier_name },
+  );
+  const [freight, setFreight] = useState(row.freight_into_cost);
   const set = (name: FieldName, value: string) => setForm((f) => ({ ...f, [name]: value }));
   const busy = save.isPending || removeKey.isPending;
 
   async function submit() {
     try {
-      await save.mutateAsync({ warehouse: row.warehouse, ...form, ...(key.trim() ? { key: key.trim() } : {}) });
+      await save.mutateAsync({
+        warehouse: row.warehouse,
+        ...form,
+        supplier: supplier?.id ?? null,
+        freight_into_cost: freight,
+        ...(key.trim() ? { key: key.trim() } : {}),
+      });
       setKey("");
       toast(`${row.warehouse_name}已儲存`, "ok");
     } catch (e) {
@@ -142,6 +155,24 @@ function LinkCard({ row }: { row: VendorLinkRow }) {
             </label>
           </>
         )}
+        <div className="vl-field">
+          入庫供應商
+          <ComboBox
+            value={supplier?.id ?? ""}
+            selectedOption={supplier}
+            onChange={(id, opt) => setSupplier(id === "" || !opt ? null : { id, label: opt.label })}
+            fetchOptions={searchSuppliers}
+            disabled={busy}
+            placeholder={`沒選 = ${row.provider_label}`}
+          />
+        </div>
+        <label>
+          入庫的運費
+          <select value={freight ? "in" : "out"} disabled={busy} onChange={(e) => setFreight(e.target.value === "in")}>
+            <option value="in">算進成本</option>
+            <option value="out">不算成本</option>
+          </select>
+        </label>
       </div>
       <div className="vl-actions">
         {row.has_key && (

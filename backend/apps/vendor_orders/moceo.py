@@ -107,8 +107,19 @@ def orders(key: str, limit: int = 100) -> list:
 
 
 def order(key: str, order_no: str) -> dict:
-    row = _read("/orders/" + urllib.parse.quote(order_no, safe=""), key).get("order")
-    return row if isinstance(row, dict) else {}
+    return detail(key, order_no).order
+
+
+@dataclass
+class Detail:
+    order: dict                     # 這張單現在的樣子(含 items:廠商事後改單、改價之後就是改過的)
+    sandbox: object = None
+
+
+def detail(key: str, order_no: str) -> Detail:
+    data = _read("/orders/" + urllib.parse.quote(order_no, safe=""), key)
+    row = data.get("order")
+    return Detail(row if isinstance(row, dict) else {}, _sandbox(data))
 
 
 @dataclass

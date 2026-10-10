@@ -1,3 +1,5 @@
+import type { ReceiptRow } from "@/lib/vendorReceive";
+
 // 共用 API 型別
 
 export interface Paginated<T> {
@@ -1776,6 +1778,11 @@ export interface VendorLinkRow {
   buyer_tax_id: string;
   buyer_name: string;
   invoice_email: string;
+  /** 到貨入庫開的進貨單記在哪個供應商;null = 第一次入庫時自動用 / 建一筆跟廠商同名的 */
+  supplier: number | null;
+  supplier_name: string;
+  /** 運費要不要算進入庫成本(這家門市固定一種做法) */
+  freight_into_cost: boolean;
   choices: { payment_method: string[]; delivery_method: string[]; invoice_type: string[] };
 }
 
@@ -1826,6 +1833,12 @@ export interface VendorOrder {
   created_at: string;
   created_by: string;
   items: VendorOrderLine[];
+  /** pos 從這裡叫的 / outside 不是從這裡叫的(認進來的;明細不存,items 是空的) */
+  source: "pos" | "outside";
+  /** 到貨時對不上的事(送錯、少到…) */
+  issue_note: string;
+  /** 到貨入庫的紀錄:一次一張進貨單(作廢的也列,標 is_void) */
+  receipts: ReceiptRow[];
 }
 
 /** 廠商那邊「不是從 POS 叫的」訂單(電話、LINE、廠商後台代下的) */

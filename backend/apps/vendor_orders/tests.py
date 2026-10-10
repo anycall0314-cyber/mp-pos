@@ -7,6 +7,7 @@
 import http.server
 import json
 import threading
+import urllib.parse
 from decimal import Decimal
 from unittest import mock
 
@@ -74,11 +75,12 @@ class FakeVendor:
             mine = [o for (k, _), o in self.placed.items() if k == key]
             return moceo.Reply(200, {"ok": True, "orders": [self._row(o) for o in [*self.outside, *mine]]})
         if method == "GET" and path.startswith("/orders/"):
-            no = path.split("/orders/", 1)[1]
-            hit = [o for (k, _), o in self.placed.items() if k == key and o["order_no"] == no]
+            no = urllib.parse.unquote(path.split("/orders/", 1)[1])
+            hit = [o for (k, _), o in self.placed.items() if k == key and o["order_no"] == no] \
+                + [o for o in self.outside if o["order_no"] == no]
             if not hit:
                 return moceo.Reply(404, {"ok": False, "error": "找不到這張單"})
-            return moceo.Reply(200, {"ok": True, "order": self._row(hit[0])})
+            return moceo.Reply(200, {"ok": True, "order": self._detail(hit[0])})
         assert (method, path) == ("POST", "/orders"), (method, path)
         outcome = self.script.pop(0) if self.script else "ok"
         if outcome == "down":
@@ -93,12 +95,40 @@ class FakeVendor:
         spec_price = {s["id"]: s["unit_price"] for p in PRODUCTS for s in p["specs"]}
         goods = sum((spec_price.get(i["spec_id"], price[i["sku"]]) + self.price_drift) * i["qty"] for i in body["items"])
         order = {"order_no": f"MO-20261010-{len(self.placed) + 1:03d}", "total_amount": goods + self.shipping_fee,
-                 "shipping_fee": self.shipping_fee, "status": "待審核", "body": body}
+                 "shipping_fee": self.shipping_fee, "status": "待審核", "body": body,
+                 "payment_method": body["payment_method"], "delivery_method": body["delivery_method"],
+                 "items": [self.line(i["sku"], i["qty"], spec_id=i["spec_id"], drift=self.price_drift) for i in body["items"]]}
         self.placed[slot] = order
         if outcome == "lost":
             raise moceo.Unreachable("連不到膜總裁(TimeoutError)")
         return moceo.Reply(200, {"ok": True, "order_no": order["order_no"], "total_amount": order["total_amount"],
                                  "shipping_fee": order["shipping_fee"]})
+
+    @staticmethod
+    def line(sku, qty, *, spec_id=None, shipped=0, free=False, drift=0):
+        """查單時的一行(欄位照膜總裁 2026-10-10 實際回的)。`free` = 瑕疵補發的免費列。"""
+        product = next(p for p in PRODUCTS if p["sku"] == sku)
+        spec = next((x for x in product["specs"] if x["id"] == spec_id), None)
+        unit = 0 if free else (spec["unit_price"] if spec else product["unit_price"]) + drift
+        return {"sku": sku, "name": product["name"], "unit": product["unit"], "pack_qty": product["pack_qty"],
+                "spec_id": spec_id, "spec_code": spec["code"] if spec else None, "spec_name": spec["name"] if spec else None,
+                "sale_type": "加購", "is_reissue": free, "qty": qty, "shipped_qty": shipped, "unit_price": unit,
+                "subtotal": unit * qty}
+
+    def find(self, order_no):
+        return next(o for o in [*self.placed.values(), *self.outside] if o["order_no"] == order_no)
+
+    def ship(self, order_no, **by_sku):
+        """廠商出貨:`ship(單號)` 全出;`ship(單號, G02=25)` 只出這幾個。"""
+        for item in self.find(order_no)["items"]:
+            item["shipped_qty"] = by_sku.get(item["sku"], 0) if by_sku else item["qty"]
+
+    def _detail(self, o):
+        row = {**self._row(o), "shipping_fee": o.get("shipping_fee", 0), "payment_method": o.get("payment_method", "月結"),
+               "delivery_method": o.get("delivery_method", "宅配")}
+        if "items" in o:
+            row["items"] = o["items"]
+        return row
 
     @staticmethod
     def _row(o):
@@ -768,11 +798,18 @@ class BackupTests(BackupBase):
         with mock.patch.object(moceo, "_call", vendor):
             r = a.admin.post(LINKS, {"warehouse": a.wh.id, "key": KEY, "ship_name": "甲湳雅店", "ship_phone": "035551234",
                                      "ship_address": "新竹市湳雅街 1 號", "payment_method": "貨到付款",
-                                     "invoice_email": "a@b.com"}, format="json")
+                                     "invoice_email": "a@b.com", "supplier": a.supplier.id,
+                                     "freight_into_cost": False}, format="json")
             self.assertEqual(r.status_code, 200, r.content.decode())
             r = a.clerk.post(ORDERS, {"request_key": "draft-0001", "warehouse": a.wh.id,
                                       "lines": [{"key": "G02", "packs": 2}]}, format="json")
             self.assertEqual((r.status_code, r.json()["vendor_order_no"]), (201, "MO-20261010-001"))
+            # 到貨入了 30 片(第二步):入庫紀錄、它開的進貨單、料號對到哪個品號都要跟著走
+            r = a.clerk.post(f"{ORDERS}{r.json()['id']}/receive/", {
+                "request_key": "recv-0001", "issue_note": "少 20 片",
+                "lines": [{"key": "G02||p", "qty": 30, "product": a.case.id}]}, format="json")
+            self.assertEqual(r.status_code, 201, r.content.decode())
+            po_no = r.json()["order"]["receipts"][0]["purchase_order_no"]
             job = self.backup(a)
             old_store = a.wh.id
             done = self.rollback(a, self.path(job))
@@ -789,6 +826,18 @@ class BackupTests(BackupBase):
             orders = a.clerk.get(ORDERS).json()["results"]
             self.assertEqual([(o["warehouse"], o["vendor_order_no"], o["state"], o["total_amount"], o["items"][0]["qty"])
                               for o in orders], [(a.wh.id, "MO-20261010-001", "placed", "7500.00", 50)])
+            self.assertEqual((orders[0]["issue_note"], orders[0]["source"],
+                              [(x["purchase_order_no"], x["qty"], x["is_void"], x["total_cost"]) for x in orders[0]["receipts"]]),
+                             ("少 20 片", "pos", [(po_no, 30, False, "4500.00")]))
+            from apps.catalog.models import SupplierProduct
+            from apps.purchasing.models import PurchaseOrder
+            from .models import VendorReceipt, VendorReceiptItem
+            receipt, item = VendorReceipt.objects.get(), VendorReceiptItem.objects.get()
+            self.assertEqual((receipt.purchase_order, receipt.order.warehouse_id, item.product, item.qty),
+                             (PurchaseOrder.objects.get(tenant=a.tenant, no=po_no), a.wh.id, a.case, 30))
+            link = VendorLink.objects.get(tenant=a.tenant)
+            self.assertEqual((link.supplier, link.freight_into_cost), (a.supplier, False))     # 還原後是新的那一列
+            self.assertEqual(SupplierProduct.objects.get(tenant=a.tenant, vendor_sku="G02").product, a.case)
             # 沒有金鑰:叫不了貨;同一把鑰匙的那一張還是認得(不會再開一張)
             calls = len(vendor.calls)
             r = a.clerk.post(ORDERS, {"request_key": "draft-0002", "warehouse": a.wh.id,

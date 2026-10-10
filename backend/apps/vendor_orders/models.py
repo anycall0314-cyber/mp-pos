@@ -4,7 +4,9 @@
 - `VendorSecret`:那把金鑰(加密過的)。另外一張表是因為它**不進公司備份**:備份檔會被帶走、搬到別台,
   外部系統的下單金鑰不該跟著走。還原之後要請管理員重新貼。
 - `VendorOrder` / `VendorOrderItem`:一張叫貨單。價錢是叫貨當下廠商報的,**只是當下的牌價**;
-  到貨入庫時以廠商那張單當下的明細為準(第二步)。
+  到貨入庫時以廠商那張單當下的明細為準。
+- `VendorReceipt` / `VendorReceiptItem`:一次到貨入庫 = 一張進貨單。一張叫貨單可以分好幾次入庫(部分出貨、少到貨);
+  進貨單之後被作廢,那一次就不算(那幾片回到「還沒入庫」)。
 """
 from django.conf import settings
 from django.db import models
@@ -31,6 +33,13 @@ class VendorLink(TenantOwnedModel):
     buyer_tax_id = models.CharField("統一編號", max_length=20, blank=True, default="")
     buyer_name = models.CharField("發票抬頭", max_length=120, blank=True, default="")
     invoice_email = models.CharField("發票信箱", max_length=200, blank=True, default="")
+    # 到貨入庫開的進貨單記在哪一個供應商底下(店裡自己的那一筆);沒指定過就自動用 / 建一筆跟廠商同名的
+    supplier = models.ForeignKey(
+        "parties.Supplier", null=True, blank=True, on_delete=models.PROTECT, related_name="+", verbose_name="供應商",
+    )
+    # 運費要不要算進入庫成本:每家門市固定一種做法,由管理員定(不是入庫的人每次勾 ——
+    # 不然同一家店的成本一下含運費、一下不含,只差誰按;紅隊 2026-10-10)
+    freight_into_cost = models.BooleanField("運費算進成本", default=True)
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
     )
@@ -69,8 +78,16 @@ class VendorOrder(TenantOwnedModel):
         # 只能用同一把鑰匙再送一次 —— 成立過會拿到同一個單號,不會變成兩張。
         UNKNOWN = "unknown", "不確定"
 
+    class Source(models.TextChoices):
+        POS = "pos", "從這裡叫的"
+        # 不是從 POS 叫的(電話、LINE、廠商後台代下):貨到了要入庫時才認進來,明細一律跟廠商要
+        OUTSIDE = "outside", "不是從這裡叫的"
+
     provider = models.CharField("廠商", max_length=20, choices=Provider.choices, default=Provider.MOCEO)
     link = models.ForeignKey(VendorLink, on_delete=models.PROTECT, related_name="orders")
+    source = models.CharField("哪裡叫的", max_length=10, choices=Source.choices, default=Source.POS)
+    # 到貨時對不上的事(送錯規格、少一包…):這幾行先不入庫,記一句讓老闆看得到
+    issue_note = models.CharField("到貨問題", max_length=300, blank=True, default="")
     warehouse = models.ForeignKey(
         "inventory.Warehouse", on_delete=models.PROTECT, related_name="vendor_orders", verbose_name="門市",
     )
@@ -124,6 +141,11 @@ class VendorOrder(TenantOwnedModel):
         ordering = ["-id"]
         constraints = [
             models.UniqueConstraint(fields=["tenant", "request_key"], name="uniq_vendor_order_request_key"),
+            # 廠商的同一張單在這家公司只會有一筆(兩家門市共用金鑰時,不能各認一次、各入一次庫)
+            models.UniqueConstraint(
+                fields=["tenant", "provider", "vendor_order_no"], condition=~models.Q(vendor_order_no=""),
+                name="uniq_vendor_order_no",
+            ),
         ]
         indexes = [models.Index(fields=["tenant", "warehouse", "-id"])]
 
@@ -145,3 +167,43 @@ class VendorOrderItem(TenantOwnedModel):
         verbose_name = "叫貨明細"
         verbose_name_plural = "叫貨明細"
         ordering = ["line_no", "id"]
+
+
+class VendorReceipt(TenantOwnedModel):
+    """一次到貨入庫。它開出來的進貨單才是庫存與成本的帳;這裡只記「這張叫貨單的哪幾行、這一次入了幾個」。"""
+
+    order = models.ForeignKey(VendorOrder, on_delete=models.PROTECT, related_name="receipts")
+    purchase_order = models.ForeignKey(
+        "purchasing.PurchaseOrder", on_delete=models.PROTECT, related_name="+", verbose_name="進貨單",
+    )
+    # 畫面每開一次入庫產生一把:連按兩下、斷線重送不會入兩次
+    request_key = models.CharField("畫面的鑰匙", max_length=50)
+    freight = models.DecimalField("這一次算進成本的運費", max_digits=14, decimal_places=2, default=0)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+        verbose_name="入庫的人",
+    )
+
+    class Meta:
+        verbose_name = "到貨入庫"
+        verbose_name_plural = "到貨入庫"
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "request_key"], name="uniq_vendor_receipt_request_key"),
+        ]
+
+
+class VendorReceiptItem(TenantOwnedModel):
+    receipt = models.ForeignKey(VendorReceipt, on_delete=models.CASCADE, related_name="items")
+    sku = models.CharField("廠商料號", max_length=80)
+    spec_id = models.IntegerField("規格編號", null=True, blank=True)
+    is_reissue = models.BooleanField("瑕疵補發(免費)", default=False)
+    name = models.CharField("廠商品名", max_length=200, blank=True, default="")
+    qty = models.PositiveIntegerField("這一次入庫幾個")
+    unit_price = models.DecimalField("廠商的單價", max_digits=14, decimal_places=2)      # 不含運費
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+", verbose_name="入到哪個品號")
+
+    class Meta:
+        verbose_name = "到貨入庫明細"
+        verbose_name_plural = "到貨入庫明細"
+        ordering = ["id"]

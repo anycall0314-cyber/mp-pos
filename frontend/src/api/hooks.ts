@@ -10,6 +10,7 @@ import {
 import { listProductPhotos, type PhotosPayload } from "./photos";
 import { rangeQuery, rangeReady, type ReportRange } from "@/lib/fixedReports";
 import type { CatalogRow } from "@/lib/vendorOrder";
+import type { ReceivePlan } from "@/lib/vendorReceive";
 import {
   Carrier,
   Category,
@@ -2614,6 +2615,58 @@ export const useSyncVendorOrders = () =>
         body: JSON.stringify({ warehouse }),
       }),
   });
+
+/** 到貨入庫要看的:廠商這張單現在的每一行、已出 / 已入 / 建議入幾個、對到哪個品號。每次打開現抓。 */
+export const useVendorReceiving = (orderId: number | null) =>
+  useQuery({
+    queryKey: ["vendor-receiving", orderId],
+    queryFn: () => api<ReceivePlan>(`/vendor-orders/${orderId}/receiving/`),
+    enabled: orderId !== null,
+    retry: false,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+  });
+
+/** 到貨入庫(開一張進貨單)。**不自動重試**:同一把鑰匙再送不會入兩次,要不要再送由畫面決定。 */
+export const useReceiveVendorOrder = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: (vars: {
+      order: number;
+      request_key: string;
+      lines: { key: string; qty: number; product: number }[];
+      issue_note: string;
+    }) =>
+      api<{ receipt: number; order: VendorOrder }>(`/vendor-orders/${vars.order}/receive/`, {
+        method: "POST",
+        body: JSON.stringify({ request_key: vars.request_key, lines: vars.lines, issue_note: vars.issue_note }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendor-orders"] });
+      qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+};
+
+/** 把廠商那邊「不是從這裡叫的」一張單認進來(之後才能到貨入庫)。認兩次是同一筆。 */
+export const useAdoptVendorOrder = () =>
+  useMutation({
+    retry: false,
+    mutationFn: (body: { warehouse: number; order_no: string }) =>
+      api<VendorOrder>(`/vendor-orders/adopt/`, { method: "POST", body: JSON.stringify(body) }),
+  });
+
+/** 到貨問題(送錯、少到…):只記一句,不入庫。 */
+export const useSaveVendorIssue = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { order: number; note: string }) =>
+      api<VendorOrder>(`/vendor-orders/${vars.order}/issue/`, { method: "POST", body: JSON.stringify({ note: vars.note }) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vendor-orders"] }),
+  });
+};
 
 // 固定的報表:內容由伺服器定,畫面只送日期 / 門市 /(商品排行)照什麼分。
 // 不留上一份當佔位:三張報表共用同一個元件,欄位不一樣,換一張時不能先畫上一張的。

@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
+  useAdoptVendorOrder,
   usePlaceVendorOrder,
   useResendVendorOrder,
   useSyncVendorOrders,
@@ -11,7 +12,7 @@ import {
 } from "@/api/hooks";
 import { ApiHttpError } from "@/api/client";
 import type { VendorLinkRow, VendorOrder, VendorOutsideOrder } from "@/api/types";
-import { useCurrentUser, useDefaultWarehouse } from "@/auth/AuthContext";
+import { useCan, useCurrentUser, useDefaultWarehouse } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
 import { Drawer } from "@/components/Drawer";
 import { Toolbar } from "@/components/Toolbar";
@@ -37,6 +38,9 @@ import {
   withPacks,
   type OrderDraft,
 } from "@/lib/vendorOrder";
+import { mayReceive, receivedText } from "@/lib/vendorReceive";
+
+import { ReceiveDrawer } from "./ReceiveDrawer";
 
 type Tab = "order" | "history";
 const TABS: { value: Tab; label: string }[] = [
@@ -450,7 +454,24 @@ function HistoryTab({ link }: { link: VendorLinkRow }) {
   const [others, setOthers] = useState<VendorOutsideOrder[] | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  // 到貨入庫開出來的是進貨單:看的是員工帳號的「進貨入庫」,不是「廠商叫貨」
+  const canReceive = useCan("purchase");
+  const adopt = useAdoptVendorOrder();
+  const [receiving, setReceiving] = useState<VendorOrder | null>(null);
   const rows = orders.data?.results ?? [];
+
+  /** 不是從這裡叫的單:先認進來(認兩次是同一筆),再打開入庫 */
+  async function takeIn(orderNo: string) {
+    if (adopt.isPending) return;
+    try {
+      const got = await adopt.mutateAsync({ warehouse: link.warehouse, order_no: orderNo });
+      setOthers((list) => (list ? list.filter((r) => r.order_no !== orderNo) : list));
+      qc.invalidateQueries({ queryKey: ["vendor-orders", link.warehouse] });
+      setReceiving(got);
+    } catch (e) {
+      toast(apiErrorText(e), "err");
+    }
+  }
 
   async function refresh() {
     try {
@@ -500,6 +521,7 @@ function HistoryTab({ link }: { link: VendorLinkRow }) {
                 <th>付款</th>
                 <th className="num">總額</th>
                 <th className="num">運費</th>
+                <th className="num">已入庫</th>
                 <th>叫貨的人</th>
                 <th />
               </tr>
@@ -511,14 +533,16 @@ function HistoryTab({ link }: { link: VendorLinkRow }) {
                     className={`report-row vo-order${o.state !== "placed" ? " vo-unsure" : ""}`}
                     onClick={() => setOpen(open === o.id ? null : o.id)}
                   >
-                    <td>{whenText(o.created_at)}</td>
+                    <td>{whenText(o.source === "outside" ? (o.vendor_ordered_at ?? o.created_at) : o.created_at)}</td>
                     <td>
                       {o.vendor_order_no || "—"}
                       {o.is_test === true && <span className="vo-test">測試單</span>}
+                      {o.source === "outside" && <span className="vo-test">外部單</span>}
                     </td>
                     <td>
                       {statusOf(o)}
                       {o.amount_matches === false && <div className="vo-sub vo-diff">金額與叫貨時不同</div>}
+                      {o.issue_note && <div className="vo-sub vo-diff">到貨問題:{o.issue_note}</div>}
                     </td>
                     <td>
                       {[o.vendor_shipping_method, o.vendor_tracking_no].filter(Boolean).join(" ") ||
@@ -531,8 +555,21 @@ function HistoryTab({ link }: { link: VendorLinkRow }) {
                     </td>
                     <td className="num">{amountText(o.total_amount)}</td>
                     <td className="num">{amountText(o.shipping_fee)}</td>
+                    <td className="num">{receivedText(o)}</td>
                     <td>{o.created_by}</td>
                     <td className="num">
+                      {canReceive && mayReceive(o) && (
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReceiving(o);
+                          }}
+                        >
+                          到貨入庫
+                        </button>
+                      )}
                       {o.state !== "placed" && (
                         <button
                           type="button"
@@ -550,21 +587,41 @@ function HistoryTab({ link }: { link: VendorLinkRow }) {
                   </tr>
                   {open === o.id && (
                     <tr className="vo-detail">
-                      <td colSpan={9}>
+                      <td colSpan={10}>
                         {o.state !== "placed" && o.problem && <div className="vo-diff">{o.problem}</div>}
-                        <table className="report-grid vo-confirm">
-                          <tbody>
-                            {o.items.map((i) => (
-                              <tr key={i.line_no}>
-                                <td className="vo-name">{rowTitle({ name: i.name, spec_label: i.spec_label, size: "" })}</td>
-                                <td>{i.sku}</td>
-                                <td className="num">{packsText(i.packs, i.qty, i.unit)}</td>
-                                <td className="num">@{money(i.unit_price)}</td>
-                                <td className="num">{money(Number(i.unit_price) * i.qty)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                        {o.items.length > 0 && (
+                          <table className="report-grid vo-confirm">
+                            <tbody>
+                              {o.items.map((i) => (
+                                <tr key={i.line_no}>
+                                  <td className="vo-name">{rowTitle({ name: i.name, spec_label: i.spec_label, size: "" })}</td>
+                                  <td>{i.sku}</td>
+                                  <td className="num">{packsText(i.packs, i.qty, i.unit)}</td>
+                                  <td className="num">@{money(i.unit_price)}</td>
+                                  <td className="num">{money(Number(i.unit_price) * i.qty)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                        {o.receipts.length > 0 && (
+                          <table className="report-grid vo-confirm">
+                            <tbody>
+                              {o.receipts.map((r) => (
+                                <tr key={r.id} className={r.is_void ? "vr-void" : undefined}>
+                                  <td>{whenText(r.created_at)}</td>
+                                  <td>
+                                    進貨單 {r.purchase_order_no}
+                                    {r.is_void && <span className="vo-test">已作廢</span>}
+                                  </td>
+                                  <td className="num">{r.qty} 個</td>
+                                  <td className="num">${money(r.total_cost)}</td>
+                                  <td>{r.created_by}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
                         {o.note && <div className="vo-sub">備註:{o.note}</div>}
                       </td>
                     </tr>
@@ -588,6 +645,7 @@ function HistoryTab({ link }: { link: VendorLinkRow }) {
                     <th>物流</th>
                     <th>收款</th>
                     <th className="num">總額</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -599,6 +657,13 @@ function HistoryTab({ link }: { link: VendorLinkRow }) {
                       <td>{[r.shipping_method, r.tracking_no].filter(Boolean).join(" ") || r.logistics_status}</td>
                       <td>{r.payment_status}</td>
                       <td className="num">{amountText(r.total_amount)}</td>
+                      <td className="num">
+                        {canReceive && (
+                          <button type="button" className="btn" disabled={adopt.isPending} onClick={() => takeIn(r.order_no)}>
+                            到貨入庫
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -607,6 +672,7 @@ function HistoryTab({ link }: { link: VendorLinkRow }) {
           </>
         )}
       </div>
+      {receiving && <ReceiveDrawer key={receiving.id} order={receiving} onClose={() => setReceiving(null)} />}
     </>
   );
 }

@@ -235,7 +235,17 @@ def _send(order: VendorOrder, key: str, *, first: bool) -> VendorOrder:
     order.total_amount, order.shipping_fee = total, fee
     order.amount_matches = None if total is None or fee is None else (total - fee == order.expected_goods)
     order.is_test = result.sandbox
-    order.save()
+    with transaction.atomic():
+        # 這張單「不確定」的時候,有人可能已經從「不是從這裡叫的」把廠商那一張認進來、甚至入過庫了。
+        # 現在確定是同一張:入庫紀錄搬過來、那一筆拿掉(廠商的同一張單在這家公司只留一筆)。
+        twin = (VendorOrder.objects.select_for_update()
+                .filter(tenant=order.tenant, provider=order.provider, vendor_order_no=order.vendor_order_no)
+                .exclude(pk=order.pk).first())
+        if twin is not None:
+            twin.receipts.update(order=order)
+            order.issue_note = order.issue_note or twin.issue_note
+            twin.delete()
+        order.save()
     return order
 
 
@@ -327,7 +337,11 @@ def _text(value, limit):
     return value[:limit] if isinstance(value, str) else ""
 
 
-def _apply(order: VendorOrder, row: dict) -> None:
+PROGRESS_FIELDS = ["vendor_status", "vendor_payment_status", "vendor_logistics_status", "vendor_shipping_method",
+                   "vendor_tracking_no", "vendor_ordered_at", "total_amount", "status_checked_at", "updated_at"]
+
+
+def _set_progress(order: VendorOrder, row: dict) -> None:
     order.vendor_status = _text(row.get("status"), 40)
     order.vendor_payment_status = _text(row.get("payment_status"), 40)
     order.vendor_logistics_status = _text(row.get("logistics_status"), 60)
@@ -338,7 +352,12 @@ def _apply(order: VendorOrder, row: dict) -> None:
     if order.total_amount is None:
         order.total_amount = _price(row.get("total_amount"))
     order.status_checked_at = timezone.now()
-    order.save()
+
+
+def _apply(order: VendorOrder, row: dict) -> None:
+    """只寫進度那幾格(整列重存的話,會把別人剛寫的「到貨問題」蓋回舊的)。"""
+    _set_progress(order, row)
+    order.save(update_fields=PROGRESS_FIELDS)
 
 
 def sync(tenant, link) -> list[dict]:

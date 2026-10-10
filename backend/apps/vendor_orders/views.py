@@ -2,6 +2,7 @@
 
 - 叫貨串接(金鑰與預設):看 → 登入的人(自己門市);改 → 只有管理員。**金鑰原文任何回應都沒有**;前幾碼只有管理員看得到。
 - 叫貨(看廠商的商品與進價、送出、再送一次、更新進度)→ 要有員工帳號的「廠商叫貨」。看叫貨單清單照舊。
+- 到貨入庫(看這張單到了什麼、入庫、把不是從這裡叫的單認進來、記到貨問題)→ 要有「進貨入庫」(它開出來的就是進貨單)。
 """
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -13,7 +14,9 @@ from apps.inventory.models import Warehouse
 from apps.tenants import abilities
 from apps.tenants.permissions import is_tenant_admin
 
-from . import moceo, secrets, services
+from apps.parties.models import Supplier
+
+from . import moceo, receiving, secrets, services
 from .models import Provider, VendorLink, VendorOrder, VendorSecret
 
 LIST_ROWS = 100
@@ -72,6 +75,10 @@ def _link_data(store, link, hints, manager) -> dict:
         "buyer_tax_id": link.buyer_tax_id if link else "",
         "buyer_name": link.buyer_name if link else "",
         "invoice_email": link.invoice_email if link else "",
+        # 到貨入庫:進貨單記在哪個供應商(沒指定 = 第一次入庫時自動用 / 建一筆跟廠商同名的)、運費要不要算進成本
+        "supplier": link.supplier_id if link else None,
+        "supplier_name": link.supplier.name if link and link.supplier_id else "",
+        "freight_into_cost": link.freight_into_cost if link else True,
         "has_key": bool(link and link.id in hints),
         # 廠商說這把是測試(沙盒)金鑰:用它叫的是測試單。大家都看得到(叫貨的人要知道現在是不是玩真的)
         "sandbox": hints[link.id][1] if link and link.id in hints else None,
@@ -90,10 +97,28 @@ def _hints(tenant, link=None) -> dict:
     return {link_id: (hint, sandbox) for link_id, hint, sandbox in rows.values_list("link_id", "hint", "sandbox")}
 
 
+def _receipt_data(receipt) -> dict:
+    po = receipt.purchase_order
+    return {
+        "id": receipt.id,
+        "purchase_order": po.id,
+        "purchase_order_no": po.no,
+        "is_void": po.is_void,
+        "total_cost": _money(po.total_cost),
+        "freight": _money(receipt.freight),
+        "qty": sum(i.qty for i in receipt.items.all()),
+        "created_at": receipt.created_at,
+        "created_by": receipt.created_by.get_username() if receipt.created_by else "",
+    }
+
+
 def _order_data(order: VendorOrder) -> dict:
     return {
         "id": order.id,
         "provider": order.provider,
+        "source": order.source,
+        "issue_note": order.issue_note,
+        "receipts": [_receipt_data(r) for r in order.receipts.all()],
         "warehouse": order.warehouse_id,
         "warehouse_name": order.warehouse.name,
         "request_key": order.request_key,
@@ -131,7 +156,7 @@ def _order_data(order: VendorOrder) -> dict:
 
 def _orders(request, store=None):
     qs = VendorOrder.objects.filter(tenant=request.tenant).select_related("warehouse", "created_by") \
-        .prefetch_related("items")
+        .prefetch_related("items", "receipts__purchase_order", "receipts__items", "receipts__created_by")
     own = locked_warehouse_id(request.user)
     if own is not None:
         qs = qs.filter(warehouse_id=own)
@@ -169,6 +194,19 @@ def links(request):
         current = _link_data(store, link, {}, False)
         merged = {name: values.get(name, current[name]) for name in LINK_FIELDS}
         services.check_header(**merged)
+        if "freight_into_cost" in data:
+            if not isinstance(data["freight_into_cost"], bool):
+                raise services.VendorError("運費要不要算進成本,只能是「要」或「不要」")
+            merged["freight_into_cost"] = data["freight_into_cost"]
+        if "supplier" in data:
+            raw_supplier = data["supplier"]
+            supplier = None
+            if raw_supplier is not None:
+                supplier = Supplier.objects.filter(tenant=request.tenant, pk=raw_supplier).first() \
+                    if isinstance(raw_supplier, int) and not isinstance(raw_supplier, bool) else None
+                if supplier is None:
+                    raise services.VendorError("找不到這個供應商")
+            merged["supplier"] = supplier
         raw, sandbox = services.check_key(data["key"]) if data.get("key") else (None, None)   # 會去打廠商一次
     except services.VendorError as exc:
         return _bad(exc, exc.status)
@@ -277,3 +315,71 @@ def sync(request):
         "results": [_order_data(o) for o in _orders(request, store)[:LIST_ROWS]],
         "others": others,
     })
+
+
+# ── 到貨入庫 ────────────────────────────────────────────────────────────────
+def _own_order(request, pk):
+    return _orders(request).filter(pk=pk).first()
+
+
+@api_view(["GET"])
+def receiving_plan(request, pk: int):
+    """這張叫貨單在廠商那邊現在的每一行:叫幾個、已出、已入庫、這次建議入幾個、對到店裡哪個品號。"""
+    abilities.require(request.user, abilities.PURCHASE)
+    order = _own_order(request, pk)
+    if order is None:
+        return _bad("找不到這張叫貨單", status.HTTP_404_NOT_FOUND)
+    try:
+        return Response(receiving.plan(request.tenant, order))
+    except services.VendorError as exc:
+        return _bad(exc, exc.status)
+
+
+@api_view(["POST"])
+def receive(request, pk: int):
+    abilities.require(request.user, abilities.PURCHASE)
+    order = _own_order(request, pk)
+    if order is None:
+        return _bad("找不到這張叫貨單", status.HTTP_404_NOT_FOUND)
+    data = request.data if isinstance(request.data, dict) else {}
+    try:
+        receipt, created = receiving.receive(
+            tenant=request.tenant, user=request.user, order=order, request_key=data.get("request_key"),
+            lines=data.get("lines"), manager=is_tenant_admin(request.user),
+        )
+        if isinstance(data.get("issue_note"), str):
+            receiving.set_issue(order, data["issue_note"])
+    except services.VendorError as exc:
+        return _bad(exc, exc.status)
+    return Response({"receipt": receipt.id, "order": _order_data(_orders(request).get(pk=order.pk))},
+                    status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+def adopt(request):
+    """把廠商那邊「不是從這裡叫的」一張單認進來(之後才能到貨入庫)。"""
+    abilities.require(request.user, abilities.PURCHASE)
+    data = request.data if isinstance(request.data, dict) else {}
+    try:
+        store = _store(request, data.get("warehouse"))
+        link = _link(request, store)
+        if link is None:
+            raise services.VendorError("這家門市還沒有設定膜總裁的金鑰,請管理員到「系統設定 → 叫貨串接」設定")
+        order = receiving.adopt(tenant=request.tenant, user=request.user, link=link, order_no=data.get("order_no"))
+    except services.VendorError as exc:
+        return _bad(exc, exc.status)
+    return Response(_order_data(_orders(request).get(pk=order.pk)))
+
+
+@api_view(["POST"])
+def issue(request, pk: int):
+    """到貨問題(送錯、少到…):記一句,老闆在叫貨紀錄上看得到。空的 = 清掉。"""
+    abilities.require(request.user, abilities.PURCHASE)
+    order = _own_order(request, pk)
+    if order is None:
+        return _bad("找不到這張叫貨單", status.HTTP_404_NOT_FOUND)
+    data = request.data if isinstance(request.data, dict) else {}
+    if not isinstance(data.get("note"), str):
+        return _bad("要有內容")
+    receiving.set_issue(order, data["note"])
+    return Response(_order_data(_orders(request).get(pk=order.pk)))

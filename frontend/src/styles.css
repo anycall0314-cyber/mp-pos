@@ -7726,6 +7726,33 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .vl-vendor, .vl-state { font-size: var(--font-secondary); font-weight: 400; color: var(--text-dim); }
 .vl-state.vl-on { color: var(--success-text); }
 .vl-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+/* 供應商那一格是搜尋框(不能包在 label 裡:點選項會被 label 再點一次) */
+.vl-grid .vl-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+  min-width: 0;
+}
+/* 到貨入庫的面板 */
+.vr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin-bottom: 10px;
+  color: var(--text-dim);
+}
+.vr-head .vr-fill { margin-left: auto; display: flex; gap: 8px; }
+.vr-grid { width: 100%; }
+.vr-grid td { vertical-align: top; }
+.vr-grid td.vo-name { min-width: 0; width: 100%; }
+.vr-grid .vr-map { margin-top: 6px; max-width: 24rem; }
+.vr-grid .vr-fixed { display: inline-flex; align-items: baseline; gap: 8px; color: var(--text-dim); }
+.vr-grid .vo-qty { width: 4.75rem; }
+.vr-grid .btn-link { padding: 0; font: inherit; color: var(--accent); background: none; border: 0; cursor: pointer; }
+.vo-confirm tr.vr-void td { opacity: 0.55; }
 /* 金鑰那一格:打進去的字遮成圓點(不是密碼框,瀏覽器不會把存過的密碼填進來) */
 .vl-grid input.vl-secret { -webkit-text-security: disc; font-family: monospace; }
 .vl-grid input.vl-secret::placeholder { -webkit-text-security: none; font-family: inherit; }
