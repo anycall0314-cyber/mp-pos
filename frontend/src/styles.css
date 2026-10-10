@@ -6571,6 +6571,9 @@ tr.selected .intake-badge { filter: none; }
 .wb input:disabled, .wb select:disabled { opacity: 0.6; }
 .wb input.num { text-align: right; font-variant-numeric: tabular-nums; }
 .wb input.bad { border-color: var(--wb-red); background: var(--wb-red-soft); }
+/* 序號防呆:已經在系統裡 / 單內重複的那一格,原因寫在格子底下;序號格收起來時這一行也看得到 */
+.wb .slot-problem { margin-top: 2px; font-size: var(--font-secondary); line-height: 1.3; color: var(--wb-red); white-space: normal; }
+.wb .slot-flag { margin-left: 6px; padding: 0 6px; font-size: var(--font-secondary); color: var(--wb-red); border: 1px solid currentColor; border-radius: 999px; }
 .wb input[readonly] { background: transparent; border-color: transparent; }
 
 .wb-btn {

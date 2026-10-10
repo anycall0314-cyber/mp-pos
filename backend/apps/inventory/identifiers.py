@@ -106,6 +106,38 @@ def taken(tenant, codes, exclude_serial_id=None):
     return [keys[k] for k in keys if k in hit]
 
 
+IN_STORE = (ProductSerial.Status.IN_STOCK, ProductSerial.Status.IN_TRANSIT, ProductSerial.Status.RMA)
+
+
+def taken_details(tenant, codes) -> dict:
+    """這些碼裡,已經被這家公司的設備用掉的那幾個,各是哪一台:{送進來的碼: 那一台設備}。
+
+    給畫面在**輸入的當下**提醒用(進貨的序號格、批次貼上、個人收購),只讀。
+    **跟存檔時擋的是同一套比法**(`taken()`):識別碼表(IMEI、SN)加主碼,去掉符號後相同就算;作廢的不佔碼。
+    兩台舊設備的碼去掉符號後撞在一起時,回其中編號最小的那一台(要講的只是「這個碼已經有人用了」)。
+    """
+    keys = {}
+    for c in codes:
+        c = str(c or "").strip()
+        if c:
+            keys.setdefault(normalize_serial(c), c)
+    keys.pop("", None)
+    if not keys:
+        return {}
+    owner = {}
+    mains = (ProductSerial.objects.filter(tenant=tenant, serial_key__in=list(keys))
+             .exclude(status=ProductSerial.Status.VOID).order_by("-id"))
+    for serial in mains:
+        owner[serial.serial_key] = serial.pk
+    # 識別碼表的登記排在後面寫(兩邊指到不同台時以它為準:它是每一個碼都有的那一份)
+    for key, serial_id in (ProductSerialIdentifier.objects.filter(tenant=tenant, normalized_value__in=list(keys))
+                           .order_by("-serial_id").values_list("normalized_value", "serial_id")):
+        owner[key] = serial_id
+    serials = {s.pk: s for s in ProductSerial.objects.filter(pk__in=set(owner.values()))
+               .select_related("product", "warehouse")}
+    return {keys[key]: serials[pk] for key, pk in owner.items() if pk in serials}
+
+
 def _identifier_rows(serial, imei, sn):
     main = main_code(imei, sn)
     return [

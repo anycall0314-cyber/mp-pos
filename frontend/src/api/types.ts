@@ -141,6 +141,8 @@ export interface ProductSerial {
   sn: string;
   warehouse: number | null;
   warehouse_code: string | null;
+  /** 在哪家門市;已售、調撥中的不掛在任何門市(空的) */
+  warehouse_name?: string;
   status: SerialStatus;
   status_label: string;
   purchase_unit_cost: string;

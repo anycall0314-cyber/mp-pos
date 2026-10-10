@@ -50,6 +50,8 @@ import {
   resizeUnits,
 } from "@/lib/deviceCodes";
 import { intStr, lineTotal, money, roundInt, splitTax } from "@/lib/money";
+import { blockText, codesOf, problemsOf, whereText } from "@/lib/serialCheck";
+import { useSerialCheck } from "@/api/serialCheck";
 import {
   type CreateTrip,
   carriedQty,
@@ -372,6 +374,9 @@ export function PurchaseWorkbenchPage({
   const [tool, setTool] = useState<"picker" | "paste" | null>(null);
   /** 勾選商品 / 批次貼上之後要人看一眼的結果(併了哪些、哪些沒加):留在明細上方,按了才收 */
   const [notice, setNotice] = useState<string[] | null>(null);
+  // 序號防呆:這張單上每一個碼(掃的、打的、貼的、批次貼上的、草稿帶回來的)都問一次「是不是已經在系統裡」,
+  // 連同單內重複的,標在那一格底下、擋住儲存。不替人拿掉(規則在 lib/serialCheck.ts)。存成功、換一張單就全部重問
+  const [docNo, setDocNo] = useState(0);
   /**
    * 從商品那一邊帶過來、卻沒加進明細的(中古機、停用、查不到、帶不完…)。跟上面那一條分開記:
    * 勾選商品 / 批次貼上會換掉上面那一條,這一條**只有人按「知道了」才消失**,沒按之前不能儲存
@@ -431,6 +436,16 @@ export function PurchaseWorkbenchPage({
   });
   const tableRef = useRef<HTMLTableElement>(null);
   const linesRef = useRef<Line[]>(lines);
+  // 這張單上現在有的每一個序號(數量以內的那幾台);哪幾個有問題
+  const docCodes = useMemo(
+    () => lines.flatMap((l) => (l.product.requires_serial ? codesOf(l.serials.slice(0, Math.max(0, l.qty))) : [])),
+    [lines],
+  );
+  const serialCheck = useSerialCheck(docCodes, docNo);
+  const serialProblems = useMemo(() => problemsOf(docCodes, serialCheck.cache), [docCodes, serialCheck.cache]);
+  const serialProblemsRef = useRef(serialProblems);
+  serialProblemsRef.current = serialProblems;
+  const serialBlock = useMemo(() => blockText(docCodes, serialProblems), [docCodes, serialProblems]);
   const currentRef = useRef<string | null>(restoredCurrent);
   const pairRef = useRef(pairMode);
   pairRef.current = pairMode;
@@ -967,7 +982,7 @@ export function PurchaseWorkbenchPage({
     // (要先看這個再看商品:商品搜尋也會用序號找,刷到已經有的 IMEI 會列出那一台的商品,看起來像「沒刷對」)
     if (device.status === "fulfilled" && device.value.length > 0) {
       const d = device.value[0];
-      return `已經在系統裡:${d.product_name}(${d.status_label})`;
+      return `已經在系統裡:${d.product_name}(${whereText({ warehouse_name: d.warehouse_name ?? "", status_label: d.status_label })})`;
     }
     // 這串字找得到商品(品名 / 品號的一部分):交給下拉讓人挑。
     // 剛好 15 碼數字(IMEI 的長度;檢查碼不對的也算,格子裡會提醒)例外:它不會是品名或品號的一部分,
@@ -1211,6 +1226,12 @@ export function PurchaseWorkbenchPage({
     if (!warehouse) return "請選入庫倉";
     const ls = linesRef.current;
     if (ls.length === 0) return "請至少掃一筆商品";
+    // 已經知道有問題的序號(已經在系統裡 / 單內重複):先講是哪幾個、為什麼。還沒查到答案的不擋(伺服器存檔時會擋)
+    const known = blockText(
+      ls.flatMap((l) => (l.product.requires_serial ? codesOf(l.serials.slice(0, Math.max(0, l.qty))) : [])),
+      serialProblemsRef.current,
+    );
+    if (known) return known;
     const seen = new Set<string>();
     for (const l of ls) {
       const name = l.product.name;
@@ -1411,6 +1432,7 @@ export function PurchaseWorkbenchPage({
     };
     commit(() => []);
     resetForm();
+    setDocNo((n) => n + 1);          // 換一張單:剛存進去的序號現在就是「已經在系統裡」,查過的結果全部重來
     setTool(null);
     try {
       sessionStorage.removeItem(draftKey);
@@ -1615,6 +1637,16 @@ export function PurchaseWorkbenchPage({
           </button>
         </div>
 
+        {serialBlock && (
+          <div className="wb-warn err ws-msg" role="alert">
+            <span className="ws-msg-line">{serialBlock}</span>
+          </div>
+        )}
+        {serialCheck.failed && !serialBlock && docCodes.length > 0 && (
+          <div className="wb-warn ws-msg">
+            <span className="ws-msg-line">連線不穩,還沒查到這些序號是不是已經在系統裡;儲存時會再查一次</span>
+          </div>
+        )}
         {notice && (
           <div className="wb-warn ws-msg">
             <span>
@@ -1789,6 +1821,8 @@ export function PurchaseWorkbenchPage({
                           }}
                         >
                           已刷 {filled.length}／{l.qty}
+                          {/* 序號格收起來的時候也看得到這一行有問題 */}
+                          {blockText(codesOf(filled), serialProblems) && <span className="slot-flag">有問題</span>}
                         </button>
                       ) : (
                         <span className="wb-dim">—</span>
@@ -1848,6 +1882,7 @@ export function PurchaseWorkbenchPage({
                           isSecondhand={!!p.is_secondhand}
                           pairMode={pairMode}
                           disabled={locked}
+                          problems={serialProblems}
                           onChange={(entries) =>
                             patch(l.key, (x) => ({ ...x, serials: entries }))
                           }

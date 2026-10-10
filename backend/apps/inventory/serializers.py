@@ -46,6 +46,8 @@ class ProductSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelS
         source="product.is_secondhand", read_only=True
     )
     warehouse_code = serializers.CharField(source="warehouse.code", read_only=True)
+    # 在哪家門市(已售、調撥中的不掛在任何門市 → 空的):刷到已經在系統裡的碼時要講得出來
+    warehouse_name = serializers.CharField(source="warehouse.name", read_only=True, default="")
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     condition_grade_label = serializers.CharField(
         source="get_condition_grade_display", read_only=True
@@ -95,6 +97,7 @@ class ProductSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelS
             "sn",
             "warehouse",
             "warehouse_code",
+            "warehouse_name",
             "status",
             "status_label",
             "purchase_unit_cost",

@@ -22,7 +22,9 @@ import { openLabelPrint } from "@/components/labels/openLabelPrint";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
-import { looksLikeImei } from "@/lib/deviceCodes";
+import { useSerialCheck } from "@/api/serialCheck";
+import { looksLikeImei, normalizeCode } from "@/lib/deviceCodes";
+import { buybackText, codesOf } from "@/lib/serialCheck";
 import { MoneyInput } from "@/components/MoneyInput";
 import { intStr, money } from "@/lib/money";
 
@@ -68,6 +70,11 @@ export function SecondhandPersonalEntry() {
   );
   const [imei, setImei] = useState("");
   const [sn, setSn] = useState("");
+  // 序號防呆:填的當下就查這個碼是不是已經在系統裡(還在店裡 / 是我們賣出去的,講法不同);收購成功之後全部重問
+  const [saves, setSaves] = useState(0);
+  const serialCheck = useSerialCheck(codesOf([{ imei, sn }]), saves);
+  const imeiTaken = serialCheck.cache[normalizeCode(imei)] ?? null;
+  const snTaken = serialCheck.cache[normalizeCode(sn)] ?? null;
   const [grade, setGrade] = useState<ConditionGrade>("A");
   const [customPrice, setCustomPrice] = useState("");
   const [batteryHealth, setBatteryHealth] = useState("");
@@ -114,6 +121,9 @@ export function SecondhandPersonalEntry() {
     if (!warehouse) return "請選擇入庫倉";
     if (!product) return "請選擇中古機商品";
     if (!imei.trim() && !sn.trim()) return "IMEI 與 SN 至少要填一個";
+    // 已經知道這個碼在系統裡:先講(還在店裡 / 是我們賣出去的,兩種講法);還沒查到答案的不擋,送出時伺服器會擋
+    if (imeiTaken) return `IMEI ${imei.trim()}:${buybackText(imeiTaken)}`;
+    if (snTaken) return `SN ${sn.trim()}:${buybackText(snTaken)}`;
     if (!grade) return "請選擇成色等級";
     if (!acquisitionPrice || Number(acquisitionPrice) <= 0)
       return "請輸入有效的收購金額";
@@ -193,6 +203,7 @@ export function SecondhandPersonalEntry() {
       setSuccess(
         `收購完成:序號 ${res.serial.serial_no},對應銷貨單 ${res.sales_order.no},付款 ${money(acquisitionPrice)} 元給 ${member?.name ?? "會員"}`,
       );
+      setSaves((n) => n + 1);
       setSavedSerial({ id: res.serial.id, last5: res.serial.serial_no.slice(-5) });
       reset();
     } catch (e) {
@@ -306,6 +317,7 @@ export function SecondhandPersonalEntry() {
           </Field>
           <Field
             label="IMEI"
+            error={imeiTaken ? buybackText(imeiTaken) : undefined}
             hint={
               imei.trim() && !looksLikeImei(imei)
                 ? "仍可送出:IMEI 檢查碼不對"
@@ -319,7 +331,7 @@ export function SecondhandPersonalEntry() {
               maxLength={80}
             />
           </Field>
-          <Field label="SN">
+          <Field label="SN" error={snTaken ? buybackText(snTaken) : undefined}>
             <input
               value={sn}
               onChange={(e) => setSn(e.target.value)}

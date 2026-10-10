@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { MoneyInput } from "@/components/MoneyInput";
 import { CodeField, looksLikeImei, routeCodes } from "@/lib/deviceCodes";
 import { money } from "@/lib/money";
+import { problemOf } from "@/lib/serialCheck";
 
 import {
   applyBelow,
@@ -27,6 +28,8 @@ interface Props {
   /** 每台刷 IMEI 與 SN 兩個碼 */
   pairMode: boolean;
   disabled: boolean;
+  /** 有問題的碼 → 為什麼(鍵 = 去掉符號的碼):已經在系統裡 / 這張單裡重複。標在那一格底下,不自動清掉 */
+  problems?: Record<string, string>;
   onChange: (entries: SerialEntry[]) => void;
   onRemoveUnit: (idx: number) => void;
   /** 沒有下一格可刷了:把游標還給掃碼框 */
@@ -47,6 +50,7 @@ export function SerialSlots({
   isSecondhand,
   pairMode,
   disabled,
+  problems,
   onChange,
   onRemoveUnit,
   onDone,
@@ -124,11 +128,14 @@ export function SerialSlots({
                     name === "imei" &&
                     !!entry.imei.trim() &&
                     !looksLikeImei(entry.imei);
+                  // 已經在系統裡 / 這張單裡重複:留著、標出來(存檔會被擋),不替人清掉
+                  const problem = problems ? problemOf(entry[name], problems) : "";
                   return (
                     <td key={name}>
                       <input
                         data-serial-slot={slot}
-                        className={`wb-mono${bad ? " bad" : ""}`}
+                        aria-invalid={problem ? true : undefined}
+                        className={`wb-mono${bad || problem ? " bad" : ""}`}
                         value={entry[name] ?? ""}
                         disabled={disabled}
                         onChange={(e) =>
@@ -175,6 +182,7 @@ export function SerialSlots({
                           }
                         }}
                       />
+                      {problem && <div className="slot-problem">{problem}</div>}
                     </td>
                   );
                 })}

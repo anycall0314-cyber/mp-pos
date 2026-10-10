@@ -25,7 +25,7 @@ from apps.tenants.permissions import is_tenant_admin
 from apps.catalog.models import Product, ProductRelation
 from apps.sales.models import SalesOrder, SalesOrderItem, SalesOrderItemSerial
 
-from .identifiers import IdentifierDenied, IdentifierError, find_serial_ids, set_codes
+from .identifiers import IN_STORE, IdentifierDenied, IdentifierError, find_serial_ids, set_codes, taken_details
 from .models import (
     ProductSerial,
     ProductSerialIdentifier,
@@ -103,6 +103,30 @@ class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
             else:
                 qs = backend().filter_queryset(self.request, qs, self)
         return qs
+
+    CHECK_LIMIT = 500
+
+    @action(detail=False, methods=["post"], url_path="check")
+    def check(self, request):
+        """這一批碼裡,哪幾個已經在系統裡(哪個商品、在哪家門市、什麼狀態)。**只讀**,給畫面在輸入的當下提醒用:
+        進貨的序號格、批次貼上、個人收購。比法跟存檔時擋的那一套一樣(`taken_details`);只看自己公司;不回成本。
+        存檔時伺服器照舊自己再擋一次 —— 這一支沒查到、或畫面沒問,都不會讓重複的碼進得來。"""
+        codes = request.data.get("codes") if isinstance(request.data, dict) else None
+        if (not isinstance(codes, list) or len(codes) > self.CHECK_LIMIT
+                or any(not isinstance(c, str) or len(c) > 80 for c in codes)):
+            return Response({"detail": f"要給一批序號(最多 {self.CHECK_LIMIT} 個)"},
+                            status=http_status.HTTP_400_BAD_REQUEST)
+        found = taken_details(request.tenant, codes)
+        return Response({"taken": [{
+            "code": code,
+            "product_name": serial.product.name,
+            "product_sku": serial.product.sku,
+            "warehouse_name": serial.warehouse.name if serial.warehouse_id else "",
+            "status": serial.status,
+            "status_label": serial.get_status_display(),
+            # 還在店裡(在庫 / 調撥中 / 維修中)還是已經不在了(已售 / 已退):個人收購要分開講
+            "in_store": serial.status in IN_STORE,
+        } for code, serial in found.items()]})
 
     @staticmethod
     def _store_of(serial):
