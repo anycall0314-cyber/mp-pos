@@ -221,11 +221,13 @@ test("報表一張一個勾:關掉的那一張收起來,七張都關掉整個入
   assert.ok(!hits({ report_commission: false }).includes("/reports/commissions"));
 });
 
-test("廠商叫貨:沒有那一項的帳號看不到;叫貨串接只有管理員看得到", () => {
+test("廠商叫貨:叫貨的人與收貨的人都看得到,兩項都沒有才收起來;叫貨串接只有管理員看得到", () => {
   const pages = (who) => visibleModules(who).flatMap((m) => [...m.tabs, ...(m.tools?.items ?? [])].map((p) => p.to));
   assert.ok(pages({ role: "tenant_user" }).includes("/vendor-orders"));
-  assert.ok(!pages({ role: "tenant_user", abilities: { vendor_order: false } }).includes("/vendor-orders"));
-  assert.ok(pages({ role: "tenant_user", abilities: { purchase: false } }).includes("/vendor-orders")); // 進貨入庫是另一項
+  // 收貨的人不一定是叫貨的人:關掉「廠商叫貨」的店員還要進得來收貨、連對照
+  assert.ok(pages({ role: "tenant_user", abilities: { vendor_order: false } }).includes("/vendor-orders"));
+  assert.ok(pages({ role: "tenant_user", abilities: { purchase: false } }).includes("/vendor-orders"));
+  assert.ok(!pages({ role: "tenant_user", abilities: { vendor_order: false, purchase: false } }).includes("/vendor-orders"));
   assert.ok(!pages({ role: "tenant_user" }).includes("/settings/vendors"));
   assert.ok(pages({ role: "tenant_admin" }).includes("/settings/vendors"));
   const purchasing = NAV_MODULES.find((m) => m.key === "purchasing");

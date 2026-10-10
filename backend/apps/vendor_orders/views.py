@@ -2,10 +2,12 @@
 每一支都要講是哪一家廠商(`vendor` = 平台名單上的代碼);名單上只有一家在合作時可以不講(就是那一家)。
 
 - 叫貨串接(金鑰與預設):看 → 登入的人(自己門市);改 → 只有管理員。**金鑰原文任何回應都沒有**;前幾碼只有管理員看得到。
-- 叫貨(看廠商的商品與進價、送出、再送一次、更新進度)→ 要有員工帳號的「廠商叫貨」。看叫貨單清單照舊。
+- 叫貨(看廠商的商品與進價、送出、再送一次)→ 要有員工帳號的「廠商叫貨」。看叫貨單清單照舊。
   另外每家門市 × 每家廠商一格「誰能叫貨」(`clerk_ordering`):關掉的那一家,店員看不到它的商品與進價、不能叫、不能再送(管理員照舊)。
 - 到貨入庫(看這張單到了什麼、入庫、把不是從這裡叫的單認進來、記到貨問題)→ 要有「進貨入庫」(它開出來的就是進貨單)。
 - 品名連連看(廠商的品項 ↔ 店內商品;看、連、改、解除)→ 有「廠商叫貨」或「進貨入庫」其中一項就可以(owner:店員都可以)。不帶價錢。
+- 更新進度(跟廠商要最新狀況,順便列出「不是從 POS 叫的」單)→ 同樣是其中一項就可以(2026-10-10 起;原本只看「廠商叫貨」):
+  收貨的人不一定是叫貨的人 —— 用 LINE 叫的、廠商直接出的貨,要先列得出來才能認進來入庫,而認進來與入庫看的本來就是「進貨入庫」。
 """
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -80,6 +82,12 @@ def _may_order(request, link) -> None:
     """這家門市 × 這家廠商設成「只限管理」時,店員不能看它的商品與進價、不能叫、不能再送。"""
     if link is not None and not link.clerk_ordering and not is_tenant_admin(request.user):
         raise PermissionDenied(f"這家門市設定只有管理員可以跟{vendors.name_of(link.provider)}叫貨")
+
+
+def _needs_either(request) -> None:
+    """叫貨的人與收貨的人都用得到的(品名連連看、更新進度):「廠商叫貨」「進貨入庫」有一項就可以。"""
+    if not (abilities.can(request.user, abilities.VENDOR_ORDER) or abilities.can(request.user, abilities.PURCHASE)):
+        raise PermissionDenied("這個帳號沒有開「廠商叫貨」或「進貨入庫」")
 
 
 def _money(value):
@@ -379,7 +387,7 @@ def order_resend(request, pk: int):
 @api_view(["POST"])
 def sync(request):
     """更新這家門市跟這家廠商叫貨單的進度,並帶回廠商那邊「不是從 POS 叫的」訂單。"""
-    abilities.require(request.user, abilities.VENDOR_ORDER)
+    _needs_either(request)
     data = request.data if isinstance(request.data, dict) else {}
     try:
         store = _store(request, data.get("warehouse"))
@@ -458,15 +466,10 @@ def issue(request, pk: int):
 
 
 # ── 品名連連看 ──────────────────────────────────────────────────────────────
-def _may_map(request) -> None:
-    if not (abilities.can(request.user, abilities.VENDOR_ORDER) or abilities.can(request.user, abilities.PURCHASE)):
-        raise PermissionDenied("這個帳號沒有開「廠商叫貨」或「進貨入庫」")
-
-
 @api_view(["GET", "POST"])
 def mappings(request):
     """GET:這家廠商的每一個品項與對到的店內商品。POST:連 / 改 / 解除一個品項(`product` 給 null = 解除)。"""
-    _may_map(request)
+    _needs_either(request)
     data = request.query_params if request.method == "GET" else (request.data if isinstance(request.data, dict) else {})
     try:
         store = _store(request, data.get("warehouse"))

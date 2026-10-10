@@ -42,29 +42,23 @@ import {
 } from "@/lib/vendorOrder";
 import {
   categoryTabs,
+  currentTab,
   draftSlot,
   inCategory,
   lastVendorSlot,
   legacyDraftSlot,
+  pageTabs,
   pickVendor,
   readDraftText,
   showPicker,
   vendorOptions,
+  type PageTab,
 } from "@/lib/vendorPick";
 import { mayReceive, receivedText } from "@/lib/vendorReceive";
 
 import { MappingTab } from "./MappingTab";
 import { ReceiveDrawer } from "./ReceiveDrawer";
 
-type Tab = "order" | "history" | "mapping";
-const TABS: { value: Tab; label: string }[] = [
-  { value: "order", label: "叫貨" },
-  { value: "history", label: "紀錄" },
-  // 品名連連看:廠商的品項 ↔ 店內商品(連好之後到貨直接入庫,不用每次挑)
-  { value: "mapping", label: "對照" },
-];
-
-/** 記住這家門市上次停在哪一家廠商(只是方便;讀寫不了就算了)。 */
 function readLastVendor(warehouse: number | null): string | null {
   if (warehouse === null) return null;
   try {
@@ -85,7 +79,10 @@ export function VendorOrdersPage() {
   const links = useVendorLinks();
   const rows = links.data?.results ?? [];
   const [picked, setPicked] = useState<number | null>(null);
-  const [tab, setTab] = useState<Tab>("order");
+  // 叫貨的人與收貨的人都進得來這一頁;沒有「廠商叫貨」的人沒有「叫貨」分頁,一進來停在紀錄
+  const canOrder = useCan("vendor_order");
+  const [wantedTab, setTab] = useState<PageTab | null>(null);
+  const tab = currentTab(wantedTab, canOrder);
   // 門市一家一個選項(一家門市現在有好幾列:每家廠商一列)
   const stores = useMemo(() => {
     const seen = new Map<number, string>();
@@ -119,7 +116,7 @@ export function VendorOrdersPage() {
     <div className="page vo-page">
       <Toolbar title="廠商叫貨">
         <div className="tab-switcher" role="tablist" aria-label="廠商叫貨">
-          {TABS.map((t) => (
+          {pageTabs(canOrder).map((t) => (
             <button
               key={t.value}
               type="button"
@@ -561,6 +558,8 @@ function HistoryTab({ link }: { link: VendorLinkRow }) {
   const [busyId, setBusyId] = useState<number | null>(null);
   // 到貨入庫開出來的是進貨單:看的是員工帳號的「進貨入庫」,不是「廠商叫貨」
   const canReceive = useCan("purchase");
+  // 「再送一次」會真的對廠商下單:只有能叫貨的人有(伺服器同一條)。更新進度兩種人都可以按
+  const canOrder = useCan("vendor_order");
   const adopt = useAdoptVendorOrder();
   const [receiving, setReceiving] = useState<VendorOrder | null>(null);
   const rows = orders.data?.results ?? [];
@@ -675,7 +674,7 @@ function HistoryTab({ link }: { link: VendorLinkRow }) {
                           到貨入庫
                         </button>
                       )}
-                      {o.state !== "placed" && (
+                      {canOrder && o.state !== "placed" && (
                         <button
                           type="button"
                           className="btn"

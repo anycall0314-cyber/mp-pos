@@ -82,7 +82,8 @@ export const NAV_MODULES: NavModule[] = [
         to: "/vendor-orders",
         label: "廠商叫貨",
         aliases: ["叫貨", "補貨", "供應商叫貨"],
-        needs: ["vendor_order"],
+        // 叫貨的人與收貨的人都用這一頁(收貨的人不一定是叫貨的人):兩項都關掉才收起來
+        needs: ["vendor_order", "purchase"],
       },
       { to: "/suppliers", label: "供應商" },
     ],

@@ -104,3 +104,27 @@ export function readDraftText(
 export function lastVendorSlot(warehouse: number): string {
   return `vendor-order-vendor:${warehouse}`;
 }
+
+/** 「廠商叫貨」這一頁的三個分頁(同一排,字數一樣)。 */
+export type PageTab = "order" | "history" | "mapping";
+
+export const PAGE_TABS: { value: PageTab; label: string }[] = [
+  { value: "order", label: "叫貨" },
+  { value: "history", label: "紀錄" },
+  // 品名連連看:廠商的品項 ↔ 店內商品(連好之後到貨直接入庫,不用每次挑)
+  { value: "mapping", label: "對照" },
+];
+
+/**
+ * 這個帳號在這一頁看得到哪幾個分頁。叫貨的人與收貨的人都進得來(收貨的人不一定是叫貨的人):
+ * 沒有「廠商叫貨」的人沒有「叫貨」這個分頁(廠商的商品與進價伺服器本來就不給他看);紀錄(到貨入庫在裡面)與對照都有。
+ */
+export function pageTabs(canOrder: boolean): { value: PageTab; label: string }[] {
+  return canOrder ? PAGE_TABS : PAGE_TABS.filter((t) => t.value !== "order");
+}
+
+/** 現在停在哪個分頁:人點過、而且看得到的那一個;不然第一個看得到的(能叫貨 = 叫貨,只收貨 = 紀錄)。 */
+export function currentTab(wanted: PageTab | null, canOrder: boolean): PageTab {
+  const tabs = pageTabs(canOrder);
+  return tabs.some((t) => t.value === wanted) ? (wanted as PageTab) : tabs[0].value;
+}

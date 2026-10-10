@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  FIRST_VENDOR, blockedOf, categoryTabs, draftSlot, inCategory, lastVendorSlot, legacyDraftSlot, pickVendor,
-  readDraftText, showPicker, vendorOptions,
+  FIRST_VENDOR, PAGE_TABS, blockedOf, categoryTabs, currentTab, draftSlot, inCategory, lastVendorSlot, legacyDraftSlot,
+  pageTabs, pickVendor, readDraftText, showPicker, vendorOptions,
 } from "./vendorPick.ts";
 
 const row = (provider, extra = {}) => ({
@@ -117,4 +117,24 @@ test("升級前的草稿接著用:送出去了還不知道結果的鎖與鑰匙�
   assert.equal(readDraftText(both, "amy", 3, "moceo"), NEW);
   assert.equal(readDraftText(store({}), "amy", 3, "moceo"), null);
   assert.equal(readDraftText(store({ "vendor-order-draft:amy:3:acme": NEW }), "amy", 3, "acme"), NEW);
+});
+
+test("這一頁的分頁:能叫貨的三個都有;只收貨的人沒有「叫貨」,紀錄與對照都有;字數一樣", () => {
+  assert.deepEqual(pageTabs(true).map((t) => t.label), ["叫貨", "紀錄", "對照"]);
+  assert.deepEqual(pageTabs(false).map((t) => t.value), ["history", "mapping"]);
+  assert.deepEqual([...new Set(PAGE_TABS.map((t) => t.label.length))], [2]);
+  assert.equal(pageTabs(true), PAGE_TABS);
+  assert.equal(PAGE_TABS.length, 3);                     // 篩掉的那一份不能改到原本的
+});
+
+test("停在哪個分頁:沒點過 → 能叫貨的停在叫貨、只收貨的停在紀錄;點過看得到的就去;看不到的不去", () => {
+  assert.equal(currentTab(null, true), "order");
+  assert.equal(currentTab(null, false), "history");
+  assert.equal(currentTab("mapping", true), "mapping");
+  assert.equal(currentTab("mapping", false), "mapping");
+  assert.equal(currentTab("history", true), "history");
+  // 只收貨的人不會停在「叫貨」(例:權限剛被關掉、畫面上還記著先前點的)
+  assert.equal(currentTab("order", false), "history");
+  assert.equal(currentTab("order", true), "order");
+  assert.equal(currentTab("不存在", true), "order");
 });

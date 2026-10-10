@@ -347,7 +347,7 @@ export function App() {
           <Route
             path="/vendor-orders"
             element={
-              <NeedsAbility ability="vendor_order" doing="叫貨">
+              <NeedsAbility ability={["vendor_order", "purchase"]} doing="叫貨與收貨">
                 <VendorOrdersPage />
               </NeedsAbility>
             }

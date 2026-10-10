@@ -617,7 +617,6 @@ class PlaceTests(_Shop):
         self.assertEqual((r.status_code, "「廠商叫貨」" in r.json()["detail"]), (403, True))
         first = VendorOrder.objects.get()
         self.assertEqual(self.clerk.post(f"{ORDERS}{first.id}/resend/").status_code, 403)
-        self.assertEqual(self.clerk.post(SYNC, {"warehouse": self.wh1.id}, format="json").status_code, 403)
         self.assertEqual(self.clerk.get(ORDERS).status_code, 200)            # 看照舊
         self.assertEqual(len(self.vendor.posts()), 1)
         from rest_framework.test import APIClient
@@ -681,6 +680,23 @@ class ListAndSyncTests(_Shop):
             "payment_status": "月結未到期", "logistics_status": "", "shipping_method": "", "tracking_no": "",
             "total_amount": "3750.00"}])
         self.assertEqual(len(r.json()["results"]), 1)
+
+    def test_whoever_orders_or_receives_may_refresh_progress(self):
+        """收貨的人不一定是叫貨的人:用 LINE 叫的、廠商直接出的貨,要先列得出來才能認進來入庫。
+        所以「更新進度」有「廠商叫貨」或「進貨入庫」其中一項就可以;兩項都沒有才擋(而且不打廠商)。"""
+        self.vendor.outside.append({"order_no": "MO-20261009-777", "total_amount": 900, "status": "已出貨"})
+        for off, code in ((("vendor_order",), 200), (("purchase",), 200), (("vendor_order", "purchase"), 403)):
+            self.turn_off(*off)
+            self.vendor.calls.clear()
+            r = self.clerk.post(SYNC, {"warehouse": self.wh1.id}, format="json")
+            self.assertEqual(r.status_code, code, (off, r.content.decode()))
+            if code == 200:
+                self.assertEqual([x["order_no"] for x in r.json()["others"]], ["MO-20261009-777"], off)
+            else:
+                self.assertEqual((r.json()["detail"], self.vendor.calls), ("這個帳號沒有開「廠商叫貨」或「進貨入庫」", []))
+        # 會真的對廠商下單的「再送一次」仍然只看「廠商叫貨」
+        self.turn_off("vendor_order")
+        self.assertEqual(self.clerk.post(f"{ORDERS}{self.a['id']}/resend/").status_code, 403)
 
     def test_sync_needs_a_working_key(self):
         self.assertEqual(self.clerk.post(SYNC, {"warehouse": self.wh2.id}, format="json").status_code, 403)
