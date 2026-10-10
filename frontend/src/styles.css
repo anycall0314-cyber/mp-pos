@@ -3911,6 +3911,39 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   min-width: 0;
 }
 
+/* 銷貨日報(owner 2026-10-10:上面太大、明細看不到幾列):桌機把篩選壓成一排、合計改成一排字,剩下的高度都給明細。
+   欄名在桌機收起來(框裡的字就是欄名),手機照舊一項一排、欄名在上面(見下面 max-width: 768px 那一段)。 */
+.sd-page .sd-label { display: none; }
+.sd-page .sd-filter { align-items: center; gap: 8px; padding: 6px 16px; flex-wrap: wrap; }
+.sd-page .sd-filter-group { flex-wrap: nowrap; }
+.sd-page .sd-field { flex: 0 1 auto; }
+.sd-page .sd-filter-dates input[type="date"] { width: 9.5rem; }
+.sd-page .sd-filter-people { flex: 1 1 22rem; min-width: 0; }
+.sd-page .sd-filter-people .sd-field { flex: 1 1 7rem; max-width: 12rem; }
+.sd-range-sep { color: var(--text-dim); }
+.sd-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 22px;
+  padding: 6px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.sd-strip-item { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.sd-strip-label { font-size: var(--font-secondary); color: var(--text-dim); }
+.sd-strip b { font-size: var(--font-body); font-weight: 700; color: var(--text); }
+.sd-strip b.sd-strip-neg { color: var(--danger-text); }
+.sd-strip-parts .sd-strip-item:first-child .sd-strip-label { color: var(--info-text); }
+/* 明細:吃掉剩下的高度(不再用固定扣 140px 的算法);表格排進畫面寬度 —— 品名可以折行,其餘不折 */
+.report-table.sd-table { flex: 1; min-height: 0; height: auto; }
+.sd-grid th, .sd-grid td { padding: 5px 6px; }
+.sd-grid th:first-child, .sd-grid td:first-child { padding-left: 16px; }
+.sd-grid th:last-child, .sd-grid td:last-child { padding-right: 16px; }
+.sd-grid td.sd-product { white-space: normal; min-width: 11rem; overflow-wrap: anywhere; }
+.sd-grid td.sd-customer { max-width: 8rem; overflow: hidden; text-overflow: ellipsis; }
+
 /* 摘要列改成卡片網格,fluid auto-fit */
 .sd-summary {
   display: grid;
@@ -4304,12 +4337,22 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
     width: 100%;
     flex: 0 0 auto;
   }
-  /* 動作按鈕:三顆併排,「查詢」是 primary 拉長放眼 */
+  /* 動作按鈕:兩顆併排,「查詢」是 primary 拉長放眼(「轉 Excel」在標題那一排) */
   .sd-filter-actions {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr;
+    grid-template-columns: 2fr 1fr;
     gap: 8px;
   }
+  /* 手機:欄名照舊在每一項上面;日期中間的「~」不用 */
+  .sd-page .sd-label { display: block; }
+  .sd-page .sd-range-sep { display: none; }
+  .sd-page .sd-filter { align-items: stretch; gap: 10px; padding: 10px; }
+  .sd-page .sd-filter-group { flex-wrap: wrap; }
+  .sd-page .sd-field { flex: 1 1 160px; }
+  .sd-page .sd-filter-dates input[type="date"] { width: 100%; }
+  .sd-page .sd-filter-people { flex: 0 0 auto; }
+  .sd-page .sd-filter-people .sd-field { flex: 0 0 auto; max-width: none; }
+  .sd-strip { padding: 8px 10px; gap: 4px 16px; }
   .sd-filter-actions .btn {
     width: 100%;
   }

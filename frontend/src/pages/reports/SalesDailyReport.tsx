@@ -13,6 +13,7 @@ import type {
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Toolbar } from "@/components/Toolbar";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { shortDay } from "@/lib/dates";
 import { intStr, money } from "@/lib/money";
 import { staffMargin } from "@/lib/staffCost";
 
@@ -254,23 +255,42 @@ export function SalesDailyReportPage() {
     URL.revokeObjectURL(url);
   }
 
+  // 表格上的日期:查的期間在同一年裡只寫月日(寬度留給品名)
+  const day = (d: string) => shortDay(d, applied.from, applied.to);
+
   return (
-    <div className="page">
-      <Toolbar title="銷貨日報" />
+    <div className="page sd-page">
+      <Toolbar
+        title="銷貨日報"
+        actions={
+          <button
+            type="button"
+            className="btn"
+            onClick={exportCsv}
+            disabled={orders.length === 0}
+          >
+            轉 Excel
+          </button>
+        }
+      />
+      {/* 桌機:整排只有一行(欄名收起來,靠框裡的字);手機:一項一排、欄名在上面 */}
       <div className="list-filterbar sd-filter">
         <div className="sd-filter-group sd-filter-dates">
           <label className="sd-field">
-            起日
+            <span className="sd-label">起日</span>
             <input
               type="date"
+              aria-label="起日"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
             />
           </label>
+          <span className="sd-range-sep">~</span>
           <label className="sd-field">
-            迄日
+            <span className="sd-label">迄日</span>
             <input
               type="date"
+              aria-label="迄日"
               value={to}
               onChange={(e) => setTo(e.target.value)}
             />
@@ -300,7 +320,7 @@ export function SalesDailyReportPage() {
               setTo(t);
             }}
           >
-            近 7 天
+            七天
           </button>
           <button
             className="btn"
@@ -319,7 +339,7 @@ export function SalesDailyReportPage() {
 
         <div className="sd-filter-group sd-filter-people">
           <label className="sd-field">
-            倉別
+            <span className="sd-label">倉別</span>
             {defaultWarehouse.locked ? (
               <input
                 value={defaultWarehouse.name || "(未設定)"}
@@ -335,12 +355,12 @@ export function SalesDailyReportPage() {
                   setWarehouseOpt(opt ?? null);
                 }}
                 fetchOptions={searchWarehouses}
-                placeholder="全部"
+                placeholder="全部倉別"
               />
             )}
           </label>
           <label className="sd-field">
-            業務員
+            <span className="sd-label">業務員</span>
             <ComboBox<SalesPerson>
               value={salesPerson}
               selectedOption={salesPersonOpt}
@@ -349,11 +369,11 @@ export function SalesDailyReportPage() {
                 setSalesPersonOpt(opt ?? null);
               }}
               fetchOptions={searchSalesPersons}
-              placeholder="全部"
+              placeholder="全部業務員"
             />
           </label>
           <label className="sd-field">
-            客戶
+            <span className="sd-label">客戶</span>
             <ComboBox<Customer>
               value={customer}
               selectedOption={customerOpt}
@@ -362,7 +382,7 @@ export function SalesDailyReportPage() {
                 setCustomerOpt(opt ?? null);
               }}
               fetchOptions={searchCustomers}
-              placeholder="全部"
+              placeholder="全部客戶"
             />
           </label>
         </div>
@@ -374,116 +394,50 @@ export function SalesDailyReportPage() {
           <button type="button" className="btn" onClick={resetFilters}>
             清除
           </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={exportCsv}
-            disabled={orders.length === 0}
-          >
-            轉 Excel
-          </button>
         </div>
       </div>
 
-      <div className="sd-summary">
-        <div className="sd-summary-card">
-          <div className="sd-summary-card-label">正常單</div>
-          <div className="sd-summary-card-value">{activeOrders.length}</div>
-        </div>
-        <div className="sd-summary-card">
-          <div className="sd-summary-card-label">明細</div>
-          <div className="sd-summary-card-value">{totals.lines}</div>
-        </div>
-        <div className="sd-summary-card">
-          <div className="sd-summary-card-label">含稅金額</div>
-          <div className="sd-summary-card-value">
-            ${fmtMoney(totals.amountIncl)}
-          </div>
-        </div>
-        <div className="sd-summary-card">
-          <div className="sd-summary-card-label">成本</div>
-          <div className="sd-summary-card-value">${fmtMoney(totals.cost)}</div>
-        </div>
-        <div className="sd-summary-card">
-          <div className="sd-summary-card-label">毛利</div>
-          <div
-            className="sd-summary-card-value"
-            style={{ color: totals.profit < 0 ? "var(--danger-text)" : undefined }}
-          >
-            ${fmtMoney(totals.profit)}
-          </div>
-        </div>
-        <div className="sd-summary-card">
-          <div className="sd-summary-card-label">業務員毛利</div>
-          <div
-            className="sd-summary-card-value"
-            style={{ color: totals.staffProfit < 0 ? "var(--danger-text)" : undefined }}
-          >
-            ${fmtMoney(totals.staffProfit)}
-          </div>
-        </div>
+      {/* 合計:一排字(以前是七張卡片,佔掉明細的高度)。算式放在滑鼠提示 */}
+      <div className="sd-strip">
+        <StripItem label="正常單" value={String(activeOrders.length)} />
+        <StripItem label="明細" value={String(totals.lines)} />
+        <StripItem label="含稅金額" value={`$${fmtMoney(totals.amountIncl)}`} />
+        <StripItem label="成本" value={`$${fmtMoney(totals.cost)}`} />
+        <StripItem
+          label="毛利"
+          title="毛利 = 未稅金額 − 成本"
+          value={`$${fmtMoney(totals.profit)}`}
+          negative={totals.profit < 0}
+        />
+        <StripItem
+          label="業務員毛利"
+          title="業務員毛利 = 未稅金額 − 業務員成本"
+          value={`$${fmtMoney(totals.staffProfit)}`}
+          negative={totals.staffProfit < 0}
+        />
         {voidOrders.length > 0 && (
-          <div className="sd-summary-card sd-summary-card-void">
-            <div className="sd-summary-card-label">作廢</div>
-            <div className="sd-summary-card-value">
-              {voidOrders.length} 筆
-            </div>
-          </div>
+          <StripItem label="作廢" value={`${voidOrders.length} 筆`} negative />
         )}
       </div>
-      <div className="sd-summary-hint">
-        毛利 = 未稅金額 − 成本;業務員毛利 = 未稅金額 − 業務員成本
-      </div>
-
       {totals.partsLines > 0 && (
-        <>
-          <div className="sd-summary">
-            <div className="sd-summary-card" style={{ borderColor: "var(--info-text)" }}>
-              <div className="sd-summary-card-label">零件調貨 明細</div>
-              <div className="sd-summary-card-value">{totals.partsLines}</div>
-            </div>
-            <div className="sd-summary-card" style={{ borderColor: "var(--info-text)" }}>
-              <div className="sd-summary-card-label">零件 含稅金額</div>
-              <div className="sd-summary-card-value">
-                ${fmtMoney(totals.partsAmount)}
-              </div>
-            </div>
-            <div className="sd-summary-card" style={{ borderColor: "var(--info-text)" }}>
-              <div className="sd-summary-card-label">零件 成本</div>
-              <div className="sd-summary-card-value">
-                ${fmtMoney(totals.partsCost)}
-              </div>
-            </div>
-            <div className="sd-summary-card" style={{ borderColor: "var(--info-text)" }}>
-              <div className="sd-summary-card-label">零件 毛利</div>
-              <div
-                className="sd-summary-card-value"
-                style={{
-                  color: totals.partsProfit < 0 ? "var(--danger-text)" : undefined,
-                }}
-              >
-                ${fmtMoney(totals.partsProfit)}
-              </div>
-            </div>
-            <div className="sd-summary-card" style={{ borderColor: "var(--info-text)" }}>
-              <div className="sd-summary-card-label">零件 業務員毛利</div>
-              <div
-                className="sd-summary-card-value"
-                style={{
-                  color: totals.partsStaffProfit < 0 ? "var(--danger-text)" : undefined,
-                }}
-              >
-                ${fmtMoney(totals.partsStaffProfit)}
-              </div>
-            </div>
-          </div>
-          <div className="sd-summary-hint">
-            零件調貨獨立列計,不污染商品毛利
-          </div>
-        </>
+        <div className="sd-strip sd-strip-parts" title="零件調貨獨立列計,不污染商品毛利">
+          <StripItem label="零件調貨" value={String(totals.partsLines)} />
+          <StripItem label="含稅金額" value={`$${fmtMoney(totals.partsAmount)}`} />
+          <StripItem label="成本" value={`$${fmtMoney(totals.partsCost)}`} />
+          <StripItem
+            label="毛利"
+            value={`$${fmtMoney(totals.partsProfit)}`}
+            negative={totals.partsProfit < 0}
+          />
+          <StripItem
+            label="業務員毛利"
+            value={`$${fmtMoney(totals.partsStaffProfit)}`}
+            negative={totals.partsStaffProfit < 0}
+          />
+        </div>
       )}
 
-      <div className="report-table">
+      <div className="report-table sd-table">
         {isLoading && <div className="md-empty">載入中…</div>}
         {isError && <div className="md-empty">{String(error)}</div>}
         {!isLoading && !isError && (
@@ -491,7 +445,7 @@ export function SalesDailyReportPage() {
             {isMobile ? (
               <SalesReportMobileList orders={activeOrders} voided={false} />
             ) : (
-              <SalesReportTable orders={activeOrders} voided={false} />
+              <SalesReportTable orders={activeOrders} voided={false} day={day} />
             )}
             {voidOrders.length > 0 && (
               <>
@@ -499,7 +453,7 @@ export function SalesDailyReportPage() {
                 {isMobile ? (
                   <SalesReportMobileList orders={voidOrders} voided={true} />
                 ) : (
-                  <SalesReportTable orders={voidOrders} voided={true} />
+                  <SalesReportTable orders={voidOrders} voided={true} day={day} />
                 )}
               </>
             )}
@@ -633,10 +587,34 @@ interface ReportTableProps {
   voided: boolean;
 }
 
-function SalesReportTable({ orders, voided }: ReportTableProps) {
+/** 合計那一排的一項:小字的名稱 + 粗體的數字。 */
+function StripItem({
+  label,
+  value,
+  title,
+  negative,
+}: {
+  label: string;
+  value: string;
+  title?: string;
+  negative?: boolean;
+}) {
+  return (
+    <span className="sd-strip-item" title={title}>
+      <span className="sd-strip-label">{label}</span>
+      <b className={negative ? "sd-strip-neg" : undefined}>{value}</b>
+    </span>
+  );
+}
+
+function SalesReportTable({
+  orders,
+  voided,
+  day,
+}: ReportTableProps & { day: (d: string) => string }) {
   if (orders.length === 0) return null;
   return (
-    <table className={`report-grid ${voided ? "void" : ""}`}>
+    <table className={`report-grid sd-grid ${voided ? "void" : ""}`}>
       <thead>
         <tr>
           <th>日期</th>
@@ -667,6 +645,7 @@ function SalesReportTable({ orders, voided }: ReportTableProps) {
               order={o}
               orderProfit={orderProfit}
               hasMarginItem={hasMarginItem}
+              day={day}
             />
           );
         })}
@@ -679,10 +658,12 @@ function ReportOrderGroup({
   order,
   orderProfit,
   hasMarginItem,
+  day,
 }: {
   order: SalesOrder;
   orderProfit: number;
   hasMarginItem: boolean;
+  day: (d: string) => string;
 }) {
   const orderStaffProfit = order.items.reduce((s, it) => s + itemStaffProfit(it), 0);
   return (
@@ -700,16 +681,22 @@ function ReportOrderGroup({
                 : "report-row order-cont"
             }
           >
-            <td>{first ? order.doc_date : ""}</td>
+            <td title={first ? order.doc_date : undefined}>
+              {first ? day(order.doc_date) : ""}
+            </td>
             <td>{first ? order.no : ""}</td>
+            {/* 只寫名稱(代碼在匯出的檔裡有):寬度留給品名 */}
             <td>
-              {first
-                ? `${order.warehouse_code ?? ""} ${order.warehouse_name ?? ""}`.trim()
-                : ""}
+              {first ? order.warehouse_name || order.warehouse_code || "" : ""}
             </td>
             <td>{first ? order.sales_person_name ?? "" : ""}</td>
-            <td>{first ? order.customer_name ?? "散客" : ""}</td>
-            <td>
+            <td
+              className="sd-customer"
+              title={first ? order.customer_name ?? undefined : undefined}
+            >
+              {first ? order.customer_name ?? "散客" : ""}
+            </td>
+            <td className="sd-product">
               {it.product_name}
               {it.product_warehouse_type === "parts" && (
                 <span className="sd-parts-badge"> 零件調貨</span>
@@ -749,6 +736,8 @@ function ReportOrderGroup({
           </tr>
         );
       })}
+      {/* 只有一行的單,小計就是那一行:不另外佔一列 */}
+      {order.items.length > 1 && (
       <tr className="report-row order-subtotal">
         <td colSpan={11} className="num" style={{ textAlign: "right" }}>
           該單小計
@@ -778,6 +767,7 @@ function ReportOrderGroup({
           {hasMarginItem ? fmtMoney(orderStaffProfit) : "—"}
         </td>
       </tr>
+      )}
     </>
   );
 }

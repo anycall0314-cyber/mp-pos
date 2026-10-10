@@ -14,3 +14,14 @@ export function addMonths(day: string, months: number): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${year}-${pad(month + 1)}-${pad(d)}`;
 }
+
+/**
+ * 報表列上的日期:查的期間在同一年裡就只寫月日("10-06"),省下來的寬度給品名;跨年才寫完整的。
+ * 期間或日期的格式不對就照原樣(不猜)。
+ */
+export function shortDay(day: string, from: string, to: string): string {
+  const ok = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+  if (!ok(day) || !ok(from) || !ok(to)) return day;
+  const year = from.slice(0, 4);
+  return to.slice(0, 4) === year && day.slice(0, 4) === year ? day.slice(5) : day;
+}
