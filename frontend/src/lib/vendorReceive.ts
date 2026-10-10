@@ -1,5 +1,5 @@
 // 廠商叫貨的「到貨入庫」在畫面這一側的規則。跑法:npm test。
-// 伺服器決定:單價(廠商那張單現在的)、運費算不算進成本、最多能入幾個、對到哪個品號能不能改。
+// 伺服器決定:單價(廠商那張單現在的)、運費算不算進成本、最多能入幾個、那個品號能不能入。
 // 這裡只管:這一次每一行入幾個(預設帶「廠商已出、這家店還沒入的」)、哪幾行還沒選品號、合計怎麼算。
 
 export const MAX_QTY = 99999;
@@ -27,7 +27,7 @@ export interface ReceiveLine {
   remaining_qty: number;
   suggested_qty: number;
   unit_price: string;
-  /** 這個料號已經對到店裡哪個品號(null = 還沒對過,第一次入庫的人選) */
+  /** 這個料號已經對到店裡哪個品號(null = 還沒對過:這次選了就記住;對照也可以先在「對照」那一頁連好) */
   product: ReceiveProduct | null;
 }
 
@@ -51,11 +51,17 @@ export interface PickedProduct {
   label: string;
 }
 
-/** 這一次入庫填到一半的樣子。`requestKey` 整個面板開著的期間不換:沒有答覆時再按一次,不會入兩次。 */
+/**
+ * 這一次入庫填到一半的樣子。`requestKey` 整個面板開著的期間不換:沒有答覆時再按一次,不會入兩次。
+ * `product` = 這個人自己挑的品號;`repick` = 哪幾行按了「改」(打開讓人重挑)。
+ * **已經對到品號、又沒按「改」的那一行,入到哪裡一律看廠商這張單現在回的(`chosen`),不看草稿** ——
+ * 被擋下來之後這張單會重抓,對照可能已經被別人改過:畫面寫的是新的,送出去的也必須是新的。
+ */
 export interface ReceiveDraft {
   requestKey: string;
   qty: Record<string, number>;
   product: Record<string, PickedProduct>;
+  repick: Record<string, true>;
   note: string;
 }
 
@@ -66,15 +72,29 @@ export function qtyFrom(raw: unknown): number {
   return Number(text);
 }
 
-/** 打開面板時:數量帶「廠商已出、這家店還沒入的」,品號帶已經對過的。 */
+/**
+ * 打開面板時:數量帶「廠商已出、這家店還沒入的」。**品號不抄進草稿**:對過的那幾行入到哪裡每一次都看這張單現在回的(`chosen`);
+ * 草稿的 `product` 只放這個人自己挑的 —— 抄進來的話,對照被別人解除之後(重抓變成還沒對過)那一格會留著舊的品號,看起來像他挑的。
+ */
 export function startDraft(plan: ReceivePlan, requestKey: string): ReceiveDraft {
   const qty: Record<string, number> = {};
-  const product: Record<string, PickedProduct> = {};
   for (const line of plan.lines) {
     if (line.suggested_qty > 0) qty[line.key] = line.suggested_qty;
-    if (line.product) product[line.key] = { id: line.product.id, label: line.product.name };
   }
-  return { requestKey, qty, product, note: plan.issue_note };
+  return { requestKey, qty, product: {}, repick: {}, note: plan.issue_note };
+}
+
+/** 這一行這次入到哪個品號(null = 還沒選)。對過、沒按「改」的 → 現在的對照;按了「改」的、還沒對過的 → 這個人挑的。 */
+export function chosen(line: Pick<ReceiveLine, "key" | "product">, draft: ReceiveDraft): PickedProduct | null {
+  if (line.product !== null && !draft.repick[line.key]) return { id: line.product.id, label: line.product.name };
+  return draft.product[line.key] ?? null;
+}
+
+/** 按了「改」:這一行打開讓人重挑,框裡先帶**現在**對到的那一個(不是打開面板那時候的)。 */
+export function withRepick(draft: ReceiveDraft, line: Pick<ReceiveLine, "key" | "product">): ReceiveDraft {
+  const product = { ...draft.product };
+  if (line.product !== null) product[line.key] = { id: line.product.id, label: line.product.name };
+  return { ...draft, product, repick: { ...draft.repick, [line.key]: true } };
 }
 
 export function withQty(draft: ReceiveDraft, key: string, n: number): ReceiveDraft {
@@ -115,8 +135,20 @@ export function lineState(line: ReceiveLine, qty: number): LineState {
   return "ok";
 }
 
+/**
+ * 送給伺服器的一行。`was` = **畫面上這一行原本對到誰**(商品編號;null = 畫面上是還沒對過)。
+ * 伺服器拿它跟現在的對照比:不一樣 = 這個畫面是舊的(對照剛被別人改掉或解除)→ 不入、對照也不動。
+ * `product` 跟 `was` 不一樣 = 這個人按了「改」換成別的(或第一次挑),對照跟著換。
+ */
+export interface ReceiveSend {
+  key: string;
+  qty: number;
+  product: number;
+  was: number | null;
+}
+
 export interface ReceiveSummary {
-  lines: { key: string; qty: number; product: number }[];
+  lines: ReceiveSend[];
   pieces: number;
   /** 這一次的貨款(廠商單價 × 數量;免費補發是 0;不含運費) */
   amount: number;
@@ -143,9 +175,9 @@ export function summarize(plan: ReceivePlan, draft: ReceiveDraft): ReceiveSummar
     out.amount += line.is_reissue ? 0 : Number(line.unit_price) * qty;
     if (state === "over") out.over.push(lineTitle(line));
     if (state === "early") out.early += 1;
-    const picked = draft.product[line.key];
+    const picked = chosen(line, draft);
     if (!picked) out.unmapped.push(lineTitle(line));
-    else out.lines.push({ key: line.key, qty, product: picked.id });
+    else out.lines.push({ key: line.key, qty, product: picked.id, was: line.product?.id ?? null });
   }
   return out;
 }
@@ -190,7 +222,7 @@ export function mayReceive(order: { state: string }): boolean {
  */
 export interface PendingReceive {
   requestKey: string;
-  lines: { key: string; qty: number; product: number }[];
+  lines: ReceiveSend[];
   pieces: number;
   note: string;
 }
@@ -224,9 +256,12 @@ export function pendingFrom(raw: string | null | undefined): PendingReceive | nu
   if (!Array.isArray(p.lines) || p.lines.length === 0) return null;
   const lines: PendingReceive["lines"] = [];
   for (const l of p.lines as unknown[]) {
-    const row = l as { key?: unknown; qty?: unknown; product?: unknown } | null;
+    const row = l as { key?: unknown; qty?: unknown; product?: unknown; was?: unknown } | null;
     if (!row || typeof row.key !== "string" || !row.key || !whole(row.qty, 1) || !whole(row.product, 1)) return null;
-    lines.push({ key: row.key, qty: row.qty, product: row.product });
+    // 「畫面上原本對到誰」要原樣留著:再送一次送的必須是同一份。這一版之前記下來的沒有這一格 = 當成還沒對過
+    const was = row.was ?? null;
+    if (was !== null && !whole(was, 1)) return null;
+    lines.push({ key: row.key, qty: row.qty, product: row.product, was });
   }
   return {
     requestKey: p.requestKey,

@@ -5,6 +5,7 @@
 - 叫貨(看廠商的商品與進價、送出、再送一次、更新進度)→ 要有員工帳號的「廠商叫貨」。看叫貨單清單照舊。
   另外每家門市 × 每家廠商一格「誰能叫貨」(`clerk_ordering`):關掉的那一家,店員看不到它的商品與進價、不能叫、不能再送(管理員照舊)。
 - 到貨入庫(看這張單到了什麼、入庫、把不是從這裡叫的單認進來、記到貨問題)→ 要有「進貨入庫」(它開出來的就是進貨單)。
+- 品名連連看(廠商的品項 ↔ 店內商品;看、連、改、解除)→ 有「廠商叫貨」或「進貨入庫」其中一項就可以(owner:店員都可以)。不帶價錢。
 """
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -18,7 +19,7 @@ from apps.tenants.permissions import is_tenant_admin
 
 from apps.parties.models import Supplier
 
-from . import receiving, secrets, services, standard, vendors
+from . import mapping, receiving, secrets, services, standard, vendors
 from .models import Vendor, VendorCategory, VendorLink, VendorOrder, VendorSecret
 
 LIST_ROWS = 100
@@ -417,7 +418,7 @@ def receive(request, pk: int):
     try:
         receipt, created = receiving.receive(
             tenant=request.tenant, user=request.user, order=order, request_key=data.get("request_key"),
-            lines=data.get("lines"), manager=is_tenant_admin(request.user),
+            lines=data.get("lines"),
         )
         if isinstance(data.get("issue_note"), str):
             receiving.set_issue(order, data["issue_note"])
@@ -454,3 +455,27 @@ def issue(request, pk: int):
         return _bad("要有內容")
     receiving.set_issue(order, data["note"])
     return Response(_order_data(_orders(request).get(pk=order.pk)))
+
+
+# ── 品名連連看 ──────────────────────────────────────────────────────────────
+def _may_map(request) -> None:
+    if not (abilities.can(request.user, abilities.VENDOR_ORDER) or abilities.can(request.user, abilities.PURCHASE)):
+        raise PermissionDenied("這個帳號沒有開「廠商叫貨」或「進貨入庫」")
+
+
+@api_view(["GET", "POST"])
+def mappings(request):
+    """GET:這家廠商的每一個品項與對到的店內商品。POST:連 / 改 / 解除一個品項(`product` 給 null = 解除)。"""
+    _may_map(request)
+    data = request.query_params if request.method == "GET" else (request.data if isinstance(request.data, dict) else {})
+    try:
+        store = _store(request, data.get("warehouse"))
+        vendor = _vendor(data.get("vendor"), active=False)       # 廠商停用了,已經叫的貨還要入庫,對照照樣看得到、改得了
+        link = _need_link(request, store, vendor)
+        if request.method == "GET":
+            return Response({"warehouse": store.id, "vendor": vendor.code, **mapping.rows(request.tenant, link, vendor)})
+        row = mapping.set_product(tenant=request.tenant, user=request.user, link=link, vendor=vendor,
+                                  key=data.get("key"), product_id=data.get("product"))
+    except services.VendorError as exc:
+        return _bad(exc, exc.status)
+    return Response(row)

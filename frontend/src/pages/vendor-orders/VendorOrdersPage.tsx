@@ -53,12 +53,15 @@ import {
 } from "@/lib/vendorPick";
 import { mayReceive, receivedText } from "@/lib/vendorReceive";
 
+import { MappingTab } from "./MappingTab";
 import { ReceiveDrawer } from "./ReceiveDrawer";
 
-type Tab = "order" | "history";
+type Tab = "order" | "history" | "mapping";
 const TABS: { value: Tab; label: string }[] = [
   { value: "order", label: "叫貨" },
   { value: "history", label: "紀錄" },
+  // 品名連連看:廠商的品項 ↔ 店內商品(連好之後到貨直接入庫,不用每次挑)
+  { value: "mapping", label: "對照" },
 ];
 
 /** 記住這家門市上次停在哪一家廠商(只是方便;讀寫不了就算了)。 */
@@ -201,6 +204,7 @@ export function VendorOrdersPage() {
         <OrderTab key={`${link.warehouse}:${link.provider}`} link={link} onPlaced={() => setTab("history")} />
       )}
       {link && link.has_key && tab === "history" && <HistoryTab key={`${link.warehouse}:${link.provider}`} link={link} />}
+      {link && link.has_key && tab === "mapping" && <MappingTab key={`${link.warehouse}:${link.provider}`} link={link} />}
     </div>
   );
 }

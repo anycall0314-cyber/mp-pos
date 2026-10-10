@@ -4,7 +4,7 @@ import test from "node:test";
 
 import {
   blocked, fill, lineState, lineTitle, mayReceive, newReceiveKey, pendingFrom, pendingOf, pendingSlot, pendingText,
-  qtyFrom, receiveOutcome, receivedText, startDraft, summarize, withProduct, withQty,
+  chosen, qtyFrom, receiveOutcome, receivedText, startDraft, summarize, withProduct, withQty, withRepick,
 } from "./vendorReceive.ts";
 
 const line = (key, extra = {}) => ({
@@ -34,14 +34,16 @@ test("框裡打的字 → 數量:只收 0 到 99999 的整數", () => {
   for (const bad of ["", "-1", "1.5", "2片", "100000", "1e3", null, undefined, {}, "２５"]) assert.equal(qtyFrom(bad), 0, String(bad));
 });
 
-test("打開面板:數量帶「廠商已出、這家店還沒入的」,品號帶對過的,備註帶上次記的", () => {
+test("打開面板:數量帶「廠商已出、這家店還沒入的」,備註帶上次記的;品號不抄進草稿(對過的看這張單現在回的)", () => {
   const draft = startDraft(PLAN, "recv-1");
   assert.deepEqual(draft, {
     requestKey: "recv-1",
     qty: { "G02||p": 50, "G01||p": 4, "G02||r": 5 },          // 還沒出的那一行不帶
-    product: { "G02||p": { id: 7, label: "高透亮面保護貼" }, "G02||r": { id: 7, label: "高透亮面保護貼" } },
+    product: {},
+    repick: {},
     note: "上次少一包",
   });
+  assert.deepEqual(chosen(PLAN.lines[0], draft), { id: 7, label: "高透亮面保護貼" });
 });
 
 test("改數量與品號:0 個的不留;原本那一份不被改到", () => {
@@ -52,9 +54,11 @@ test("改數量與品號:0 個的不留;原本那一份不被改到", () => {
   assert.equal("G02||p" in withQty(draft, "G02||p", 1.5).qty, false);
   assert.equal(withQty(draft, "G02||p", 1e9).qty["G02||p"], 99999);
   assert.deepEqual(withProduct(draft, "G01||p", { id: 9, label: "D3O" }).product["G01||p"], { id: 9, label: "D3O" });
-  assert.equal("G02||p" in withProduct(draft, "G02||p", null).product, false);
+  const picked = withProduct(draft, "G02||p", { id: 7, label: "高透" });
+  assert.equal("G02||p" in withProduct(picked, "G02||p", null).product, false);
+  assert.deepEqual(picked.product, { "G02||p": { id: 7, label: "高透" } });     // 清掉回的是新的一份
   assert.deepEqual(draft.qty, { "G02||p": 50, "G01||p": 4, "G02||r": 5 });
-  assert.deepEqual(draft.product, { "G02||p": { id: 7, label: "高透亮面保護貼" }, "G02||r": { id: 7, label: "高透亮面保護貼" } });
+  assert.deepEqual(draft.product, {});
   assert.equal(withQty(draft, "G01||p", 9).requestKey, "recv-1");          // 鑰匙不換
 });
 
@@ -90,7 +94,7 @@ test("合計:只算這一次要入的;免費補發的算數量不算錢;沒選�
   const sum = summarize(PLAN, draft);
   assert.equal(sum.pieces, 50 + 4 + 5 + 5);
   assert.equal(sum.amount, 50 * 150 + 4 * 280 + 5 * 150);          // 補發的 5 片是 0
-  assert.deepEqual(sum.lines, [{ key: "G02||p", qty: 50, product: 7 }, { key: "G02||r", qty: 5, product: 7 }]);
+  assert.deepEqual(sum.lines, [{ key: "G02||p", qty: 50, product: 7, was: 7 }, { key: "G02||r", qty: 5, product: 7, was: 7 }]);
   assert.deepEqual(sum.unmapped, ["品G01", "品M01 K43 iPhone 15 Pro"]);
   assert.deepEqual(sum.over, []);
   assert.equal(sum.early, 1);                                      // M01 還沒出就要入 5 個
@@ -98,6 +102,69 @@ test("合計:只算這一次要入的;免費補發的算數量不算錢;沒選�
   const ready = summarize(PLAN, withProduct(withProduct(draft, "G01||p", { id: 9, label: "D3O" }), "M01|901|p", { id: 8, label: "膜速箱" }));
   assert.equal(blocked(ready), null);
   assert.equal(ready.lines.length, 4);
+});
+
+test("每一行都帶著「畫面上原本對到誰」:換了的、沒換的、第一次選的", () => {
+  const open = startDraft(PLAN, "recv-abcdefgh");
+  // G02 原本對到 7,這個人按了「改」換成 9;G01 還沒對過,這次選 9
+  const pressed = withRepick(open, PLAN.lines[0]);
+  assert.deepEqual([pressed.repick, open.repick, open.product], [{ "G02||p": true }, {}, {}]);     // 原本那一份不被改到
+  const draft = withProduct(withProduct(pressed, "G02||p", { id: 9, label: "D3O" }), "G01||p", { id: 9, label: "D3O" });
+  assert.deepEqual(summarize(PLAN, draft).lines, [
+    { key: "G02||p", qty: 50, product: 9, was: 7 },
+    { key: "G01||p", qty: 4, product: 9, was: null },
+    { key: "G02||r", qty: 5, product: 7, was: 7 },
+  ]);
+  // 按了「改」又選回原本那一個:送的就是原本那一個
+  const back = withProduct(draft, "G02||p", { id: 7, label: "高透" });
+  assert.deepEqual(summarize(PLAN, back).lines[0], { key: "G02||p", qty: 50, product: 7, was: 7 });
+  // 記下來再讀回來是同一份(再送一次送的要是同一份)
+  const pending = pendingOf(draft, summarize(PLAN, draft));
+  assert.deepEqual(pendingFrom(pendingText(pending)), pending);
+  assert.deepEqual(pendingFrom(pendingText(pending)).lines.map((l) => l.was), [7, null, 7]);
+  // 這一版之前記下來的沒有那一格:當成還沒對過;亂寫的整份不要
+  const old = JSON.stringify({ ...pending, lines: [{ key: "G02||p", qty: 50, product: 9 }] });
+  assert.deepEqual(pendingFrom(old).lines, [{ key: "G02||p", qty: 50, product: 9, was: null }]);
+  for (const odd of ["7", 0, -1, 1.5, true, {}]) {
+    const text = JSON.stringify({ ...pending, lines: [{ key: "G02||p", qty: 50, product: 9, was: odd }] });
+    assert.equal(pendingFrom(text), null, String(odd));
+  }
+});
+
+test("沒按「改」的那一行跟著這張單現在的對照走,不是打開面板那時候的", () => {
+  // 打開時 G02 對到 7、G01 還沒對過(這個人自己挑了 9)
+  const draft = withProduct(startDraft(PLAN, "recv-abcdefgh"), "G01||p", { id: 9, label: "D3O" });
+  assert.deepEqual(chosen(PLAN.lines[0], draft), { id: 7, label: "高透亮面保護貼" });
+  assert.deepEqual(chosen(PLAN.lines[1], draft), { id: 9, label: "D3O" });
+  assert.equal(chosen(PLAN.lines[2], draft), null);
+  // 被擋下來、重抓:別人把 G02 改成 8、把 G01 連到 5
+  const OTHER = { id: 8, sku: "LC-0008", name: "別的膜", is_active: true };
+  const LATE = { id: 5, sku: "LC-0005", name: "別人連的", is_active: true };
+  const again = plan([line("G02||p", { product: OTHER }), line("G01||p", { product: LATE }), ...PLAN.lines.slice(2)]);
+  assert.deepEqual(chosen(again.lines[0], draft), { id: 8, label: "別的膜" });
+  assert.deepEqual(chosen(again.lines[1], draft), { id: 5, label: "別人連的" });       // 自己挑的 9 不算數了(畫面寫的是 5)
+  const sent = summarize(again, draft).lines;
+  // 送出去的品號與「畫面上對到誰」都是現在的:沒有人要換
+  assert.deepEqual(sent.slice(0, 2), [{ key: "G02||p", qty: 50, product: 8, was: 8 }, { key: "G01||p", qty: 4, product: 5, was: 5 }]);
+  // 這時候才按「改」:框裡先帶現在對到的那一個(8),不是一開始的 7
+  const pressed = withRepick(draft, again.lines[0]);
+  assert.deepEqual(chosen(again.lines[0], pressed), { id: 8, label: "別的膜" });
+  assert.deepEqual(draft.product, { "G01||p": { id: 9, label: "D3O" } });               // 原本那一份不被改到
+  assert.deepEqual(summarize(again, pressed).lines[0], { key: "G02||p", qty: 50, product: 8, was: 8 });
+  // 按了「改」之後清掉沒選:這一行算還沒選品號(不能偷偷回到原本對到的)
+  const cleared = withProduct(pressed, "G02||p", null);
+  assert.equal(chosen(again.lines[0], cleared), null);
+  assert.deepEqual(summarize(again, cleared).unmapped, ["品G02"]);
+  // 換成別的:品號是新的、「原本對到誰」還是畫面上那一個
+  const moved = withProduct(pressed, "G02||p", { id: 7, label: "高透" });
+  assert.deepEqual(summarize(again, moved).lines[0], { key: "G02||p", qty: 50, product: 7, was: 8 });
+  // 對照被別人**解除**了(重抓變成還沒對過):沒按過「改」的那一行不能留著舊的品號,要這個人自己再挑
+  const gone = plan([line("G02||p"), ...PLAN.lines.slice(1)]);
+  assert.equal(chosen(gone.lines[0], draft), null);
+  assert.deepEqual(summarize(gone, draft).unmapped.includes("品G02"), true);
+  assert.equal(summarize(gone, draft).lines.some((l) => l.key === "G02||p"), false);
+  // 還沒對過的那一行按不了「改」;真的被呼叫也不會憑空多一個品號
+  assert.equal(chosen(PLAN.lines[2], withRepick(draft, PLAN.lines[2])), null);
 });
 
 test("不能按確認入庫的三種情況,先講數量、再講品號", () => {
@@ -144,7 +211,7 @@ test("按了確認、還不知道結果的那一次:送出之前記下來的就�
   const pending = pendingOf(draft, summarize(PLAN, draft));
   assert.deepEqual(pending, {
     requestKey: "recv-abcdefgh",
-    lines: [{ key: "G02||p", qty: 50, product: 7 }, { key: "G01||p", qty: 4, product: 9 }, { key: "G02||r", qty: 5, product: 7 }],
+    lines: [{ key: "G02||p", qty: 50, product: 7, was: 7 }, { key: "G01||p", qty: 4, product: 9, was: null }, { key: "G02||r", qty: 5, product: 7, was: 7 }],
     pieces: 59,
     note: "少一包",
   });
@@ -155,7 +222,7 @@ test("按了確認、還不知道結果的那一次:送出之前記下來的就�
 });
 
 test("瀏覽器裡那一格讀不懂就當成沒有(不拿壞掉的內容去入庫)", () => {
-  const good = { requestKey: "recv-abcdefgh", lines: [{ key: "G02||p", qty: 50, product: 7 }], pieces: 50, note: "" };
+  const good = { requestKey: "recv-abcdefgh", lines: [{ key: "G02||p", qty: 50, product: 7, was: 7 }], pieces: 50, note: "" };
   assert.deepEqual(pendingFrom(JSON.stringify(good)), good);
   // 幾個是照明細加起來的,不看存的那個數字;備註不是字就當成空的
   assert.deepEqual(pendingFrom(JSON.stringify({ ...good, pieces: 999, note: 5 })), good);

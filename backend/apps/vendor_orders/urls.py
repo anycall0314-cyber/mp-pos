@@ -14,6 +14,7 @@ urlpatterns = [
     path("vendor-orders/catalog/", views.catalog),
     path("vendor-orders/sync/", views.sync),
     path("vendor-orders/adopt/", views.adopt),
+    path("vendor-orders/mappings/", views.mappings),
     path("vendor-orders/<int:pk>/", views.order_detail),
     path("vendor-orders/<int:pk>/resend/", views.order_resend),
     path("vendor-orders/<int:pk>/receiving/", views.receiving_plan),

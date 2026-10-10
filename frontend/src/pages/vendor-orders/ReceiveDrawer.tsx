@@ -4,7 +4,6 @@ import { useReceiveVendorOrder, useSaveVendorIssue, useVendorReceiving } from "@
 import { ApiHttpError } from "@/api/client";
 import { searchProducts } from "@/api/search";
 import type { VendorOrder } from "@/api/types";
-import { useCurrentUser } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
 import { ComboBox } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
@@ -12,10 +11,10 @@ import { apiErrorText } from "@/components/workbench/errors";
 import { QtyInput } from "@/components/workbench/QtyInput";
 import { toast } from "@/components/workbench/toast";
 import { money } from "@/lib/money";
-import { isManager } from "@/lib/roles";
 import {
   MAX_QTY,
   blocked,
+  chosen,
   fill,
   lineState,
   lineTitle,
@@ -29,6 +28,7 @@ import {
   summarize,
   withProduct,
   withQty,
+  withRepick,
   type PendingReceive,
   type ReceiveDraft,
   type ReceiveLine,
@@ -64,11 +64,11 @@ async function pickable(query: string) {
 /**
  * 到貨入庫:照廠商這張單**現在**的明細開一張進貨單。
  * 單價是廠商的、運費算不算進成本是門市的設定,這裡都改不到;這裡只決定「這一次每一行入幾個、入到哪個品號」。
+ * 在「對照」那一頁連好的品項打開就帶好品號;按「改」換一個 = 明講要換對照(owner 2026-10-10:店員都可以改)。
  * 規則在 lib/vendorReceive.ts;能不能入、最多幾個由伺服器照廠商當下的單再算一次。
  * 按了確認、沒有拿到答覆的那一次記在瀏覽器裡:解決之前(同一把鑰匙再送一次)這張單不能開新的一次入庫。
  */
 export function ReceiveDrawer({ order, onClose }: { order: VendorOrder; onClose: () => void }) {
-  const manager = isManager(useCurrentUser()?.profile?.role);
   const plan = useVendorReceiving(order.id);
   const receive = useReceiveVendorOrder();
   const saveIssue = useSaveVendorIssue();
@@ -76,7 +76,6 @@ export function ReceiveDrawer({ order, onClose }: { order: VendorOrder; onClose:
   const requestKey = useRef(newReceiveKey());
   const [draft, setDraft] = useState<ReceiveDraft | null>(null);
   const [refused, setRefused] = useState("");
-  const [repick, setRepick] = useState<Record<string, boolean>>({});
   // 上一次按了確認、還不知道結果的那一次(可能是這個面板上一次打開時按的):解決之前只能「再送一次」
   const [pending, setPending] = useState<PendingReceive | null>(() => readPending(order.id));
   const busy = receive.isPending || saveIssue.isPending;
@@ -151,17 +150,15 @@ export function ReceiveDrawer({ order, onClose }: { order: VendorOrder; onClose:
 
   function productCell(line: ReceiveLine) {
     if (!draft) return null;
-    const picked = draft.product[line.key];
-    // 對過的料號:店員改不了(怕手滑入到別的膜上);管理員按「改」才打開
-    if (line.product && !repick[line.key]) {
+    const picked = chosen(line, draft);
+    // 對過的料號:先顯示**現在**對到誰(這張單重抓之後跟著換;不會手滑入到別的膜上);按「改」才打開,換了別的 = 對照跟著換
+    if (line.product && !draft.repick[line.key]) {
       return (
         <span className="vr-fixed">
           入到 {line.product.name}
-          {manager && (
-            <button type="button" className="btn-link" disabled={locked} onClick={() => setRepick({ ...repick, [line.key]: true })}>
-              改
-            </button>
-          )}
+          <button type="button" className="btn-link" disabled={locked} onClick={() => setDraft(withRepick(draft, line))}>
+            改
+          </button>
         </span>
       );
     }

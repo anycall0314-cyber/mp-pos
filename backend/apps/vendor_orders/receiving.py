@@ -234,17 +234,36 @@ def _remember(tenant, supplier, line: Line, product, user, supplier_platform: st
     )
 
 
-def _map(tenant, supplier, line: Line, product, user, manager: bool, platform: str) -> None:
-    """這一行對到哪個品號。第一次對 → 記住;記住之後店員改不了(怕手滑入到別的膜上),只有管理員能改對照。"""
+def _retire(tenant, supplier, line: Line, user, why: str) -> None:
+    """把這個料號現在的對照停用。**不刪**:留著當紀錄,備註寫誰、什麼時候、為什麼(改對照誰都可以做,所以每一次都要查得到)。"""
+    stamp = timezone.localtime().strftime("%Y-%m-%d %H:%M")
+    who = user.get_username() if user is not None else ""
+    SupplierProduct.objects.filter(
+        tenant=tenant, supplier=supplier, is_active=True, vendor_sku_key=alias_key(line.vendor_sku)[:200],
+    ).update(is_active=False, note=f"{stamp} {who} {why}"[:200], updated_at=timezone.now())
+
+
+NOT_CHECKED = object()        # `_map(seen=…)`:這個人是明講要換(連連看那一頁),不用核對他看到的是誰
+
+
+def _map(tenant, supplier, line: Line, product, user, platform: str, *, seen) -> None:
+    """這一行對到哪個品號。沒對過 → 記住;對過、這次指到別的 → 舊的停用留著、記新的。
+    能叫貨或能進貨的人都可以改(owner 2026-10-10:「店員都可以」;原本是只有管理員能改)。
+
+    `seen` = 送這個請求的人**畫面上看到**這個料號對到誰(商品編號;None = 他看到的是還沒對過)。
+    誰都能改之後,入庫面板開著的那段時間對照可能被別人改掉或解除 —— **他看到的跟現在的不一樣 = 他看的是舊畫面:不入、對照也不動**,請他重開。
+    不這樣擋:甲看到的是對到 A、乙改成 B(或解除)、甲按確認 → 貨入到 A、乙的修正被悄悄改回去。
+    送來的品號就是現在對到的那一個 → 沒有東西要改,不用核對。連連看那一頁是明講要換,給 `NOT_CHECKED`。
+    """
     owner = _owner(tenant, supplier, line)
     if owner is not None and owner.id == product.id:
         return
+    if seen is not NOT_CHECKED and seen != (owner.id if owner is not None else None):
+        if owner is None:
+            raise VendorError(f"「{line.title}」的對照剛被解除,請重新打開再試")
+        raise VendorError(f"「{line.title}」現在對到的是「{owner.name}」(對照剛被改過),請重新打開再試")
     if owner is not None:
-        if not manager:
-            raise VendorError(f"「{line.title}」已經對到「{owner.name}」,要改請管理員")
-        SupplierProduct.objects.filter(
-            tenant=tenant, supplier=supplier, is_active=True, vendor_sku_key=alias_key(line.vendor_sku)[:200],
-        ).update(is_active=False, updated_at=timezone.now())
+        _retire(tenant, supplier, line, user, f"改對到 {product.sku}")
         still = _owner(tenant, supplier, line)
         if still is not None and still.id != product.id:
             raise VendorError(f"「{line.title}」在商品的其他叫法裡已經對到「{still.name}」,要先到那個商品把這個叫法拿掉")
@@ -280,7 +299,9 @@ def _spread(share: Decimal, picked) -> dict[str, Decimal]:
     return out
 
 
-def _wanted(lines) -> list[tuple[str, int, int]]:
+def _wanted(lines) -> list[tuple[str, int, int, object]]:
+    """畫面送來的每一行 → (哪一行, 幾個, 入到哪個品號, 他看到這一行原本對到誰)。
+    `was` 沒帶 = 他看到的是還沒對過(None)。"""
     if not isinstance(lines, list) or not lines:
         raise VendorError("這一次沒有要入庫的東西")
     seen, out = set(), []
@@ -290,10 +311,13 @@ def _wanted(lines) -> list[tuple[str, int, int]]:
         product = _whole(row.get("product")) if isinstance(row, dict) else None
         if not isinstance(key, str) or qty is None or qty < 1 or product is None:
             raise VendorError("入庫的內容不完整(每一行要有數量與對到的品號)")
+        was = row.get("was")
+        if was is not None and (_whole(was) is None or was < 1):
+            raise VendorError("入庫的內容不完整(原本對到的品號不對)")
         if key in seen:
             raise VendorError("同一行重複了")
         seen.add(key)
-        out.append((key, qty, product))
+        out.append((key, qty, product, was))
     return out
 
 
@@ -313,17 +337,17 @@ def _lock_request(tenant, request_key) -> None:
         cur.execute("SELECT pg_advisory_xact_lock(%s)", [int.from_bytes(digest[:8], "big", signed=True)])
 
 
-def receive(*, tenant, user, order, request_key, lines, manager: bool):
+def receive(*, tenant, user, order, request_key, lines):
     """照這張叫貨單開一張進貨單。回 (這一次入庫, 是不是這一次新做的)。同一把鑰匙再來回同一次,不會入兩次。
     丟 `VendorError` = 這把鑰匙沒有入過、這一次也沒有入(畫面靠這個決定可不可以開新的一次)。"""
     if not isinstance(request_key, str) or not services.REQUEST_KEY.match(request_key):
         raise VendorError("這一次入庫的編號不對,請重新整理頁面再試")
     with transaction.atomic():
         _lock_request(tenant, request_key)
-        return _receive(tenant=tenant, user=user, order=order, request_key=request_key, lines=lines, manager=manager)
+        return _receive(tenant=tenant, user=user, order=order, request_key=request_key, lines=lines)
 
 
-def _receive(*, tenant, user, order, request_key, lines, manager: bool):
+def _receive(*, tenant, user, order, request_key, lines):
     done = VendorReceipt.objects.filter(tenant=tenant, request_key=request_key).first()
     if done is not None:
         if done.order_id != order.id:
@@ -344,11 +368,11 @@ def _receive(*, tenant, user, order, request_key, lines, manager: bool):
             link = VendorLink.objects.get(pk=locked.link_id)
             got = received_by_line(locked)
             products = {p.id: p for p in Product.objects.filter(tenant=tenant, pk__in=[w[2] for w in wanted])}
-            for key, _, _ in wanted:
+            for key, *_ in wanted:
                 if key not in by_key:
                     raise VendorError(f"{who}那張單現在沒有這一行(可能改過單),請重新打開入庫再試")
             picked = []
-            for key, qty, product_id in sorted(wanted, key=lambda w: alias_key(by_key[w[0]].vendor_sku)):
+            for key, qty, product_id, was in sorted(wanted, key=lambda w: alias_key(by_key[w[0]].vendor_sku)):
                 line = by_key[key]
                 left = line.qty - got.get(key, 0)
                 if qty > left:
@@ -357,7 +381,7 @@ def _receive(*, tenant, user, order, request_key, lines, manager: bool):
                 if product is None:
                     raise VendorError(f"「{line.title}」對到的商品找不到")
                 _fits(product, line.title)
-                _map(tenant, supplier, line, product, user, manager, locked.provider)
+                _map(tenant, supplier, line, product, user, locked.provider, seen=was)
                 picked.append((line, qty, product))
             share = _freight_share(link, fee, freight_spent(locked), vendor_lines, got, [(l, q) for l, q, _ in picked])
             extra = _spread(share, [(l, q) for l, q, _ in picked])

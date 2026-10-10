@@ -7682,6 +7682,12 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .vo-filter .vo-check { gap: 6px; color: var(--text); }
 .vo-filter .vo-check input { width: 1.15rem; height: 1.15rem; }
 .vo-diff { color: var(--warn-text); }
+/* 品名連連看(對照):左邊廠商的品項、右邊店內商品;還沒連的那一列淡淡標出來 */
+.vm-grid td.vo-name { width: 45%; }
+.vm-grid tr.vm-open td { background: rgba(255, 180, 60, 0.06); }
+.vm-grid .vm-none { color: var(--warn-text); }
+.vm-grid td.vm-acts { white-space: nowrap; text-align: right; }
+.vm-grid td.vm-acts .btn + .btn { margin-left: 8px; }
 .vo-bar {
   display: flex;
   align-items: center;

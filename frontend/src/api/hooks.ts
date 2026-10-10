@@ -11,7 +11,8 @@ import { listProductPhotos, type PhotosPayload } from "./photos";
 import { rangeQuery, rangeReady, type ReportRange } from "@/lib/fixedReports";
 import type { CatalogRow } from "@/lib/vendorOrder";
 import type { VendorCategoryOption } from "@/lib/vendorPick";
-import type { ReceivePlan } from "@/lib/vendorReceive";
+import { withSaved, type MappingData, type MappingRow } from "@/lib/vendorMapping";
+import type { ReceivePlan, ReceiveSend } from "@/lib/vendorReceive";
 import {
   Carrier,
   Category,
@@ -2647,7 +2648,7 @@ export const useReceiveVendorOrder = () => {
     mutationFn: (vars: {
       order: number;
       request_key: string;
-      lines: { key: string; qty: number; product: number }[];
+      lines: ReceiveSend[];
       issue_note: string;
     }) =>
       api<{ receipt: number; order: VendorOrder }>(`/vendor-orders/${vars.order}/receive/`, {
@@ -2658,6 +2659,36 @@ export const useReceiveVendorOrder = () => {
       qc.invalidateQueries({ queryKey: ["vendor-orders"] });
       qc.invalidateQueries({ queryKey: ["purchase-orders"] });
       qc.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+};
+
+/**
+ * 品名連連看:這家廠商現在的每一個品項與對到的店內商品。每次進那一頁現抓(品項是廠商的,不留舊的);
+ * 不在背後自己重抓(人正要按的時候列不能自己換)。
+ */
+export const useVendorMappings = (warehouse: number | null, vendor: string | null) =>
+  useQuery({
+    queryKey: ["vendor-mappings", warehouse, vendor],
+    queryFn: () =>
+      api<MappingData>(`/vendor-orders/mappings/?warehouse=${warehouse}&vendor=${encodeURIComponent(vendor ?? "")}`),
+    enabled: warehouse !== null && vendor !== null,
+    retry: false,
+    gcTime: 0,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+/** 連 / 改 / 解除一個品項(`product` 給 null = 解除)。存完把伺服器回的那一列放回清單,不重抓整份。 */
+export const useSaveVendorMapping = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: (vars: { warehouse: number; vendor: string; key: string; product: number | null }) =>
+      api<MappingRow>(`/vendor-orders/mappings/`, { method: "POST", body: JSON.stringify(vars) }),
+    onSuccess: (row, vars) => {
+      qc.setQueryData<MappingData>(["vendor-mappings", vars.warehouse, vars.vendor], (old) => withSaved(old, row));
     },
   });
 };

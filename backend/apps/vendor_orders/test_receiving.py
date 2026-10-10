@@ -53,8 +53,8 @@ class _Arrival(_Shop):
         body = {"request_key": key, "lines": lines, **extra}
         return (client or self.clerk).post(f"{ORDERS}{(order or self.o)['id']}/receive/", body, format="json")
 
-    def line(self, key=G02, qty=50, product=None):
-        return {"key": key, "qty": qty, "product": (product or self.film).id}
+    def line(self, key=G02, qty=50, product=None, **more):
+        return {"key": key, "qty": qty, "product": (product or self.film).id, **more}
 
     def stock(self, product=None, warehouse=None):
         row = StockBalance.objects.filter(tenant=self.t, product=product or self.film,
@@ -458,18 +458,52 @@ class MappingTests(_Arrival):
         self.assertEqual((rows[BOX_901]["product"]["id"], rows[BOX_902]["product"]["id"], rows[G02]["product"]),
                          (self.film.id, self.film2.id, None))
 
-    def test_once_set_a_clerk_cannot_point_it_elsewhere_but_a_manager_can(self):
+    def test_a_clerk_can_point_it_elsewhere_and_the_old_one_is_kept_with_who_and_when(self):
+        """owner 2026-10-10:「店員都可以」改對照。舊的那一筆停用留著,備註寫誰、改指到哪。"""
         self.assertEqual(self.take([self.line(qty=10)]).status_code, 201)
-        r = self.take([self.line(qty=5, product=self.film2)], key="recv-0002")
-        self.assertEqual((r.status_code, r.json()["detail"]),
-                         (400, f"「高透亮面」已經對到「{self.film.name}」,要改請管理員"))
-        self.assertEqual((self.stock(self.film2)[0], SupplierProduct.objects.get().product_id), (0, self.film.id))
-        r = self.take([self.line(qty=5, product=self.film2)], key="recv-0002", client=self.admin)
+        r = self.take([self.line(qty=5, product=self.film2, was=self.film.id)], key="recv-0002")
         self.assertEqual(r.status_code, 201, r.content.decode())
         self.assertEqual(sorted(SupplierProduct.objects.values_list("product_id", "is_active")),
                          sorted([(self.film.id, False), (self.film2.id, True)]))
+        old = SupplierProduct.objects.get(product=self.film)
+        self.assertRegex(old.note, rf"^\d{{4}}-\d\d-\d\d \d\d:\d\d {self.c.clerk_user.username} 改對到 {self.film2.sku}$")
+        self.assertEqual(SupplierProduct.objects.get(product=self.film2).note, "")
         self.assertEqual((self.stock(self.film)[0], self.stock(self.film2)[0]), (10, 5))
         self.assertEqual(self.plan().json()["lines"][0]["product"]["id"], self.film2.id)
+
+    def test_a_stale_screen_does_not_quietly_point_it_back(self):
+        """對照被別人改過之後,還開著舊畫面的人按確認:不入、對照不動。
+        每一行帶著「畫面上看到它對到誰」(`was`;沒帶 = 看到的是還沒對過),跟現在的不一樣就擋。"""
+        self.assertEqual(self.take([self.line(qty=10)]).status_code, 201)
+        # 現在對到 film。舊畫面以為還沒對過 / 以為對到別的,送來的是 film2
+        for extra in ({}, {"was": None}, {"was": self.film2.id}, {"was": 999999}):
+            r = self.take([self.line(qty=5, product=self.film2, **extra)], key="recv-0002")
+            self.assertEqual((r.status_code, r.json()["detail"]),
+                             (400, f"「高透亮面」現在對到的是「{self.film.name}」(對照剛被改過),請重新打開再試"), extra)
+        self.assertEqual((self.stock(self.film)[0], self.stock(self.film2)[0]), (10, 0))
+        self.assertEqual(list(SupplierProduct.objects.values_list("product_id", "is_active", "note")),
+                         [(self.film.id, True, "")])
+        # 送來的就是現在對到的那一個:沒有東西要改,看到誰都照入
+        self.assertEqual(self.take([self.line(qty=5, was=self.film2.id)], key="recv-0002").status_code, 201)
+
+    def test_a_stale_screen_does_not_quietly_link_back_what_was_unlinked(self):
+        """複審 2026-10-10:甲開著入庫面板(看到對到 film)、乙把對照解除、甲按確認 → 不能把乙解除的悄悄連回去。"""
+        self.assertEqual(self.take([self.line(qty=10)]).status_code, 201)
+        SupplierProduct.objects.update(is_active=False, note="乙解除的")
+        r = self.take([self.line(qty=5, was=self.film.id)], key="recv-0002")
+        self.assertEqual((r.status_code, r.json()["detail"]), (400, "「高透亮面」的對照剛被解除,請重新打開再試"))
+        self.assertEqual((self.stock(self.film)[0], SupplierProduct.objects.filter(is_active=True).count(),
+                          SupplierProduct.objects.count()), (10, 0, 1))
+        self.assertIsNone(self.plan().json()["lines"][0]["product"])
+        # 重開之後看到的是還沒對過,自己再挑一次:這才連
+        self.assertEqual(self.take([self.line(qty=5)], key="recv-0002").status_code, 201)
+        self.assertEqual(SupplierProduct.objects.filter(is_active=True).count(), 1)
+
+    def test_what_the_screen_saw_has_to_be_a_product_number_or_nothing(self):
+        for odd in ("7", 0, -1, 1.5, True, [], {}):
+            r = self.take([self.line(qty=5, was=odd)])
+            self.assertEqual((r.status_code, r.json()["detail"]), (400, "入庫的內容不完整(原本對到的品號不對)"), repr(odd))
+        self.assertNothingReceived()
 
     def test_a_name_the_store_already_taught_for_this_supplier_is_respected(self):
         """別名表先認領的(拍照入庫教過的):一樣算數,而且這裡改不了它(要到那個商品把叫法拿掉)。"""
@@ -481,7 +515,7 @@ class MappingTests(_Arrival):
                                     value="G02", normalized_value=alias_key("G02"), verified=True)
         self.assertEqual(self.link(key="", supplier=supplier.id).status_code, 200)
         self.assertEqual(self.plan().json()["lines"][0]["product"]["id"], self.film.id)
-        r = self.take([self.line(qty=5, product=self.film2)], client=self.admin)
+        r = self.take([self.line(qty=5, product=self.film2, was=self.film.id)], client=self.admin)
         self.assertEqual((r.status_code, "在商品的其他叫法裡已經對到" in r.json()["detail"]), (400, True), r.content.decode())
         self.assertEqual(self.take([self.line(qty=5)]).status_code, 201)
         self.assertEqual(SupplierProduct.objects.count(), 0)
@@ -659,7 +693,7 @@ class TwoPeopleTests(TransactionTestCase):
                 start.wait(5)
                 receipt, created = receiving.receive(
                     tenant=self.c.tenant, user=self.c.clerk_user, order=order, request_key=key,
-                    lines=[{"key": G02, "qty": 50, "product": self.film.id}], manager=False)
+                    lines=[{"key": G02, "qty": 50, "product": self.film.id}])
                 results[key] = "入庫" if created else "重複"
             except services.VendorError as exc:
                 results[key] = str(exc)
@@ -697,7 +731,7 @@ class TwoPeopleTests(TransactionTestCase):
             try:
                 receipt, created = receiving.receive(
                     tenant=self.c.tenant, user=self.c.clerk_user, order=order, request_key="recv-samekey1",
-                    lines=[{"key": G02, "qty": 20, "product": self.film.id}], manager=False)
+                    lines=[{"key": G02, "qty": 20, "product": self.film.id}])
                 results[name] = ("入庫" if created else "同一次", receipt.id)
             except services.VendorError as exc:
                 results[name] = (str(exc), None)
