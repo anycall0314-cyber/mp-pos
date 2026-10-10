@@ -33,13 +33,12 @@ from apps.purchasing.serializers import PurchaseOrderSerializer
 from apps.purchasing.services import PurchaseOrderError, commit_purchase_order
 from apps.tenants.models import PaymentMethod
 
-from . import moceo, secrets, services
+from . import secrets, services, vendors
 from .models import VendorLink, VendorOrder, VendorReceipt, VendorReceiptItem
 from .services import VendorError
 
 CENT = Decimal("0.01")
 ZERO = Decimal("0")
-PLATFORM = "moceo"
 ORDER_NO = re.compile(r"^[A-Za-z0-9_-]{4,40}$")
 CASH_ON_DELIVERY = "貨到付款"
 
@@ -99,10 +98,10 @@ def _whole(value):
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
-def lines_of(items) -> list[Line]:
+def lines_of(items, who: str = "廠商") -> list[Line]:
     """廠商回的明細 → 行。**有一行看不懂就整張不給入**(少算一行,庫存就少一行,而且沒有人會發現)。"""
     if not isinstance(items, list) or not items:
-        raise VendorError("膜總裁沒有回這張單的明細,先不要入庫")
+        raise VendorError(f"{who}沒有回這張單的明細,先不要入庫")
     merged: dict[str, Line] = {}
     for row in items:
         sku = row.get("sku") if isinstance(row, dict) else None
@@ -111,7 +110,7 @@ def lines_of(items) -> list[Line]:
         price = services._price(row.get("unit_price")) if isinstance(row, dict) else None
         if (not isinstance(sku, str) or not sku.strip() or qty is None or qty < 1 or price is None
                 or not (spec_id is None or _whole(spec_id) is not None)):
-            raise VendorError("膜總裁回的明細有一行看不懂,先不要入庫")
+            raise VendorError(f"{who}回的明細有一行看不懂,先不要入庫")
         free = row.get("is_reissue") is True
         subtotal = services._price(row.get("subtotal"))
         amount = ZERO if free else (subtotal if subtotal is not None else price * qty)
@@ -151,8 +150,9 @@ def suggested_qty(qty: int, shipped: int, received: int) -> int:
 def _detail(order):
     if order.state != VendorOrder.State.PLACED or not order.vendor_order_no:
         raise VendorError("這張叫貨單還沒有確定成立,不能入庫")
-    found = services._read(moceo.detail, services.key_of(order.link), order.vendor_order_no)
-    return found, lines_of(found.order.get("items"))
+    vendor = services.vendor_of(order.provider)          # 廠商停用了照樣可以入庫(貨已經叫了)
+    found = services._read(vendor, "detail", services.key_of(order.link, vendor), order.vendor_order_no)
+    return found, lines_of(found.order.get("items"), vendor.name)
 
 
 def _in_lock_order(lines):
@@ -210,7 +210,7 @@ def supplier_for(link):
     link = VendorLink.objects.select_for_update().get(pk=link.pk)     # 兩張單同時第一次入庫,只建一筆
     if link.supplier_id:
         return link.supplier
-    name = link.get_provider_display()
+    name = vendors.name_of(link.provider)[:120]
     supplier = (Supplier.objects.filter(tenant=link.tenant, name=name).order_by("id").first()
                 or Supplier.objects.create(tenant=link.tenant, name=name))
     link.supplier = supplier
@@ -226,15 +226,15 @@ def _fits(product, title) -> None:
         raise VendorError(f"「{title}」不能對到「{product.name}」:只能入到按數量管的一般商品(不追序號、不是中古機、不是虛擬商品)")
 
 
-def _remember(tenant, supplier, line: Line, product, user) -> None:
+def _remember(tenant, supplier, line: Line, product, user, supplier_platform: str) -> None:
     SupplierProduct.objects.create(
-        tenant=tenant, product=product, supplier=supplier, platform=PLATFORM, vendor_sku=line.vendor_sku[:80],
+        tenant=tenant, product=product, supplier=supplier, platform=supplier_platform, vendor_sku=line.vendor_sku[:80],
         variant=line.spec_label[:200], source_name=line.name[:300], pack_qty=line.pack_qty,
         confirmed_by=user, confirmed_at=timezone.now(),
     )
 
 
-def _map(tenant, supplier, line: Line, product, user, manager: bool) -> None:
+def _map(tenant, supplier, line: Line, product, user, manager: bool, platform: str) -> None:
     """這一行對到哪個品號。第一次對 → 記住;記住之後店員改不了(怕手滑入到別的膜上),只有管理員能改對照。"""
     owner = _owner(tenant, supplier, line)
     if owner is not None and owner.id == product.id:
@@ -250,7 +250,7 @@ def _map(tenant, supplier, line: Line, product, user, manager: bool) -> None:
             raise VendorError(f"「{line.title}」在商品的其他叫法裡已經對到「{still.name}」,要先到那個商品把這個叫法拿掉")
         if still is not None:
             return
-    _remember(tenant, supplier, line, product, user)
+    _remember(tenant, supplier, line, product, user, platform)
 
 
 def _freight_share(link, fee: Decimal, spent: Decimal, lines, got, picked) -> Decimal:
@@ -330,6 +330,7 @@ def _receive(*, tenant, user, order, request_key, lines, manager: bool):
             raise VendorError("這把鑰匙是另一張叫貨單的入庫")
         return done, False
     wanted = _wanted(lines)
+    who = vendors.name_of(order.provider)
     found, vendor_lines = _detail(order)          # 廠商這張單現在的樣子(還沒拿叫貨單那一列的鎖:不能握著它等外面的系統)
     by_key = {line.key: line for line in vendor_lines}
     fee = _fee(found.order)
@@ -345,7 +346,7 @@ def _receive(*, tenant, user, order, request_key, lines, manager: bool):
             products = {p.id: p for p in Product.objects.filter(tenant=tenant, pk__in=[w[2] for w in wanted])}
             for key, _, _ in wanted:
                 if key not in by_key:
-                    raise VendorError("膜總裁那張單現在沒有這一行(可能改過單),請重新打開入庫再試")
+                    raise VendorError(f"{who}那張單現在沒有這一行(可能改過單),請重新打開入庫再試")
             picked = []
             for key, qty, product_id in sorted(wanted, key=lambda w: alias_key(by_key[w[0]].vendor_sku)):
                 line = by_key[key]
@@ -356,7 +357,7 @@ def _receive(*, tenant, user, order, request_key, lines, manager: bool):
                 if product is None:
                     raise VendorError(f"「{line.title}」對到的商品找不到")
                 _fits(product, line.title)
-                _map(tenant, supplier, line, product, user, manager)
+                _map(tenant, supplier, line, product, user, manager, locked.provider)
                 picked.append((line, qty, product))
             share = _freight_share(link, fee, freight_spent(locked), vendor_lines, got, [(l, q) for l, q, _ in picked])
             extra = _spread(share, [(l, q) for l, q, _ in picked])
@@ -372,7 +373,7 @@ def _receive(*, tenant, user, order, request_key, lines, manager: bool):
             if pay == CASH_ON_DELIVERY:
                 cash = (PaymentMethod.objects.filter(tenant=tenant, kind=PaymentMethod.Kind.CASH, is_active=True)
                         .order_by("sort_order", "id").first())
-            note = f"{link.get_provider_display()} {locked.vendor_order_no} 到貨入庫"
+            note = f"{who} {locked.vendor_order_no} 到貨入庫"
             if fee > 0 and not link.freight_into_cost:
                 note += f"(運費 {fee:.0f} 沒有算進成本)"
             form = PurchaseOrderSerializer(data={
@@ -412,6 +413,14 @@ def _receive(*, tenant, user, order, request_key, lines, manager: bool):
 
 
 # ── 不是從 POS 叫的單 ────────────────────────────────────────────────────────
+def outside_key(provider: str, order_no: str) -> str:
+    """認進來的單沒有畫面的鑰匙,自己編一把:**一家廠商的一個單號一把**。
+    兩家廠商各自編號,單號可以一模一樣 —— 只用單號編的話,第二家的那一張會撞到「一家公司裡鑰匙不重複」而認不進來(複審 2026-10-10)。
+    用雜湊不用直接接起來:「廠商代碼 + 單號」可能比欄位長,截掉會撞。"""
+    digest = hashlib.sha256(f"{provider}\n{order_no}".encode("utf-8")).hexdigest()
+    return f"outside-{digest[:40]}"
+
+
 def adopt(*, tenant, user, link, order_no):
     """把廠商那邊「不是從這裡叫的」一張單認進來(電話、LINE、廠商代下的),之後才能到貨入庫。明細不存,每次跟廠商要。"""
     order_no = order_no.strip() if isinstance(order_no, str) else ""
@@ -430,9 +439,10 @@ def adopt(*, tenant, user, link, order_no):
     order = existing()
     if order is not None:
         return mine(order)
-    key = services.key_of(link)
-    found = services._read(moceo.detail, key, order_no)
-    lines = lines_of(found.order.get("items"))
+    vendor = services.vendor_of(link.provider)
+    key = services.key_of(link, vendor)
+    found = services._read(vendor, "detail", key, order_no)
+    lines = lines_of(found.order.get("items"), vendor.name)
     row = found.order
     text = lambda name, limit: row[name][:limit] if isinstance(row.get(name), str) else ""      # noqa: E731
     try:
@@ -440,7 +450,7 @@ def adopt(*, tenant, user, link, order_no):
             order = VendorOrder(
                 tenant=tenant, provider=link.provider, link=link, warehouse=link.warehouse,
                 source=VendorOrder.Source.OUTSIDE, state=VendorOrder.State.PLACED,
-                request_key=f"outside-{order_no}"[:50], vendor_key="", key_fingerprint=secrets.fingerprint(key),
+                request_key=outside_key(link.provider, order_no), vendor_key="", key_fingerprint=secrets.fingerprint(key),
                 vendor_order_no=order_no, expected_goods=sum((line.amount for line in lines), ZERO),
                 payment_method=text("payment_method", 20), delivery_method=text("delivery_method", 20),
                 invoice_type="", is_test=found.sandbox, created_by=user,

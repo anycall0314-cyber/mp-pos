@@ -201,7 +201,7 @@ export function ReceiveDrawer({ order, onClose }: { order: VendorOrder; onClose:
         </>
       }
     >
-      {plan.isLoading && <div className="md-empty">跟膜總裁要這張單的明細…</div>}
+      {plan.isLoading && <div className="md-empty">跟{order.provider_label}要這張單的明細…</div>}
       {plan.isError && <Banner kind="error" message={apiErrorText(plan.error)} />}
       {pending && !receive.isPending && !refused && (
         <Banner kind="error" message={`上一次的入庫(${pending.pieces} 個)還不知道有沒有成功,請按「再送一次」`} />

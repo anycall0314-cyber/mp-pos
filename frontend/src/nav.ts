@@ -81,7 +81,7 @@ export const NAV_MODULES: NavModule[] = [
       {
         to: "/vendor-orders",
         label: "廠商叫貨",
-        aliases: ["叫貨", "膜總裁", "補貨", "供應商叫貨"],
+        aliases: ["叫貨", "補貨", "供應商叫貨"],
         needs: ["vendor_order"],
       },
       { to: "/suppliers", label: "供應商" },
@@ -251,7 +251,7 @@ export const NAV_MODULES: NavModule[] = [
       {
         to: "/settings/vendors",
         label: "叫貨串接",
-        aliases: ["膜總裁金鑰", "廠商金鑰", "叫貨設定"],
+        aliases: ["廠商金鑰", "叫貨設定", "開通廠商"],
         adminOnly: true,
       },
       { to: "/settings/legacy", label: "舊系統對照", adminOnly: true },

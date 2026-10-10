@@ -10,6 +10,7 @@ import {
 import { listProductPhotos, type PhotosPayload } from "./photos";
 import { rangeQuery, rangeReady, type ReportRange } from "@/lib/fixedReports";
 import type { CatalogRow } from "@/lib/vendorOrder";
+import type { VendorCategoryOption } from "@/lib/vendorPick";
 import type { ReceivePlan } from "@/lib/vendorReceive";
 import {
   Carrier,
@@ -76,6 +77,8 @@ import {
   CommissionLines,
   FixedReportResult,
   LedgerOverview,
+  PlatformVendor,
+  PlatformVendorCategory,
   VendorLinkRow,
   VendorOrder,
   VendorOutsideOrder,
@@ -2534,18 +2537,18 @@ export const useAnalyticsQuery = (spec: AnalyticsSpec | null) =>
     retry: false,
   });
 
-// ── 廠商叫貨(膜總裁)────────────────────────────────────────────────────────
+// ── 廠商叫貨(多廠商;每一支都要講是哪一家 `vendor`)──────────────────────────────
 export const useVendorLinks = () =>
   useQuery({
     queryKey: ["vendor-links"],
-    queryFn: () => api<{ results: VendorLinkRow[] }>(`/vendor-links/`),
+    queryFn: () => api<{ results: VendorLinkRow[]; categories: VendorCategoryOption[] }>(`/vendor-links/`),
   });
 
 /** 存一家門市的串接設定;`key` 有給才換金鑰(伺服器會拿它去問廠商一次)。 */
 export const useSaveVendorLink = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: Partial<VendorLinkRow> & { warehouse: number; key?: string }) =>
+    mutationFn: (body: Partial<VendorLinkRow> & { warehouse: number; vendor: string; key?: string }) =>
       api<VendorLinkRow>(`/vendor-links/`, { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["vendor-links"] });
@@ -2557,8 +2560,11 @@ export const useSaveVendorLink = () => {
 export const useRemoveVendorKey = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (warehouse: number) =>
-      api<VendorLinkRow>(`/vendor-links/${warehouse}/remove-key/`, { method: "POST" }),
+    mutationFn: (vars: { warehouse: number; vendor: string }) =>
+      api<VendorLinkRow>(`/vendor-links/${vars.warehouse}/remove-key/`, {
+        method: "POST",
+        body: JSON.stringify({ vendor: vars.vendor }),
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["vendor-links"] });
       qc.invalidateQueries({ queryKey: ["vendor-catalog"] });
@@ -2567,22 +2573,27 @@ export const useRemoveVendorKey = () => {
 };
 
 /** 廠商現在的商品與這家門市的進價。每次進這一頁現抓(價錢是廠商的,不留舊的)。 */
-export const useVendorCatalog = (warehouse: number | null) =>
+export const useVendorCatalog = (warehouse: number | null, vendor: string | null) =>
   useQuery({
-    queryKey: ["vendor-catalog", warehouse],
+    queryKey: ["vendor-catalog", warehouse, vendor],
     queryFn: () =>
-      api<{ warehouse: number; rows: CatalogRow[] }>(`/vendor-orders/catalog/?warehouse=${warehouse}`),
-    enabled: warehouse !== null,
+      api<{ warehouse: number; vendor: string; rows: CatalogRow[] }>(
+        `/vendor-orders/catalog/?warehouse=${warehouse}&vendor=${encodeURIComponent(vendor ?? "")}`,
+      ),
+    enabled: warehouse !== null && vendor !== null,
     retry: false,
     gcTime: 0,
     refetchOnWindowFocus: false,
   });
 
-export const useVendorOrders = (warehouse: number | null) =>
+export const useVendorOrders = (warehouse: number | null, vendor: string | null) =>
   useQuery({
-    queryKey: ["vendor-orders", warehouse],
-    queryFn: () => api<{ results: VendorOrder[] }>(`/vendor-orders/?warehouse=${warehouse}`),
-    enabled: warehouse !== null,
+    queryKey: ["vendor-orders", warehouse, vendor],
+    queryFn: () =>
+      api<{ results: VendorOrder[] }>(
+        `/vendor-orders/?warehouse=${warehouse}&vendor=${encodeURIComponent(vendor ?? "")}`,
+      ),
+    enabled: warehouse !== null && vendor !== null,
   });
 
 /** 送出一張叫貨單。**不自動重試**:沒有答覆時要不要再送由畫面照同一把鑰匙決定。 */
@@ -2592,6 +2603,7 @@ export const usePlaceVendorOrder = () =>
     mutationFn: (body: {
       request_key: string;
       warehouse: number;
+      vendor: string;
       lines: { key: string; packs: number }[];
       payment_method: string;
       delivery_method: string;
@@ -2609,10 +2621,10 @@ export const useResendVendorOrder = () =>
 export const useSyncVendorOrders = () =>
   useMutation({
     retry: false,
-    mutationFn: (warehouse: number) =>
+    mutationFn: (vars: { warehouse: number; vendor: string }) =>
       api<{ results: VendorOrder[]; others: VendorOutsideOrder[] }>(`/vendor-orders/sync/`, {
         method: "POST",
-        body: JSON.stringify({ warehouse }),
+        body: JSON.stringify(vars),
       }),
   });
 
@@ -2654,7 +2666,7 @@ export const useReceiveVendorOrder = () => {
 export const useAdoptVendorOrder = () =>
   useMutation({
     retry: false,
-    mutationFn: (body: { warehouse: number; order_no: string }) =>
+    mutationFn: (body: { warehouse: number; vendor: string; order_no: string }) =>
       api<VendorOrder>(`/vendor-orders/adopt/`, { method: "POST", body: JSON.stringify(body) }),
   });
 
@@ -2665,6 +2677,55 @@ export const useSaveVendorIssue = () => {
     mutationFn: (vars: { order: number; note: string }) =>
       api<VendorOrder>(`/vendor-orders/${vars.order}/issue/`, { method: "POST", body: JSON.stringify({ note: vars.note }) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["vendor-orders"] }),
+  });
+};
+
+// 平台管理:叫貨類別與廠商名單(只有平台管理員;只能停用、不能刪)
+export const usePlatformVendorCategories = () =>
+  useQuery({
+    queryKey: ["platform-vendor-categories"],
+    queryFn: () => api<{ results: PlatformVendorCategory[] }>(`/platform/vendor-categories/`),
+  });
+
+export const useSavePlatformVendorCategory = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Partial<PlatformVendorCategory> & { id?: number }) => {
+      const { id, ...body } = payload;
+      return api<PlatformVendorCategory>(id ? `/platform/vendor-categories/${id}/` : `/platform/vendor-categories/`, {
+        method: id ? "PATCH" : "POST",
+        body: JSON.stringify(body),
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["platform-vendor-categories"] });
+      qc.invalidateQueries({ queryKey: ["vendor-links"] });
+    },
+  });
+};
+
+export const usePlatformVendors = () =>
+  useQuery({
+    queryKey: ["platform-vendors"],
+    queryFn: () =>
+      api<{ results: PlatformVendor[]; protocols: { value: string; label: string }[] }>(`/platform/vendors/`),
+  });
+
+export const useSavePlatformVendor = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Partial<PlatformVendor> & { id?: number }) => {
+      const { id, ...body } = payload;
+      return api<PlatformVendor>(id ? `/platform/vendors/${id}/` : `/platform/vendors/`, {
+        method: id ? "PATCH" : "POST",
+        body: JSON.stringify(body),
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["platform-vendors"] });
+      qc.invalidateQueries({ queryKey: ["platform-vendor-categories"] });
+      qc.invalidateQueries({ queryKey: ["vendor-links"] });
+    },
   });
 };
 

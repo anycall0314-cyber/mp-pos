@@ -1,4 +1,4 @@
-// 廠商叫貨(膜總裁)在畫面這一側的規則。跑法:npm test。
+// 廠商叫貨在畫面這一側的規則(選類別、選廠商在 vendorPick.ts)。跑法:npm test。
 // 伺服器決定價錢、一包幾片、送給廠商什麼;這裡只管:包數怎麼填、合計怎麼算、
 // 這張叫貨單的鑰匙與「送出去了還不知道結果」怎麼記(同一把鑰匙再送不會變成兩張)。
 import { money } from "./money.ts";
@@ -117,6 +117,15 @@ export function linesToSend(summary: CartSummary): { key: string; packs: number 
 /** 「2 包 = 50 片」:店員講的是包,廠商收的是片,兩個都寫出來。 */
 export function packsText(packs: number, pieces: number, unit: string): string {
   return `${packs} 包 = ${pieces} ${unit || "片"}`;
+}
+
+/**
+ * 合計那一行的單位:每家廠商賣的東西單位不一樣(片、條、個…)。這幾項都是同一個單位就用它;
+ * 混在一起(或都沒有寫)就寫「件」,不能把條跟個加起來還叫「片」。
+ */
+export function commonUnit(units: string[]): string {
+  const seen = [...new Set(units.filter(Boolean))];
+  return seen.length === 1 ? seen[0] : "件";
 }
 
 export function rowTitle(row: { name: string; spec_label: string; size: string }): string {

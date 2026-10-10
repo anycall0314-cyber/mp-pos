@@ -12,12 +12,14 @@ import { toast } from "@/components/workbench/toast";
 import { isManager } from "@/lib/roles";
 
 /**
- * 系統設定 → 叫貨串接:每家門市貼一把膜總裁的金鑰,與叫貨時預設的付款 / 收件 / 發票。只有管理員。
+ * 系統設定 → 叫貨串接:選門市,**每家廠商一張卡** —— 貼那家廠商給的金鑰(貼了才算開通),與叫貨時預設的付款 / 收件 / 發票、
+ * 到貨入庫記在哪個供應商、運費算不算成本、店員能不能跟這家叫貨。只有管理員。有哪些廠商是平台定的。
  * 金鑰存了之後只顯示前幾碼;這一頁打的金鑰只留在那一格裡,存完就清掉。
  */
 export function VendorLinksPage() {
   const user = useCurrentUser();
   const links = useVendorLinks();
+  const [picked, setPicked] = useState<number | null>(null);
   if (!isManager(user?.profile?.role)) {
     return (
       <div className="page">
@@ -25,13 +27,35 @@ export function VendorLinksPage() {
       </div>
     );
   }
+  const rows = links.data?.results ?? [];
+  const stores = [...new Map(rows.map((r) => [r.warehouse, r.warehouse_name]))];
+  const warehouse = picked ?? stores[0]?.[0] ?? null;
+  const mine = rows.filter((r) => r.warehouse === warehouse);
+  const names = new Map((links.data?.categories ?? []).map((c) => [c.id, c.name]));
   return (
     <div className="page">
-      <Toolbar title="叫貨串接" />
+      <Toolbar title="叫貨串接">
+        {stores.length > 1 && (
+          <select aria-label="門市" value={warehouse ?? ""} onChange={(e) => setPicked(Number(e.target.value))}>
+            {stores.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+        )}
+      </Toolbar>
       <div className="entry-body">
         {links.isLoading && <div className="md-empty">載入中…</div>}
         {links.isError && <div className="md-empty">{apiErrorText(links.error)}</div>}
-        {links.data?.results.map((row) => <LinkCard key={row.warehouse} row={row} />)}
+        {links.data && mine.length === 0 && <div className="md-empty">平台還沒有開放任何廠商</div>}
+        {mine.map((row) => (
+          <LinkCard
+            key={`${row.warehouse}:${row.provider}`}
+            row={row}
+            categories={row.categories.map((id) => names.get(id)).filter(Boolean).join("、")}
+          />
+        ))}
       </div>
     </div>
   );
@@ -41,7 +65,7 @@ const FIELDS = ["payment_method", "delivery_method", "ship_name", "ship_phone", 
   "buyer_tax_id", "buyer_name", "invoice_email"] as const;
 type FieldName = (typeof FIELDS)[number];
 
-function LinkCard({ row }: { row: VendorLinkRow }) {
+function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string }) {
   const save = useSaveVendorLink();
   const removeKey = useRemoveVendorKey();
   const [form, setForm] = useState<Record<FieldName, string>>(
@@ -53,6 +77,8 @@ function LinkCard({ row }: { row: VendorLinkRow }) {
     row.supplier === null ? null : { id: row.supplier, label: row.supplier_name },
   );
   const [freight, setFreight] = useState(row.freight_into_cost);
+  // 這家門市的店員能不能跟這家叫貨(管理員一律可以;員工帳號的「廠商叫貨」是總開關)
+  const [clerks, setClerks] = useState(row.clerk_ordering);
   const set = (name: FieldName, value: string) => setForm((f) => ({ ...f, [name]: value }));
   const busy = save.isPending || removeKey.isPending;
 
@@ -60,13 +86,15 @@ function LinkCard({ row }: { row: VendorLinkRow }) {
     try {
       await save.mutateAsync({
         warehouse: row.warehouse,
+        vendor: row.provider,
         ...form,
         supplier: supplier?.id ?? null,
         freight_into_cost: freight,
+        clerk_ordering: clerks,
         ...(key.trim() ? { key: key.trim() } : {}),
       });
       setKey("");
-      toast(`${row.warehouse_name}已儲存`, "ok");
+      toast(`${row.provider_label}已儲存`, "ok");
     } catch (e) {
       toast(apiErrorText(e), "err");
     }
@@ -75,8 +103,9 @@ function LinkCard({ row }: { row: VendorLinkRow }) {
   return (
     <section className="vl-card">
       <h3 className="vl-title">
-        {row.warehouse_name}
-        <span className="vl-vendor">{row.provider_label}</span>
+        {row.provider_label}
+        <span className="vl-vendor">{[row.warehouse_name, categories].filter(Boolean).join(" · ")}</span>
+        {!row.vendor_active && <span className="vo-test">已停用</span>}
         <span className={row.has_key ? "vl-state vl-on" : "vl-state"}>
           {row.has_key ? `已設定 ${row.key_hint ?? ""}…` : "尚未設定金鑰"}
         </span>
@@ -98,8 +127,8 @@ function LinkCard({ row }: { row: VendorLinkRow }) {
             data-lpignore="true"
             spellCheck={false}
             value={key}
-            placeholder={row.has_key ? "要換才貼新的" : "貼上膜總裁的金鑰"}
-            disabled={busy}
+            placeholder={row.has_key ? "要換才貼新的" : `貼上${row.provider_label}的金鑰`}
+            disabled={busy || !row.vendor_active}
             onChange={(e) => setKey(e.target.value)}
           />
         </label>
@@ -173,6 +202,13 @@ function LinkCard({ row }: { row: VendorLinkRow }) {
             <option value="out">不算成本</option>
           </select>
         </label>
+        <label>
+          誰能叫貨
+          <select value={clerks ? "all" : "managers"} disabled={busy} onChange={(e) => setClerks(e.target.value === "all")}>
+            <option value="all">店員也可</option>
+            <option value="managers">只限管理</option>
+          </select>
+        </label>
       </div>
       <div className="vl-actions">
         {row.has_key && (
@@ -183,8 +219,8 @@ function LinkCard({ row }: { row: VendorLinkRow }) {
             disabled={busy}
             onConfirm={async () => {
               try {
-                await removeKey.mutateAsync(row.warehouse);
-                toast(`${row.warehouse_name}的金鑰已拿掉`, "ok");
+                await removeKey.mutateAsync({ warehouse: row.warehouse, vendor: row.provider });
+                toast(`${row.provider_label}的金鑰已拿掉`, "ok");
               } catch (e) {
                 toast(apiErrorText(e), "err");
               }

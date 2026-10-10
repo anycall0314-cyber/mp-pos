@@ -232,7 +232,10 @@ test("廠商叫貨:沒有那一項的帳號看不到;叫貨串接只有管理員
   assert.equal(purchasing.tabs.find((p) => p.to === "/vendor-orders").label, "廠商叫貨");
   const hits = (q) => searchNav(q, visibleModules({ role: "tenant_user" })).map((h) => h.page.to);
   assert.ok(hits("叫貨").includes("/vendor-orders"));
-  assert.ok(hits("膜總裁").includes("/vendor-orders"));
+  // 廠商有哪幾家是平台名單上的資料,選單不寫死任何一家的名字;用「補貨」「廠商」找得到
+  assert.ok(hits("補貨").includes("/vendor-orders"));
+  assert.ok(hits("廠商").includes("/vendor-orders"));
+  assert.equal(hits("膜總裁").includes("/vendor-orders"), false);
 });
 
 test("入口的預設頁被收起來時,點入口去第一個看得到的頁", () => {

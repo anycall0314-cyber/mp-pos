@@ -20,11 +20,13 @@ import { apiErrorText } from "@/components/workbench/errors";
 import { QtyInput } from "@/components/workbench/QtyInput";
 import { toast } from "@/components/workbench/toast";
 import { money } from "@/lib/money";
+import { isManager } from "@/lib/roles";
 import {
   MAX_PACKS,
   afterSend,
   amountText,
   beforeSend,
+  commonUnit,
   draftFrom,
   filterRows,
   kindsOf,
@@ -38,6 +40,17 @@ import {
   withPacks,
   type OrderDraft,
 } from "@/lib/vendorOrder";
+import {
+  categoryTabs,
+  draftSlot,
+  inCategory,
+  lastVendorSlot,
+  legacyDraftSlot,
+  pickVendor,
+  readDraftText,
+  showPicker,
+  vendorOptions,
+} from "@/lib/vendorPick";
 import { mayReceive, receivedText } from "@/lib/vendorReceive";
 
 import { ReceiveDrawer } from "./ReceiveDrawer";
@@ -48,20 +61,56 @@ const TABS: { value: Tab; label: string }[] = [
   { value: "history", label: "紀錄" },
 ];
 
+/** 記住這家門市上次停在哪一家廠商(只是方便;讀寫不了就算了)。 */
+function readLastVendor(warehouse: number | null): string | null {
+  if (warehouse === null) return null;
+  try {
+    return localStorage.getItem(lastVendorSlot(warehouse));
+  } catch {
+    return null;
+  }
+}
+
 /**
- * 廠商叫貨(膜總裁):看廠商的商品與這家門市的進價 → 填包數 → 確認 → 送出;「紀錄」看進度。
- * 價錢、一包幾片、送給廠商什麼都是伺服器決定的;這一頁的規則在 lib/vendorOrder.ts。
+ * 廠商叫貨:先選類別、再選廠商 → 看那家廠商的商品與這家門市的進價 → 填包數 → 確認 → 送出;「紀錄」看進度與到貨入庫。
+ * 有哪些類別、哪些廠商是平台定的;**類別只用來篩廠商**,同一家廠商永遠是同一個入口、同一份購物車。
+ * 價錢、一包幾片、送給廠商什麼都是伺服器決定的;這一頁的規則在 lib/vendorOrder.ts 與 lib/vendorPick.ts。
  */
 export function VendorOrdersPage() {
   const store = useDefaultWarehouse();
+  const manager = isManager(useCurrentUser()?.profile?.role);
   const links = useVendorLinks();
   const rows = links.data?.results ?? [];
   const [picked, setPicked] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("order");
+  // 門市一家一個選項(一家門市現在有好幾列:每家廠商一列)
+  const stores = useMemo(() => {
+    const seen = new Map<number, string>();
+    for (const r of rows) if (!seen.has(r.warehouse)) seen.set(r.warehouse, r.warehouse_name);
+    return [...seen].map(([id, name]) => ({ id, name }));
+  }, [rows]);
   // 沒鎖門市的(管理員):先停在有設金鑰的第一家
   const fallback = rows.find((r) => r.has_key)?.warehouse ?? rows[0]?.warehouse ?? null;
   const warehouse = store.locked ? store.id : (picked ?? fallback);
-  const link = rows.find((r) => r.warehouse === warehouse) ?? null;
+
+  const options = useMemo(() => vendorOptions(rows, warehouse, manager), [rows, warehouse, manager]);
+  const tabs = useMemo(() => categoryTabs(links.data?.categories ?? [], options), [links.data, options]);
+  const [category, setCategory] = useState<number | null>(null);
+  const [wanted, setWanted] = useState<string | null>(null);
+  const shown = inCategory(options, tabs.some((c) => c.id === category) ? category : null);
+  // 還在這一排裡就不換(換類別不會換廠商、也不會換購物車);沒選過就用這家門市上次停的那一家
+  const provider = pickVendor(shown, wanted ?? readLastVendor(warehouse));
+  const link = rows.find((r) => r.warehouse === warehouse && r.provider === provider) ?? null;
+  const blocked = options.find((o) => o.provider === provider)?.blocked ?? "";
+
+  function choose(next: string) {
+    setWanted(next);
+    try {
+      if (warehouse !== null) localStorage.setItem(lastVendorSlot(warehouse), next);
+    } catch {
+      /* 記不住就算了 */
+    }
+  }
 
   return (
     <div className="page vo-page">
@@ -80,15 +129,18 @@ export function VendorOrdersPage() {
             </button>
           ))}
         </div>
-        {!store.locked && rows.length > 1 && (
+        {!store.locked && stores.length > 1 && (
           <select
             aria-label="門市"
             value={warehouse ?? ""}
-            onChange={(e) => setPicked(Number(e.target.value))}
+            onChange={(e) => {
+              setPicked(Number(e.target.value));
+              setWanted(null);
+            }}
           >
-            {rows.map((r) => (
-              <option key={r.warehouse} value={r.warehouse}>
-                {r.warehouse_name}
+            {stores.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
               </option>
             ))}
           </select>
@@ -96,18 +148,59 @@ export function VendorOrdersPage() {
         {link && <span className="vo-vendor">{link.provider_label}</span>}
         {link?.sandbox === true && <span className="vo-test">測試金鑰</span>}
       </Toolbar>
+      {showPicker(options) && (
+        <div className="vo-pick">
+          {tabs.length > 0 && (
+            <div className="vo-pick-row" role="tablist" aria-label="類別">
+              {[{ id: null as number | null, name: "全部" }, ...tabs].map((c) => (
+                <button
+                  key={c.id ?? "all"}
+                  type="button"
+                  role="tab"
+                  aria-selected={category === c.id}
+                  className={`vo-chip${category === c.id ? " active" : ""}`}
+                  onClick={() => setCategory(c.id)}
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="vo-pick-row" role="tablist" aria-label="廠商">
+            {shown.map((o) => (
+              <button
+                key={o.provider}
+                type="button"
+                role="tab"
+                aria-selected={o.provider === provider}
+                className={`vo-chip vo-chip-vendor${o.provider === provider ? " active" : ""}${o.blocked ? " off" : ""}`}
+                onClick={() => choose(o.provider)}
+              >
+                {o.label}
+                {o.blocked && <span className="vo-chip-why">{o.blocked}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {links.isLoading && <div className="md-empty">載入中…</div>}
       {links.isError && <div className="md-empty">{apiErrorText(links.error)}</div>}
       {links.data && !link && <div className="md-empty">這個帳號沒有可以叫貨的門市</div>}
       {link && !link.has_key && (
         <div className="md-empty">
-          {link.warehouse_name}還沒有設定膜總裁的金鑰(管理員:系統設定 → 叫貨串接)
+          {link.warehouse_name}還沒有設定{link.provider_label}的金鑰(管理員:系統設定 → 叫貨串接)
         </div>
       )}
-      {link && link.has_key && tab === "order" && (
-        <OrderTab key={link.warehouse} link={link} onPlaced={() => setTab("history")} />
+      {link && link.has_key && tab === "order" && blocked === "已停用" && (
+        <div className="md-empty">{link.provider_label}已經停用,不能叫新的貨</div>
       )}
-      {link && link.has_key && tab === "history" && <HistoryTab key={link.warehouse} link={link} />}
+      {link && link.has_key && tab === "order" && blocked === "限管理" && (
+        <div className="md-empty">這家門市設定只有管理員可以跟{link.provider_label}叫貨</div>
+      )}
+      {link && link.has_key && tab === "order" && blocked === "" && (
+        <OrderTab key={`${link.warehouse}:${link.provider}`} link={link} onPlaced={() => setTab("history")} />
+      )}
+      {link && link.has_key && tab === "history" && <HistoryTab key={`${link.warehouse}:${link.provider}`} link={link} />}
     </div>
   );
 }
@@ -115,13 +208,17 @@ export function VendorOrdersPage() {
 function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: () => void }) {
   const user = useCurrentUser();
   const qc = useQueryClient();
-  const catalog = useVendorCatalog(link.warehouse);
+  const catalog = useVendorCatalog(link.warehouse, link.provider);
   const place = usePlaceVendorOrder();
-  // 草稿(包數、鑰匙、送出去了還不知道結果)跟著這個帳號、這家門市存在瀏覽器裡:重新整理、切到別頁再回來都是同一把鑰匙
-  const storeKey = `vendor-order-draft:${user?.username ?? ""}:${link.warehouse}`;
+  // 草稿(包數、鑰匙、送出去了還不知道結果)跟著這個帳號、這家門市、這家廠商存在瀏覽器裡:
+  // 重新整理、切到別家廠商再回來都是同一份、同一把鑰匙
+  const storeKey = draftSlot(user?.username ?? "", link.warehouse, link.provider);
+  // 升級成多廠商之前存的那一格(只有第一家廠商有):接著用,存新的那一格之後就拿掉
+  const oldKey = legacyDraftSlot(user?.username ?? "", link.warehouse, link.provider);
   const [draft, setDraftState] = useState<OrderDraft>(() => {
     try {
-      return draftFrom(JSON.parse(sessionStorage.getItem(storeKey) ?? "null"));
+      const text = readDraftText((slot) => sessionStorage.getItem(slot), user?.username ?? "", link.warehouse, link.provider);
+      return draftFrom(JSON.parse(text ?? "null"));
     } catch {
       return draftFrom(null);
     }
@@ -132,6 +229,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: () => voi
     setDraftState(next);
     try {
       sessionStorage.setItem(storeKey, JSON.stringify(next));
+      if (oldKey !== null) sessionStorage.removeItem(oldKey);
     } catch {
       /* 存不進去(無痕模式滿了):照樣能用,只是重新整理會不見 */
     }
@@ -143,6 +241,8 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: () => voi
 
   const rows = catalog.data?.rows ?? [];
   const sum = useMemo(() => summarize(draft.cart, rows), [draft.cart, rows]);
+  // 合計的單位:選了東西看選的那幾項,還沒選看這家廠商的清單(每家廠商的單位不一樣)
+  const totalUnit = commonUnit((sum.lines.length > 0 ? sum.lines.map((l) => l.row) : rows).map((r) => r.unit));
   // 清單長(膜速箱一個規格一列):用找的。只是藏起來,合計與送出看的是整張購物車
   const [text, setText] = useState("");
   const [kind, setKind] = useState("");
@@ -162,7 +262,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: () => voi
     let cart = draftRef.current.cart;
     for (const key of sum.gone) cart = withPacks(cart, key, 0);
     setDraft({ ...draftRef.current, cart });
-    toast(`有 ${sum.gone.length} 項膜總裁現在沒有在賣,已經從這張單拿掉`, "err");
+    toast(`有 ${sum.gone.length} 項${link.provider_label}現在沒有在賣,已經從這張單拿掉`, "err");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalog.data, sum.gone.length]);
 
@@ -181,6 +281,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: () => voi
       const order = await place.mutateAsync({
         request_key: now.requestKey,
         warehouse: link.warehouse,
+        vendor: link.provider,
         lines: sent,
         payment_method: payment,
         delivery_method: delivery,
@@ -193,7 +294,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: () => voi
         outcome = { kind: "other" as const, orderNo: order.vendor_order_no };
         toast(`先前那一張已經成立(${order.vendor_order_no});現在畫面上這一份還沒有送出`, "err", { ms: 9000 });
       } else if (outcome.kind === "placed") {
-        toast(`已送出,膜總裁單號 ${order.vendor_order_no}`, "ok");
+        toast(`已送出,${link.provider_label}單號 ${order.vendor_order_no}`, "ok");
       }
     } catch (e) {
       outcome = outcomeOf(e instanceof ApiHttpError ? e.status : 0, undefined, apiErrorText(e));
@@ -251,7 +352,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: () => voi
         </div>
       )}
       <div className="report-table vo-table">
-        {catalog.isLoading && <div className="md-empty">跟膜總裁要商品清單…</div>}
+        {catalog.isLoading && <div className="md-empty">跟{link.provider_label}要商品清單…</div>}
         {catalog.isError && (
           <div className="md-empty">
             {apiErrorText(catalog.error)}
@@ -262,7 +363,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: () => voi
             </div>
           </div>
         )}
-        {catalog.data && rows.length === 0 && <div className="md-empty">膜總裁沒有回任何商品</div>}
+        {catalog.data && rows.length === 0 && <div className="md-empty">{link.provider_label}沒有回任何商品</div>}
         {rows.length > 0 && shown.length === 0 && <div className="md-empty">沒有符合的商品</div>}
         {shown.length > 0 && (
           <table className="report-grid vo-grid">
@@ -320,7 +421,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: () => voi
       </div>
       <div className="vo-bar">
         <span className="vo-bar-sum">
-          {sum.lines.length} 項　{packsText(sum.packs, sum.pieces, "片")}
+          {sum.lines.length} 項　{packsText(sum.packs, sum.pieces, totalUnit)}
         </span>
         <b className="vo-bar-total">${money(sum.amount)}</b>
         <button
@@ -373,7 +474,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: () => voi
             ))}
             <tr className="vo-confirm-total">
               <td>貨款(不含運費)</td>
-              <td className="num">{packsText(sum.packs, sum.pieces, "片")}</td>
+              <td className="num">{packsText(sum.packs, sum.pieces, totalUnit)}</td>
               <td className="num">
                 <b>${money(sum.amount)}</b>
               </td>
@@ -433,7 +534,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: () => voi
           </dd>
         </dl>
         <div className="vo-warn">
-          {link.sandbox === true ? "測試金鑰:這張是測試單,膜總裁不會出貨" : "送出後不能在這裡修改或取消"}
+          {link.sandbox === true ? `測試金鑰:這張是測試單,${link.provider_label}不會出貨` : "送出後不能在這裡修改或取消"}
         </div>
       </Drawer>
     </>
@@ -448,7 +549,7 @@ function statusOf(o: VendorOrder): string {
 
 function HistoryTab({ link }: { link: VendorLinkRow }) {
   const qc = useQueryClient();
-  const orders = useVendorOrders(link.warehouse);
+  const orders = useVendorOrders(link.warehouse, link.provider);
   const sync = useSyncVendorOrders();
   const resend = useResendVendorOrder();
   const [others, setOthers] = useState<VendorOutsideOrder[] | null>(null);
@@ -464,7 +565,7 @@ function HistoryTab({ link }: { link: VendorLinkRow }) {
   async function takeIn(orderNo: string) {
     if (adopt.isPending) return;
     try {
-      const got = await adopt.mutateAsync({ warehouse: link.warehouse, order_no: orderNo });
+      const got = await adopt.mutateAsync({ warehouse: link.warehouse, vendor: link.provider, order_no: orderNo });
       setOthers((list) => (list ? list.filter((r) => r.order_no !== orderNo) : list));
       qc.invalidateQueries({ queryKey: ["vendor-orders", link.warehouse] });
       setReceiving(got);
@@ -475,8 +576,8 @@ function HistoryTab({ link }: { link: VendorLinkRow }) {
 
   async function refresh() {
     try {
-      const got = await sync.mutateAsync(link.warehouse);
-      qc.setQueryData(["vendor-orders", link.warehouse], { results: got.results });
+      const got = await sync.mutateAsync({ warehouse: link.warehouse, vendor: link.provider });
+      qc.setQueryData(["vendor-orders", link.warehouse, link.provider], { results: got.results });
       setOthers(got.others);
       toast("進度已更新", "ok");
     } catch (e) {
@@ -489,7 +590,7 @@ function HistoryTab({ link }: { link: VendorLinkRow }) {
     setBusyId(o.id);
     try {
       const got = await resend.mutateAsync(o.id);
-      toast(got.state === "placed" ? `已成立,膜總裁單號 ${got.vendor_order_no}` : `還是不確定:${got.problem}`, got.state === "placed" ? "ok" : "err");
+      toast(got.state === "placed" ? `已成立,${link.provider_label}單號 ${got.vendor_order_no}` : `還是不確定:${got.problem}`, got.state === "placed" ? "ok" : "err");
     } catch (e) {
       toast(apiErrorText(e), "err");
     } finally {
@@ -515,7 +616,7 @@ function HistoryTab({ link }: { link: VendorLinkRow }) {
             <thead>
               <tr>
                 <th>叫貨時間</th>
-                <th>膜總裁單號</th>
+                <th>廠商單號</th>
                 <th>狀況</th>
                 <th>物流</th>
                 <th>付款</th>
@@ -633,14 +734,14 @@ function HistoryTab({ link }: { link: VendorLinkRow }) {
         )}
         {others !== null && (
           <>
-            <div className="vo-section">不是從這裡叫的(電話、LINE、膜總裁代下)</div>
+            <div className="vo-section">不是從這裡叫的(電話、LINE、{link.provider_label}代下)</div>
             {others.length === 0 && <div className="md-empty">沒有</div>}
             {others.length > 0 && (
               <table className="report-grid vo-grid">
                 <thead>
                   <tr>
                     <th>下單時間</th>
-                    <th>膜總裁單號</th>
+                    <th>廠商單號</th>
                     <th>狀況</th>
                     <th>物流</th>
                     <th>收款</th>

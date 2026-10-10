@@ -18,9 +18,9 @@ from apps.parties.models import Supplier
 from apps.purchasing.models import PurchaseOrder
 from apps.purchasing import services as purchasing_services
 
-from . import moceo, receiving, services
+from . import receiving, services, standard
 from .models import VendorLink, VendorOrder, VendorReceipt, VendorReceiptItem
-from .tests import KEY, LINKS, ORDERS, SYNC, FakeVendor, _Shop
+from .tests import KEY, LINKS, ORDERS, SYNC, FakeVendor, _Shop, ensure_vendor
 
 D = Decimal
 ADOPT = "/api/v1/vendor-orders/adopt/"
@@ -629,8 +629,9 @@ class TwoPeopleTests(TransactionTestCase):
 
     def setUp(self):
         self.c = Company("a", "甲通訊行", "甲")
+        ensure_vendor()
         self.vendor = FakeVendor()
-        patcher = mock.patch.object(moceo, "_call", self.vendor)
+        patcher = mock.patch.object(standard, "_call", self.vendor)
         patcher.start()
         self.addCleanup(patcher.stop)
         # 供應商先指定好:第一次入庫建供應商時另外會鎖住串接那一列,那一把剛好也擋得住兩個人 ——
@@ -684,13 +685,13 @@ class TwoPeopleTests(TransactionTestCase):
         order = VendorOrder.objects.get(pk=self.o["id"])
         real, entered, seen, results = self.vendor, threading.Event(), [], {}
 
-        def flaky(method, path, key, body=None, timeout=15):
+        def flaky(method, path, key, body=None, timeout=15, **where):
             seen.append(path)
             if len(seen) == 1:
                 entered.set()
                 time.sleep(0.8)             # 第一次:還在等廠商
-                return real(method, path, key, body, timeout)
-            raise moceo.Unreachable("連不到膜總裁(URLError)")
+                return real(method, path, key, body, timeout, **where)
+            raise standard.Unreachable("連不到膜總裁(URLError)")
 
         def work(name):
             try:
@@ -703,7 +704,7 @@ class TwoPeopleTests(TransactionTestCase):
             finally:
                 connections.close_all()
 
-        with mock.patch.object(moceo, "_call", flaky):
+        with mock.patch.object(standard, "_call", flaky):
             first = threading.Thread(target=work, args=("第一次",))
             first.start()
             self.assertTrue(entered.wait(5))

@@ -104,6 +104,8 @@ REGISTRY: dict[str, Entry] = {
     "photos.PhotoDraft": Entry(EXCLUDED, "新增 / 編輯商品時的照片作業,暫存;存檔後照片已經在 ProductPhoto"),
     "photos.PhotoUpload": Entry(EXCLUDED, "還沒隨商品存檔的暫存照片"),
     "vendor_orders.VendorSecret": Entry(EXCLUDED, "外部下單系統的金鑰不跟著備份檔走;還原之後請管理員重新貼"),
+    "vendor_orders.VendorCategory": Entry(EXCLUDED, "平台的叫貨類別,不屬於任何公司"),
+    "vendor_orders.Vendor": Entry(EXCLUDED, "平台的廠商名單,不屬於任何公司;公司的資料只記廠商代碼"),
 }
 
 # 帶檔案的欄位:{表: [欄位]}。只存路徑不算備份,檔案本體要一起打包。

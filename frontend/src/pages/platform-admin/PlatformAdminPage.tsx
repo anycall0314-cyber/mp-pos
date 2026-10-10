@@ -6,9 +6,10 @@ import { Toolbar } from "@/components/Toolbar";
 
 import { PlatformTenantsTab } from "./PlatformTenantsTab";
 import { PlatformUsersTab } from "./PlatformUsersTab";
+import { PlatformVendorsTab } from "./PlatformVendorsTab";
 import { PlatformWarehousesTab } from "./PlatformWarehousesTab";
 
-type Tab = "tenants" | "users" | "warehouses";
+type Tab = "tenants" | "users" | "warehouses" | "vendors";
 
 export function PlatformAdminPage() {
   const user = useCurrentUser();
@@ -26,6 +27,7 @@ export function PlatformAdminPage() {
               { key: "tenants", label: "經銷商" },
               { key: "users", label: "用戶" },
               { key: "warehouses", label: "倉別" },
+              { key: "vendors", label: "廠商" },
             ] as const
           ).map((t) => (
             <button
@@ -43,6 +45,7 @@ export function PlatformAdminPage() {
         {tab === "tenants" && <PlatformTenantsTab />}
         {tab === "users" && <PlatformUsersTab />}
         {tab === "warehouses" && <PlatformWarehousesTab />}
+        {tab === "vendors" && <PlatformVendorsTab />}
       </div>
     </div>
   );

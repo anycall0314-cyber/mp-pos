@@ -1,4 +1,4 @@
-"""廠商叫貨(第一步:叫貨)。自動測試不打真的膜總裁:對外的那一個口(`moceo._call`)換成假的。
+"""廠商叫貨(第一步:叫貨)。自動測試不打真的膜總裁:對外的那一個口(`standard._call`)換成假的。
 
 假的膜總裁照那個專案實際的行為寫(2026-10-10 讀過程式、打過「讀」的):
 - 金鑰不對 → 401;商品清單回這個帳號的價錢;
@@ -18,11 +18,13 @@ from apps.backup.tests.factory import Company
 from apps.backup.tests.test_backup_restore import _Base as BackupBase
 from apps.tenants.models import UserProfile
 
-from . import moceo, secrets, services
-from .models import VendorLink, VendorOrder, VendorSecret
+from . import secrets, services, standard
+from .models import Vendor, VendorCategory, VendorLink, VendorOrder, VendorSecret
 
 KEY = "mk_live_" + "a1B2c3D4" * 5 + "xyz"          # 測試用的假金鑰
 OTHER_KEY = "mk_live_" + "Z9y8X7w6" * 5 + "abc"
+MOCEO_BASE = "https://moceo.test/api/v1"            # 測試裡膜總裁的網址(假的;請求會被 FakeVendor 接走)
+CLIENT = standard.Client(MOCEO_BASE, "膜總裁")
 LINKS = "/api/v1/vendor-links/"
 ORDERS = "/api/v1/vendor-orders/"
 CATALOG = "/api/v1/vendor-orders/catalog/"
@@ -40,13 +42,33 @@ PRODUCTS = [
 ]
 
 
+def ensure_vendor(code="moceo", name="膜總裁", base=MOCEO_BASE, prefix="mk_live_", categories=("保護貼",), **more):
+    """名單上要有這一家(不靠資料庫變更放進去的那一筆:別的測試清過整個資料庫之後它就不在了)。"""
+    vendor, _ = Vendor.objects.update_or_create(code=code, defaults=dict(
+        name=name, api_base=base, key_prefix=prefix, protocol=Vendor.Protocol.STANDARD, is_active=True, **more))
+    vendor.categories.set([VendorCategory.objects.get_or_create(name=n)[0] for n in categories])
+    return vendor
+
+
+class FakeNet:
+    """好幾家假的廠商:照請求打到哪個網址,交給哪一家(各自的金鑰、各自的訂單)。打到名單以外的網址就是錯。"""
+
+    def __init__(self, **by_base):
+        self.by_base = by_base
+
+    def __call__(self, method, path, key, body=None, timeout=15, *, base, name="廠商"):
+        return self.by_base[base](method, path, key, body, timeout, base=base, name=name)
+
+
 class FakeVendor:
     """假的膜總裁。`script` 排的是接下來幾次下單要發生什麼事:
     "down" = 連不上(沒成立);"lost" = 成立了但回應沒回來;(狀態碼, 原因) = 明確被擋。"""
 
-    def __init__(self):
+    def __init__(self, keys=None, order_prefix="MO"):
         self.calls, self.script = [], []
-        self.keys = {KEY}
+        self.bases = []             # 每一個請求打到哪個網址
+        self.order_prefix = order_prefix
+        self.keys = {KEY} if keys is None else set(keys)
         self.placed = {}            # (金鑰, 鑰匙) → 那張單
         self.outside = []           # 不是從 POS 叫的單
         self.shipping_fee = 0
@@ -57,7 +79,8 @@ class FakeVendor:
     def posts(self):
         return [c for c in self.calls if c[0] == "POST"]
 
-    def __call__(self, method, path, key, body=None, timeout=15):
+    def __call__(self, method, path, key, body=None, timeout=15, *, base=None, name="廠商"):
+        self.bases.append(base)
         reply = self._answer(method, path, key, body)
         if reply.status != 401 and self.sandbox is not None:     # 金鑰驗過之後的每一個回應都帶,錯誤的也帶
             reply.data["sandbox"] = self.sandbox
@@ -66,42 +89,42 @@ class FakeVendor:
     def _answer(self, method, path, key, body):
         self.calls.append((method, path, key, body))
         if method == "GET" and self.read_down:
-            raise moceo.Unreachable("連不到膜總裁(URLError)")
+            raise standard.Unreachable("連不到膜總裁(URLError)")
         if key not in self.keys:
-            return moceo.Reply(401, {"ok": False, "error": "金鑰無效或已作廢"})
+            return standard.Reply(401, {"ok": False, "error": "金鑰無效或已作廢"})
         if method == "GET" and path == "/products":
-            return moceo.Reply(200, {"ok": True, "products": PRODUCTS})
+            return standard.Reply(200, {"ok": True, "products": PRODUCTS})
         if method == "GET" and path.startswith("/orders?"):
             mine = [o for (k, _), o in self.placed.items() if k == key]
-            return moceo.Reply(200, {"ok": True, "orders": [self._row(o) for o in [*self.outside, *mine]]})
+            return standard.Reply(200, {"ok": True, "orders": [self._row(o) for o in [*self.outside, *mine]]})
         if method == "GET" and path.startswith("/orders/"):
             no = urllib.parse.unquote(path.split("/orders/", 1)[1])
             hit = [o for (k, _), o in self.placed.items() if k == key and o["order_no"] == no] \
                 + [o for o in self.outside if o["order_no"] == no]
             if not hit:
-                return moceo.Reply(404, {"ok": False, "error": "找不到這張單"})
-            return moceo.Reply(200, {"ok": True, "order": self._detail(hit[0])})
+                return standard.Reply(404, {"ok": False, "error": "找不到這張單"})
+            return standard.Reply(200, {"ok": True, "order": self._detail(hit[0])})
         assert (method, path) == ("POST", "/orders"), (method, path)
         outcome = self.script.pop(0) if self.script else "ok"
         if outcome == "down":
-            raise moceo.Unreachable("連不到膜總裁(URLError)")
+            raise standard.Unreachable("連不到膜總裁(URLError)")
         if isinstance(outcome, tuple):
-            return moceo.Reply(outcome[0], {"ok": False, "error": outcome[1]})
+            return standard.Reply(outcome[0], {"ok": False, "error": outcome[1]})
         slot = (key, body["idempotency_key"])
         if slot in self.placed:
-            return moceo.Reply(409, {"ok": False, "error": "這個 idempotency_key 已經用過了",
+            return standard.Reply(409, {"ok": False, "error": "這個 idempotency_key 已經用過了",
                                      "order_no": self.placed[slot]["order_no"]})
         price = {p["sku"]: p["unit_price"] for p in PRODUCTS}
         spec_price = {s["id"]: s["unit_price"] for p in PRODUCTS for s in p["specs"]}
         goods = sum((spec_price.get(i["spec_id"], price[i["sku"]]) + self.price_drift) * i["qty"] for i in body["items"])
-        order = {"order_no": f"MO-20261010-{len(self.placed) + 1:03d}", "total_amount": goods + self.shipping_fee,
+        order = {"order_no": f"{self.order_prefix}-20261010-{len(self.placed) + 1:03d}", "total_amount": goods + self.shipping_fee,
                  "shipping_fee": self.shipping_fee, "status": "待審核", "body": body,
                  "payment_method": body["payment_method"], "delivery_method": body["delivery_method"],
                  "items": [self.line(i["sku"], i["qty"], spec_id=i["spec_id"], drift=self.price_drift) for i in body["items"]]}
         self.placed[slot] = order
         if outcome == "lost":
-            raise moceo.Unreachable("連不到膜總裁(TimeoutError)")
-        return moceo.Reply(200, {"ok": True, "order_no": order["order_no"], "total_amount": order["total_amount"],
+            raise standard.Unreachable("連不到膜總裁(TimeoutError)")
+        return standard.Reply(200, {"ok": True, "order_no": order["order_no"], "total_amount": order["total_amount"],
                                  "shipping_fee": order["shipping_fee"]})
 
     @staticmethod
@@ -144,18 +167,19 @@ class _Shop(TestCase):
         self.t = self.c.tenant
         self.wh1, self.wh2 = self.c.warehouses
         self.admin, self.clerk = self.c.admin, self.c.clerk
+        self.moceo = ensure_vendor()
         self.vendor = FakeVendor()
-        patcher = mock.patch.object(moceo, "_call", self.vendor)
+        patcher = mock.patch.object(standard, "_call", self.vendor)
         patcher.start()
         self.addCleanup(patcher.stop)
 
     def link(self, store=None, client=None, **extra):
-        body = {"warehouse": (store or self.wh1).id, "key": KEY, "ship_name": "甲湳雅店", "ship_phone": "035551234",
-                "ship_address": "新竹市湳雅街 1 號", "invoice_email": "a@b.com", **extra}
+        body = {"warehouse": (store or self.wh1).id, "vendor": "moceo", "key": KEY, "ship_name": "甲湳雅店",
+                "ship_phone": "035551234", "ship_address": "新竹市湳雅街 1 號", "invoice_email": "a@b.com", **extra}
         return (client or self.admin).post(LINKS, body, format="json")
 
     def order(self, lines=None, key="draft-0001", client=None, store=None, **extra):
-        body = {"request_key": key, "warehouse": (store or self.wh1).id,
+        body = {"request_key": key, "warehouse": (store or self.wh1).id, "vendor": "moceo",
                 "lines": [{"key": "G02", "packs": 2}] if lines is None else lines, **extra}
         return (client or self.clerk).post(ORDERS, body, format="json")
 
@@ -304,7 +328,7 @@ class SandboxTests(_Shop):
             for flag in (False, None, "true", 1):
                 self.vendor.sandbox = flag
                 r = self.link()
-                self.assertEqual((r.status_code, "只能用膜總裁的沙盒金鑰" in r.json()["detail"]), (400, True), flag)
+                self.assertEqual((r.status_code, "只能用膜總裁的沙盒(測試)金鑰" in r.json()["detail"]), (400, True), flag)
             self.assertEqual(VendorSecret.objects.count(), 0)
             self.vendor.sandbox = True
             self.assertEqual(self.link().status_code, 200)
@@ -313,7 +337,7 @@ class SandboxTests(_Shop):
             self.vendor.sandbox = False
             posts = len(self.vendor.posts())
             for r in (self.clerk.get(CATALOG), self.order(key="draft-0002")):
-                self.assertEqual((r.status_code, "只能用膜總裁的沙盒金鑰" in r.json()["detail"]), (400, True))
+                self.assertEqual((r.status_code, "只能用膜總裁的沙盒(測試)金鑰" in r.json()["detail"]), (400, True))
             self.assertEqual((len(self.vendor.posts()), VendorOrder.objects.count()), (posts, 1))
         # 正式環境(沒有開這個設定):正式金鑰照常用
         self.assertEqual(self.link().status_code, 200)
@@ -329,7 +353,7 @@ class SandboxTests(_Shop):
             self.vendor.sandbox = False                      # 這把金鑰之後變成正式的
             posts = len(self.vendor.posts())
             for r in (self.clerk.post(f"{ORDERS}{first['id']}/resend/"), self.order()):
-                self.assertEqual((r.status_code, "只能用膜總裁的沙盒金鑰" in r.json()["detail"]), (400, True), r.content.decode())
+                self.assertEqual((r.status_code, "只能用膜總裁的沙盒(測試)金鑰" in r.json()["detail"]), (400, True), r.content.decode())
             self.assertEqual((len(self.vendor.posts()), len(self.vendor.placed)), (posts, 0))     # 沒有送出去
             order = VendorOrder.objects.get()
             self.assertEqual((order.state, order.sending_since), ("unknown", None))               # 留著、沒有卡在送出中
@@ -682,10 +706,10 @@ class ReplyRuleTests(SimpleTestCase):
     """廠商回的每一種樣子算成立、沒成立、還是不知道。分錯的後果:當成沒成立會再開一張;當成成立會以為有貨要來。"""
 
     def outcome(self, status, data):
-        with mock.patch.object(moceo, "_call", return_value=moceo.Reply(status, data)):
+        with mock.patch.object(standard, "_call", return_value=standard.Reply(status, data)):
             try:
-                return moceo.place(KEY, {})
-            except moceo.Unreachable:
+                return CLIENT.place(KEY, {})
+            except standard.Unreachable:
                 return "unknown"
 
     def test_what_counts_as_placed_refused_or_unknown(self):
@@ -699,7 +723,7 @@ class ReplyRuleTests(SimpleTestCase):
         for status, data in ((400, {"ok": False, "error": "庫存不足"}), (401, {"ok": False, "error": "金鑰無效或已作廢"}),
                              (422, {"ok": False}), (429, {"ok": False, "error": "太頻繁"}), (404, {})):
             got = self.outcome(status, data)
-            self.assertIsInstance(got, moceo.Rejected, status)
+            self.assertIsInstance(got, standard.Rejected, status)
             self.assertEqual(got.status, status)
         self.assertEqual(self.outcome(422, {"ok": False}).reason, "膜總裁回 HTTP 422")
         for status, data in ((500, {"ok": False, "error": "我們這邊的問題"}), (502, {}), (503, {"ok": False}),
@@ -710,10 +734,15 @@ class ReplyRuleTests(SimpleTestCase):
             self.assertEqual(self.outcome(status, data), "unknown", (status, data))
 
     def test_what_a_key_looks_like(self):
-        self.assertTrue(moceo.looks_like_key(KEY))
+        self.assertTrue(standard.looks_like_key(KEY, "mk_live_"))
         for bad in ("", None, 5, "mk_live_", "mk_live_short", "sk_live_" + "x" * 30, "mk_live_" + "x" * 30 + " ",
                     "mk_live_" + "金" * 30, "mk_live_" + "x" * 200):
-            self.assertFalse(moceo.looks_like_key(bad), bad)
+            self.assertFalse(standard.looks_like_key(bad, "mk_live_"), bad)
+        # 這家廠商沒有固定的開頭:只看長度、沒有空白、是不是一般的英數字
+        self.assertTrue(standard.looks_like_key("sk_live_" + "x" * 30))
+        self.assertTrue(standard.looks_like_key("sk_live_" + "x" * 30, ""))
+        for bad in ("", None, "short", "x" * 30 + " y", "金" * 30, "x" * 201):
+            self.assertFalse(standard.looks_like_key(bad), bad)
 
 
 class _Handler(http.server.BaseHTTPRequestHandler):
@@ -755,8 +784,7 @@ class WireTests(SimpleTestCase):
 
     def test_the_key_travels_in_the_header_only_and_the_body_is_utf8_json(self):
         _Handler.answer = (200, json.dumps({"ok": True, "order_no": "MO-1", "total_amount": 1, "shipping_fee": 0}).encode())
-        with override_settings(MOCEO_API_BASE=self.base + "/"):
-            got = moceo.place(KEY, {"idempotency_key": "pos-a-1", "note": "下午再送"})
+        got = standard.Client(self.base + "/", "膜總裁").place(KEY, {"idempotency_key": "pos-a-1", "note": "下午再送"})
         self.assertEqual(got.order_no, "MO-1")
         method, path, headers, body = _Handler.seen[0]
         self.assertEqual((method, path, headers["Authorization"], headers["Content-Type"]),
@@ -765,28 +793,29 @@ class WireTests(SimpleTestCase):
         self.assertEqual(json.loads(body.decode("utf-8")), {"idempotency_key": "pos-a-1", "note": "下午再送"})
 
     def test_answers_and_failures(self):
-        with override_settings(MOCEO_API_BASE=self.base):
+        standard_ = standard.Client(self.base, "膜總裁")
+        if True:
             _Handler.answer = (400, '{"ok": false, "error": "月結額度不足"}'.encode())
-            got = moceo.place(KEY, {})
-            self.assertEqual((type(got), got.reason), (moceo.Rejected, "月結額度不足"))
-            with self.assertRaises(moceo.Refused) as ctx:
-                moceo.products(KEY)
+            got = standard_.place(KEY, {})
+            self.assertEqual((type(got), got.reason), (standard.Rejected, "月結額度不足"))
+            with self.assertRaises(standard.Refused) as ctx:
+                standard_.products(KEY)
             self.assertEqual((ctx.exception.status, ctx.exception.reason), (400, "月結額度不足"))
             for answer in ((502, b"<html>Bad Gateway</html>"), (200, b"<html>login</html>"), (200, b'["not", "an object"]'),
                            (400, b"\xff\xfe"), (500, b'{"ok": false, "error": "x"}')):
                 _Handler.answer = answer
-                with self.assertRaises(moceo.Unreachable, msg=answer) as ctx:
-                    moceo.place(KEY, {})
+                with self.assertRaises(standard.Unreachable, msg=answer) as ctx:
+                    standard_.place(KEY, {})
                 self.assertNotIn(KEY, str(ctx.exception))
-            with self.assertRaises(moceo.Unreachable):
-                moceo.products(KEY)                 # 讀的那幾支:對方出錯(5xx)也是沒有答覆
+            with self.assertRaises(standard.Unreachable):
+                standard_.products(KEY)                 # 讀的那幾支:對方出錯(5xx)也是沒有答覆
             _Handler.answer = (200, b'{"ok": true, "order": {"total_amount": 5}}')
-            self.assertEqual(moceo.order(KEY, "MO 1/2"), {"total_amount": 5})
+            self.assertEqual(standard_.order(KEY, "MO 1/2"), {"total_amount": 5})
             self.assertEqual(_Handler.seen[-1][1], "/api/v1/orders/MO%201%2F2")
-        with override_settings(MOCEO_API_BASE="http://127.0.0.1:1/api/v1"):       # 沒有人在聽
-            with self.assertRaises(moceo.Unreachable) as ctx:
-                moceo.place(KEY, {})
-            self.assertNotIn(KEY, str(ctx.exception))
+        with self.assertRaises(standard.Unreachable) as ctx:       # 沒有人在聽
+            standard.Client("http://127.0.0.1:1/api/v1", "乙廠商").place(KEY, {})
+        self.assertNotIn(KEY, str(ctx.exception))
+        self.assertIn("連不到乙廠商", str(ctx.exception))          # 訊息講的是那一家的名字
 
 
 class BackupTests(BackupBase):
@@ -794,8 +823,9 @@ class BackupTests(BackupBase):
 
     def test_orders_and_settings_survive_a_restore_but_the_key_does_not(self):
         a = self.a
+        ensure_vendor()
         vendor = FakeVendor()
-        with mock.patch.object(moceo, "_call", vendor):
+        with mock.patch.object(standard, "_call", vendor):
             r = a.admin.post(LINKS, {"warehouse": a.wh.id, "key": KEY, "ship_name": "甲湳雅店", "ship_phone": "035551234",
                                      "ship_address": "新竹市湳雅街 1 號", "payment_method": "貨到付款",
                                      "invoice_email": "a@b.com", "supplier": a.supplier.id,

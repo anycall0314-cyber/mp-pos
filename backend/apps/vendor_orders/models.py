@@ -1,5 +1,8 @@
-"""廠商叫貨:在 POS 裡直接跟供應商的下單系統叫貨(第一家是膜總裁 B2B)。
+"""廠商叫貨:在 POS 裡直接跟供應商叫貨(第一家是膜總裁 B2B)。
 
+- `VendorCategory` / `Vendor`:**平台的名單,不屬於任何公司**(只有平台管理員能改):有哪些叫貨類別、招進來哪些廠商、
+  每家廠商怎麼接(對方的網址…)。招到一家 = 加一筆,不用改程式。**不進公司備份**;公司的資料只記廠商的代碼(`provider`),不用外鍵指過來
+  (備份檔會搬到別台,那邊的編號不一樣)。只能停用、不能刪。
 - `VendorLink`:一家門市 × 一家廠商的串接設定(預設的付款方式、收件、發票)。**金鑰不在這張表**。
 - `VendorSecret`:那把金鑰(加密過的)。另外一張表是因為它**不進公司備份**:備份檔會被帶走、搬到別台,
   外部系統的下單金鑰不該跟著走。還原之後要請管理員重新貼。
@@ -11,15 +14,59 @@
 from django.conf import settings
 from django.db import models
 
-from apps.core.models import TenantOwnedModel
+from apps.core.models import TenantOwnedModel, TimestampedModel
+
+MOCEO = "moceo"         # 第一家廠商的代碼(資料庫變更會把它放進名單)
 
 
-class Provider(models.TextChoices):
-    MOCEO = "moceo", "膜總裁"
+class VendorCategory(TimestampedModel):
+    """平台定的叫貨類別(保護貼、配件、維修零件…)。**只用來篩廠商**:同一家廠商掛幾個類別都是同一個入口、同一份購物車。
+    停用 = 叫貨頁不顯示這個類別;要停叫貨是停廠商(紅隊 2026-10-10)。"""
+
+    name = models.CharField("名稱", max_length=20, unique=True)
+    sort_order = models.PositiveIntegerField("排序", default=0)
+    is_active = models.BooleanField("啟用", default=True)
+
+    class Meta:
+        verbose_name = "叫貨類別"
+        verbose_name_plural = "叫貨類別"
+        ordering = ["sort_order", "id"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class Vendor(TimestampedModel):
+    """平台招進來的一家廠商。"""
+
+    class Protocol(models.TextChoices):
+        # 全自動:對方有下單系統,照「標準格式」(膜總裁 B2B 對外下單 API v1 那一套)講話 —— 見 standard.py
+        STANDARD = "standard", "全自動(標準格式)"
+
+    # 代碼建了不能改:公司的串接、叫貨單、料號對照都靠它認
+    code = models.SlugField("代碼", max_length=20, unique=True)
+    name = models.CharField("名稱", max_length=40)
+    categories = models.ManyToManyField(VendorCategory, blank=True, related_name="vendors", verbose_name="類別")
+    protocol = models.CharField("怎麼接", max_length=20, choices=Protocol.choices, default=Protocol.STANDARD)
+    # 對方系統的網址。**金鑰只會送到這個網址**,所以只有平台管理員能改、而且一定要 https(API 那一層檢查)
+    api_base = models.CharField("對方的網址", max_length=200, blank=True, default="")
+    # 這家的金鑰固定的開頭(有填才檢查):擋掉貼錯的東西(別的密碼)被送去問廠商
+    key_prefix = models.CharField("金鑰的開頭", max_length=20, blank=True, default="")
+    # 停用:不能叫新的貨、不能貼新金鑰;已經叫的單照樣看得到、照樣可以重送與到貨入庫
+    is_active = models.BooleanField("啟用", default=True)
+    sort_order = models.PositiveIntegerField("排序", default=0)
+
+    class Meta:
+        verbose_name = "叫貨廠商"
+        verbose_name_plural = "叫貨廠商"
+        ordering = ["sort_order", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.code} {self.name}"
 
 
 class VendorLink(TenantOwnedModel):
-    provider = models.CharField("廠商", max_length=20, choices=Provider.choices, default=Provider.MOCEO)
+    provider = models.CharField("廠商代碼", max_length=20)          # = Vendor.code
     warehouse = models.ForeignKey(
         "inventory.Warehouse", on_delete=models.PROTECT, related_name="vendor_links", verbose_name="門市",
     )
@@ -40,6 +87,9 @@ class VendorLink(TenantOwnedModel):
     # 運費要不要算進入庫成本:每家門市固定一種做法,由管理員定(不是入庫的人每次勾 ——
     # 不然同一家店的成本一下含運費、一下不含,只差誰按;紅隊 2026-10-10)
     freight_into_cost = models.BooleanField("運費算進成本", default=True)
+    # 這家門市的店員能不能跟這家廠商叫貨(管理員一律可以)。員工帳號的「廠商叫貨」是總開關,這一格是每家廠商各自的:
+    # 不然開通高單價的零件廠之後,要嘛店員也能跟它下大單,要嘛連保護貼都不能叫(紅隊 2026-10-10)
+    clerk_ordering = models.BooleanField("店員也可以叫貨", default=True)
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
     )
@@ -83,7 +133,7 @@ class VendorOrder(TenantOwnedModel):
         # 不是從 POS 叫的(電話、LINE、廠商後台代下):貨到了要入庫時才認進來,明細一律跟廠商要
         OUTSIDE = "outside", "不是從這裡叫的"
 
-    provider = models.CharField("廠商", max_length=20, choices=Provider.choices, default=Provider.MOCEO)
+    provider = models.CharField("廠商代碼", max_length=20)          # = Vendor.code
     link = models.ForeignKey(VendorLink, on_delete=models.PROTECT, related_name="orders")
     source = models.CharField("哪裡叫的", max_length=10, choices=Source.choices, default=Source.POS)
     # 到貨時對不上的事(送錯規格、少一包…):這幾行先不入庫,記一句讓老闆看得到

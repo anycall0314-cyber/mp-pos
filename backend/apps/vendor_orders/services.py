@@ -1,4 +1,6 @@
-"""廠商叫貨的規則(第一步:叫貨)。
+"""廠商叫貨的規則(叫貨這一段;到貨入庫在 receiving.py)。
+
+哪一家廠商、對方的網址、訊息裡怎麼稱呼它,都從平台的廠商名單來(`vendor_of`);**金鑰只會送到它所屬那一家的網址**。
 
 **同一張叫貨單在廠商那邊只會成立一次**,靠的是三件事:
 1. 畫面每開一張新單產生一把鑰匙(`request_key`);送給廠商的那一把(`vendor_key`)由它固定算出來。
@@ -18,7 +20,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from . import moceo, secrets
+from . import secrets, standard, vendors
 from .models import VendorOrder, VendorOrderItem, VendorSecret
 
 MAX_LINES = 100
@@ -26,7 +28,6 @@ MAX_PACKS = 9999
 SENDING_GRACE = timedelta(seconds=90)       # 「送出中」超過這麼久沒有結果,當成那一次沒有回來(可以重送)
 REQUEST_KEY = re.compile(r"^[A-Za-z0-9_-]{8,50}$")
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-SANDBOX_ONLY = "這裡是測試環境,只能用膜總裁的沙盒金鑰(到膜總裁後台產生金鑰時勾「沙盒」)"
 CENT = Decimal("0.01")
 
 
@@ -43,24 +44,44 @@ class Busy(VendorError):
     status = 409
 
 
+# ── 哪一家廠商 ──────────────────────────────────────────────────────────────
+def vendor_of(code, *, active=False):
+    """這個代碼是平台名單上的哪一家。`active` = 要還在合作中的(叫新的貨、貼新金鑰時才要求;
+    已經叫的單要重送、查進度、到貨入庫,廠商停用了照樣可以)。"""
+    vendor = vendors.find(code)
+    if vendor is None:
+        raise VendorError(f"廠商名單上沒有「{code}」這一家,請平台管理員處理")
+    if active and not vendor.is_active:
+        raise VendorError(f"「{vendor.name}」已經停用,不能叫新的貨")
+    return vendor
+
+
+def _client(vendor):
+    try:
+        return vendors.client(vendor)
+    except vendors.UnknownVendor as exc:
+        raise VendorError(str(exc)) from None
+
+
 # ── 金鑰與商品清單 ──────────────────────────────────────────────────────────
-def key_of(link) -> str:
+def key_of(link, vendor) -> str:
     raw = secrets.reveal(link) if link is not None else None
     if not raw:
-        raise VendorError("這家門市還沒有設定膜總裁的金鑰,請管理員到「系統設定 → 叫貨串接」設定")
+        raise VendorError(f"這家門市還沒有設定{vendor.name}的金鑰,請管理員到「系統設定 → 叫貨串接」設定")
     return raw
 
 
-def _read(call, *args):
-    """打廠商「讀」的那幾支,把兩種失敗翻成給人看的話。"""
+def _read(vendor, what: str, *args):
+    """打廠商「讀」的那幾支(`what` = products / orders / detail / order),把兩種失敗翻成給人看的話。"""
+    call = getattr(_client(vendor), what)
     try:
         return call(*args)
-    except moceo.Unreachable:
-        raise VendorError("連不到膜總裁,請稍後再試") from None
-    except moceo.Refused as exc:
+    except standard.Unreachable:
+        raise VendorError(f"連不到{vendor.name},請稍後再試") from None
+    except standard.Refused as exc:
         if exc.status in (401, 403):
-            raise VendorError("膜總裁不認得這家門市的金鑰(可能已經作廢),請管理員重新設定") from None
-        raise VendorError(f"膜總裁:{exc.reason}") from None
+            raise VendorError(f"{vendor.name}不認得這家門市的金鑰(可能已經作廢),請管理員重新設定") from None
+        raise VendorError(f"{vendor.name}:{exc.reason}") from None
 
 
 def _price(value):
@@ -105,57 +126,59 @@ def rows_from(products) -> list[dict]:
     return out
 
 
-def _only_sandbox_here(sandbox) -> None:
+def _only_sandbox_here(sandbox, who: str) -> None:
     """測試環境(`VENDOR_SANDBOX_ONLY`)只收廠商明講是沙盒的金鑰:不然有人把正式金鑰貼到測試站,測試時下的就是真的單。"""
     if settings.VENDOR_SANDBOX_ONLY and sandbox is not True:
-        raise VendorError(SANDBOX_ONLY)
+        raise VendorError(f"這裡是測試環境,只能用{who}的沙盒(測試)金鑰")
 
 
-def live_rows(link, key=None) -> list[dict]:
-    listing = _read(moceo.products, key or key_of(link))
+def live_rows(link, vendor, key=None) -> list[dict]:
+    listing = _read(vendor, "products", key or key_of(link, vendor))
     # 這把金鑰是不是沙盒以廠商現在講的為準(廠商那邊改過設定的話跟著換)
     VendorSecret.objects.filter(link=link).exclude(sandbox=listing.sandbox).update(sandbox=listing.sandbox)
-    _only_sandbox_here(listing.sandbox)
+    _only_sandbox_here(listing.sandbox, vendor.name)
     return rows_from(listing.products)
 
 
-def check_key(raw):
-    """要存的金鑰:樣子要對、而且廠商認得(拿它打一次商品清單)。回 (整理過的原文, 廠商說是不是沙盒)。"""
+def check_key(vendor, raw):
+    """要存的金鑰:樣子要對、而且廠商認得(拿它打一次**這家廠商**的商品清單)。回 (整理過的原文, 廠商說是不是沙盒)。"""
     raw = raw.strip() if isinstance(raw, str) else ""
-    if not moceo.looks_like_key(raw):
-        raise VendorError("這不像膜總裁的金鑰(要以 mk_live_ 開頭、中間沒有空白)")
+    if not standard.looks_like_key(raw, vendor.key_prefix):
+        starts = f"要以 {vendor.key_prefix} 開頭、" if vendor.key_prefix else ""
+        raise VendorError(f"這不像{vendor.name}的金鑰({starts}中間沒有空白)")
+    client = _client(vendor)
     try:
-        listing = moceo.products(raw)
-    except moceo.Unreachable:
-        raise VendorError("連不到膜總裁,沒辦法確認這把金鑰,沒有存") from None
-    except moceo.Refused as exc:
+        listing = client.products(raw)
+    except standard.Unreachable:
+        raise VendorError(f"連不到{vendor.name},沒辦法確認這把金鑰,沒有存") from None
+    except standard.Refused as exc:
         if exc.status in (401, 403):
-            raise VendorError("膜總裁不認得這把金鑰(打錯、或已經作廢),沒有存") from None
-        raise VendorError(f"膜總裁:{exc.reason}(沒有存)") from None
-    _only_sandbox_here(listing.sandbox)
+            raise VendorError(f"{vendor.name}不認得這把金鑰(打錯、或已經作廢),沒有存") from None
+        raise VendorError(f"{vendor.name}:{exc.reason}(沒有存)") from None
+    _only_sandbox_here(listing.sandbox, vendor.name)
     return raw, listing.sandbox
 
 
 # ── 單頭:付款、取貨、收件、發票 ───────────────────────────────────────────────
 def check_header(*, payment_method, delivery_method, ship_name, ship_phone, ship_address,
                  invoice_type, buyer_tax_id, buyer_name, invoice_email) -> None:
-    if payment_method not in moceo.PAYMENT_METHODS:
+    if payment_method not in standard.PAYMENT_METHODS:
         raise VendorError("付款方式只能是 月結 / 貨到付款 / 匯款")
-    if delivery_method not in moceo.DELIVERY_METHODS:
+    if delivery_method not in standard.DELIVERY_METHODS:
         raise VendorError("取貨方式只能是 宅配 / 自取")
     if delivery_method == "宅配" and not (ship_name and ship_phone and ship_address):
         raise VendorError("宅配要有收件人、電話、地址(請管理員到「系統設定 → 叫貨串接」填)")
-    if invoice_type not in moceo.INVOICE_TYPES:
+    if invoice_type not in standard.INVOICE_TYPES:
         raise VendorError("發票只能是 個人 / 公司")
     if invoice_type == "公司" and not (buyer_tax_id and buyer_name):
         raise VendorError("公司發票要有統一編號與抬頭(請管理員到「系統設定 → 叫貨串接」填)")
-    # 膜總裁每一張單都要發票信箱(沒有的話它那邊整張擋掉,而且講的不是人話)
+    # 標準格式每一張單都要發票信箱(沒有的話對方整張擋掉,而且講的不是人話)
     if not EMAIL.match(invoice_email or ""):
         raise VendorError("要有發票信箱(請管理員到「系統設定 → 叫貨串接」填)")
 
 
 # ── 明細 ────────────────────────────────────────────────────────────────────
-def _lines(rows: list[dict], wanted) -> list[dict]:
+def _lines(rows: list[dict], wanted, who: str = "廠商") -> list[dict]:
     """畫面送來的 [{key, packs}] → 要存的明細。品名、一包幾個、單價一律用廠商剛剛回的,不看畫面送來的。"""
     if not isinstance(wanted, list) or not wanted:
         raise VendorError("至少要叫一項")
@@ -167,7 +190,7 @@ def _lines(rows: list[dict], wanted) -> list[dict]:
         key = line.get("key") if isinstance(line, dict) else None
         packs = line.get("packs") if isinstance(line, dict) else None
         if not isinstance(key, str) or key not in by_key:
-            raise VendorError("有一項膜總裁現在沒有在賣(清單可能更新過),請重新整理再選")
+            raise VendorError(f"有一項{who}現在沒有在賣(清單可能更新過),請重新整理再選")
         row = by_key[key]
         if key in seen:
             raise VendorError(f"「{row['name']}」重複了")
@@ -210,24 +233,25 @@ def _mark_unknown(order: VendorOrder, why: str) -> VendorOrder:
     return order
 
 
-def _send(order: VendorOrder, key: str, *, first: bool) -> VendorOrder:
+def _send(order: VendorOrder, key: str, vendor, *, first: bool) -> VendorOrder:
+    client = _client(vendor)        # 連不連得上這家在存叫貨單之前就確認過了(place / resend 的開頭)
     try:
-        result = moceo.place(key, _payload(order))
-    except moceo.Unreachable as exc:
+        result = client.place(key, _payload(order))
+    except standard.Unreachable as exc:
         return _mark_unknown(order, str(exc))
-    if isinstance(result, moceo.Rejected):
+    if isinstance(result, standard.Rejected):
         # 第一次送就被擋 = 沒有成立。重送時只有「內容被擋」(400 / 422)能證明先前那一次也沒有成立
         #(廠商是先查這把鑰匙用過沒有、才檢查內容);金鑰無效、太頻繁這些證明不了,照舊是不確定。
         if first or result.status in (400, 422):
             order.delete()
-            raise NotPlaced(f"膜總裁沒有收這張單:{result.reason}")
+            raise NotPlaced(f"{vendor.name}沒有收這張單:{result.reason}")
         return _mark_unknown(order, f"沒辦法確認:{result.reason}")
     total, fee = _price(result.total_amount), _price(result.shipping_fee)
     if total is None:
         # 重送拿到「已經成立」時廠商只回單號:總額另外查一次(查不到就先空著,更新進度時會補)
         try:
-            total = _price(moceo.order(key, result.order_no).get("total_amount"))
-        except (moceo.Unreachable, moceo.Refused):
+            total = _price(client.order(key, result.order_no).get("total_amount"))
+        except (standard.Unreachable, standard.Refused):
             total = None
     order.state = VendorOrder.State.PLACED
     order.problem, order.sending_since = "", None
@@ -257,8 +281,10 @@ def place(*, tenant, user, link, request_key, lines, payment_method=None, delive
     if existing is not None:
         return _again(existing, link), False
 
-    key = key_of(link)
-    items = _lines(live_rows(link, key), lines)
+    vendor = vendor_of(link.provider, active=True)
+    _client(vendor)                 # 這家連線還沒設好:現在就講,不要等叫貨單存了才發現送不出去
+    key = key_of(link, vendor)
+    items = _lines(live_rows(link, vendor, key), lines, vendor.name)
     header = dict(
         payment_method=payment_method or link.payment_method,
         delivery_method=delivery_method or link.delivery_method,
@@ -291,17 +317,21 @@ def place(*, tenant, user, link, request_key, lines, payment_method=None, delive
         if existing is None:
             raise
         return _again(existing, link), False
-    return _send(order, key, first=True), True
+    return _send(order, key, vendor, first=True), True
 
 
 def _again(order: VendorOrder, link) -> VendorOrder:
     if link is not None and order.warehouse_id != link.warehouse_id:
         raise VendorError("這把鑰匙是另一家門市的叫貨單")
+    if link is not None and order.provider != link.provider:
+        raise VendorError("這把鑰匙是另一家廠商的叫貨單")
     return order if order.state == VendorOrder.State.PLACED else resend(order)
 
 
 def resend(order: VendorOrder) -> VendorOrder:
-    """「不確定」的那一張再送一次(同一把鑰匙)。已成立的原樣回。"""
+    """「不確定」的那一張再送一次(同一把鑰匙)。已成立的原樣回。廠商停用了也可以(確認的是已經送出去的那一次)。"""
+    vendor = vendor_of(order.provider)
+    _client(vendor)
     with transaction.atomic():
         locked = VendorOrder.objects.select_for_update().filter(pk=order.pk).first()
         if locked is None:
@@ -317,19 +347,19 @@ def resend(order: VendorOrder) -> VendorOrder:
     key = secrets.reveal(order.link)
     if not key:
         _mark_unknown(order, order.problem or "這家門市現在沒有金鑰")
-        raise VendorError("這家門市現在沒有膜總裁的金鑰,沒辦法確認這張單;請管理員重新設定之後再送一次")
+        raise VendorError(f"這家門市現在沒有{vendor.name}的金鑰,沒辦法確認這張單;請管理員重新設定之後再送一次")
     if secrets.fingerprint(key) != order.key_fingerprint:
         _mark_unknown(order, "送出之後金鑰換過了")
-        raise VendorError("這張叫貨單送出之後,這家門市的金鑰換過了,沒辦法用再送一次來確認。請到膜總裁查這張單有沒有成立")
+        raise VendorError(f"這張叫貨單送出之後,這家門市的金鑰換過了,沒辦法用再送一次來確認。請到{vendor.name}查這張單有沒有成立")
     if settings.VENDOR_SANDBOX_ONLY:
         # 測試環境:再送之前重新問一次這把金鑰現在還是不是沙盒。同一把金鑰在廠商那邊可以被改成正式的(指紋不會變),
         # 那時候「再送一次」如果先前沒成立,這一次就會在廠商那邊成立一張真的單(複審抓到的)。
         try:
-            live_rows(order.link, key)
+            live_rows(order.link, vendor, key)
         except VendorError as exc:
             _mark_unknown(order, order.problem or str(exc))
             raise
-    return _send(order, key, first=False)
+    return _send(order, key, vendor, first=False)
 
 
 # ── 進度 ────────────────────────────────────────────────────────────────────
@@ -363,7 +393,8 @@ def _apply(order: VendorOrder, row: dict) -> None:
 def sync(tenant, link) -> list[dict]:
     """跟廠商要這個帳號最近的訂單:更新 POS 這邊叫貨單的進度,並回「不是從 POS 叫的」那幾張
     (電話、LINE、廠商後台代下的;老闆要看得到全貌)。別家門市從 POS 叫的不列在這裡(在那家門市自己的清單)。"""
-    remote = [r for r in _read(moceo.orders, key_of(link), 100)
+    vendor = vendor_of(link.provider)
+    remote = [r for r in _read(vendor, "orders", key_of(link, vendor), 100)
               if isinstance(r, dict) and isinstance(r.get("order_no"), str) and r["order_no"]]
     by_no = {r["order_no"]: r for r in remote}
     ours = set()

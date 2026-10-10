@@ -5,7 +5,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 
 import {
-  afterSend, amountText, beforeSend, draftFrom, emptyDraft, filterRows, kindsOf, linesToSend, newRequestKey, outcomeOf,
+  afterSend, amountText, beforeSend, commonUnit, draftFrom, emptyDraft, filterRows, kindsOf, linesToSend, newRequestKey, outcomeOf,
   packsFrom, packsText, rowTitle, sameAsSent, summarize, whenText, withPacks,
 } from "./vendorOrder.ts";
 
@@ -190,4 +190,13 @@ test("這把鑰匙成立的是先前的另一份:現在這一份留著、換新�
   assert.deepEqual([next.cart, next.note, next.pending, next.payment_method], [{ G01: 9 }, "x", false, "月結"]);
   assert.notEqual(next.requestKey, draft.requestKey);
   assert.match(next.requestKey, /^vo-seed-\d+$/);
+});
+
+test("合計的單位:同一個單位就用它,混在一起寫「件」(每家廠商賣的單位不一樣)", () => {
+  assert.equal(commonUnit(["片", "片"]), "片");
+  assert.equal(commonUnit(["條"]), "條");
+  assert.equal(commonUnit(["條", "個"]), "件");
+  assert.equal(commonUnit(["條", "", "條"]), "條");          // 沒寫單位的不算
+  assert.equal(commonUnit([]), "件");
+  assert.equal(commonUnit(["", ""]), "件");
 });

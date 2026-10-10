@@ -7608,6 +7608,31 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
  * 廠商叫貨(膜總裁):商品清單填包數、最下面固定合計與主要按鈕;叫貨串接設定
  * ───────────────────────────────────────────────────────── */
 .vo-vendor { color: var(--text-dim); font-size: var(--font-secondary); }
+/* 先選類別、再選廠商(只有一家時整塊不出現) */
+.vo-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.vo-pick-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.vo-chip {
+  min-height: var(--control-height);
+  padding: 0 14px;
+  font: inherit;
+  color: var(--text-dim);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.vo-chip.active { color: var(--text); border-color: var(--accent); background: rgba(79, 140, 255, 0.14); }
+.vo-chip-vendor { font-weight: 600; color: var(--text); border-radius: 8px; }
+.vo-chip-vendor.off { color: var(--text-dim); font-weight: 400; }
+.vo-chip-why { margin-left: 8px; font-size: var(--font-secondary); font-weight: 400; color: var(--warn-text); }
 .vo-test {
   display: inline-block;
   margin-left: 6px;
@@ -7735,6 +7760,14 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   font-size: var(--font-secondary);
   min-width: 0;
 }
+/* 平台管理 → 叫貨廠商 */
+.pv-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0 8px; }
+.pv-head:first-child { margin-top: 0; }
+.pv-head h3 { margin: 0; font-size: var(--font-section); }
+.pv-add { display: flex; gap: 8px; }
+.pv-add input { min-height: var(--control-height); padding: 0 10px; font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; }
+.pv-checks { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.pv-checks label { display: inline-flex; align-items: center; gap: 6px; }
 /* 到貨入庫的面板 */
 .vr-head {
   display: flex;

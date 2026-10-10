@@ -1762,8 +1762,15 @@ export interface AnalyticsResult {
 export interface VendorLinkRow {
   warehouse: number;
   warehouse_name: string;
+  /** 廠商的代碼(平台名單上的)與名稱 */
   provider: string;
   provider_label: string;
+  /** 這家廠商掛在哪些類別(只用來篩廠商) */
+  categories: number[];
+  /** 廠商還在不在合作;停用的不能叫新的貨,已經叫的單照樣看得到 */
+  vendor_active: boolean;
+  /** 這家門市的店員能不能跟這家叫貨(管理員一律可以) */
+  clerk_ordering: boolean;
   saved: boolean;
   has_key: boolean;
   key_hint?: string;
@@ -1801,6 +1808,9 @@ export interface VendorOrderLine {
 
 export interface VendorOrder {
   id: number;
+  /** 哪一家廠商(代碼與名稱) */
+  provider: string;
+  provider_label: string;
   warehouse: number;
   warehouse_name: string;
   request_key: string;
@@ -1897,4 +1907,32 @@ export interface SavedReport {
   editable: boolean;
   owner: string;
   updated_at: string;
+}
+
+/** 平台管理:叫貨類別 */
+export interface PlatformVendorCategory {
+  id: number;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+  /** 幾家廠商掛在這個類別 */
+  vendors: number;
+}
+
+/** 平台管理:叫貨廠商 */
+export interface PlatformVendor {
+  id: number;
+  /** 建了不能改:各家門市的叫貨單靠它認 */
+  code: string;
+  name: string;
+  categories: number[];
+  protocol: string;
+  protocol_label: string;
+  /** 對方系統的網址:各家門市的金鑰只會送到這裡 */
+  api_base: string;
+  key_prefix: string;
+  is_active: boolean;
+  sort_order: number;
+  /** 幾家門市開通了(貼了金鑰) */
+  stores: number;
 }
