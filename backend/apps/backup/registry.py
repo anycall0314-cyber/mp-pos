@@ -106,6 +106,7 @@ REGISTRY: dict[str, Entry] = {
     "vendor_orders.VendorSecret": Entry(EXCLUDED, "外部下單系統的金鑰不跟著備份檔走;還原之後請管理員重新貼"),
     "vendor_orders.VendorCategory": Entry(EXCLUDED, "平台的叫貨類別,不屬於任何公司"),
     "vendor_orders.Vendor": Entry(EXCLUDED, "平台的廠商名單,不屬於任何公司;公司的資料只記廠商代碼"),
+    "vendor_orders.VendorItem": Entry(EXCLUDED, "平台幫半自動廠商建的價目表,不屬於任何公司;公司的資料只記料號"),
 }
 
 # 帶檔案的欄位:{表: [欄位]}。只存路徑不算備份,檔案本體要一起打包。

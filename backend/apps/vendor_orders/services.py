@@ -178,8 +178,9 @@ def check_header(*, payment_method, delivery_method, ship_name, ship_phone, ship
 
 
 # ── 明細 ────────────────────────────────────────────────────────────────────
-def _lines(rows: list[dict], wanted, who: str = "廠商") -> list[dict]:
-    """畫面送來的 [{key, packs}] → 要存的明細。品名、一包幾個、單價一律用廠商剛剛回的,不看畫面送來的。"""
+def _lines(rows: list[dict], wanted, who: str = "廠商", *, unpriced_ok: bool = False) -> list[dict]:
+    """畫面送來的 [{key, packs}] → 要存的明細。品名、一包幾個、單價一律用廠商剛剛回的(半自動的 = 平台價目表上的),不看畫面送來的。
+    `unpriced_ok` = 沒有價錢的也可以叫(半自動廠商的參考價可以是空的;全自動的沒有報價 = 這個帳號不能訂)。"""
     if not isinstance(wanted, list) or not wanted:
         raise VendorError("至少要叫一項")
     if len(wanted) > MAX_LINES:
@@ -197,14 +198,15 @@ def _lines(rows: list[dict], wanted, who: str = "廠商") -> list[dict]:
         seen.add(key)
         if isinstance(packs, bool) or not isinstance(packs, int) or not 1 <= packs <= MAX_PACKS:
             raise VendorError(f"「{row['name']}」的包數要是 1 到 {MAX_PACKS} 的整數")
-        if row["unit_price"] is None:
+        if row["unit_price"] is None and not unpriced_ok:
             raise VendorError(f"「{row['name']}」這個帳號還沒有報價,不能叫")
         out.append({**row, "packs": packs, "qty": packs * row["pack_qty"]})
     return out
 
 
 def goods_total(items) -> Decimal:
-    return sum((Decimal(i["unit_price"]) * i["qty"] for i in items), Decimal("0")).quantize(CENT)
+    """叫貨當下的貨款(沒有價錢的那幾項不算)。"""
+    return sum((Decimal(i["unit_price"]) * i["qty"] for i in items if i["unit_price"] is not None), Decimal("0")).quantize(CENT)
 
 
 # ── 送出 ────────────────────────────────────────────────────────────────────

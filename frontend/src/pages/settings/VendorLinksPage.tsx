@@ -15,6 +15,7 @@ import { isManager } from "@/lib/roles";
  * 系統設定 → 叫貨串接:選門市,**每家廠商一張卡** —— 貼那家廠商給的金鑰(貼了才算開通),與叫貨時預設的付款 / 收件 / 發票、
  * 到貨入庫記在哪個供應商、運費算不算成本、店員能不能跟這家叫貨。只有管理員。有哪些廠商是平台定的。
  * 金鑰存了之後只顯示前幾碼;這一頁打的金鑰只留在那一格裡,存完就清掉。
+ * **半自動的廠商**(對方沒有系統):沒有金鑰,選「開通」就可以叫;發票那幾格不用填。
  */
 export function VendorLinksPage() {
   const user = useCurrentUser();
@@ -79,6 +80,8 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
   const [freight, setFreight] = useState(row.freight_into_cost);
   // 這家門市的店員能不能跟這家叫貨(管理員一律可以;員工帳號的「廠商叫貨」是總開關)
   const [clerks, setClerks] = useState(row.clerk_ordering);
+  // 半自動的廠商:沒有金鑰,管理員選開通 / 關閉
+  const [opened, setOpened] = useState(row.opened);
   const set = (name: FieldName, value: string) => setForm((f) => ({ ...f, [name]: value }));
   const busy = save.isPending || removeKey.isPending;
 
@@ -91,7 +94,7 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
         supplier: supplier?.id ?? null,
         freight_into_cost: freight,
         clerk_ordering: clerks,
-        ...(key.trim() ? { key: key.trim() } : {}),
+        ...(row.manual ? { opened } : key.trim() ? { key: key.trim() } : {}),
       });
       setKey("");
       toast(`${row.provider_label}已儲存`, "ok");
@@ -106,12 +109,31 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
         {row.provider_label}
         <span className="vl-vendor">{[row.warehouse_name, categories].filter(Boolean).join(" · ")}</span>
         {!row.vendor_active && <span className="vo-test">已停用</span>}
-        <span className={row.has_key ? "vl-state vl-on" : "vl-state"}>
-          {row.has_key ? `已設定 ${row.key_hint ?? ""}…` : "尚未設定金鑰"}
-        </span>
+        {row.manual ? (
+          <span className={row.opened ? "vl-state vl-on" : "vl-state"}>{row.opened ? "已開通" : "尚未開通"}</span>
+        ) : (
+          <span className={row.has_key ? "vl-state vl-on" : "vl-state"}>
+            {row.has_key ? `已設定 ${row.key_hint ?? ""}…` : "尚未設定金鑰"}
+          </span>
+        )}
+        {row.manual && row.contact && <span className="vl-vendor">{row.contact}</span>}
         {row.sandbox === true && <span className="vo-test">測試金鑰</span>}
       </h3>
       <div className="vl-grid">
+        {row.manual && (
+          <label className="vl-wide">
+            開通
+            <select
+              value={opened ? "on" : "off"}
+              disabled={busy || (!row.vendor_active && !row.opened)}
+              onChange={(e) => setOpened(e.target.value === "on")}
+            >
+              <option value="on">開通叫貨</option>
+              <option value="off">先不開通</option>
+            </select>
+          </label>
+        )}
+        {!row.manual && (
         <label className="vl-wide">
           金鑰
           {/* 不用 type="password":瀏覽器會把存過的登入密碼自動填進來(填進來的字按儲存就會被當成金鑰送出去)。
@@ -132,6 +154,7 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
             onChange={(e) => setKey(e.target.value)}
           />
         </label>
+        )}
         <label>
           付款方式
           <select value={form.payment_method} disabled={busy} onChange={(e) => set("payment_method", e.target.value)}>
@@ -160,19 +183,24 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
           收件地址
           <input value={form.ship_address} maxLength={200} disabled={busy} onChange={(e) => set("ship_address", e.target.value)} />
         </label>
-        <label>
-          發票
-          <select value={form.invoice_type} disabled={busy} onChange={(e) => set("invoice_type", e.target.value)}>
-            {row.choices.invoice_type.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          發票信箱
-          <input value={form.invoice_email} maxLength={200} disabled={busy} onChange={(e) => set("invoice_email", e.target.value)} />
-        </label>
-        {form.invoice_type === "公司" && (
+        {/* 發票那幾格是全自動那一套(對方的下單系統)要的;半自動的廠商不用 */}
+        {!row.manual && (
+          <>
+            <label>
+              發票
+              <select value={form.invoice_type} disabled={busy} onChange={(e) => set("invoice_type", e.target.value)}>
+                {row.choices.invoice_type.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              發票信箱
+              <input value={form.invoice_email} maxLength={200} disabled={busy} onChange={(e) => set("invoice_email", e.target.value)} />
+            </label>
+          </>
+        )}
+        {!row.manual && form.invoice_type === "公司" && (
           <>
             <label>
               統一編號
@@ -211,7 +239,7 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
         </label>
       </div>
       <div className="vl-actions">
-        {row.has_key && (
+        {!row.manual && row.has_key && (
           <ArmButton
             label="拿掉金鑰"
             armedLabel="確定拿掉"

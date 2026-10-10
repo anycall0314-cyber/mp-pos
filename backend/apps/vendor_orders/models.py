@@ -3,6 +3,7 @@
 - `VendorCategory` / `Vendor`:**平台的名單,不屬於任何公司**(只有平台管理員能改):有哪些叫貨類別、招進來哪些廠商、
   每家廠商怎麼接(對方的網址…)。招到一家 = 加一筆,不用改程式。**不進公司備份**;公司的資料只記廠商的代碼(`provider`),不用外鍵指過來
   (備份檔會搬到別台,那邊的編號不一樣)。只能停用、不能刪。
+- `VendorItem`:半自動廠商的**價目表**(平台幫廠商建的;所有店家看到同一份;也不進公司備份)。全自動的廠商沒有這張表的資料(商品清單是現問它的系統)。
 - `VendorLink`:一家門市 × 一家廠商的串接設定(預設的付款方式、收件、發票)。**金鑰不在這張表**。
 - `VendorSecret`:那把金鑰(加密過的)。另外一張表是因為它**不進公司備份**:備份檔會被帶走、搬到別台,
   外部系統的下單金鑰不該跟著走。還原之後要請管理員重新貼。
@@ -42,6 +43,9 @@ class Vendor(TimestampedModel):
     class Protocol(models.TextChoices):
         # 全自動:對方有下單系統,照「標準格式」(膜總裁 B2B 對外下單 API v1 那一套)講話 —— 見 standard.py
         STANDARD = "standard", "全自動(標準格式)"
+        # 半自動:廠商沒有可以接的系統(多半是租來的進銷存,沒有串接功能)。商品與參考價由平台建價目表;
+        # 叫貨單在 POS 自己成立、由人傳給廠商(複製貼 LINE / 寄信);進度靠人記;到貨照店家叫的那張單入庫。廠商那邊什麼都不用改。
+        MANUAL = "manual", "半自動(人工傳單)"
 
     # 代碼建了不能改:公司的串接、叫貨單、料號對照都靠它認
     code = models.SlugField("代碼", max_length=20, unique=True)
@@ -52,6 +56,9 @@ class Vendor(TimestampedModel):
     api_base = models.CharField("對方的網址", max_length=200, blank=True, default="")
     # 這家的金鑰固定的開頭(有填才檢查):擋掉貼錯的東西(別的密碼)被送去問廠商
     key_prefix = models.CharField("金鑰的開頭", max_length=20, blank=True, default="")
+    # 半自動的廠商用:接單信箱(有填才寄信;沒填就只靠店員複製貼給廠商)、給店員看的聯絡方式(例:LINE @xxx)
+    order_email = models.CharField("接單信箱", max_length=200, blank=True, default="")
+    contact = models.CharField("聯絡方式", max_length=120, blank=True, default="")
     # 停用:不能叫新的貨、不能貼新金鑰;已經叫的單照樣看得到、照樣可以重送與到貨入庫
     is_active = models.BooleanField("啟用", default=True)
     sort_order = models.PositiveIntegerField("排序", default=0)
@@ -63,6 +70,32 @@ class Vendor(TimestampedModel):
 
     def __str__(self) -> str:
         return f"{self.code} {self.name}"
+
+
+class VendorItem(TimestampedModel):
+    """半自動廠商價目表上的一項(平台的資料)。只能停用、不能刪:各家門市的叫貨單與料號對照靠 `sku` 認它。
+    `ref_price` 是**參考價**:實際付多少以到貨入庫時填的為準(廠商沒有系統可以對)。可以是空的(沒報價也可以叫)。"""
+
+    vendor = models.ForeignKey(Vendor, on_delete=models.PROTECT, related_name="items", verbose_name="廠商")
+    # 料號建了不能改;平台沒填就由系統給一個(N0001…)
+    sku = models.CharField("料號", max_length=80)
+    name = models.CharField("品名", max_length=200)
+    spec = models.CharField("規格", max_length=120, blank=True, default="")
+    kind = models.CharField("種類", max_length=40, blank=True, default="")
+    unit = models.CharField("單位", max_length=10, blank=True, default="")
+    pack_qty = models.PositiveIntegerField("一包幾個", default=1)
+    ref_price = models.DecimalField("參考單價", max_digits=14, decimal_places=2, null=True, blank=True)
+    is_active = models.BooleanField("啟用", default=True)
+    sort_order = models.PositiveIntegerField("排序", default=0)
+
+    class Meta:
+        verbose_name = "廠商價目"
+        verbose_name_plural = "廠商價目"
+        ordering = ["sort_order", "id"]
+        constraints = [models.UniqueConstraint(fields=["vendor", "sku"], name="uniq_vendor_item_sku")]
+
+    def __str__(self) -> str:
+        return f"{self.vendor_id} {self.sku} {self.name}"
 
 
 class VendorLink(TenantOwnedModel):
@@ -90,6 +123,8 @@ class VendorLink(TenantOwnedModel):
     # 這家門市的店員能不能跟這家廠商叫貨(管理員一律可以)。員工帳號的「廠商叫貨」是總開關,這一格是每家廠商各自的:
     # 不然開通高單價的零件廠之後,要嘛店員也能跟它下大單,要嘛連保護貼都不能叫(紅隊 2026-10-10)
     clerk_ordering = models.BooleanField("店員也可以叫貨", default=True)
+    # 半自動的廠商沒有金鑰:管理員按了「開通」這家門市才叫得了(全自動的看的是有沒有金鑰,這一格不看)
+    opened = models.BooleanField("開通(半自動的廠商)", default=False)
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
     )
@@ -180,6 +215,24 @@ class VendorOrder(TenantOwnedModel):
     vendor_ordered_at = models.DateTimeField("廠商收單時間", null=True, blank=True)
     status_checked_at = models.DateTimeField("進度更新時間", null=True, blank=True)
 
+    # 這張單是 POS 自己成立的(半自動的廠商):沒有送給任何系統,單號是 POS 編的;明細、進度、到貨都以 POS 這邊記的為準。
+    # 記在單上、不是每次去看廠商現在怎麼接:廠商之後改成全自動,這些舊單還是照人工的那一套走
+    manual = models.BooleanField("POS 自己成立的(半自動)", default=False)
+    # ── 半自動廠商的叫貨單才用的三件事 ──
+    # 傳給廠商了沒:這張單是 POS 自己成立的,要有人把內容貼給 / 寄給廠商才算數(沒傳的在紀錄上標出來)
+    sent_at = models.DateTimeField("傳給廠商的時間", null=True, blank=True)
+    sent_how = models.CharField("怎麼傳的", max_length=10, blank=True, default="")      # manual = 人按的 / email = 系統寄的
+    sent_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+", verbose_name="傳的人",
+    )
+    # 進度靠人記一句(廠商沒有系統可以查)
+    progress_note = models.CharField("進度備註", max_length=200, blank=True, default="")
+    # 取消只是 POS 這邊的標記(要自己跟廠商講);可以恢復;貨還是到了照樣入得了庫
+    cancelled_at = models.DateTimeField("取消的時間", null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+", verbose_name="取消的人",
+    )
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
         verbose_name="叫貨的人",
@@ -211,7 +264,8 @@ class VendorOrderItem(TenantOwnedModel):
     pack_qty = models.PositiveIntegerField("一包幾個")
     packs = models.PositiveIntegerField("包數")
     qty = models.PositiveIntegerField("數量")            # = 包數 × 一包幾個;送給廠商的是這個
-    unit_price = models.DecimalField("叫貨當下的單價", max_digits=14, decimal_places=2)
+    # 半自動廠商的是參考價,可以是空的(沒報價也可以叫;實際單價到貨入庫時填)
+    unit_price = models.DecimalField("叫貨當下的單價", max_digits=14, decimal_places=2, null=True, blank=True)
 
     class Meta:
         verbose_name = "叫貨明細"

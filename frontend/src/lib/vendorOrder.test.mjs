@@ -52,6 +52,18 @@ test("清單換過之後不在了、或變成沒有報價的:列出來,不默默
   assert.deepEqual(summarize({ G02: 1 }, []).gone, ["G02"]);      // 清單還沒回來 / 是空的
 });
 
+test("半自動的廠商:沒有參考價的也可以叫(金額當 0),不算「不在賣了」;真的不在清單上的照樣列出來", () => {
+  const cart = { G02: 2, S09: 3, GONE: 1 };
+  // 全自動:沒有報價的 S09 不能叫
+  const strict = summarize(cart, ROWS);
+  assert.deepEqual([strict.lines.map((l) => l.row.key), strict.gone.sort()], [["G02"], ["GONE", "S09"]]);
+  // 半自動:S09 照叫,金額只算有價錢的
+  const loose = summarize(cart, ROWS, true);
+  assert.deepEqual(loose.lines.map((l) => [l.row.key, l.packs, l.pieces, l.amount]), [["G02", 2, 50, 7500], ["S09", 3, 75, 0]]);
+  assert.deepEqual([loose.gone, loose.amount, loose.pieces], [["GONE"], 7500, 125]);
+  assert.deepEqual(linesToSend(loose), [{ key: "G02", packs: 2 }, { key: "S09", packs: 3 }]);
+});
+
 test("幾包 = 幾片,兩個都寫出來", () => {
   assert.equal(packsText(2, 50, "片"), "2 包 = 50 片");
   assert.equal(packsText(1, 5, ""), "1 包 = 5 片");

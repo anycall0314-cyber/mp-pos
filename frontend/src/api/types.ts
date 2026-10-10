@@ -1774,6 +1774,13 @@ export interface VendorLinkRow {
   /** 這家門市的店員能不能跟這家叫貨(管理員一律可以) */
   clerk_ordering: boolean;
   saved: boolean;
+  /** 半自動的廠商(對方沒有系統):沒有金鑰,管理員按「開通」;商品是平台的價目表 */
+  manual: boolean;
+  opened: boolean;
+  /** 這家門市現在可以跟這家往來了(全自動 = 有金鑰;半自動 = 開通了) */
+  ready: boolean;
+  /** 平台填的聯絡方式(給店員看的一句,例:LINE @xxx) */
+  contact: string;
   has_key: boolean;
   key_hint?: string;
   /** 廠商說這把是測試(沙盒)金鑰:用它叫的是測試單。null = 沒有金鑰、或廠商沒有講 */
@@ -1805,7 +1812,8 @@ export interface VendorOrderLine {
   pack_qty: number;
   packs: number;
   qty: number;
-  unit_price: string;
+  /** 半自動廠商的是參考價,可以是空的 */
+  unit_price: string | null;
 }
 
 export interface VendorOrder {
@@ -1851,6 +1859,17 @@ export interface VendorOrder {
   issue_note: string;
   /** 到貨入庫的紀錄:一次一張進貨單(作廢的也列,標 is_void) */
   receipts: ReceiptRow[];
+  /** 半自動廠商的單(POS 自己成立的,沒有送給任何系統) */
+  manual: boolean;
+  /** 要傳給廠商的那一段(貼 LINE 用;不含價錢) */
+  message: string;
+  sent_at: string | null;
+  /** manual = 人按的 / email = 系統寄的 */
+  sent_how: string;
+  sent_by: string;
+  progress_note: string;
+  cancelled_at: string | null;
+  cancelled_by: string;
 }
 
 /** 廠商那邊「不是從 POS 叫的」訂單(電話、LINE、廠商後台代下的) */
@@ -1935,6 +1954,41 @@ export interface PlatformVendor {
   key_prefix: string;
   is_active: boolean;
   sort_order: number;
-  /** 幾家門市開通了(貼了金鑰) */
+  /** 幾家門市開通了(全自動 = 貼了金鑰;半自動 = 按了開通) */
   stores: number;
+  /** 半自動的廠商用:接單信箱、給店員看的聯絡方式、價目表上啟用中的有幾項 */
+  order_email: string;
+  contact: string;
+  items: number;
+}
+
+/** 半自動廠商價目表上的一項(平台的資料) */
+export interface PlatformVendorItem {
+  id: number;
+  /** 建了不能改 */
+  sku: string;
+  name: string;
+  spec: string;
+  kind: string;
+  unit: string;
+  pack_qty: number;
+  ref_price: string | null;
+  is_active: boolean;
+  sort_order: number;
+}
+
+/** 整批貼上的預覽 / 結果 */
+export interface VendorItemImport {
+  rows: {
+    line: number;
+    action: "new" | "update" | "same" | "error";
+    problem: string;
+    sku: string;
+    name: string;
+    spec: string;
+    changes: Record<string, string | null>;
+  }[];
+  counts: { new: number; update: number; same: number; error: number };
+  applied: boolean;
+  detail?: string;
 }

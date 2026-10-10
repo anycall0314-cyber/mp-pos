@@ -15,7 +15,7 @@ export interface CatalogRow {
   pack_qty: number;
   spec_id: number | null;
   spec_label: string;
-  /** null = 這個帳號沒有這一項的報價(不能叫) */
+  /** null = 這個帳號沒有這一項的報價(全自動的廠商:不能叫;半自動的廠商:參考價沒填,照樣可以叫) */
   unit_price: string | null;
   pack_price: string | null;
 }
@@ -59,19 +59,18 @@ export interface CartSummary {
  * 購物車對上廠商**現在**的清單。順序照清單(畫面上看到的順序)。
  * 清單換過之後不在了、或變成沒有報價的,列在 gone —— 不能默默丟掉(人以為叫了)也不能照送(伺服器會擋)。
  */
-export function summarize(cart: Cart, rows: CatalogRow[]): CartSummary {
+export function summarize(cart: Cart, rows: CatalogRow[], unpricedOk = false): CartSummary {
   const byKey = new Map(rows.map((r) => [r.key, r]));
+  // `unpricedOk` = 半自動的廠商:價錢是平台價目表上的參考價,沒有價錢的也可以叫(金額當 0,合計只是參考)
+  const orderable = (row: CatalogRow | undefined) => !!row && (row.unit_price !== null || unpricedOk);
   const lines: CartLine[] = [];
   for (const row of rows) {
     const packs = cart[row.key] ?? 0;
-    if (packs <= 0 || row.unit_price === null) continue;
+    if (packs <= 0 || !orderable(row)) continue;
     const pieces = packs * row.pack_qty;
-    lines.push({ row, packs, pieces, amount: Number(row.unit_price) * pieces });
+    lines.push({ row, packs, pieces, amount: row.unit_price === null ? 0 : Number(row.unit_price) * pieces });
   }
-  const gone = Object.keys(cart).filter((key) => {
-    const row = byKey.get(key);
-    return cart[key] > 0 && (!row || row.unit_price === null);
-  });
+  const gone = Object.keys(cart).filter((key) => cart[key] > 0 && !orderable(byKey.get(key)));
   return {
     lines,
     packs: lines.reduce((s, l) => s + l.packs, 0),

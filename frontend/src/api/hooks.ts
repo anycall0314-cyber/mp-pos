@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "./client";
+import { ApiHttpError, api } from "./client";
 import {
   type ContractQuery,
   type FollowStatus,
@@ -11,6 +11,7 @@ import { listProductPhotos, type PhotosPayload } from "./photos";
 import { rangeQuery, rangeReady, type ReportRange } from "@/lib/fixedReports";
 import type { CatalogRow } from "@/lib/vendorOrder";
 import type { VendorCategoryOption } from "@/lib/vendorPick";
+import type { ManualPlan, ManualSend, PastedItem } from "@/lib/vendorManual";
 import { withSaved, type MappingData, type MappingRow } from "@/lib/vendorMapping";
 import type { ReceivePlan, ReceiveSend } from "@/lib/vendorReceive";
 import {
@@ -80,6 +81,8 @@ import {
   LedgerOverview,
   PlatformVendor,
   PlatformVendorCategory,
+  PlatformVendorItem,
+  VendorItemImport,
   VendorLinkRow,
   VendorOrder,
   VendorOutsideOrder,
@@ -2578,7 +2581,7 @@ export const useVendorCatalog = (warehouse: number | null, vendor: string | null
   useQuery({
     queryKey: ["vendor-catalog", warehouse, vendor],
     queryFn: () =>
-      api<{ warehouse: number; vendor: string; rows: CatalogRow[] }>(
+      api<{ warehouse: number; vendor: string; manual: boolean; rows: CatalogRow[] }>(
         `/vendor-orders/catalog/?warehouse=${warehouse}&vendor=${encodeURIComponent(vendor ?? "")}`,
       ),
     enabled: warehouse !== null && vendor !== null,
@@ -2640,6 +2643,17 @@ export const useVendorReceiving = (orderId: number | null) =>
     refetchOnWindowFocus: false,
   });
 
+/** 半自動廠商的單要看的(同一支端點,內容不一樣):店家叫的每一行、已入幾個、還可以加的品項。每次打開現抓。 */
+export const useManualReceiving = (orderId: number | null) =>
+  useQuery({
+    queryKey: ["vendor-receiving-manual", orderId],
+    queryFn: () => api<ManualPlan>(`/vendor-orders/${orderId}/receiving/`),
+    enabled: orderId !== null,
+    retry: false,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+  });
+
 /** 到貨入庫(開一張進貨單)。**不自動重試**:同一把鑰匙再送不會入兩次,要不要再送由畫面決定。 */
 export const useReceiveVendorOrder = () => {
   const qc = useQueryClient();
@@ -2648,12 +2662,14 @@ export const useReceiveVendorOrder = () => {
     mutationFn: (vars: {
       order: number;
       request_key: string;
-      lines: ReceiveSend[];
+      lines: ReceiveSend[] | ManualSend[];
       issue_note: string;
+      /** 半自動廠商的單才有:這一次的運費(整數元) */
+      freight?: number;
     }) =>
       api<{ receipt: number; order: VendorOrder }>(`/vendor-orders/${vars.order}/receive/`, {
         method: "POST",
-        body: JSON.stringify({ request_key: vars.request_key, lines: vars.lines, issue_note: vars.issue_note }),
+        body: JSON.stringify({ request_key: vars.request_key, lines: vars.lines, issue_note: vars.issue_note, freight: vars.freight }),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["vendor-orders"] });
@@ -2708,6 +2724,71 @@ export const useSaveVendorIssue = () => {
     mutationFn: (vars: { order: number; note: string }) =>
       api<VendorOrder>(`/vendor-orders/${vars.order}/issue/`, { method: "POST", body: JSON.stringify({ note: vars.note }) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["vendor-orders"] }),
+  });
+};
+
+/** 半自動廠商的叫貨單:已貼給廠商 / 記一句進度 / 取消與恢復。回這張單現在的樣子,直接放回清單(不重抓)。 */
+export const useVendorOrderAction = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: (vars: { order: number; action: "sent" | "progress" | "cancel"; body: Record<string, unknown> }) =>
+      api<VendorOrder>(`/vendor-orders/${vars.order}/${vars.action}/`, { method: "POST", body: JSON.stringify(vars.body) }),
+    onSuccess: (order) => {
+      qc.setQueriesData<{ results: VendorOrder[] }>({ queryKey: ["vendor-orders"] }, (old) =>
+        old ? { ...old, results: old.results.map((o) => (o.id === order.id ? order : o)) } : old,
+      );
+    },
+  });
+};
+
+// 平台管理:半自動廠商的價目表
+export const usePlatformVendorItems = (vendorId: number | null) =>
+  useQuery({
+    queryKey: ["platform-vendor-items", vendorId],
+    queryFn: () => api<{ vendor: string; results: PlatformVendorItem[] }>(`/platform/vendors/${vendorId}/items/`),
+    enabled: vendorId !== null,
+  });
+
+export const useSavePlatformVendorItem = (vendorId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Partial<PlatformVendorItem> & { id?: number }) => {
+      const { id, ...body } = payload;
+      return api<PlatformVendorItem>(id ? `/platform/vendor-items/${id}/` : `/platform/vendors/${vendorId}/items/`, {
+        method: id ? "PATCH" : "POST",
+        body: JSON.stringify(body),
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["platform-vendor-items", vendorId] });
+      qc.invalidateQueries({ queryKey: ["platform-vendors"] });
+    },
+  });
+};
+
+/** 整批貼上:`apply` 沒給 = 只預覽;有問題的那一批伺服器回 400 但內容一樣是預覽(畫面要顯示哪幾列有錯)。 */
+export const useImportPlatformVendorItems = (vendorId: number) => {
+  const qc = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: async (vars: { rows: PastedItem[]; apply: boolean }) => {
+      try {
+        return await api<VendorItemImport>(`/platform/vendors/${vendorId}/items/import/`, {
+          method: "POST",
+          body: JSON.stringify(vars),
+        });
+      } catch (e) {
+        const body = e instanceof ApiHttpError ? (e.body as VendorItemImport | undefined) : undefined;
+        if (body && Array.isArray(body.rows)) return body;
+        throw e;
+      }
+    },
+    onSuccess: (got) => {
+      if (!got.applied) return;
+      qc.invalidateQueries({ queryKey: ["platform-vendor-items", vendorId] });
+      qc.invalidateQueries({ queryKey: ["platform-vendors"] });
+    },
   });
 };
 

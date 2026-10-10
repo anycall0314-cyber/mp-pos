@@ -8,7 +8,7 @@ import {
 } from "./vendorPick.ts";
 
 const row = (provider, extra = {}) => ({
-  warehouse: 1, provider, provider_label: `廠商${provider}`, categories: [10], vendor_active: true, has_key: true,
+  warehouse: 1, provider, provider_label: `廠商${provider}`, categories: [10], vendor_active: true, ready: true,
   clerk_ordering: true, ...extra,
 });
 const FILM = { id: 10, name: "保護貼" };
@@ -19,17 +19,17 @@ const ROWS = [
   row("acme", { categories: [20, 10] }),
   row("parts", { categories: [30], clerk_ordering: false }),
   row("gone", { categories: [20], vendor_active: false }),
-  row("new", { categories: [20], has_key: false }),
-  row("moceo", { warehouse: 2, has_key: false }),
+  row("new", { categories: [20], ready: false }),
+  row("moceo", { warehouse: 2, ready: false }),
 ];
 
 test("為什麼不能叫:先看有沒有金鑰,再看廠商還在不在合作,最後才是這家門市只讓管理員叫", () => {
   assert.equal(blockedOf(row("a"), false), "");
-  assert.equal(blockedOf(row("a", { has_key: false }), true), "未開通");
+  assert.equal(blockedOf(row("a", { ready: false }), true), "未開通");
   assert.equal(blockedOf(row("a", { vendor_active: false }), true), "已停用");
   assert.equal(blockedOf(row("a", { clerk_ordering: false }), false), "限管理");
   assert.equal(blockedOf(row("a", { clerk_ordering: false }), true), "");           // 管理員不受這一格限制
-  assert.equal(blockedOf(row("a", { has_key: false, vendor_active: false, clerk_ordering: false }), false), "未開通");
+  assert.equal(blockedOf(row("a", { ready: false, vendor_active: false, clerk_ordering: false }), false), "未開通");
   assert.equal(blockedOf(row("a", { vendor_active: false, clerk_ordering: false }), false), "已停用");
   // 寫在同一排的字等長
   assert.deepEqual([...new Set(["未開通", "已停用", "限管理"].map((w) => w.length))], [3]);

@@ -7,7 +7,7 @@ owner 2026-10-10:「要再針對供應商做品名連連看，店內品名A=供�
 - 供應商 = 這家門市跟這家廠商的「入庫供應商」(串接上指定的;沒指定就用 / 建一筆跟廠商同名的)。
 - 誰能連與改:能叫貨或能進貨的人(owner:「店員都可以」)。每一次改都留紀錄:舊的那一筆停用留著,備註寫誰、什麼時候、改指到哪。
 - 只能連到入得了庫的商品(按數量管的一般商品:不追序號、不是中古、不是虛擬、沒停用)—— 跟到貨入庫同一條。
-- **品名、規格、一包幾個一律用伺服器剛跟廠商要的,畫面只講「哪一個品項 → 哪一個商品」**;廠商現在沒有的品項不能連
+- **品名、規格、一包幾個一律用伺服器剛跟廠商要的(半自動的廠商 = 平台價目表上的),畫面只講「哪一個品項 → 哪一個商品」**;廠商現在沒有的品項不能連
   (舊單上才有的品項,到貨入庫那一頁照樣可以當場挑)。
 - 改了對照不影響已經入庫的單(那些單記的是當時入到哪個商品)。
 """
@@ -18,7 +18,7 @@ from apps.catalog.models import Product, SupplierProduct
 from apps.identity.models import ProductAlias
 from apps.identity.normalize import alias_key
 
-from . import services
+from . import manual, services
 from .receiving import NOT_CHECKED, Line, _fits, _map, _owner, _retire, supplier_for, vendor_sku_of
 from .services import VendorError
 
@@ -63,7 +63,7 @@ def _row(item: dict, product) -> dict:
 
 def rows(tenant, link, vendor) -> dict:
     """連連看那一頁:這家廠商現在的每一個品項,與它對到的店內商品。"""
-    items = services.live_rows(link, vendor)
+    items = manual.catalog_rows(link, vendor)
     owners = owners_of(tenant, link.supplier, [vendor_sku_of(i["sku"], i["spec_id"]) for i in items])
     return {
         "supplier": None if link.supplier_id is None else {"id": link.supplier_id, "name": link.supplier.name},
@@ -77,8 +77,8 @@ def set_product(*, tenant, user, link, vendor, key, product_id) -> dict:
         raise VendorError("要指定是哪一個品項")
     if not (product_id is None or (isinstance(product_id, int) and not isinstance(product_id, bool))):
         raise VendorError("商品不對")
-    # 跟廠商要清單在交易與鎖之外(要等網路)
-    item = next((i for i in services.live_rows(link, vendor) if i["key"] == key), None)
+    # 跟廠商要清單在交易與鎖之外(要等網路);半自動的廠商 = 平台的價目表
+    item = next((i for i in manual.catalog_rows(link, vendor) if i["key"] == key), None)
     if item is None:
         raise VendorError(f"{vendor.name}現在沒有這個品項,請重新整理")
     line = Line(sku=item["sku"], spec_id=item["spec_id"], is_reissue=False, spec_label=item["spec_label"],

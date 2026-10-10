@@ -137,7 +137,8 @@ class PlatformListTests(_Shop):
         r = self.root.get(P_VENDORS)
         self.assertNoKeyIn(r)
         self.assertEqual([(v["code"], v["stores"]) for v in r.json()["results"]], [("moceo", 2)])
-        self.assertEqual(r.json()["protocols"], [{"value": "standard", "label": "全自動(標準格式)"}])
+        self.assertEqual(r.json()["protocols"], [{"value": "standard", "label": "全自動(標準格式)"},
+                                                 {"value": "manual", "label": "半自動(人工傳單)"}])
 
     def test_the_lists_are_not_company_data(self):
         registry.check_registry()

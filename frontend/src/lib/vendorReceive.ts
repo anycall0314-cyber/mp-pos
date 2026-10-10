@@ -84,14 +84,17 @@ export function startDraft(plan: ReceivePlan, requestKey: string): ReceiveDraft 
   return { requestKey, qty, product: {}, repick: {}, note: plan.issue_note };
 }
 
+/** 草稿裡跟「入到哪個品號」有關的那兩格(全自動與半自動的入庫草稿都有;下面三支兩邊共用)。 */
+export type Picks = Pick<ReceiveDraft, "product" | "repick">;
+
 /** 這一行這次入到哪個品號(null = 還沒選)。對過、沒按「改」的 → 現在的對照;按了「改」的、還沒對過的 → 這個人挑的。 */
-export function chosen(line: Pick<ReceiveLine, "key" | "product">, draft: ReceiveDraft): PickedProduct | null {
+export function chosen(line: Pick<ReceiveLine, "key" | "product">, draft: Picks): PickedProduct | null {
   if (line.product !== null && !draft.repick[line.key]) return { id: line.product.id, label: line.product.name };
   return draft.product[line.key] ?? null;
 }
 
 /** 按了「改」:這一行打開讓人重挑,框裡先帶**現在**對到的那一個(不是打開面板那時候的)。 */
-export function withRepick(draft: ReceiveDraft, line: Pick<ReceiveLine, "key" | "product">): ReceiveDraft {
+export function withRepick<D extends Picks>(draft: D, line: Pick<ReceiveLine, "key" | "product">): D {
   const product = { ...draft.product };
   if (line.product !== null) product[line.key] = { id: line.product.id, label: line.product.name };
   return { ...draft, product, repick: { ...draft.repick, [line.key]: true } };
@@ -105,7 +108,7 @@ export function withQty(draft: ReceiveDraft, key: string, n: number): ReceiveDra
   return { ...draft, qty };
 }
 
-export function withProduct(draft: ReceiveDraft, key: string, picked: PickedProduct | null): ReceiveDraft {
+export function withProduct<D extends Picks>(draft: D, key: string, picked: PickedProduct | null): D {
   const product = { ...draft.product };
   if (picked) product[key] = picked;
   else delete product[key];

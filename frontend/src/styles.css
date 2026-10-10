@@ -7682,6 +7682,52 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .vo-filter .vo-check { gap: 6px; color: var(--text); }
 .vo-filter .vo-check input { width: 1.15rem; height: 1.15rem; }
 .vo-diff { color: var(--warn-text); }
+/* 半自動廠商的叫貨單:要傳給廠商的那一段(可以選取)、標記與進度 */
+.vm-manual { display: grid; gap: 8px; margin-bottom: 10px; }
+.vm-message {
+  margin: 0;
+  padding: 10px 12px;
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.vm-manual-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.vm-progress { display: flex; gap: 8px; }
+.vm-progress input {
+  flex: 1 1 14rem;
+  min-width: 0;
+  min-height: var(--control-height);
+  padding: 0 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.vr-grid .vm-price { width: 6.5rem; }
+.vr-grid .vm-price.bad { border-color: var(--danger-text); }
+.vr-grid .vm-drop { margin-left: 8px; }
+/* 平台:半自動廠商的價目表與整批貼上 */
+.pv-paste {
+  width: 100%;
+  min-height: 9rem;
+  padding: 8px 10px;
+  font: inherit;
+  font-family: var(--font-mono, monospace);
+  white-space: pre;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.pv-items td input { width: 100%; min-width: 0; }
+.pv-items td.num input { text-align: right; }
+.pv-import tr.err td { color: var(--danger-text); }
 /* 品名連連看(對照):左邊廠商的品項、右邊店內商品;還沒連的那一列淡淡標出來 */
 .vm-grid td.vo-name { width: 45%; }
 .vm-grid tr.vm-open td { background: rgba(255, 180, 60, 0.06); }

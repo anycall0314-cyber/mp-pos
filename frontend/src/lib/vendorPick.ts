@@ -9,7 +9,8 @@ export interface LinkLike {
   provider_label: string;
   categories: number[];
   vendor_active: boolean;
-  has_key: boolean;
+  /** 這家門市可以跟這家往來了(全自動 = 貼了金鑰;半自動 = 管理員按了開通) */
+  ready: boolean;
   clerk_ordering: boolean;
 }
 
@@ -28,9 +29,9 @@ export interface VendorOption {
   blocked: Blocked;
 }
 
-/** 先看最根本的原因:沒有金鑰 → 廠商已經停用 → 這家門市只讓管理員叫。 */
+/** 先看最根本的原因:還沒開通(沒有金鑰 / 沒按開通)→ 廠商已經停用 → 這家門市只讓管理員叫。 */
 export function blockedOf(row: LinkLike, manager: boolean): Blocked {
-  if (!row.has_key) return "未開通";
+  if (!row.ready) return "未開通";
   if (!row.vendor_active) return "已停用";
   if (!row.clerk_ordering && !manager) return "限管理";
   return "";

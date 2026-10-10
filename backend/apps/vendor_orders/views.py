@@ -8,6 +8,8 @@
 - 品名連連看(廠商的品項 ↔ 店內商品;看、連、改、解除)→ 有「廠商叫貨」或「進貨入庫」其中一項就可以(owner:店員都可以)。不帶價錢。
 - 更新進度(跟廠商要最新狀況,順便列出「不是從 POS 叫的」單)→ 同樣是其中一項就可以(2026-10-10 起;原本只看「廠商叫貨」):
   收貨的人不一定是叫貨的人 —— 用 LINE 叫的、廠商直接出的貨,要先列得出來才能認進來入庫,而認進來與入庫看的本來就是「進貨入庫」。
+- **半自動的廠商**(`manual.py`;沒有可以接的系統):開通 = 管理員在串接上按「開通」(沒有金鑰);商品清單 = 平台的價目表;叫貨單 POS 自己成立;
+  「已貼給廠商」「取消 / 恢復」→ 要有「廠商叫貨」;「進度備註」→ 兩項有一項;到貨入庫照舊看「進貨入庫」。沒有 再送一次 / 把外面的單認進來;更新進度不問任何系統。
 """
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -21,7 +23,7 @@ from apps.tenants.permissions import is_tenant_admin
 
 from apps.parties.models import Supplier
 
-from . import mapping, receiving, secrets, services, standard, vendors
+from . import manual, mapping, receiving, secrets, services, standard, vendors
 from .models import Vendor, VendorCategory, VendorLink, VendorOrder, VendorSecret
 
 LIST_ROWS = 100
@@ -73,7 +75,9 @@ def _link(request, store, vendor):
 
 def _need_link(request, store, vendor):
     link = _link(request, store, vendor)
-    if link is None:
+    if manual.is_manual(vendor):
+        manual.need_open(link, vendor)          # 半自動的沒有金鑰:看的是管理員開通了沒
+    elif link is None:
         raise services.VendorError(f"這家門市還沒有設定{vendor.name}的金鑰,請管理員到「系統設定 → 叫貨串接」設定")
     return link
 
@@ -121,6 +125,11 @@ def _link_data(store, vendor, link, hints, manager) -> dict:
         "freight_into_cost": link.freight_into_cost if link else True,
         # 這家門市的店員能不能跟這家叫貨(管理員一律可以)。大家都看得到:畫面要知道哪幾家對這個人是灰的
         "clerk_ordering": link.clerk_ordering if link else True,
+        # 怎麼接:半自動的沒有金鑰,看的是「開通」;`ready` = 這家門市現在可以跟這家往來了(全自動 = 有金鑰,半自動 = 開通了)
+        "manual": manual.is_manual(vendor),
+        "opened": bool(link and link.opened),
+        "ready": bool(link and (link.opened if manual.is_manual(vendor) else link.id in hints)),
+        "contact": vendor.contact,
         "has_key": bool(link and link.id in hints),
         # 廠商說這把是測試(沙盒)金鑰:用它叫的是測試單。大家都看得到(叫貨的人要知道現在是不是玩真的)
         "sandbox": hints[link.id][1] if link and link.id in hints else None,
@@ -191,6 +200,15 @@ def _order_data(order: VendorOrder, names=None) -> dict:
         "status_checked_at": order.status_checked_at,
         "created_at": order.created_at,
         "created_by": order.created_by.get_username() if order.created_by else "",
+        # 半自動廠商的單(POS 自己成立的):要傳給廠商的那一段、傳了沒、人記的進度、取消了沒
+        "manual": order.manual,
+        "message": manual.order_text(order) if order.manual else "",
+        "sent_at": order.sent_at,
+        "sent_how": order.sent_how,
+        "sent_by": order.sent_by.get_username() if order.sent_by else "",
+        "progress_note": order.progress_note,
+        "cancelled_at": order.cancelled_at,
+        "cancelled_by": order.cancelled_by.get_username() if order.cancelled_by else "",
         "items": [{
             "line_no": i.line_no, "sku": i.sku, "spec_id": i.spec_id, "spec_label": i.spec_label, "name": i.name,
             "unit": i.unit, "pack_qty": i.pack_qty, "packs": i.packs, "qty": i.qty, "unit_price": _money(i.unit_price),
@@ -199,7 +217,8 @@ def _order_data(order: VendorOrder, names=None) -> dict:
 
 
 def _orders(request, store=None, vendor=None):
-    qs = VendorOrder.objects.filter(tenant=request.tenant).select_related("warehouse", "created_by") \
+    qs = VendorOrder.objects.filter(tenant=request.tenant) \
+        .select_related("warehouse", "created_by", "sent_by", "cancelled_by", "tenant") \
         .prefetch_related("items", "receipts__purchase_order", "receipts__items", "receipts__created_by")
     own = locked_warehouse_id(request.user)
     if own is not None:
@@ -253,8 +272,12 @@ def links(request):
         store = _store(request, data.get("warehouse"))
         vendor = _vendor(data.get("vendor"), active=False)
         link = _link(request, store, vendor)
-        if not vendor.is_active and (link is None or data.get("key")):
+        is_manual = manual.is_manual(vendor)
+        opening = is_manual and data.get("opened") is True and not (link and link.opened)
+        if not vendor.is_active and (link is None or data.get("key") or opening):
             raise services.VendorError(f"「{vendor.name}」已經停用,不能新開通或換金鑰")
+        if is_manual and data.get("key"):
+            raise services.VendorError(f"「{vendor.name}」不用金鑰(按「開通」就可以叫貨)")
         values = {}
         for name in LINK_FIELDS:
             if name in data:
@@ -264,9 +287,14 @@ def links(request):
                 values[name] = value.strip()
         current = _link_data(store, vendor, link, {}, False)
         merged = {name: values.get(name, current[name]) for name in LINK_FIELDS}
-        services.check_header(**merged)
+        if is_manual:       # 半自動的只管付款、取貨、收件(發票那幾格是全自動那一套要的)
+            manual.check_header(merged["payment_method"], merged["delivery_method"], merged["ship_name"],
+                                merged["ship_phone"], merged["ship_address"])
+        else:
+            services.check_header(**merged)
         for flag, wrong in (("freight_into_cost", "運費要不要算進成本,只能是「要」或「不要」"),
-                            ("clerk_ordering", "誰能叫貨只能是「店員也可」或「只限管理」")):
+                            ("clerk_ordering", "誰能叫貨只能是「店員也可」或「只限管理」"),
+                            *((("opened", "開通只能是「開」或「關」"),) if is_manual else ())):
             if flag in data:
                 if not isinstance(data[flag], bool):
                     raise services.VendorError(wrong)
@@ -322,10 +350,11 @@ def catalog(request):
         vendor = _vendor(request.query_params.get("vendor"))
         link = _need_link(request, store, vendor)
         _may_order(request, link)
-        rows = services.live_rows(link, vendor)
+        rows = manual.catalog_rows(link, vendor)
     except services.VendorError as exc:
         return _bad(exc, exc.status)
-    return Response({"warehouse": store.id, "vendor": vendor.code, "rows": [{
+    # `manual` = 半自動的廠商:價錢是平台價目表上的參考價,沒有價錢的也可以叫
+    return Response({"warehouse": store.id, "vendor": vendor.code, "manual": manual.is_manual(vendor), "rows": [{
         **row,
         "unit_price": _money(row["unit_price"]),
         "pack_price": None if row["unit_price"] is None else _money(row["unit_price"] * row["pack_qty"]),
@@ -349,13 +378,16 @@ def orders(request):
         store = _store(request, data.get("warehouse"))
         # 停用的廠商在 services.place 擋(同一把鑰匙再來確認先前那一張,廠商停用了也要回得了)
         vendor = _vendor(data.get("vendor"), active=False)
-        link = _need_link(request, store, vendor)
+        is_manual = manual.is_manual(vendor)
+        # 半自動:開通了沒在 manual.place 裡看(同一把鑰匙再來確認先前那一張,之後被關掉了也要回得了)
+        link = _link(request, store, vendor) if is_manual else _need_link(request, store, vendor)
+        if is_manual and link is None:
+            manual.need_open(link, vendor)
         _may_order(request, link)
-        order, created = services.place(
-            tenant=request.tenant, user=request.user, link=link, request_key=data.get("request_key"),
-            lines=data.get("lines"), payment_method=data.get("payment_method") or None,
-            delivery_method=data.get("delivery_method") or None, note=data.get("note") or "",
-        )
+        common = dict(tenant=request.tenant, user=request.user, link=link, request_key=data.get("request_key"),
+                      lines=data.get("lines"), payment_method=data.get("payment_method") or None,
+                      delivery_method=data.get("delivery_method") or None, note=data.get("note") or "")
+        order, created = manual.place(vendor=vendor, **common) if is_manual else services.place(**common)
     except services.VendorError as exc:
         return _bad(exc, exc.status)
     order = _orders(request).get(pk=order.pk)
@@ -377,6 +409,8 @@ def order_resend(request, pk: int):
     if order is None:
         return _bad("找不到這張叫貨單", status.HTTP_404_NOT_FOUND)
     _may_order(request, order.link)         # 再送一次可能就是成立的那一次:跟叫貨同一個門檻
+    if order.manual:
+        return Response(_order_data(order))        # POS 自己成立的單沒有「不確定」,不用再送
     try:
         order = services.resend(order)
     except services.VendorError as exc:
@@ -392,7 +426,9 @@ def sync(request):
     try:
         store = _store(request, data.get("warehouse"))
         vendor = _vendor(data.get("vendor"), active=False)
-        others = services.sync(request.tenant, _need_link(request, store, vendor))
+        link = _need_link(request, store, vendor)
+        # 半自動的廠商沒有系統可以問:進度是人記的,也沒有「不是從 POS 叫的單」可以列
+        others = [] if manual.is_manual(vendor) else services.sync(request.tenant, link)
     except services.VendorError as exc:
         return _bad(exc, exc.status)
     return Response({"results": _page(request, store, vendor), "others": others})
@@ -411,7 +447,7 @@ def receiving_plan(request, pk: int):
     if order is None:
         return _bad("找不到這張叫貨單", status.HTTP_404_NOT_FOUND)
     try:
-        return Response(receiving.plan(request.tenant, order))
+        return Response(manual.plan(request.tenant, order) if order.manual else receiving.plan(request.tenant, order))
     except services.VendorError as exc:
         return _bad(exc, exc.status)
 
@@ -424,10 +460,16 @@ def receive(request, pk: int):
         return _bad("找不到這張叫貨單", status.HTTP_404_NOT_FOUND)
     data = request.data if isinstance(request.data, dict) else {}
     try:
-        receipt, created = receiving.receive(
-            tenant=request.tenant, user=request.user, order=order, request_key=data.get("request_key"),
-            lines=data.get("lines"),
-        )
+        if order.manual:        # 半自動:實際單價與這一次的運費是入庫的人填的
+            receipt, created = manual.receive(
+                tenant=request.tenant, user=request.user, order=order, request_key=data.get("request_key"),
+                lines=data.get("lines"), freight=data.get("freight"),
+            )
+        else:
+            receipt, created = receiving.receive(
+                tenant=request.tenant, user=request.user, order=order, request_key=data.get("request_key"),
+                lines=data.get("lines"),
+            )
         if isinstance(data.get("issue_note"), str):
             receiving.set_issue(order, data["issue_note"])
     except services.VendorError as exc:
@@ -445,6 +487,8 @@ def adopt(request):
         store = _store(request, data.get("warehouse"))
         vendor = _vendor(data.get("vendor"), active=False)       # 廠商停用了,已經叫的貨照樣要入得了庫
         link = _need_link(request, store, vendor)
+        if manual.is_manual(vendor):
+            raise services.VendorError(f"「{vendor.name}」沒有系統可以查單;不是從這裡叫的貨請開一般的進貨單入庫")
         order = receiving.adopt(tenant=request.tenant, user=request.user, link=link, order_no=data.get("order_no"))
     except services.VendorError as exc:
         return _bad(exc, exc.status)
@@ -482,3 +526,37 @@ def mappings(request):
     except services.VendorError as exc:
         return _bad(exc, exc.status)
     return Response(row)
+
+
+# ── 半自動廠商的叫貨單:傳了沒、進度、取消 ────────────────────────────────────
+def _manual_action(request, pk, work):
+    order = _own_order(request, pk)
+    if order is None:
+        return _bad("找不到這張叫貨單", status.HTTP_404_NOT_FOUND)
+    data = request.data if isinstance(request.data, dict) else {}
+    try:
+        work(order, data)
+    except services.VendorError as exc:
+        return _bad(exc, exc.status)
+    return Response(_order_data(_orders(request).get(pk=order.pk)))
+
+
+@api_view(["POST"])
+def order_sent(request, pk: int):
+    """店員把叫貨內容貼給廠商之後按「已貼給廠商」(`sent: true`;收回給 false)。"""
+    abilities.require(request.user, abilities.VENDOR_ORDER)
+    return _manual_action(request, pk, lambda order, data: manual.mark_sent(order, request.user, data.get("sent")))
+
+
+@api_view(["POST"])
+def order_progress(request, pk: int):
+    """人記的一句進度(廠商沒有系統可以查)。叫貨的人、收貨的人都可以記;空的 = 清掉。"""
+    _needs_either(request)
+    return _manual_action(request, pk, lambda order, data: manual.set_progress(order, data.get("note")))
+
+
+@api_view(["POST"])
+def order_cancel(request, pk: int):
+    """取消(`cancelled: true`)/ 恢復(false)。只是 POS 這邊的標記,要自己跟廠商講。"""
+    abilities.require(request.user, abilities.VENDOR_ORDER)
+    return _manual_action(request, pk, lambda order, data: manual.set_cancelled(order, request.user, data.get("cancelled")))
