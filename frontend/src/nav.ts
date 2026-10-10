@@ -14,6 +14,8 @@ export interface NavPage {
   aliases?: string[];
   /** 只給公司管理員看的頁面(例:備份與還原) */
   adminOnly?: boolean;
+  /** 員工帳號的權限:這幾項**有任何一項**才看得到這一頁(伺服器的清單在 backend/apps/tenants/abilities.py) */
+  needs?: string[];
 }
 
 export interface NavModule {
@@ -67,11 +69,14 @@ export const NAV_MODULES: NavModule[] = [
         to: "/secondhand-acquisition",
         label: "中古收購",
         aliases: ["中古入庫", "個人收購", "廠商收購"],
+        // 個人收購要「中古收購」、廠商收購走進貨單要「進貨入庫」:有一項就進得來,頁面裡兩個分頁各看各的
+        needs: ["secondhand_buy", "purchase"],
       },
       {
         to: "/intake",
         label: "進貨匯入",
         aliases: ["待確認入庫", "進貨單匯入"],
+        needs: ["purchase"],
       },
       { to: "/suppliers", label: "供應商" },
     ],
@@ -128,7 +133,11 @@ export const NAV_MODULES: NavModule[] = [
     to: "/telecom/billing",
     tabs: [
       { to: "/telecom/billing", label: "代收話費" },
-      { to: "/telecom/expiries", label: "合約到期", aliases: ["到期查詢", "續約提醒", "門號到期"] },
+      {
+        to: "/telecom/expiries",
+        label: "合約到期",
+        aliases: ["到期查詢", "續約提醒", "門號到期"],
+      },
       { to: "/telecom-plans", label: "電信方案", aliases: ["方案管理"] },
       { to: "/sim-cards", label: "SIM 卡", aliases: ["卡片管理"] },
     ],
@@ -138,7 +147,11 @@ export const NAV_MODULES: NavModule[] = [
     label: "門市帳務",
     to: "/reports/business-daily",
     tabs: [
-      { to: "/reports/business-daily", label: "營業日報" },
+      {
+        to: "/reports/business-daily",
+        label: "營業日報",
+        needs: ["view_business_daily"],
+      },
       { to: "/expenses", label: "店頭雜支", aliases: ["雜支"] },
       { to: "/cash-adjustments", label: "現金調整" },
     ],
@@ -202,23 +215,37 @@ export const NAV_MODULES: NavModule[] = [
 
 export interface NavRole {
   role?: string;
+  /** 登入資料裡的 abilities(每一項能不能做);沒有這一格當成都可以 */
+  abilities?: Record<string, boolean>;
 }
 
 function pageVisible(page: NavPage, who: NavRole): boolean {
-  return !page.adminOnly || who.role === "tenant_admin";
+  if (page.adminOnly && who.role !== "tenant_admin") return false;
+  // 只有明講「不可以」才算沒有;需要的幾項全部都被關掉才收起來
+  if (page.needs && page.needs.every((k) => who.abilities?.[k] === false))
+    return false;
+  return true;
 }
 
 /** 這個帳號看得到的入口(每個入口底下也只留看得到的頁面) */
 export function visibleModules(who: NavRole): NavModule[] {
   return NAV_MODULES.filter(
     (m) => !m.platformOnly || who.role === "platform_admin",
-  ).map((m) => ({
-    ...m,
-    tabs: m.tabs.filter((p) => pageVisible(p, who)),
-    tools: m.tools
-      ? { ...m.tools, items: m.tools.items.filter((p) => pageVisible(p, who)) }
-      : undefined,
-  }));
+  ).map((m) => {
+    const tabs = m.tabs.filter((p) => pageVisible(p, who));
+    return {
+      ...m,
+      // 入口原本的預設頁這個帳號看不到(例:沒有「營業日報」)→ 點入口改去第一個看得到的頁,不要把人帶去「不能看」的那一頁
+      to: tabs.some((p) => p.to === m.to) ? m.to : (tabs[0]?.to ?? m.to),
+      tabs,
+      tools: m.tools
+        ? {
+            ...m.tools,
+            items: m.tools.items.filter((p) => pageVisible(p, who)),
+          }
+        : undefined,
+    };
+  });
 }
 
 /**
@@ -242,7 +269,10 @@ export interface NavMatch {
  * /repairs/items 是「維修項目」不是「維修單」,/sales/new、/transfers/12 仍然算在銷貨單、調撥作業底下。
  * 所以同一層永遠只有一頁是「目前這一頁」。
  */
-export function matchNav(pathname: string, modules: NavModule[]): NavMatch | null {
+export function matchNav(
+  pathname: string,
+  modules: NavModule[],
+): NavMatch | null {
   let best: NavMatch | null = null;
   for (const module of modules) {
     for (const page of [...module.tabs, ...(module.tools?.items ?? [])]) {
@@ -296,7 +326,8 @@ export function searchNav(query: string, modules: NavModule[]): NavSearchHit[] {
       const aliasIn = aliases.find((a) => a.toLowerCase().includes(q));
       if (label.startsWith(q)) ranks[0].push({ module, page });
       else if (label.includes(q)) ranks[1].push({ module, page });
-      else if (inModule && page.to === module.to) ranks[2].push({ module, page });
+      else if (inModule && page.to === module.to)
+        ranks[2].push({ module, page });
       else if (aliasStart) ranks[3].push({ module, page, via: aliasStart });
       else if (aliasIn) ranks[4].push({ module, page, via: aliasIn });
       else if (inModule) ranks[5].push({ module, page });

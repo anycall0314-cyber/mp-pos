@@ -10,6 +10,7 @@
 from dataclasses import dataclass
 
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import SAFE_METHODS
 
 from .permissions import is_tenant_admin
 
@@ -26,12 +27,23 @@ VOID_SALES = "void_sales"
 SALES_RETURN = "sales_return"
 VOID_PURCHASE = "void_purchase"
 VOID_OTHERS = "void_others"
+EDIT_PRODUCTS = "edit_products"
+PURCHASE = "purchase"
+SECONDHAND_BUY = "secondhand_buy"
+CASH_OPS = "cash_ops"
+VIEW_BUSINESS_DAILY = "view_business_daily"
 
 ABILITIES = [
     Ability(VOID_SALES, "作廢銷貨單", "作廢與銷退"),
     Ability(SALES_RETURN, "開立銷退單", "作廢與銷退", "含作廢銷退單"),
     Ability(VOID_PURCHASE, "作廢進貨單", "作廢與銷退"),
     Ability(VOID_OTHERS, "作廢其他單", "作廢與銷退", "調撥、維修、雜支、現金調整、代收話費"),
+    # 第二批(只擋「做」;查商品、查庫存、看進貨單與雜支清單照舊)
+    Ability(EDIT_PRODUCTS, "商品建檔", "商品", "新增、修改商品與類別品牌,含批次與匯入"),
+    Ability(PURCHASE, "進貨入庫", "進貨與帳務", "進貨單、進貨匯入、中古的廠商收購"),
+    Ability(SECONDHAND_BUY, "中古收購", "進貨與帳務", "跟客人收購二手機"),
+    Ability(CASH_OPS, "雜支調整", "進貨與帳務", "新增、修改雜支與現金調整"),
+    Ability(VIEW_BUSINESS_DAILY, "營業日報", "進貨與帳務", "看營業日報"),
 ]
 KEYS = frozenset(a.key for a in ABILITIES)
 LABELS = {a.key: a.label for a in ABILITIES}
@@ -57,6 +69,22 @@ def require(user, key: str) -> None:
     """不能做就丟 403(DRF 會回 `{"detail": …}`,畫面的錯誤訊息只認這一格)。"""
     if not can(user, key):
         raise PermissionDenied(f"這個帳號不能{LABELS[key]},請管理員到「系統設定 → 員工帳號」開啟")
+
+
+class WritesNeed:
+    """viewset 用(放在繼承清單最前面):**會改資料的請求**(不是 GET / HEAD / OPTIONS)要有 `needs_ability` 這一項;看照舊。
+
+    `ability_exempt` 裡的動作不看這一項 —— 它們自己另外擋(例:雜支的「作廢」看的是「作廢其他單」,不是「雜支調整」)。
+    """
+
+    needs_ability: str = ""
+    ability_exempt: tuple = ()
+
+    def check_permissions(self, request):
+        super().check_permissions(request)
+        if request.method in SAFE_METHODS or getattr(self, "action", None) in self.ability_exempt:
+            return
+        require(request.user, self.needs_ability)
 
 
 def for_user(user) -> dict[str, bool]:

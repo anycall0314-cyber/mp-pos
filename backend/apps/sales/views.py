@@ -238,6 +238,7 @@ class SalesOrderViewSet(
     @action(detail=False, methods=["post"], url_path="secondhand-acquisition")
     def secondhand_acquisition(self, request):
         """個人收購入庫:一個 transaction 內建立中古機序號 + 收購二手銷貨單。"""
+        abilities.require(request.user, abilities.SECONDHAND_BUY)
         tenant = request.tenant
         in_ser = SecondhandAcquisitionInputSerializer(
             data=request.data, context={"request": request}

@@ -1,3 +1,4 @@
+import { useCan } from "@/auth/AuthContext";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -162,6 +163,8 @@ export function ProductsPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [bulkPartsOpen, setBulkPartsOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  // 員工帳號的權限:沒有「商品建檔」的帳號只能看(伺服器也會擋)
+  const canEdit = useCan("edit_products");
   const [selectedProductIds, setSelectedProductIds] = useState<Set<number>>(
     new Set(),
   );
@@ -318,15 +321,18 @@ export function ProductsPage() {
                   >
                     清除選取
                   </button>
-                  <button
-                    className="btn primary"
-                    onClick={() => setBulkEditOpen(true)}
-                  >
-                    批次修改 {selectedProductIds.size} 筆
-                  </button>
+                  {canEdit && (
+                    <button
+                      className="btn primary"
+                      onClick={() => setBulkEditOpen(true)}
+                    >
+                      批次修改 {selectedProductIds.size} 筆
+                    </button>
+                  )}
                 </>
               )}
-              {/* 一次建很多筆的工具收在這裡(字數一致);平常建一個商品只有右邊那一顆 */}
+              {/* 一次建很多筆的工具收在這裡(字數一致);平常建一個商品只有右邊那一顆。沒有「商品建檔」的帳號兩顆都沒有 */}
+              {canEdit && (
               <MoreMenu label="批次工具" buttonClass="btn">
                 {(close) =>
                   BATCH_TOOLS.map((t) => (
@@ -346,9 +352,12 @@ export function ProductsPage() {
                   ))
                 }
               </MoreMenu>
-              <button className="btn primary" onClick={() => setFindOpen(true)}>
-                新增商品
-              </button>
+              )}
+              {canEdit && (
+                <button className="btn primary" onClick={() => setFindOpen(true)}>
+                  新增商品
+                </button>
+              )}
             </>
           ) : (
             <button
@@ -757,15 +766,17 @@ export function ProductsPage() {
                     <dd>{selectedProduct.is_active ? "啟用" : "停用"}</dd>
                   </dl>
                   <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-                    <button
-                      className="btn primary"
-                      onClick={() => {
-                        setDrawerInitial(selectedProduct);
-                        setDrawerOpen(true);
-                      }}
-                    >
-                      編輯
-                    </button>
+                    {canEdit && (
+                      <button
+                        className="btn primary"
+                        onClick={() => {
+                          setDrawerInitial(selectedProduct);
+                          setDrawerOpen(true);
+                        }}
+                      >
+                        編輯
+                      </button>
+                    )}
                     {/* 建好品號的下一步多半是進貨:帶著這個商品去進貨開單頁(中古機去中古收購;虛擬、停用的沒有這顆) */}
                     {(() => {
                       const to = purchaseLinkFor([selectedProduct]);

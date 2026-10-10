@@ -9,6 +9,7 @@ from django.db.models import Q
 from apps.catalog.models import Product
 from apps.inventory.models import Warehouse
 from apps.parties.models import Supplier
+from apps.tenants import abilities
 from apps.tenants.permissions import is_tenant_admin
 
 from . import services
@@ -150,7 +151,7 @@ class ProductAliasViewSet(viewsets.ModelViewSet):
 
 
 class IntakeBatchViewSet(
-    mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet
+    abilities.WritesNeed, mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet
 ):
     """進貨待確認批次。
 
@@ -158,6 +159,8 @@ class IntakeBatchViewSet(
     GET  /api/v1/identity/intakes/            批次清單
     POST /api/v1/identity/intakes/{id}/commit/  全部對應完 → 過帳成進貨單
     """
+
+    needs_ability = abilities.PURCHASE      # 員工帳號的權限:進貨匯入算「進貨入庫」;看清單照舊
     serializer_class = IntakeBatchSerializer
     filterset_fields = ["status", "source", "supplier"]
     ordering = ["-id"]
@@ -272,9 +275,11 @@ class IntakeBatchViewSet(
 
 
 class IntakeItemViewSet(
-    mixins.RetrieveModelMixin, viewsets.GenericViewSet
+    abilities.WritesNeed, mixins.RetrieveModelMixin, viewsets.GenericViewSet
 ):
     """待確認明細逐筆處理:選候選 / 建新品 / 駁回。"""
+
+    needs_ability = abilities.PURCHASE      # 員工帳號的權限:同上
     serializer_class = IntakeItemSerializer
 
     def get_queryset(self):
@@ -319,6 +324,8 @@ class IntakeItemViewSet(
 
     @action(detail=True, methods=["post"], url_path="new-product")
     def new_product(self, request, pk=None):
+        # 這一步會建出一個新品號:除了「進貨入庫」還要「商品建檔」(不然關掉商品建檔的人從進貨匯入照樣建得出商品)
+        abilities.require(request.user, abilities.EDIT_PRODUCTS)
         item = self.get_object()
         body = NewProductForItemSerializer(data=request.data)
         body.is_valid(raise_exception=True)

@@ -66,6 +66,7 @@ export function PurchaseListPage() {
   const voidMutation = useVoidPurchaseOrder();
   // 員工帳號的權限:關掉的人沒有這顆(伺服器也會擋)
   const canVoid = useCan("void_purchase");
+  const canPurchase = useCan("purchase");
   const [day, setDay] = useState("");
   const [showAll, setShowAll] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(focusId);
@@ -235,13 +236,15 @@ export function PurchaseListPage() {
         {draftLines > 0 && (
           <span className="wb-badge warn">草稿 {draftLines} 行</span>
         )}
-        <button
-          type="button"
-          className="wb-btn go"
-          onClick={() => navigate("/purchases/new")}
-        >
-          新增進貨
-        </button>
+        {canPurchase && (
+          <button
+            type="button"
+            className="wb-btn go"
+            onClick={() => navigate("/purchases/new")}
+          >
+            新增進貨
+          </button>
+        )}
       </div>
 
       {focusId && focusQ.isError && (

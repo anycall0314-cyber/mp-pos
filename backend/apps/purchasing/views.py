@@ -34,6 +34,7 @@ class PurchaseOrderCategoryViewSet(viewsets.ModelViewSet):
 
 
 class PurchaseOrderViewSet(
+    abilities.WritesNeed,
     IdempotentCreateMixin,
     WarehouseScopedMixin,
     mixins.ListModelMixin,
@@ -43,6 +44,8 @@ class PurchaseOrderViewSet(
 ):
     """進貨單:儲存即生效;不開放 update / delete,要取消請用 void action。"""
 
+    needs_ability = abilities.PURCHASE      # 員工帳號的權限:開進貨單要有「進貨入庫」
+    ability_exempt = ("void",)              # 作廢看的是「作廢進貨單」
     idempotency_scope = "purchase-order"
     serializer_class = PurchaseOrderSerializer
     search_fields = ["no", "supplier__code", "supplier__name", "note", "invoice_no"]

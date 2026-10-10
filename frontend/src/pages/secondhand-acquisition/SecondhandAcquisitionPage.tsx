@@ -1,3 +1,4 @@
+import { useCan } from "@/auth/AuthContext";
 import { useState } from "react";
 
 import { Banner } from "@/components/Banner";
@@ -30,7 +31,15 @@ const TABS: { value: Tab; label: string; hint: string }[] = [
  *   儲存成功後不離開頁面,而是 bump key 重置表單 + 顯示成功訊息。
  */
 export function SecondhandAcquisitionPage() {
-  const [tab, setTab] = useState<Tab>("personal");
+  // 員工帳號的權限:個人收購要「中古收購」;廠商收購走進貨單,要「進貨入庫」。
+  // 沒有的那一個分頁不出現(不讓人點完序號才被擋);兩個都沒有的人導覽上根本沒有這一頁
+  const allowed: Record<Tab, boolean> = {
+    personal: useCan("secondhand_buy"),
+    vendor: useCan("purchase"),
+  };
+  const tabs = TABS.filter((t) => allowed[t.value]);
+  const [picked, setTab] = useState<Tab>("personal");
+  const tab: Tab | null = allowed[picked] ? picked : (tabs[0]?.value ?? null);
   // 廠商收購儲存成功後 bump 強制進貨工作台重建(清空所有 state)
   const [vendorKey, setVendorKey] = useState(0);
   const [vendorSuccess, setVendorSuccess] = useState<string | null>(null);
@@ -46,7 +55,7 @@ export function SecondhandAcquisitionPage() {
         title="中古收購"
         actions={
           <div className="tab-switcher" role="tablist" aria-label="收購來源">
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <button
                 key={t.value}
                 type="button"
@@ -66,7 +75,9 @@ export function SecondhandAcquisitionPage() {
           </div>
         }
       />
-      {tab === "personal" ? (
+      {tab === null ? (
+        <div className="md-empty">這個帳號不能中古收購</div>
+      ) : tab === "personal" ? (
         <SecondhandPersonalEntry />
       ) : (
         <>

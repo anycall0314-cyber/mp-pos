@@ -43,6 +43,7 @@ from apps.purchasing.models import PurchaseOrderItem
 from apps.sales.models import SalesOrderItem
 from apps.tenants.permissions import IsPlatformAdmin, is_tenant_admin
 from apps.transfers.models import TransferOrder, TransferOrderItem
+from apps.tenants import abilities
 
 from . import shop_terms
 from .brand_import import import_brands_series
@@ -86,7 +87,8 @@ def _own_category_id(tenant, value):
     )
 
 
-class CategoryViewSet(viewsets.ModelViewSet):
+class CategoryViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
+    needs_ability = abilities.EDIT_PRODUCTS      # 員工帳號的權限:新增 / 修改要有「商品建檔」;看照舊
     serializer_class = CategorySerializer
     search_fields = ["code", "name"]
     ordering_fields = ["sort_order", "code", "name", "created_at"]
@@ -100,7 +102,8 @@ class CategoryViewSet(viewsets.ModelViewSet):
         serializer.save(tenant=self.request.tenant)
 
 
-class ProductViewSet(viewsets.ModelViewSet):
+class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
+    needs_ability = abilities.EDIT_PRODUCTS      # 員工帳號的權限:新增 / 修改要有「商品建檔」;看照舊
     serializer_class = ProductSerializer
     # 基本搜尋欄;serials__serial_no 改由 get_search_fields 動態加入,
     # 只有純數字 6 碼以上的查詢(IMEI-like)才會把序號納入比對,
@@ -1394,7 +1397,8 @@ class ProductViewSet(viewsets.ModelViewSet):
         )
 
 
-class BrandViewSet(viewsets.ModelViewSet):
+class BrandViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
+    needs_ability = abilities.EDIT_PRODUCTS      # 員工帳號的權限:新增 / 修改要有「商品建檔」;看照舊
     """品牌主檔 CRUD(per-tenant)。
 
     經銷商可自行新增 / 編輯 / 刪除自家的品牌與系列;
@@ -1456,7 +1460,8 @@ class BrandViewSet(viewsets.ModelViewSet):
         return Response(result)
 
 
-class PhoneSeriesViewSet(viewsets.ModelViewSet):
+class PhoneSeriesViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
+    needs_ability = abilities.EDIT_PRODUCTS      # 員工帳號的權限:新增 / 修改要有「商品建檔」;看照舊
     """產品系列主檔 CRUD(掛在 Brand 下,per-tenant)。
 
     用 ?brand=<id> 過濾單一品牌的系列;
@@ -1478,7 +1483,8 @@ class PhoneSeriesViewSet(viewsets.ModelViewSet):
         serializer.save(tenant=self.request.tenant)
 
 
-class ConditionViewSet(viewsets.ModelViewSet):
+class ConditionViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
+    needs_ability = abilities.EDIT_PRODUCTS      # 員工帳號的權限:新增 / 修改要有「商品建檔」;看照舊
     """商品狀態主檔 CRUD(per-tenant)。
 
     用於建手機型號 wizard 的「狀態」維度:全新 / 已拆封 / 中古機(保固內)/ 中古機。
@@ -1501,7 +1507,8 @@ class ConditionViewSet(viewsets.ModelViewSet):
         serializer.save(tenant=self.request.tenant)
 
 
-class ProductTypeViewSet(viewsets.ModelViewSet):
+class ProductTypeViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
+    needs_ability = abilities.EDIT_PRODUCTS      # 員工帳號的權限:新增 / 修改要有「商品建檔」;看照舊
     """產品類型主檔 CRUD(per-tenant)。
 
     經銷商可自訂類型(手機 / 平板 / 耳機 / 手錶 / 智慧家電 …),
@@ -1524,7 +1531,8 @@ class ProductTypeViewSet(viewsets.ModelViewSet):
         serializer.save(tenant=self.request.tenant)
 
 
-class PartTemplateViewSet(viewsets.ModelViewSet):
+class PartTemplateViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
+    needs_ability = abilities.EDIT_PRODUCTS      # 員工帳號的權限:新增 / 修改要有「商品建檔」;看照舊
     """零件範本 CRUD + 批次建立 actions。
 
     /api/v1/part-templates/                            CRUD

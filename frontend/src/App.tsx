@@ -45,6 +45,7 @@ import { SalesPersonsPage } from "@/pages/sales-persons/SalesPersonsPage";
 import { BackupPage } from "@/pages/backup/BackupPage";
 import { LegacyMappingPage } from "@/pages/legacy/LegacyMappingPage";
 import { LedgerChecksPage } from "@/pages/ledger/LedgerChecksPage";
+import { NeedsAbility } from "@/components/NeedsAbility";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { StaffAccountsPage } from "@/pages/settings/StaffAccountsPage";
 import { SimCardsPage } from "@/pages/sim-cards/SimCardsPage";
@@ -124,7 +125,7 @@ export function App() {
     );
   }
 
-  const who = { role: user?.profile?.role };
+  const who = { role: user?.profile?.role, abilities: user?.abilities };
   const modules = visibleModules(who);
   const navMatch = matchForUser(location.pathname, who);
 
@@ -218,7 +219,14 @@ export function App() {
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<HomePage />} />
           <Route path="/products" element={<ProductsPage />} />
-          <Route path="/intake" element={<IntakePage />} />
+          <Route
+            path="/intake"
+            element={
+              <NeedsAbility ability="purchase" doing="進貨入庫">
+                <IntakePage />
+              </NeedsAbility>
+            }
+          />
           <Route path="/part-templates" element={<PartTemplatesPage />} />
           <Route path="/brand-series" element={<BrandSeriesPage />} />
           <Route path="/product-types" element={<ProductTypesPage />} />
@@ -230,7 +238,14 @@ export function App() {
           <Route path="/telecom-plans" element={<TelecomPlansPage />} />
           <Route path="/sim-cards" element={<SimCardsPage />} />
           <Route path="/purchases" element={<PurchaseListPage />} />
-          <Route path="/purchases/new" element={<PurchaseWorkbenchPage />} />
+          <Route
+            path="/purchases/new"
+            element={
+              <NeedsAbility ability="purchase" doing="進貨入庫">
+                <PurchaseWorkbenchPage />
+              </NeedsAbility>
+            }
+          />
           <Route path="/purchases/:id" element={<PurchaseListPage />} />
           <Route
             path="/purchases/:id/print/labels"
@@ -329,7 +344,11 @@ export function App() {
           />
           <Route
             path="/reports/business-daily"
-            element={<BusinessDailyReportPage />}
+            element={
+              <NeedsAbility ability="view_business_daily" doing="看營業日報">
+                <BusinessDailyReportPage />
+              </NeedsAbility>
+            }
           />
           <Route
             path="/reports/parts-usage"

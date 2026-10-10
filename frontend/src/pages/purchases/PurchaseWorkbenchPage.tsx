@@ -21,7 +21,7 @@ import type {
   PurchaseOrder,
   TaxMethod,
 } from "@/api/types";
-import { useCurrentUser, useDefaultWarehouse } from "@/auth/AuthContext";
+import { useCan, useCurrentUser, useDefaultWarehouse } from "@/auth/AuthContext";
 import { openPurchaseLabels } from "@/components/labels/openLabelPrint";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
@@ -305,6 +305,8 @@ export function PurchaseWorkbenchPage({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isSecondhandVendor = mode === "secondhand-vendor";
+  // 員工帳號的權限:刷到系統沒有的商品要當場建,得有「商品建檔」(沒有的人掃碼框沒有「建立」那一顆)
+  const canEditProducts = useCan("edit_products");
   /** 嵌在別頁裡(中古收購):沒有自己的頁首,存完不離開 */
   const embedded = !!onAfterCreated;
   const listPath = "/purchases";
@@ -1577,7 +1579,7 @@ export function PurchaseWorkbenchPage({
               peek.open({ id: o.payload.id, name: o.payload.name, sku: o.payload.sku, onUse: use })
             }
             onPick={onPick}
-            onCreate={isSecondhandVendor ? undefined : startCreate}
+            onCreate={isSecondhandVendor || !canEditProducts ? undefined : startCreate}
           />
           <label
             className="wb-check"

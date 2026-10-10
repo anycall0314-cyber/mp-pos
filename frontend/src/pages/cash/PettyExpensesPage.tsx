@@ -21,6 +21,7 @@ export function PettyExpensesPage() {
   const voidMutation = useVoidPettyExpense();
   // 員工帳號的權限(作廢其他單):關掉的人沒有這顆(伺服器也會擋)
   const canVoid = useCan("void_others");
+  const canWrite = useCan("cash_ops");                // 新增 / 修改要「雜支調整」
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerInitial, setDrawerInitial] = useState<PettyExpense | null>(
     null,
@@ -136,15 +137,17 @@ export function PettyExpensesPage() {
           </dl>
           {!r.is_void && (
             <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-              <button
-                className="btn primary"
-                onClick={() => {
-                  setDrawerInitial(r);
-                  setDrawerOpen(true);
-                }}
-              >
-                編輯
-              </button>
+              {canWrite && (
+                <button
+                  className="btn primary"
+                  onClick={() => {
+                    setDrawerInitial(r);
+                    setDrawerOpen(true);
+                  }}
+                >
+                  編輯
+                </button>
+              )}
               {canVoid && (
                 <button
                   className="btn danger"
@@ -166,15 +169,17 @@ export function PettyExpensesPage() {
       <Toolbar
         title="店頭雜支"
         actions={
-          <button
-            className="btn primary"
-            onClick={() => {
-              setDrawerInitial(null);
-              setDrawerOpen(true);
-            }}
-          >
-            + 新增雜支
-          </button>
+          canWrite ? (
+            <button
+              className="btn primary"
+              onClick={() => {
+                setDrawerInitial(null);
+                setDrawerOpen(true);
+              }}
+            >
+              + 新增雜支
+            </button>
+          ) : null
         }
       >
         <span style={{ color: "var(--text-dim)", fontSize: 14 }}>

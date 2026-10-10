@@ -94,7 +94,7 @@ class AccountPageTests(_Shop):
         self.assertEqual(r.status_code, 200, r.content.decode())
         body = r.json()
         self.assertEqual([a["key"] for a in body["abilities"]], ALL)
-        self.assertEqual({a["group"] for a in body["abilities"]}, {"作廢與銷退"})
+        self.assertEqual({a["group"] for a in body["abilities"]}, {"作廢與銷退", "商品", "進貨與帳務"})
         rows = {a["username"]: a for a in body["accounts"]}
         self.assertEqual(set(rows), {"a-boss", "a-clerk"})
         self.assertEqual((rows["a-clerk"]["editable"], rows["a-boss"]["editable"]), (True, False))
@@ -148,8 +148,7 @@ class AccountPageTests(_Shop):
     def test_the_login_data_carries_what_this_account_can_do(self):
         self.turn_off("void_sales", "void_others")
         me = self.c.clerk.get("/api/v1/auth/me/").json()
-        self.assertEqual(me["abilities"], {"void_sales": False, "sales_return": True, "void_purchase": True,
-                                           "void_others": False})
+        self.assertEqual(me["abilities"], {**{k: True for k in ALL}, "void_sales": False, "void_others": False})
         self.turn_off(*ALL, user=self.c.admin_user)                 # 管理員身上就算有,也不算
         self.assertEqual(self.c.admin.get("/api/v1/auth/me/").json()["abilities"], {k: True for k in ALL})
 
@@ -289,3 +288,200 @@ class BlockingTests(_Shop):
         self.assertEqual(self.c.clerk.get("/api/v1/sales-orders/").status_code, 200)
         self.assertEqual(self.c.clerk.get("/api/v1/sales-returns/").status_code, 200)
         self.assertEqual(self.c.clerk.get(f"/api/v1/sales-returns/returnable/?sales_order={r.json()['id']}").status_code, 200)
+
+
+class SecondBatchTests(_Shop):
+    """第二批:商品建檔、進貨入庫、中古收購、雜支調整、營業日報。只擋「做」,看照舊;各項互不影響。"""
+
+    def setUp(self):
+        super().setUp()
+        self.c.purchase(case_qty=5)
+
+    def blocked(self, r, label):
+        self.assertEqual(r.status_code, 403, r.content.decode())
+        self.assertIn(label, r.json()["detail"])
+
+    # ── 商品建檔
+    def test_product_setup(self):
+        from apps.catalog.models import Brand, Category, Product
+
+        case = f"/api/v1/products/{self.c.case.id}/"
+        new = {"name": "新的皮套 Z9", "category": self.c.cat_case.id, "requires_serial": False}
+        self.turn_off("edit_products")
+        writes = [
+            ("post", "/api/v1/products/", new),
+            ("patch", case, {"spec": "改規格", "list_price": "1"}),
+            ("put", case, {**new, "name": "改掉品名"}),
+            ("delete", case, None),
+            ("post", "/api/v1/products/bulk-edit/", {"ids": [self.c.case.id], "patch": {"list_price": "1"}}),
+            ("post", "/api/v1/products/bulk/", {"items": [new]}),
+            ("post", "/api/v1/products/create-phone-model/", {}),
+            ("post", "/api/v1/products/import/", {}),
+            ("post", "/api/v1/categories/", {"code": "ZZ", "name": "新類別"}),
+            ("patch", f"/api/v1/categories/{self.c.cat_case.id}/", {"name": "改類別"}),
+            ("post", "/api/v1/brands/", {"code": "zz", "name": "新品牌"}),
+            ("post", "/api/v1/phone-series/", {"code": "zz", "name": "新系列"}),
+            ("post", "/api/v1/conditions/", {"code": "zz", "name": "新品況"}),
+            ("post", "/api/v1/product-types/", {"code": "zz", "name": "新類型"}),
+            ("post", "/api/v1/part-templates/", {"name": "新範本"}),
+        ]
+        for method, url, body in writes:
+            r = getattr(self.c.clerk, method)(url, body, format="json") if body is not None else getattr(self.c.clerk, method)(url)
+            self.blocked(r, "商品建檔")
+        self.c.case.refresh_from_db()
+        self.assertEqual((self.c.case.spec, self.c.case.list_price, self.c.case.name), ("", Decimal("390"), self.c.case.name))
+        self.assertFalse(Product.objects.filter(tenant=self.t, name__in=["新的皮套 Z9", "改掉品名"]).exists())
+        self.assertFalse(Category.objects.filter(tenant=self.t, code="ZZ").exists())
+        self.assertFalse(Brand.objects.filter(tenant=self.t, code="zz").exists())
+        # 看照舊:清單、單筆、搜尋、庫存查詢、先找有沒有建過
+        for url in ("/api/v1/products/", case, "/api/v1/products/?search=皮套", "/api/v1/products/stock-matrix/",
+                    "/api/v1/products/resolve/?q=皮套", f"/api/v1/products/{self.c.case.id}/usage/",
+                    "/api/v1/categories/", "/api/v1/brands/", "/api/v1/conditions/"):
+            self.assertEqual(self.c.clerk.get(url).status_code, 200, url)
+        # 開單照舊
+        self.assertEqual(self.sell().status_code, 201)
+        # 關的是別項:照舊可以改
+        self.turn_off(*[k for k in ALL if k != "edit_products"])
+        r = self.c.clerk.patch(case, {"spec": "改規格"}, format="json")
+        self.assertEqual(r.status_code, 200, r.content.decode())
+        self.assertEqual(self.c.clerk.post("/api/v1/categories/", {"code": "ZZ", "name": "新類別"}, format="json").status_code, 201)
+
+    def sell(self):
+        return self.c.clerk.post("/api/v1/sales-orders/", {
+            "customer": self.c.customer.id, "warehouse": self.c.wh.id, "tax_method": "untaxed",
+            "items": [{"product": self.c.case.id, "qty": 1, "unit_price": "390"}],
+            "payments": [{"method": "cash", "amount": "390"}]}, format="json")
+
+    # ── 進貨入庫
+    def purchase_body(self):
+        return {"supplier": self.c.supplier.id, "warehouse": self.c.wh.id, "tax_method": "untaxed",
+                "items": [{"product": self.c.case.id, "qty": 2, "unit_price": "100"}]}
+
+    def test_receiving_goods(self):
+        from apps.identity.models import IntakeBatch
+
+        before = PurchaseOrder.objects.filter(tenant=self.t).count()
+        intake = {"raw_text": "皮套 x1", "supplier": self.c.supplier.id, "warehouse": self.c.wh.id}
+        self.turn_off("purchase")
+        self.blocked(self.c.clerk.post("/api/v1/purchase-orders/", self.purchase_body(), format="json"), "進貨入庫")
+        self.blocked(self.c.clerk.post("/api/v1/identity/intakes/", intake, format="json"), "進貨入庫")
+        self.blocked(self.c.clerk.post("/api/v1/identity/intakes/ocr/", {}, format="json"), "進貨入庫")
+        self.assertEqual(PurchaseOrder.objects.filter(tenant=self.t).count(), before)
+        self.assertFalse(IntakeBatch.objects.filter(tenant=self.t).exists())
+        self.assertEqual(StockBalance.objects.get(tenant=self.t, product=self.c.case, warehouse=self.c.wh).qty, 5)
+        # 看進貨單、待確認清單照舊;作廢進貨單是另一項(沒被關就照舊)
+        self.assertEqual(self.c.clerk.get("/api/v1/purchase-orders/").status_code, 200)
+        self.assertEqual(self.c.clerk.get("/api/v1/identity/intakes/").status_code, 200)
+        po = PurchaseOrder.objects.filter(tenant=self.t).first()
+        self.assertEqual(self.c.clerk.post(f"/api/v1/purchase-orders/{po.id}/void/", {}, format="json").status_code, 200)
+        # 關的是別項:照舊可以進貨
+        self.turn_off(*[k for k in ALL if k != "purchase"])
+        self.assertEqual(self.c.clerk.post("/api/v1/purchase-orders/", self.purchase_body(), format="json").status_code, 201)
+        self.assertEqual(self.c.clerk.post("/api/v1/identity/intakes/", intake, format="json").status_code, 201)
+
+    def test_intake_lines_and_creating_a_product_from_one(self):
+        """進貨匯入的每一步都算「進貨入庫」;其中「建新品」另外還要「商品建檔」(紅隊提的:不然關掉商品建檔的人從進貨匯入照樣建得出商品)。"""
+        from apps.catalog.models import Product
+        from apps.identity.models import IntakeItem
+
+        r = self.c.admin.post("/api/v1/identity/intakes/", {
+            "raw_text": "全新的東西 QX77 x1 50", "supplier": self.c.supplier.id, "warehouse": self.c.wh.id}, format="json")
+        self.assertEqual(r.status_code, 201, r.content.decode())
+        batch = r.json()["id"]
+        item = IntakeItem.objects.filter(batch_id=batch).first()
+        one = f"/api/v1/identity/intake-items/{item.id}"
+        products = Product.objects.filter(tenant=self.t).count()
+        self.turn_off("purchase")
+        for action in ("match", "new-product", "correct", "units", "reject"):
+            self.blocked(self.c.clerk.post(f"{one}/{action}/", {}, format="json"), "進貨入庫")
+        self.blocked(self.c.clerk.post(f"/api/v1/identity/intakes/{batch}/commit/", {}, format="json"), "進貨入庫")
+        self.blocked(self.c.clerk.post(f"/api/v1/identity/intakes/{batch}/set-header/", {}, format="json"), "進貨入庫")
+        self.assertEqual(self.c.clerk.get(f"{one}/").status_code, 200)                 # 看照舊
+        # 有「進貨入庫」、沒有「商品建檔」:別的步驟可以,建新品不行
+        self.turn_off("edit_products")
+        new = {"name": "全新的東西 QX77", "category": self.c.cat_case.id, "requires_serial": False}
+        self.blocked(self.c.clerk.post(f"{one}/new-product/", new, format="json"), "商品建檔")
+        self.assertEqual(Product.objects.filter(tenant=self.t).count(), products)
+        r = self.c.clerk.post(f"{one}/correct/", {"qty": 2}, format="json")
+        self.assertNotEqual(r.status_code, 403, r.content.decode())
+        # 兩項都有:建得出來
+        self.turn_off()
+        r = self.c.clerk.post(f"{one}/new-product/", new, format="json")
+        self.assertIn(r.status_code, (200, 201), r.content.decode())
+        self.assertEqual(Product.objects.filter(tenant=self.t).count(), products + 1)
+
+    # ── 中古收購
+    def test_buying_a_used_phone_from_a_customer(self):
+        from apps.catalog.models import Product
+        from apps.parties.models import Member
+
+        used = Product.objects.create(tenant=self.t, category=self.c.cat_phone, name="甲 中古 iPhone 13", is_secondhand=True)
+        member = Member.objects.create(tenant=self.t, name="王小明", phone="0912000111")
+        body = {"member": member.id, "warehouse": self.c.wh.id, "product": used.id, "serial_no": "甲USED1",
+                "condition_grade": "A", "acquisition_price": "5000", "payment_method_code": "cash"}
+        self.turn_off("secondhand_buy")
+        self.blocked(self.c.clerk.post("/api/v1/sales-orders/secondhand-acquisition/", body, format="json"), "中古收購")
+        self.assertFalse(ProductSerialExists(self.t, "甲USED1"))
+        # 中古的廠商收購走進貨單,看的是「進貨入庫」,不是這一項
+        r = self.c.clerk.post("/api/v1/purchase-orders/", {
+            "supplier": self.c.supplier.id, "warehouse": self.c.wh.id, "tax_method": "untaxed",
+            "items": [{"product": used.id, "qty": 1, "unit_price": "4000", "serial_numbers": ["甲USED2"]}]}, format="json")
+        self.assertEqual(r.status_code, 201, r.content.decode())
+        self.turn_off("purchase")                                   # 反過來:關進貨、留中古收購
+        r = self.c.clerk.post("/api/v1/sales-orders/secondhand-acquisition/", body, format="json")
+        self.assertEqual(r.status_code, 201, r.content.decode())
+        self.assertTrue(ProductSerialExists(self.t, "甲USED1"))
+
+    # ── 雜支調整
+    def test_petty_cash_documents(self):
+        expense = {"warehouse": self.c.wh.id, "category": "other", "amount": "100", "payment_method": self.c.cash.id}
+        adjust = {"warehouse": self.c.wh.id, "direction": "in", "reason": "other", "amount": "50"}
+        kept = PettyExpense.objects.create(tenant=self.t, warehouse=self.c.wh, amount=Decimal("300"), payment_method=self.c.cash)
+        kept_adj = CashAdjustment.objects.create(tenant=self.t, warehouse=self.c.wh, amount=Decimal("70"))
+        self.turn_off("cash_ops")
+        self.blocked(self.c.clerk.post("/api/v1/petty-expenses/", expense, format="json"), "雜支調整")
+        self.blocked(self.c.clerk.patch(f"/api/v1/petty-expenses/{kept.id}/", {"amount": "1"}, format="json"), "雜支調整")
+        self.blocked(self.c.clerk.post("/api/v1/cash-adjustments/", adjust, format="json"), "雜支調整")
+        self.blocked(self.c.clerk.patch(f"/api/v1/cash-adjustments/{kept_adj.id}/", {"amount": "1"}, format="json"), "雜支調整")
+        kept.refresh_from_db(); kept_adj.refresh_from_db()
+        self.assertEqual((kept.amount, kept_adj.amount, PettyExpense.objects.filter(tenant=self.t).count(),
+                          CashAdjustment.objects.filter(tenant=self.t).count()), (Decimal("300"), Decimal("70"), 1, 1))
+        self.assertEqual(self.c.clerk.get("/api/v1/petty-expenses/").status_code, 200)             # 看照舊
+        self.assertEqual(self.c.clerk.get("/api/v1/cash-adjustments/").status_code, 200)
+        # 作廢是另一項(作廢其他單):沒被關就照舊可以作廢
+        self.assertEqual(self.c.clerk.post(f"/api/v1/petty-expenses/{kept.id}/void/", {}, format="json").status_code, 200)
+        # 關的是別項:新增、修改照舊
+        self.turn_off(*[k for k in ALL if k != "cash_ops"])
+        r = self.c.clerk.post("/api/v1/petty-expenses/", expense, format="json")
+        self.assertEqual(r.status_code, 201, r.content.decode())
+        r = self.c.clerk.post("/api/v1/cash-adjustments/", adjust, format="json")
+        self.assertEqual(r.status_code, 201, r.content.decode())
+        self.assertEqual(self.c.clerk.patch(f"/api/v1/cash-adjustments/{kept_adj.id}/", {"note": "補備註"}, format="json").status_code, 200)
+
+    # ── 營業日報
+    def test_the_daily_cash_report(self):
+        url = f"/api/v1/reports/business-daily/?warehouse={self.c.wh.id}&date={date.today()}"
+        self.turn_off("view_business_daily")
+        self.blocked(self.c.clerk.get(url), "營業日報")
+        self.turn_off(*[k for k in ALL if k != "view_business_daily"])
+        self.assertEqual(self.c.clerk.get(url).status_code, 200)
+        self.assertEqual(self.c.admin.get(url).status_code, 200)
+
+    def test_with_all_five_off_selling_and_looking_still_work(self):
+        self.turn_off("edit_products", "purchase", "secondhand_buy", "cash_ops", "view_business_daily")
+        self.assertEqual(self.sell().status_code, 201)
+        for url in ("/api/v1/products/", "/api/v1/products/stock-matrix/", "/api/v1/purchase-orders/", "/api/v1/sales-orders/",
+                    "/api/v1/petty-expenses/", "/api/v1/home-summary/"):
+            self.assertEqual(self.c.clerk.get(url).status_code, 200, url)
+        # 調撥不算進貨:照舊
+        r = self.c.clerk.post("/api/v1/transfer-orders/", {
+            "from_warehouse": self.c.wh.id, "to_warehouse": self.c.warehouses[1].id,
+            "items": [{"product": self.c.case.id, "qty": 1}]}, format="json")
+        self.assertEqual(r.status_code, 201, r.content.decode())
+
+
+def ProductSerialExists(tenant, serial_no) -> bool:
+    from apps.inventory.models import ProductSerial
+
+    return ProductSerial.objects.filter(tenant=tenant, serial_no=serial_no).exists()
+

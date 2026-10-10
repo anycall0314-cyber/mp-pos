@@ -2,7 +2,16 @@
 // 清單與判斷只有伺服器那一份(backend/apps/tenants/abilities.py),**真正擋的是伺服器**;
 // 這裡只決定按鈕要不要出現(不讓人白按),以及員工帳號頁怎麼排。
 export type AbilityKey =
-  "void_sales" | "sales_return" | "void_purchase" | "void_others";
+  | "void_sales"
+  | "sales_return"
+  | "void_purchase"
+  | "void_others"
+  // 第二批
+  | "edit_products"
+  | "purchase"
+  | "secondhand_buy"
+  | "cash_ops"
+  | "view_business_daily";
 
 export interface AbilityInfo {
   key: string;

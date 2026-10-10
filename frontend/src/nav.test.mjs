@@ -174,3 +174,34 @@ test("功能搜尋:名稱開頭對上的排前面", () => {
   assert.equal(hits[0], "/sales");
   assert.ok(hits.includes("/reports/sales-daily"));
 });
+
+test("員工帳號的權限:需要的幾項都被關掉的頁面收起來,有一項就看得到", () => {
+  const pages = (abilities) =>
+    visibleModules({ role: "tenant_user", abilities }).flatMap((m) => [...m.tabs, ...(m.tools?.items ?? [])].map((p) => p.to));
+  const all = pages(undefined);
+  for (const to of ["/secondhand-acquisition", "/intake", "/reports/business-daily"]) assert.ok(all.includes(to), to);
+  assert.deepEqual(pages({}), all); // 沒有講的當成可以
+  assert.deepEqual(pages({ purchase: true, secondhand_buy: true, view_business_daily: true }), all);
+  // 進貨匯入只看「進貨入庫」
+  assert.ok(!pages({ purchase: false }).includes("/intake"));
+  // 中古收購:個人收購或廠商收購(走進貨單)有一個就進得來
+  assert.ok(pages({ purchase: false }).includes("/secondhand-acquisition"));
+  assert.ok(pages({ secondhand_buy: false }).includes("/secondhand-acquisition"));
+  assert.ok(!pages({ purchase: false, secondhand_buy: false }).includes("/secondhand-acquisition"));
+  // 營業日報
+  assert.ok(!pages({ view_business_daily: false }).includes("/reports/business-daily"));
+  // 別的頁不受影響
+  const off = pages({ purchase: false, secondhand_buy: false, view_business_daily: false, edit_products: false, cash_ops: false });
+  for (const to of ["/sales", "/purchases", "/products", "/inventory", "/expenses", "/cash-adjustments"]) assert.ok(off.includes(to), to);
+});
+
+test("入口的預設頁被收起來時,點入口去第一個看得到的頁", () => {
+  const cash = (abilities) => visibleModules({ role: "tenant_user", abilities }).find((m) => m.tabs.some((p) => p.to === "/expenses"));
+  assert.equal(cash(undefined).to, "/reports/business-daily");
+  assert.equal(cash({ view_business_daily: false }).to, "/expenses");
+  // 管理員頁照舊:店員看不到、管理員看得到
+  const settings = (role) => visibleModules({ role }).find((m) => m.key === "settings").tabs.map((p) => p.to);
+  assert.ok(!settings("tenant_user").includes("/settings/users"));
+  assert.ok(settings("tenant_admin").includes("/settings/users"));
+});
+

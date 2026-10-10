@@ -23,7 +23,9 @@ from .serializers import (
 )
 
 
-class PettyExpenseViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
+class PettyExpenseViewSet(abilities.WritesNeed, WarehouseScopedMixin, viewsets.ModelViewSet):
+    needs_ability = abilities.CASH_OPS      # 員工帳號的權限:新增 / 修改要有「雜支調整」
+    ability_exempt = ("void",)              # 作廢看的是「作廢其他單」
     serializer_class = PettyExpenseSerializer
     search_fields = ["no", "payee", "note"]
     ordering_fields = ["doc_date", "amount", "created_at"]
@@ -103,7 +105,9 @@ class PhoneBillCollectionViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
         return Response(self.get_serializer(obj).data)
 
 
-class CashAdjustmentViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
+class CashAdjustmentViewSet(abilities.WritesNeed, WarehouseScopedMixin, viewsets.ModelViewSet):
+    needs_ability = abilities.CASH_OPS      # 員工帳號的權限:新增 / 修改要有「雜支調整」
+    ability_exempt = ("void",)              # 作廢看的是「作廢其他單」
     serializer_class = CashAdjustmentSerializer
     search_fields = ["no", "note"]
     ordering_fields = ["doc_date", "amount", "created_at"]
@@ -247,6 +251,7 @@ def business_daily_report(request):
     結餘 = 期初現金(由前端帶) + 銷貨 cash 收入 - 進貨 cash 付款 - 雜支 cash 支出
     本 API 只回三區明細與小計;期初現金與最終結餘由前端組裝顯示。
     """
+    abilities.require(request.user, abilities.VIEW_BUSINESS_DAILY)
     tenant = request.tenant
     warehouse_id = request.query_params.get("warehouse")
     date_str = request.query_params.get("date")
