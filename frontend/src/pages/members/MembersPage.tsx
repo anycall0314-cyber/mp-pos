@@ -8,8 +8,9 @@ import {
   useSalesOrders,
   useSaveMember,
 } from "@/api/hooks";
-import type { Member } from "@/api/types";
+import type { Customer, Member } from "@/api/types";
 import { Banner } from "@/components/Banner";
+import { SourcePicker } from "@/components/SourcePicker";
 import { Toolbar } from "@/components/Toolbar";
 import { money } from "@/lib/money";
 
@@ -18,6 +19,11 @@ import { LegacyHistorySection } from "./LegacyHistorySection";
 type Selection = { kind: "member"; id: number } | { kind: "new" } | null;
 
 interface FormState {
+  kind: Member["kind"];
+  tax_id: string;
+  contact: string;
+  default_source_mode: Member["default_source_mode"];
+  default_customer_detail: Customer | null;
   name: string;
   phone: string;
   national_id: string;
@@ -28,6 +34,7 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = {
+  kind: "individual", tax_id: "", contact: "", default_source_mode: "sales_default", default_customer_detail: null,
   name: "",
   phone: "",
   national_id: "",
@@ -39,6 +46,7 @@ const EMPTY_FORM: FormState = {
 
 function toForm(m: Member): FormState {
   return {
+    kind: m.kind, tax_id: m.tax_id, contact: m.contact, default_source_mode: m.default_source_mode, default_customer_detail: m.default_customer_detail,
     name: m.name,
     phone: m.phone,
     national_id: m.national_id,
@@ -100,7 +108,7 @@ export function MembersPage() {
       (m) =>
         m.phone.toLowerCase().includes(q) ||
         m.name.toLowerCase().includes(q) ||
-        m.national_id.toLowerCase().includes(q) ||
+        m.national_id.toLowerCase().includes(q) || m.tax_id.toLowerCase().includes(q) || m.contact.toLowerCase().includes(q) ||
         m.code.toLowerCase().includes(q),
     );
   }, [members, query]);
@@ -163,7 +171,7 @@ export function MembersPage() {
         sales_person_label: so.sales_person_name
           ? `${so.sales_person_code ?? ""} ${so.sales_person_name}`
           : "—",
-        customer_name: so.customer_name || "—",
+        customer_name: so.source_name || so.customer_name || "—",
         doc_no: so.no,
         so_id: so.id,
       })),
@@ -219,11 +227,13 @@ export function MembersPage() {
   async function handleSave() {
     const name = form.name.trim();
     if (!name) {
-      setError("姓名必填");
+      setError("姓名／公司名稱必填");
       return;
     }
     const payload: Partial<Member> & { id?: number } = {
       name,
+      kind: form.kind, tax_id: form.tax_id.trim(), contact: form.contact.trim(),
+      default_source_mode: form.default_source_mode, default_customer: form.default_customer_detail?.id ?? null,
       phone: form.phone.trim(),
       national_id: form.national_id.trim(),
       birthday: form.birthday ? form.birthday : null,
@@ -286,7 +296,7 @@ export function MembersPage() {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="搜尋 電話 / 姓名 / 身分證 / 會員號"
+                placeholder="搜尋 電話 / 姓名 / 公司 / 統編 / 會員號"
               />
               {query && (
                 <button className="btn" onClick={() => setQuery("")}>
@@ -353,8 +363,10 @@ export function MembersPage() {
               {error && <Banner kind="error" message={error} />}
               {savedFlash && <Banner kind="success" message="已儲存" />}
               <dl>
+                <dt>會員類型</dt><dd><select value={form.kind} onChange={e => patch("kind", e.target.value as Member["kind"])}><option value="individual">個人</option><option value="company">公司</option></select></dd>
+                <dt>預設來源</dt><dd style={{maxWidth: 360}}><SourcePicker inherit mode={form.default_source_mode} source={form.default_customer_detail} onChange={(source, mode) => setForm(f => ({...f, default_customer_detail: source, default_source_mode: mode}))} /></dd>
                 <dt>
-                  姓名 <span style={{ color: "var(--danger-text)" }}>*</span>
+                  {form.kind === "company" ? "公司名稱" : "姓名"} <span style={{ color: "var(--danger-text)" }}>*</span>
                 </dt>
                 <dd>
                   <input
@@ -373,6 +385,10 @@ export function MembersPage() {
                     style={{ width: 280 }}
                   />
                 </dd>
+                {form.kind === "company" ? <>
+                  <dt>統一編號</dt><dd><input value={form.tax_id} onChange={e => patch("tax_id", e.target.value)} maxLength={20} /></dd>
+                  <dt>聯絡人</dt><dd><input value={form.contact} onChange={e => patch("contact", e.target.value)} maxLength={120} /></dd>
+                </> : <>
                 <dt>身分證字號</dt>
                 <dd>
                   <input
@@ -391,6 +407,7 @@ export function MembersPage() {
                     style={{ width: 180 }}
                   />
                 </dd>
+                </>}
                 <dt>地址</dt>
                 <dd>
                   <input
@@ -467,7 +484,7 @@ export function MembersPage() {
                           <th className="num" style={{ width: 90 }}>單價</th>
                           <th className="num" style={{ width: 100 }}>小計</th>
                           <th style={{ width: 100 }}>業務員</th>
-                          <th style={{ width: 100 }}>客戶</th>
+                          <th style={{ width: 100 }}>來源／舊客戶</th>
                           <th style={{ width: 120 }}>單號</th>
                         </tr>
                       </thead>

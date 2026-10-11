@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Q
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -55,7 +56,7 @@ class RepairOrderViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
     """維修單 CRUD + 狀態切換 action。"""
 
     serializer_class = RepairOrderSerializer
-    search_fields = ["no", "customer__name", "customer__phone", "device_serial"]
+    search_fields = ["no", "member__name", "member__phone", "customer__name", "customer__phone", "device_serial"]
     filterset_fields = {
         "mode": ["exact"],
         "status": ["exact"],
@@ -70,7 +71,7 @@ class RepairOrderViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
         return (
             RepairOrder.objects.for_tenant(self.request.tenant)
             .select_related(
-                "customer",
+                "customer", "member", "member__default_customer",
                 "warehouse",
                 "sales_person",
                 "repair_item",
@@ -180,7 +181,8 @@ class RepairOrderViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
             return Response([])
         qs = (
             self.get_queryset()
-            .filter(is_void=False, customer__phone=phone)
+            .filter(is_void=False)
+            .filter(Q(member__phone=phone) | Q(member__isnull=True, customer__phone=phone))
             .order_by("-received_date", "-id")[:30]
         )
         warranty_days = request.tenant.repair_warranty_days

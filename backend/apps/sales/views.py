@@ -496,7 +496,7 @@ class SalesReturnViewSet(
             "tax_method": so.tax_method,
             "invoice_voided": so.invoice_voided,
             "customer": so.customer_id,
-            "customer_name": so.customer.name if so.customer else "",
+            "customer_name": so.display_customer_name,
             "member": so.member_id,
             "member_name": so.member.name if so.member else "",
             "warehouse": so.warehouse_id,

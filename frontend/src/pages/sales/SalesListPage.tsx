@@ -501,7 +501,7 @@ export function SalesListPage() {
             <tr>
               <th>單號</th>
               <th>時間</th>
-              <th>客戶</th>
+              <th>來源／客戶・會員</th>
               <th>分店</th>
               <th>業務</th>
               <th className="num">項數</th>
@@ -539,7 +539,7 @@ export function SalesListPage() {
                     <td className="wb-small">
                       {t.doc_date.slice(5)} {clock(t.created_at)}
                     </td>
-                    <td>{t.customer_name}</td>
+                    <td>{t.customer_name}{t.member_name && <small style={{display:"block"}}>{t.member_name}</small>}</td>
                     <td>{t.warehouse_name}</td>
                     <td>{t.sales_person_name}</td>
                     <td className="num">{t.items.length}</td>

@@ -187,7 +187,7 @@ class SalesOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSeri
     items = SalesOrderItemSerializer(many=True, required=False)
     payments = SalesOrderPaymentSerializer(many=True, required=False)
     customer_phone = serializers.CharField(source="customer.phone", read_only=True)
-    customer_name = serializers.CharField(source="customer.name", read_only=True)
+    customer_name = serializers.ReadOnlyField(source="display_customer_name")
     customer_kind_label = serializers.CharField(
         source="customer.get_kind_display", read_only=True
     )
@@ -211,6 +211,7 @@ class SalesOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSeri
             "id",
             "no",
             "customer",
+            "source_name",
             "customer_phone",
             "customer_name",
             "customer_kind_label",
@@ -245,6 +246,7 @@ class SalesOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSeri
         ]
         read_only_fields = [
             "created_by",
+            "source_name",
             "id",
             "no",
             "customer_phone",
@@ -306,6 +308,13 @@ class SalesOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSeri
         )
         items_data = validated_data.pop("items", [])
         payments_data = validated_data.pop("payments", [])
+        from apps.parties.sources import transaction_source
+        member = validated_data.get("member")
+        if member is not None and not member.is_active:
+            raise serializers.ValidationError({"member": "會員已停用"})
+        source = transaction_source(validated_data, validated_data["tenant"])
+        validated_data["customer"] = source
+        validated_data["source_name"] = source.name if source else "直客"
         so = SalesOrder.objects.create(**validated_data)
         self._save_items(so, items_data)
         self._save_payments(so, payments_data)
@@ -429,7 +438,8 @@ class SalesReturnSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSer
     original_so_doc_date = serializers.DateField(
         source="original_so.doc_date", read_only=True
     )
-    customer_name = serializers.CharField(source="customer.name", read_only=True)
+    source_name = serializers.CharField(source="original_so.source_name", read_only=True)
+    customer_name = serializers.ReadOnlyField(source="original_so.display_customer_name")
     customer_phone = serializers.CharField(source="customer.phone", read_only=True)
     member_name = serializers.CharField(source="member.name", read_only=True)
     warehouse_code = serializers.CharField(source="warehouse.code", read_only=True)
@@ -444,6 +454,7 @@ class SalesReturnSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSer
             "original_so_no",
             "original_so_doc_date",
             "customer",
+            "source_name",
             "customer_name",
             "customer_phone",
             "member",

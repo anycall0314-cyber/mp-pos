@@ -422,7 +422,7 @@ export async function searchMembers(
   return data.map((m) => ({
     id: m.id,
     label: m.name || m.phone || `#${m.id}`,
-    secondary: [m.phone, m.code].filter(Boolean).join(" / "),
+    secondary: [m.kind_label, m.phone, m.tax_id, m.contact].filter(Boolean).join(" / "),
     payload: m,
   }));
 }

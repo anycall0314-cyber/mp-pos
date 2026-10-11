@@ -507,6 +507,19 @@ class NewEnvironmentRestoreTests(_Base):
         )
         return tenant, result, expected, users_before
 
+    def test_company_member_and_source_default_restore_with_new_ids(self):
+        from apps.parties.models import Customer, Member
+        self.a.customer.is_sales_default = True
+        self.a.customer.save(update_fields=["is_sales_default"])
+        member = Member.objects.create(tenant=self.a.tenant, name="乙公司", kind="company", tax_id="22222222", contact="林小姐", default_source_mode="customer", default_customer=self.a.customer)
+        tenant, *_ = self.restore_as_new()
+        restored = Member.objects.get(tenant=tenant, code=member.code)
+        source = Customer.objects.get(tenant=tenant, is_sales_default=True)
+        self.assertEqual((restored.kind, restored.tax_id, restored.contact), ("company", "22222222", "林小姐"))
+        self.assertEqual(restored.default_customer_id, source.id)
+        self.assertNotEqual(restored.default_customer_id, self.a.customer.id)
+        self.assertEqual(restored.default_source_mode, "customer")
+
     def test_books_come_back_exactly(self):
         tenant, result, expected, _ = self.restore_as_new()
         self.assertEqual(business_view(tenant), expected)

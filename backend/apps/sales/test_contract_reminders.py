@@ -191,7 +191,7 @@ class WhoIsOnTheListTests(_Shop):
     def test_a_sale_without_a_customer_is_still_listed(self):
         # 散客的單可以沒有客戶(舊資料、別的入口):名單不能因為這一筆整頁打不開
         item = self.sell("0910000001", 10)
-        SalesOrder.objects.filter(pk=item.so_id).update(customer=None)
+        SalesOrder.objects.filter(pk=item.so_id).update(customer=None, source_name="")
         row = self.listing()["results"][0]
         self.assertEqual((row["msisdn"], row["customer_name"], row["customer_phone"]),
                          ("0910000001", "", ""))

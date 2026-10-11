@@ -252,7 +252,7 @@ class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
             SalesOrderItemSerial.objects.for_tenant(serial.tenant)
             .filter(serial=serial)
             .select_related(
-                "item__so", "item__so__customer", "item__product"
+                "item__so", "item__so__customer", "item__so__member", "item__product"
             )
             .order_by("item__so__doc_date", "id")
         )
@@ -264,10 +264,10 @@ class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
                 "doc_date": s.item.so.doc_date,
                 "is_void": s.item.so.is_void,
                 "customer_phone": (
-                    s.item.so.customer.phone if s.item.so.customer_id else ""
+                    (s.item.so.member.phone if s.item.so.source_name and s.item.so.member_id else s.item.so.customer.phone if s.item.so.customer_id else "")
                 ),
                 "customer_name": (
-                    s.item.so.customer.name if s.item.so.customer_id else ""
+                    (s.item.so.member.name if s.item.so.source_name and s.item.so.member_id else s.item.so.display_customer_name)
                 ),
                 "unit_price": str(s.item.unit_price),
                 "amount": str(s.item.amount),

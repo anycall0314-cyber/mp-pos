@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.catalog.models import Product
+from apps.parties.serializers import MemberSerializer
 from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
 
 from .models import (
@@ -142,14 +143,17 @@ class RepairOrderPartSerializer(TenantScopedRelatedFieldsMixin, serializers.Mode
 
 
 class RepairOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
+    member_detail = MemberSerializer(source="member", read_only=True)
     parts = RepairOrderPartSerializer(many=True, read_only=True)
     parts_input = serializers.ListField(
         child=serializers.DictField(),
         required=False,
         write_only=True,
     )
-    customer_name = serializers.CharField(source="customer.name", read_only=True)
-    customer_phone = serializers.CharField(source="customer.phone", read_only=True)
+    customer_name = serializers.SerializerMethodField()
+    customer_phone = serializers.SerializerMethodField()
+    member_name = serializers.CharField(source="member.name", read_only=True, default="")
+    member_phone = serializers.CharField(source="member.phone", read_only=True, default="")
     warehouse_code = serializers.CharField(source="warehouse.code", read_only=True)
     warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
     warehouse_address = serializers.CharField(
@@ -213,6 +217,10 @@ class RepairOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSer
             "status",
             "status_label",
             "customer",
+            "member",
+            "member_detail",
+            "member_name",
+            "member_phone",
             "customer_name",
             "customer_phone",
             "host_model_key",
@@ -287,7 +295,28 @@ class RepairOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSer
             "updated_at",
         ]
 
+    def get_customer_name(self, obj):
+        party = obj.member or obj.customer
+        return party.name if party else ""
+
+    def get_customer_phone(self, obj):
+        party = obj.member or obj.customer
+        return party.phone if party else ""
+
+    def validate(self, attrs):
+        member = attrs.get("member", getattr(self.instance, "member", None))
+        customer = attrs.get("customer", getattr(self.instance, "customer", None))
+        existing_member_id = getattr(self.instance, "member_id", None)
+        if member is not None and not member.is_active and member.pk != existing_member_id:
+            raise serializers.ValidationError({"member": "會員已停用"})
+        if member is None and customer is None:
+            raise serializers.ValidationError({"member": "請選送修會員"})
+        return attrs
+
     def create(self, validated_data):
+        if validated_data.get("member") is not None:
+            from apps.parties.sources import transaction_source
+            validated_data["customer"] = transaction_source(validated_data, validated_data["tenant"])
         parts_input = validated_data.pop("parts_input", None)
         instance = super().create(validated_data)
         if parts_input is not None:

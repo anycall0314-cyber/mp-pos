@@ -56,14 +56,10 @@ export function SalesPrintPage() {
       )}
 
       <div className="print-section">
-        <Row
-          label="客戶"
-          value={
-            so.customer_phone
-              ? `${so.customer_phone} ${so.customer_name ?? ""}`
-              : "(散客)"
-          }
-        />
+        {so.source_name ? <>
+          <Row label="來源" value={so.source_name} />
+          <Row label="會員" value={[so.member_name, so.member_phone].filter(Boolean).join(" ") || "(散客)"} />
+        </> : <Row label="客戶" value={[so.customer_name, so.customer_phone].filter(Boolean).join(" ") || "(散客)"} />}
         {so.sales_person_name && (
           <Row
             label="業務員"

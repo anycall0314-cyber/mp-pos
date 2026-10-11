@@ -258,7 +258,7 @@ export interface Supplier {
   is_active: boolean;
 }
 
-export type CustomerKind = "individual" | "peer" | "corporate" | "other";
+export type CustomerKind = "individual" | "channel" | "peer" | "corporate" | "other";
 
 export interface Customer {
   id: number;
@@ -271,6 +271,7 @@ export interface Customer {
   address: string;
   note: string;
   is_active: boolean;
+  is_sales_default: boolean;
 }
 
 export interface Member {
@@ -283,6 +284,13 @@ export interface Member {
   address: string;
   note: string;
   is_active: boolean;
+  kind: "individual" | "company";
+  kind_label: string;
+  tax_id: string;
+  contact: string;
+  default_source_mode: "sales_default" | "direct" | "customer";
+  default_customer: number | null;
+  default_customer_detail: Customer | null;
 }
 
 export interface SalesReturnItemSerial {
@@ -320,6 +328,7 @@ export interface SalesReturn {
   original_so_no: string;
   original_so_doc_date: string;
   customer: number | null;
+  source_name: string;
   customer_name: string;
   customer_phone: string;
   member: number | null;
@@ -679,6 +688,7 @@ export interface SalesOrder {
   payments: SalesOrderPayment[];
   created_at: string;
   updated_at: string;
+  source_name: string;
 }
 
 export type PettyExpenseCategory =
@@ -1245,7 +1255,11 @@ export interface RepairOrder {
   mode_label: string;
   status: RepairStatus;
   status_label: string;
-  customer: number;
+  customer: number | null;
+  member: number | null;
+  member_detail: Member | null;
+  member_name: string;
+  member_phone: string;
   customer_name: string;
   customer_phone: string;
   host_model_key: string;

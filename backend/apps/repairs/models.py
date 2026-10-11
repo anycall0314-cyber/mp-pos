@@ -114,8 +114,9 @@ class RepairOrder(TenantOwnedModel):
     )
 
     customer = models.ForeignKey(
-        Customer, on_delete=models.PROTECT, verbose_name="客戶"
+        Customer, on_delete=models.PROTECT, null=True, blank=True, verbose_name="來源客戶／舊客戶"
     )
+    member = models.ForeignKey("parties.Member", on_delete=models.PROTECT, null=True, blank=True, related_name="repair_orders", verbose_name="送修會員")
     host_model_key = models.CharField(
         "機型 key", max_length=128, blank=True, db_index=True,
     )
@@ -264,6 +265,10 @@ class RepairOrder(TenantOwnedModel):
         ordering = ["-received_date", "-id"]
         verbose_name = "維修單"
         verbose_name_plural = "維修單"
+
+    @property
+    def party(self):
+        return self.member or self.customer
 
     def __str__(self) -> str:
         return f"{self.no} {self.customer.name if self.customer_id else ''}"

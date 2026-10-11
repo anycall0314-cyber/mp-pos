@@ -56,7 +56,7 @@ def _row(it, today) -> dict:
         "warehouse_name": so.warehouse.name,
         "sales_person_name": so.sales_person.name if so.sales_person_id else "",
         # 散客的單可以沒有客戶
-        "customer_name": so.customer.name if so.customer_id else "",
+        "customer_name": so.display_customer_name,
         "customer_phone": (so.customer.phone or "") if so.customer_id else "",
         "member_name": so.member.name if so.member_id else "",
         "member_phone": (so.member.phone or "") if so.member_id else "",

@@ -3,13 +3,11 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { api } from "@/api/client";
 import {
-  lookupCustomer,
   lookupMember,
   useCompleteRepair,
   useRepairItemsByModel,
   useRepairOrder,
   useReopenRepair,
-  useSaveCustomer,
   useSaveMember,
   useSaveRepairOrder,
   useSetRepairStatus,
@@ -17,6 +15,7 @@ import {
 } from "@/api/hooks";
 import {
   searchProducts,
+  searchMembers,
   searchSalesPersons,
 } from "@/api/search";
 import {
@@ -125,9 +124,7 @@ function RepairEntryForm() {
     "idle" | "checking" | "found" | "not_found"
   >("idle");
   const [showQuickCreate, setShowQuickCreate] = useState(false);
-  const [quickCreateAlsoMember, setQuickCreateAlsoMember] = useState(true);
   const [creating, setCreating] = useState(false);
-  const saveCustomer = useSaveCustomer();
   const saveMember = useSaveMember();
   const [modelKey, setModelKey] = useState("");
   const [modelName, setModelName] = useState("");
@@ -194,7 +191,8 @@ function RepairEntryForm() {
     if (!o) return;
     // 金額照資料庫原本的字串放進 state(框裡會顯示成整數):沒動過的欄位存檔時原樣送回去,不會被改寫
     setMode(o.mode);
-    setCustomer(o.customer);
+    setCustomer(o.customer ?? "");
+    setMember(o.member_detail ?? null);
     setCustomerName(o.customer_name);
     setCustomerPhone(o.customer_phone);
     setLookupStatus("found");
@@ -347,82 +345,39 @@ function RepairEntryForm() {
     );
   }
 
-  // 電話 debounce 查詢:同時查 Customer + Member
+  // 新單以會員識別實際送修人；舊單保留原客戶與已掛的會員。
   useEffect(() => {
+    if (isEdit) return;
     const phone = customerPhone.trim();
-    if (!phone || phone.length < 4) {
-      setLookupStatus("idle");
-      setMember(null);
-      setShowQuickCreate(false);
-      return;
-    }
-    if (isEdit && customer) return; // 編輯狀態下不重複查
+    if (member?.phone === phone) return;
+    setMember(null);
+    setCustomer("");
+    if (phone.length < 4) { setLookupStatus("idle"); setShowQuickCreate(false); return; }
+    let active = true;
     setLookupStatus("checking");
     const t = setTimeout(async () => {
       try {
-        const [cust, mem] = await Promise.all([
-          lookupCustomer(phone),
-          lookupMember(phone),
-        ]);
+        const mem = await lookupMember(phone);
+        if (!active) return;
         setMember(mem);
-        if (cust) {
-          setCustomer(cust.id);
-          setCustomerName(cust.name);
-          setLookupStatus("found");
-          setShowQuickCreate(false);
-        } else if (mem) {
-          // 有會員沒客戶 → 用會員資料預填,等送出時建立 individual customer
-          setCustomer("");
-          if (!customerName.trim()) setCustomerName(mem.name);
-          setLookupStatus("not_found");
-          setShowQuickCreate(true);
-        } else {
-          setCustomer("");
-          setLookupStatus("not_found");
-          setShowQuickCreate(true);
-        }
-      } catch {
-        setLookupStatus("idle");
-      }
+        setLookupStatus(mem ? "found" : "not_found");
+        setShowQuickCreate(!mem);
+        if (mem) setCustomerName(mem.name);
+      } catch { if (active) setLookupStatus("idle"); }
     }, 400);
-    return () => clearTimeout(t);
-  }, [customerPhone, isEdit]);
+    return () => { active = false; clearTimeout(t); };
+  }, [customerPhone, isEdit, member]);
 
   async function quickCreateCustomer() {
     const phone = customerPhone.trim();
     const name = customerName.trim();
-    if (!phone) {
-      setError("請先輸入聯絡電話");
-      return;
-    }
-    if (!name) {
-      setError("請輸入客戶姓名");
-      return;
-    }
+    if (!phone || !name) { setError("請填聯絡電話及會員姓名／公司名稱"); return; }
     setCreating(true);
     try {
-      const cust = await saveCustomer.mutateAsync({
-        name,
-        phone,
-        kind: "individual",
-      });
-      setCustomer(cust.id);
-      setLookupStatus("found");
-      setShowQuickCreate(false);
-      if (quickCreateAlsoMember && !member) {
-        try {
-          const m = await saveMember.mutateAsync({ name, phone });
-          setMember(m);
-        } catch {
-          // 會員建立失敗不擋客戶,僅提示
-        }
-      }
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setCreating(false);
-    }
+      const m = await saveMember.mutateAsync({name, phone});
+      setMember(m); setLookupStatus("found"); setShowQuickCreate(false); setError(null);
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setCreating(false); }
   }
 
   async function submit(opts?: { printAfter?: boolean }) {
@@ -433,8 +388,8 @@ function RepairEntryForm() {
       setError("請輸入聯絡電話");
       return;
     }
-    if (!customer) {
-      setError("請依電話建立客戶,或從歷史維修挑出已存在客戶");
+    if (!customer && !member) {
+      setError("請選或建立送修會員");
       return;
     }
     if (!warehouseId) {
@@ -482,7 +437,8 @@ function RepairEntryForm() {
       const body: Record<string, unknown> = {
         id: id ?? undefined,
         mode,
-        customer,
+        customer: member && !isEdit ? undefined : customer || null,
+        member: member?.id ?? null,
         host_model_key: modelKey,
         host_model_name: modelName,
         device_serial: deviceSerial,
@@ -772,6 +728,7 @@ function RepairEntryForm() {
             <section className="re-section">
               <div className="re-section-title">基本資料</div>
               <div className="re-section-body">
+                <Field label="送修會員"><ComboBox<Member> value={member?.id ?? ""} selectedOption={member ? {id: member.id, label: member.name, secondary: member.phone, payload: member} : null} fetchOptions={searchMembers} disabled={isLocked || notLoaded} placeholder="電話／姓名／公司／統編" onChange={(_, opt) => { const m = opt?.payload ?? null; setMember(m); if (m) { setCustomerName(m.name); setCustomerPhone(m.phone); setLookupStatus("found"); setShowQuickCreate(false); } }} /></Field>
                 <div className="re-2col">
                   <Field
                     label="聯絡電話"
@@ -779,11 +736,11 @@ function RepairEntryForm() {
                     hint={
                       lookupStatus === "checking"
                         ? "查詢中…"
-                        : lookupStatus === "found" && customer
-                          ? "已對應客戶,自動帶入"
+                        : lookupStatus === "found" && (customer || member)
+                          ? "已對應送修對象"
                           : lookupStatus === "not_found"
                             ? "查無此電話,可下方建立"
-                            : "輸入電話會自動帶會員 / 客戶"
+                            : "輸入電話會查詢會員"
                     }
                   >
                     <input
@@ -799,12 +756,12 @@ function RepairEntryForm() {
                       placeholder="09xx-xxx-xxx"
                     />
                   </Field>
-                  <Field label="客戶姓名" required>
+                  <Field label="姓名／公司名稱" required>
                     <input
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
                       placeholder="王小明"
-                      disabled={!!customer && lookupStatus === "found"}
+                      disabled={!!(customer || member) && lookupStatus === "found"}
                     />
                   </Field>
                 </div>
@@ -824,25 +781,9 @@ function RepairEntryForm() {
                     {showQuickCreate && !customer && (
                       <div className="re-quick-create">
                         <span style={{ color: "var(--text-dim)", fontSize: 14 }}>
-                          查無此電話的客戶,
+                          查無此電話的會員，
                         </span>
-                        <label
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 4,
-                            fontSize: 14,
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={quickCreateAlsoMember}
-                            onChange={(e) =>
-                              setQuickCreateAlsoMember(e.target.checked)
-                            }
-                          />
-                          同步建立會員
-                        </label>
+
                         <button
                           type="button"
                           className="btn primary"

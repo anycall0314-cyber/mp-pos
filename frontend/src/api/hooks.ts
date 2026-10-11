@@ -990,6 +990,21 @@ export function useSaveSupplier() {
   });
 }
 
+export function useSalesDefaultSource() {
+  return useQuery({ queryKey: ["sales-default-source"], queryFn: () => api<{customer: Customer | null}>("/customers/sales-default/") });
+}
+
+export function useSaveSalesDefaultSource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (customer: number | null) => api<{customer: Customer | null}>("/customers/sales-default/", {method: "POST", body: JSON.stringify({customer})}),
+    onSuccess: () => {
+      qc.invalidateQueries({queryKey: ["sales-default-source"]});
+      qc.invalidateQueries({queryKey: ["customers"]});
+    },
+  });
+}
+
 export function useSaveCustomer() {
   const qc = useQueryClient();
   return useMutation({

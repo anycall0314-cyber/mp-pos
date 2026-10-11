@@ -2,14 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { ApiHttpError } from "@/api/client";
-import { useCustomers, useSalesOrders, useSaveCustomer } from "@/api/hooks";
+import { useCustomers, useSalesOrders, useSaveCustomer, useSalesDefaultSource, useSaveSalesDefaultSource } from "@/api/hooks";
 import type { Customer, CustomerKind } from "@/api/types";
 import { Banner } from "@/components/Banner";
+import { SourcePicker } from "@/components/SourcePicker";
+import { useCurrentUser } from "@/auth/AuthContext";
 import { Toolbar } from "@/components/Toolbar";
 import { money } from "@/lib/money";
 
 const CUSTOMER_KINDS: { value: CustomerKind; label: string }[] = [
-  { value: "individual", label: "個人" },
+  { value: "channel", label: "通路" },
+  { value: "individual", label: "個人（舊類別）" },
   { value: "peer", label: "同業 / 盤商" },
   { value: "corporate", label: "企業" },
   { value: "other", label: "其他" },
@@ -19,7 +22,8 @@ type TabKey = "all" | CustomerKind;
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "all", label: "全部" },
-  { key: "individual", label: "個人 / 直客" },
+  { key: "channel", label: "通路" },
+  { key: "individual", label: "個人（舊類別）" },
   { key: "peer", label: "同業 / 盤商" },
   { key: "corporate", label: "企業" },
   { key: "other", label: "其他" },
@@ -40,7 +44,7 @@ interface FormState {
 const EMPTY_FORM: FormState = {
   phone: "",
   name: "",
-  kind: "individual",
+  kind: "channel",
   tax_id: "",
   address: "",
   note: "",
@@ -71,6 +75,14 @@ export function CustomersPage() {
 
   const result = useCustomers();
   const save = useSaveCustomer();
+  const defaults = useSalesDefaultSource();
+  const saveDefault = useSaveSalesDefaultSource();
+  const role = useCurrentUser()?.profile?.role;
+  const manager = role === "tenant_admin" || role === "platform_admin";
+  async function changeDefault(source: Customer | null) {
+    try { await saveDefault.mutateAsync(source?.id ?? null); setError(null); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }
 
   const [query, setQuery] = useState("");
   const [selection, setSelection] = useState<Selection>(() => {
@@ -139,7 +151,7 @@ export function CustomersPage() {
     } else if (selection?.kind === "new") {
       setForm({
         ...EMPTY_FORM,
-        kind: tab === "all" ? "individual" : tab,
+        kind: tab === "all" ? "channel" : tab,
       });
       setError(null);
       setSavedFlash(false);
@@ -220,7 +232,7 @@ export function CustomersPage() {
   return (
     <div className="page">
       <Toolbar
-        title="客戶管理"
+        title="客戶來源管理"
         actions={
           <button
             className="btn primary"
@@ -232,6 +244,11 @@ export function CustomersPage() {
       />
 
       <div style={{ padding: "8px 16px 0" }}>
+        <div style={{display: "flex", alignItems: "center", gap: 12, marginBottom: 10}}>
+          <span>銷貨預設來源</span><div style={{width: 320}}><SourcePicker source={defaults.data?.customer ?? null} disabled={!manager || defaults.isLoading || defaults.isError || saveDefault.isPending} onChange={source => void changeDefault(source)} /></div>
+          {!manager && <span className="muted">由管理員設定</span>}
+        </div>
+        {error && <Banner kind="error" message={error} />}
         <div className="tab-switcher">
           {TABS.map((t) => {
             const count =
@@ -351,12 +368,12 @@ export function CustomersPage() {
                     value={form.phone}
                     onChange={(e) => patch("phone", e.target.value)}
                     maxLength={40}
-                    placeholder="選填(個人客戶建議填,同業/企業可省略)"
+                    placeholder="來源聯絡電話（選填）"
                     style={{ width: 280 }}
                   />
                 </dd>
                 <dt>
-                  姓名 / 名稱 <span style={{ color: "var(--danger-text)" }}>*</span>
+                  來源名稱 <span style={{ color: "var(--danger-text)" }}>*</span>
                 </dt>
                 <dd>
                   <input
@@ -366,7 +383,7 @@ export function CustomersPage() {
                     style={{ width: 280 }}
                   />
                 </dd>
-                <dt>客戶類別</dt>
+                <dt>來源類別</dt>
                 <dd>
                   <select
                     value={form.kind}

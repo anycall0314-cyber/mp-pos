@@ -10,13 +10,13 @@ import {
   usePaymentMethods,
   useSaveCustomer,
   useSaveMember,
+  useSalesDefaultSource,
   useWarehouses,
 } from "@/api/hooks";
 import {
   fetchInStockSerials,
   findDevicesByCode,
   SalesProductHit,
-  searchCustomers,
   searchMembers,
   searchProductsForSales,
   searchSalesPersons,
@@ -36,6 +36,8 @@ import type {
 } from "@/api/types";
 import { useDefaultHandledBy, useDefaultWarehouse } from "@/auth/AuthContext";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
+import { SourcePicker, sourceOption } from "@/components/SourcePicker";
+import { memberSource, sourceAfterMemberChange, taxAfterMemberChange } from "@/lib/customerSources";
 import { Drawer } from "@/components/Drawer";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ArmButton } from "@/components/workbench/ArmButton";
@@ -137,6 +139,8 @@ interface Draft {
   split?: boolean;
   payAmounts?: Record<string, string>;
   payNotes?: Record<string, string>;
+  sourceManual?: boolean;
+  buyerTaxManual?: boolean;
   customerOption: ComboOption<Customer> | null;
   memberOption: ComboOption<Member> | null;
   salesPerson: number | "";
@@ -155,7 +159,8 @@ const TAX_METHODS: { value: TaxMethod; label: string }[] = [
   { value: "untaxed", label: "未稅" },
 ];
 const CUSTOMER_KINDS: { value: CustomerKind; label: string }[] = [
-  { value: "individual", label: "個人" },
+  { value: "channel", label: "通路" },
+  { value: "individual", label: "個人（舊類別）" },
   { value: "peer", label: "同業" },
   { value: "corporate", label: "企業" },
   { value: "other", label: "其他" },
@@ -266,6 +271,8 @@ function loadDraft(): Draft | null {
       split: !!d.split,
       payAmounts: d.payAmounts && typeof d.payAmounts === "object" ? d.payAmounts : {},
       payNotes: d.payNotes && typeof d.payNotes === "object" ? d.payNotes : {},
+      sourceManual: d.sourceManual ?? !!d.customerOption,
+      buyerTaxManual: d.buyerTaxManual ?? !!d.buyerTaxId,
       customerOption: d.customerOption ?? null,
       memberOption: d.memberOption ?? null,
       salesPerson: d.salesPerson ?? "",
@@ -366,6 +373,7 @@ export function SalesWorkbenchPage() {
   const createMutation = useCreateSalesOrder();
   const saveCustomer = useSaveCustomer();
   const saveMember = useSaveMember();
+  const sourceDefaults = useSalesDefaultSource();
 
   const [draft] = useState<Draft | null>(loadDraft);
 
@@ -389,6 +397,9 @@ export function SalesWorkbenchPage() {
   const [memberOption, setMemberOption] = useState<ComboOption<Member> | null>(
     draft?.memberOption ?? null,
   );
+  const [sourceManual, setSourceManual] = useState(draft?.sourceManual ?? false);
+  const [buyerTaxManual, setBuyerTaxManual] = useState(draft?.buyerTaxManual ?? false);
+  const defaultApplied = useRef(!!draft);
   const customer = customerOption?.payload ?? null;
   const member = memberOption?.payload ?? null;
   const [taxMethod, setTaxMethod] = useState<TaxMethod>(
@@ -399,6 +410,12 @@ export function SalesWorkbenchPage() {
   );
   const [buyerTaxId, setBuyerTaxId] = useState(draft?.buyerTaxId ?? "");
   const [note, setNote] = useState(draft?.note ?? "");
+  useEffect(() => {
+    if (!sourceDefaults.data || defaultApplied.current) return;
+    defaultApplied.current = true;
+    if (!sourceManual) setCustomerOption(sourceOption(memberSource(member, sourceDefaults.data.customer)));
+  }, [sourceDefaults.data, sourceManual, member]);
+  const keptSource = sourceAfterMemberChange(customer, sourceManual, member, sourceDefaults.data?.customer ?? null).keptManual;
   /**
    * 哪一行把在庫的每一台攤開著。同一時間最多一行:剛加進來、還沒選台的那一行會自己攤開,
    * 其他行都是一列(還沒選台的寫紅色的「選一台」),明細才不會被一排排小標籤佔滿。
@@ -430,7 +447,12 @@ export function SalesWorkbenchPage() {
     name: string;
     phone: string;
     national_id: string;
-  }>({ name: "", phone: "", national_id: "" });
+    kind: Member["kind"];
+    tax_id: string;
+    contact: string;
+    default_source_mode: Member["default_source_mode"];
+    default_customer_detail: Customer | null;
+  }>({ name: "", phone: "", national_id: "", kind: "individual", tax_id: "", contact: "", default_source_mode: "sales_default", default_customer_detail: null });
 
   /** 右邊打開的是哪一塊(單據資訊 / 結帳 / 新增客戶 / 新增會員);資料都在這一頁,關掉不會不見 */
   const [panel, setPanel] = useState<Panel | null>(null);
@@ -611,7 +633,7 @@ export function SalesWorkbenchPage() {
 
   // ── 草稿:切到別頁、重新整理再回來不會掉(結帳成功就清掉) ──────────
   const hasContent =
-    lines.length > 0 || !!customerOption || !!memberOption || !!note || !!buyerTaxId;
+    lines.length > 0 || sourceManual || !!memberOption || !!note || !!buyerTaxId;
   function saveDraft() {
     const snapshot: Draft = {
       formKey: formKey.current,
@@ -621,6 +643,8 @@ export function SalesWorkbenchPage() {
       split,
       payAmounts,
       payNotes,
+      sourceManual,
+      buyerTaxManual,
       customerOption,
       memberOption,
       salesPerson,
@@ -648,6 +672,8 @@ export function SalesWorkbenchPage() {
     const handle = window.setTimeout(() => saveDraftRef.current(), 250);
     return () => window.clearTimeout(handle);
   }, [
+    sourceManual,
+    buyerTaxManual,
     customerOption,
     memberOption,
     salesPerson,
@@ -1175,7 +1201,8 @@ export function SalesWorkbenchPage() {
   function problems(withPayment: boolean): Issue[] {
     const out: Issue[] = [];
     if (!warehouse) out.push({ text: "請選出貨倉", at: "store" });
-    if (!customer) out.push({ text: "請選客戶", at: "customer" });
+    if (!defaultApplied.current && (sourceDefaults.isPending || sourceDefaults.isError)) out.push({ text: "銷貨預設來源尚未載入，請重新整理", at: "customer" });
+    if (customer?.is_active === false) out.push({text: "來源已停用，請改選本次來源", at: "customer"});
     if (!salesPerson) out.push({ text: "請選業務員", at: "person" });
     if (!invoiceForm) out.push({ text: "請選發票類型", at: "invoice" });
     const ls = linesRef.current;
@@ -1313,7 +1340,10 @@ export function SalesWorkbenchPage() {
 
   /** 這一張結束了(結完帳 / 放棄):換一把新鑰匙,解鎖 */
   function resetForm() {
-    setCustomerOption(null);
+    setCustomerOption(sourceOption(sourceDefaults.data?.customer ?? null));
+    defaultApplied.current = true;
+    setSourceManual(false);
+    setBuyerTaxManual(false);
     setMemberOption(null);
     setBuyerTaxId("");
     setNote("");
@@ -1490,6 +1520,8 @@ export function SalesWorkbenchPage() {
     if (submitting.current) return;
     const kept = {
       lines: linesRef.current,
+      sourceManual,
+      buyerTaxManual,
       customerOption,
       memberOption,
       note,
@@ -1528,6 +1560,8 @@ export function SalesWorkbenchPage() {
               return;
             }
             commit(() => kept.lines);
+            setSourceManual(kept.sourceManual);
+            setBuyerTaxManual(kept.buyerTaxManual);
             setCustomerOption(kept.customerOption);
             setMemberOption(kept.memberOption);
             // 會員跟現在不一樣:上面那個 effect 會重看;一樣的話它不會跑,這裡自己看一次
@@ -1553,8 +1587,14 @@ export function SalesWorkbenchPage() {
   // ── 新增客戶 / 會員 ───────────────────────────────────
   function pickCustomer(opt: ComboOption<Customer> | null) {
     setCustomerOption(opt);
-    const c = opt?.payload;
-    if (isTaxable && c?.tax_id && !buyerTaxId) setBuyerTaxId(c.tax_id);
+    setSourceManual(true);
+  }
+  function pickMember(opt: ComboOption<Member> | null) {
+    const next = opt?.payload ?? null;
+    setMemberOption(opt);
+    const chosen = sourceAfterMemberChange(customer, sourceManual, next, sourceDefaults.data?.customer ?? null);
+    if (!sourceManual) setCustomerOption(sourceOption(chosen.source));
+    setBuyerTaxId(taxAfterMemberChange(buyerTaxId, buyerTaxManual, next));
   }
   async function createCustomer() {
     if (lockedRef.current) return;
@@ -1596,14 +1636,16 @@ export function SalesWorkbenchPage() {
         name,
         phone: newMember.phone.trim(),
         national_id: newMember.national_id.trim() || undefined,
+        kind: newMember.kind, tax_id: newMember.tax_id.trim(), contact: newMember.contact.trim(),
+        default_source_mode: newMember.default_source_mode, default_customer: newMember.default_customer_detail?.id ?? null,
       });
-      setMemberOption({
+      pickMember({
         id: created.id,
         label: created.name || created.phone || `#${created.id}`,
         secondary: created.phone,
         payload: created,
       });
-      setNewMember({ name: "", phone: "", national_id: "" });
+      setNewMember({ name: "", phone: "", national_id: "", kind: "individual", tax_id: "", contact: "", default_source_mode: "sales_default", default_customer_detail: null });
       closePanel();
     } catch (e) {
       toast(`新增會員失敗:${apiErrorText(e)}`, "err", { ms: 7000 });
@@ -1772,15 +1814,9 @@ export function SalesWorkbenchPage() {
             </select>
           </label>
           <div className="ws-f grow" data-at="customer">
-            <span className="ws-lbl">客戶</span>
-            <ComboBox<Customer>
-              value={customer?.id ?? ""}
-              selectedOption={customerOption}
-              onChange={(_cid, opt) => pickCustomer(opt ?? null)}
-              fetchOptions={searchCustomers}
-              disabled={locked}
-              placeholder="名稱 / 電話 / 統編"
-            />
+            <span className="ws-lbl">來源客戶</span>
+            <SourcePicker source={customer} disabled={locked || sourceDefaults.isPending || sourceDefaults.isError} onChange={source => pickCustomer(sourceOption(source))} />
+            {keptSource && <div style={{fontSize: 13}}>保留本單手選來源 <button type="button" className="wb-link" disabled={locked} onClick={() => { setSourceManual(false); setCustomerOption(sourceOption(memberSource(member, sourceDefaults.data?.customer ?? null))); }}>套用會員來源</button></div>}
             <button
               type="button"
               className="wb-link"
@@ -1795,10 +1831,10 @@ export function SalesWorkbenchPage() {
             <ComboBox<Member>
               value={member?.id ?? ""}
               selectedOption={memberOption}
-              onChange={(_mid, opt) => setMemberOption(opt ?? null)}
+              onChange={(_mid, opt) => pickMember(opt ?? null)}
               fetchOptions={searchMembers}
               disabled={locked}
-              placeholder="電話 / 姓名(可不填)"
+              placeholder="電話 / 姓名 / 公司 / 統編（可不填）"
             />
             <button
               type="button"
@@ -2442,7 +2478,7 @@ export function SalesWorkbenchPage() {
                     maxLength={8}
                     inputMode="numeric"
                     disabled={locked}
-                    onChange={(e) => setBuyerTaxId(e.target.value)}
+                    onChange={(e) => { setBuyerTaxManual(true); setBuyerTaxId(e.target.value); }}
                   />
                 </label>
               )}
@@ -2541,8 +2577,10 @@ export function SalesWorkbenchPage() {
         {panel === "member" && (
           <div className="ws-form">
             <section>
+              <label><span>會員類型</span><select value={newMember.kind} disabled={locked} onChange={e => setNewMember({...newMember, kind: e.target.value as Member["kind"]})}><option value="individual">個人</option><option value="company">公司</option></select></label>
+              <label><span>預設來源</span><SourcePicker inherit source={newMember.default_customer_detail} mode={newMember.default_source_mode} disabled={locked} onChange={(source, mode) => setNewMember({...newMember, default_customer_detail: source, default_source_mode: mode})} /></label>
               <label>
-                <span>姓名</span>
+                <span>{newMember.kind === "company" ? "公司名稱" : "姓名"}</span>
                 <input
                   autoFocus
                   value={newMember.name}
@@ -2563,6 +2601,10 @@ export function SalesWorkbenchPage() {
                   }
                 />
               </label>
+              {newMember.kind === "company" ? <>
+                <label><span>統一編號</span><input value={newMember.tax_id} maxLength={20} disabled={locked} onChange={e => setNewMember({...newMember, tax_id: e.target.value})} /></label>
+                <label><span>聯絡人</span><input value={newMember.contact} maxLength={120} disabled={locked} onChange={e => setNewMember({...newMember, contact: e.target.value})} /></label>
+              </> : <>
               <label>
                 <span>身分證</span>
                 <input
@@ -2573,6 +2615,7 @@ export function SalesWorkbenchPage() {
                   }
                 />
               </label>
+              </>}
             </section>
           </div>
         )}

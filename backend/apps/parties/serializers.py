@@ -52,6 +52,7 @@ class CustomerSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, ser
             "name",
             "kind",
             "kind_label",
+            "is_sales_default",
             "tax_id",
             "address",
             "note",
@@ -59,16 +60,32 @@ class CustomerSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, ser
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "code", "kind_label", "created_at", "updated_at"]
+        read_only_fields = ["id", "code", "kind_label", "is_sales_default", "created_at", "updated_at"]
+
+
+    def validate(self, attrs):
+        if self.instance and self.instance.is_sales_default and attrs.get("is_active") is False:
+            raise serializers.ValidationError({"is_active": "請先更換銷貨預設來源，再停用此來源"})
+        return attrs
 
 
 class MemberSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
+    kind_label = serializers.CharField(source="get_kind_display", read_only=True)
+    default_customer_detail = CustomerSerializer(source="default_customer", read_only=True)
+
     class Meta:
         model = Member
         fields = [
             "id",
             "code",
             "name",
+            "kind",
+            "kind_label",
+            "tax_id",
+            "contact",
+            "default_source_mode",
+            "default_customer",
+            "default_customer_detail",
             "phone",
             "national_id",
             "birthday",
@@ -78,7 +95,18 @@ class MemberSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, seria
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "code", "created_at", "updated_at"]
+        read_only_fields = ["id", "code", "kind_label", "default_customer_detail", "created_at", "updated_at"]
+
+
+    def validate(self, attrs):
+        mode = attrs.get("default_source_mode", getattr(self.instance, "default_source_mode", Member.SourceMode.SALES_DEFAULT))
+        source = attrs.get("default_customer", getattr(self.instance, "default_customer", None))
+        if mode == Member.SourceMode.CUSTOMER:
+            if source is None or not source.is_active:
+                raise serializers.ValidationError({"default_customer": "請選啟用中的來源客戶"})
+        elif "default_customer" in attrs or "default_source_mode" in attrs:
+            attrs["default_customer"] = None
+        return attrs
 
 
 class SalesPersonSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):

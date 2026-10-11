@@ -47,8 +47,9 @@ class SalesOrder(TenantOwnedModel):
         null=True,
         blank=True,
         verbose_name="客戶",
-        help_text="這次交易的對象(收款/開發票對象);散客可不填",
+        help_text="新銷貨為本次來源客戶；空值代表直客。舊單保留原交易對象語意",
     )
+    source_name = models.CharField("本次來源名稱", max_length=120, blank=True, default="", help_text="新銷貨來源快照；空字串為舊單，保留原客戶語意")
     member = models.ForeignKey(
         "parties.Member",
         on_delete=models.PROTECT,
@@ -151,6 +152,10 @@ class SalesOrder(TenantOwnedModel):
         ordering = ["-doc_date", "-id"]
         verbose_name = "銷貨單"
         verbose_name_plural = "銷貨單"
+
+    @property
+    def display_customer_name(self):
+        return self.source_name or (self.customer.name if self.customer_id else "")
 
     def __str__(self) -> str:
         return f"{self.no}"

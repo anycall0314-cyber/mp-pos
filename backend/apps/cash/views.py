@@ -341,7 +341,7 @@ def business_daily_report(request):
                 {
                     "id": so.id,
                     "no": so.no,
-                    "customer_name": so.customer.name if so.customer_id else "",
+                    "customer_name": so.display_customer_name,
                     "sales_person_name": (
                         so.sales_person.name if so.sales_person_id else ""
                     ),
@@ -355,7 +355,7 @@ def business_daily_report(request):
                 {
                     "id": so.id,
                     "no": so.no,
-                    "customer_name": so.customer.name if so.customer_id else "",
+                    "customer_name": so.display_customer_name,
                     "sales_person_name": (
                         so.sales_person.name if so.sales_person_id else ""
                     ),
@@ -370,7 +370,7 @@ def business_daily_report(request):
                 {
                     "id": so.id,
                     "no": so.no,
-                    "customer_name": so.customer.name if so.customer_id else "",
+                    "customer_name": so.display_customer_name,
                     "sales_person_name": (
                         so.sales_person.name if so.sales_person_id else ""
                     ),
@@ -464,7 +464,7 @@ def business_daily_report(request):
                 "id": sr.id,
                 "no": sr.no,
                 "original_so_no": sr.original_so.no,
-                "customer_name": sr.customer.name if sr.customer_id else "",
+                "customer_name": sr.original_so.display_customer_name,
                 "payment_method_name": cash_methods_map.get(
                     sr.payment_method, sr.payment_method
                 ),
@@ -689,7 +689,7 @@ def home_summary(request):
             {
                 "id": so.id,
                 "no": so.no,
-                "customer_name": so.customer.name if so.customer else "散客",
+                "customer_name": so.display_customer_name or "散客",
                 "sales_person_name": so.sales_person.name if so.sales_person else "",
                 "total": money_int(so.total),
                 "doc_time": so.created_at.isoformat(),
@@ -772,7 +772,7 @@ def _build_repair_alerts(tenant, wid):
         {
             "id": r.id,
             "no": r.no,
-            "customer_name": r.customer.name if r.customer_id else "",
+            "customer_name": r.party.name if r.party else "",
             "host_model_name": r.host_model_name,
             "expected_complete_date": (
                 r.expected_complete_date.isoformat()
@@ -801,7 +801,7 @@ def _build_repair_alerts(tenant, wid):
         {
             "id": r.id,
             "no": r.no,
-            "customer_name": r.customer.name if r.customer_id else "",
+            "customer_name": r.party.name if r.party else "",
             "vendor_name": (
                 r.external_vendor.name if r.external_vendor_id else ""
             ),
@@ -834,8 +834,8 @@ def _build_repair_alerts(tenant, wid):
             {
                 "id": r.id,
                 "no": r.no,
-                "customer_name": r.customer.name if r.customer_id else "",
-                "customer_phone": r.customer.phone if r.customer_id else "",
+                "customer_name": r.party.name if r.party else "",
+                "customer_phone": r.party.phone if r.party else "",
                 "host_model_name": r.host_model_name,
                 "ready_days": (today - completed_d).days,
             }

@@ -1,10 +1,11 @@
 import django_filters
 from django.db import transaction
-from rest_framework import permissions, status, viewsets
+from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.tenants.permissions import is_tenant_admin
+from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
 
 from .models import Carrier, Customer, Member, SalesPerson, SimCard, Supplier, TelecomPlan
 
@@ -82,15 +83,47 @@ class CustomerViewSet(viewsets.ModelViewSet):
         return Response(self.get_serializer(obj).data)
 
 
+    @action(detail=False, methods=["get", "post"], url_path="sales-default")
+    def sales_default(self, request):
+        from apps.tenants.models import Tenant
+        from .sources import sales_default
+        if request.method == "GET":
+            obj = sales_default(request.tenant)
+            return Response({"customer": self.get_serializer(obj).data if obj else None})
+        if not is_tenant_admin(request.user):
+            return Response({"detail": "只有管理員能修改銷貨預設來源"}, status=status.HTTP_403_FORBIDDEN)
+        class Input(TenantScopedRelatedFieldsMixin, serializers.Serializer):
+            customer = serializers.PrimaryKeyRelatedField(queryset=Customer.objects.all(), allow_null=True)
+        data = Input(data=request.data, context={"request": request})
+        data.is_valid(raise_exception=True)
+        with transaction.atomic():
+            Tenant.objects.select_for_update(no_key=True).get(pk=request.tenant.pk)
+            obj = data.validated_data["customer"]
+            if obj:
+                obj = self.get_queryset().select_for_update().get(pk=obj.pk)
+                if not obj.is_active:
+                    raise serializers.ValidationError({"customer": "不能指定停用來源"})
+            self.get_queryset().filter(is_sales_default=True).update(is_sales_default=False)
+            if obj:
+                obj.is_sales_default = True
+                obj.save(update_fields=["is_sales_default"])
+        return Response({"customer": self.get_serializer(obj).data if obj else None})
+
+    def destroy(self, request, *args, **kwargs):
+        if self.get_object().is_sales_default:
+            raise serializers.ValidationError({"detail": "請先更換銷貨預設來源"})
+        return super().destroy(request, *args, **kwargs)
+
+
 class MemberViewSet(viewsets.ModelViewSet):
     serializer_class = MemberSerializer
-    search_fields = ["code", "phone", "name", "national_id"]
+    search_fields = ["code", "phone", "name", "national_id", "tax_id", "contact"]
     ordering_fields = ["code", "phone", "name", "created_at"]
     ordering = ["code"]
-    filterset_fields = ["is_active"]
+    filterset_fields = ["is_active", "kind", "default_customer"]
 
     def get_queryset(self):
-        return Member.objects.for_tenant(self.request.tenant)
+        return Member.objects.for_tenant(self.request.tenant).select_related("default_customer")
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.tenant)

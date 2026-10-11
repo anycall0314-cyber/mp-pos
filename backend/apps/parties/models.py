@@ -241,14 +241,15 @@ class SalesPerson(TenantOwnedModel):
 
 
 class Customer(TenantOwnedModel):
-    """客戶。記錄銷貨單的「歸屬對象」:個人/同業/企業/其他。
+    """來源客戶（通路／同業）；保留舊交易對象資料供歷史單據使用。
 
     識別:code 為系統自動產生的編號 (C-{5 位流水});phone 為選填(同業/企業可不填)。
-    會員(Member)是獨立的「人」主檔,可掛在任意客戶底下消費,不在這張表。
+    會員(Member)是個人／公司的交易主體，與來源分開。
     """
 
     class Kind(models.TextChoices):
         INDIVIDUAL = "individual", "個人"
+        CHANNEL = "channel", "通路"
         PEER = "peer", "同業 / 盤商"
         CORPORATE = "corporate", "企業"
         OTHER = "other", "其他"
@@ -274,8 +275,11 @@ class Customer(TenantOwnedModel):
     note = models.CharField("備註", max_length=200, blank=True)
     is_active = models.BooleanField("啟用", default=True)
 
+    is_sales_default = models.BooleanField("銷貨預設來源", default=False)
+
     class Meta:
         constraints = [
+            models.UniqueConstraint(fields=["tenant"], condition=models.Q(is_sales_default=True), name="uniq_sales_default_customer"),
             models.UniqueConstraint(
                 fields=["tenant", "code"],
                 name="uniq_customer_tenant_code",
@@ -297,11 +301,22 @@ class Customer(TenantOwnedModel):
 
 
 class Member(TenantOwnedModel):
-    """會員(人)。可掛在任何客戶底下消費,跟 Customer 各自獨立。
+    """個人／公司交易主體；預設來源與每張單實際來源分開。"""
 
-    識別:code 為系統自動產生的編號 (M-{5 位流水});phone 為選填但建議填。
-    與 Customer 不互斥 - 同一個人可同時是 Customer 又是 Member,系統不強制連結。
-    """
+    class Kind(models.TextChoices):
+        INDIVIDUAL = "individual", "個人"
+        COMPANY = "company", "公司"
+
+    class SourceMode(models.TextChoices):
+        SALES_DEFAULT = "sales_default", "沿用銷貨預設"
+        DIRECT = "direct", "直客"
+        CUSTOMER = "customer", "指定來源"
+
+    kind = models.CharField("會員類型", max_length=20, choices=Kind.choices, default=Kind.INDIVIDUAL)
+    tax_id = models.CharField("統一編號", max_length=20, blank=True)
+    contact = models.CharField("聯絡人", max_length=120, blank=True)
+    default_source_mode = models.CharField("預設來源", max_length=20, choices=SourceMode.choices, default=SourceMode.SALES_DEFAULT)
+    default_customer = models.ForeignKey(Customer, on_delete=models.PROTECT, null=True, blank=True, related_name="default_members", verbose_name="會員預設來源客戶")
 
     code = models.SlugField(
         "會員編號",
@@ -310,7 +325,7 @@ class Member(TenantOwnedModel):
         editable=False,
         help_text="系統自動產生:M-{5位流水};前端不顯示也不輸入",
     )
-    name = models.CharField("姓名", max_length=120)
+    name = models.CharField("姓名／公司名稱", max_length=120)
     phone = models.CharField("電話", max_length=40, blank=True)
     national_id = models.CharField("身分證字號", max_length=20, blank=True)
     birthday = models.DateField("生日", null=True, blank=True)
