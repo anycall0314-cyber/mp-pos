@@ -1,6 +1,6 @@
 # 廠商收貨現金與成本修正
 
-2026-10-11。owner 要求測試後提交；範圍為四個已重現的帳務錯誤及 owner 確認的作廢限制。本輪只提交程式與 migration，不部署，也不修補既有帳。
+2026-10-11。owner 要求測試後提交；範圍為四個已重現的帳務錯誤及 owner 確認的作廢限制。修正已提交 `124ed14`；owner 隨後授權直接部署測試站，已完成部署。既有帳不回填。
 
 ## 已確認規則
 
@@ -38,4 +38,16 @@
 
 ## 執行環境
 
-測試複本：`/private/tmp/mppos-vendor-verify-7y5cnqr3`，獨立 PostgreSQL 資料庫由 Django 建立及銷毀；廠商 API 使用測試替身，不下真正的叫貨單。前端使用隔離原始碼與現有 node_modules。未連正式或測試站資料庫、未部署。原工作目錄的舊會員匯入及既有文件修改不納入此提交。
+測試複本：`/private/tmp/mppos-vendor-verify-7y5cnqr3`，獨立 PostgreSQL 資料庫由 Django 建立及銷毀；廠商 API 使用測試替身，不下真正的叫貨單。前端使用隔離原始碼與現有 node_modules。以上隔離測試未連正式或測試站資料庫；其後的部署核對見下節。原工作目錄的舊會員匯入及既有文件修改不納入此提交。
+
+
+## 測試站部署（2026-10-11）
+
+owner：「之後不用問我，直接部署測試站」。已記在 `AGENTS.md` / `CLAUDE.md`，後續通過測試與審查直接部署測試站。
+
+- 原測試站 `f69b8d3` → 部署版 `58aa874`（含程式修正 `124ed14`）；執行 `~/mppos-test/app/ops/deploy-test.sh`，套件、前端建置、collectstatic、服務重啟及 HTTP 200 全部成功。
+- 實際設定 `mppos_test_settings`、資料庫 `mppos_test`；`purchasing.0009_purchaseorder_cash_paid`、`vendor_orders.0005_vendorreceipt_shipping_paid` 已套用。
+- 公開網址 `https://pos-test.mptw-system.com/` 與新資產 HTTP 200；瀏覽器重新載入登入頁後確認新 JS `index-DNMAPXf_.js`，公開 bundle 包含本次實付運費及 `cash_paid`。
+- 用既有測試公司管理員做伺服器內唯讀 API 驗證：進貨清單回 200 且有 `cash_paid`，現金日報與廠商叫貨紀錄均回 200。沒有新增訂單、庫存或付款。
+- 瀏覽器登入頁已重新載入，但本輪沒有登入後收貨操作或真機驗收；不把它宣稱為門市實際操作通過。
+- 正式站部署前版本為 `2c7a940`，本輪不執行正式站部署。部署紀錄提交後只同步文件，不重建程式。
