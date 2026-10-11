@@ -479,7 +479,7 @@ class ReceiveTests(_Manual):
         return (client or self.clerk).get(f"{ORDERS}{(order or self.o)['id']}/receiving/")
 
     def take(self, lines, key="recv-m001", order=None, client=None, **extra):
-        body = {"request_key": key, "lines": lines, **extra}
+        body = {"request_key": key, "freight": 0, "lines": lines, **extra}
         return (client or self.clerk).post(f"{ORDERS}{(order or self.o)['id']}/receive/", body, format="json")
 
     def line(self, key=C01, qty=20, product=None, price="45", **more):
@@ -626,12 +626,12 @@ class ReceiveTests(_Manual):
         self.assertEqual((self.plan(theirs).status_code, self.take([self.line()], key="recv-m009", order=theirs).status_code), (404, 404))
         self.assertNothingWentOut()
 
-    def test_the_other_kind_of_order_is_untouched(self):
-        """全自動(膜總裁)那一條路照舊:單價用廠商的、畫面送什麼都不看。"""
+    def test_automatic_order_uses_vendor_price_and_receiver_freight(self):
+        """全自動單價仍用廠商的，本次實付運費由收貨人填。"""
         self.link()
         real = self.order(key="draft-real1").json()
         film = self.product("甲 高透亮面保護貼")
         r = self.clerk.post(f"{ORDERS}{real['id']}/receive/", {"request_key": "recv-real1", "freight": 999, "lines": [
             {"key": "G02||p", "qty": 50, "product": film.id, "unit_price": "1"}]}, format="json")
         self.assertEqual(r.status_code, 201, r.content.decode())
-        self.assertEqual(self.stock(film), (50, D("150.00")))
+        self.assertEqual(self.stock(film), (50, D("169.98")))

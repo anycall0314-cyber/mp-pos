@@ -4,7 +4,7 @@ import test from "node:test";
 
 import {
   blocked, fill, lineState, lineTitle, mayReceive, newReceiveKey, pendingFrom, pendingOf, pendingSlot, pendingText,
-  chosen, qtyFrom, receiveOutcome, receivedText, startDraft, summarize, withProduct, withQty, withRepick,
+  chosen, paidFreight, qtyFrom, receiveOutcome, receivedText, startDraft, summarize, withProduct, withQty, withRepick,
 } from "./vendorReceive.ts";
 
 const line = (key, extra = {}) => ({
@@ -42,6 +42,7 @@ test("打開面板:數量帶「廠商已出、這家店還沒入的」,備註帶
     product: {},
     repick: {},
     note: "上次少一包",
+    freight: "",
   });
   assert.deepEqual(chosen(PLAN.lines[0], draft), { id: 7, label: "高透亮面保護貼" });
 });
@@ -257,4 +258,17 @@ test("再送一次(確認上一次)被擋:沒權限 / 找不到 / 沒登入證�
   for (const unknown of [401, 403, 404, 405, 410, 418, null, 408, 409, 429, 500, 502, 503, 504, 0, 302]) {
     assert.equal(receiveOutcome(unknown, true), "unknown", String(unknown));
   }
+});
+
+test("實付運費明填，未確認的重送保留同一筆運費", () => {
+  assert.equal(paidFreight("0"), 0);
+  assert.equal(paidFreight(" 80 "), 80);
+  for (const bad of ["", "-1", "1.5", "1e2", "10000000", "８０"]) assert.equal(paidFreight(bad), null);
+  const draft = { ...withProduct(startDraft(PLAN, "recv-abcdefgh"), "G01||p", { id: 9, label: "D3O" }), freight: "80" };
+  const sum = summarize(PLAN, draft);
+  assert.equal(blocked(sum, ""), "請填本次實付運費，沒有支付請填 0");
+  assert.equal(blocked(sum, "0"), null);
+  const pending = pendingOf(draft, sum);
+  assert.equal(pending.freight, 80);
+  assert.equal(pendingFrom(pendingText(pending), 1).freight, 80);
 });

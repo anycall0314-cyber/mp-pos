@@ -158,19 +158,19 @@ class ReceiveTests(_Arrival):
 
     def test_cash_on_delivery_is_recorded_as_paid_in_cash(self):
         o = self.order(key="draft-0002", payment_method="貨到付款").json()
-        self.assertEqual(self.take([self.line()], order=o).status_code, 201)
+        self.assertEqual(self.take([self.line()], order=o, freight=0).status_code, 201)
         self.assertEqual(PurchaseOrder.objects.get(tenant=self.t).payment_method, self.c.cash)
 
     def test_the_payment_method_is_the_one_the_vendor_has_now(self):
         """叫貨時是月結、廠商事後改成貨到付款:付的是現金,進貨單要記得到(複審 2026-10-10)。反過來也一樣。"""
         self.vendor.find(self.no)["payment_method"] = "貨到付款"
         self.assertEqual((self.o["payment_method"], self.plan().json()["payment_method"]), ("月結", "貨到付款"))
-        r = self.take([self.line(qty=20)])
+        r = self.take([self.line(qty=20)], freight=0)
         self.assertEqual((r.status_code, r.json()["order"]["payment_method"]), (201, "貨到付款"))     # 叫貨紀錄跟著寫現在的
         self.assertEqual(PurchaseOrder.objects.get(tenant=self.t).payment_method, self.c.cash)
         # 廠商沒有回這一格:用叫貨單上記的(剛剛寫回來的貨到付款)
         self.vendor.find(self.no)["payment_method"] = None
-        self.assertEqual(self.take([self.line(qty=5)], key="recv-0002").status_code, 201)
+        self.assertEqual(self.take([self.line(qty=5)], key="recv-0002", freight=0).status_code, 201)
         self.assertEqual(PurchaseOrder.objects.filter(tenant=self.t).order_by("id").last().payment_method, self.c.cash)
         # 反過來:叫貨時貨到付款、廠商改成月結 → 不記現金
         other = self.order(key="draft-0002", payment_method="貨到付款").json()
@@ -374,7 +374,7 @@ class FreightTests(_Arrival):
         r = self.link(key="", freight_into_cost=False)
         self.assertEqual((r.status_code, r.json()["freight_into_cost"]), (200, False))
         self.assertEqual(self.plan().json()["freight_into_cost"], False)
-        self.assertEqual(self.take(self.both()).status_code, 201)
+        self.assertEqual(self.take(self.both(), freight=200).status_code, 201)
         po = PurchaseOrder.objects.get(tenant=self.t)
         self.assertEqual((po.total_cost, VendorReceipt.objects.get().freight, self.stock()), (10300, 0, (50, D("150.00"))))
         self.assertIn("運費 200 沒有算進成本", po.note)
@@ -588,7 +588,7 @@ class OutsideOrderTests(_Arrival):
         self.assertEqual(self.vendor.posts()[1:], [])                          # 認領不會跟廠商下單
         row = self.plan(got).json()["lines"][0]
         self.assertEqual((row["qty"], row["suggested_qty"], row["unit_price"]), (25, 25, "150.00"))
-        self.assertEqual(self.take([self.line(qty=25)], order=got).status_code, 201)
+        self.assertEqual(self.take([self.line(qty=25)], order=got, freight=100).status_code, 201)
         po = PurchaseOrder.objects.get(tenant=self.t)
         self.assertEqual((po.total_cost, po.payment_method, self.stock()), (3850, self.c.cash, (25, D("154.00"))))
 

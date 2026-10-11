@@ -127,6 +127,7 @@ export function PurchaseListPage() {
           {t.invoice_no ? ` · 發票 ${t.invoice_no}` : ""}
           {t.payment_method_name ? ` · ${t.payment_method_name}` : ""}
           {" · "}小計 {money(t.subtotal)} · 稅 {money(t.tax_amount)}
+          {t.cash_paid !== null && t.cash_paid !== undefined ? ` · 現金實付 ${money(t.cash_paid)}` : ""}
           {t.note ? ` · ${t.note}` : ""}
         </div>
         <table className="wb-detail-lines">

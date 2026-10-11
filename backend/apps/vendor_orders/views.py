@@ -157,6 +157,8 @@ def _receipt_data(receipt) -> dict:
         "is_void": po.is_void,
         "total_cost": _money(po.total_cost),
         "freight": _money(receipt.freight),
+        "shipping_paid": _money(receipt.shipping_paid),
+        "cash_paid": _money(po.cash_paid),
         "qty": sum(i.qty for i in receipt.items.all()),
         "created_at": receipt.created_at,
         "created_by": receipt.created_by.get_username() if receipt.created_by else "",
@@ -468,7 +470,7 @@ def receive(request, pk: int):
         else:
             receipt, created = receiving.receive(
                 tenant=request.tenant, user=request.user, order=order, request_key=data.get("request_key"),
-                lines=data.get("lines"),
+                lines=data.get("lines"), freight=data.get("freight"),
             )
         if isinstance(data.get("issue_note"), str):
             receiving.set_issue(order, data["issue_note"])

@@ -452,6 +452,20 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
         )
 
         serials = list(ProductSerial.objects.filter(pk__in=serial_ids).order_by("pk"))
+        # 已售出再退回的設備也算動用過，不能以整單作廢抹掉進貨來源。
+        serial_sales = StockMovement.objects.filter(
+            tenant=po.tenant, serial_id__in=serial_ids,
+            movement_type=StockMovement.MovementType.SALE_OUT,
+        ).exists()
+        # 數量制沒有逐批銷售來源；本倉同商品在進貨後曾出庫，就不能證明整批未動用。
+        batch_used = StockMovement.objects.filter(
+            tenant=po.tenant, product_id__in=[it.product_id for it in stock_items],
+            from_warehouse=po.warehouse, created_at__gte=po.created_at, qty__gt=0,
+            movement_type__in=[StockMovement.MovementType.SALE_OUT, StockMovement.MovementType.TRANSFER_OUT,
+                              StockMovement.MovementType.REPAIR_USAGE, StockMovement.MovementType.PARTS_TRANSFER],
+        ).exists()
+        if serial_sales or batch_used:
+            raise PurchaseOrderError("這張進貨單的商品已售出或動用，不能整張作廢；請逐筆辦理商品退貨（退貨功能待完成）")
         # 要還在這張單進貨的門市、而且在庫:已經賣掉、調走(就算在別家門市是在庫)都算動用過
         moved = [
             x.serial_no for x in serials
@@ -464,8 +478,10 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
 
         # 配件庫存夠不夠扣(同一個商品在這張單出現好幾行時要加總)
         need = {}
+        batch_values = {}
         for it in stock_items:
             need[it.product_id] = need.get(it.product_id, 0) + it.qty
+            batch_values[it.product_id] = batch_values.get(it.product_id, Decimal("0")) + it.unit_landed_cost * it.qty
         balances = {}
         for it in stock_items:
             if it.product_id in balances:
@@ -478,6 +494,12 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
                     f"無法回退本單的 {need[it.product_id]} 件(部分已售出/調撥)"
                 )
             balances[it.product_id] = balance
+            remaining_qty = current - need[it.product_id]
+            remaining_value = Decimal(current) * balance.weighted_avg_cost - batch_values[it.product_id]
+            if remaining_qty > 0 and remaining_value < 0:
+                raise PurchaseOrderError("庫存成本已變動，不能整張作廢；請逐筆辦理商品退貨（退貨功能待完成）")
+            balance.weighted_avg_cost = ((remaining_value / remaining_qty).quantize(CENTS)
+                                         if remaining_qty > 0 else Decimal("0"))
 
         affected_product_ids = set()
         for x in serials:

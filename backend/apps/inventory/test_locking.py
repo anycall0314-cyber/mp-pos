@@ -396,7 +396,7 @@ class LedgerStaysConsistentTests(TestCase):
         self.c.sell(case_qty=1)                  # 剩 3 個,不夠退整張單的 4 個
         r = self.c.admin.post(f"/api/v1/purchase-orders/{po['id']}/void/", {}, format="json")
         self.assertEqual(r.status_code, 400, r.content)
-        self.assertIn("無法回退本單的 4 件", str(r.json()))
+        self.assertIn("已售出或動用，不能整張作廢", str(r.json()))
         self.assertEqual(StockBalance.objects.get(product=self.c.case, warehouse=self.w1).qty, 3)
         self.consistent()
 

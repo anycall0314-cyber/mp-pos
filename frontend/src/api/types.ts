@@ -550,6 +550,7 @@ export interface PurchaseOrder {
   subtotal: string;
   tax_amount: string;
   total_cost: string;
+  cash_paid: string | null;
   items: PurchaseOrderItem[];
   created_at: string;
   updated_at: string;

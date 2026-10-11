@@ -21,22 +21,21 @@ from django.utils import timezone
 from rest_framework import serializers as drf_serializers
 
 from apps.catalog.models import Product
+from apps.core.money import round_money
 from apps.identity.normalize import alias_key
 from apps.purchasing.models import PurchaseOrder
 from apps.purchasing.serializers import PurchaseOrderSerializer
 from apps.purchasing.services import PurchaseOrderError, commit_purchase_order
-from apps.tenants.models import PaymentMethod
 
 from . import services, standard, vendors
 from .models import Vendor, VendorItem, VendorLink, VendorOrder, VendorOrderItem, VendorReceipt, VendorReceiptItem
 from .receiving import (
-    CASH_ON_DELIVERY, CENT, ZERO, Line, _fits, _in_lock_order, _lock_request, _map, _owner, _spread, _whole,
-    line_key, received_by_line, supplier_for,
+    CENT, ZERO, Line, _fits, _in_lock_order, _lock_request, _map, _owner, _spread, _whole,
+    cash_method_for, line_key, received_by_line, shipping_paid_for, supplier_for,
 )
 from .services import REQUEST_KEY, VendorError
 
 MAX_PRICE = Decimal("9999999.99")
-MAX_FREIGHT = 9_999_999
 MAX_QTY = 99_999
 NOTE_LIMIT = 200
 ORDER_NO = "VO-{:06d}"
@@ -299,16 +298,6 @@ def _wanted(lines) -> list[tuple[str, int, int, object, Decimal]]:
     return out
 
 
-def _freight(value) -> Decimal:
-    """這一次的運費(整數元;沒填 = 0)。"""
-    if value in (None, ""):
-        return ZERO
-    n = _whole(value)
-    if n is None or not 0 <= n <= MAX_FREIGHT:
-        raise VendorError(f"運費要是 0 到 {MAX_FREIGHT} 的整數")
-    return Decimal(n)
-
-
 def receive(*, tenant, user, order: VendorOrder, request_key, lines, freight=None):
     """把這一次到的貨入庫:開一張進貨單。回 (這一次入庫, 是不是這一次新做的)。同一把鑰匙再來回同一次。"""
     if not order.manual:
@@ -327,7 +316,6 @@ def _receive(*, tenant, user, order, request_key, lines, freight):
             raise VendorError("這把鑰匙是另一張叫貨單的入庫")
         return done, False
     wanted = _wanted(lines)
-    fee = _freight(freight)
     who = vendors.name_of(order.provider)
     try:
         with transaction.atomic():
@@ -337,6 +325,9 @@ def _receive(*, tenant, user, order, request_key, lines, freight):
                 return done, False
             supplier = supplier_for(locked.link)
             link = VendorLink.objects.get(pk=locked.link_id)
+            cash = cash_method_for(tenant, locked.payment_method)
+            fee = shipping_paid_for(freight, locked.payment_method)
+            fee = ZERO if fee is None else fee
             ordered = {line_key(i.sku, None, False): (i.sku, i.spec_label, i.name, i.unit, i.pack_qty) for i in locked.items.all()}
             got = received_by_line(locked)
             listed = {line_key(i.sku, None, False): i for i in VendorItem.objects.filter(vendor__code=locked.provider)}
@@ -369,10 +360,6 @@ def _receive(*, tenant, user, order, request_key, lines, freight):
                 else:
                     cost = ((price * qty + extra.get(line.key, ZERO)) / qty).quantize(CENT)
                     items.append({"product": product.id, "qty": qty, "unit_price": str(cost)})
-            cash = None
-            if locked.payment_method == CASH_ON_DELIVERY:
-                cash = (PaymentMethod.objects.filter(tenant=tenant, kind=PaymentMethod.Kind.CASH, is_active=True)
-                        .order_by("sort_order", "id").first())
             note = f"{who} {locked.vendor_order_no} 到貨入庫"
             if fee > 0 and share == 0:
                 note += f"(運費 {fee:.0f} 沒有算進成本)"
@@ -383,11 +370,12 @@ def _receive(*, tenant, user, order, request_key, lines, freight):
                 "payment_method": cash.id if cash else None, "note": note[:200], "items": items,
             })
             form.is_valid(raise_exception=True)
-            form.save(tenant=tenant, created_by=user)
+            goods = sum((price * qty for _, qty, _, price in picked), ZERO)
+            form.save(tenant=tenant, created_by=user, cash_paid=round_money(goods + fee) if cash else None)
             commit_purchase_order(form.instance)
             receipt = VendorReceipt.objects.create(
                 tenant=tenant, order=locked, purchase_order=form.instance, request_key=request_key,
-                freight=share, created_by=user,
+                freight=share, shipping_paid=fee, created_by=user,
             )
             VendorReceiptItem.objects.bulk_create([
                 VendorReceiptItem(

@@ -126,6 +126,14 @@ class PurchaseOrder(TenantOwnedModel):
         default=0,
         editable=False,
     )
+    cash_paid = models.DecimalField(
+        "現金實付", max_digits=14, decimal_places=2, null=True, blank=True, editable=False,
+        help_text="廠商貨到付款的實際支出，包含本次實付運費；空白的舊單沿用含稅總額",
+    )
+
+    @property
+    def cash_payment_amount(self):
+        return self.total_cost if self.cash_paid is None else self.cash_paid
 
     class Meta:
         constraints = [

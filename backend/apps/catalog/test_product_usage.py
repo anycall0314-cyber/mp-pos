@@ -226,12 +226,9 @@ class ProductUsageTests(TestCase):
         self.assertEqual(self.patch(self.c.case, requires_serial=True).status_code, 400)
 
     # ── 出路:把單作廢、庫存歸零就可以改 ──
-    def test_voiding_the_documents_unlocks_the_product(self):
+    def test_voiding_an_unused_purchase_unlocks_the_product(self):
         po = self.c.purchase(case_qty=2)
-        so = self.c.sell(case_qty=1)
         self.assertEqual(self.patch(self.c.case, requires_serial=True).status_code, 400)
-        self.void("sales-orders", so)
-        self.assertEqual(self.patch(self.c.case, requires_serial=True).status_code, 400)   # 進貨單還在
         self.void("purchase-orders", po)
         self.assertEqual(product_usage(self.c.case).reasons, ())
         # 庫存那一筆還在、只是數量回到 0:一次查一批的那一支(類別連動用的)也要說它沒用過

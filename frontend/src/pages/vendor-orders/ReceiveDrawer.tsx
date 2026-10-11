@@ -9,6 +9,7 @@ import { ComboBox } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { apiErrorText } from "@/components/workbench/errors";
 import { QtyInput } from "@/components/workbench/QtyInput";
+import { MoneyInput } from "@/components/MoneyInput";
 import { toast } from "@/components/workbench/toast";
 import { money } from "@/lib/money";
 import {
@@ -63,7 +64,7 @@ async function pickable(query: string) {
 
 /**
  * 到貨入庫:照廠商這張單**現在**的明細開一張進貨單。
- * 單價是廠商的、運費算不算進成本是門市的設定,這裡都改不到;這裡只決定「這一次每一行入幾個、入到哪個品號」。
+ * 單價是廠商的、運費算不算進成本是門市的設定,這裡都改不到;收貨人填本次實付運費、各行數量與品號。
  * 在「對照」那一頁連好的品項打開就帶好品號;按「改」換一個 = 明講要換對照(owner 2026-10-10:店員都可以改)。
  * 規則在 lib/vendorReceive.ts;能不能入、最多幾個由伺服器照廠商當下的單再算一次。
  * 按了確認、沒有拿到答覆的那一次記在瀏覽器裡:解決之前(同一把鑰匙再送一次)這張單不能開新的一次入庫。
@@ -106,6 +107,7 @@ export function ReceiveDrawer({ order, onClose }: { order: VendorOrder; onClose:
         request_key: what.requestKey,
         lines: what.lines,
         issue_note: what.note,
+        freight: what.freight,
       });
       const mine = got.order.receipts.find((r) => r.id === got.receipt);
       writePending(order.id, null);
@@ -129,7 +131,7 @@ export function ReceiveDrawer({ order, onClose }: { order: VendorOrder; onClose:
 
   function submit() {
     if (!data || !draft || !sum || locked) return;
-    const why = blocked(sum);
+    const why = blocked(sum, draft.freight ?? "");
     if (why) {
       setRefused(why);
       return;
@@ -210,8 +212,7 @@ export function ReceiveDrawer({ order, onClose }: { order: VendorOrder; onClose:
             <span>{[data.vendor_status, data.vendor_logistics_status, data.vendor_tracking_no].filter(Boolean).join(" · ")}</span>
             {fee > 0 && (
               <span>
-                運費 ${money(fee)}
-                {data.freight_into_cost ? `(算進成本,還有 $${money(data.freight_left)})` : "(不算成本)"}
+                廠商單上運費 ${money(fee)}
               </span>
             )}
             {data.payment_method === "貨到付款" && <span>貨到付款:記現金</span>}
@@ -280,6 +281,11 @@ export function ReceiveDrawer({ order, onClose }: { order: VendorOrder; onClose:
             </tbody>
           </table>
           <div className="vo-form">
+            <label>
+              本次實付運費{data.freight_into_cost ? "（算進成本）" : "（不算成本）"}
+              <MoneyInput value={draft.freight ?? ""} min={0} max={9_999_999} disabled={locked}
+                placeholder="沒有支付請填 0" onChange={(value) => setDraft({ ...draft, freight: value })} />
+            </label>
             <label className="vo-form-wide">
               到貨問題
               <input

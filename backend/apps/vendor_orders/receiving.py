@@ -9,7 +9,8 @@ owner 2026-10-10 定的:
 動手前紅隊(三個視角)改掉的:
 - 預設入庫的數量 = 廠商已出、這家店還沒入的(不是整張還沒入的);比已出的多只提醒不擋。
 - 一張叫貨單可以分好幾次入庫;送錯、對不上的那幾行這次不入,留在叫貨單上,另外記一句「到貨問題」。
-- 分次入庫時運費照這一次貨款的比例算,最後一次拿剩下的(不是第一次就整筆壓上去)。
+- owner 2026-10-11:本次實付運費由收貨人明填，0 代表未支付；不由分批數量猜付款。
+  舊月結請求未帶運費時只保留原成本分攤，貨到付款缺運費就擋。
 
 庫存與成本的帳只有進貨單那一份:這裡組好內容,交給既有的 `PurchaseOrderSerializer` + `commit_purchase_order`。
 """
@@ -41,6 +42,28 @@ CENT = Decimal("0.01")
 ZERO = Decimal("0")
 ORDER_NO = re.compile(r"^[A-Za-z0-9_-]{4,40}$")
 CASH_ON_DELIVERY = "貨到付款"
+
+
+def cash_method_for(tenant, payment):
+    """貨到付款必須記得到現金；缺設定時整次收貨退回，不當成未付款。"""
+    if payment != CASH_ON_DELIVERY:
+        return None
+    cash = (PaymentMethod.objects.filter(tenant=tenant, kind=PaymentMethod.Kind.CASH, is_active=True)
+            .order_by("sort_order", "id").first())
+    if cash is None:
+        raise VendorError("貨到付款需要有效的現金付款方式，請管理員先到系統設定啟用，再重送這次入庫")
+    return cash
+
+
+def shipping_paid_for(value, payment):
+    """新畫面由收貨人明填本次運費；舊的月結請求可沿用原成本分攤。"""
+    if value in (None, ""):
+        if payment == CASH_ON_DELIVERY:
+            raise VendorError("請填本次實付運費，沒有支付運費請填 0")
+        return None
+    if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= 9_999_999:
+        raise VendorError("本次實付運費要是 0 到 9999999 的整數")
+    return Decimal(value)
 
 
 @dataclass
@@ -337,17 +360,17 @@ def _lock_request(tenant, request_key) -> None:
         cur.execute("SELECT pg_advisory_xact_lock(%s)", [int.from_bytes(digest[:8], "big", signed=True)])
 
 
-def receive(*, tenant, user, order, request_key, lines):
+def receive(*, tenant, user, order, request_key, lines, freight=None):
     """照這張叫貨單開一張進貨單。回 (這一次入庫, 是不是這一次新做的)。同一把鑰匙再來回同一次,不會入兩次。
     丟 `VendorError` = 這把鑰匙沒有入過、這一次也沒有入(畫面靠這個決定可不可以開新的一次)。"""
     if not isinstance(request_key, str) or not services.REQUEST_KEY.match(request_key):
         raise VendorError("這一次入庫的編號不對,請重新整理頁面再試")
     with transaction.atomic():
         _lock_request(tenant, request_key)
-        return _receive(tenant=tenant, user=user, order=order, request_key=request_key, lines=lines)
+        return _receive(tenant=tenant, user=user, order=order, request_key=request_key, lines=lines, freight=freight)
 
 
-def _receive(*, tenant, user, order, request_key, lines):
+def _receive(*, tenant, user, order, request_key, lines, freight):
     done = VendorReceipt.objects.filter(tenant=tenant, request_key=request_key).first()
     if done is not None:
         if done.order_id != order.id:
@@ -383,8 +406,15 @@ def _receive(*, tenant, user, order, request_key, lines):
                 _fits(product, line.title)
                 _map(tenant, supplier, line, product, user, locked.provider, seen=was)
                 picked.append((line, qty, product))
-            share = _freight_share(link, fee, freight_spent(locked), vendor_lines, got, [(l, q) for l, q, _ in picked])
+            pay = _payment(locked, found.order)
+            cash = cash_method_for(tenant, pay)
+            shipping_paid = shipping_paid_for(freight, pay)
+            if shipping_paid is None:  # 升級前的月結畫面，不猜成實際付款
+                share = _freight_share(link, fee, freight_spent(locked), vendor_lines, got, [(l, q) for l, q, _ in picked])
+            else:
+                share = shipping_paid if link.freight_into_cost else ZERO
             extra = _spread(share, [(l, q) for l, q, _ in picked])
+            share = sum(extra.values(), ZERO)
             items = []
             for line, qty, product in picked:
                 if line.is_reissue:        # 瑕疵補發:數量照入、不計價(平均成本被攤低)
@@ -392,14 +422,9 @@ def _receive(*, tenant, user, order, request_key, lines):
                 else:
                     cost = ((line.unit_price * qty + extra.get(line.key, ZERO)) / qty).quantize(CENT)
                     items.append({"product": product.id, "qty": qty, "unit_price": str(cost)})
-            cash = None
-            pay = _payment(locked, found.order)
-            if pay == CASH_ON_DELIVERY:
-                cash = (PaymentMethod.objects.filter(tenant=tenant, kind=PaymentMethod.Kind.CASH, is_active=True)
-                        .order_by("sort_order", "id").first())
             note = f"{who} {locked.vendor_order_no} 到貨入庫"
-            if fee > 0 and not link.freight_into_cost:
-                note += f"(運費 {fee:.0f} 沒有算進成本)"
+            if shipping_paid is not None and shipping_paid > 0 and share == 0:
+                note += f"(運費 {shipping_paid:.0f} 沒有算進成本)"
             form = PurchaseOrderSerializer(data={
                 "supplier": supplier.id, "warehouse": locked.warehouse_id,
                 # 未稅:單價照放、不除 1.05 —— 成本 = 實際付出去的金額(owner 2026-10-10)
@@ -407,11 +432,14 @@ def _receive(*, tenant, user, order, request_key, lines):
                 "payment_method": cash.id if cash else None, "note": note[:200], "items": items,
             })
             form.is_valid(raise_exception=True)
-            form.save(tenant=tenant, created_by=user)
+            # 用未攤提、未收成單位成本的原貨款記現金；成本到分的尾差不能改付款額。
+            goods = sum((line.amount * qty / line.qty for line, qty, _ in picked if not line.is_reissue), ZERO)
+            form.save(tenant=tenant, created_by=user,
+                      cash_paid=round_money(goods + shipping_paid) if cash else None)
             commit_purchase_order(form.instance)
             receipt = VendorReceipt.objects.create(
                 tenant=tenant, order=locked, purchase_order=form.instance, request_key=request_key,
-                freight=share, created_by=user,
+                freight=share, shipping_paid=shipping_paid, created_by=user,
             )
             VendorReceiptItem.objects.bulk_create([
                 VendorReceiptItem(

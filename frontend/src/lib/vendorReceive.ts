@@ -63,6 +63,13 @@ export interface ReceiveDraft {
   product: Record<string, PickedProduct>;
   repick: Record<string, true>;
   note: string;
+  freight?: string;
+}
+
+/** 本次實付運費必須明填，0 代表本次沒有支付。 */
+export function paidFreight(raw: unknown): number | null {
+  const text = typeof raw === "string" ? raw.trim() : "";
+  return /^\d{1,7}$/.test(text) ? Number(text) : null;
 }
 
 /** 框裡打的字 → 數量。不是 0 到上限之間的整數就當成 0(這一行這次不入)。 */
@@ -81,7 +88,7 @@ export function startDraft(plan: ReceivePlan, requestKey: string): ReceiveDraft 
   for (const line of plan.lines) {
     if (line.suggested_qty > 0) qty[line.key] = line.suggested_qty;
   }
-  return { requestKey, qty, product: {}, repick: {}, note: plan.issue_note };
+  return { requestKey, qty, product: {}, repick: {}, note: plan.issue_note, freight: "" };
 }
 
 /** 草稿裡跟「入到哪個品號」有關的那兩格(全自動與半自動的入庫草稿都有;下面三支兩邊共用)。 */
@@ -186,10 +193,11 @@ export function summarize(plan: ReceivePlan, draft: ReceiveDraft): ReceiveSummar
 }
 
 /** 為什麼現在不能按「確認入庫」(null = 可以)。 */
-export function blocked(sum: ReceiveSummary): string | null {
+export function blocked(sum: ReceiveSummary, freight?: string): string | null {
   if (sum.pieces === 0) return "這一次沒有要入庫的東西";
   if (sum.over.length > 0) return `比還沒入庫的多:${sum.over.join("、")}`;
   if (sum.unmapped.length > 0) return `還沒選品號:${sum.unmapped.join("、")}`;
+  if (freight !== undefined && paidFreight(freight) === null) return "請填本次實付運費，沒有支付請填 0";
   return null;
 }
 
@@ -200,6 +208,8 @@ export interface ReceiptRow {
   is_void: boolean;
   total_cost: string;
   freight: string;
+  shipping_paid?: string | null;
+  cash_paid?: string | null;
   qty: number;
   created_at: string;
   created_by: string;
@@ -228,6 +238,8 @@ export interface PendingReceive {
   lines: ReceiveSend[];
   pieces: number;
   note: string;
+  /** 升級前待確認的請求沒有此欄，必須保留原鑰匙。 */
+  freight?: number;
 }
 
 export function pendingSlot(orderId: number): string {
@@ -235,7 +247,9 @@ export function pendingSlot(orderId: number): string {
 }
 
 export function pendingOf(draft: ReceiveDraft, sum: ReceiveSummary): PendingReceive {
-  return { requestKey: draft.requestKey, lines: sum.lines, pieces: sum.pieces, note: draft.note };
+  const freight = paidFreight(draft.freight);
+  return { requestKey: draft.requestKey, lines: sum.lines, pieces: sum.pieces, note: draft.note,
+    ...(freight === null ? {} : { freight }) };
 }
 
 export function pendingText(pending: PendingReceive): string {
@@ -257,6 +271,7 @@ export function pendingFrom(raw: string | null | undefined): PendingReceive | nu
   const p = d as Partial<PendingReceive>;
   if (typeof p.requestKey !== "string" || !/^[A-Za-z0-9_-]{8,50}$/.test(p.requestKey)) return null;
   if (!Array.isArray(p.lines) || p.lines.length === 0) return null;
+  if (p.freight !== undefined && (!whole(p.freight, 0) || p.freight > 9_999_999)) return null;
   const lines: PendingReceive["lines"] = [];
   for (const l of p.lines as unknown[]) {
     const row = l as { key?: unknown; qty?: unknown; product?: unknown; was?: unknown } | null;
@@ -271,6 +286,7 @@ export function pendingFrom(raw: string | null | undefined): PendingReceive | nu
     lines,
     pieces: lines.reduce((sum, l) => sum + l.qty, 0),
     note: typeof p.note === "string" ? p.note : "",
+    ...(p.freight === undefined ? {} : { freight: p.freight }),
   };
 }
 

@@ -2664,7 +2664,7 @@ export const useReceiveVendorOrder = () => {
       request_key: string;
       lines: ReceiveSend[] | ManualSend[];
       issue_note: string;
-      /** 半自動廠商的單才有:這一次的運費(整數元) */
+      /** 收貨人填寫的本次實付運費（整數元）；舊的待確認請求可能沒有此欄。 */
       freight?: number;
     }) =>
       api<{ receipt: number; order: VendorOrder }>(`/vendor-orders/${vars.order}/receive/`, {

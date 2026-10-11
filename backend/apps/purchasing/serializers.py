@@ -109,6 +109,7 @@ class PurchaseOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelS
             "subtotal",
             "tax_amount",
             "total_cost",
+            "cash_paid",
             "items",
             "created_at",
             "updated_at",
@@ -132,6 +133,7 @@ class PurchaseOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelS
             "subtotal",
             "tax_amount",
             "total_cost",
+            "cash_paid",
             "created_at",
             "updated_at",
         ]

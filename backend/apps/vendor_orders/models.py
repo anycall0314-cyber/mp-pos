@@ -283,6 +283,7 @@ class VendorReceipt(TenantOwnedModel):
     # 畫面每開一次入庫產生一把:連按兩下、斷線重送不會入兩次
     request_key = models.CharField("畫面的鑰匙", max_length=50)
     freight = models.DecimalField("這一次算進成本的運費", max_digits=14, decimal_places=2, default=0)
+    shipping_paid = models.DecimalField("本次實付運費", max_digits=14, decimal_places=2, null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
         verbose_name="入庫的人",

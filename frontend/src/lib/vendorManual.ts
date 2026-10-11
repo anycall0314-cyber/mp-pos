@@ -176,10 +176,11 @@ export function manualSummary(plan: ManualPlan, draft: ManualDraft): ManualSumma
 }
 
 /** 為什麼現在不能按「確認入庫」(null = 可以)。比叫的多不擋。 */
-export function manualBlocked(sum: ManualSummary): string | null {
+export function manualBlocked(sum: ManualSummary, freight?: string): string | null {
   if (sum.pieces === 0) return "這一次沒有要入庫的東西";
   if (sum.unpriced.length > 0) return `還沒填實際單價:${sum.unpriced.join("、")}`;
   if (sum.unmapped.length > 0) return `還沒選品號:${sum.unmapped.join("、")}`;
+  if (freight !== undefined && freight.trim() === "") return "請填本次實付運費，沒有支付請填 0";
   if (sum.freight === null) return "運費要是整數";
   return null;
 }

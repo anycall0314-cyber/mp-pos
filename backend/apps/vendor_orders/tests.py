@@ -852,7 +852,7 @@ class BackupTests(BackupBase):
             self.assertEqual((r.status_code, r.json()["vendor_order_no"]), (201, "MO-20261010-001"))
             # 到貨入了 30 片(第二步):入庫紀錄、它開的進貨單、料號對到哪個品號都要跟著走
             r = a.clerk.post(f"{ORDERS}{r.json()['id']}/receive/", {
-                "request_key": "recv-0001", "issue_note": "少 20 片",
+                "request_key": "recv-0001", "issue_note": "少 20 片", "freight": 0,
                 "lines": [{"key": "G02||p", "qty": 30, "product": a.case.id}]}, format="json")
             self.assertEqual(r.status_code, 201, r.content.decode())
             po_no = r.json()["order"]["receipts"][0]["purchase_order_no"]

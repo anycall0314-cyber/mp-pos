@@ -9,6 +9,7 @@ import { ComboBox } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { apiErrorText } from "@/components/workbench/errors";
 import { QtyInput } from "@/components/workbench/QtyInput";
+import { MoneyInput } from "@/components/MoneyInput";
 import { toast } from "@/components/workbench/toast";
 import { money } from "@/lib/money";
 import {
@@ -125,7 +126,7 @@ export function ManualReceiveDrawer({ order, onClose }: { order: VendorOrder; on
 
   function submit() {
     if (!data || !draft || !sum || locked) return;
-    const why = manualBlocked(sum);
+    const why = manualBlocked(sum, draft.freight);
     if (why) {
       setRefused(why);
       return;
@@ -295,15 +296,19 @@ export function ManualReceiveDrawer({ order, onClose }: { order: VendorOrder; on
               </label>
             )}
             <label>
-              運費{data.freight_into_cost ? "(算進成本)" : "(不算成本)"}
-              <input
-                inputMode="numeric"
+              本次實付運費{data.freight_into_cost ? "(算進成本)" : "(不算成本)"}
+              <MoneyInput
                 value={draft.freight}
                 disabled={locked}
-                placeholder="0"
-                onChange={(e) => setDraft({ ...draft, freight: e.target.value })}
+                min={0}
+                max={9_999_999}
+                placeholder="沒有支付請填 0"
+                onChange={(value) => setDraft({ ...draft, freight: value })}
               />
             </label>
+            {data.payment_method === "貨到付款" && draft.freight.trim() !== "" && sum.freight !== null && (
+              <span>本次現金實付 ${money(sum.amount + sum.freight)}</span>
+            )}
             <label className="vo-form-wide">
               到貨問題
               <input

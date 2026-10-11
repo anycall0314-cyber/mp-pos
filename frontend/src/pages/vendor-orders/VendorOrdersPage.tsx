@@ -851,7 +851,11 @@ function HistoryTab({ link, openFirst }: { link: VendorLinkRow; openFirst: numbe
                                     {r.is_void && <span className="vo-test">已作廢</span>}
                                   </td>
                                   <td className="num">{r.qty} 個</td>
-                                  <td className="num">${money(r.total_cost)}</td>
+                                  <td className="num">
+                                    入庫成本 ${money(r.total_cost)}
+                                    {r.cash_paid !== null && r.cash_paid !== undefined && <div className="vo-sub">現金實付 ${money(r.cash_paid)}</div>}
+                                    {r.shipping_paid !== null && r.shipping_paid !== undefined && <div className="vo-sub">實付運費 ${money(r.shipping_paid)}</div>}
+                                  </td>
                                   <td>{r.created_by}</td>
                                 </tr>
                               ))}

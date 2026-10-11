@@ -187,7 +187,7 @@ def _compute_cash_balance_before(tenant, warehouse_id, before_date, cash_codes):
             is_void=False,
             payment_method__kind="cash",
         )
-        .aggregate(s=Sum(Round("total_cost")))["s"]
+        .aggregate(s=Sum(Round(Coalesce("cash_paid", "total_cost"))))["s"]
         or 0
     )
     expenses_out = (
@@ -408,10 +408,10 @@ def business_daily_report(request):
                 "no": po.no,
                 "supplier_name": po.supplier.name if po.supplier_id else "",
                 "payment_method_name": po.payment_method.name,
-                "total_cost": str(po.total_cost),
+                "total_cost": str(po.cash_payment_amount),
             }
         )
-        purchases_total += money_int(po.total_cost)
+        purchases_total += money_int(po.cash_payment_amount)
 
     # 3. 雜支 cash 支出
     expenses_qs = (
