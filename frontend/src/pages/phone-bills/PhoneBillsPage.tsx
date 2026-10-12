@@ -9,13 +9,17 @@ import {
   MasterColumn,
   DetailTab,
 } from "@/components/master-detail/MasterDetail";
+import { localDay, monthStart } from "@/lib/fixedReports";
 import { money, roundInt } from "@/lib/money";
 
 import { PhoneBillForm } from "./PhoneBillForm";
 import { maskIdNo } from "./mask";
 
 export function PhoneBillsPage() {
-  const { data, isLoading, isError, error } = usePhoneBills();
+  // 清單與合計 = 這段期間(預設本月)。以前不分期間只拿最新 50 筆,合計只加了那 50 筆
+  const [from, setFrom] = useState(monthStart);
+  const [to, setTo] = useState(localDay);
+  const { data, isLoading, isError, error } = usePhoneBills({ from, to });
   const voidMutation = useVoidPhoneBill();
   // 員工帳號的權限(作廢其他單):關掉的人沒有這顆(伺服器也會擋)
   const canVoid = useCan("void_others");
@@ -181,6 +185,36 @@ export function PhoneBillsPage() {
           </b>
         </span>
       </Toolbar>
+      <div className="list-filterbar">
+        <label>
+          起日
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        </label>
+        <label>
+          迄日
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        </label>
+        <button
+          className="btn"
+          type="button"
+          onClick={() => {
+            setFrom(monthStart());
+            setTo(localDay());
+          }}
+        >
+          本月
+        </button>
+        <button
+          className="btn"
+          type="button"
+          onClick={() => {
+            setFrom(localDay());
+            setTo(localDay());
+          }}
+        >
+          今天
+        </button>
+      </div>
       {isLoading && <div className="md-empty">載入中…</div>}
       {isError && <div className="md-empty">載入失敗:{String(error)}</div>}
       {!isLoading && !isError && (
@@ -191,9 +225,10 @@ export function PhoneBillsPage() {
           tabs={tabs}
           searchPlaceholder="搜尋 單號 / 門市 / 電信 / 電話 / 會員 / 經手人"
           onSearch={setQuery}
+          searchValue={query}
           emptyDetailHint={
             (data ?? []).length === 0
-              ? "尚無代收話費紀錄,點右上「+ 新增代收」開始"
+              ? "這段期間沒有代收話費"
               : filtered.length === 0
                 ? `查無符合「${query}」的紀錄`
                 : "從左側選擇代收單檢視詳細"

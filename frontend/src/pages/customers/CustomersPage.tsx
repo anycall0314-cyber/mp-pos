@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { ApiHttpError } from "@/api/client";
-import { useCustomers, useSalesOrders, useSaveCustomer, useSalesDefaultSource, useSaveSalesDefaultSource } from "@/api/hooks";
+import { useCustomers, useOrdersOf, useOrderSummary, useSaveCustomer, useSalesDefaultSource, useSaveSalesDefaultSource } from "@/api/hooks";
 import type { Customer, CustomerKind } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { SourcePicker } from "@/components/SourcePicker";
 import { useCurrentUser } from "@/auth/AuthContext";
 import { Toolbar } from "@/components/Toolbar";
+import { cutNote } from "@/lib/listAll";
 import { money } from "@/lib/money";
 
 const CUSTOMER_KINDS: { value: CustomerKind; label: string }[] = [
@@ -159,20 +160,18 @@ export function CustomersPage() {
   }, [selection, selected, tab]);
 
   const customerId = selection?.kind === "customer" ? selection.id : null;
-  const orders = useSalesOrders(
-    customerId ? { customer: customerId } : undefined,
-  );
+  const who = customerId ? { customer: customerId } : undefined;
+  const orders = useOrdersOf(who);            // 最近的 100 張(底下那張表)
+  const summary = useOrderSummary(who);       // 幾張、累計、最近:伺服器算全部
 
-  const orderStats = useMemo(() => {
-    const list = orders.data ?? [];
-    const active = list.filter((o) => !o.is_void);
-    const total = active.reduce((s, o) => s + Number(o.total || 0), 0);
-    const lastVisit = active.reduce<string | null>((d, o) => {
-      if (!d) return o.doc_date;
-      return o.doc_date > d ? o.doc_date : d;
-    }, null);
-    return { count: active.length, total, lastVisit };
-  }, [orders.data]);
+  const orderStats = {
+    count: summary.data?.count ?? 0,
+    total: Number(summary.data?.total ?? 0),
+    lastVisit: summary.data?.last_date ?? null,
+  };
+  const ordersLoading = orders.isLoading || summary.isLoading;
+  const ordersFailed = orders.isError || summary.isError;
+  const ordersCut = cutNote(orders.data, "只列最近", "張");
 
   function patch<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -459,9 +458,11 @@ export function CustomersPage() {
                 <div style={{ marginTop: 24 }}>
                   <h4 className="pc-detail-title">
                     銷售紀錄
-                    {orders.isLoading
+                    {ordersLoading
                       ? " 載入中…"
-                      : ` (${orderStats.count} 筆 · 累計 $${money(orderStats.total)}${
+                      : ordersFailed
+                        ? " 載入失敗"
+                        : ` (${orderStats.count} 筆 · 累計 $${money(orderStats.total)}${
                           orderStats.lastVisit
                             ? ` · 最近 ${orderStats.lastVisit}`
                             : ""
@@ -480,7 +481,7 @@ export function CustomersPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {(orders.data ?? []).map((so) => (
+                        {(orders.data?.rows ?? []).map((so) => (
                           <tr
                             key={so.id}
                             onClick={() => navigate(`/sales/${so.id}`)}
@@ -500,10 +501,17 @@ export function CustomersPage() {
                             </td>
                           </tr>
                         ))}
-                        {!orders.isLoading && (orders.data ?? []).length === 0 && (
+                        {!ordersLoading && !ordersFailed && (orders.data?.rows ?? []).length === 0 && (
                           <tr>
                             <td colSpan={6} className="md-empty">
                               此客戶尚無銷售紀錄
+                            </td>
+                          </tr>
+                        )}
+                        {ordersCut && (
+                          <tr>
+                            <td colSpan={6} className="md-empty">
+                              {ordersCut}
                             </td>
                           </tr>
                         )}

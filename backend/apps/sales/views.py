@@ -1,4 +1,7 @@
+from decimal import Decimal
+
 from django.db import transaction
+from django.db.models import Count, Max, Sum
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -124,6 +127,19 @@ class SalesOrderViewSet(
                 commit_sales_order(serializer.instance)
             except SalesOrderError as exc:
                 raise serializers.ValidationError({"detail": str(exc)})
+
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        """沒作廢的有幾張、總額多少、最近是哪一天。條件與門市範圍跟清單同一套(`?customer=`、`?member=`、`?doc_date__gte=` …)。
+
+        會員 / 客戶頁的「N 筆 · 累計 · 最近」用:以前畫面拿清單的第一頁自己加,只算到最近 50 張。"""
+        orders = self.filter_queryset(self.get_queryset()).filter(is_void=False).order_by()
+        got = orders.aggregate(n=Count("id"), s=Sum("total"), last=Max("doc_date"))
+        return Response({
+            "count": got["n"],
+            "total": f"{got['s'] or Decimal('0'):.2f}",
+            "last_date": got["last"],
+        })
 
     @action(detail=False, methods=["get"], url_path="last-price")
     def last_price(self, request):

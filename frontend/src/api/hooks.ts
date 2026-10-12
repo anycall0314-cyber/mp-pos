@@ -9,6 +9,12 @@ import {
 } from "./contracts";
 import { listProductPhotos, type PhotosPayload } from "./photos";
 import { rangeQuery, rangeReady, type ReportRange } from "@/lib/fixedReports";
+import {
+  type FetchPage,
+  firstPage as onlyFirstPage,
+  listAll as walkAll,
+  topPage as onlyTopPage,
+} from "@/lib/listAll";
 import { invoiceQuery, type InvoiceFilter, type InvoiceListing } from "@/lib/invoiceList";
 import { repairQuery, type RepairFilter, type RepairListing } from "@/lib/repairReport";
 import type { CountDetail, CountSummary } from "@/lib/stockCount";
@@ -109,9 +115,24 @@ import {
   StaffAccountsResponse,
 } from "./types";
 
-// 通用：把分頁 results 攤平回傳（MVP 一頁 50 筆夠用）
-function list<T>(path: string) {
-  return api<Paginated<T>>(path).then((d) => d.results);
+// 讀清單一律走這三支(規則在 `lib/listAll.ts`):每一處都要明講是「整份都要」還是「只要最前面那一頁」。
+// 以前只有一支、只拿第一頁(伺服器一頁 50 筆):第 51 筆看不到也搜不到,頁面上的合計只加了那 50 筆。
+const fetchPage: FetchPage = <T,>(path: string) => api<Paginated<T>>(path);
+/** 整份都要(下拉的選項、管理頁、有合計的清單)。超過 5,000 筆報錯,不給一部分。 */
+function listAll<T>(path: string, hint?: string) {
+  return walkAll<T>(fetchPage, path, hint);
+}
+/** 只要最前面那一頁:本來就只列最近的 / 找到的前幾筆。 */
+function firstPage<T>(path: string) {
+  return onlyFirstPage<T>(fetchPage, path);
+}
+/** 最前面那一頁 + 總共幾筆(畫面要講「只列前 N 筆」的)。 */
+function topPage<T>(path: string) {
+  return onlyTopPage<T>(fetchPage, path);
+}
+/** 單據清單:有選日期 / 狀態(`whole`)= 那一段整份都要;都沒選 = 只列最近的。 */
+function listSome<T>(whole: boolean, path: string) {
+  return whole ? listAll<T>(path) : firstPage<T>(path);
 }
 
 // ---- queries ----
@@ -122,7 +143,7 @@ export const useProducts = (
 ) =>
   useQuery({
     queryKey: ["products", params ?? ""],
-    queryFn: () => list<Product>(`/products/${params ? "?" + params : ""}`),
+    queryFn: () => firstPage<Product>(`/products/${params ? "?" + params : ""}`),
     enabled: opts?.enabled ?? true,
   });
 
@@ -147,26 +168,46 @@ export const useProductUsage = (id: number | null) =>
   });
 
 export const useCategories = () =>
-  useQuery({ queryKey: ["categories"], queryFn: () => list<Category>("/categories/") });
+  useQuery({ queryKey: ["categories"], queryFn: () => listAll<Category>("/categories/") });
 
 export const useWarehouses = () =>
-  useQuery({ queryKey: ["warehouses"], queryFn: () => list<Warehouse>("/warehouses/") });
+  useQuery({ queryKey: ["warehouses"], queryFn: () => listAll<Warehouse>("/warehouses/") });
 
 export const useSuppliers = () =>
-  useQuery({ queryKey: ["suppliers"], queryFn: () => list<Supplier>("/suppliers/") });
+  useQuery({ queryKey: ["suppliers"], queryFn: () => listAll<Supplier>("/suppliers/") });
 
 export const useCustomers = () =>
-  useQuery({ queryKey: ["customers"], queryFn: () => list<Customer>("/customers/") });
+  useQuery({ queryKey: ["customers"], queryFn: () => listAll<Customer>("/customers/") });
 
-export const useMembers = () =>
-  useQuery({ queryKey: ["members"], queryFn: () => list<Member>("/members/") });
+/** 會員頁左邊的名單一次列幾位。 */
+export const MEMBER_PAGE = 100;
+/**
+ * 會員名單:照姓名排的前 `MEMBER_PAGE` 位 + 總共幾位;`search` 有字就由伺服器查全部
+ * (電話 / 姓名 / 身分證 / 統編 / 聯絡人 / 會員號)。會員會有幾萬位,不整份拿回來在畫面上篩。
+ */
+export const useMemberList = (search: string) => {
+  const q = new URLSearchParams({ ordering: "name", page_size: String(MEMBER_PAGE) });
+  if (search.trim()) q.set("search", search.trim());
+  return useQuery({
+    queryKey: ["members", "list", search.trim()],
+    queryFn: () => topPage<Member>(`/members/?${q.toString()}`),
+    placeholderData: keepPreviousData,
+  });
+};
+/** 一位會員(從別頁連過來、不在名單那一頁裡的)。 */
+export const useMember = (id: number | null) =>
+  useQuery({
+    queryKey: ["members", "one", id],
+    queryFn: () => api<Member>(`/members/${id}/`),
+    enabled: id != null,
+  });
 
 export const useLegacyPurchases = (memberId: number | null) =>
   useQuery({
     queryKey: ["legacy-purchases", memberId],
     queryFn: () =>
-      list<LegacyPurchase>(
-        `/legacy-purchases/?member=${memberId}&page_size=200`,
+      listAll<LegacyPurchase>(
+        `/legacy-purchases/?member=${memberId}`,
       ),
     enabled: memberId != null,
   });
@@ -174,24 +215,24 @@ export const useLegacyPurchases = (memberId: number | null) =>
 export const useSalesPersons = () =>
   useQuery({
     queryKey: ["sales-persons"],
-    queryFn: () => list<SalesPerson>("/sales-persons/"),
+    queryFn: () => listAll<SalesPerson>("/sales-persons/"),
   });
 
 export const useInvoiceTypes = (opts?: { activeOnly?: boolean }) =>
   useQuery({
     queryKey: ["invoice-types", opts?.activeOnly ?? false],
     queryFn: () =>
-      list<InvoiceType>(
+      listAll<InvoiceType>(
         opts?.activeOnly
-          ? "/invoice-types/?is_active=true&page_size=50"
-          : "/invoice-types/?page_size=50",
+          ? "/invoice-types/?is_active=true"
+          : "/invoice-types/",
       ),
   });
 
 export const useInvoiceTracks = () =>
   useQuery({
     queryKey: ["invoice-tracks"],
-    queryFn: () => list<InvoiceTrack>("/invoice-tracks/?page_size=100"),
+    queryFn: () => listAll<InvoiceTrack>("/invoice-tracks/"),
   });
 
 export function useSaveInvoiceTrack() {
@@ -248,10 +289,10 @@ export const usePaymentMethods = (opts?: { activeOnly?: boolean }) =>
   useQuery({
     queryKey: ["payment-methods", opts?.activeOnly ?? false],
     queryFn: () =>
-      list<PaymentMethod>(
+      listAll<PaymentMethod>(
         opts?.activeOnly
-          ? "/payment-methods/?is_active=true&page_size=50"
-          : "/payment-methods/?page_size=50",
+          ? "/payment-methods/?is_active=true"
+          : "/payment-methods/",
       ),
   });
 
@@ -307,14 +348,14 @@ export function useContractFollowUp() {
 export const useCarriers = () =>
   useQuery({
     queryKey: ["carriers"],
-    queryFn: () => list<Carrier>("/carriers/"),
+    queryFn: () => listAll<Carrier>("/carriers/"),
   });
 
 export const useTelecomPlans = (opts?: { includeInactive?: boolean }) =>
   useQuery({
     queryKey: ["telecom-plans", opts?.includeInactive ?? false],
     queryFn: () =>
-      list<TelecomPlan>(
+      listAll<TelecomPlan>(
         opts?.includeInactive
           ? "/telecom-plans/"
           : "/telecom-plans/?is_active=true",
@@ -338,7 +379,7 @@ export const useSimCards = (opts?: { includeInactive?: boolean }) =>
   useQuery({
     queryKey: ["sim-cards", opts?.includeInactive ?? false],
     queryFn: () =>
-      list<SimCard>(
+      listAll<SimCard>(
         opts?.includeInactive ? "/sim-cards/" : "/sim-cards/?status=in_stock",
       ),
   });
@@ -346,13 +387,19 @@ export const useSimCards = (opts?: { includeInactive?: boolean }) =>
 export const useAllSimCards = () =>
   useQuery({
     queryKey: ["sim-cards", "all"],
-    queryFn: () => list<SimCard>("/sim-cards/"),
+    queryFn: () => listAll<SimCard>("/sim-cards/"),
   });
 
-export const usePettyExpenses = () =>
+/** 期間太長、超過上限時講的那一句。 */
+const NARROW = "請把期間縮小";
+/** 雜支 / 現金調整 / 代收話費:選的那段期間整份都要(頁面上的合計是加這一份)。 */
+function inPeriod(path: string, range: DateRangeFilter): string {
+  return `${path}${buildQS({ doc_date__gte: range.from, doc_date__lte: range.to })}`;
+}
+export const usePettyExpenses = (range: DateRangeFilter) =>
   useQuery({
-    queryKey: ["petty-expenses"],
-    queryFn: () => list<PettyExpense>("/petty-expenses/?page_size=200"),
+    queryKey: ["petty-expenses", range.from ?? "", range.to ?? ""],
+    queryFn: () => listAll<PettyExpense>(inPeriod("/petty-expenses/", range), NARROW),
   });
 
 export function useSavePettyExpense() {
@@ -484,11 +531,10 @@ export function useVoidPettyExpense() {
   });
 }
 
-export const useCashAdjustments = () =>
+export const useCashAdjustments = (range: DateRangeFilter) =>
   useQuery({
-    queryKey: ["cash-adjustments"],
-    queryFn: () =>
-      list<CashAdjustment>("/cash-adjustments/?page_size=200"),
+    queryKey: ["cash-adjustments", range.from ?? "", range.to ?? ""],
+    queryFn: () => listAll<CashAdjustment>(inPeriod("/cash-adjustments/", range), NARROW),
   });
 
 export function useSaveCashAdjustment() {
@@ -524,11 +570,10 @@ export function useVoidCashAdjustment() {
   });
 }
 
-export const usePhoneBills = () =>
+export const usePhoneBills = (range: DateRangeFilter) =>
   useQuery({
-    queryKey: ["phone-bills"],
-    queryFn: () =>
-      list<PhoneBillCollection>("/phone-bills/?page_size=200"),
+    queryKey: ["phone-bills", range.from ?? "", range.to ?? ""],
+    queryFn: () => listAll<PhoneBillCollection>(inPeriod("/phone-bills/", range), NARROW),
   });
 
 export const usePhoneBill = (id: number | null) =>
@@ -635,7 +680,7 @@ export const useInStockSerials = (productId?: number, warehouseId?: number) => {
   if (warehouseId) qs.set("warehouse", String(warehouseId));
   return useQuery({
     queryKey: ["serials", "in_stock", productId ?? null, warehouseId ?? null],
-    queryFn: () => list<ProductSerial>(`/serials/?${qs.toString()}`),
+    queryFn: () => firstPage<ProductSerial>(`/serials/?${qs.toString()}`),
   });
 };
 
@@ -645,7 +690,7 @@ export const useDevicesByCode = (code: string) => {
   return useQuery({
     queryKey: ["serials", "by-code", q],
     queryFn: () =>
-      list<ProductSerial>(
+      firstPage<ProductSerial>(
         `/serials/?${new URLSearchParams({ code: q, page_size: "10" }).toString()}`,
       ),
     enabled: q.replace(/[\s\-_.]+/g, "").length > 0,
@@ -702,7 +747,8 @@ export const usePurchaseOrders = (range?: DateRangeFilter) =>
   useQuery({
     queryKey: ["purchase-orders", range?.from ?? "", range?.to ?? ""],
     queryFn: () =>
-      list<PurchaseOrder>(
+      listSome<PurchaseOrder>(
+        !!(range?.from || range?.to),
         `/purchase-orders/${buildQS({
           doc_date__gte: range?.from,
           doc_date__lte: range?.to,
@@ -727,7 +773,8 @@ export const useSalesOrders = (filter?: SalesOrdersFilter) =>
       filter?.member ?? "",
     ],
     queryFn: () =>
-      list<SalesOrder>(
+      listSome<SalesOrder>(
+        !!(filter?.from || filter?.to),
         `/sales-orders/${buildQS({
           doc_date__gte: filter?.from,
           doc_date__lte: filter?.to,
@@ -738,6 +785,39 @@ export const useSalesOrders = (filter?: SalesOrdersFilter) =>
       ),
   });
 
+/** 會員 / 客戶頁底下一次列幾張銷貨單。 */
+export const ORDERS_OF_PAGE = 100;
+export interface OrdersOf {
+  member?: number;
+  customer?: number;
+}
+/** 這位會員 / 這個客戶最近的銷貨單(最前面 `ORDERS_OF_PAGE` 張 + 總共幾張)。 */
+export const useOrdersOf = (who?: OrdersOf) =>
+  useQuery({
+    queryKey: ["sales-orders", "of", who?.member ?? "", who?.customer ?? ""],
+    queryFn: () =>
+      topPage<SalesOrder>(
+        `/sales-orders/${buildQS({ member: who?.member, customer: who?.customer, page_size: ORDERS_OF_PAGE })}`,
+      ),
+    enabled: !!(who?.member || who?.customer),
+  });
+export interface OrderSummary {
+  /** 沒作廢的幾張 */
+  count: number;
+  total: string;
+  last_date: string | null;
+}
+/**
+ * 這位會員 / 這個客戶沒作廢的銷貨單:幾張、總額、最近哪一天 —— 伺服器算全部
+ * (以前畫面拿清單的第一頁自己加,只算到最近 50 張)。
+ */
+export const useOrderSummary = (who?: OrdersOf) =>
+  useQuery({
+    queryKey: ["sales-orders", "summary", who?.member ?? "", who?.customer ?? ""],
+    queryFn: () =>
+      api<OrderSummary>(`/sales-orders/summary/${buildQS({ member: who?.member, customer: who?.customer })}`),
+    enabled: !!(who?.member || who?.customer),
+  });
 export const useSalesOrder = (id: number | null) =>
   useQuery({
     queryKey: ["sales-order", id],
@@ -1172,7 +1252,8 @@ export const useSalesReturns = (filter?: SalesReturnsFilter) =>
       filter?.original_so ?? "",
     ],
     queryFn: () =>
-      list<SalesReturn>(
+      listSome<SalesReturn>(
+        !!(filter?.from || filter?.to || filter?.original_so),
         `/sales-returns/${buildQS({
           doc_date__gte: filter?.from,
           doc_date__lte: filter?.to,
@@ -1378,7 +1459,7 @@ export const useStockBalances = (params?: {
   const url = `/stock-balances/?${qs.toString()}`;
   return useQuery({
     queryKey: ["stock-balances", qs.toString()],
-    queryFn: () => list<StockBalance>(url),
+    queryFn: () => listAll<StockBalance>(url),
   });
 };
 
@@ -1396,7 +1477,12 @@ export const useTransferOrders = (params?: {
   if (params?.status) qs.set("status", params.status);
   return useQuery({
     queryKey: ["transfer-orders", qs.toString()],
-    queryFn: () => list<TransferOrder>(`/transfer-orders/?${qs.toString()}`),
+    // 選了日期或狀態(待入庫幾張要數全部)= 整份;都沒選 = 最近的
+    queryFn: () =>
+      listSome<TransferOrder>(
+        !!(params?.doc_date_gte || params?.doc_date_lte || params?.status),
+        `/transfer-orders/?${qs.toString()}`,
+      ),
   });
 };
 
@@ -1463,7 +1549,7 @@ export const usePlatformTenants = () =>
   useQuery({
     queryKey: ["platform-tenants"],
     queryFn: () =>
-      list<PlatformTenant>("/platform/tenants/?page_size=200"),
+      listAll<PlatformTenant>("/platform/tenants/"),
   });
 
 export function useSavePlatformTenant() {
@@ -1486,7 +1572,7 @@ export function useSavePlatformTenant() {
 export const usePlatformUsers = () =>
   useQuery({
     queryKey: ["platform-users"],
-    queryFn: () => list<PlatformUser>("/platform/users/?page_size=200"),
+    queryFn: () => listAll<PlatformUser>("/platform/users/"),
   });
 
 export function useSavePlatformUser() {
@@ -1527,7 +1613,7 @@ export const usePlatformWarehouses = () =>
   useQuery({
     queryKey: ["platform-warehouses"],
     queryFn: () =>
-      list<PlatformWarehouse>("/platform/warehouses/?page_size=200"),
+      listAll<PlatformWarehouse>("/platform/warehouses/"),
   });
 
 export function useSavePlatformWarehouse() {
@@ -1554,7 +1640,7 @@ export function useSavePlatformWarehouse() {
 export const useRepairItems = () =>
   useQuery({
     queryKey: ["repair-items"],
-    queryFn: () => list<RepairItem>("/repair-items/?page_size=500"),
+    queryFn: () => listAll<RepairItem>("/repair-items/"),
   });
 
 export const useRepairItemsByModel = (modelKey: string) =>
@@ -1614,7 +1700,7 @@ export const useRepairOrders = (params?: {
   q.set("page_size", "200");
   return useQuery({
     queryKey: ["repair-orders", params],
-    queryFn: () => list<RepairOrder>(`/repair-orders/?${q.toString()}`),
+    queryFn: () => listAll<RepairOrder>(`/repair-orders/?${q.toString()}`),
   });
 };
 
@@ -1782,7 +1868,7 @@ export const usePartsUsageReport = (params: {
 export const usePartTemplates = () =>
   useQuery({
     queryKey: ["part-templates"],
-    queryFn: () => list<PartTemplate>(`/part-templates/?page_size=100`),
+    queryFn: () => listAll<PartTemplate>(`/part-templates/`),
   });
 
 export const usePartTemplate = (id: number | null) =>
@@ -1877,7 +1963,7 @@ export function usePartBulkCreate() {
 export const useBrands = () =>
   useQuery({
     queryKey: ["brands"],
-    queryFn: () => list<Brand>(`/brands/?page_size=100`),
+    queryFn: () => listAll<Brand>(`/brands/`),
   });
 
 export function useSaveBrand() {
@@ -1897,10 +1983,10 @@ export const usePhoneSeriesList = (brandId?: number | null) =>
   useQuery({
     queryKey: ["phone-series", brandId ?? "all"],
     queryFn: () =>
-      list<PhoneSeries>(
+      listAll<PhoneSeries>(
         brandId
-          ? `/phone-series/?brand=${brandId}&is_active=true&page_size=100`
-          : `/phone-series/?is_active=true&page_size=100`,
+          ? `/phone-series/?brand=${brandId}&is_active=true`
+          : `/phone-series/?is_active=true`,
       ),
     enabled: brandId != null && brandId > 0,
   });
@@ -1947,7 +2033,7 @@ export function useDeletePhoneSeries() {
 export const useProductTypes = () =>
   useQuery({
     queryKey: ["product-types"],
-    queryFn: () => list<ProductType>(`/product-types/?page_size=100`),
+    queryFn: () => listAll<ProductType>(`/product-types/`),
   });
 
 export function useSaveProductType() {
@@ -2124,7 +2210,7 @@ export const useProductsByPhoneModel = (
 export const useConditions = () =>
   useQuery({
     queryKey: ["conditions"],
-    queryFn: () => list<Condition>(`/conditions/?page_size=100`),
+    queryFn: () => listAll<Condition>(`/conditions/`),
   });
 
 export function useSaveCondition() {
@@ -2202,7 +2288,7 @@ export const useProductAliases = (product: number | null) =>
   useQuery({
     queryKey: ["product-aliases", product],
     queryFn: () =>
-      list<ProductAlias>(`/identity/aliases/?product=${product}&page_size=200`),
+      listAll<ProductAlias>(`/identity/aliases/?product=${product}`),
     enabled: product != null,
   });
 
@@ -2245,7 +2331,7 @@ export const useIntakeBatches = (params?: string) =>
   useQuery({
     queryKey: ["intake-batches", params ?? ""],
     queryFn: () =>
-      list<IntakeBatch>(`/identity/intakes/${params ? "?" + params : ""}`),
+      firstPage<IntakeBatch>(`/identity/intakes/${params ? "?" + params : ""}`),
   });
 
 export const useIntakeBatch = (id: number | null) =>

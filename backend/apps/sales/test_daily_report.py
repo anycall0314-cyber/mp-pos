@@ -39,8 +39,8 @@ class EverythingIsThereTests(_Shop):
     def test_more_than_fifty_orders(self):
         for _ in range(60):
             self.c.sell(case_qty=1)
-        # 原因:銷貨單清單一頁固定 50 張,要求一頁 500 張它不理 —— 以前的銷貨日報就是拿這一頁自己加總
-        old = self.c.admin.get("/api/v1/sales-orders/", {"doc_date__gte": today(), "page_size": 500}).json()
+        # 原因:銷貨單清單一頁 50 張 —— 以前的銷貨日報就是拿第一頁自己加總(當時要求一頁 500 張它也不理;2026-10-13 起清單會認了)
+        old = self.c.admin.get("/api/v1/sales-orders/", {"doc_date__gte": today()}).json()
         self.assertEqual((old["count"], len(old["results"])), (60, 50))
         data = self.report()
         self.assertEqual(len(data["orders"]), 60)

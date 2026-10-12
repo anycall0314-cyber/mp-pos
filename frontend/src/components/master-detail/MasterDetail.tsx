@@ -27,6 +27,11 @@ interface MasterDetailProps<T> {
   actions?: (row: T) => DetailAction[];
   searchPlaceholder?: string;
   onSearch?: (query: string) => void;
+  /**
+   * 父頁現在照哪幾個字在篩。有給 = 搜尋框顯示的就是它:這個元件被卸下再裝回來(換期間重新載入)時,
+   * 框不會變成空的、清單卻還照著剛才的字篩。沒給 = 框自己記(父頁不會把這個元件卸下的才可以不給)。
+   */
+  searchValue?: string;
   emptyDetailHint?: string;
 }
 
@@ -38,6 +43,7 @@ export function MasterDetail<T>({
   actions,
   searchPlaceholder = "搜尋…",
   onSearch,
+  searchValue,
   emptyDetailHint = "從左側選擇一列以檢視詳細資料",
 }: MasterDetailProps<T>) {
   const [selectedKey, setSelectedKey] = useState<string | number | null>(null);
@@ -54,6 +60,7 @@ export function MasterDetail<T>({
           <input
             type="search"
             placeholder={searchPlaceholder}
+            value={searchValue}
             onChange={(e) => onSearch?.(e.target.value)}
           />
         </div>

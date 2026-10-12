@@ -172,7 +172,8 @@ REST_FRAMEWORK = {
         "rest_framework.filters.OrderingFilter",
         "apps.core.filters.TrigramSearchFilter",
     ],
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    # 一頁預設 50 筆、`?page_size=` 最多 500、要更少的照舊給 50(見那一支的說明)
+    "DEFAULT_PAGINATION_CLASS": "apps.core.pagination.Paging",
     "PAGE_SIZE": 50,
     # 認證走 TokenAuthentication(/auth/login 取 token,後續 API 帶
     # `Authorization: Token xxx`)。刻意不放 SessionAuthentication 避免

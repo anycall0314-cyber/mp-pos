@@ -4,14 +4,17 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ApiHttpError } from "@/api/client";
 import {
   useLegacyPurchases,
-  useMembers,
-  useSalesOrders,
+  useMember,
+  useMemberList,
+  useOrdersOf,
+  useOrderSummary,
   useSaveMember,
 } from "@/api/hooks";
 import type { Customer, Member } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { SourcePicker } from "@/components/SourcePicker";
 import { Toolbar } from "@/components/Toolbar";
+import { byId, cutNote, latestDay } from "@/lib/listAll";
 import { money } from "@/lib/money";
 
 import { LegacyHistorySection } from "./LegacyHistorySection";
@@ -60,10 +63,18 @@ function toForm(m: Member): FormState {
 export function MembersPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const result = useMembers();
   const save = useSaveMember();
 
   const [query, setQuery] = useState("");
+  // 名單問伺服器(會員會有幾萬位):打字停一下才問;沒打字 = 照姓名排的前 100 位
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const result = useMemberList(search);
+  // 選到的那一位:點名單時記下來,名單之後換了(打字搜尋)也還是他
+  const [picked, setPicked] = useState<Member | null>(null);
   const [selection, setSelection] = useState<Selection>(() => {
     const sel = searchParams.get("selected");
     const n = sel ? Number(sel) : NaN;
@@ -96,27 +107,13 @@ export function MembersPage() {
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
 
-  const members = useMemo(() => {
-    const list = result.data ?? [];
-    return [...list].sort((a, b) => a.name.localeCompare(b.name, "zh-Hant"));
-  }, [result.data]);
+  const members = result.data?.rows ?? [];
+  const cut = cutNote(result.data, "只列前", "位");
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return members;
-    return members.filter(
-      (m) =>
-        m.phone.toLowerCase().includes(q) ||
-        m.name.toLowerCase().includes(q) ||
-        m.national_id.toLowerCase().includes(q) || m.tax_id.toLowerCase().includes(q) || m.contact.toLowerCase().includes(q) ||
-        m.code.toLowerCase().includes(q),
-    );
-  }, [members, query]);
-
-  const selected = useMemo(() => {
-    if (selection?.kind !== "member") return null;
-    return members.find((m) => m.id === selection.id) ?? null;
-  }, [selection, members]);
+  // 從別頁連過來的那一位不在手上(也可能不在名單這一頁裡):另外讀
+  const selectedId = selection?.kind === "member" ? selection.id : null;
+  const one = useMember(selectedId != null && picked?.id !== selectedId ? selectedId : null);
+  const selected = useMemo(() => byId(selectedId, picked, one.data), [selectedId, picked, one.data]);
 
   useEffect(() => {
     if (selection?.kind === "member" && selected) {
@@ -131,7 +128,9 @@ export function MembersPage() {
   }, [selection, selected]);
 
   const memberId = selection?.kind === "member" ? selection.id : null;
-  const orders = useSalesOrders(memberId ? { member: memberId } : undefined);
+  const who = memberId ? { member: memberId } : undefined;
+  const orders = useOrdersOf(who);            // 最近的 100 張(底下那張表)
+  const summary = useOrderSummary(who);       // 幾張、累計、最近:伺服器算全部
   const legacy = useLegacyPurchases(memberId);
 
   // 把現役銷貨單明細 + 舊系統紀錄整成單一時間軸,每列一個商品 row。
@@ -153,7 +152,7 @@ export function MembersPage() {
   };
 
   const rows = useMemo<Row[]>(() => {
-    const fromCurrent: Row[] = (orders.data ?? []).flatMap((so) =>
+    const fromCurrent: Row[] = (orders.data?.rows ?? []).flatMap((so) =>
       so.items.map((it) => ({
         key: `c-${so.id}-${it.id}`,
         source: "current" as const,
@@ -198,27 +197,22 @@ export function MembersPage() {
   }, [orders.data, legacy.data]);
 
   const orderStats = useMemo(() => {
-    const list = orders.data ?? [];
-    const active = list.filter((o) => !o.is_void);
-    const total = active.reduce((s, o) => s + Number(o.total || 0), 0);
     const legacyList = legacy.data ?? [];
     const legacyTotal = legacyList.reduce(
       (s, lp) => s + Number(lp.amount || 0),
       0,
     );
-    const lastDateAll = rows.reduce<string | null>((d, r) => {
-      if (r.is_void) return d;
-      if (!d) return r.doc_date;
-      return r.doc_date > d ? r.doc_date : d;
-    }, null);
     return {
-      count: active.length,
-      total,
+      count: summary.data?.count ?? 0,
+      total: Number(summary.data?.total ?? 0),
       legacyCount: legacyList.length,
       legacyTotal,
-      lastVisit: lastDateAll,
+      lastVisit: latestDay(summary.data?.last_date, ...legacyList.map((lp) => lp.doc_date)),
     };
-  }, [orders.data, legacy.data, rows]);
+  }, [summary.data, legacy.data]);
+  const ordersLoading = orders.isLoading || summary.isLoading || legacy.isLoading;
+  const ordersFailed = orders.isError || summary.isError || legacy.isError;
+  const ordersCut = cutNote(orders.data, "只列最近", "張");
 
   function patch<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -247,6 +241,7 @@ export function MembersPage() {
       setError(null);
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
+      setPicked(saved);
       setSelection({ kind: "member", id: saved.id });
     } catch (e) {
       if (e instanceof ApiHttpError) {
@@ -289,7 +284,7 @@ export function MembersPage() {
             <div className="pc-section-header">
               會員
               <span style={{ fontWeight: "normal" }}>
-                {!result.isLoading && `${filtered.length} 筆`}
+                {result.data && `${result.data.count} 筆`}
               </span>
             </div>
             <div className="pc-section-search">
@@ -317,10 +312,13 @@ export function MembersPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((m) => (
+                    {members.map((m) => (
                       <tr
                         key={m.id}
-                        onClick={() => setSelection({ kind: "member", id: m.id })}
+                        onClick={() => {
+                          setPicked(m);
+                          setSelection({ kind: "member", id: m.id });
+                        }}
                         className={
                           selection?.kind === "member" && selection.id === m.id
                             ? "selected"
@@ -334,10 +332,17 @@ export function MembersPage() {
                         <td style={{ color: "var(--text-dim)" }}>{m.code}</td>
                       </tr>
                     ))}
-                    {filtered.length === 0 && (
+                    {members.length === 0 && (
                       <tr>
                         <td colSpan={3} className="md-empty">
-                          {query ? "查無會員" : "尚無會員"}
+                          {search ? "查無會員" : "尚無會員"}
+                        </td>
+                      </tr>
+                    )}
+                    {cut && (
+                      <tr>
+                        <td colSpan={3} className="md-empty">
+                          {cut}
                         </td>
                       </tr>
                     )}
@@ -355,7 +360,14 @@ export function MembersPage() {
             </div>
           )}
 
-          {(isEditing || isNew) && (
+          {/* 那一位還沒讀到之前不給表單:上一位的資料還在格子裡,按儲存會存到這一位身上 */}
+          {isEditing && !selected && (
+            <div className="md-empty" style={{ marginTop: 40 }}>
+              {one.isError ? "找不到這位會員" : "載入中…"}
+            </div>
+          )}
+
+          {(isNew || (isEditing && selected)) && (
             <div className="pc-detail-body">
               <h3 className="pc-detail-title">
                 {isNew ? "新增會員" : `會員 · ${selected?.name}`}
@@ -461,9 +473,11 @@ export function MembersPage() {
                 <div style={{ marginTop: 24 }}>
                   <h4 className="pc-detail-title">
                     購買明細
-                    {orders.isLoading || legacy.isLoading
+                    {ordersLoading
                       ? " 載入中…"
-                      : ` (${orderStats.count} 筆銷貨 · 累計 $${money(orderStats.total)}${
+                      : ordersFailed
+                        ? " 載入失敗"
+                        : ` (${orderStats.count} 筆銷貨 · 累計 $${money(orderStats.total)}${
                           orderStats.legacyCount > 0
                             ? ` · 舊系統 ${orderStats.legacyCount} 筆 / $${money(orderStats.legacyTotal)}`
                             : ""
@@ -541,10 +555,17 @@ export function MembersPage() {
                             </td>
                           </tr>
                         ))}
-                        {!orders.isLoading && !legacy.isLoading && rows.length === 0 && (
+                        {!ordersLoading && !ordersFailed && rows.length === 0 && (
                           <tr>
                             <td colSpan={9} className="md-empty">
                               此會員尚無銷售紀錄
+                            </td>
+                          </tr>
+                        )}
+                        {ordersCut && (
+                          <tr>
+                            <td colSpan={9} className="md-empty">
+                              {ordersCut}
                             </td>
                           </tr>
                         )}
