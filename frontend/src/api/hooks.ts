@@ -9,6 +9,8 @@ import {
 } from "./contracts";
 import { listProductPhotos, type PhotosPayload } from "./photos";
 import { rangeQuery, rangeReady, type ReportRange } from "@/lib/fixedReports";
+import { purchaseLineQuery, type PurchaseLine, type PurchaseLineFilter } from "@/lib/purchaseLines";
+import { dailyQuery, type DailyFilter, type DailyReport } from "@/lib/salesDaily";
 import {
   flowQuery,
   moveQuery,
@@ -818,41 +820,6 @@ export const useStockMatrix = (
       params.set("page_size", String(filter.pageSize ?? 500));
       return api<StockMatrixResponse>(`/products/stock-matrix/?${params}`);
     },
-    enabled: opts?.enabled ?? true,
-  });
-
-// 銷貨日報專用:撈期間內全部銷貨單(含作廢),前端再分組與作廢分區
-export interface SalesDailyReportFilter extends DateRangeFilter {
-  warehouse?: number;
-  sales_person?: number;
-  customer?: number;
-}
-
-export const useSalesDailyReport = (
-  filter: SalesDailyReportFilter,
-  opts?: { enabled?: boolean },
-) =>
-  useQuery({
-    queryKey: [
-      "sales-daily-report",
-      filter.from ?? "",
-      filter.to ?? "",
-      filter.warehouse ?? "",
-      filter.sales_person ?? "",
-      filter.customer ?? "",
-    ],
-    queryFn: () =>
-      list<SalesOrder>(
-        `/sales-orders/${buildQS({
-          doc_date__gte: filter.from,
-          doc_date__lte: filter.to,
-          warehouse: filter.warehouse,
-          sales_person: filter.sales_person,
-          customer: filter.customer,
-          page_size: 500,
-          ordering: "doc_date,no",
-        })}`,
-      ),
     enabled: opts?.enabled ?? true,
   });
 
@@ -2941,6 +2908,37 @@ export const useSerialReport = (filter: SerialFilter, page: number) =>
 
 export const fetchSerialReportExport = (filter: SerialFilter) =>
   api<SerialListing>(`/serial-report/?${serialQuery(filter, "export")}`);
+
+// ── 兩張明細(2026-10-12):銷貨日報的資料、進貨明細(只讀;怎麼算在伺服器)──────────────
+
+/** 銷貨日報:期間內全部的銷貨單與銷退(伺服器一次給齊;以前拿銷貨單清單只拿得到前 50 張)。 */
+export const useSalesDaily = (filter: DailyFilter) =>
+  useQuery({
+    queryKey: ["sales-daily", filter],
+    queryFn: () => api<DailyReport>(`/sales-daily-report/?${dailyQuery(filter)}`),
+    enabled: rangeReady(filter),
+    retry: false,
+    gcTime: 0,
+  });
+
+export type PurchaseLineListing = Listing<PurchaseLine> & {
+  from: string;
+  to: string;
+  totals: { qty: number; amount: string; cost: string };
+};
+
+export const usePurchaseLines = (filter: PurchaseLineFilter, page: number) =>
+  useQuery({
+    queryKey: ["purchase-lines", filter, page],
+    queryFn: () => api<PurchaseLineListing>(`/purchase-line-report/?${purchaseLineQuery(filter, page)}`),
+    enabled: rangeReady(filter),
+    retry: false,
+    gcTime: 0,
+    placeholderData: keepPreviousData,
+  });
+
+export const fetchPurchaseLinesExport = (filter: PurchaseLineFilter) =>
+  api<PurchaseLineListing>(`/purchase-line-report/?${purchaseLineQuery(filter, "export")}`);
 
 export const useAnalyticsOptions = (dimension: string | null, q: string) =>
   useQuery({

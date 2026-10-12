@@ -1,66 +1,56 @@
 import { useMemo, useState } from "react";
 
-import { useSalesDailyReport } from "@/api/hooks";
-import { searchCustomers, searchSalesPersons, searchWarehouses } from "@/api/search";
+import { useSalesDaily } from "@/api/hooks";
+import {
+  searchCustomers,
+  searchMembers,
+  searchSalesPersons,
+  searchWarehouses,
+} from "@/api/search";
 import { useDefaultWarehouse } from "@/auth/AuthContext";
-import type {
-  Customer,
-  SalesOrder,
-  SalesOrderItem,
-  SalesPerson,
-  Warehouse,
-} from "@/api/types";
+import type { Customer, Member, SalesPerson, Warehouse } from "@/api/types";
+import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Toolbar } from "@/components/Toolbar";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { shortDay } from "@/lib/dates";
-import { intStr, money } from "@/lib/money";
-import { staffMargin } from "@/lib/staffCost";
+import { rangeReady } from "@/lib/fixedReports";
+import { money } from "@/lib/money";
+import {
+  customerText,
+  dailyTable,
+  dailyTotals,
+  daysAgo,
+  itemCountsMargin,
+  itemGrossProfit,
+  itemStaffProfit,
+  narrowedBy,
+  netTotals,
+  serialList,
+  shownOrders,
+  splitOrders,
+  truncatedText,
+  type DailyFilter,
+  type DailyOrder,
+} from "@/lib/salesDaily";
+import { downloadCsv } from "@/pages/inventory/stockReportParts";
 
+/** 這台電腦的今天(不用世界時間:台灣早上八點以前會變成昨天)。 */
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-/** 未稅金額:過帳當下由後端存死(整單加總 = 單頭未稅小計),報表不再自己回推稅別。 */
-function itemUntaxedAmount(it: SalesOrderItem): number {
-  return Number(it.untaxed_amount);
-}
-
-/**
- * 是否該項目計入毛利。
- * 收購二手等 counts_margin=false 的虛擬商品不計毛利(只計現金支出)
- */
-function itemCountsMargin(it: SalesOrderItem): boolean {
-  return it.product_counts_margin !== false;
-}
-
-function itemGrossProfit(it: SalesOrderItem): number {
-  if (!itemCountsMargin(it)) return 0;
-  return itemUntaxedAmount(it) - Number(it.cost_at_post);
-}
-
-/** 業務員毛利 = 未稅金額 − 業務員成本(成交當下記在單上的;沒有設定規則時跟毛利一樣)。 */
-function itemStaffProfit(it: SalesOrderItem): number {
-  return staffMargin(it);
+  return daysAgo(0);
 }
 
 function fmtMoney(v: number): string {
   return money(v);
 }
 
-function serialList(it: SalesOrderItem): string {
-  if (!it.serials || it.serials.length === 0) return "";
-  return it.serials.map((s) => s.serial_no).join(" / ");
-}
+type AppliedFilter = DailyFilter;
 
-interface AppliedFilter {
-  from: string;
-  to: string;
-  warehouse: number | "";
-  sales_person: number | "";
-  customer: number | "";
-}
-
+/**
+ * 銷貨日報:期間內每一張銷貨單的每一行;期間內的銷退另外一塊(每一行是負的);作廢的單在最下面。
+ * 資料由伺服器一次給齊(`sales-daily-report/`);標題旁邊那幾格的合計是沒扣銷退的,銷退另外一格。
+ * 怎麼列、怎麼算在 `lib/salesDaily.ts`。
+ */
 export function SalesDailyReportPage() {
   const defaultWarehouse = useDefaultWarehouse();
   const isMobile = useIsMobile();
@@ -85,6 +75,11 @@ export function SalesDailyReportPage() {
   );
   const [customer, setCustomer] = useState<number | "">("");
   const [customerOpt, setCustomerOpt] = useState<ComboOption<Customer> | null>(null);
+  const [member, setMember] = useState<number | "">("");
+  const [memberOpt, setMemberOpt] = useState<ComboOption<Member> | null>(null);
+  const [search, setSearch] = useState("");
+  // 打了商品的字之後:只列對得上的那幾行;勾了才把同一張單的其他行一起列出來(合計跟著變)
+  const [whole, setWhole] = useState(false);
 
   // 已套用 — 按「查詢」才打 API
   const [applied, setApplied] = useState<AppliedFilter>(() => ({
@@ -93,85 +88,41 @@ export function SalesDailyReportPage() {
     warehouse: "",
     sales_person: "",
     customer: "",
+    member: "",
+    search: "",
   }));
 
-  const { data, isLoading, isError, error } = useSalesDailyReport({
-    from: applied.from,
-    to: applied.to,
-    warehouse: applied.warehouse === "" ? undefined : applied.warehouse,
-    sales_person: applied.sales_person === "" ? undefined : applied.sales_person,
-    customer: applied.customer === "" ? undefined : applied.customer,
-  });
+  const { data, isLoading, isError, error } = useSalesDaily(applied);
 
-  const orders = data ?? [];
+  // 要列的單與行(打了商品的字、沒勾整張單 = 只留對得上的行);正常單 / 作廢單 / 銷退各一塊
+  const { activeOrders, voidOrders, returnOrders } = useMemo(() => {
+    const all = !data?.searching || whole;
+    const { active, voided } = splitOrders(shownOrders(data?.orders ?? [], all));
+    return { activeOrders: active, voidOrders: voided, returnOrders: shownOrders(data?.returns ?? [], all) };
+  }, [data, whole]);
+  const nothing = activeOrders.length + voidOrders.length + returnOrders.length === 0;
+  // 銷退的合計(本身是負的);「扣掉銷退之後」那一組 = 相加
+  const backTotals = useMemo(() => dailyTotals(returnOrders), [returnOrders]);
+  const narrowed = narrowedBy(applied);
+  const cut = data ? truncatedText(data) : "";
 
-  // 分組:正常單 + 作廢單(顯示在底部)
-  const { activeOrders, voidOrders } = useMemo(() => {
-    const active: SalesOrder[] = [];
-    const voided: SalesOrder[] = [];
-    for (const o of orders) {
-      if (o.is_void) voided.push(o);
-      else active.push(o);
-    }
-    return { activeOrders: active, voidOrders: voided };
-  }, [orders]);
+  // 標題旁邊那幾格(商品 / 零件分開;沒扣銷退 —— 銷退另外一格)
+  const totals = useMemo(() => dailyTotals(activeOrders), [activeOrders]);
+  const net = netTotals(totals, backTotals);
 
-  // 統計合計(分商品 / 零件:毛利不互相污染)
-  const totals = useMemo(() => {
-    let lines = 0;
-    let amountIncl = 0;
-    let cost = 0;
-    let profit = 0;
-    let staffProfit = 0;
-    // 零件調貨單獨統計(不汙染商品毛利)
-    let partsLines = 0;
-    let partsAmount = 0;
-    let partsCost = 0;
-    let partsProfit = 0;
-    let partsStaffProfit = 0;
-    for (const o of activeOrders) {
-      for (const it of o.items) {
-        const isParts = it.product_warehouse_type === "parts";
-        if (isParts) {
-          partsLines += 1;
-          partsAmount += Number(it.amount);
-          if (itemCountsMargin(it)) {
-            partsCost += Number(it.cost_at_post);
-            partsProfit += itemGrossProfit(it);
-            partsStaffProfit += itemStaffProfit(it);
-          }
-        } else {
-          lines += 1;
-          amountIncl += Number(it.amount);
-          if (itemCountsMargin(it)) {
-            cost += Number(it.cost_at_post);
-            profit += itemGrossProfit(it);
-            staffProfit += itemStaffProfit(it);
-          }
-        }
-      }
-    }
-    return {
-      lines,
-      amountIncl,
-      cost,
-      profit,
-      staffProfit,
-      partsLines,
-      partsAmount,
-      partsCost,
-      partsProfit,
-      partsStaffProfit,
-    };
-  }, [activeOrders]);
+  // 日期要兩個都有、而且起日不晚於迄日才查(不然請求不會送,畫面會像是「查無資料」)
+  const ready = rangeReady({ from, to });
 
   function runQuery() {
+    if (!ready) return;
     setApplied({
       from,
       to,
       warehouse,
       sales_person: salesPerson,
       customer,
+      member,
+      search,
     });
   }
 
@@ -185,74 +136,18 @@ export function SalesDailyReportPage() {
     setSalesPersonOpt(null);
     setCustomer("");
     setCustomerOpt(null);
-    setApplied({ from: t, to: t, warehouse: "", sales_person: "", customer: "" });
+    setMember("");
+    setMemberOpt(null);
+    setSearch("");
+    setWhole(false);
+    setApplied({ from: t, to: t, warehouse: "", sales_person: "", customer: "", member: "", search: "" });
   }
 
   function exportCsv() {
-    const headers = [
-      "日期",
-      "單號",
-      "出貨倉",
-      "業務員",
-      "客戶",
-      "商品",
-      "序號",
-      "數量",
-      "單價",
-      "金額",
-      "成本",
-      "毛利",
-      "業務員毛利",
-      "作廢",
-    ];
-    const rows: string[][] = [];
-    const writeOrder = (o: SalesOrder, voidFlag: boolean) => {
-      for (const it of o.items) {
-        const countsMargin = itemCountsMargin(it);
-        rows.push([
-          o.doc_date,
-          o.no,
-          `${o.warehouse_code ?? ""} ${o.warehouse_name ?? ""}`.trim(),
-          o.sales_person_name ?? "",
-          o.customer_name ?? "散客",
-          it.product_name,
-          serialList(it),
-          String(it.qty),
-          intStr(it.unit_price),
-          intStr(it.amount),
-          countsMargin ? intStr(it.cost_at_post) : "",
-          countsMargin
-            ? intStr(itemGrossProfit(it))
-            : "",
-          countsMargin ? intStr(itemStaffProfit(it)) : "",
-          voidFlag ? "Y" : "",
-        ]);
-      }
-    };
-    for (const o of activeOrders) writeOrder(o, false);
-    for (const o of voidOrders) writeOrder(o, true);
-
-    const csv = [headers, ...rows]
-      .map((r) =>
-        r
-          .map((c) => {
-            const s = String(c ?? "");
-            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-          })
-          .join(","),
-      )
-      .join("\r\n");
-
-    // BOM 讓 Excel 開繁中不亂碼
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `銷貨日報_${applied.from}_${applied.to}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadCsv(
+      `銷貨日報_${applied.from}_${applied.to}.csv`,
+      dailyTable(activeOrders, returnOrders, voidOrders),
+    );
   }
 
   // 表格上的日期:查的期間在同一年裡只寫月日(寬度留給品名)
@@ -267,7 +162,7 @@ export function SalesDailyReportPage() {
             type="button"
             className="btn"
             onClick={exportCsv}
-            disabled={orders.length === 0}
+            disabled={nothing}
           >
             轉 Excel
           </button>
@@ -275,6 +170,11 @@ export function SalesDailyReportPage() {
       >
         {/* 合計:標題旁邊的小表格(上面一列名稱、下面一列數字)。算式放在滑鼠提示 */}
         <div className="sd-sum">
+          {narrowed.length > 0 && (
+            <span className="wb-badge warn sd-narrowed" title={`只看:${narrowed.join("、")}。合計是這些條件的,不是整段期間的`}>
+              篩選中
+            </span>
+          )}
           <SumCell label="正常單" value={String(activeOrders.length)} />
           <SumCell label="明細" value={String(totals.lines)} />
           <SumCell label="含稅金額" value={`$${fmtMoney(totals.amountIncl)}`} />
@@ -291,11 +191,30 @@ export function SalesDailyReportPage() {
             value={`$${fmtMoney(totals.staffProfit)}`}
             negative={totals.staffProfit < 0}
           />
+          {returnOrders.length > 0 && (
+            <>
+              <SumCell
+                label="銷退"
+                title={`期間內退回 ${returnOrders.length} 張(列在退的那一天);前面幾格沒有扣掉這個數字`}
+                value={`$${fmtMoney(backTotals.amountIncl)}`}
+                negative
+              />
+              <SumCell label="淨額" title="含稅金額 − 銷退" value={`$${fmtMoney(net.amount)}`} negative={net.amount < 0} />
+              <SumCell label="淨毛利" title="毛利 − 銷退的毛利" value={`$${fmtMoney(net.profit)}`} negative={net.profit < 0} />
+              <SumCell
+                label="業務員淨毛利"
+                title="業務員毛利 − 銷退的業務員毛利"
+                value={`$${fmtMoney(net.staffProfit)}`}
+                negative={net.staffProfit < 0}
+              />
+            </>
+          )}
           {voidOrders.length > 0 && (
             <SumCell label="作廢" value={`${voidOrders.length} 筆`} negative />
           )}
         </div>
       </Toolbar>
+      {cut && <Banner kind="error" message={cut} />}
       {/* 桌機:整排只有一行(欄名收起來,靠框裡的字);手機:一項一排、欄名在上面 */}
       <div className="list-filterbar sd-filter">
         <div className="sd-filter-group sd-filter-dates">
@@ -336,11 +255,8 @@ export function SalesDailyReportPage() {
             className="btn"
             type="button"
             onClick={() => {
-              const t = today();
-              const d = new Date();
-              d.setDate(d.getDate() - 6);
-              setFrom(d.toISOString().slice(0, 10));
-              setTo(t);
+              setFrom(daysAgo(6));
+              setTo(today());
             }}
           >
             七天
@@ -349,11 +265,8 @@ export function SalesDailyReportPage() {
             className="btn"
             type="button"
             onClick={() => {
-              const t = today();
-              const d = new Date();
-              d.setDate(1);
-              setFrom(d.toISOString().slice(0, 10));
-              setTo(t);
+              setFrom(`${today().slice(0, 8)}01`);
+              setTo(today());
             }}
           >
             本月
@@ -408,10 +321,48 @@ export function SalesDailyReportPage() {
               placeholder="全部客戶"
             />
           </label>
+          <label className="sd-field">
+            <span className="sd-label">會員</span>
+            <ComboBox<Member>
+              value={member}
+              selectedOption={memberOpt}
+              onChange={(id, opt) => {
+                setMember(id);
+                setMemberOpt(opt ?? null);
+              }}
+              fetchOptions={searchMembers}
+              placeholder="全部會員"
+            />
+          </label>
+          <label className="sd-field">
+            <span className="sd-label">商品</span>
+            <input
+              type="text"
+              aria-label="商品"
+              value={search}
+              placeholder="品號 / 品名 / 序號"
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.nativeEvent.isComposing) runQuery();
+              }}
+            />
+          </label>
+          {data?.searching && (
+            <label className="sd-field sd-whole" title="把同一張單的其他行一起列出來(合計跟著變成整張單的)">
+              <input type="checkbox" checked={whole} onChange={(e) => setWhole(e.target.checked)} />
+              整張單
+            </label>
+          )}
         </div>
 
         <div className="sd-filter-group sd-filter-actions">
-          <button type="button" className="btn primary" onClick={runQuery}>
+          <button
+            type="button"
+            className="btn primary"
+            onClick={runQuery}
+            disabled={!ready}
+            title={ready ? undefined : "起日不能晚於迄日"}
+          >
             查詢
           </button>
           <button type="button" className="btn" onClick={resetFilters}>
@@ -421,7 +372,7 @@ export function SalesDailyReportPage() {
       </div>
 
       {/* 零件調貨另外一排(有零件才出現);商品的合計在標題旁邊 */}
-      {totals.partsLines > 0 && (
+      {(totals.partsLines > 0 || backTotals.partsLines > 0) && (
         <div className="sd-strip sd-strip-parts" title="零件調貨獨立列計,不污染商品毛利">
           <StripItem label="零件調貨" value={String(totals.partsLines)} />
           <StripItem label="含稅金額" value={`$${fmtMoney(totals.partsAmount)}`} />
@@ -436,6 +387,9 @@ export function SalesDailyReportPage() {
             value={`$${fmtMoney(totals.partsStaffProfit)}`}
             negative={totals.partsStaffProfit < 0}
           />
+          {backTotals.partsLines > 0 && (
+            <StripItem label="銷退" value={`$${fmtMoney(backTotals.partsAmount)}`} negative />
+          )}
         </div>
       )}
 
@@ -449,6 +403,18 @@ export function SalesDailyReportPage() {
             ) : (
               <SalesReportTable orders={activeOrders} voided={false} day={day} />
             )}
+            {returnOrders.length > 0 && (
+              <>
+                <div className="report-void-header sd-return-header">
+                  銷退單據　{returnOrders.length} 張
+                </div>
+                {isMobile ? (
+                  <SalesReportMobileList orders={returnOrders} voided={false} returned />
+                ) : (
+                  <SalesReportTable orders={returnOrders} voided={false} returned day={day} />
+                )}
+              </>
+            )}
             {voidOrders.length > 0 && (
               <>
                 <div className="report-void-header">作廢單據</div>
@@ -459,9 +425,7 @@ export function SalesDailyReportPage() {
                 )}
               </>
             )}
-            {orders.length === 0 && (
-              <div className="md-empty">查無資料</div>
-            )}
+            {nothing && <div className="md-empty">查無資料</div>}
           </>
         )}
       </div>
@@ -469,7 +433,7 @@ export function SalesDailyReportPage() {
   );
 }
 
-function SalesReportMobileList({ orders, voided }: ReportTableProps) {
+function SalesReportMobileList({ orders, voided, returned }: ReportTableProps) {
   if (orders.length === 0) return null;
   return (
     <div className="report-mobile-list">
@@ -493,8 +457,11 @@ function SalesReportMobileList({ orders, voided }: ReportTableProps) {
               <div className="report-card-date">{o.doc_date}</div>
             </div>
             <div className="report-card-customer">
-              {o.customer_name ?? "散客"}
+              {customerText(o)}
               {voided && <span className="report-card-badge">作廢</span>}
+              {returned && (
+                <span className="report-card-badge">銷退{o.original_so_no ? ` ${o.original_so_no}` : ""}</span>
+              )}
             </div>
             <div className="report-card-meta">
               {`${o.warehouse_code ?? ""} ${o.warehouse_name ?? ""}`.trim() || "—"}
@@ -585,8 +552,10 @@ function SalesReportMobileList({ orders, voided }: ReportTableProps) {
 }
 
 interface ReportTableProps {
-  orders: SalesOrder[];
+  orders: DailyOrder[];
   voided: boolean;
+  /** 這一塊是銷退(每一行是負的;單號底下寫原銷貨單) */
+  returned?: boolean;
 }
 
 /** 標題旁邊那張小表格的一格:上面是名稱、下面是數字。 */
@@ -632,6 +601,7 @@ function StripItem({
 function SalesReportTable({
   orders,
   voided,
+  returned,
   day,
 }: ReportTableProps & { day: (d: string) => string }) {
   if (orders.length === 0) return null;
@@ -667,6 +637,7 @@ function SalesReportTable({
               order={o}
               orderProfit={orderProfit}
               hasMarginItem={hasMarginItem}
+              returned={returned}
               day={day}
             />
           );
@@ -680,11 +651,13 @@ function ReportOrderGroup({
   order,
   orderProfit,
   hasMarginItem,
+  returned,
   day,
 }: {
-  order: SalesOrder;
+  order: DailyOrder;
   orderProfit: number;
   hasMarginItem: boolean;
+  returned?: boolean;
   day: (d: string) => string;
 }) {
   const orderStaffProfit = order.items.reduce((s, it) => s + itemStaffProfit(it), 0);
@@ -706,17 +679,16 @@ function ReportOrderGroup({
             <td title={first ? order.doc_date : undefined}>
               {first ? day(order.doc_date) : ""}
             </td>
-            <td>{first ? order.no : ""}</td>
+            <td title={first && returned && order.original_so_no ? `原銷貨單 ${order.original_so_no}` : undefined}>
+              {first ? order.no : ""}
+            </td>
             {/* 只寫名稱(代碼在匯出的檔裡有):寬度留給品名 */}
             <td>
               {first ? order.warehouse_name || order.warehouse_code || "" : ""}
             </td>
             <td>{first ? order.sales_person_name ?? "" : ""}</td>
-            <td
-              className="sd-customer"
-              title={first ? order.customer_name ?? undefined : undefined}
-            >
-              {first ? order.customer_name ?? "散客" : ""}
+            <td className="sd-customer" title={first ? customerText(order) : undefined}>
+              {first ? customerText(order) : ""}
             </td>
             <td className="sd-product">
               {it.product_name}

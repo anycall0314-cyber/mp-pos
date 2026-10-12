@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .commission_views import commission_lines
 from .contract_views import contract_follow_up, contract_list
+from .daily_report import sales_daily_report
 from .views import LegacyPurchaseViewSet, SalesOrderViewSet, SalesReturnViewSet
 
 router = DefaultRouter()
@@ -16,4 +17,6 @@ urlpatterns = router.urls + [
     path("telecom-contracts/<int:pk>/follow-up/", contract_follow_up),
     # 門號佣金明細(一筆門號一列;員工帳號的權限「佣金明細」)
     path("telecom-commissions/", commission_lines),
+    # 銷貨日報的資料(期間內全部的銷貨單與銷退;員工帳號的權限「銷貨日報」)
+    path("sales-daily-report/", sales_daily_report),
 ]

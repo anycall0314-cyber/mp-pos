@@ -28,7 +28,7 @@ def _flag(params, key) -> bool:
     return params.get(key, "").strip().lower() in ("1", "true", "yes")
 
 
-def _listing(request, queryset, to_rows, extra):
+def listing(request, queryset, to_rows, extra):
     """一頁一頁給;?export=1 = 照同樣的條件一次給全部(匯出用,有上限)。"""
     if _flag(request.query_params, "export"):
         rows = list(queryset[: reports.EXPORT_MAX + 1])
@@ -77,7 +77,7 @@ def stock_movement_report(request):
         )
     except reports.ReportError as exc:
         return _bad(exc)
-    return _listing(
+    return listing(
         request, queryset, lambda rows: reports.movement_rows(tenant, rows, warehouse_id),
         {
             "from": start.isoformat(), "to": end.isoformat(), "warehouse": warehouse_id,
@@ -104,7 +104,7 @@ def serial_report(request):
         )
     except reports.ReportError as exc:
         return _bad(exc)
-    return _listing(
+    return listing(
         request, queryset, lambda rows: reports.serial_rows(tenant, rows),
         {
             # 照同樣的條件全部加起來(不是只有這一頁)

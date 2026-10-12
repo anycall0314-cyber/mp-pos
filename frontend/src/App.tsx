@@ -14,6 +14,7 @@ import { CategoriesPage } from "@/pages/inventory/CategoriesPage";
 import { InventoryAlertsPage } from "@/pages/inventory/InventoryAlertsPage";
 import { InventoryQueryPage } from "@/pages/inventory/InventoryQueryPage";
 import { SerialListPage } from "@/pages/inventory/SerialListPage";
+import { PurchaseLinesPage } from "@/pages/purchases/PurchaseLinesPage";
 import { StockFlowPage } from "@/pages/inventory/StockFlowPage";
 import { StockMovesPage } from "@/pages/inventory/StockMovesPage";
 import { IntakePage } from "@/pages/intake/IntakePage";
@@ -246,6 +247,7 @@ export function App() {
           <Route path="/telecom-plans" element={<TelecomPlansPage />} />
           <Route path="/sim-cards" element={<SimCardsPage />} />
           <Route path="/purchases" element={<PurchaseListPage />} />
+          <Route path="/purchases/lines" element={<PurchaseLinesPage />} />
           <Route
             path="/purchases/new"
             element={

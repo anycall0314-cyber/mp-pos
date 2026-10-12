@@ -85,6 +85,12 @@ export const NAV_MODULES: NavModule[] = [
         // 叫貨的人與收貨的人都用這一頁(收貨的人不一定是叫貨的人):兩項都關掉才收起來
         needs: ["vendor_order", "purchase"],
       },
+      // 進貨單的每一行一列(2026-10-12;取舊歐睿 FI010 的優點)。看進貨單本來就不另外設權限的勾
+      {
+        to: "/purchases/lines",
+        label: "進貨明細",
+        aliases: ["進退貨商品查詢表", "進貨商品查詢", "進貨明細表", "進價查詢"],
+      },
       { to: "/suppliers", label: "供應商" },
     ],
     // 跟著商品管理一起搬過來:建商品時才用得到的幾個主檔

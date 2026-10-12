@@ -7906,3 +7906,29 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
+
+/* ── 銷貨日報(2026-10-12):商品那一格、整張單的勾、銷退那一塊的標題 ── */
+.sd-filter input[type="text"] {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: var(--font-body);
+  min-height: var(--control-height);
+  width: 180px;
+}
+.sd-filter .sd-whole {
+  display: inline-flex; flex-direction: row; align-items: center; gap: 6px;
+  color: var(--text); cursor: pointer; white-space: nowrap;
+}
+.sd-filter .sd-whole input { width: 18px; height: 18px; }
+.sd-sum .sd-narrowed { align-self: center; margin-right: 8px; }
+/* 銷退不是錯誤:標題用一般的顏色,數字本身是負的(紅的) */
+.report-void-header.sd-return-header {
+  color: var(--text);
+  background: var(--panel-2);
+  border-color: var(--border);
+  font-variant-numeric: tabular-nums;
+}
