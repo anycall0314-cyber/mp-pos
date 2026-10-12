@@ -103,6 +103,11 @@ class FlowTests(_Count):
         self.assertEqual((saved.approved_by, saved.submitted_by, saved.created_by),
                          (self.c.admin_user, self.c.clerk_user, self.c.clerk_user))
         self.assertEqual([(r["adjust_qty"], r["unit_cost"], r["amount"]) for r in done["line_rows"]], [(-2, "100.00", "-200.00")])
+        # 金額用的是核准當下的平均成本:之後進貨把平均成本改掉,這張單上的數字不跟著變
+        StockBalance.objects.filter(tenant=self.c.tenant, product=self.case, warehouse=self.w1).update(weighted_avg_cost=999)
+        later = self.detail(count)
+        self.assertEqual([(r["unit_cost"], r["amount"]) for r in later["line_rows"]], [("100.00", "-200.00")])
+        StockBalance.objects.filter(tenant=self.c.tenant, product=self.case, warehouse=self.w1).update(weighted_avg_cost=100)
         self.assertEqual([(m["applied"], m["found"]) for m in done["missing_rows"]], [(True, False)])
         self.books_agree()
         # 異動查詢:歸在「庫存調整」,而且點得回這張盤點單
@@ -142,6 +147,9 @@ class FlowTests(_Count):
         self.ok(self.line(count, 10))
         self.assertEqual(self.detail(count, self.c.clerk)["left"], 1)
         self.ok(self.line(count, 0, other))                                       # 數到 0 個也是盤過了
+        self.assertEqual(self.detail(count, self.c.clerk)["left"], 0)
+        # 帶序號的商品不算在「還有幾樣」裡(它是逐台刷的;正常不會有它的數量餘額,這裡直接造一列釘住)
+        StockBalance.objects.create(tenant=self.c.tenant, product=self.phone, warehouse=self.w1, qty=2, weighted_avg_cost=0)
         self.assertEqual(self.detail(count, self.c.clerk)["left"], 0)
 
 
@@ -244,6 +252,25 @@ class PhoneTests(_Count):
         self.assertEqual((self.status_of("甲IMEI1"), self.status_of("甲IMEI9")), ("sold", "in_stock"))
         self.assertEqual(ProductSerial.objects.get(serial_no="甲IMEI9").warehouse, self.w2)
         self.books_agree()
+
+    def test_found_only_works_for_a_phone_this_count_marked_lost(self):
+        # 第一張盤點單把甲IMEI3 勾成先不調;第二張才把它標成盤虧。不能拿第一張的「找回」把它變回在庫
+        first = self.open()
+        self.ok(self.scan(first, "甲IMEI1"))
+        self.ok(self.scan(first, "甲IMEI2"))
+        self.ok(self.act(first, "submit", self.c.clerk, phones_done=True))
+        skipped = self.detail(first)["missing_rows"][0]
+        self.ok(self.act(first, "approve", missing={str(skipped["id"]): {"skipped": True}}))
+        second = self.open()
+        self.ok(self.scan(second, "甲IMEI1"))
+        self.ok(self.scan(second, "甲IMEI2"))
+        self.ok(self.act(second, "submit", self.c.clerk, phones_done=True))
+        self.ok(self.act(second, "approve"))
+        self.assertEqual(self.status_of("甲IMEI3"), "lost")
+        r = self.c.admin.post(f"{URL}{first['id']}/missing/{skipped['id']}/found/", {}, format="json")
+        self.assertEqual(r.status_code, 400, r.content.decode())
+        self.assertEqual(self.status_of("甲IMEI3"), "lost")
+        self.assertEqual(self.c.admin.post(f"{URL}{first['id']}/missing/999999/found/", {}, format="json").status_code, 400)
 
     def test_a_returned_phone_sitting_in_the_store_is_neither_extra_nor_missing(self):
         # 客人退回來、還放在店裡的(狀態「已退」):刷到不算多;沒刷到也不算少(要刷的只有「在庫」的)
@@ -638,6 +665,23 @@ class TwoPeopleTests(_Concurrent):
         # 管理員可以
         stockcount.void(StockCount.objects.get(pk=count.pk), by_manager=True)
         self.assertEqual(StockCount.objects.get(pk=count.pk).status, "void")
+
+    def test_the_void_request_of_a_clerk_is_refused_when_the_count_was_just_submitted(self):
+        """同一件事從端點走一次:店員按作廢的請求進來時單還是「盤點中」,等到鎖的時候已經送出了 —— 要被擋下來。
+        (端點如果把每個人都當成管理員傳進去,這裡就會作廢成功。)"""
+        count = stockcount.open_count(self.c.tenant, self.w1, [], self.c.clerk_user)
+        stockcount.set_line(count, self.c.case, 4, self.c.clerk_user)
+        t = self.meanwhile([
+            ("SELECT 1 FROM inventory_stockcount WHERE id = %s FOR UPDATE", [count.pk]),
+            ("UPDATE inventory_stockcount SET status = 'submitted' WHERE id = %s", [count.pk]),
+        ])
+        r = self.c.clerk.post(f"/api/v1/stock-counts/{count.pk}/void/", {}, format="json")
+        t.join()
+        self.assertEqual(r.status_code, 400, r.content.decode())
+        self.assertEqual(StockCount.objects.get(pk=count.pk).status, "submitted")
+        # 管理員的作廢請求可以
+        r = self.c.admin.post(f"/api/v1/stock-counts/{count.pk}/void/", {}, format="json")
+        self.assertEqual((r.status_code, StockCount.objects.get(pk=count.pk).status), (200, "void"))
 
     def test_the_book_quantity_waits_for_a_first_purchase_that_is_being_saved(self):
         """複審 P0:這家門市還沒有這個商品的餘額列,有人正在存第一張進貨(那一列還沒存完、別人看不到)。

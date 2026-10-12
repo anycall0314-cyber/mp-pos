@@ -108,6 +108,8 @@ test("「商品設定」選單跟著商品管理在「進貨入庫」;「商品�
   assert.ok(!stockTabs({ stock_count: false }).includes("/inventory/stocktake"));
   assert.equal(stockTabs({ stock_count: false }).length, 6);                    // 只少那一頁
   assert.equal(searchNav("盤點", visibleModules({ role: "tenant_user" }))[0].page.to, "/inventory/stocktake");
+  for (const word of ["盤虧", "盤盈", "庫存盤點"])
+    assert.equal(searchNav(word, visibleModules({ role: "tenant_user" }))[0]?.page.to, "/inventory/stocktake", word);
   assert.ok(!searchNav("盤點", visibleModules({ role: "tenant_user", abilities: { stock_count: false } }))
     .some((h) => h.page.to === "/inventory/stocktake"));
   assert.deepEqual([...new Set(byKey("stock").tabs.map((t) => t.label.length))], [4]);
