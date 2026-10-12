@@ -1914,6 +1914,12 @@ export interface FixedReportResult extends AnalyticsResult {
   by: { key: string; label: string }[];
   /** 期間旁邊那幾個字(這張表的數字扣了什麼),伺服器決定 */
   note?: string;
+  /** 期間可以看哪幾種日期(開通統計:開單日 / 上線日);只有一種的報表是空的 */
+  dates?: { key: string; label: string }[];
+  /** 這一次看的是哪一種 */
+  date?: string;
+  /** 還沒有那個日期、所以哪一段期間都沒算到的(一句話,伺服器寫的;沒有就是空的) */
+  pending?: string;
 }
 
 /** 門號佣金明細的一列;公司佣金只有管理員的回應裡有(沒有這一格 = 不是管理員) */

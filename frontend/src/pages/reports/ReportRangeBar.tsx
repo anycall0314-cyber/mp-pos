@@ -7,18 +7,21 @@ import { ComboBox, type ComboOption } from "@/components/ComboBox";
 import { localDay, monthStart, rangeReady, type ReportRange } from "@/lib/fixedReports";
 
 /**
- * 固定報表上面那一排:起日、迄日、門市、(商品排行)照什麼分。按「查詢」才送。
+ * 固定報表上面那一排:起日、迄日、門市、(開通統計)期間看哪一種日期、(商品排行)照什麼分。按「查詢」才送;兩個下拉一選就換。
  * 鎖在門市的帳號門市那一格是自己那一家、不能改 —— 伺服器本來就只算那一家。
  */
 export function ReportRangeBar({
   applied,
   onApply,
   by,
+  dates,
 }: {
   applied: ReportRange;
   onApply: (range: ReportRange) => void;
   /** 商品排行:可以照哪幾種分(伺服器給的);沒有就不顯示 */
   by?: { key: string; label: string }[];
+  /** 開通統計:期間可以看哪幾種日期(伺服器給的);只有一種就不顯示 */
+  dates?: { key: string; label: string }[];
 }) {
   const store = useDefaultWarehouse();
   const [from, setFrom] = useState(applied.from);
@@ -54,6 +57,21 @@ export function ReportRangeBar({
           />
         )}
       </label>
+      {dates && dates.length > 1 && (
+        <label>
+          日期
+          <select
+            value={applied.date || dates[0].key}
+            onChange={(e) => onApply({ ...applied, date: e.target.value })}
+          >
+            {dates.map((d) => (
+              <option key={d.key} value={d.key}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {by && by.length > 1 && (
         <label>
           分組

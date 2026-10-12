@@ -28,6 +28,17 @@ class Col:
 
 
 @dataclass(frozen=True)
+class Basis:
+    """同一張報表的另一種看法:期間改看別的日期(欄換成那個日期的那一組指標)。"""
+    key: str                # 網址的 ?date=
+    label: str              # 下拉上的字(同一張報表的幾種字數一樣)
+    cols: tuple
+    sort: str = ""
+    note: str = ""
+    pending: object = None  # callable(tenant, 門市編號或 None) -> 一句話或 "":還沒有這個日期、所以哪一段期間都不算的有多少
+
+
+@dataclass(frozen=True)
 class Report:
     key: str
     title: str
@@ -39,9 +50,26 @@ class Report:
     keep: int = engine.MAX_ROWS     # 最多列幾列
     max_days: int = 0               # 期間最長幾天(0 = 照引擎的上限)
     note: str = "已扣銷退"            # 期間旁邊那幾個字:這張表的數字扣了什麼(畫面不自己寫死)
+    # 期間可以改看別的日期(開通統計:上線日)。上面的 cols / sort / note 是預設那一種,它在下拉上叫 date_label
+    date_label: str = ""
+    dates: tuple = ()
 
 
 MANAGERS_ONLY = ""
+
+
+def _lines_without_start(tenant, warehouse_id):
+    """門號那一行還沒有填上線日的有幾門(不管哪一天開的單;動手前紅隊第 2 條:要在老闆正在看的那一段就看得到,
+    不是掛在開單那個月的表尾)。作廢的單、已經整張退掉的不算(退掉的那一門兩邊都不會算)。"""
+    from apps.sales.models import SalesOrderItem, SalesReturn
+
+    lines = SalesOrderItem.objects.filter(
+        tenant=tenant, so__is_void=False, telecom_plan__isnull=False, activation_date__isnull=True,
+    ).exclude(so__in=SalesReturn.objects.filter(tenant=tenant, is_void=False).values("original_so"))
+    if warehouse_id is not None:
+        lines = lines.filter(so__warehouse_id=warehouse_id)
+    count = lines.count()
+    return f"未填上線日 {count} 門" if count else ""
 
 MONEY = (
     Col("net_sales", "淨銷售額"),
@@ -77,8 +105,30 @@ REPORTS = {r.key: r for r in [
            (*(Col(f"activations_{code}", label) for code, label in PLAN_KINDS),
             Col("return_activations", "退掉"), Col("net_activations", "淨開通"),
             Col("net_staff_commission", "業務員佣金"), Col("net_company_commission", "公司佣金", managers=True)),
-           sort="-net_activations", note="佣金已扣銷退"),       # 新辦 / 續約 / 攜碼三欄是成交的數,沒有扣
+           sort="-net_activations", note="佣金已扣銷退",        # 新辦 / 續約 / 攜碼三欄是成交的數,沒有扣
+           # owner 2026-10-12:要能照上線日看(電信商照上線日算佣金與達標)。欄的意思一樣,只是歸到上線的那一天;
+           # 退掉的仍然扣在退的那一天(動手前紅隊第 1 條),而且只扣有上線日的那幾門
+           date_label="開單日",
+           dates=(Basis("start", "上線日",
+                        (*(Col(f"started_{code}", label) for code, label in PLAN_KINDS),
+                         Col("return_started", "退掉"), Col("started_net", "淨開通"),
+                         Col("started_net_staff_commission", "業務員佣金"),
+                         Col("started_net_company_commission", "公司佣金", managers=True)),
+                        sort="-started_net", note="佣金已扣銷退", pending=_lines_without_start),)),
 ]}
+
+DEFAULT_DATE = "doc"
+
+
+def _basis(report: Report, date: str) -> Basis:
+    """這次期間看哪一種日期。沒有別種看法的報表不收這個參數(送了別的值就是打錯)。"""
+    default = Basis(DEFAULT_DATE, report.date_label, report.cols, report.sort, report.note)
+    if date in ("", DEFAULT_DATE):
+        return default
+    for basis in report.dates:
+        if basis.key == date:
+            return basis
+    raise engine.QueryError("這張報表不能照這個日期看")
 
 
 def check(report: Report, user) -> None:
@@ -95,8 +145,9 @@ def _nothing(values) -> bool:
 
 
 def run(report: Report, tenant, user, *, start, end, by="", warehouse=None, only_warehouse=None,
-        everything=False):
+        everything=False, date=""):
     """warehouse = 畫面選的門市(沒選 = 全公司);only_warehouse = 鎖在門市的帳號那一家(引擎強制)。
+    date = 期間看哪一種日期(空的 = 預設;只有 `Report.dates` 有列的報表可以改)。
 
     everything = 匯出用:不照這張報表「畫面最多列幾列」(商品排行 200)截,給引擎算得出來的全部
     (引擎自己的上限 `engine.MAX_ROWS` 還是在;超過那個才算 truncated)。合計本來就是全部的。
@@ -105,12 +156,13 @@ def run(report: Report, tenant, user, *, start, end, by="", warehouse=None, only
     dimension = by or next(iter(report.by))
     if dimension not in report.by:
         raise engine.QueryError("這張報表不能這樣分")
-    cols = [c for c in report.cols if not c.managers or role in MANAGERS]
+    basis = _basis(report, date)
+    cols = [c for c in basis.cols if not c.managers or role in MANAGERS]
     spec = {
         "measures": [c.key for c in cols],
         "dimensions": [dimension],
         "period": {"from": start, "to": end, "grain": report.grain},
-        "sort": report.sort,
+        "sort": basis.sort,
         "limit": engine.MAX_ROWS,
     }
     if warehouse is not None:
@@ -124,7 +176,14 @@ def run(report: Report, tenant, user, *, start, end, by="", warehouse=None, only
     return {
         "key": report.key,
         "title": report.title,
-        "note": report.note,
+        "note": basis.note,
+        # 期間可以看哪幾種日期(只有一種的報表是空的,畫面不出下拉)、這一次看的是哪一種
+        "dates": [{"key": b.key, "label": b.label}
+                  for b in ((Basis(DEFAULT_DATE, report.date_label, ()), *report.dates) if report.dates else ())],
+        "date": basis.key,
+        # 還沒有這個日期、所以哪一段期間都沒算到的(一句話;沒有就是空的)。鎖門市的帳號只算自己那一家
+        "pending": basis.pending(tenant, only_warehouse if only_warehouse is not None else warehouse)
+        if basis.pending else "",
         "by": [{"key": k, "label": v} for k, v in report.by.items()],
         "columns": {
             "dimensions": [{"key": dimension, "label": report.by[dimension]}],

@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
-  FIXED_REPORTS, cellText, isNegative, localDay, monthStart, rangeQuery, rangeReady,
+  FIXED_REPORTS, cellText, exportTitle, isNegative, localDay, monthStart, rangeQuery, rangeReady,
 } from "./fixedReports.ts";
 
 test("今天與月初用的是這台電腦的日期,不是世界時間", () => {
@@ -89,4 +89,38 @@ test("期間旁邊那幾個字(扣了什麼)是伺服器給的,頁面不自己�
   const page = readFileSync(new URL("../pages/reports/FixedReportPage.tsx", import.meta.url), "utf8");
   assert.ok(!page.includes("已扣銷退"));
   assert.ok(page.includes("data.note"));
+});
+
+test("期間可以改看別的日期(開通統計:上線日):選了才送;下拉的字是伺服器給的;匯出的檔名看得出是哪一種", () => {
+  // owner 2026-10-12:開通統計要能照上線日看
+  assert.equal(rangeQuery({ from: "2026-10-01", to: "2026-10-12" }), "from=2026-10-01&to=2026-10-12");
+  assert.equal(rangeQuery({ from: "2026-10-01", to: "2026-10-12", date: "" }), "from=2026-10-01&to=2026-10-12");
+  assert.equal(
+    rangeQuery({ from: "2026-10-01", to: "2026-10-12", warehouse: 8, by: "plan", date: "start" }),
+    "from=2026-10-01&to=2026-10-12&warehouse=8&by=plan&date=start",
+  );
+  const dates = [{ key: "doc", label: "開單日" }, { key: "start", label: "上線日" }];
+  assert.equal(exportTitle("開通統計", { dates, date: "start" }), "開通統計-上線日");
+  assert.equal(exportTitle("開通統計", { dates, date: "doc" }), "開通統計");          // 預設那一種不加字(檔名跟以前一樣)
+  assert.equal(exportTitle("開通統計", { dates, date: "" }), "開通統計");
+  assert.equal(exportTitle("開通統計", { dates }), "開通統計");
+  assert.equal(exportTitle("開通統計", { dates, date: "gone" }), "開通統計");
+  assert.equal(exportTitle("業績彙總", { dates: [], date: "doc" }), "業績彙總");        // 只有一種看法的報表
+  assert.equal(exportTitle("業績彙總", {}), "業績彙總");
+  assert.deepEqual([...new Set(dates.map((d) => d.label.length))], [3]);
+
+  const page = readFileSync(new URL("../pages/reports/FixedReportPage.tsx", import.meta.url), "utf8");
+  assert.ok(page.includes("dates={data?.dates}"), "日期的選項要照伺服器給的畫");
+  assert.ok(page.includes("data.pending ? `　${data.pending}` : \"\""), "還沒填上線日的那一句是伺服器寫的");
+  assert.match(page, /const title = exportTitle\(report\.title, all\);[\s\S]*?exportFileName\(title, \{/, "匯出的檔名要看得出是哪一種日期");
+  const bar = readFileSync(new URL("../pages/reports/ReportRangeBar.tsx", import.meta.url), "utf8");
+  assert.match(bar, /dates && dates\.length > 1 && \(/);                              // 只有一種就不出下拉
+  assert.match(bar, /value=\{applied\.date \|\| dates\[0\]\.key\}/);
+  assert.match(bar, /onApply\(\{ \.\.\.applied, date: e\.target\.value \}\)/);
+  for (const text of [page, bar]) {
+    const code = text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+    for (const word of ["開單日", "上線日"]) assert.ok(!code.includes(word), `畫面寫死了「${word}」`);
+  }
+  const hooks = readFileSync(new URL("../api/hooks.ts", import.meta.url), "utf8");
+  assert.ok(hooks.includes("`/analytics/presets/${key}/?${rangeQuery(range)}&export=1`"));     // 匯出跟畫面用同一份條件(含日期)
 });

@@ -193,6 +193,14 @@ def _sales(tenant):
     return SalesOrderItem.objects.filter(tenant=tenant, so__is_void=False)
 
 
+def _started(tenant):
+    """門號那一行,期間看**上線日**(合約從哪一天起算:新辦 = 開單日;續約 = 續約日、攜碼 = 合約生效日,可以事後改)。
+    沒有填上線日的那幾行不在任何一段期間裡(開通統計另外寫「未填上線日幾門」)。作廢的單不算。"""
+    from apps.sales.models import SalesOrderItem
+
+    return SalesOrderItem.objects.filter(tenant=tenant, so__is_void=False, telecom_plan__isnull=False)
+
+
 def _contracts(tenant):
     # 門號合約:哪些算數(作廢、被退掉的不算)、哪一筆已經續約,規則只有 apps/sales/contracts.py 那一份
     from apps.sales.contracts import contracts
@@ -281,6 +289,17 @@ FACTS = {f.key: f for f in [
         # 退掉的那一行當初是不是門號、哪個方案:看原銷貨單的那一行(佣金也是從那裡沖回)
         **_plan_paths("original_item"),
     }),
+    # 跟「銷貨」是同一批明細裡有方案的那幾行,只差期間看的是上線日(owner 2026-10-12:開通統計要能照上線日看 ——
+    # 電信商照上線日算佣金與達標)。角度跟銷貨一樣,所以照電信 / 方案 / 業務 / 門市都分得出來
+    Fact("started", "門號上線", _started, "activation_date", {
+        "warehouse": Path("so__warehouse_id", "so__warehouse__name"),
+        "sales_person": Path("so__sales_person_id", "so__sales_person__name"),
+        "tax_method": Path("so__tax_method"),
+        "source": NEW,
+        **_people_paths("so"),
+        **_product_paths(),
+        **_plan_paths(),
+    }),
     Fact("purchases", "進貨", _purchases, "po__doc_date", {
         "warehouse": Path("po__warehouse_id", "po__warehouse__name"),
         "supplier": Path("po__supplier_id", "po__supplier__name"),
@@ -331,6 +350,9 @@ FACTS = {f.key: f for f in [
 ]}
 
 
+# 銷退明細被退的那一行當初有填上線日
+_HAS_START = {"original_item__activation_date__isnull": False}
+
 # 「銷售」只算計入毛利的明細:收購二手那一類(只算現金、不算毛利)不是營收,另外一欄看。
 # 這樣 銷售額 − 成本 = 毛利,三個數字是同一批明細。
 COUNTED = Q(product__counts_margin=True)
@@ -376,6 +398,23 @@ BASES = [
          lambda: Count("id", filter=Q(original_item__telecom_plan__isnull=False)), "int", group="門號合約"),
     Base("return_orders", "銷退單數", "returns",
          lambda: Count("sr_id", distinct=True, filter=COUNTED), "int"),
+
+    # 照上線日看的開通數與佣金(2026-10-12)。期間 = 上線日落在哪一段;跟上面照開單日的那一組是同一批明細,只是歸到不同的日子
+    *[Base(f"started_{code}", f"{label}上線數(未扣銷退)", "started",
+           (lambda code=code: Count("id", filter=Q(telecom_plan__kind=code))), "int", group="門號合約")
+      for code, label in PLAN_KINDS],
+    Base("started_staff_commission", "上線門號業務員佣金", "started", lambda: Sum("commission"), group="佣金"),
+    Base("started_company_commission", "上線門號公司佣金", "started", lambda: Sum("company_commission"),
+         roles=MANAGERS, group="佣金"),
+    # 退掉的:扣在**退的那一天**(動手前紅隊第 1 條:電信商追回佣金是出在後來那一期的對帳單,不會回頭改上線那個月)。
+    # 只算「有上線日」的那幾行 —— 沒填上線日的當初沒有算進任何一期的上線數,退掉時也不能扣(不然憑空少一門)
+    Base("return_started", "退掉的上線門號數", "returns",
+         lambda: Count("id", filter=Q(original_item__telecom_plan__isnull=False, **_HAS_START)),
+         "int", group="門號合約"),
+    Base("return_started_staff_commission", "沖回上線門號業務員佣金", "returns",
+         lambda: Sum("original_item__commission", filter=Q(**_HAS_START)), group="佣金"),
+    Base("return_started_company_commission", "沖回上線門號公司佣金", "returns",
+         lambda: Sum("original_item__company_commission", filter=Q(**_HAS_START)), roles=MANAGERS, group="佣金"),
 
     # 進貨金額 = 記進庫存的成本(未稅單位成本 × 數量),跟庫存金額、加權平均成本是同一個數字。
     # 單位成本存到分,有贈品或除不盡時,跟進貨單頭的未稅小計可能差幾分錢(進貨明細沒有存死每行未稅)。
@@ -436,6 +475,16 @@ DERIVED = [
     # 期間內成交的門號 − 期間內退掉的門號(退的扣在退的那一天,跟佣金一樣;所以某一天、某一個月可能是負的)
     Derived("net_activations", "開通數(扣銷退)", ("activations", "return_activations"),
             lambda v: v["activations"] - v["return_activations"], "int", group="門號合約"),
+    # 照上線日:期間內上線的門號 − 期間內退掉的(有上線日的)門號;兩種佣金一樣
+    Derived("started_net", "上線數(扣銷退)", (*(f"started_{code}" for code, _ in PLAN_KINDS), "return_started"),
+            lambda v: sum(v[f"started_{code}"] for code, _ in PLAN_KINDS) - v["return_started"],
+            "int", group="門號合約"),
+    Derived("started_net_staff_commission", "上線門號業務員佣金(扣銷退)",
+            ("started_staff_commission", "return_started_staff_commission"),
+            lambda v: v["started_staff_commission"] - v["return_started_staff_commission"], group="佣金"),
+    Derived("started_net_company_commission", "上線門號公司佣金(扣銷退)",
+            ("started_company_commission", "return_started_company_commission"),
+            lambda v: v["started_company_commission"] - v["return_started_company_commission"], group="佣金"),
     # 銷貨單清單與開單頁上的「業務員毛利」是含佣金的(每張單:業務員毛利 + 業務員佣金);這個數字就是它們加起來、再扣掉銷退
     Derived("staff_total", "業務員毛利加佣金(扣銷退)",
             ("sales_untaxed", "sales_staff_cost", "return_untaxed", "return_staff_cost",

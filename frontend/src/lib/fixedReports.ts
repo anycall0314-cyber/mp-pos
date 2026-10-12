@@ -46,6 +46,8 @@ export interface ReportRange {
   warehouse?: number | "";
   /** 商品排行:照商品 / 品類 / 品牌 */
   by?: string;
+  /** 期間看哪一種日期(開通統計:開單日 / 上線日);沒有 = 伺服器的預設 */
+  date?: string;
   /** 選到的門市叫什麼(匯出的檔名用;不送伺服器。沒選 = 空的) */
   warehouseName?: string;
 }
@@ -58,7 +60,22 @@ export function rangeQuery(range: ReportRange): string {
   if (range.warehouse !== undefined && range.warehouse !== "")
     q.set("warehouse", String(range.warehouse));
   if (range.by) q.set("by", range.by);
+  if (range.date) q.set("date", range.date);
   return q.toString();
+}
+
+/**
+ * 匯出的檔名用的報表名稱:期間看的不是預設那一種日期時把它寫進去(「開通統計-上線日」),
+ * 不然兩種看法匯出來的檔名一模一樣、數字卻不同。
+ */
+export function exportTitle(
+  title: string,
+  result: { dates?: { key: string; label: string }[]; date?: string },
+): string {
+  const dates = result.dates ?? [];
+  if (dates.length < 2 || !result.date || result.date === dates[0].key) return title;
+  const picked = dates.find((d) => d.key === result.date);
+  return picked ? `${title}-${picked.label}` : title;
 }
 
 /** 日期要兩個都有、而且開始不晚於結束才查(不然伺服器只會回一句格式不對)。 */

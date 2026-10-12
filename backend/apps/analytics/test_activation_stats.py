@@ -250,6 +250,255 @@ class ActivationStatsTests(_Lines):
         self.assertEqual(data["totals"]["net_activations"], 4)
 
 
+OCT = {"from": "2026-10-01", "to": "2026-10-31"}
+START = ("started_new", "started_renewal", "started_portin", "return_started", "started_net")
+START_MONEY = ("started_net_staff_commission", "started_net_company_commission")
+
+
+def started(values):
+    """(新辦, 續約, 攜碼, 退掉, 淨開通)—— 照上線日"""
+    return tuple(values[k] for k in START)
+
+
+class StartDateTests(_Lines):
+    """開通統計照上線日看(owner 2026-10-12)。上線日 = 合約從哪一天起算;電信商照它算佣金與達標。
+
+    把 _Lines 的五門排成:
+      s4 中華續約 第一家門市 開單 9/20 上線 9/20
+      s5 中華續約 第二家門市 開單 9/21 上線 **10/02**(手機到貨才續約,跨月)、沒有業務員
+      s6 中華續約 第一家門市 開單 9/22 上線 9/20,9/25 整張退掉
+      s8 遠傳新辦 第一家門市 開單 9/23 上線 9/23
+      s9 中華攜碼 第二家門市 開單 9/24 **還沒填上線日**
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.set_start(self.c.s5, date(2026, 10, 2))
+        self.set_start(self.s8, date(2026, 9, 23))        # 新辦存檔時上線日 = 當下的單據日期(今天),這裡跟著測試的開單日
+        self.set_start(self.s9, None)
+
+    @staticmethod
+    def set_start(so, day):
+        from apps.sales.models import SalesOrderItem
+
+        SalesOrderItem.objects.filter(so_id=so["id"]).update(activation_date=day)
+
+    def by_start(self, client=None, **params):
+        return self.report(client, date="start", **params)
+
+    def test_the_period_is_the_start_date(self):
+        data = self.by_start()
+        self.assertEqual((data["date"], data["dates"]), ("start", [
+            {"key": "doc", "label": "開單日"}, {"key": "start", "label": "上線日"}]))
+        self.assertEqual(len({len(d["label"]) for d in data["dates"]}), 1)              # 下拉的字一樣長
+        self.assertEqual([m["label"] for m in data["columns"]["measures"]],
+                         ["新辦", "續約", "攜碼", "退掉", "淨開通", "業務員佣金", "公司佣金"])     # 欄名跟照開單日一樣
+        self.assertEqual(data["note"], "佣金已扣銷退")
+        # 九月上線的:中華續約兩門(s4、s6;s5 十月才上線、s9 還沒填)、退掉一門(s6);遠傳新辦一門
+        self.assertEqual(self.table(data), {
+            "甲中華電信": {"started_new": 0, "started_renewal": 2, "started_portin": 0, "return_started": 1,
+                       "started_net": 1, "started_net_staff_commission": "6000.00",
+                       "started_net_company_commission": "10000.00"},
+            "甲遠傳": {"started_new": 1, "started_renewal": 0, "started_portin": 0, "return_started": 0,
+                     "started_net": 1, "started_net_staff_commission": "2000.00",
+                     "started_net_company_commission": "3500.00"},
+        })
+        self.assertEqual((started(data["totals"]), data["totals"]["started_net_staff_commission"],
+                          data["totals"]["started_net_company_commission"]), ((1, 2, 0, 1, 2), "8000.00", "13500.00"))
+        # 十月上線的:九月開單、十月才續約的那一門
+        octo = self.by_start(**OCT)
+        self.assertEqual(self.table(octo), {"甲中華電信": {
+            "started_new": 0, "started_renewal": 1, "started_portin": 0, "return_started": 0, "started_net": 1,
+            "started_net_staff_commission": "6000.00", "started_net_company_commission": "10000.00"}})
+
+    def test_the_default_is_still_the_document_date(self):
+        # 不帶、或帶 doc:跟以前一模一樣(照開單日五門都在九月),只是多了「可以看哪幾種日期」
+        plain, doc = self.report(), self.report(date="doc")
+        self.assertEqual(plain, doc)
+        self.assertEqual((plain["date"], [d["key"] for d in plain["dates"]], plain["pending"]), ("doc", ["doc", "start"], ""))
+        self.assertEqual(counts(plain["totals"]), (1, 3, 1, 1, 4))
+        self.assertEqual(self.report(**OCT)["rows"], [])                                # 照開單日十月沒有東西
+
+    def test_lines_without_a_start_date_are_called_out_wherever_the_period_is(self):
+        # 動手前紅隊第 2 條:還沒填的要在正在看的那一段就看得到(不管哪一天開的單)。哪一段期間都一樣
+        for period in (SEP, OCT, {"from": "2026-01-01", "to": "2026-01-31"}):
+            self.assertEqual(self.by_start(**period)["pending"], "未填上線日 1 門", period)
+        self.assertEqual(self.by_start(warehouse=self.wh2.id)["pending"], "未填上線日 1 門")
+        self.assertEqual(self.by_start(warehouse=self.wh1.id)["pending"], "")           # 那一門在第二家門市
+        # 補填之後不見了、算進那一天
+        r = self.admin.post(f"/api/v1/sales-orders/{self.s9['id']}/contract-dates/", {
+            "item": self.item_of(self.s9), "activation_date": "2026-09-30"}, format="json")
+        self.assertEqual(r.status_code, 200, r.content.decode())
+        after = self.by_start()
+        self.assertEqual((after["pending"], started(after["totals"])), ("", (1, 2, 1, 1, 3)))
+
+    @staticmethod
+    def item_of(so):
+        from apps.sales.models import SalesOrderItem
+
+        return SalesOrderItem.objects.get(so_id=so["id"]).id
+
+    def test_void_and_returned_lines_are_not_pending(self):
+        self.set_start(self.c.s4, None)
+        self.set_start(self.c.s6, None)                                                 # 已經整張退掉的
+        self.assertEqual(self.by_start()["pending"], "未填上線日 2 門")                   # s4、s9;退掉的 s6 不算
+        r = self.admin.post(f"/api/v1/sales-orders/{self.c.s4['id']}/void/", {}, format="json")
+        self.assertEqual(r.status_code, 200, r.content.decode())
+        self.assertEqual(self.by_start()["pending"], "未填上線日 1 門")                   # 作廢的不算
+        # 銷退作廢之後那一門又是有效的:又要填了
+        r = self.admin.post(f"/api/v1/sales-returns/{self.c.sr6['id']}/void/", {}, format="json")
+        self.assertEqual(r.status_code, 200, r.content.decode())
+        self.assertEqual(self.by_start()["pending"], "未填上線日 2 門")
+
+    def test_a_return_comes_off_on_the_day_it_came_back_not_the_start_month(self):
+        # 動手前紅隊第 1 條:電信商追回佣金出在後來那一期,不會回頭改上線那個月。九月上線、十月才退 → 九月不變、十月扣
+        SalesReturn.objects.filter(pk=self.c.sr6["id"]).update(doc_date=date(2026, 10, 5))
+        sep, octo = self.by_start(), self.by_start(**OCT)
+        self.assertEqual((started(sep["totals"]), sep["totals"]["started_net_staff_commission"]), ((1, 2, 0, 0, 3), "14000.00"))
+        # 十月:上線一門(s5)、退掉一門(九月上線的 s6)→ 淨開通 0、佣金 6,000 − 6,000
+        self.assertEqual((started(octo["totals"]), octo["totals"]["started_net_staff_commission"],
+                          octo["totals"]["started_net_company_commission"]), ((0, 1, 0, 1, 0), "0.00", "0.00"))
+
+    def test_returning_a_line_that_never_had_a_start_date_takes_nothing_off(self):
+        # 沒填上線日的那一門當初沒有算進任何一期,退掉時也不能扣(不然憑空少一門、佣金多扣一次)
+        sr = self.c._post("/api/v1/sales-returns/", {"original_so": self.s9["id"]})
+        SalesReturn.objects.filter(pk=sr["id"]).update(doc_date=date(2026, 9, 26))
+        data = self.by_start()
+        self.assertEqual((started(data["totals"]), data["totals"]["started_net_staff_commission"],
+                          data["totals"]["started_net_company_commission"], data["pending"]),
+                         ((1, 2, 0, 1, 2), "8000.00", "13500.00", ""))                    # 兩種佣金都沒有多扣
+        # 對照:照開單日那一門有算(成交一門、退一門)
+        self.assertEqual(counts(self.report()["totals"]), (1, 3, 1, 2, 3))
+
+    def test_a_returned_line_that_is_not_a_phone_line_is_never_a_returned_start(self):
+        # 退掉的門數只算門號那一行。不是門號的明細不會有上線日(存檔時會擋);這裡直接改資料庫造一筆,釘住「退掉」數的是門號
+        from apps.sales.models import SalesOrderItem
+
+        so = self.c.sell(case_qty=1)
+        SalesOrder.objects.filter(pk=so["id"]).update(doc_date=date(2026, 9, 18))
+        SalesOrderItem.objects.filter(so_id=so["id"]).update(activation_date=date(2026, 9, 18))
+        sr = self.c._post("/api/v1/sales-returns/", {"original_so": so["id"], "payment_method": "cash"})
+        SalesReturn.objects.filter(pk=sr["id"]).update(doc_date=date(2026, 9, 19))
+        self.assertEqual(started(self.by_start()["totals"]), (1, 2, 0, 1, 2))            # 退掉還是只有 s6 那一門
+
+    def test_the_columns_add_up_and_every_grouping_agrees(self):
+        expected = {
+            "plan": {"甲1399 30月": (0, 2, 0, 1, 1), "甲599 24月": (1, 0, 0, 0, 1)},
+            "sales_person": {self.c.sales_person.name: (1, 2, 0, 1, 2)},
+            "warehouse": {self.wh1.name: (1, 2, 0, 1, 2)},
+        }
+        first = self.by_start()["totals"]
+        for by, rows in expected.items():
+            data = self.by_start(by=by)
+            self.assertEqual({label: started(v) for label, v in self.table(data).items()}, rows, by)
+            self.assertEqual(data["totals"], first, by)
+            for values in [r["values"] for r in data["rows"]] + [data["totals"]]:
+                new, renewal, portin, back, net = started(values)
+                self.assertEqual(new + renewal + portin - back, net, by)
+            for key in START_MONEY:
+                self.assertEqual(sum(Decimal(r["values"][key]) for r in data["rows"]), Decimal(first[key]), (by, key))
+
+    def test_both_ends_of_the_period_count_and_void_orders_do_not(self):
+        def net(first, last):
+            return self.by_start(**{"from": first, "to": last})["totals"]["started_net"]
+
+        self.assertEqual((net("2026-09-20", "2026-09-20"), net("2026-09-21", "2026-09-22"),
+                          net("2026-09-23", "2026-09-23"), net("2026-09-25", "2026-09-25"),
+                          net("2026-10-02", "2026-10-02"), net("2026-10-01", "2026-10-01")), (2, 0, 1, -1, 1, 0))
+        r = self.admin.post(f"/api/v1/sales-orders/{self.c.s4['id']}/void/", {}, format="json")
+        self.assertEqual(r.status_code, 200, r.content.decode())
+        self.assertEqual(net("2026-09-20", "2026-09-20"), 1)
+
+    def test_moving_the_start_date_moves_the_line(self):
+        # 上線日事後改到別的月份(中華等手機到貨才續約):報表跟著變
+        r = self.admin.post(f"/api/v1/sales-orders/{self.c.s4['id']}/contract-dates/", {
+            "item": self.item_of(self.c.s4), "activation_date": "2026-10-10"}, format="json")
+        self.assertEqual(r.status_code, 200, r.content.decode())
+        self.assertEqual((started(self.by_start()["totals"]), started(self.by_start(**OCT)["totals"])),
+                         ((1, 1, 0, 1, 1), (0, 2, 0, 0, 2)))
+        self.assertEqual(counts(self.report()["totals"]), (1, 3, 1, 1, 4))               # 照開單日的不受影響
+
+    def test_most_lines_first(self):
+        self.line(self.plan2, "0922333028", 23, self.wh1)                                # 遠傳再一門(新辦:上線日要另外設)
+        from apps.sales.models import SalesOrderItem
+        SalesOrderItem.objects.filter(msisdn="0922333028").update(activation_date=date(2026, 9, 23))
+        data = self.by_start()
+        self.assertEqual([(r["dims"][0]["label"], r["values"]["started_net"]) for r in data["rows"]],
+                         [("甲遠傳", 2), ("甲中華電信", 1)])                               # 照門數(遠傳佣金 4,000 < 中華 6,000)
+
+    def test_clerk_sees_own_store_without_the_company_commission(self):
+        self.set_start(self.c.s5, None)                                                 # 第二家門市兩門都還沒填
+        mine = self.by_start(client=self.clerk, warehouse=self.wh2.id, by="warehouse")   # 網址帶別家的編號沒有用
+        allowed = {*START, "started_net_staff_commission"}
+        self.assertEqual([m["key"] for m in mine["columns"]["measures"]], [*START, "started_net_staff_commission"])
+        self.assertEqual(set(mine["totals"]), allowed)
+        self.assertTrue(mine["rows"] and all(set(r["values"]) == allowed for r in mine["rows"]))
+        self.assertNotIn("company", str(mine))
+        self.assertEqual({label: started(v) for label, v in self.table(mine).items()}, {self.wh1.name: (1, 2, 0, 1, 2)})
+        # 還沒填的只算自己門市的(第二家的兩門不關這個店員的事)
+        self.assertEqual(mine["pending"], "")
+        self.assertEqual(self.by_start()["pending"], "未填上線日 2 門")
+        self.set_start(self.c.s4, None)
+        self.assertEqual(self.by_start(client=self.clerk, warehouse=self.wh2.id)["pending"], "未填上線日 1 門")
+        exported = self.by_start(client=self.clerk, export="1")
+        self.assertEqual(set(exported["totals"]), allowed)
+        self.assertNotIn("company", str(exported))
+
+    def test_same_item_and_export_and_bad_dates(self):
+        shown, exported = self.by_start(by="plan"), self.by_start(by="plan", export="1")
+        self.assertEqual((exported["rows"], exported["totals"], exported["date"], exported["pending"]),
+                         (shown["rows"], shown["totals"], "start", shown["pending"]))
+        r = self.admin.get(URL, {**SEP, "date": "nope"})
+        self.assertEqual((r.status_code, r.json()["detail"]), (400, "這張報表不能照這個日期看"))
+        # 別張報表沒有第二種日期:送 start 是打錯,不默默當成預設
+        r = self.admin.get(f"{PRESET}staff/", {**SEP, "date": "start"})
+        self.assertEqual((r.status_code, r.json()["detail"]), (400, "這張報表不能照這個日期看"))
+        staff = self.admin.get(f"{PRESET}staff/", {**SEP, "date": "doc"})
+        self.assertEqual((staff.status_code, staff.json()["dates"], staff.json()["pending"]), (200, [], ""))
+        # 同一個勾:關掉之後照上線日也看不到
+        UserProfile.objects.filter(user=self.c.clerk_user).update(denied_abilities=["report_activations"])
+        clerk = Company.client(get_user_model().objects.get(pk=self.c.clerk_user.pk))
+        self.assertDenied(clerk.get(URL, {**SEP, "date": "start"}), "開通統計")
+
+    def test_another_company_is_never_mixed_in(self):
+        from apps.sales.models import SalesOrderItem
+
+        from .test_report_access import add_lines
+        from .tests import build_shop
+
+        other = add_lines(build_shop("b", "乙通訊行", "乙"), "乙")
+        SalesOrderItem.objects.filter(tenant=other.tenant, telecom_plan__isnull=False, so_id=other.s4["id"]).update(
+            activation_date=None)
+        data = self.by_start()
+        self.assertEqual(set(self.table(data)), {"甲中華電信", "甲遠傳"})
+        self.assertEqual((data["totals"]["started_net"], data["pending"]), (2, "未填上線日 1 門"))
+        theirs = other.admin.get(URL, {**SEP, "date": "start"}).json()
+        self.assertEqual((theirs["totals"]["started_net"], theirs["pending"]), (1, "未填上線日 1 門"))
+
+    def test_the_new_measures_in_explore(self):
+        q = lambda client, *measures, **spec: client.post(                              # noqa: E731
+            QUERY, {"measures": list(measures), "period": SEP, **spec}, format="json")
+        r = q(self.admin, "started_net", "started_net_company_commission", dimensions=["carrier"])
+        self.assertEqual(r.status_code, 200, r.content.decode())
+        self.assertEqual(self.table(r.json())["甲中華電信"], {"started_net": 1, "started_net_company_commission": "10000.00"})
+        # 公司佣金那三個只有管理員看得到(直接的、沖回的、扣掉之後的)
+        for key in ("started_company_commission", "return_started_company_commission", "started_net_company_commission"):
+            self.assertEqual(q(self.clerk, key).status_code, 400, key)
+            self.assertEqual(q(self.admin, key).status_code, 200, key)
+        seen = {m["key"] for m in self.clerk.get("/api/v1/analytics/catalog/").json()["measures"]}
+        self.assertFalse({k for k in seen if "company" in k})
+        self.assertTrue({"started_net", "started_new", "started_net_staff_commission", "return_started"} <= seen)
+        # 歸在既有的類別(選單的類別是固定的那幾個)
+        groups = {m["key"]: m["group"] for m in self.admin.get("/api/v1/analytics/catalog/").json()["measures"]}
+        self.assertEqual({groups[k] for k in ("started_new", "started_net", "return_started")}, {"門號合約"})
+        self.assertEqual({groups[k] for k in ("started_staff_commission", "started_net_company_commission")}, {"佣金"})
+        # 跟銷貨一樣可以照門市、業務、電信、方案分;鎖門市的店員只算自己門市
+        for measure in ("started_net", "started_net_staff_commission"):
+            self.assertTrue({"warehouse", "sales_person", "carrier", "plan", "plan_kind", "date"} <= supported_dims(measure))
+        mine = q(self.clerk, "started_net", dimensions=["warehouse"]).json()
+        self.assertEqual(self.table(mine), {self.wh1.name: {"started_net": 2}})
+
+
 class PlanDimensionTests(_Lines):
     """自訂分析的「電信業者」「方案種類」「方案」:銷貨、銷退那幾組指標也能用了。"""
 

@@ -56,6 +56,7 @@ def query(request):
 @api_view(["GET"])
 def preset(request, key):
     """固定的報表:?from= ?to=(必填)?warehouse=(沒鎖門市的才有用)?by=(商品排行:商品 / 品類 / 品牌)
+    ?date=(開通統計:doc 開單日 / start 上線日)
     ?export=1 = 匯出用,給全部的列(畫面只列前幾名的那一張也是)"""
     report = presets.REPORTS.get(key)
     if report is None:
@@ -68,7 +69,7 @@ def preset(request, key):
             start=params.get("from"), end=params.get("to"), by=params.get("by") or "",
             warehouse=report_warehouse_id(request),
             only_warehouse=locked_warehouse_id(request.user),
-            everything=params.get("export") == "1"))
+            everything=params.get("export") == "1", date=(params.get("date") or "").strip()))
     except engine.QueryError as exc:
         return _bad(exc)
 

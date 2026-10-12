@@ -6,6 +6,7 @@ import { downloadCsv } from "@/components/downloadCsv";
 import { Toolbar } from "@/components/Toolbar";
 import {
   cellText,
+  exportTitle,
   isNegative,
   localDay,
   monthStart,
@@ -39,10 +40,12 @@ export function FixedReportPage({ report }: { report: PageInfo }) {
     setExportNote("");
     try {
       const all = await fetchFixedReportAll(report.key, applied);
+      // 期間看的不是預設那一種日期時,檔名要看得出來(「開通統計-上線日」)
+      const title = exportTitle(report.title, all);
       setExportNote(
         exportIfComplete(
           { count: all.rows.length, truncated: all.truncated },
-          exportFileName(report.title, {
+          exportFileName(title, {
             store: (all.applied.filters.find((f) => f.dimension === "warehouse")?.values ?? [])
               .map((v) => v.label)
               .join("、"),
@@ -71,7 +74,7 @@ export function FixedReportPage({ report }: { report: PageInfo }) {
         }
       />
       {exportNote && <Banner kind="error" message={exportNote} />}
-      <ReportRangeBar applied={applied} onApply={setApplied} by={data?.by} />
+      <ReportRangeBar applied={applied} onApply={setApplied} by={data?.by} dates={data?.dates} />
       {isError && <Banner kind="error" message={errorMessageOf(error)} />}
 
       {data && (
@@ -79,6 +82,7 @@ export function FixedReportPage({ report }: { report: PageInfo }) {
           <div className="ex-period">
             {data.applied.period.from} ~ {data.applied.period.to}
             {data.note ? `　${data.note}` : ""}
+            {data.pending ? `　${data.pending}` : ""}
           </div>
           <div className="sd-summary">
             {measures.map((m) => (
