@@ -1,4 +1,5 @@
 import { type AbilityKey, can } from "@/lib/abilities";
+import { attachIdleLogout } from "@/lib/idleLogout";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   createContext,
@@ -57,39 +58,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => authEvents.removeEventListener("unauthorized", onUnauth);
   }, []);
 
-  // 10 分鐘無操作自動登出:登入後啟動 timer,任何滑鼠 / 鍵盤 / 觸控
-  // 活動都會 reset 倒數;超時呼叫 logout 把 token 清掉並跳回登入頁。
+  // 連續 2 小時沒有操作自動登出(門檻與怎麼算在 lib/idleLogout.ts):登入後開始看,
+  // 滑鼠 / 鍵盤 / 觸控 / 捲動 / 點擊都重新算;超過就把 token 清掉並跳回登入頁。
   useEffect(() => {
-    if (!user) return; // 未登入不需要倒數
-    const IDLE_MS = 10 * 60 * 1000;
-    let timer: ReturnType<typeof setTimeout>;
-    const fire = () => {
-      // 安靜地 logout(API 失敗也要清前端 state)
+    if (!user) return; // 未登入不需要看
+    return attachIdleLogout(window, () => {
+      // 安靜地 logout(不呼叫後端;前端 state 一定要清)
       setToken(null);
       setUser(null);
       qc.clear();
-    };
-    const reset = () => {
-      clearTimeout(timer);
-      timer = setTimeout(fire, IDLE_MS);
-    };
-    // 涵蓋桌機 / 觸控 / iPad 等所有互動
-    const events: (keyof DocumentEventMap)[] = [
-      "mousedown",
-      "mousemove",
-      "keydown",
-      "touchstart",
-      "scroll",
-      "click",
-    ];
-    events.forEach((ev) =>
-      document.addEventListener(ev, reset, { passive: true }),
-    );
-    reset(); // 啟動倒數
-    return () => {
-      clearTimeout(timer);
-      events.forEach((ev) => document.removeEventListener(ev, reset));
-    };
+    });
   }, [user, qc]);
 
   const login = useCallback(
