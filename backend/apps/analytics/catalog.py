@@ -136,6 +136,10 @@ DIMENSIONS = {d.key: d for d in [
     Dim("item_kind", "商品 / 帳務項目", "flag", flag_labels=("帳務 / 服務項目", "商品")),
     Dim("product_kind", "商品 / 零件", "choice", labels=lambda tenant: {"product": "商品", "parts": "零件"}),
     Dim("sales_person", "業務員", "ref", model="parties.SalesPerson"),
+    # 銷貨單上的兩個人(2026-10-12;取舊歐睿 SA040 毛利彙總表可以照客戶 / 會員看):
+    # 客戶 = 這張單的來源(通路 / 同業 / 直客);會員 = 實際的那個人或公司(可以沒有)
+    Dim("customer", "客戶", "ref", model="parties.Customer"),
+    Dim("member", "會員", "ref", model="parties.Member"),
     Dim("supplier", "供應商", "ref", model="parties.Supplier"),
     Dim("payment_method", "付款方式", "choice", labels=_payment_labels),
     Dim("tax_method", "課稅別", "choice", labels=lambda tenant: _tax_labels()),
@@ -162,6 +166,18 @@ def _product_paths(prefix="", none_label="(未指定)"):
         "condition": Path(f"{p}product__is_secondhand", none_label=none_label),
         "item_kind": Path(f"{p}product__is_virtual", none_label=none_label),
         "product_kind": Path(f"{p}product__warehouse_type", none_label=none_label),
+    }
+
+
+NO_MEMBER = "(非會員)"
+
+
+def _people_paths(prefix):
+    """單上的客戶與會員。prefix = 怎麼走到那張單(空的 = 這張表自己就是單頭)。沒有會員的歸「(非會員)」。"""
+    p = f"{prefix}__" if prefix else ""
+    return {
+        "customer": Path(f"{p}customer_id", f"{p}customer__name"),
+        "member": Path(f"{p}member_id", f"{p}member__name", none_label=NO_MEMBER),
     }
 
 
@@ -228,6 +244,7 @@ FACTS = {f.key: f for f in [
         "sales_person": Path("so__sales_person_id", "so__sales_person__name"),
         "tax_method": Path("so__tax_method"),
         "source": NEW,
+        **_people_paths("so"),
         **_product_paths(),
     }),
     Fact("returns", "銷退", _returns, "sr__doc_date", {
@@ -235,6 +252,8 @@ FACTS = {f.key: f for f in [
         "sales_person": Path("sr__original_so__sales_person_id", "sr__original_so__sales_person__name"),
         "tax_method": Path("sr__original_so__tax_method"),
         "source": NEW,
+        # 銷退單上的客戶 / 會員一律跟原銷貨單一樣(建立時照抄、唯讀)
+        **_people_paths("sr"),
         **_product_paths(),
     }),
     Fact("purchases", "進貨", _purchases, "po__doc_date", {
@@ -248,12 +267,14 @@ FACTS = {f.key: f for f in [
         "sales_person": Path("so__sales_person_id", "so__sales_person__name"),
         "payment_method": Path("method"),
         "source": NEW,
+        **_people_paths("so"),
     }),
     Fact("refunds", "退款", _refunds, "doc_date", {
         "warehouse": Path("warehouse_id", "warehouse__name"),
         "sales_person": Path("original_so__sales_person_id", "original_so__sales_person__name"),
         "payment_method": Path("payment_method"),
         "source": NEW,
+        **_people_paths(""),
     }),
     Fact("stock", "庫存", _stock, "business_date", {
         "warehouse": Path("warehouse_id", "warehouse__name", none_label="調撥中(未指定門市)"),
@@ -269,6 +290,7 @@ FACTS = {f.key: f for f in [
         "plan_kind": Path("telecom_plan__kind"),
         "contract_state": Path("state"),
         "source": NEW,
+        **_people_paths("so"),
     }),
     # 舊 POS:門市 / 商品 / 業務員走對照表(人確認過才有值),沒對到的歸「未對照」
     Fact("legacy", "舊 POS", _legacy, "document__document_date", {

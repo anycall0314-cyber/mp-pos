@@ -204,6 +204,12 @@ export const NAV_MODULES: NavModule[] = [
         needs: ["report_products"],
       },
       {
+        to: "/reports/customers",
+        label: "客戶排行",
+        aliases: ["毛利彙總", "毛利彙總表", "客戶毛利", "會員排行", "會員消費", "客戶彙總"],
+        needs: ["report_customers"],
+      },
+      {
         to: "/reports/commissions",
         label: "佣金明細",
         aliases: ["門號佣金", "門號佣金明細"],

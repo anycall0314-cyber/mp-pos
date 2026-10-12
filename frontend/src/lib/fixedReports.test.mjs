@@ -56,12 +56,14 @@ test("負的看得出來;0 與沒有值不算負的", () => {
   assert.equal(isNegative(""), false);
 });
 
-test("三張報表的名稱、網址、權限各是各的,而且導覽與路由用的是同一份", () => {
+test("幾張彙總報表的名稱、網址、權限各是各的,而且導覽與路由用的是同一份", () => {
   assert.deepEqual(FIXED_REPORTS.map((r) => [r.key, r.path, r.title, r.ability]), [
     ["daily", "/reports/daily", "每日彙總", "report_daily"],
     ["staff", "/reports/staff", "業績彙總", "report_staff"],
     ["products", "/reports/products", "商品排行", "report_products"],
+    ["customers", "/reports/customers", "客戶排行", "report_customers"],      // 2026-10-12:照客戶 / 照會員
   ]);
+  assert.deepEqual([...new Set(FIXED_REPORTS.map((r) => r.title.length))], [4]);
   const nav = readFileSync(new URL("../nav.ts", import.meta.url), "utf8");
   const app = readFileSync(new URL("../App.tsx", import.meta.url), "utf8");
   for (const r of FIXED_REPORTS) {

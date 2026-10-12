@@ -1,4 +1,4 @@
-"""固定的報表(員工帳號權限第三批,owner 2026-10-10):業績彙總、商品排行、每日彙總。
+"""固定的報表(員工帳號權限第三批,owner 2026-10-10):業績彙總、商品排行、每日彙總;2026-10-12 多客戶排行。
 
 內容由伺服器定,畫面只選日期與門市;數字全部走 `engine`(指標怎麼算只有 `catalog.py` 那一份),
 這裡只決定「哪幾欄、照什麼分、欄名叫什麼」。
@@ -56,6 +56,11 @@ REPORTS = {r.key: r for r in [
            sort="-net_qty", keep=200),
     Report("daily", "每日彙總", abilities.REPORT_DAILY, {"date": "日期"},
            (Col("sales_orders", "銷貨單數"), *MONEY), grain="day", max_days=366),
+    # 取舊歐睿 SA040 毛利彙總表「照客戶 / 照會員」(owner 2026-10-12):誰買得最多。欄位跟商品排行同一套
+    Report("customers", "客戶排行", abilities.REPORT_CUSTOMERS, {"customer": "客戶", "member": "會員"},
+           (Col("sales_orders", "銷貨單數"), Col("net_sales", "淨銷售額"),
+            Col("staff_gross_profit", "業務員毛利"), Col("gross_profit", "實際毛利", managers=True)),
+           sort="-net_sales", keep=200),
 ]}
 
 

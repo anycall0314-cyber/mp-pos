@@ -5,7 +5,7 @@ import { money } from "./money.ts";
 
 import type { AbilityKey } from "./abilities.ts";
 
-export type FixedReportKey = "staff" | "products" | "daily";
+export type FixedReportKey = "staff" | "products" | "daily" | "customers";
 
 export interface FixedReportPage {
   key: FixedReportKey;
@@ -14,11 +14,13 @@ export interface FixedReportPage {
   ability: AbilityKey;
 }
 
-/** 三張彙總報表的頁面(路徑、名稱、要哪一項權限)。名稱跟導覽的分頁、員工帳號頁的項目是同一個字。 */
+/** 幾張彙總報表的頁面(路徑、名稱、要哪一項權限)。名稱跟導覽的分頁、員工帳號頁的項目是同一個字。 */
 export const FIXED_REPORTS: FixedReportPage[] = [
   { key: "daily", path: "/reports/daily", title: "每日彙總", ability: "report_daily" },
   { key: "staff", path: "/reports/staff", title: "業績彙總", ability: "report_staff" },
   { key: "products", path: "/reports/products", title: "商品排行", ability: "report_products" },
+  // 照客戶 / 照會員看誰買得最多(2026-10-12;取舊歐睿 SA040 毛利彙總表的優點)
+  { key: "customers", path: "/reports/customers", title: "客戶排行", ability: "report_customers" },
 ];
 
 const pad = (n: number) => String(n).padStart(2, "0");

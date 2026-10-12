@@ -1203,6 +1203,7 @@ button { font-family: inherit; }
   align-items: center;
   gap: 6px;
   color: var(--text-dim);
+  white-space: nowrap;   /* 欄名不折行(畫面窄的時候「門市」會被擠成上下兩個字) */
 }
 .list-filterbar input[type="date"] {
   background: var(--panel-2);

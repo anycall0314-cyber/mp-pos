@@ -20,7 +20,8 @@ export type AbilityKey =
   | "report_staff"
   | "report_products"
   | "report_commission"
-  | "report_daily";
+  | "report_daily"
+  | "report_customers";
 
 export interface AbilityInfo {
   key: string;
