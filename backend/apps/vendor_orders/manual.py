@@ -105,6 +105,7 @@ def place(*, tenant, user, link, vendor, request_key, lines, payment_method=None
         raise VendorError(f"「{vendor.name}」已經停用,不能叫新的貨")
     need_open(link, vendor)
     items = services._lines(rows(vendor), lines, vendor.name, unpriced_ok=True)
+    owners = services._internal(tenant, link, items, lines)
     header = _header(link, payment_method, delivery_method)
     note = note.strip()[:NOTE_LIMIT] if isinstance(note, str) else ""
     try:
@@ -122,6 +123,7 @@ def place(*, tenant, user, link, vendor, request_key, lines, payment_method=None
                     tenant=tenant, order=order, line_no=n, sku=i["sku"], spec_id=None,
                     spec_label=i["spec_label"][:120], name=i["name"][:200], unit=i["unit"][:10],
                     pack_qty=i["pack_qty"], packs=i["packs"], qty=i["qty"], unit_price=i["unit_price"],
+                    **services.internal_fields(owners.get(i["key"])),
                 ) for n, i in enumerate(items, start=1)
             ])
     except IntegrityError:

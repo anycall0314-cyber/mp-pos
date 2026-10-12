@@ -7668,6 +7668,8 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 }
 .vo-qty:disabled { opacity: 0.45; }
 .vo-sub { font-size: var(--font-secondary); color: var(--text-dim); font-weight: 400; }
+/* 品名後面的小標(未對照 / 已停用):跟品名隔開一點 */
+.vo-name .wb-badge { margin-left: 6px; }
 .vo-search {
   flex: 1 1 14rem;
   max-width: 24rem;

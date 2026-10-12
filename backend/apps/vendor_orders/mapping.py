@@ -47,7 +47,49 @@ def owners_of(tenant, supplier, vendor_skus) -> dict:
     return {sku: found[key] for sku, key in keys.items() if key in found}
 
 
-def _product_data(product) -> dict | None:
+def owners_by_key(tenant, link, items) -> dict:
+    """這幾個廠商品項(`key` / `sku` / `spec_id`)各自連到店裡的哪個商品:{key: 商品}。沒連的不在裡面。"""
+    owners = owners_of(tenant, link.supplier, [vendor_sku_of(i["sku"], i["spec_id"]) for i in items])
+    return {i["key"]: owners[vendor_sku_of(i["sku"], i["spec_id"])]
+            for i in items if vendor_sku_of(i["sku"], i["spec_id"]) in owners}
+
+
+def internal_of(tenant, link, items, wanted) -> dict:
+    """叫貨單要存的每一行各自連到店裡的哪個商品:{key: 商品}(叫貨當下的,存進明細就不再變)。
+
+    `items` = 伺服器剛排好要存的那幾行;`wanted` = 畫面送來的那幾行。畫面有講「我看到它連到哪個商品」(`was`:商品編號,null = 沒連)的,
+    要跟**現在**的一樣 —— 不一樣(剛好有人改了對照、或這是一份放了很久的草稿)就不送:不能畫面上寫的是 P、存下來的是 Q。
+    沒帶 `was` 的不比(舊畫面送來的;照現在的對照記)。
+    """
+    owners = owners_by_key(tenant, link, items)
+    seen = {}
+    for line in wanted if isinstance(wanted, list) else []:
+        if isinstance(line, dict) and "was" in line and isinstance(line.get("key"), str):
+            was = line["was"]
+            if not (was is None or (isinstance(was, int) and not isinstance(was, bool))):
+                raise VendorError("商品不對")
+            seen[line["key"]] = was
+    for item in items:
+        if item["key"] not in seen:
+            continue
+        now = owners.get(item["key"])
+        was = seen[item["key"]]
+        if (now.id if now is not None else None) == was:
+            continue
+        title = " ".join(x for x in (item["name"], item["spec_label"]) if x)
+        before = Product.objects.filter(tenant=tenant, pk=was).values_list("name", flat=True).first() if was else None
+        raise VendorError(
+            f"「{title}」連到的店內商品剛剛被改了:畫面上是{_named(before)},現在是{_named(now.name if now else None)}。"
+            "數量都還在,看一下再送"
+        )
+    return owners
+
+
+def _named(name) -> str:
+    return f"「{name}」" if name else "沒有對照"
+
+
+def product_data(product) -> dict | None:
     return None if product is None else {
         "id": product.id, "sku": product.sku, "name": product.name, "is_active": product.is_active}
 
@@ -57,17 +99,17 @@ def _row(item: dict, product) -> dict:
     return {
         "key": item["key"], "sku": item["sku"], "spec_id": item["spec_id"], "name": item["name"],
         "spec_label": item["spec_label"], "kind": item["kind"], "size": item["size"], "unit": item["unit"],
-        "pack_qty": item["pack_qty"], "product": _product_data(product),
+        "pack_qty": item["pack_qty"], "product": product_data(product),
     }
 
 
 def rows(tenant, link, vendor) -> dict:
     """連連看那一頁:這家廠商現在的每一個品項,與它對到的店內商品。"""
     items = manual.catalog_rows(link, vendor)
-    owners = owners_of(tenant, link.supplier, [vendor_sku_of(i["sku"], i["spec_id"]) for i in items])
+    owners = owners_by_key(tenant, link, items)
     return {
         "supplier": None if link.supplier_id is None else {"id": link.supplier_id, "name": link.supplier.name},
-        "rows": [_row(i, owners.get(vendor_sku_of(i["sku"], i["spec_id"]))) for i in items],
+        "rows": [_row(i, owners.get(i["key"])) for i in items],
     }
 
 

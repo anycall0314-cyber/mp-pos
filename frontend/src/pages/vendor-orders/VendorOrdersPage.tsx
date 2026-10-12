@@ -33,9 +33,16 @@ import {
   filterRows,
   kindsOf,
   linesToSend,
+  linkedCount,
+  linkedThen,
   outcomeOf,
   packsText,
   rowTitle,
+  sentTitle,
+  sentVendorSide,
+  storeFirst,
+  storeTitle,
+  vendorSide,
   sameAsSent,
   summarize,
   whenText,
@@ -257,7 +264,9 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
   const sendingRef = useRef(false);
   const [refused, setRefused] = useState("");
 
-  const rows = catalog.data?.rows ?? [];
+  // 已經連到店內商品的排前面(用店內的品名),沒連的排後面(照樣可以叫,到貨時再連)
+  const rows = useMemo(() => storeFirst(catalog.data?.rows ?? []), [catalog.data]);
+  const linked = useMemo(() => linkedCount(rows), [rows]);
   // 半自動的廠商:價錢是平台價目表上的參考價,沒有價錢的也可以叫;送出 = POS 自己成立一張單(要再傳給廠商)
   const manual = link.manual;
   const sum = useMemo(() => summarize(draft.cart, rows, manual), [draft.cart, rows, manual]);
@@ -267,10 +276,14 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
   const [text, setText] = useState("");
   const [kind, setKind] = useState("");
   const [pickedOnly, setPickedOnly] = useState(false);
+  const [wantLinkedOnly, setLinkedOnly] = useState(false);
+  // 「只看店內」那個勾只在「有連的、也有沒連的」時出現;勾著的時候對照被別人全部解除(勾跟著不見),不能留著一張空的清單
+  const canPickLinked = linked > 0 && linked < rows.length;
+  const linkedOnly = wantLinkedOnly && canPickLinked;
   const kinds = useMemo(() => kindsOf(rows), [rows]);
   const shown = useMemo(
-    () => filterRows(rows, { text, kind, pickedOnly }, draft.cart),
-    [rows, text, kind, pickedOnly, draft.cart],
+    () => filterRows(rows, { text, kind, pickedOnly, linkedOnly }, draft.cart),
+    [rows, text, kind, pickedOnly, linkedOnly, draft.cart],
   );
   const payment = draft.payment_method || link.payment_method;
   const delivery = draft.delivery_method || link.delivery_method;
@@ -323,6 +336,11 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
           "ok",
           manual ? { ms: 7000 } : undefined,
         );
+        // 拿回來的是先前就成立的那一張、而且當時連到的店內商品跟畫面上剛確認的不一樣:講清楚(貨有叫到,沒有再叫一次)
+        const then = linkedThen(sent, order.items);
+        if (then.length > 0) {
+          toast(`這張單先前就成立了,沒有再叫一次。${then.join(";")}`, "err", { ms: 12000 });
+        }
       }
     } catch (e) {
       outcome = outcomeOf(e instanceof ApiHttpError ? e.status : 0, undefined, apiErrorText(e));
@@ -337,6 +355,8 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
     } else if (outcome.kind === "refused") {
       setRefused(outcome.message);
       if (!confirming) toast(outcome.message, "err");
+      // 被擋的原因可能是「這一列連到的店內商品剛剛被改了」:重抓清單,畫面換成現在的對照;填好的包數都留著
+      void catalog.refetch();
     } else {
       setConfirming(false);
     }
@@ -374,6 +394,12 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
             <input type="checkbox" checked={pickedOnly} onChange={(e) => setPickedOnly(e.target.checked)} />
             只看已選
           </label>
+          {canPickLinked && (
+            <label className="vo-check">
+              <input type="checkbox" checked={linkedOnly} onChange={(e) => setLinkedOnly(e.target.checked)} />
+              只看店內
+            </label>
+          )}
           <span className="list-filterbar-count">
             {shown.length} / {rows.length} 項
           </span>
@@ -412,7 +438,13 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
                 const priced = row.unit_price !== null;
                 return (
                   <tr key={row.key} className={packs > 0 ? "report-row vo-picked" : "report-row"}>
-                    <td className="vo-name">{rowTitle(row)}</td>
+                    <td className="vo-name">
+                      {storeTitle(row)}
+                      {row.product && !row.product.is_active && <span className="wb-badge warn">已停用</span>}
+                      {!row.product && linked > 0 && <span className="wb-badge">未對照</span>}
+                      {/* 店內品名底下寫廠商的叫法(核對用);料號、一包幾個在右邊兩欄 */}
+                      {row.product && <div className="vo-sub">{rowTitle(row)}</div>}
+                    </td>
                     <td>{row.sku}</td>
                     <td className="num">
                       {row.pack_qty} {row.unit || "片"}
@@ -422,7 +454,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
                     <td className="num">
                       <QtyInput
                         className="vo-qty"
-                        aria-label={`${rowTitle(row)} 包數`}
+                        aria-label={`${storeTitle(row)} 包數`}
                         value={packs}
                         min={0}
                         max={MAX_PACKS}
@@ -498,7 +530,11 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
           <tbody>
             {sum.lines.map((l) => (
               <tr key={l.row.key}>
-                <td className="vo-name">{rowTitle(l.row)}</td>
+                <td className="vo-name">
+                  {storeTitle(l.row)}
+                  {/* 廠商那邊是哪一項、一包幾個:同一個店內商品的兩種包裝要分得出來 */}
+                  <div className="vo-sub">{vendorSide(l.row)}</div>
+                </td>
                 <td className="num">{packsText(l.packs, l.pieces, l.row.unit)}</td>
                 <td className="num">{money(l.amount)}</td>
               </tr>
@@ -830,7 +866,10 @@ function HistoryTab({ link, openFirst }: { link: VendorLinkRow; openFirst: numbe
                             <tbody>
                               {o.items.map((i) => (
                                 <tr key={i.line_no}>
-                                  <td className="vo-name">{rowTitle({ name: i.name, spec_label: i.spec_label, size: "" })}</td>
+                                  <td className="vo-name">
+                                    {sentTitle(i)}
+                                    {sentVendorSide(i) && <div className="vo-sub">{sentVendorSide(i)}</div>}
+                                  </td>
                                   <td>{i.sku}</td>
                                   <td className="num">{packsText(i.packs, i.qty, i.unit)}</td>
                                   <td className="num">{i.unit_price === null ? "—" : `@${money(i.unit_price)}`}</td>

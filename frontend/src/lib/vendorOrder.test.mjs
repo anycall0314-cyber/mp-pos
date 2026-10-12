@@ -6,7 +6,8 @@ import { readFileSync } from "node:fs";
 
 import {
   afterSend, amountText, beforeSend, commonUnit, draftFrom, emptyDraft, filterRows, kindsOf, linesToSend, newRequestKey, outcomeOf,
-  packsFrom, packsText, rowTitle, sameAsSent, summarize, whenText, withPacks,
+  linkedCount, linkedThen, packsFrom, packsText, rowTitle, sameAsSent, sentTitle, sentVendorSide, storeFirst, storeTitle, summarize, vendorSide,
+  whenText, withPacks,
 } from "./vendorOrder.ts";
 
 const row = (key, extra = {}) => ({
@@ -40,7 +41,7 @@ test("合計:包數 × 一包幾片 = 片數,片數 × 單價 = 金額;順序照
   const sum = summarize({ "M01#901": 3, G02: 2 }, ROWS);
   assert.deepEqual(sum.lines.map((l) => [l.row.key, l.packs, l.pieces, l.amount]), [["G02", 2, 50, 7500], ["M01#901", 3, 15, 1125]]);
   assert.deepEqual([sum.packs, sum.pieces, sum.amount, sum.gone], [5, 65, 8625, []]);
-  assert.deepEqual(linesToSend(sum), [{ key: "G02", packs: 2 }, { key: "M01#901", packs: 3 }]);
+  assert.deepEqual(linesToSend(sum), [{ key: "G02", packs: 2, was: null }, { key: "M01#901", packs: 3, was: null }]);
   assert.deepEqual(summarize({}, ROWS), { lines: [], packs: 0, pieces: 0, amount: 0, gone: [] });
 });
 
@@ -48,7 +49,7 @@ test("清單換過之後不在了、或變成沒有報價的:列出來,不默默
   const sum = summarize({ G02: 1, OLD: 4, S09: 2 }, ROWS);
   assert.deepEqual(sum.lines.map((l) => l.row.key), ["G02"]);
   assert.deepEqual(sum.gone.sort(), ["OLD", "S09"]);
-  assert.deepEqual(linesToSend(sum), [{ key: "G02", packs: 1 }]);
+  assert.deepEqual(linesToSend(sum), [{ key: "G02", packs: 1, was: null }]);
   assert.deepEqual(summarize({ G02: 1 }, []).gone, ["G02"]);      // 清單還沒回來 / 是空的
 });
 
@@ -61,7 +62,7 @@ test("半自動的廠商:沒有參考價的也可以叫(金額當 0),不算「�
   const loose = summarize(cart, ROWS, true);
   assert.deepEqual(loose.lines.map((l) => [l.row.key, l.packs, l.pieces, l.amount]), [["G02", 2, 50, 7500], ["S09", 3, 75, 0]]);
   assert.deepEqual([loose.gone, loose.amount, loose.pieces], [["GONE"], 7500, 125]);
-  assert.deepEqual(linesToSend(loose), [{ key: "G02", packs: 2 }, { key: "S09", packs: 3 }]);
+  assert.deepEqual(linesToSend(loose), [{ key: "G02", packs: 2, was: null }, { key: "S09", packs: 3, was: null }]);
 });
 
 test("幾包 = 幾片,兩個都寫出來", () => {
@@ -187,7 +188,7 @@ test("送出之後其中一項下架:比的是草稿的完整內容,不是現在
   const placed = [{ sku: "G02", spec_id: null, packs: 2 }, { sku: "G01", spec_id: null, packs: 3 }];
   const rowsNow = ROWS.filter((r) => r.key !== "G01");
   const stillListed = linesToSend(summarize(cart, rowsNow));
-  assert.deepEqual(stillListed, [{ key: "G02", packs: 2 }]);            // 照現在的清單只剩一列
+  assert.deepEqual(stillListed, [{ key: "G02", packs: 2, was: null }]);            // 照現在的清單只剩一列
   assert.equal(sameAsSent(cart, placed), true);                           // 但成立的就是這張草稿:不能說「這一份還沒送出」
   // 叫貨頁比的是草稿的購物車
   const page = readFileSync(new URL("../pages/vendor-orders/VendorOrdersPage.tsx", import.meta.url), "utf8");
@@ -211,4 +212,138 @@ test("合計的單位:同一個單位就用它,混在一起寫「件」(每家�
   assert.equal(commonUnit(["條", "", "條"]), "條");          // 沒寫單位的不算
   assert.equal(commonUnit([]), "件");
   assert.equal(commonUnit(["", ""]), "件");
+});
+
+// ── 用店內品名叫貨(交接包 V1)──────────────────────────────────────────────
+const film = { id: 7, sku: "AA-000007", name: "甲 高透亮面保護貼", is_active: true };
+const head = { id: 9, sku: "CH-000009", name: "甲 20W 充電頭", is_active: true };
+const STORE_ROWS = [
+  row("G02"),                                                              // 沒連
+  row("G01", { name: "D3O 7H", product: film }),
+  row("H05", { name: "20W 充電頭", unit: "個", pack_qty: 5, product: head }),
+  row("X01", { product: null }),                                           // 沒連(伺服器明講是空的)
+  row("H10", { name: "充電頭 大包", unit: "個", pack_qty: 10, product: head }),   // 同一個店內商品的另一種包裝
+];
+
+test("大字:連到店內商品的寫店內的品名,沒連的寫廠商的叫法", () => {
+  assert.equal(storeTitle(STORE_ROWS[1]), "甲 高透亮面保護貼");
+  assert.equal(storeTitle(STORE_ROWS[0]), "品G02");
+  assert.equal(storeTitle(STORE_ROWS[3]), "品X01");
+  assert.equal(storeTitle({ name: "膜速箱", spec_label: "K43 iPhone 15 Pro", size: "", product: undefined }), "膜速箱 K43 iPhone 15 Pro");
+});
+
+test("小字:這一列在廠商那邊是什麼 —— 同一個店內商品的兩種包裝要分得出來", () => {
+  // 連到店內商品的:廠商的叫法、料號、一包幾個都要有
+  assert.equal(vendorSide(STORE_ROWS[2]), "20W 充電頭 · H05 · 一包 5 個");
+  assert.equal(vendorSide(STORE_ROWS[4]), "充電頭 大包 · H10 · 一包 10 個");
+  assert.equal(storeTitle(STORE_ROWS[2]), storeTitle(STORE_ROWS[4]));         // 大字一樣
+  assert.notEqual(vendorSide(STORE_ROWS[2]), vendorSide(STORE_ROWS[4]));       // 小字分得出來
+  // 沒連的:大字已經是廠商的叫法,小字只補料號與包裝
+  assert.equal(vendorSide(STORE_ROWS[0]), "G02 · 一包 25 片");
+  // 規格、尺寸算在廠商的叫法裡;沒寫單位的用「片」
+  assert.equal(
+    vendorSide({ name: "膜速箱", spec_label: "K43", size: "6.1", sku: "M01", pack_qty: 5, unit: "", product: film }),
+    "膜速箱 K43 6.1 · M01 · 一包 5 片",
+  );
+});
+
+test("清單的順序:連好的排前面、沒連的排後面,各自照廠商給的順序;沒連的一列都不會不見", () => {
+  assert.deepEqual(storeFirst(STORE_ROWS).map((r) => r.key), ["G01", "H05", "H10", "G02", "X01"]);
+  assert.equal(storeFirst(STORE_ROWS).length, STORE_ROWS.length);
+  assert.deepEqual(storeFirst(ROWS).map((r) => r.key), ROWS.map((r) => r.key));     // 都沒連:原樣
+  assert.deepEqual(storeFirst([]), []);
+  assert.equal(linkedCount(STORE_ROWS), 3);
+  assert.equal(linkedCount(ROWS), 0);
+  const before = STORE_ROWS.map((r) => r.key);
+  storeFirst(STORE_ROWS);
+  assert.deepEqual(STORE_ROWS.map((r) => r.key), before);                            // 原本那一份不被改到
+});
+
+test("找:店內的品名 / 品號、廠商的品名 / 料號都找得到同一列;「只看店內」只留連好的", () => {
+  const keys = (filter) => filterRows(STORE_ROWS, { text: "", kind: "", pickedOnly: false, ...filter }, {}).map((r) => r.key);
+  assert.deepEqual(keys({ text: "高透亮面" }), ["G01"]);            // 店內的品名
+  assert.deepEqual(keys({ text: "aa-000007" }), ["G01"]);          // 店內的品號(不分大小寫)
+  assert.deepEqual(keys({ text: "d3o" }), ["G01"]);                // 廠商的品名
+  assert.deepEqual(keys({ text: "g01" }), ["G01"]);                // 廠商的料號
+  assert.deepEqual(keys({ text: "充電頭" }), ["H05", "H10"]);      // 店內品名、廠商品名都有這幾個字
+  assert.deepEqual(keys({ text: "充電頭 大包" }), ["H10"]);        // 每一段字都要有:可以拿廠商的叫法分出包裝
+  assert.deepEqual(keys({ text: "甲 h05" }), ["H05"]);             // 一段是店內的、一段是廠商的也行
+  assert.deepEqual(keys({ linkedOnly: true }), ["G01", "H05", "H10"]);
+  assert.deepEqual(keys({ linkedOnly: false }), ["G02", "G01", "H05", "X01", "H10"]);
+  assert.deepEqual(keys({ linkedOnly: true, text: "品" }), []);    // 沒連的那幾列才有「品」
+  assert.deepEqual(keys({ text: "品x01" }), ["X01"]);              // 沒連的照樣找得到(可以叫)
+});
+
+test("送出去的每一行帶著「畫面上看到它連到哪個店內商品」;沒連的是 null", () => {
+  const sum = summarize({ G02: 1, G01: 2, H10: 3 }, STORE_ROWS);
+  assert.deepEqual(linesToSend(sum), [
+    { key: "G02", packs: 1, was: null },
+    { key: "G01", packs: 2, was: 7 },
+    { key: "H10", packs: 3, was: 9 },
+  ]);
+  // 同一個店內商品的兩種包裝是兩行、各算各的個數(2 包 × 5 與 2 包 × 10)
+  const both = summarize({ H05: 2, H10: 2 }, STORE_ROWS);
+  assert.deepEqual(both.lines.map((l) => [storeTitle(l.row), l.row.key, l.packs, l.pieces]), [
+    ["甲 20W 充電頭", "H05", 2, 10],
+    ["甲 20W 充電頭", "H10", 2, 20],
+  ]);
+});
+
+test("叫貨紀錄:寫叫貨當下的店內品名,底下補廠商當時的叫法;那時候沒連的照舊寫廠商的", () => {
+  const linked = { name: "20W 充電頭", spec_label: "白", product_name: "甲 20W 充電頭" };
+  assert.equal(sentTitle(linked), "甲 20W 充電頭");
+  assert.equal(sentVendorSide(linked), "20W 充電頭 白");
+  for (const old of [{ name: "高透亮面", spec_label: "" }, { name: "高透亮面", spec_label: "", product_name: "" }]) {
+    assert.equal(sentTitle(old), "高透亮面");
+    assert.equal(sentVendorSide(old), "");                          // 大字已經是廠商的叫法,不重複
+  }
+});
+
+test("叫貨頁:清單、確認框、叫貨紀錄都是店內品名在上、廠商的叫法在下;被擋下來會重抓清單", () => {
+  const page = readFileSync(new URL("../pages/vendor-orders/VendorOrdersPage.tsx", import.meta.url), "utf8");
+  // 清單:連好的排前面;大字用 storeTitle,連好的底下寫廠商的叫法;沒連的標「未對照」(一個都沒連的店不標,免得整頁都是)
+  assert.match(page, /const rows = useMemo\(\(\) => storeFirst\(catalog\.data\?\.rows \?\? \[\]\), \[catalog\.data\]\);/);
+  assert.match(page, /<td className="vo-name">\s*\{storeTitle\(row\)\}/);
+  assert.match(page, /\{row\.product && <div className="vo-sub">\{rowTitle\(row\)\}<\/div>\}/);
+  assert.match(page, /\{!row\.product && linked > 0 && <span className="wb-badge">未對照<\/span>\}/);
+  assert.match(page, /\{row\.product && !row\.product\.is_active && <span className="wb-badge warn">已停用<\/span>\}/);
+  // 找:帶著「只看店內」;有連的也有沒連的時候才出現那個勾
+  assert.match(page, /filterRows\(rows, \{ text, kind, pickedOnly, linkedOnly \}, draft\.cart\)/);
+  assert.match(page, /const canPickLinked = linked > 0 && linked < rows\.length;\s*const linkedOnly = wantLinkedOnly && canPickLinked;/);
+  assert.match(page, /\{canPickLinked && \(\s*<label className="vo-check">\s*<input type="checkbox" checked=\{linkedOnly\}/);
+  // 確認框:每一行底下都有廠商那邊是什麼(料號、一包幾個)
+  assert.match(page, /\{storeTitle\(l\.row\)\}[^]{0,200}<div className="vo-sub">\{vendorSide\(l\.row\)\}<\/div>/);
+  // 叫貨紀錄:叫貨當下的店內品名
+  assert.match(page, /\{sentTitle\(i\)\}\s*\{sentVendorSide\(i\) && <div className="vo-sub">\{sentVendorSide\(i\)\}<\/div>\}/);
+  // 被擋下來(可能是對照剛被改):重抓清單;包數留在草稿裡(afterSend 的 refused 不清購物車)
+  const body = page.slice(page.indexOf("async function send()"));
+  assert.match(body, /outcome\.kind === "refused"\) \{[^}]*void catalog\.refetch\(\);/);
+  const draft = { ...emptyDraft(random), cart: { G02: 2, G01: 1 }, pending: true };
+  assert.deepEqual(afterSend(draft, { kind: "refused", message: "對照剛剛被改了" }).cart, { G02: 2, G01: 1 });
+  // 對照分頁改了對照:叫貨那一頁的清單要重抓
+  const hooks = readFileSync(new URL("../api/hooks.ts", import.meta.url), "utf8");
+  assert.match(hooks, /qc\.invalidateQueries\(\{ queryKey: \["vendor-catalog", vars\.warehouse, vars\.vendor\] \}\);/);
+});
+
+test("拿回來的是先前就成立的那一張、當時連到的店內商品跟畫面上的不一樣:講是哪幾行、當時連到誰", () => {
+  const items = [
+    { sku: "G02", spec_id: null, name: "高透亮面", spec_label: "", product: 7, product_name: "甲 高透亮面保護貼" },
+    { sku: "M01", spec_id: 901, name: "膜速箱", spec_label: "K43", product: null, product_name: "" },
+    { sku: "G01", spec_id: null, name: "D3O 7H", spec_label: "", product: 9, product_name: "甲 D3O 保護貼" },
+  ];
+  // 正常送出:畫面看到的跟單上記的一樣 → 沒有話要講
+  assert.deepEqual(linkedThen([{ key: "G02", packs: 1, was: 7 }, { key: "M01#901", packs: 1, was: null }, { key: "G01", packs: 1, was: 9 }], items), []);
+  // 另一個分頁先送了、之後對照才改:畫面上是 8,單上記的是當時的 7
+  assert.deepEqual(linkedThen([{ key: "G02", packs: 1, was: 8 }, { key: "M01#901", packs: 1, was: null }], items),
+    ["「高透亮面」當時連到的是「甲 高透亮面保護貼」"]);
+  // 當時沒連、現在畫面上有連;當時有連、現在畫面上沒連
+  assert.deepEqual(linkedThen([{ key: "M01#901", packs: 1, was: 5 }, { key: "G01", packs: 1, was: null }], items),
+    ["「膜速箱 K43」當時連到的是沒有對照", "「D3O 7H」當時連到的是「甲 D3O 保護貼」"]);
+  // 很早以前的單(沒有這幾格)當成當時沒連;畫面沒送的那幾行(清單沒載到)不比
+  assert.deepEqual(linkedThen([{ key: "G02", packs: 1, was: null }], [{ sku: "G02", spec_id: null, name: "高透亮面", spec_label: "" }]), []);
+  assert.deepEqual(linkedThen([], items), []);
+  // 叫貨頁成立之後會講這件事
+  const page = readFileSync(new URL("../pages/vendor-orders/VendorOrdersPage.tsx", import.meta.url), "utf8");
+  const body = page.slice(page.indexOf("async function send()"));
+  assert.match(body, /const then = linkedThen\(sent, order\.items\);\s*if \(then\.length > 0\) \{\s*toast\(`這張單先前就成立了,沒有再叫一次。\$\{then\.join\(";"\)\}`/);
 });

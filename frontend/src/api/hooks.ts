@@ -2720,6 +2720,8 @@ export const useSaveVendorMapping = () => {
       api<MappingRow>(`/vendor-orders/mappings/`, { method: "POST", body: JSON.stringify(vars) }),
     onSuccess: (row, vars) => {
       qc.setQueryData<MappingData>(["vendor-mappings", vars.warehouse, vars.vendor], (old) => withSaved(old, row));
+      // 叫貨那一頁的清單也帶著「連到哪個店內商品」:對照改了要跟著重抓
+      qc.invalidateQueries({ queryKey: ["vendor-catalog", vars.warehouse, vars.vendor] });
     },
   });
 };

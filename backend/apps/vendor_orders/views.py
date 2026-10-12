@@ -214,6 +214,8 @@ def _order_data(order: VendorOrder, names=None) -> dict:
         "items": [{
             "line_no": i.line_no, "sku": i.sku, "spec_id": i.spec_id, "spec_label": i.spec_label, "name": i.name,
             "unit": i.unit, "pack_qty": i.pack_qty, "packs": i.packs, "qty": i.qty, "unit_price": _money(i.unit_price),
+            # 叫貨當下連到的店內商品(沒連、或加這幾格之前的舊單 = 空的)
+            "product": i.product_id, "product_sku": i.product_sku, "product_name": i.product_name,
         } for i in order.items.all()],
     }
 
@@ -355,11 +357,14 @@ def catalog(request):
         rows = manual.catalog_rows(link, vendor)
     except services.VendorError as exc:
         return _bad(exc, exc.status)
+    # 每一列連到店裡的哪個商品(跟「對照」分頁、到貨入庫同一套查法):叫貨那一頁用店內品名,廠商的品名拿來核對
+    owners = mapping.owners_by_key(request.tenant, link, rows)
     # `manual` = 半自動的廠商:價錢是平台價目表上的參考價,沒有價錢的也可以叫
     return Response({"warehouse": store.id, "vendor": vendor.code, "manual": manual.is_manual(vendor), "rows": [{
         **row,
         "unit_price": _money(row["unit_price"]),
         "pack_price": None if row["unit_price"] is None else _money(row["unit_price"] * row["pack_qty"]),
+        "product": mapping.product_data(owners.get(row["key"])),
     } for row in rows]})
 
 

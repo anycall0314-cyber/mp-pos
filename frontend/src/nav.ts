@@ -222,7 +222,8 @@ export const NAV_MODULES: NavModule[] = [
       {
         to: "/platform/admin",
         label: "平台管理",
-        aliases: ["經銷商 / 用戶 / 倉別"],
+        // 叫貨的廠商與類別是平台的名單,在這一頁的「廠商」分頁維護
+        aliases: ["經銷商 / 用戶 / 倉別", "新增廠商", "廠商類別", "廠商管理", "廠商價目表"],
       },
     ],
   },

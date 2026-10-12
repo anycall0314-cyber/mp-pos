@@ -18,6 +18,15 @@ export interface CatalogRow {
   /** null = 這個帳號沒有這一項的報價(全自動的廠商:不能叫;半自動的廠商:參考價沒填,照樣可以叫) */
   unit_price: string | null;
   pack_price: string | null;
+  /** 這個廠商品項連到店裡的哪個商品(「對照」分頁連的;沒連 = null)。叫貨用店內的品名,廠商的品名拿來核對 */
+  product?: StoreProduct | null;
+}
+
+export interface StoreProduct {
+  id: number;
+  sku: string;
+  name: string;
+  is_active: boolean;
 }
 
 /** 購物車:哪一列叫幾包。0 包的不留。 */
@@ -85,6 +94,8 @@ export interface RowFilter {
   /** "" = 全部 */
   kind: string;
   pickedOnly: boolean;
+  /** 只看已經連到店內商品的 */
+  linkedOnly?: boolean;
 }
 
 /** 廠商的清單有哪幾種(照出現的順序)。 */
@@ -95,22 +106,40 @@ export function kindsOf(rows: CatalogRow[]): string[] {
 }
 
 /**
- * 清單太長(膜速箱一個規格一列)時用來找的:打的每一段字都要在 品名 / 規格 / 料號 / 尺寸 裡(不分大小寫);
- * 「只看已選」留下購物車裡有的。只是藏起來,不影響合計與送出(藏起來的已選照樣算)。
+ * 清單太長(膜速箱一個規格一列)時用來找的:打的每一段字都要在 **店內的品名 / 品號、廠商的品名 / 規格 / 料號 / 尺寸** 裡(不分大小寫)
+ * —— 記得店裡怎麼叫、或手上只有廠商的料號,都找得到同一列。
+ * 「只看已選」留下購物車裡有的;「只看店內」留下已經連到店內商品的。只是藏起來,不影響合計與送出(藏起來的已選照樣算)。
  */
 export function filterRows(rows: CatalogRow[], filter: RowFilter, cart: Cart): CatalogRow[] {
   const words = filter.text.toLowerCase().split(/\s+/).filter(Boolean);
   return rows.filter((r) => {
     if (filter.kind && r.kind !== filter.kind) return false;
     if (filter.pickedOnly && !((cart[r.key] ?? 0) > 0)) return false;
-    const hay = `${r.name} ${r.spec_label} ${r.sku} ${r.size}`.toLowerCase();
+    if (filter.linkedOnly && !r.product) return false;
+    const hay = `${r.product?.name ?? ""} ${r.product?.sku ?? ""} ${r.name} ${r.spec_label} ${r.sku} ${r.size}`.toLowerCase();
     return words.every((w) => hay.includes(w));
   });
 }
 
-/** 送給伺服器的明細:只有鍵與包數。價錢、品名、一包幾片伺服器自己跟廠商要。 */
-export function linesToSend(summary: CartSummary): { key: string; packs: number }[] {
-  return summary.lines.map((l) => ({ key: l.row.key, packs: l.packs }));
+/**
+ * 叫貨清單的順序:**已經連到店內商品的排前面**,沒連的排後面;兩群裡面各自照廠商給的順序。
+ * (紅隊:對照還少的時候不能只剩一張幾乎空的清單 —— 所以是同一張,不分兩頁;沒連的照樣可以叫,到貨時再連。)
+ */
+export function storeFirst<R extends { product?: StoreProduct | null }>(rows: R[]): R[] {
+  return [...rows.filter((r) => !!r.product), ...rows.filter((r) => !r.product)];
+}
+
+/** 幾列已經連到店內商品。 */
+export function linkedCount(rows: { product?: StoreProduct | null }[]): number {
+  return rows.filter((r) => !!r.product).length;
+}
+
+/**
+ * 送給伺服器的明細:鍵、包數,加上「畫面上看到這一列連到哪個店內商品」(`was`:商品編號,沒連 = null)。
+ * 價錢、品名、一包幾片伺服器自己跟廠商要;`was` 跟伺服器現在的對照不一樣就不會成立(剛好有人改了對照)。
+ */
+export function linesToSend(summary: CartSummary): { key: string; packs: number; was: number | null }[] {
+  return summary.lines.map((l) => ({ key: l.row.key, packs: l.packs, was: l.row.product ? l.row.product.id : null }));
 }
 
 /** 「2 包 = 50 片」:店員講的是包,廠商收的是片,兩個都寫出來。 */
@@ -127,8 +156,45 @@ export function commonUnit(units: string[]): string {
   return seen.length === 1 ? seen[0] : "件";
 }
 
+/** 廠商自己的叫法:品名 + 規格 + 尺寸。送給廠商、跟廠商核對用的是這個。 */
 export function rowTitle(row: { name: string; spec_label: string; size: string }): string {
   return [row.name, row.spec_label, row.size].filter(Boolean).join(" ");
+}
+
+/**
+ * 畫面上的大字:連到店內商品的寫**店內的品名**,沒連的寫廠商的叫法。
+ * 清單、購物車、確認框都用這一個(同一列在三個地方不能是三種叫法)。
+ */
+export function storeTitle(row: { name: string; spec_label: string; size: string; product?: StoreProduct | null }): string {
+  return row.product ? row.product.name : rowTitle(row);
+}
+
+/**
+ * 大字底下那一行小字:這一列在廠商那邊是什麼 —— 廠商的叫法、料號、一包幾個。
+ * 連到店內商品的一定要有(紅隊:同一個店內商品在同一家有兩種包裝時,光看店內品名分不出來,會叫錯倍數);
+ * 沒連的大字已經是廠商的叫法,只補料號與包裝。
+ */
+export function vendorSide(row: {
+  name: string;
+  spec_label: string;
+  size: string;
+  sku: string;
+  pack_qty: number;
+  unit: string;
+  product?: StoreProduct | null;
+}): string {
+  const pack = `一包 ${row.pack_qty} ${row.unit || "片"}`;
+  return (row.product ? [rowTitle(row), row.sku, pack] : [row.sku, pack]).filter(Boolean).join(" · ");
+}
+
+/** 叫貨紀錄的一行:叫貨當下連到的店內品名(那時候沒連、或很早以前的單 = 廠商的叫法)。 */
+export function sentTitle(item: { name: string; spec_label: string; product_name?: string }): string {
+  return item.product_name || rowTitle({ name: item.name, spec_label: item.spec_label, size: "" });
+}
+
+/** 叫貨紀錄那一行底下的小字:有記店內品名的,補上廠商當時的叫法(核對用);沒有的不用再寫一次。 */
+export function sentVendorSide(item: { name: string; spec_label: string; product_name?: string }): string {
+  return item.product_name ? rowTitle({ name: item.name, spec_label: item.spec_label, size: "" }) : "";
 }
 
 // ── 這張叫貨單的鑰匙與草稿 ──────────────────────────────────────────────────
@@ -201,6 +267,29 @@ export function sameAsSent(
   if (mine.length === 0) return true;
   const got = new Map(items.map((i) => [i.spec_id === null ? i.sku : `${i.sku}#${i.spec_id}`, i.packs]));
   return mine.length === got.size && mine.every(([key, packs]) => got.get(key) === packs);
+}
+
+/**
+ * 拿回來的那張單,明細上「叫貨當下連到的店內商品」跟這一次畫面送出去的不一樣的那幾行。
+ *
+ * 正常送出不會不一樣(不一樣伺服器就不讓它成立)。會不一樣只有一種情況:**同一把鑰匙的單先前就成立了**
+ * (另一個分頁送的、或上一次的回應沒回來),之後對照才被改 —— 伺服器回的是原本那一張,不會再叫一次。
+ * 貨是叫到了,但畫面上剛確認的店內商品跟那張單記的不是同一個,要講清楚(Codex 複審抓的:只說「成功」的話人會以為記的是新的)。
+ * 回每一行一句「廠商的叫法 當時連到誰」;都一樣回空的。
+ */
+export function linkedThen(
+  sent: { key: string; was: number | null }[],
+  items: { sku: string; spec_id: number | null; name: string; spec_label: string; product?: number | null; product_name?: string }[],
+): string[] {
+  const seen = new Map(sent.map((l) => [l.key, l.was]));
+  const out: string[] = [];
+  for (const i of items) {
+    const key = i.spec_id === null ? i.sku : `${i.sku}#${i.spec_id}`;
+    if (!seen.has(key) || seen.get(key) === (i.product ?? null)) continue;
+    const then = i.product_name ? `「${i.product_name}」` : "沒有對照";
+    out.push(`「${rowTitle({ name: i.name, spec_label: i.spec_label, size: "" })}」當時連到的是${then}`);
+  }
+  return out;
 }
 
 export type SendOutcome =

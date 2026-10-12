@@ -209,6 +209,23 @@ def goods_total(items) -> Decimal:
     return sum((Decimal(i["unit_price"]) * i["qty"] for i in items if i["unit_price"] is not None), Decimal("0")).quantize(CENT)
 
 
+def _internal(tenant, link, items, wanted) -> dict:
+    """要存的每一行連到店裡的哪個商品(畫面看到的跟現在的不一樣就不送);規則在 `mapping.internal_of`。
+
+    `mapping` 會匯入這一支,所以用到的時候才拿。
+    """
+    from . import mapping
+
+    return mapping.internal_of(tenant, link, items, wanted)
+
+
+def internal_fields(product) -> dict:
+    """叫貨明細上「當時連到的店內商品」那三格(沒連的都是空的)。"""
+    if product is None:
+        return {"product": None, "product_sku": "", "product_name": ""}
+    return {"product": product, "product_sku": product.sku[:60], "product_name": product.name[:200]}
+
+
 # ── 送出 ────────────────────────────────────────────────────────────────────
 def _payload(order: VendorOrder) -> dict:
     body = {
@@ -287,6 +304,7 @@ def place(*, tenant, user, link, request_key, lines, payment_method=None, delive
     _client(vendor)                 # 這家連線還沒設好:現在就講,不要等叫貨單存了才發現送不出去
     key = key_of(link, vendor)
     items = _lines(live_rows(link, vendor, key), lines, vendor.name)
+    owners = _internal(tenant, link, items, lines)
     header = dict(
         payment_method=payment_method or link.payment_method,
         delivery_method=delivery_method or link.delivery_method,
@@ -311,6 +329,7 @@ def place(*, tenant, user, link, request_key, lines, payment_method=None, delive
                     tenant=tenant, order=order, line_no=n, sku=i["sku"], spec_id=i["spec_id"],
                     spec_label=i["spec_label"][:120], name=i["name"][:200], unit=i["unit"][:10],
                     pack_qty=i["pack_qty"], packs=i["packs"], qty=i["qty"], unit_price=i["unit_price"],
+                    **internal_fields(owners.get(i["key"])),
                 ) for n, i in enumerate(items, start=1)
             ])
     except IntegrityError:

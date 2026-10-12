@@ -274,7 +274,7 @@ class OpenTests(_Manual):
         self.assertEqual((got["manual"], got["vendor"], [x["key"] for x in got["rows"]]), (True, "acme", ["C01", "H01", "C02"]))
         self.assertEqual(got["rows"][0], {
             "key": "C01", "sku": "C01", "spec_id": None, "spec_label": "1M", "name": "快充線", "kind": "線材", "size": "",
-            "unit": "條", "pack_qty": 10, "unit_price": "45.00", "pack_price": "450.00"})
+            "unit": "條", "pack_qty": 10, "unit_price": "45.00", "pack_price": "450.00", "product": None})
         self.assertEqual((got["rows"][1]["unit_price"], got["rows"][1]["pack_price"]), (None, None))     # 沒有參考價
         self.assertNotIn("G99", r.content.decode())                                                     # 別家廠商的品項不在這裡
         self.assertEqual(self.clerk.get(f"{CATALOG}?vendor=moceo").json().get("manual"), None)          # 全自動那一家沒開通:400

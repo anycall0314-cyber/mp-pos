@@ -1829,6 +1829,10 @@ export interface VendorOrderLine {
   qty: number;
   /** 半自動廠商的是參考價,可以是空的 */
   unit_price: string | null;
+  /** 叫貨當下這一行連到的店內商品(沒連、或很早以前的單 = null / 空字串)。之後對照怎麼改都不跟著變 */
+  product?: number | null;
+  product_sku?: string;
+  product_name?: string;
 }
 
 export interface VendorOrder {

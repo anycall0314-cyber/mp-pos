@@ -266,6 +266,16 @@ class VendorOrderItem(TenantOwnedModel):
     qty = models.PositiveIntegerField("數量")            # = 包數 × 一包幾個;送給廠商的是這個
     # 半自動廠商的是參考價,可以是空的(沒報價也可以叫;實際單價到貨入庫時填)
     unit_price = models.DecimalField("叫貨當下的單價", max_digits=14, decimal_places=2, null=True, blank=True)
+    # 叫貨當下這一行連到店裡的哪個商品(沒連的都是空的)。**只記當時的**:之後對照改了、商品改名了,這張單不跟著變;
+    # 加這三格之前成立的舊單一律是空的,不拿現在的對照去猜。商品被刪掉時編號清空,品號與品名留著
+    product = models.ForeignKey(
+        "catalog.Product", null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+        verbose_name="當時連到的店內商品",
+    )
+    # `db_default`:預設值要留在資料庫裡。上線時是「先改資料庫、打包前端、才重啟程式」,中間那一兩分鐘跑的還是舊程式 ——
+    # 它新增明細時不知道有這兩格,資料庫沒有預設值的話叫貨會整張失敗(Codex 複審抓的)
+    product_sku = models.CharField("當時的店內品號", max_length=60, blank=True, default="", db_default="")
+    product_name = models.CharField("當時的店內品名", max_length=200, blank=True, default="", db_default="")
 
     class Meta:
         verbose_name = "叫貨明細"
