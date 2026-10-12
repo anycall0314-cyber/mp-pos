@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  isManager,
   matchForUser,
   matchNav,
   NAV_MODULES,
@@ -207,14 +208,31 @@ test("員工帳號的權限:需要的幾項都被關掉的頁面收起來,有一
   for (const to of ["/sales", "/purchases", "/products", "/inventory", "/expenses", "/cash-adjustments"]) assert.ok(off.includes(to), to);
 });
 
-test("報表一張一個勾:關掉的那一張收起來,十張都關掉整個入口不見", () => {
+test("客戶排行只有管理員看得到:店員沒有這一頁、沒有勾可以開、功能搜尋也找不到", () => {
+  // owner 2026-10-12:「客戶排行不用給店員看」
+  const tabs = (who) => visibleModules(who).find((m) => m.key === "reports").tabs.map((p) => p.to);
+  const to = "/reports/customers";
+  for (const who of [{ role: "tenant_user" }, { role: "tenant_user", abilities: { report_customers: true } },
+    { role: undefined }, {}]) assert.ok(!tabs(who).includes(to), JSON.stringify(who));
+  for (const role of ["tenant_admin", "platform_admin"]) {
+    assert.deepEqual(tabs({ role }).slice(3, 6), ["/reports/products", to, "/reports/commissions"], role);   // 排在商品排行後面
+    assert.equal(searchNav("毛利彙總", visibleModules({ role }))[0].page.to, to, role);
+    assert.equal(searchNav("客戶排行", visibleModules({ role }))[0].page.to, to, role);
+  }
+  for (const word of ["毛利彙總", "客戶排行", "會員排行"])
+    assert.ok(!searchNav(word, visibleModules({ role: "tenant_user" })).some((h) => h.page.to === to), word);
+  assert.equal(isManager("tenant_admin") && isManager("platform_admin"), true);
+  assert.equal(isManager("tenant_user") || isManager(undefined) || isManager(null) || isManager(""), false);
+});
+
+test("報表一張一個勾:關掉的那一張收起來,九張都關掉整個入口不見", () => {
   const reports = (abilities) => visibleModules({ role: "tenant_user", abilities }).find((m) => m.key === "reports");
-  // 2026-10-12 多了客戶排行(排在商品排行後面)、開通統計(排在佣金明細後面)
-  const order = ["/reports/sales-daily", "/reports/daily", "/reports/staff", "/reports/products", "/reports/customers",
+  // 2026-10-12 多了開通統計(排在佣金明細後面)、發票明細。客戶排行店員沒有(只有管理員看得到,見下一條)
+  const order = ["/reports/sales-daily", "/reports/daily", "/reports/staff", "/reports/products",
     "/reports/commissions", "/reports/activations", "/reports/invoice-detail", "/reports/explore", "/reports/parts-usage"];
   assert.deepEqual(reports(undefined).tabs.map((p) => p.to), order);
-  assert.deepEqual(reports(undefined).tabs.map((p) => p.label.length), [4, 4, 4, 4, 4, 4, 4, 4, 4, 4]);
-  const keys = ["report_sales_daily", "report_daily", "report_staff", "report_products", "report_customers",
+  assert.deepEqual(reports(undefined).tabs.map((p) => p.label.length), [4, 4, 4, 4, 4, 4, 4, 4, 4]);
+  const keys = ["report_sales_daily", "report_daily", "report_staff", "report_products",
     "report_commission", "report_activations", "report_invoices", "report_explore", "report_parts"];
   keys.forEach((key, i) => {
     const left = reports({ [key]: false }).tabs.map((p) => p.to);
@@ -229,7 +247,6 @@ test("報表一張一個勾:關掉的那一張收起來,十張都關掉整個入
     visibleModules({ role: "tenant_user" }).length - 1);
   assert.equal(visibleModules({ role: "tenant_admin" }).find((m) => m.key === "reports").tabs.length, 10);
   // 打舊系統的名字找得到
-  assert.equal(searchNav("毛利彙總", visibleModules({ role: "tenant_user" }))[0].page.to, "/reports/customers");
   assert.equal(searchNav("開通查詢", visibleModules({ role: "tenant_user" }))[0].page.to, "/reports/activations");
   assert.equal(searchNav("開通明細", visibleModules({ role: "tenant_user" }))[0].page.to, "/reports/commissions");
   assert.equal(searchNav("開立發票表", visibleModules({ role: "tenant_user" }))[0].page.to, "/reports/invoice-detail");

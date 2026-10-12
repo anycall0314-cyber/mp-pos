@@ -61,16 +61,23 @@ test("幾張彙總報表的名稱、網址、權限各是各的,而且導覽與�
     ["daily", "/reports/daily", "每日彙總", "report_daily"],
     ["staff", "/reports/staff", "業績彙總", "report_staff"],
     ["products", "/reports/products", "商品排行", "report_products"],
-    ["customers", "/reports/customers", "客戶排行", "report_customers"],      // 2026-10-12:照客戶 / 照會員
+    ["customers", "/reports/customers", "客戶排行", undefined],               // 只有管理員看得到:沒有勾
     ["activations", "/reports/activations", "開通統計", "report_activations"],  // 2026-10-12:各家電信開了幾門
   ]);
   assert.deepEqual([...new Set(FIXED_REPORTS.map((r) => r.title.length))], [4]);
   const nav = readFileSync(new URL("../nav.ts", import.meta.url), "utf8");
   const app = readFileSync(new URL("../App.tsx", import.meta.url), "utf8");
   for (const r of FIXED_REPORTS) {
-    assert.ok(nav.includes(`to: "${r.path}"`), `導覽沒有 ${r.path}`);
-    assert.ok(nav.includes(`needs: ["${r.ability}"]`), `導覽的 ${r.title} 沒有掛權限`);
+    const at = nav.indexOf(`to: "${r.path}"`);
+    assert.ok(at >= 0, `導覽沒有 ${r.path}`);
+    const entry = nav.slice(at, nav.indexOf("},", at));           // 這一頁在導覽裡的那一段
+    // 有勾的掛那個勾;沒有勾的(只有管理員看得到)掛 managersOnly —— 兩種一定有一種,不能什麼都沒掛
+    if (r.ability) assert.ok(entry.includes(`needs: ["${r.ability}"]`), `導覽的 ${r.title} 沒有掛權限`);
+    else assert.ok(entry.includes("managersOnly: true") && !entry.includes("needs:"), `導覽的 ${r.title} 要只給管理員`);
   }
+  assert.deepEqual(FIXED_REPORTS.filter((r) => !r.ability).map((r) => r.key), ["customers"]);
+  // 路由:沒有勾的那一張用「只有管理員」的守門,不是什麼都不擋
+  assert.match(app, /r\.ability \? \(\s*<NeedsAbility ability=\{r\.ability\}[\s\S]*?\) : \(\s*<ManagersOnly doing=/);
   assert.ok(app.includes("FIXED_REPORTS.map"), "路由要照 FIXED_REPORTS 產生,不另外寫一份");
   // 以前的空殼「開通查詢」那個網址(有人存了書籤)要帶到開通統計,不是停在「尚未實作」
   assert.match(app, /path="\/telecom\/activations"\s+element=\{<Navigate to="\/reports\/activations" replace \/>\}/);

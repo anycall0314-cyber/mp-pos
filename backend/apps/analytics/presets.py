@@ -11,7 +11,10 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
+from rest_framework.exceptions import PermissionDenied
+
 from apps.tenants import abilities
+from apps.tenants.permissions import is_tenant_admin
 
 from . import engine
 from .catalog import MANAGERS, PLAN_KINDS
@@ -28,7 +31,7 @@ class Col:
 class Report:
     key: str
     title: str
-    ability: str
+    ability: str            # 員工帳號頁的哪一個勾;MANAGERS_ONLY = 沒有勾,只有管理員看得到
     by: dict                # 網址的 ?by= → 照哪個角度分(第一個是預設)
     cols: tuple
     sort: str = ""
@@ -37,6 +40,8 @@ class Report:
     max_days: int = 0               # 期間最長幾天(0 = 照引擎的上限)
     note: str = "已扣銷退"            # 期間旁邊那幾個字:這張表的數字扣了什麼(畫面不自己寫死)
 
+
+MANAGERS_ONLY = ""
 
 MONEY = (
     Col("net_sales", "淨銷售額"),
@@ -58,7 +63,8 @@ REPORTS = {r.key: r for r in [
     Report("daily", "每日彙總", abilities.REPORT_DAILY, {"date": "日期"},
            (Col("sales_orders", "銷貨單數"), *MONEY), grain="day", max_days=366),
     # 取舊歐睿 SA040 毛利彙總表「照客戶 / 照會員」(owner 2026-10-12):誰買得最多。欄位跟商品排行同一套
-    Report("customers", "客戶排行", abilities.REPORT_CUSTOMERS, {"customer": "客戶", "member": "會員"},
+    # **只有管理員看得到**(owner 同一天:「客戶排行不用給店員看」)
+    Report("customers", "客戶排行", MANAGERS_ONLY, {"customer": "客戶", "member": "會員"},
            (Col("sales_orders", "銷貨單數"), Col("net_sales", "淨銷售額"),
             Col("staff_gross_profit", "業務員毛利"), Col("gross_profit", "實際毛利", managers=True)),
            sort="-net_sales", keep=200),
@@ -73,6 +79,15 @@ REPORTS = {r.key: r for r in [
             Col("net_staff_commission", "業務員佣金"), Col("net_company_commission", "公司佣金", managers=True)),
            sort="-net_activations", note="佣金已扣銷退"),       # 新辦 / 續約 / 攜碼三欄是成交的數,沒有扣
 ]}
+
+
+def check(report: Report, user) -> None:
+    """這個人能不能看這張(不能就丟 403)。只給管理員的看角色,其餘看員工帳號頁的那一個勾。"""
+    if report.ability == MANAGERS_ONLY:
+        if not is_tenant_admin(user):
+            raise PermissionDenied(f"「{report.title}」只有管理員可以看")
+        return
+    abilities.require(user, report.ability)
 
 
 def _nothing(values) -> bool:

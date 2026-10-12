@@ -14,6 +14,8 @@ export interface NavPage {
   aliases?: string[];
   /** 只給公司管理員看的頁面(例:備份與還原) */
   adminOnly?: boolean;
+  /** 只給管理員看的報表(公司管理員與平台管理員;店員沒有勾可以開。例:客戶排行) */
+  managersOnly?: boolean;
   /** 員工帳號的權限:這幾項**有任何一項**才看得到這一頁(伺服器的清單在 backend/apps/tenants/abilities.py) */
   needs?: string[];
 }
@@ -207,7 +209,8 @@ export const NAV_MODULES: NavModule[] = [
         to: "/reports/customers",
         label: "客戶排行",
         aliases: ["毛利彙總", "毛利彙總表", "客戶毛利", "會員排行", "會員消費", "客戶彙總"],
-        needs: ["report_customers"],
+        // 只有管理員看得到(owner 2026-10-12:「客戶排行不用給店員看」);平台管理員也算
+        managersOnly: true,
       },
       {
         to: "/reports/commissions",
@@ -296,8 +299,14 @@ export interface NavRole {
   abilities?: Record<string, boolean>;
 }
 
+/** 管理員(公司管理員、平台管理員):跟伺服器的 `is_tenant_admin` 同一個意思。 */
+export function isManager(role: string | undefined | null): boolean {
+  return role === "tenant_admin" || role === "platform_admin";
+}
+
 function pageVisible(page: NavPage, who: NavRole): boolean {
   if (page.adminOnly && who.role !== "tenant_admin") return false;
+  if (page.managersOnly && !isManager(who.role)) return false;
   // 只有明講「不可以」才算沒有;需要的幾項全部都被關掉才收起來
   if (page.needs && page.needs.every((k) => who.abilities?.[k] === false))
     return false;

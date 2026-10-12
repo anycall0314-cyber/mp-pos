@@ -35,8 +35,7 @@ PRESET = "/api/v1/analytics/presets/"
 LINES = "/api/v1/telecom-commissions/"
 SEP_Q = "from=2026-09-01&to=2026-09-30"
 REPORT_KEYS = ("report_sales_daily", "report_explore", "report_parts", "report_staff",
-               "report_products", "report_commission", "report_daily", "report_customers",
-               "report_activations", "report_invoices")
+               "report_products", "report_commission", "report_daily", "report_activations", "report_invoices")
 
 
 def add_lines(c, tag="甲"):
@@ -105,26 +104,41 @@ class _Shop(TestCase):
 
 class ListTests(SimpleTestCase):
     def test_the_report_items(self):
-        # 2026-10-12 多了「客戶排行」(第八項)、「開通統計」(第九項)、「發票明細」(第十項)
+        # 2026-10-12 多了「開通統計」(第八項)、「發票明細」(第九項)。
+        # 「客戶排行」同一天加了又拿掉:owner 說不用給店員看,改成只有管理員看得到,沒有勾
         items = {a["key"]: a for a in abilities.catalog() if a["group"] == "報表"}
         self.assertEqual(tuple(items), REPORT_KEYS)
         self.assertEqual(
             [items[k]["label"] for k in REPORT_KEYS],
-            ["銷貨日報", "自訂分析", "零件耗用", "業績彙總", "商品排行", "佣金明細", "每日彙總", "客戶排行", "開通統計", "發票明細"])
+            ["銷貨日報", "自訂分析", "零件耗用", "業績彙總", "商品排行", "佣金明細", "每日彙總", "開通統計", "發票明細"])
 
     def test_every_measure_can_be_limited_to_one_store(self):
         """鎖在門市的帳號靠「只算那一家」:哪個指標分不出門市,店員就整個不能用 —— 新增指標時這裡會提醒。"""
         self.assertEqual([m for m in MEASURES if "warehouse" not in supported_dims(m)], [])
 
     def test_each_fixed_report_has_its_own_item(self):
+        """一張一個勾;唯一的例外是只有管理員看得到的那一張(沒有勾)。"""
         self.assertEqual({k: r.ability for k, r in presets.REPORTS.items()},
                          {"staff": "report_staff", "products": "report_products", "daily": "report_daily",
-                          "customers": "report_customers", "activations": "report_activations"})
+                          "customers": presets.MANAGERS_ONLY, "activations": "report_activations"})
+        self.assertNotIn(presets.MANAGERS_ONLY, abilities.KEYS)
+
+    def test_a_managers_only_report_cannot_be_rebuilt_by_clerks(self):
+        """只有管理員看得到的固定報表:它能照著分的每一個角度,在自訂分析裡也都只有管理員能用。"""
+        from .catalog import DIMENSIONS, MANAGERS
+
+        locked = [r for r in presets.REPORTS.values() if r.ability == presets.MANAGERS_ONLY]
+        self.assertEqual([r.key for r in locked], ["customers"])
+        for report in locked:
+            for dim in report.by:
+                self.assertEqual(DIMENSIONS[dim].roles, MANAGERS, (report.key, dim))
 
     def test_explore_needs_every_report_it_can_rebuild(self):
         """自訂分析挑同樣的指標與分組就組得出固定的報表:固定的報表每一張都要列在「自訂分析要另外開著的」裡面。"""
         needs = set(abilities.ALSO_NEEDS["report_explore"])
-        self.assertEqual({r.ability for r in presets.REPORTS.values()} - needs, set())
+        # 只有管理員看得到的那一張不用列:它的分組在自訂分析裡店員本來就不能用(見下一條)
+        self.assertEqual({r.ability for r in presets.REPORTS.values()} - needs, {presets.MANAGERS_ONLY})
+        self.assertEqual(needs - abilities.KEYS, set())
         self.assertIn("view_business_daily", needs)             # 自訂分析有「收款」:每天收了多少錢
 
 

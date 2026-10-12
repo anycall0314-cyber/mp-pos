@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { useAuth } from "@/auth/AuthContext";
 import { can, type AbilityKey } from "@/lib/abilities";
+import { isManager } from "@/nav";
 
 /**
  * 整頁都是「做」某件事的頁面(進貨開單、進貨匯入、營業日報):這個帳號沒有那一項權限就不顯示內容,講一句話。
@@ -20,6 +21,22 @@ export function NeedsAbility({
 }) {
   const user = useAuth().user;
   if ([ability].flat().some((key) => can(user, key))) return <>{children}</>;
+  return (
+    <div className="page">
+      <div className="md-empty">這個帳號不能{doing}</div>
+    </div>
+  );
+}
+
+/** 只有管理員看得到的頁面(客戶排行):店員直接打網址進來講一句話。真正擋的是伺服器。 */
+export function ManagersOnly({
+  doing,
+  children,
+}: {
+  doing: string;
+  children: ReactNode;
+}) {
+  if (isManager(useAuth().user?.profile?.role)) return <>{children}</>;
   return (
     <div className="page">
       <div className="md-empty">這個帳號不能{doing}</div>

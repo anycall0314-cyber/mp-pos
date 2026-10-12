@@ -34,6 +34,7 @@ from .catalog import (
     base_keys,
     group_of,
     may_see,
+    may_use,
     supported_dims,
 )
 
@@ -144,6 +145,8 @@ def parse(spec, user=None) -> Query:
     for d in dimensions:
         if not isinstance(d, str) or d not in DIMENSIONS:
             raise QueryError(f"沒有「{d}」這個角度")
+        if not may_use(d, role):
+            raise QueryError(f"沒有權限照「{_label(d)}」看")
 
     period = spec.get("period") or {}
     if not isinstance(period, dict):
@@ -171,6 +174,8 @@ def parse(spec, user=None) -> Query:
     for key, values in filters.items():
         if key not in DIMENSIONS or key == "date":
             raise QueryError(f"不能用「{key}」當條件")
+        if not may_use(key, role):       # 只篩一個客戶再看合計,跟照客戶分是同一件事
+            raise QueryError(f"沒有權限照「{_label(key)}」看")
         if not isinstance(values, list) or not values:
             raise QueryError(f"「{_label(key)}」的條件要是清單,而且不能是空的")
         if len(values) > MAX_FILTER_VALUES:
@@ -515,11 +520,13 @@ def normalize(tenant, spec, user=None):
 OPTION_ROWS = 200
 
 
-def options(tenant, dimension, search=""):
+def options(tenant, dimension, search="", user=None):
     """某個角度有哪些值可以選(條件用);一律只給這家公司自己的。search = 名稱裡要有的字。"""
     dim = DIMENSIONS.get(dimension)
     if dim is None or dim.kind == "date":
         raise QueryError("沒有這個角度")
+    if not may_use(dim.key, getattr(getattr(user, "profile", None), "role", None)):
+        raise QueryError(f"沒有權限照「{dim.label}」看")       # 不然這裡列得出整份客戶 / 會員名單
     if dim.kind == "ref":
         model = django_apps.get_model(dim.model)
         rows = model.objects.filter(tenant=tenant)
@@ -535,16 +542,17 @@ def options(tenant, dimension, search=""):
 
 def describe(user=None):
     """給畫面(與之後的自然語言)用的清單:有哪些指標、每個指標能用哪些角度。
-    這個人看不到的指標(只給管理員的)不列出來。"""
+    這個人看不到的指標、不能用的角度(只給管理員的)不列出來。"""
     role = getattr(getattr(user, "profile", None), "role", None)
     return {
         "measures": [
             {"key": m.key, "label": m.label, "format": m.fmt, "group": group_of(m),
-             "dimensions": sorted(supported_dims(m.key))}
+             "dimensions": sorted(d for d in supported_dims(m.key) if may_use(d, role))}
             for m in MEASURES.values() if not getattr(m, "hidden", False) and may_see(m.key, role)
         ],
         "dimensions": [
-            {"key": d.key, "label": d.label, "kind": d.kind} for d in DIMENSIONS.values()
+            {"key": d.key, "label": d.label, "kind": d.kind}
+            for d in DIMENSIONS.values() if may_use(d.key, role)
         ],
         "groups": GROUPS,
         "grains": [{"key": k, "label": v} for k, v in GRAINS.items()],

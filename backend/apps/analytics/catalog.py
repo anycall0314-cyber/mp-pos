@@ -14,6 +14,8 @@ from django.db.models import Count, F, Q, Sum
 from django.db.models.functions import Coalesce
 
 CENT = Decimal("0.01")
+# 只有管理員看得到的指標(公司實際拿的佣金、之後的實際成本)與角度(客戶、會員)
+MANAGERS = ("tenant_admin", "platform_admin")
 
 
 @dataclass(frozen=True)
@@ -25,6 +27,7 @@ class Dim:
     flag_labels: tuple = ()   # flag:(是的名稱, 否的名稱)
     model: str = ""           # ref:這個角度是哪一張表(條件的名稱查詢與「只認自己公司」用)
     key_field: str = "code"   # ref:那張表裡不會變的代碼(存報表用;編號在還原備份後會換)
+    roles: tuple = ()         # 誰可以照這個角度分 / 篩 / 查有哪些值;空 = 所有登入的人
 
 
 @dataclass(frozen=True)
@@ -138,8 +141,9 @@ DIMENSIONS = {d.key: d for d in [
     Dim("sales_person", "業務員", "ref", model="parties.SalesPerson"),
     # 銷貨單上的兩個人(2026-10-12;取舊歐睿 SA040 毛利彙總表可以照客戶 / 會員看):
     # 客戶 = 這張單的來源(通路 / 同業 / 直客);會員 = 實際的那個人或公司(可以沒有)
-    Dim("customer", "客戶", "ref", model="parties.Customer"),
-    Dim("member", "會員", "ref", model="parties.Member"),
+    # **只給管理員**(owner 2026-10-12:「客戶排行不用給店員看」):照這兩個分就是客戶排行,所以分組、條件、下拉的值都一起收
+    Dim("customer", "客戶", "ref", model="parties.Customer", roles=MANAGERS),
+    Dim("member", "會員", "ref", model="parties.Member", roles=MANAGERS),
     Dim("supplier", "供應商", "ref", model="parties.Supplier"),
     Dim("payment_method", "付款方式", "choice", labels=_payment_labels),
     Dim("tax_method", "課稅別", "choice", labels=lambda tenant: _tax_labels()),
@@ -330,9 +334,6 @@ FACTS = {f.key: f for f in [
 # 「銷售」只算計入毛利的明細:收購二手那一類(只算現金、不算毛利)不是營收,另外一欄看。
 # 這樣 銷售額 − 成本 = 毛利,三個數字是同一批明細。
 COUNTED = Q(product__counts_margin=True)
-# 只有管理員看得到的指標(公司實際拿的佣金、之後的實際成本)
-MANAGERS = ("tenant_admin", "platform_admin")
-
 BASES = [
     Base("sales_untaxed", "銷售額(未稅)", "sales", lambda: Sum("untaxed_amount", filter=COUNTED)),
     Base("sales_gross", "銷售額(含稅)", "sales",
@@ -480,6 +481,12 @@ def may_see(measure_key, role) -> bool:
     return all(
         not MEASURES[k].roles or role in MEASURES[k].roles for k in base_keys(measure_key)
     )
+
+
+def may_use(dimension_key, role) -> bool:
+    """這個角色可不可以用這個角度(分組、條件、查有哪些值都看這一個)。"""
+    roles = DIMENSIONS[dimension_key].roles
+    return not roles or role in roles
 
 
 def supported_dims(measure_key):

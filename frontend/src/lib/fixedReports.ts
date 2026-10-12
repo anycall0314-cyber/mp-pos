@@ -11,7 +11,8 @@ export interface FixedReportPage {
   key: FixedReportKey;
   path: string;
   title: string;
-  ability: AbilityKey;
+  /** 員工帳號頁的哪一個勾;沒有 = 只有管理員看得到(沒有勾可以開) */
+  ability?: AbilityKey;
 }
 
 /** 幾張彙總報表的頁面(路徑、名稱、要哪一項權限)。名稱跟導覽的分頁、員工帳號頁的項目是同一個字。 */
@@ -19,8 +20,9 @@ export const FIXED_REPORTS: FixedReportPage[] = [
   { key: "daily", path: "/reports/daily", title: "每日彙總", ability: "report_daily" },
   { key: "staff", path: "/reports/staff", title: "業績彙總", ability: "report_staff" },
   { key: "products", path: "/reports/products", title: "商品排行", ability: "report_products" },
-  // 照客戶 / 照會員看誰買得最多(2026-10-12;取舊歐睿 SA040 毛利彙總表的優點)
-  { key: "customers", path: "/reports/customers", title: "客戶排行", ability: "report_customers" },
+  // 照客戶 / 照會員看誰買得最多(2026-10-12;取舊歐睿 SA040 毛利彙總表的優點)。
+  // 只有管理員看得到(owner 同一天:「客戶排行不用給店員看」),所以沒有 ability
+  { key: "customers", path: "/reports/customers", title: "客戶排行" },
   // 各家電信、各種方案開了幾門(2026-10-12;取舊歐睿 SIM031 開通數量統計)。逐筆的是佣金明細
   { key: "activations", path: "/reports/activations", title: "開通統計", ability: "report_activations" },
 ];

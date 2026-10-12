@@ -5,7 +5,9 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.analytics import presets
+from rest_framework.exceptions import PermissionDenied
+
+from apps.analytics import engine, presets
 from apps.analytics.catalog import NO_MEMBER, supported_dims
 from apps.backup.tests.factory import Company
 from apps.parties.models import Customer, Member
@@ -40,6 +42,12 @@ class CustomerRankingTests(TestCase):
             "items": [{"product": self.c.case.id, "qty": cases, "unit_price": "390"}],
             "payments": [{"method": "cash", "amount": str(390 * cases)}],
         })
+
+    @staticmethod
+    def root():
+        user = get_user_model().objects.create_user(username="root-x", password="pw-12345")
+        UserProfile.objects.create(user=user, role="platform_admin", tenant=None, is_warehouse_locked=False)
+        return user
 
     def report(self, client=None, **params):
         r = (client or self.c.admin).get(URL, {**self.range, **params})
@@ -98,35 +106,42 @@ class CustomerRankingTests(TestCase):
         self.assertEqual(sorted(r["values"]["net_sales"] for r in named), ["1170.00", "390.00"])
         self.assertEqual(len({r["dims"][0]["value"] for r in named}), 2)
 
-    def test_clerk_sees_own_store_without_the_actual_margin(self):
-        self.sell(self.c.customer, None, 2, warehouse=self.w2)                 # 第二家門市的
-        mine = self.report(client=self.c.clerk, warehouse=self.w2.id)           # 網址帶別家的編號沒有用
-        self.assertEqual([m["key"] for m in mine["columns"]["measures"]], ["sales_orders", "net_sales", "staff_gross_profit"])
-        # 不只是欄名沒列:每一列、合計、整份回應裡都沒有實際毛利(複審首輪:只驗欄名的話,數字偷偷帶出來也會過)
-        allowed = {"sales_orders", "net_sales", "staff_gross_profit"}
-        self.assertEqual(set(mine["totals"]), allowed)
-        self.assertTrue(mine["rows"] and all(set(r["values"]) == allowed for r in mine["rows"]))
-        self.assertNotIn("gross_profit\"", str(mine).replace("staff_gross_profit", "").replace("'", "\""))
-        exported = self.report(client=self.c.clerk, export="1", by="member")
-        self.assertEqual(set(exported["totals"]), allowed)
-        self.assertTrue(all(set(r["values"]) == allowed for r in exported["rows"]))
-        self.assertEqual(mine["totals"]["sales_orders"], 3)
-        self.assertEqual(self.report()["totals"]["sales_orders"], 4)
+    def test_only_managers_see_it(self):
+        # owner 2026-10-12:「客戶排行不用給店員看」—— 沒有勾可以開,店員一律 403;管理員與平台管理員照舊
+        self.assertEqual(presets.REPORTS["customers"].ability, presets.MANAGERS_ONLY)
+        self.assertNotIn("report_customers", abilities.KEYS)
+        for params in (self.range, {**self.range, "by": "member"}, {**self.range, "export": "1"}):
+            r = self.c.clerk.get(URL, params)
+            self.assertEqual(r.status_code, 403, r.content.decode())
+            self.assertEqual(r.json()["detail"], "「客戶排行」只有管理員可以看")
+            self.assertNotIn("王小明", r.content.decode())
+        self.assertEqual(self.c.admin.get(URL, self.range).status_code, 200)
+        root_user = self.root()
+        presets.check(presets.REPORTS["customers"], root_user)                # 平台管理員也可以(不丟錯)
+        with self.assertRaises(PermissionDenied):
+            presets.check(presets.REPORTS["customers"], self.c.clerk_user)
+        # 平台管理員實際走一次(複審:只呼叫 check 沒有驗到整條路):選了這家公司之後查得到、匯出得到、自訂分析也能照會員分
+        from rest_framework.authtoken.models import Token
+        from rest_framework.test import APIClient
 
-    def test_needs_its_own_item_and_explore_follows(self):
-        self.assertEqual(presets.REPORTS["customers"].ability, abilities.REPORT_CUSTOMERS)
-        self.assertEqual(self.c.clerk.get(URL, self.range).status_code, 200)
-        UserProfile.objects.filter(user=self.c.clerk_user).update(denied_abilities=["report_customers"])
-        clerk = Company.client(get_user_model().objects.get(pk=self.c.clerk_user.pk))
-        r = clerk.get(URL, self.range)
-        self.assertEqual(r.status_code, 403)
-        self.assertIn("客戶排行", r.json()["detail"])
-        # 自訂分析挑「淨銷售額 × 會員」就組得出同一張表:這一張關掉,自訂分析也跟著不能用
-        spec = {"measures": ["net_sales"], "dimensions": ["member"], "period": self.range}
-        r = clerk.post("/api/v1/analytics/query/", spec, format="json")
-        self.assertEqual(r.status_code, 403)
-        self.assertIn("客戶排行", r.json()["detail"])
-        self.assertEqual(self.c.admin.post("/api/v1/analytics/query/", spec, format="json").status_code, 200)
+        root = APIClient()
+        root.credentials(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=root_user).key}",
+                         HTTP_X_TENANT_ID=str(self.c.tenant.pk))
+        for params in (self.range, {**self.range, "by": "member", "export": "1"}):
+            r = root.get(URL, params)
+            self.assertEqual(r.status_code, 200, r.content.decode())
+            self.assertTrue(r.json()["rows"])
+        r = root.post("/api/v1/analytics/query/", {
+            "measures": ["net_sales"], "dimensions": ["member"], "period": self.range}, format="json")
+        self.assertEqual(r.status_code, 200, r.content.decode())
+        self.assertIn("王小明", [row["dims"][0]["label"] for row in r.json()["rows"]])
+        # 店員別的報表照舊(不是整組一起關)
+        self.assertEqual(self.c.clerk.get("/api/v1/analytics/presets/staff/", self.range).status_code, 200)
+
+    def test_a_clerk_who_was_an_admin_loses_it(self):
+        UserProfile.objects.filter(user=self.c.admin_user).update(role="tenant_user")
+        former = Company.client(get_user_model().objects.get(pk=self.c.admin_user.pk))
+        self.assertEqual(former.get(URL, self.range).status_code, 403)
 
     def test_export_gives_everything(self):
         from dataclasses import replace
@@ -186,6 +201,57 @@ class PeopleDimensionTests(TestCase):
         r = self.query(measures=["purchase_untaxed"], dimensions=["member"])
         self.assertEqual(r.status_code, 400)
         self.assertIn("會員", r.json()["detail"])
+
+    def test_clerks_cannot_split_filter_or_list_by_people(self):
+        """照客戶 / 會員分就是客戶排行:分組、條件、下拉的名單、選單都一起收(owner 2026-10-12)。店員的自訂分析其餘照舊。"""
+        for dim, label, one in (("customer", "客戶", self.c.customer.id), ("member", "會員", self.wang.id)):
+            for spec in ({"dimensions": [dim]}, {"dimensions": ["warehouse"], "filters": {dim: [one]}},
+                         {"dimensions": [], "filters": {dim: [one]}}):
+                r = self.query(self.c.clerk, measures=["net_sales"], **spec)
+                self.assertEqual(r.status_code, 400, (dim, spec, r.content.decode()))
+                self.assertEqual(r.json()["detail"], f"沒有權限照「{label}」看")
+                self.assertEqual(self.query(measures=["net_sales"], **spec).status_code, 200, (dim, spec))   # 管理員可以
+            r = self.c.clerk.get(f"/api/v1/analytics/options/?dimension={dim}")
+            self.assertEqual(r.status_code, 400)
+            self.assertNotIn("王小明", r.content.decode())
+            self.assertEqual(self.c.admin.get(f"/api/v1/analytics/options/?dimension={dim}").status_code, 200)
+        seen = self.c.clerk.get("/api/v1/analytics/catalog/").json()
+        self.assertFalse({"customer", "member"} & {d["key"] for d in seen["dimensions"]})
+        self.assertFalse(any({"customer", "member"} & set(m["dimensions"]) for m in seen["measures"]))
+        self.assertTrue({"warehouse", "product", "sales_person"} <= {d["key"] for d in seen["dimensions"]})
+        full = self.c.admin.get("/api/v1/analytics/catalog/").json()
+        self.assertTrue({"customer", "member"} <= {d["key"] for d in full["dimensions"]})
+        self.assertTrue({"customer", "member"} <= set(
+            next(m for m in full["measures"] if m["key"] == "net_sales")["dimensions"]))
+        root = CustomerRankingTests.root()
+        self.assertTrue({"customer", "member"} <= {d["key"] for d in engine.describe(root)["dimensions"]})
+        self.assertFalse({"customer", "member"} & {d["key"] for d in engine.describe(None)["dimensions"]})
+        # 店員其餘的自訂分析照舊
+        self.assertEqual(self.query(self.c.clerk, measures=["net_sales"], dimensions=["sales_person"]).status_code, 200)
+
+    def test_a_shared_report_by_people_does_not_open_for_clerks(self):
+        """管理員存成全公司共用的「照會員」報表:店員的清單上看得到這一份,但打不開、也拿不到裡面的名單。"""
+        for name, spec in (("照會員", {"dimensions": ["member"]}),
+                           ("只看王小明", {"dimensions": ["warehouse"], "filters": {"member": [self.wang.id]}})):
+            r = self.c.admin.post("/api/v1/analytics/reports/", {
+                "name": name, "shared": True, "spec": {"measures": ["net_sales"], "period": self.range, **spec},
+            }, format="json")
+            self.assertEqual(r.status_code, 201, r.content.decode())
+        mine = {x["name"]: x for x in self.c.admin.get("/api/v1/analytics/reports/").json()["results"]}
+        self.assertEqual((mine["照會員"]["error"], mine["只看王小明"]["error"]), ("", ""))
+        self.assertEqual(mine["只看王小明"]["filters"][0]["values"][0]["label"], "王小明")
+        r = self.c.clerk.get("/api/v1/analytics/reports/")
+        self.assertEqual(r.status_code, 200)
+        theirs = {x["name"]: x for x in r.json()["results"]}
+        self.assertEqual((theirs["照會員"]["error"], theirs["只看王小明"]["error"]),
+                         ("沒有權限照「會員」看", "沒有權限照「會員」看"))
+        self.assertEqual(theirs["只看王小明"]["filters"], [])
+        self.assertNotIn("王小明", str(theirs["只看王小明"]["filters"]))
+        # 店員自己也存不了這種報表
+        r = self.c.clerk.post("/api/v1/analytics/reports/", {
+            "name": "偷存", "spec": {"measures": ["net_sales"], "dimensions": ["customer"], "period": self.range},
+        }, format="json")
+        self.assertEqual(r.status_code, 400)
 
     def test_options_and_filters_stay_inside_the_company(self):
         other = Company("b", "乙通訊行", "乙")

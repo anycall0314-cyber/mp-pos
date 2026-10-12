@@ -21,7 +21,6 @@ export type AbilityKey =
   | "report_products"
   | "report_commission"
   | "report_daily"
-  | "report_customers"
   | "report_activations"
   | "report_invoices";
 

@@ -52,7 +52,7 @@ import { SalesPersonsPage } from "@/pages/sales-persons/SalesPersonsPage";
 import { BackupPage } from "@/pages/backup/BackupPage";
 import { LegacyMappingPage } from "@/pages/legacy/LegacyMappingPage";
 import { LedgerChecksPage } from "@/pages/ledger/LedgerChecksPage";
-import { NeedsAbility } from "@/components/NeedsAbility";
+import { ManagersOnly, NeedsAbility } from "@/components/NeedsAbility";
 import { VendorLinksPage } from "@/pages/settings/VendorLinksPage";
 import { VendorOrdersPage } from "@/pages/vendor-orders/VendorOrdersPage";
 import { FIXED_REPORTS } from "@/lib/fixedReports";
@@ -370,10 +370,16 @@ export function App() {
               key={r.key}
               path={r.path}
               element={
-                <NeedsAbility ability={r.ability} doing={`看${r.title}`}>
-                  {/* key:三張共用同一個元件,換一張要整個重來(日期、門市不沿用上一張的) */}
-                  <FixedReportPage key={r.key} report={r} />
-                </NeedsAbility>
+                r.ability ? (
+                  <NeedsAbility ability={r.ability} doing={`看${r.title}`}>
+                    {/* key:三張共用同一個元件,換一張要整個重來(日期、門市不沿用上一張的) */}
+                    <FixedReportPage key={r.key} report={r} />
+                  </NeedsAbility>
+                ) : (
+                  <ManagersOnly doing={`看${r.title}`}>
+                    <FixedReportPage key={r.key} report={r} />
+                  </ManagersOnly>
+                )
               }
             />
           ))}

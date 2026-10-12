@@ -36,7 +36,8 @@ def options(request):
     abilities.require(request.user, abilities.REPORT_EXPLORE)
     try:
         return Response({"results": engine.options(
-            request.tenant, request.query_params.get("dimension"), request.query_params.get("q", ""))})
+            request.tenant, request.query_params.get("dimension"), request.query_params.get("q", ""),
+            request.user)})
     except engine.QueryError as exc:
         return _bad(exc)
 
@@ -59,7 +60,7 @@ def preset(request, key):
     report = presets.REPORTS.get(key)
     if report is None:
         return _bad("沒有這張報表", status.HTTP_404_NOT_FOUND)
-    abilities.require(request.user, report.ability)
+    presets.check(report, request.user)
     params = request.query_params
     try:
         return Response(presets.run(
