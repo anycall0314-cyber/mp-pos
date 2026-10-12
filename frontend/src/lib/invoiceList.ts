@@ -24,6 +24,8 @@ export interface InvoiceRow {
   tax: string;
   total: string;
   state: InvoiceState;
+  /** 哪一天作廢的:銷貨單作廢 = 作廢那一刻的日期(以前作廢、沒有記到的是空的);銷退時作廢原發票 = 銷退的日期 */
+  void_date: string | null;
   /** 退了多少(含稅);照銷退日看的時候是這段期間退的 */
   returned: string;
   return_date: string | null;
@@ -43,6 +45,8 @@ export interface InvoiceTotals {
   tax: string;
   total: string;
   check_total: string;
+  /** 作廢那幾張的發票面額 */
+  void_total: string;
   /** 正常那幾張被退的 */
   returned: string;
 }
@@ -97,25 +101,25 @@ export function returnedText(row: Pick<InvoiceRow, "returned">): string {
 
 /**
  * 標題底下那一排:金額只算正常那幾張的發票面額(沒有扣銷退);銷退、作廢、待查各自一格。
+ * 作廢、待查有幾張就寫幾張與那幾張的面額(會計要列作廢清單的金額);0 張不寫金額。
  * 字由伺服器的狀態清單給(正常 / 作廢 / 待查),其餘是欄名。
  */
 export function summaryCards(totals: InvoiceTotals, states: Choice[] | undefined): { label: string; value: string }[] {
+  const sheets = (count: number, total: string) => (count === 0 ? "0 張" : `${count} 張 ${money(total)}`);
   return [
     { label: choiceLabel(states, "ok"), value: `${totals.ok_count} 張` },
     { label: "未稅", value: money(totals.subtotal) },
     { label: "稅額", value: money(totals.tax) },
     { label: "含稅", value: money(totals.total) },
     { label: "銷退", value: money(totals.returned) },
-    { label: choiceLabel(states, "void"), value: `${totals.void_count} 張` },
-    {
-      label: choiceLabel(states, "check"),
-      value: totals.check_count === 0 ? "0 張" : `${totals.check_count} 張 ${money(totals.check_total)}`,
-    },
+    { label: choiceLabel(states, "void"), value: sheets(totals.void_count, totals.void_total) },
+    { label: choiceLabel(states, "check"), value: sheets(totals.check_count, totals.check_total) },
   ];
 }
 
 export const INVOICE_HEAD = [
-  "發票日期", "發票號碼", "類型", "買方統編", "銷貨單號", "門市", "客戶", "課稅別", "未稅", "稅額", "含稅", "狀態", "銷退", "銷退日",
+  "發票日期", "發票號碼", "類型", "買方統編", "銷貨單號", "門市", "客戶", "課稅別", "未稅", "稅額", "含稅", "狀態", "作廢日",
+  "銷退", "銷退日",
 ];
 
 /** 匯出:一張發票一列,金額不加千分位;沒有退的「銷退」是 0(檔裡要能加總)。 */
@@ -124,7 +128,7 @@ export function invoiceTable(rows: InvoiceRow[], states: Choice[] | undefined): 
     INVOICE_HEAD,
     ...rows.map((r) => [
       r.date, r.invoice_no, r.form, r.buyer_tax_id, r.doc.no, r.store, r.customer, r.tax_method,
-      intStr(r.subtotal), intStr(r.tax), intStr(r.total), choiceLabel(states, r.state),
+      intStr(r.subtotal), intStr(r.tax), intStr(r.total), choiceLabel(states, r.state), r.void_date ?? "",
       intStr(r.returned), r.return_date ?? "",
     ]),
   ];

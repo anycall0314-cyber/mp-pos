@@ -634,6 +634,21 @@ class NewEnvironmentRestoreTests(_Base):
         boss = UserProfile.objects.get(tenant=tenant, user__username="a-boss-a2")
         self.assertEqual(boss.denied_abilities, [])
 
+    def test_the_void_time_and_who_come_back(self):
+        """銷貨單作廢的那一刻與誰按的(2026-10-12)跟著備份走:搬到新環境還原之後時間一樣,人換成那邊重建的同一位。"""
+        so = SalesOrder.objects.get(tenant=self.a.tenant)
+        r = self.a.clerk.post(f"/api/v1/sales-orders/{so.id}/void/", {}, format="json")
+        self.assertEqual(r.status_code, 200, r.content)
+        stamped = SalesOrder.objects.get(pk=so.pk)
+        self.assertEqual(stamped.voided_by, self.a.clerk_user)
+        tenant, _, _, _ = self.restore_as_new()
+        back = SalesOrder.objects.get(tenant=tenant)
+        self.assertTrue(back.is_void)
+        self.assertEqual(back.voided_at, stamped.voided_at)
+        there = UserProfile.objects.get(tenant=tenant, role="tenant_user").user
+        self.assertEqual(back.voided_by, there)
+        self.assertNotEqual(there.pk, self.a.clerk_user.pk)
+
     def test_account_names_never_collide_or_overflow(self):
         """改名後的名字也被用掉、或原名已經頂到長度上限:都要找得到一個放得下、沒人用的名字。"""
         from django.contrib.auth import get_user_model

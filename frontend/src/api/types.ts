@@ -681,6 +681,9 @@ export interface SalesOrder {
   sales_person_code: string | null;
   sales_person_name: string | null;
   is_void: boolean;
+  /** 作廢的那一刻與誰按的(伺服器在作廢當下記的;沒作廢、或以前作廢沒有記到的 = 空的) */
+  voided_at: string | null;
+  voided_by_name: string;
   subtotal: string;
   tax_amount: string;
   total: string;

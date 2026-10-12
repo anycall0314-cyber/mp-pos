@@ -21,6 +21,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { hasCompanyCommission, showCompanyCommission } from "@/lib/commission";
 import { money } from "@/lib/money";
 import { orderActualMargin, orderStaffMargin } from "@/lib/staffCost";
+import { voidStamp } from "@/lib/voidStamp";
 
 import { SALES_DRAFT_KEY, SALES_MARGIN_KEY } from "./SalesWorkbenchPage";
 
@@ -399,6 +400,7 @@ export function SalesListPage() {
               <div className="wb-xfer-card-head">
                 <span className={t.is_void ? "wb-dim" : "pname"}>{t.no}</span>
                 {t.is_void && <span className="wb-badge">已作廢</span>}
+                {t.is_void && voidStamp(t) && <span className="wb-dim wb-small">{voidStamp(t)}</span>}
                 <span className="wb-dim wb-small">
                   {t.doc_date} {clock(t.created_at)}
                 </span>
@@ -472,6 +474,7 @@ export function SalesListPage() {
                 <div className="wb-xfer-card-head">
                   <span className={t.is_void ? "wb-dim" : "pname"}>{t.no}</span>
                   {t.is_void && <span className="wb-badge">已作廢</span>}
+                  {t.is_void && voidStamp(t) && <span className="wb-dim wb-small">{voidStamp(t)}</span>}
                   <span className="wb-dim wb-small">
                     {t.doc_date.slice(5)} {clock(t.created_at)}
                   </span>
@@ -550,6 +553,7 @@ export function SalesListPage() {
                       ) : (
                         <span className="wb-badge ok">已完成</span>
                       )}
+                      {t.is_void && voidStamp(t) && <small className="wb-dim" style={{ display: "block" }}>{voidStamp(t)}</small>}
                     </td>
                   </tr>
                   {open && (

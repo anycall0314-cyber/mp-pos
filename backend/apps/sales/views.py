@@ -102,7 +102,7 @@ class SalesOrderViewSet(
     def get_queryset(self):
         return (
             SalesOrder.objects.for_tenant(self.request.tenant)
-            .select_related("customer", "member", "warehouse")
+            .select_related("customer", "member", "warehouse", "voided_by__profile")
             .prefetch_related(
                 "items__product",
                 "items__sim_card",
@@ -206,7 +206,7 @@ class SalesOrderViewSet(
         abilities.require(request.user, abilities.VOID_SALES)
         so = self.get_object()
         try:
-            void_sales_order(so)
+            void_sales_order(so, request.user)
         except SalesOrderError as exc:
             return Response(
                 {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST

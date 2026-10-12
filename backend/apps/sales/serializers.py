@@ -204,6 +204,8 @@ class SalesOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSeri
     tax_method_label = serializers.CharField(
         source="get_tax_method_display", read_only=True
     )
+    # 誰作廢的(帳號);沒作廢、或有這一欄之前就作廢的 = 空的
+    voided_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesOrder
@@ -236,6 +238,8 @@ class SalesOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSeri
             "sales_person_name",
             "created_by",
             "is_void",
+            "voided_at",
+            "voided_by_name",
             "subtotal",
             "tax_amount",
             "total",
@@ -246,6 +250,7 @@ class SalesOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSeri
         ]
         read_only_fields = [
             "created_by",
+            "voided_at",
             "source_name",
             "id",
             "no",
@@ -267,6 +272,17 @@ class SalesOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSeri
             "created_at",
             "updated_at",
         ]
+
+    def get_voided_by_name(self, so) -> str:
+        """這家公司自己的帳號寫帳號名稱;不是這家公司的人(平台管理員代為操作)只寫「平台管理員」,
+        不把平台的帳號名稱給店家看(公司備份也是同一個原則:外人的帳號名稱不帶出去)。"""
+        user = so.voided_by
+        if user is None:
+            return ""
+        profile = getattr(user, "profile", None)
+        if profile is None or profile.tenant_id != so.tenant_id:
+            return "平台管理員"
+        return user.username
 
     def _save_items(self, so, items_data):
         for idx, item_data in enumerate(items_data, start=1):

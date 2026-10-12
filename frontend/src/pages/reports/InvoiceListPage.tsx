@@ -209,6 +209,7 @@ export function InvoiceListPage() {
                 <th className="num">稅額</th>
                 <th className="num">含稅</th>
                 <th>狀態</th>
+                <th>作廢日</th>
                 <th className="num">銷退</th>
                 <th>銷退日</th>
               </tr>
@@ -230,6 +231,7 @@ export function InvoiceListPage() {
                   <td className="num">{money(r.tax)}</td>
                   <td className="num">{money(r.total)}</td>
                   <td className="inv-state">{choiceLabel(choices?.state, r.state)}</td>
+                  <td>{r.void_date ?? ""}</td>
                   <td className="num">{returnedText(r)}</td>
                   <td>{r.return_date ?? ""}</td>
                 </tr>

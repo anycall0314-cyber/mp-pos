@@ -12,7 +12,7 @@ const states = [{ key: "ok", label: "正常" }, { key: "void", label: "作廢" }
 const row = {
   id: 1, date: "2026-09-05", invoice_no: "QA10000001", form: "電子發票", buyer_tax_id: "04567890",
   doc: { kind: "sale", id: 7, no: "SO-000007" }, store: "民生店", customer: "直客", tax_method: "應稅內含",
-  subtotal: "1114.00", tax: "56.00", total: "1170.00", state: "ok", returned: "0.00", return_date: null,
+  subtotal: "1114.00", tax: "56.00", total: "1170.00", state: "ok", void_date: null, returned: "0.00", return_date: null,
 };
 
 test("網址:空的條件不送;看畫面用頁碼,匯出要全部", () => {
@@ -21,6 +21,7 @@ test("網址:空的條件不送;看畫面用頁碼,匯出要全部", () => {
     invoiceQuery({ ...filter, by: "return", warehouse: 8, form: "hand_tri", state: "check", search: " QA1000 " }, "export"),
     "from=2026-09-01&to=2026-10-31&by=return&warehouse=8&form=hand_tri&state=check&search=QA1000&export=1",
   );
+  assert.ok(invoiceQuery({ ...filter, by: "void" }, 1).includes("&by=void&"));       // 照作廢日(2026-10-12)
   assert.ok(!invoiceQuery({ ...filter, search: "  " }, 2).includes("search"));
 });
 
@@ -38,7 +39,7 @@ test("銷退那一格:沒有退是空的,有退寫金額", () => {
 test("標題底下那一排:金額是正常那幾張的面額;銷退、作廢、待查各自一格", () => {
   const totals = {
     ok_count: 4, void_count: 2, check_count: 1, subtotal: "3844.00", tax: "56.00", total: "3900.00",
-    check_total: "390.00", returned: "1560.00",
+    check_total: "390.00", void_total: "1170.00", returned: "1560.00",
   };
   assert.deepEqual(summaryCards(totals, states), [
     { label: "正常", value: "4 張" },
@@ -46,24 +47,29 @@ test("標題底下那一排:金額是正常那幾張的面額;銷退、作廢、
     { label: "稅額", value: "56" },
     { label: "含稅", value: "3,900" },
     { label: "銷退", value: "1,560" },
-    { label: "作廢", value: "2 張" },
+    { label: "作廢", value: "2 張 1,170" },                // 作廢那幾張的面額(會計列作廢清單要金額)
     { label: "待查", value: "1 張 390" },
   ]);
   assert.equal(summaryCards({ ...totals, check_count: 0, check_total: "0.00" }, states)[6].value, "0 張");
+  assert.equal(summaryCards({ ...totals, void_count: 0, void_total: "0.00" }, states)[5].value, "0 張");
+  // 作廢的金額不能拿成待查的(兩格各是各的)
+  assert.equal(summaryCards({ ...totals, void_total: "999.00" }, states)[5].value, "2 張 999");
+  assert.equal(summaryCards({ ...totals, void_total: "999.00" }, states)[6].value, "1 張 390");
   assert.deepEqual([...new Set(summaryCards(totals, states).map((c) => c.label.length))], [2]);       // 一排的字數一樣
 });
 
 test("匯出:一張發票一列,金額不加千分位,狀態寫字,開頭是 0 的統編不會被試算表吃掉", () => {
   const table = invoiceTable(
-    [row, { ...row, id: 2, invoice_no: "QA10000004", state: "void", returned: "780.00", return_date: "2026-10-02" }],
+    [row, { ...row, id: 2, invoice_no: "QA10000004", state: "void", void_date: "2026-10-05", returned: "780.00", return_date: "2026-10-02" }],
     states,
   );
   assert.deepEqual(table[0], INVOICE_HEAD);
   assert.deepEqual(table[1], [
     "2026-09-05", "QA10000001", "電子發票", "04567890", "SO-000007", "民生店", "直客", "應稅內含",
-    "1114", "56", "1170", "正常", "0", "",
+    "1114", "56", "1170", "正常", "", "0", "",
   ]);
-  assert.deepEqual(table[2].slice(11), ["作廢", "780", "2026-10-02"]);
+  assert.deepEqual(table[2].slice(11), ["作廢", "2026-10-05", "780", "2026-10-02"]);        // 作廢日與銷退日各是各的
+  assert.deepEqual(INVOICE_HEAD.slice(11), ["狀態", "作廢日", "銷退", "銷退日"]);
   assert.equal(table.every((line) => line.length === INVOICE_HEAD.length), true);
   assert.ok(toCsv(table).split("\r\n")[1].includes('"=""04567890"""'));
 });
@@ -71,9 +77,12 @@ test("匯出:一張發票一列,金額不加千分位,狀態寫字,開頭是 0 �
 test("頁面:選項從伺服器的清單畫、匯出走「完整才存檔」、要有這一項權限才進得來", () => {
   const page = readFileSync(new URL("../pages/reports/InvoiceListPage.tsx", import.meta.url), "utf8");
   assert.ok(page.includes("choices?.by") && page.includes("choices?.state"));
-  // 下拉的選項不能自己寫(欄名「銷退日」不算;那是表頭)
-  assert.ok(!/<option[^>]*>\s*(正常|作廢|待查|發票日|銷退日)\s*</.test(page), "頁面寫死了下拉的選項");
-  const code = page.replace(/\/\*[\s\S]*?\*\//g, "");        // 說明文字不算
+  // 下拉的選項不能自己寫(欄名「銷退日」「作廢日」不算;那是表頭)
+  assert.ok(!/<option[^>]*>\s*(正常|作廢|待查|發票日|銷退日|作廢日)\s*</.test(page), "頁面寫死了下拉的選項");
+  const code = page.replace(/\/\*[\s\S]*?\*\//g, "").replaceAll("<th>作廢日</th>", "");        // 說明文字與表頭不算
+  // 表上有作廢日那一欄,而且排在狀態後面、銷退前面(跟匯出的欄一樣的順序)
+  assert.match(page, /<th>狀態<\/th>\s*<th>作廢日<\/th>\s*<th className="num">銷退<\/th>/);
+  assert.match(page, /\{choiceLabel\(choices\?\.state, r\.state\)\}<\/td>\s*<td>\{r\.void_date \?\? ""\}<\/td>\s*<td className="num">\{returnedText\(r\)\}/);
   for (const word of ["正常", "作廢", "待查"]) assert.ok(!code.includes(word), `頁面寫死了「${word}」`);
   assert.ok(page.includes("exportIfComplete(all,"));
   const app = readFileSync(new URL("../App.tsx", import.meta.url), "utf8");

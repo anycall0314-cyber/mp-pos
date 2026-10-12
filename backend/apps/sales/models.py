@@ -117,6 +117,18 @@ class SalesOrder(TenantOwnedModel):
     )
 
     is_void = models.BooleanField("作廢", default=False)
+    # 哪一刻作廢的、誰按的(owner 2026-10-12「作廢要日期」)。作廢當下系統自己記,不給人填、不給人改;
+    # 有這兩欄之前就作廢的單是空的(補不回來)。原因沒有記(owner 只要日期)
+    voided_at = models.DateTimeField("作廢時間", null=True, blank=True, editable=False)
+    voided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name="作廢的人",
+    )
     invoice_voided = models.BooleanField(
         "原發票已作廢",
         default=False,

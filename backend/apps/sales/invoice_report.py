@@ -13,13 +13,16 @@ owner 2026-10-12(取舊歐睿報表的優點;舊 FI012 開立發票表):發票�
 - 合計(紅隊第 2 條):金額只算正常的那幾張的**發票面額**(沒有扣銷退);作廢幾張、待查幾張與金額、銷退合計各自一格。
 - 「日期」可以改成照銷退日(紅隊第 1 條):列出這段期間有銷退的發票(不管是哪一期開的)、「銷退」那一欄是這段期間退的。
   上一期開的發票這一期才退,照發票日看這一期的表上不會有它。
-  **銷貨單作廢沒有記是哪一天作廢的**,所以「這一期才作廢的」列不出來(記在待辦)。
+- **作廢日**(owner 2026-10-12「作廢要日期」):銷貨單作廢 = 作廢那一刻的日期(`SalesOrder.voided_at`,系統記的;有這一欄之前就作廢的舊單是空的);
+  銷退時作廢原發票 = 那張銷退的日期。待查的沒有(記成作廢,但那張銷退已經不在了)。
+  「日期」可以改成照作廢日:列出這段期間作廢的發票(不管是哪一期開的)—— 上一期開、這一期才作廢的在這裡找;沒有記到作廢日的舊單只在「照發票日」看得到。
+  **報表怎麼算沒有變**:作廢的單照舊整張不算、算在原本開單那一天。
 - 要有「發票明細」那一項;鎖在門市的帳號只看自己門市。
 """
 from decimal import Decimal
 
-from django.db.models import Case, CharField, Count, DecimalField, F, OuterRef, Q, Subquery, Sum, Value, When
-from django.db.models.functions import Coalesce
+from django.db.models import Case, CharField, Count, DateField, DecimalField, F, OuterRef, Q, Subquery, Sum, Value, When
+from django.db.models.functions import Coalesce, TruncDate
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -33,8 +36,8 @@ from .models import SalesOrder, SalesReturn
 
 OK, VOID, CHECK = "ok", "void", "check"
 STATES = {OK: "正常", VOID: "作廢", CHECK: "待查"}
-BY_INVOICE, BY_RETURN = "invoice", "return"
-BY = {BY_INVOICE: "發票日", BY_RETURN: "銷退日"}
+BY_INVOICE, BY_RETURN, BY_VOID = "invoice", "return", "void"
+BY = {BY_INVOICE: "發票日", BY_RETURN: "銷退日", BY_VOID: "作廢日"}
 
 _MONEY = DecimalField(max_digits=18, decimal_places=2)
 _ZERO = Value(Decimal("0"), output_field=_MONEY)
@@ -61,9 +64,9 @@ def _returned(tenant, start=None, end=None):
 
 
 def invoices(tenant, *, start, end, by=BY_INVOICE, warehouse_id=None, invoice_form="", state="", search=""):
-    """照條件列發票(照號碼排)。by = 期間看發票日還是銷退日。"""
+    """照條件列發票(照號碼排)。by = 期間看發票日、銷退日還是作廢日。"""
     if by not in BY:
-        raise stock_reports.ReportError("日期只能照發票日或銷退日")
+        raise stock_reports.ReportError("日期只能照發票日、銷退日或作廢日")
     if state and state not in STATES:
         raise stock_reports.ReportError("沒有這種狀態")
     qs = SalesOrder.objects.filter(tenant=tenant).exclude(invoice_no="").annotate(
@@ -75,14 +78,24 @@ def invoices(tenant, *, start, end, by=BY_INVOICE, warehouse_id=None, invoice_fo
         in_period = SalesReturn.objects.filter(
             tenant=tenant, is_void=False, doc_date__gte=start, doc_date__lte=end).order_by()
         qs = qs.filter(pk__in=in_period.values("original_so_id")).annotate(returned=_returned(tenant, start, end))
-    else:
+    elif by == BY_INVOICE:
         qs = qs.filter(day__gte=start, day__lte=end).annotate(returned=F("returned_all"))
+    else:
+        qs = qs.annotate(returned=F("returned_all"))
     qs = qs.annotate(state=Case(
         When(is_void=True, then=Value(VOID)),
         When(invoice_voided=True, returned_all=F("total"), then=Value(VOID)),
         When(invoice_voided=True, then=Value(CHECK)),
         default=Value(OK), output_field=CharField(),
+    )).annotate(void_date=Case(
+        # 銷貨單作廢:作廢那一刻在這裡的日期(系統的時區;半夜十二點多作廢的算當天,不是世界時間的前一天)
+        When(is_void=True, then=TruncDate("voided_at")),
+        # 銷退時作廢原發票:那張銷退的日期
+        When(state=VOID, then=F("return_date")),
+        default=None, output_field=DateField(),
     ))
+    if by == BY_VOID:       # 這段期間作廢的(不管哪一期開的);沒有記到作廢日的、待查的不在這裡
+        qs = qs.filter(state=VOID, void_date__gte=start, void_date__lte=end)
     if warehouse_id is not None:
         qs = qs.filter(warehouse_id=warehouse_id)
     if invoice_form:
@@ -106,10 +119,11 @@ def totals(queryset):
         s_tax=Sum("tax_amount", filter=normal),
         s_total=Sum("total", filter=normal),
         s_check=Sum("total", filter=Q(state=CHECK)),
+        s_void=Sum("total", filter=Q(state=VOID)),
         s_returned=Sum("returned", filter=normal),
     )
     money = {"subtotal": "s_subtotal", "tax": "s_tax", "total": "s_total", "check_total": "s_check",
-             "returned": "s_returned"}
+             "void_total": "s_void", "returned": "s_returned"}
     return {
         "ok_count": got["n_ok"], "void_count": got["n_void"], "check_count": got["n_check"],
         **{key: _money(got[name]) for key, name in money.items()},
@@ -135,6 +149,7 @@ def rows_for(tenant):
             "tax": _money(so.tax_amount),
             "total": _money(so.total),
             "state": so.state,
+            "void_date": so.void_date,
             "returned": _money(so.returned),
             "return_date": so.return_date,
         } for so in page]
@@ -148,7 +163,7 @@ def _choices(labels):
 
 @api_view(["GET"])
 def sales_invoice_report(request):
-    """發票明細。?from= &to= &by=invoice|return &warehouse= &form=(發票類型代碼)&state=ok|void|check &search= &page= &export=1"""
+    """發票明細。?from= &to= &by=invoice|return|void &warehouse= &form=(發票類型代碼)&state=ok|void|check &search= &page= &export=1"""
     abilities.require(request.user, abilities.REPORT_INVOICES)
     p = request.query_params
     by = (p.get("by") or BY_INVOICE).strip()

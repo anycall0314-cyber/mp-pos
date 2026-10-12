@@ -741,8 +741,8 @@ def acquire_secondhand_from_member(
     return serial, so
 
 
-def void_sales_order(so: SalesOrder) -> SalesOrder:
-    """整單作廢:序號全部退回 in_stock、SIM 卡退回 in_stock。
+def void_sales_order(so: SalesOrder, user=None) -> SalesOrder:
+    """整單作廢:序號全部退回 in_stock、SIM 卡退回 in_stock。記下哪一刻作廢的、誰按的(user;系統自己記,不收人填的時間)。
 
     已經有有效銷退的單不能作廢(庫存已經由銷退加回去了,再作廢會加第二次);要先作廢銷退。
     跟建立銷退共用同一把鎖(原銷貨單那一列),兩邊同時來也只會有一邊成功。
@@ -817,7 +817,9 @@ def void_sales_order(so: SalesOrder) -> SalesOrder:
                 card.save(update_fields=["status", "issued_at"])
 
         so.is_void = True
-        so.save(update_fields=["is_void"])
+        so.voided_at = timezone.now()
+        so.voided_by = user if getattr(user, "is_authenticated", False) else None
+        so.save(update_fields=["is_void", "voided_at", "voided_by"])
 
     return so
 
