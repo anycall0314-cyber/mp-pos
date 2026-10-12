@@ -1,3 +1,4 @@
+import { downloadCsv } from "@/components/downloadCsv";
 import { useState } from "react";
 
 import { usePartsUsageReport } from "@/api/hooks";
@@ -40,16 +41,7 @@ export function PartsUsageReportPage() {
         ].join(","),
       );
     }
-    const csv = "﻿" + lines.join("\r\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `零件耗用報表_${applied.from}_${applied.to}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadCsv(`零件耗用報表_${applied.from}_${applied.to}.csv`, lines.map((line) => line.split(",")));
   }
 
   return (

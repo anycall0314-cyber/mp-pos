@@ -10,13 +10,15 @@ import { Toolbar } from "@/components/Toolbar";
 import { localDay, monthStart, rangeReady } from "@/lib/fixedReports";
 import { money } from "@/lib/money";
 import { purchaseLineTable, qtyText, type PurchaseLineFilter } from "@/lib/purchaseLines";
-import { docPath, pageCount, truncatedNote } from "@/lib/stockReports";
+import { exportFileName, exportIfComplete } from "@/lib/reportExports";
+import { docPath, pageCount } from "@/lib/stockReports";
 import {
   CategoryField,
   downloadCsv,
   NOT_PICKED,
   Pager,
   StoreField,
+  useStoreName,
   type Picked,
 } from "@/pages/inventory/stockReportParts";
 
@@ -43,6 +45,8 @@ export function PurchaseLinesPage() {
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
   const [exportNote, setExportNote] = useState("");
+  const [appliedStore, setAppliedStore] = useState<Picked<Warehouse>>(NOT_PICKED);
+  const storeName = useStoreName(appliedStore);
 
   const { data, isFetching, isError, error } = usePurchaseLines(applied, page);
   const ready = rangeReady({ from, to });
@@ -51,6 +55,7 @@ export function PurchaseLinesPage() {
   function apply() {
     if (!ready) return;
     setApplied({ from, to, warehouse: store.id, supplier: supplier.id, category: category.id, search });
+    setAppliedStore(store);
     setPage(1);
     setExportNote("");
   }
@@ -60,8 +65,9 @@ export function PurchaseLinesPage() {
     setExportNote("");
     try {
       const all = await fetchPurchaseLinesExport(applied);
-      downloadCsv(`進貨明細_${applied.from}_${applied.to}.csv`, purchaseLineTable(all.results));
-      setExportNote(truncatedNote(all));
+      setExportNote(
+        exportIfComplete(all, exportFileName("進貨明細", { store: storeName, from: applied.from, to: applied.to }), () => purchaseLineTable(all.results), downloadCsv),
+      );
     } catch (e) {
       setExportNote(errorMessageOf(e));
     } finally {

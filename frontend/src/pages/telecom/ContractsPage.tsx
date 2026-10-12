@@ -1,9 +1,10 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 
-import type { ContractRow, ContractTab, FollowStatus } from "@/api/contracts";
+import { listContracts, type ContractRow, type ContractTab, type FollowStatus } from "@/api/contracts";
 import { useCarriers, useContractFollowUp, useContracts, useWarehouses } from "@/api/hooks";
-import { useDefaultWarehouse } from "@/auth/AuthContext";
+import { useCurrentUser, useDefaultWarehouse } from "@/auth/AuthContext";
+import { downloadCsv } from "@/components/downloadCsv";
 import { apiErrorText } from "@/components/workbench/errors";
 import { toast } from "@/components/workbench/toast";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -17,6 +18,8 @@ import {
   type KeptRows,
   settleDraft,
 } from "@/lib/contractList";
+import { collectPages, contractTable, exportFileName, exportIfComplete } from "@/lib/reportExports";
+import { isManager } from "@/lib/roles";
 
 /**
  * 合約到期:門號合約快到期(或已經過期還沒續)的客人名單,打電話用。
@@ -118,6 +121,38 @@ export function ContractsPage() {
   const listQ = useContracts({ state: tab, months, warehouse, carrier, search, ...cursor });
   const followUp = useContractFollowUp();
   const data = listQ.data;
+
+  // 匯出:這個分頁、這些條件的整份名單(不是只有畫面上這一頁)。翻頁用的是同一個游標(接在最後一列後面)
+  const mayExport = isManager(useCurrentUser()?.profile?.role);
+  const [exporting, setExporting] = useState(false);
+  async function exportAll() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const got = await collectPages<ContractRow, string>("", async (after) => {
+        const page = await listContracts({
+          state: tab, months, warehouse, carrier, search, ...(after ? { after } : {}),
+        });
+        const last = page.results[page.results.length - 1];
+        return { rows: page.results, next: page.has_more && last ? cursorOf(last) : null };
+      });
+      const name = TABS.find((t) => t.key === tab)?.label ?? "";
+      const storeName = store.locked
+        ? store.name
+        : ((warehouses.data ?? []).find((w) => w.id === warehouse)?.name ?? "");
+      const refused = exportIfComplete(
+        { count: got.rows.length, truncated: got.truncated },
+        exportFileName(`合約到期_${name}`, { store: storeName, day: data?.today ?? "" }),
+        () => contractTable(got.rows),
+        downloadCsv,
+      );
+      if (refused) toast(refused, "err");
+    } catch (e) {
+      toast(apiErrorText(e), "err");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   // 現在看的是第幾次名單(`epoch`):條件一換、或人自己要求重整,就是新的一次。
   // 留在原地的那幾列只屬於它那一次 —— 換過條件再換回來是新的一次,不能把舊的那一份再搬出來蓋住新抓的名單
@@ -361,6 +396,18 @@ export function ContractsPage() {
           aria-label="搜尋"
           onChange={(e) => setTyped(e.target.value)}
         />
+        {/* 整份客人名單(姓名、電話、門號)存成檔:只有管理員有這顆。店員照舊在畫面上一筆一筆看、一筆一筆標 */}
+        {mayExport && (
+          <button
+            type="button"
+            className="wb-btn"
+            onClick={exportAll}
+            // 名單還不是現在要的那一份(剛打字還沒查、剛換條件)時不能按:匯出的會是上一個條件的(複審首輪)
+            disabled={!data || data.total === 0 || exporting || listQ.isError || stale}
+          >
+            匯出
+          </button>
+        )}
       </div>
 
       {tab === "pending" && data && !listQ.isError && data.counts.overdue > 0 && (

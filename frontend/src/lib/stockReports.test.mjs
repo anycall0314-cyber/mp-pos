@@ -6,7 +6,7 @@ import test from "node:test";
 import {
   PAGE_SIZE, SERIAL_DEFAULT_STATUSES, SERIAL_STATUS_CHOICES, statusesOf, costText, csvCell, dayOf, docPath, effectLines, flowCell, flowQuery,
   flowTable, fullTime, moveQuery, moveTable, movesOfFlowRow, optionalRangeReady, pageCount, pageSlice, routeText,
-  serialFilterReady, serialQuery, serialTable, shortTime, signed, toCsv, truncatedNote, unitCodes,
+  serialFilterReady, serialQuery, serialTable, shortTime, signed, toCsv, unitCodes,
 } from "./stockReports.ts";
 
 const flowFilter = { from: "2026-10-01", to: "2026-10-12", warehouse: "", category: "", search: "", moved: false };
@@ -214,12 +214,6 @@ test("序號查詢的匯出:兩個碼分開、成本不加千分位、沒有賣�
   assert.deepEqual(table[2].slice(6), ["", "", "", "20000", "", ""]);
   // 整份檔:IMEI 那一格是文字
   assert.ok(toCsv(table).includes('"=""356789012345678""",F17ABC'));
-});
-
-test("匯出被截短要講", () => {
-  assert.equal(truncatedNote({ truncated: true, count: 20000 }), "只匯出前 20000 列,請把條件縮小");
-  assert.equal(truncatedNote({ truncated: false, count: 12 }), "");
-  assert.equal(truncatedNote({ count: 12 }), "");
 });
 
 test("三張表都掛在導覽上、名稱四個字,路由不是空殼", () => {

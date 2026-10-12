@@ -2,6 +2,11 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 
 import { Link } from "react-router-dom";
 
+import { downloadCsv } from "@/components/downloadCsv";
+import { toast } from "@/components/workbench/toast";
+import { localDay } from "@/lib/fixedReports";
+import { collectPages, exportFileName, exportIfComplete, stockMatrixTable } from "@/lib/reportExports";
+
 import {
   StockMatrixProduct,
   StockMatrixWarehouse,
@@ -12,6 +17,7 @@ import {
   usePendingTransfers,
   useStockMatrix,
   useWarehouses,
+  fetchStockMatrix,
 } from "@/api/hooks";
 import { searchCategories } from "@/api/search";
 import type { Category } from "@/api/types";
@@ -324,6 +330,43 @@ export function InventoryQueryPage() {
     { enabled: !!applied && applied.warehouseIds.length > 0 },
   );
 
+  // 匯出:照現在查的條件把每一頁抓完(不是只有畫面上這一頁)。一頁 1000 個、最多 30 頁
+  const [exporting, setExporting] = useState(false);
+  async function exportAll() {
+    if (!applied || exporting) return;
+    setExporting(true);
+    try {
+      let stores: StockMatrixWarehouse[] = [];
+      const got = await collectPages<StockMatrixProduct, number>(
+        1,
+        async (at) => {
+          const res = await fetchStockMatrix({
+            warehouseIds: applied.warehouseIds,
+            search: applied.keyword,
+            categoryIds: applied.categoryIds,
+            inStockOnly: true,
+            page: at,
+            pageSize: 1000,
+          });
+          stores = res.warehouses;
+          return { rows: res.products, next: res.has_more ? at + 1 : null };
+        },
+        30,
+      );
+      const refused = exportIfComplete(
+        { count: got.rows.length, truncated: got.truncated },
+        exportFileName("庫存查詢", { day: localDay() }),
+        () => stockMatrixTable(stores, got.rows),
+        downloadCsv,
+      );
+      if (refused) toast(refused, "err");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "匯出失敗", "err");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const warehouses = matrix.data?.warehouses ?? [];
   const rawProducts = matrix.data?.products ?? [];
   const matrixTotal = matrix.data?.total ?? 0;
@@ -553,6 +596,14 @@ export function InventoryQueryPage() {
           </button>
           <button type="button" className="wb-btn" onClick={resetFilters}>
             清除
+          </button>
+          <button
+            type="button"
+            className="wb-btn"
+            onClick={exportAll}
+            disabled={!ready || matrixTotal === 0 || exporting}
+          >
+            匯出
           </button>
           <span className="wb-dim wb-small">
             {ready

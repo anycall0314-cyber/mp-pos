@@ -6,6 +6,7 @@ import type { Category, Warehouse } from "@/api/types";
 import { Banner, errorMessageOf } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { localDay, monthStart, rangeReady } from "@/lib/fixedReports";
+import { exportFileName, exportIfComplete, tooManyToExport } from "@/lib/reportExports";
 import {
   flowCell,
   flowTable,
@@ -22,6 +23,7 @@ import {
   NOT_PICKED,
   Pager,
   StoreField,
+  useStoreName,
   type Picked,
 } from "./stockReportParts";
 
@@ -53,6 +55,9 @@ export function StockFlowPage() {
   const ready = rangeReady({ from, to });
   const rows = data?.rows ?? [];
   const shown = pageSlice(rows, page);
+  const storeName = useStoreName(appliedStore);
+  // 超過一次列得出來的商品數:不給只有一部分的檔
+  const tooMany = tooManyToExport(rows.length, data?.truncated);
 
   function apply() {
     if (!ready) return;
@@ -74,8 +79,17 @@ export function StockFlowPage() {
           <button
             className="btn"
             type="button"
-            disabled={!data || rows.length === 0}
-            onClick={() => data && downloadCsv(`進銷存表_${data.from}_${data.to}.csv`, flowTable(data))}
+            disabled={!data || rows.length === 0 || !!tooMany}
+            title={tooMany || undefined}
+            onClick={() =>
+              data &&
+              exportIfComplete(
+                { count: rows.length, truncated: data.truncated },
+                exportFileName("進銷存表", { store: storeName, from: data.from, to: data.to }),
+                () => flowTable(data),
+                downloadCsv,
+              )
+            }
           >
             匯出
           </button>

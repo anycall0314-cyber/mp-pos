@@ -7,6 +7,7 @@ import { Banner, errorMessageOf } from "@/components/Banner";
 import { SerialHistoryModal } from "@/components/SerialHistoryModal";
 import { Toolbar } from "@/components/Toolbar";
 import { localDay, monthStart, rangeReady } from "@/lib/fixedReports";
+import { exportFileName, exportIfComplete } from "@/lib/reportExports";
 import {
   docPath,
   effectLines,
@@ -14,7 +15,6 @@ import {
   pageCount,
   routeText,
   shortTime,
-  truncatedNote,
   type MoveFilter,
 } from "@/lib/stockReports";
 
@@ -24,6 +24,7 @@ import {
   NOT_PICKED,
   Pager,
   StoreField,
+  useStoreName,
   type Picked,
 } from "./stockReportParts";
 
@@ -65,6 +66,9 @@ export function StockMovesPage() {
   const [unit, setUnit] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportNote, setExportNote] = useState("");
+  // 查詢當下選的門市(檔名用;畫面上的框之後可能又被改了)
+  const [appliedStore, setAppliedStore] = useState<Picked<Warehouse>>(carried.store ?? NOT_PICKED);
+  const storeName = useStoreName(appliedStore);
 
   const { data, isFetching, isError, error } = useStockMoves(applied, page);
   const ready = rangeReady({ from, to });
@@ -76,6 +80,7 @@ export function StockMovesPage() {
       from, to, warehouse: store.id, kind, category: category.id,
       search: only ? "" : search, product: only ? only.id : "",
     });
+    setAppliedStore(store);
     setPage(1);
     setExportNote("");
   }
@@ -85,8 +90,9 @@ export function StockMovesPage() {
     setExportNote("");
     try {
       const all = await fetchStockMovesExport(applied);
-      downloadCsv(`異動查詢_${applied.from}_${applied.to}.csv`, moveTable(all.results));
-      setExportNote(truncatedNote(all));
+      setExportNote(
+        exportIfComplete(all, exportFileName("異動查詢", { store: storeName, from: applied.from, to: applied.to }), () => moveTable(all.results), downloadCsv),
+      );
     } catch (e) {
       setExportNote(errorMessageOf(e));
     } finally {

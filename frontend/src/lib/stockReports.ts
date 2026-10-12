@@ -302,19 +302,8 @@ export function pageSlice<T>(rows: T[], page: number, size: number = PAGE_SIZE):
 
 // ── 匯出 ────────────────────────────────────────────────────
 
-/**
- * 試算表的一格。有逗號 / 引號 / 換行的包起來;**12 位以上的純數字(IMEI、條碼)寫成文字** ——
- * 不然試算表會把它當成數字、顯示成 3.56E+14,存檔之後末幾碼就變成 0。
- */
-export function csvCell(value: unknown): string {
-  const s = value === null || value === undefined ? "" : String(value);
-  if (/^\d{12,}$/.test(s)) return `"=""${s}"""`;
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-export function toCsv(table: unknown[][]): string {
-  return table.map((row) => row.map(csvCell).join(",")).join("\r\n");
-}
+// 一格怎麼寫(長數字、開頭是 0 的號碼寫成文字)在 lib/csv.ts,全站共用;這裡照舊可以從這個檔拿
+export { csvCell, toCsv } from "./csv.ts";
 
 export function flowTable(result: FlowResult): unknown[][] {
   const head = ["品號", "品名", "類別", "期初", ...result.columns.map((c) => c.label), "期末", "其中已退"];
@@ -365,9 +354,4 @@ export function serialTable(rows: SerialRow[]): unknown[][] {
 /** 成本在畫面顯示成整數元(全站同一條規則;存的還是到分)。匯出的檔不加千分位,試算表才當成數字。 */
 export function costText(value: string | number): string {
   return money(value);
-}
-
-/** 匯出被伺服器截短時要講的話(沒截短 = 空的)。 */
-export function truncatedNote(listing: { truncated?: boolean; count: number }): string {
-  return listing.truncated ? `只匯出前 ${listing.count} 列,請把條件縮小` : "";
 }

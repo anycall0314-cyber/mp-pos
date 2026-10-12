@@ -1,3 +1,5 @@
+import { exportIfComplete } from "@/lib/reportExports";
+import { downloadCsv } from "@/components/downloadCsv";
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -76,11 +78,6 @@ function change(
   if (Number(prev) === 0) return { text: amount, dir };
   const pct = Math.round((diff / Math.abs(Number(prev))) * 100);
   return { text: `${amount} (${pct > 0 ? "+" : ""}${pct}%)`, dir };
-}
-
-function csvCell(v: unknown): string {
-  const s = v === null || v === undefined ? "" : String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 function allowedDims(catalog: AnalyticsCatalog, measures: string[]): string[] {
@@ -277,14 +274,13 @@ export function ExploreReportPage() {
         ),
       );
     }
-    const csv = [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${loaded?.name ?? "自訂分析"}_${result.applied.period.from}_${result.applied.period.to}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const refused = exportIfComplete(
+      { count: result.rows.length, truncated: result.truncated },
+      `${loaded?.name ?? "自訂分析"}_${result.applied.period.from}_${result.applied.period.to}.csv`,
+      () => [head, ...rows],
+      downloadCsv,
+    );
+    if (refused) setNotice({ kind: "error", message: refused });
   }
 
   if (catalogError) {

@@ -83,7 +83,15 @@ export function ReportRangeBar({
         className="btn primary"
         type="button"
         disabled={!ready}
-        onClick={() => onApply({ ...applied, from, to, warehouse })}
+        onClick={() =>
+          onApply({
+            ...applied,
+            from,
+            to,
+            warehouse,
+            warehouseName: store.locked ? store.name : warehouse === "" ? "" : (warehouseOpt?.label ?? ""),
+          })
+        }
       >
         查詢
       </button>

@@ -1,7 +1,8 @@
 import { useState } from "react";
 
-import { useFixedReport } from "@/api/hooks";
+import { fetchFixedReportAll, useFixedReport } from "@/api/hooks";
 import { Banner, errorMessageOf } from "@/components/Banner";
+import { downloadCsv } from "@/components/downloadCsv";
 import { Toolbar } from "@/components/Toolbar";
 import {
   cellText,
@@ -11,6 +12,8 @@ import {
   type FixedReportPage as PageInfo,
   type ReportRange,
 } from "@/lib/fixedReports";
+
+import { exportFileName, exportIfComplete, fixedReportTable } from "@/lib/reportExports";
 
 import { ReportRangeBar } from "./ReportRangeBar";
 
@@ -28,9 +31,46 @@ export function FixedReportPage({ report }: { report: PageInfo }) {
   const measures = data?.columns.measures ?? [];
   const rows = data?.rows ?? [];
 
+  // 匯出:照畫面查的條件另外跟伺服器要**全部的列**(商品排行畫面只列前 200 名,檔不能只有前 200 名、合計卻是全部的)
+  const [exporting, setExporting] = useState(false);
+  const [exportNote, setExportNote] = useState("");
+  async function exportAll() {
+    setExporting(true);
+    setExportNote("");
+    try {
+      const all = await fetchFixedReportAll(report.key, applied);
+      setExportNote(
+        exportIfComplete(
+          { count: all.rows.length, truncated: all.truncated },
+          exportFileName(report.title, {
+            store: (all.applied.filters.find((f) => f.dimension === "warehouse")?.values ?? [])
+              .map((v) => v.label)
+              .join("、"),
+            from: all.applied.period.from,
+            to: all.applied.period.to,
+          }),
+          () => fixedReportTable(all),
+          downloadCsv,
+        ),
+      );
+    } catch (e) {
+      setExportNote(errorMessageOf(e));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="page">
-      <Toolbar title={report.title} />
+      <Toolbar
+        title={report.title}
+        actions={
+          <button className="btn" type="button" disabled={!data || rows.length === 0 || exporting} onClick={exportAll}>
+            匯出
+          </button>
+        }
+      />
+      {exportNote && <Banner kind="error" message={exportNote} />}
       <ReportRangeBar applied={applied} onApply={setApplied} by={data?.by} />
       {isError && <Banner kind="error" message={errorMessageOf(error)} />}
 

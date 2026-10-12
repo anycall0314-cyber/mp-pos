@@ -33,7 +33,8 @@ import {
   type DailyFilter,
   type DailyOrder,
 } from "@/lib/salesDaily";
-import { downloadCsv } from "@/pages/inventory/stockReportParts";
+import { downloadCsv } from "@/components/downloadCsv";
+import { exportFileName, exportIfComplete } from "@/lib/reportExports";
 
 /** 這台電腦的今天(不用世界時間:台灣早上八點以前會變成昨天)。 */
 function today(): string {
@@ -80,6 +81,8 @@ export function SalesDailyReportPage() {
   const [search, setSearch] = useState("");
   // 打了商品的字之後:只列對得上的那幾行;勾了才把同一張單的其他行一起列出來(合計跟著變)
   const [whole, setWhole] = useState(false);
+  // 查詢當下選的門市叫什麼(匯出的檔名用)
+  const [appliedStoreName, setAppliedStoreName] = useState("");
 
   // 已套用 — 按「查詢」才打 API
   const [applied, setApplied] = useState<AppliedFilter>(() => ({
@@ -115,6 +118,7 @@ export function SalesDailyReportPage() {
 
   function runQuery() {
     if (!ready) return;
+    setAppliedStoreName(warehouseOpt?.label ?? "");
     setApplied({
       from,
       to,
@@ -140,13 +144,21 @@ export function SalesDailyReportPage() {
     setMemberOpt(null);
     setSearch("");
     setWhole(false);
+    setAppliedStoreName("");
     setApplied({ from: t, to: t, warehouse: "", sales_person: "", customer: "", member: "", search: "" });
   }
 
   function exportCsv() {
-    downloadCsv(
-      `銷貨日報_${applied.from}_${applied.to}.csv`,
-      dailyTable(activeOrders, returnOrders, voidOrders),
+    // 超過上限、合計不完整:不給只有一部分的檔(按鈕這時候也不能按)
+    exportIfComplete(
+      { count: data?.limit ?? 0, truncated: data?.truncated },
+      exportFileName("銷貨日報", {
+        store: defaultWarehouse.locked ? defaultWarehouse.name : appliedStoreName,
+        from: applied.from,
+        to: applied.to,
+      }),
+      () => dailyTable(activeOrders, returnOrders, voidOrders),
+      downloadCsv,
     );
   }
 
@@ -162,7 +174,8 @@ export function SalesDailyReportPage() {
             type="button"
             className="btn"
             onClick={exportCsv}
-            disabled={nothing}
+            disabled={nothing || !!cut}
+            title={cut || undefined}
           >
             轉 Excel
           </button>

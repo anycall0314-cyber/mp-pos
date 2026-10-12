@@ -54,7 +54,8 @@ def query(request):
 
 @api_view(["GET"])
 def preset(request, key):
-    """固定的報表:?from= ?to=(必填)?warehouse=(沒鎖門市的才有用)?by=(商品排行:商品 / 品類 / 品牌)"""
+    """固定的報表:?from= ?to=(必填)?warehouse=(沒鎖門市的才有用)?by=(商品排行:商品 / 品類 / 品牌)
+    ?export=1 = 匯出用,給全部的列(畫面只列前幾名的那一張也是)"""
     report = presets.REPORTS.get(key)
     if report is None:
         return _bad("沒有這張報表", status.HTTP_404_NOT_FOUND)
@@ -65,7 +66,8 @@ def preset(request, key):
             report, request.tenant, request.user,
             start=params.get("from"), end=params.get("to"), by=params.get("by") or "",
             warehouse=report_warehouse_id(request),
-            only_warehouse=locked_warehouse_id(request.user)))
+            only_warehouse=locked_warehouse_id(request.user),
+            everything=params.get("export") == "1"))
     except engine.QueryError as exc:
         return _bad(exc)
 

@@ -2,7 +2,6 @@ import type { Category, Warehouse } from "@/api/types";
 import { searchCategories, searchWarehouses } from "@/api/search";
 import { useDefaultWarehouse } from "@/auth/AuthContext";
 import { ComboBox, type ComboOption } from "@/components/ComboBox";
-import { toCsv } from "@/lib/stockReports";
 
 /** 下拉選到的那一筆(編號 + 顯示用的那一列)。空的 = 沒選。 */
 export interface Picked<T> {
@@ -11,6 +10,16 @@ export interface Picked<T> {
 }
 
 export const NOT_PICKED = { id: "" as const, option: null };
+
+/**
+ * 匯出的檔名要寫的門市:鎖在門市的帳號是自己那一家(伺服器本來就只算那一家);其餘是查詢當下選的那一家,沒選 = 空的(檔名寫「全部門市」)。
+ * lockable = false:這一頁不照門市鎖(序號查詢)。
+ */
+export function useStoreName(picked: Picked<Warehouse>, lockable = true): string {
+  const store = useDefaultWarehouse();
+  if (lockable && store.locked) return store.name;
+  return picked.option?.label ?? "";
+}
 
 /** 門市:鎖在門市的帳號是自己那一家、不能改(伺服器本來就只算那一家)。 */
 export function StoreField({
@@ -91,15 +100,5 @@ export function Pager({
   );
 }
 
-/** 存成試算表開得了的檔(開頭的記號讓 Excel 認得出中文)。 */
-export function downloadCsv(filename: string, table: unknown[][]) {
-  const blob = new Blob(["﻿" + toCsv(table)], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
+// 存檔的那一支全站共用(components/downloadCsv.ts);這裡照舊可以從這個檔拿
+export { downloadCsv } from "@/components/downloadCsv";

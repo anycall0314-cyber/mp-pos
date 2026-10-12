@@ -63,8 +63,13 @@ def _nothing(values) -> bool:
     return all(v is None or Decimal(str(v)) == 0 for v in values.values())
 
 
-def run(report: Report, tenant, user, *, start, end, by="", warehouse=None, only_warehouse=None):
-    """warehouse = 畫面選的門市(沒選 = 全公司);only_warehouse = 鎖在門市的帳號那一家(引擎強制)。"""
+def run(report: Report, tenant, user, *, start, end, by="", warehouse=None, only_warehouse=None,
+        everything=False):
+    """warehouse = 畫面選的門市(沒選 = 全公司);only_warehouse = 鎖在門市的帳號那一家(引擎強制)。
+
+    everything = 匯出用:不照這張報表「畫面最多列幾列」(商品排行 200)截,給引擎算得出來的全部
+    (引擎自己的上限 `engine.MAX_ROWS` 還是在;超過那個才算 truncated)。合計本來就是全部的。
+    """
     role = getattr(getattr(user, "profile", None), "role", None)
     dimension = by or next(iter(report.by))
     if dimension not in report.by:
@@ -93,9 +98,9 @@ def run(report: Report, tenant, user, *, start, end, by="", warehouse=None, only
             "dimensions": [{"key": dimension, "label": report.by[dimension]}],
             "measures": [{**m, "label": labels[m["key"]]} for m in result["columns"]["measures"]],
         },
-        "rows": rows[: report.keep],
+        "rows": rows if everything else rows[: report.keep],
         "row_count": len(rows),
-        "truncated": result["truncated"] or len(rows) > report.keep,
+        "truncated": result["truncated"] or (not everything and len(rows) > report.keep),
         "totals": result["totals"],
         "applied": result["applied"],
     }

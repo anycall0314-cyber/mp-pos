@@ -9,6 +9,7 @@ import { ComboBox } from "@/components/ComboBox";
 import { SerialHistoryModal } from "@/components/SerialHistoryModal";
 import { Toolbar } from "@/components/Toolbar";
 import { localDay } from "@/lib/fixedReports";
+import { exportFileName, exportIfComplete } from "@/lib/reportExports";
 import {
   costText,
   dayOf,
@@ -18,12 +19,11 @@ import {
   serialFilterReady,
   serialTable,
   statusesOf,
-  truncatedNote,
   unitCodes,
   type SerialFilter,
 } from "@/lib/stockReports";
 
-import { downloadCsv, NOT_PICKED, Pager, StoreField, type Picked } from "./stockReportParts";
+import { downloadCsv, NOT_PICKED, Pager, StoreField, useStoreName, type Picked } from "./stockReportParts";
 
 /**
  * 序號查詢:跨商品列每一台設備(新進的在前面)。一打開列的是在門市裡的(在庫 + 已退)。
@@ -53,6 +53,8 @@ export function SerialListPage() {
   const [unit, setUnit] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportNote, setExportNote] = useState("");
+  const [appliedStore, setAppliedStore] = useState<Picked<Warehouse>>(NOT_PICKED);
+  const storeName = useStoreName(appliedStore, false);
 
   const draft: SerialFilter = {
     statuses: statusesOf(status),
@@ -71,6 +73,7 @@ export function SerialListPage() {
   function apply() {
     if (!ready) return;
     setApplied(draft);
+    setAppliedStore(store);
     setPage(1);
     setExportNote("");
   }
@@ -80,8 +83,14 @@ export function SerialListPage() {
     setExportNote("");
     try {
       const all = await fetchSerialReportExport(applied);
-      downloadCsv(`序號查詢_${localDay()}.csv`, serialTable(all.results));
-      setExportNote(truncatedNote(all));
+      setExportNote(
+        exportIfComplete(
+          all,
+          exportFileName("序號查詢", { store: storeName, day: localDay() }),
+          () => serialTable(all.results),
+          downloadCsv,
+        ),
+      );
     } catch (e) {
       setExportNote(errorMessageOf(e));
     } finally {

@@ -1,3 +1,4 @@
+import { downloadCsv } from "@/components/downloadCsv";
 import { useEffect, useMemo, useState } from "react";
 
 import { useBusinessDailyReport, useWarehouses } from "@/api/hooks";
@@ -209,16 +210,9 @@ export function BusinessDailyReportPage() {
     lines.push(`今日結餘(僅現金),${closing}`);
     lines.push(`當日總營收(現金+非現金),${dailyRevenue}`);
 
-    const csv = "﻿" + lines.join("\r\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `營業日報_${warehouseName}_${date}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // 每一行是「格,格,格」(格裡的逗號上面已經換成空白):拆回一格一格交給共用的寫法,
+    // 電話(09 開頭)與長數字才會寫成文字,不會被試算表改掉
+    downloadCsv(`營業日報_${warehouseName}_${date}.csv`, lines.map((line) => line.split(",")));
   }
 
   return (

@@ -40,6 +40,8 @@ export interface ReportRange {
   warehouse?: number | "";
   /** 商品排行:照商品 / 品類 / 品牌 */
   by?: string;
+  /** 選到的門市叫什麼(匯出的檔名用;不送伺服器。沒選 = 空的) */
+  warehouseName?: string;
 }
 
 /** 查詢字串:空的不送。 */

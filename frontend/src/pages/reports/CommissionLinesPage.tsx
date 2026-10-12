@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { useCommissionLines } from "@/api/hooks";
+import { useDefaultWarehouse } from "@/auth/AuthContext";
 import { Banner, errorMessageOf } from "@/components/Banner";
+import { downloadCsv } from "@/components/downloadCsv";
 import { Toolbar } from "@/components/Toolbar";
 import {
   cellText,
@@ -11,6 +13,8 @@ import {
   monthStart,
   type ReportRange,
 } from "@/lib/fixedReports";
+
+import { commissionTable, exportFileName, exportIfComplete, tooManyToExport } from "@/lib/reportExports";
 
 import { ReportRangeBar } from "./ReportRangeBar";
 
@@ -27,10 +31,38 @@ export function CommissionLinesPage() {
   const { data, isLoading, isError, error } = useCommissionLines(applied);
   const rows = data?.rows ?? [];
   const manager = !!data?.manager;
+  const lock = useDefaultWarehouse();
+  // 超過一次列得出來的筆數:不給只有一部分的檔(拿去對佣金會少一截)
+  const tooMany = tooManyToExport(rows.length, data?.truncated);
 
   return (
     <div className="page">
-      <Toolbar title="佣金明細" />
+      <Toolbar
+        title="佣金明細"
+        actions={
+          <button
+            className="btn"
+            type="button"
+            disabled={!data || rows.length === 0 || !!tooMany}
+            title={tooMany || undefined}
+            onClick={() =>
+              data &&
+              exportIfComplete(
+                { count: rows.length, truncated: data.truncated },
+                exportFileName("佣金明細", {
+                  store: lock.locked ? lock.name : (applied.warehouseName ?? ""),
+                  from: data.applied.from,
+                  to: data.applied.to,
+                }),
+                () => commissionTable(data),
+                downloadCsv,
+              )
+            }
+          >
+            匯出
+          </button>
+        }
+      />
       <ReportRangeBar applied={applied} onApply={setApplied} />
       {isError && <Banner kind="error" message={errorMessageOf(error)} />}
 

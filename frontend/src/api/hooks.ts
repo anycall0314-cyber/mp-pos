@@ -789,6 +789,22 @@ export interface StockMatrixFilter {
   page?: number;
   pageSize?: number;
 }
+/** 抓庫存矩陣的一頁(畫面用 `useStockMatrix`;匯出照同樣的條件一頁一頁抓完)。 */
+export function fetchStockMatrix(filter: StockMatrixFilter) {
+  const params = new URLSearchParams();
+  if (filter.warehouseIds.length > 0) {
+    params.set("warehouse_ids", filter.warehouseIds.join(","));
+  }
+  if (filter.search) params.set("search", filter.search);
+  if (filter.categoryIds && filter.categoryIds.length > 0) {
+    params.set("category_ids", filter.categoryIds.join(","));
+  }
+  params.set("in_stock_only", filter.inStockOnly === false ? "false" : "true");
+  params.set("page", String(filter.page ?? 1));
+  params.set("page_size", String(filter.pageSize ?? 500));
+  return api<StockMatrixResponse>(`/products/stock-matrix/?${params}`);
+}
+
 export const useStockMatrix = (
   filter: StockMatrixFilter,
   opts?: { enabled?: boolean },
@@ -803,23 +819,7 @@ export const useStockMatrix = (
       filter.page ?? 1,
       filter.pageSize ?? 500,
     ],
-    queryFn: () => {
-      const params = new URLSearchParams();
-      if (filter.warehouseIds.length > 0) {
-        params.set("warehouse_ids", filter.warehouseIds.join(","));
-      }
-      if (filter.search) params.set("search", filter.search);
-      if (filter.categoryIds && filter.categoryIds.length > 0) {
-        params.set("category_ids", filter.categoryIds.join(","));
-      }
-      params.set(
-        "in_stock_only",
-        filter.inStockOnly === false ? "false" : "true",
-      );
-      params.set("page", String(filter.page ?? 1));
-      params.set("page_size", String(filter.pageSize ?? 500));
-      return api<StockMatrixResponse>(`/products/stock-matrix/?${params}`);
-    },
+    queryFn: () => fetchStockMatrix(filter),
     enabled: opts?.enabled ?? true,
   });
 
@@ -2848,6 +2848,10 @@ export const useFixedReport = (key: string, range: ReportRange) =>
     enabled: rangeReady(range),
     retry: false,
   });
+
+/** 匯出用:這張報表照同樣的條件、**全部的列**(畫面只列前幾名的商品排行也是)。 */
+export const fetchFixedReportAll = (key: string, range: ReportRange) =>
+  api<FixedReportResult>(`/analytics/presets/${key}/?${rangeQuery(range)}&export=1`);
 
 export const useCommissionLines = (range: ReportRange) =>
   useQuery({
