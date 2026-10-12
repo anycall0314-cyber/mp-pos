@@ -323,9 +323,10 @@ export function App() {
             path="/telecom/billing/:id/receipt"
             element={<PhoneBillReceiptPage />}
           />
+          {/* 以前的空殼「開通查詢」:統計在統計分析底下的開通統計,逐筆的是佣金明細 */}
           <Route
             path="/telecom/activations"
-            element={<Placeholder title="開通查詢" />}
+            element={<Navigate to="/reports/activations" replace />}
           />
           <Route
             path="/telecom/commissions"

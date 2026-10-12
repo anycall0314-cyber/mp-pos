@@ -212,8 +212,14 @@ export const NAV_MODULES: NavModule[] = [
       {
         to: "/reports/commissions",
         label: "佣金明細",
-        aliases: ["門號佣金", "門號佣金明細"],
+        aliases: ["門號佣金", "門號佣金明細", "開通明細"],
         needs: ["report_commission"],
+      },
+      {
+        to: "/reports/activations",
+        label: "開通統計",
+        aliases: ["開通查詢", "開通數量統計", "開通數", "門號開通", "門號統計"],
+        needs: ["report_activations"],
       },
       {
         to: "/reports/explore",

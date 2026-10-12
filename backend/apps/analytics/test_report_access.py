@@ -35,7 +35,8 @@ PRESET = "/api/v1/analytics/presets/"
 LINES = "/api/v1/telecom-commissions/"
 SEP_Q = "from=2026-09-01&to=2026-09-30"
 REPORT_KEYS = ("report_sales_daily", "report_explore", "report_parts", "report_staff",
-               "report_products", "report_commission", "report_daily", "report_customers")
+               "report_products", "report_commission", "report_daily", "report_customers",
+               "report_activations")
 
 
 def add_lines(c, tag="甲"):
@@ -104,12 +105,12 @@ class _Shop(TestCase):
 
 class ListTests(SimpleTestCase):
     def test_the_report_items(self):
-        # 2026-10-12 多了「客戶排行」(第八項)
+        # 2026-10-12 多了「客戶排行」(第八項)、「開通統計」(第九項)
         items = {a["key"]: a for a in abilities.catalog() if a["group"] == "報表"}
         self.assertEqual(tuple(items), REPORT_KEYS)
         self.assertEqual(
             [items[k]["label"] for k in REPORT_KEYS],
-            ["銷貨日報", "自訂分析", "零件耗用", "業績彙總", "商品排行", "佣金明細", "每日彙總", "客戶排行"])
+            ["銷貨日報", "自訂分析", "零件耗用", "業績彙總", "商品排行", "佣金明細", "每日彙總", "客戶排行", "開通統計"])
 
     def test_every_measure_can_be_limited_to_one_store(self):
         """鎖在門市的帳號靠「只算那一家」:哪個指標分不出門市,店員就整個不能用 —— 新增指標時這裡會提醒。"""
@@ -118,7 +119,7 @@ class ListTests(SimpleTestCase):
     def test_each_fixed_report_has_its_own_item(self):
         self.assertEqual({k: r.ability for k, r in presets.REPORTS.items()},
                          {"staff": "report_staff", "products": "report_products", "daily": "report_daily",
-                          "customers": "report_customers"})
+                          "customers": "report_customers", "activations": "report_activations"})
 
     def test_explore_needs_every_report_it_can_rebuild(self):
         """自訂分析挑同樣的指標與分組就組得出固定的報表:固定的報表每一張都要列在「自訂分析要另外開著的」裡面。"""

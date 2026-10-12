@@ -41,6 +41,7 @@ REPORT_PRODUCTS = "report_products"
 REPORT_COMMISSION = "report_commission"
 REPORT_DAILY = "report_daily"
 REPORT_CUSTOMERS = "report_customers"
+REPORT_ACTIVATIONS = "report_activations"
 
 ABILITIES = [
     Ability(VOID_SALES, "作廢銷貨單", "作廢與銷退"),
@@ -57,13 +58,14 @@ ABILITIES = [
     Ability(VENDOR_ORDER, "廠商叫貨", "進貨與帳務", "送出叫貨單;看得到進價"),
     # 第三批:報表一張一個勾(鎖在門市的帳號本來就只看自己門市)
     Ability(REPORT_SALES_DAILY, "銷貨日報", "報表", "只收起這一頁;內容跟銷貨單清單看得到的一樣"),
-    Ability(REPORT_EXPLORE, "自訂分析", "報表", "要業績彙總、商品排行、每日彙總、客戶排行、營業日報都開著"),
+    Ability(REPORT_EXPLORE, "自訂分析", "報表", "要業績彙總、商品排行、每日彙總、客戶排行、開通統計、營業日報都開著"),
     Ability(REPORT_PARTS, "零件耗用", "報表"),
     Ability(REPORT_STAFF, "業績彙總", "報表"),
     Ability(REPORT_PRODUCTS, "商品排行", "報表"),
     Ability(REPORT_COMMISSION, "佣金明細", "報表"),
     Ability(REPORT_DAILY, "每日彙總", "報表"),
     Ability(REPORT_CUSTOMERS, "客戶排行", "報表", "照客戶、照會員看誰買得最多"),
+    Ability(REPORT_ACTIVATIONS, "開通統計", "報表", "各家電信、各種方案開了幾門"),
 ]
 KEYS = frozenset(a.key for a in ABILITIES)
 LABELS = {a.key: a.label for a in ABILITIES}
@@ -71,7 +73,8 @@ LABELS = {a.key: a.label for a in ABILITIES}
 # 這一項要另外那幾項都開著才能用。自訂分析什麼數字都組得出來(照業務員分、照商品分、一天一列、每天收了多少錢):
 # 那幾張報表有一張被關掉的帳號,自訂分析也跟著不能用 —— 不然關掉「業績彙總」的人到自訂分析挑同樣的指標與分組就看到了
 # (複審 2026-10-10 抓到的)。固定的報表(analytics/presets.py)每加一張都要列進來,有測試擋。
-ALSO_NEEDS = {REPORT_EXPLORE: (REPORT_STAFF, REPORT_PRODUCTS, REPORT_DAILY, REPORT_CUSTOMERS, VIEW_BUSINESS_DAILY)}
+ALSO_NEEDS = {REPORT_EXPLORE: (REPORT_STAFF, REPORT_PRODUCTS, REPORT_DAILY, REPORT_CUSTOMERS, REPORT_ACTIVATIONS,
+                               VIEW_BUSINESS_DAILY)}
 
 
 def switched_off(profile) -> set[str]:

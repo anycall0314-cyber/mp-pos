@@ -146,9 +146,11 @@ DIMENSIONS = {d.key: d for d in [
     Dim("stock_state", "庫存狀態", "choice", labels=lambda tenant: _state_labels()),
     Dim("legacy_doc_type", "舊單別", "choice", labels=lambda tenant: _legacy_type_labels()),
     Dim("source", "資料來源", "choice", labels=lambda tenant: {"mp": "新系統", "legacy": "舊 POS"}),
-    # 門號合約(只有「門號合約」那一組指標用得到)
+    # 門號(2026-10-12 起銷貨、銷退也用得到,取舊歐睿 SIM031 開通數量統計;原本只有「門號合約」那一組)。
+    # 銷貨單上沒有方案的那幾行歸一列「(不是門號)」
     Dim("carrier", "電信業者", "ref", model="parties.Carrier"),
     Dim("plan_kind", "方案種類", "choice", labels=lambda tenant: _plan_kind_labels()),
+    Dim("plan", "方案", "ref", model="parties.TelecomPlan"),
     Dim("contract_state", "合約處理狀況", "choice", labels=lambda tenant: _contract_state_labels()),
 ]}
 
@@ -238,6 +240,22 @@ def _legacy(tenant):
 
 NEW = Path(const=("mp", "新系統"))
 
+NOT_A_LINE = "(不是門號)"
+# 方案的三種。跟 parties.TelecomPlan.Kind 是同一份(這裡不能在載入時就讀資料表定義,所以另外列一次;
+# 測試會比對,那邊多一種、改了名字,這裡要跟著改)
+PLAN_KINDS = (("new", "新辦"), ("renewal", "續約"), ("portin", "攜碼"))
+
+
+def _plan_paths(prefix="", none_label=NOT_A_LINE):
+    """門號那一行的三個角度(電信業者 / 方案種類 / 方案)。prefix = 怎麼走到記著方案的那一行。"""
+    p = f"{prefix}__" if prefix else ""
+    return {
+        "carrier": Path(f"{p}telecom_plan__carrier_id", f"{p}telecom_plan__carrier__name", none_label=none_label),
+        "plan_kind": Path(f"{p}telecom_plan__kind", none_label=none_label),
+        "plan": Path(f"{p}telecom_plan_id", f"{p}telecom_plan__name", none_label=none_label),
+    }
+
+
 FACTS = {f.key: f for f in [
     Fact("sales", "銷貨", _sales, "so__doc_date", {
         "warehouse": Path("so__warehouse_id", "so__warehouse__name"),
@@ -246,6 +264,7 @@ FACTS = {f.key: f for f in [
         "source": NEW,
         **_people_paths("so"),
         **_product_paths(),
+        **_plan_paths(),
     }),
     Fact("returns", "銷退", _returns, "sr__doc_date", {
         "warehouse": Path("sr__warehouse_id", "sr__warehouse__name"),
@@ -255,6 +274,8 @@ FACTS = {f.key: f for f in [
         # 銷退單上的客戶 / 會員一律跟原銷貨單一樣(建立時照抄、唯讀)
         **_people_paths("sr"),
         **_product_paths(),
+        # 退掉的那一行當初是不是門號、哪個方案:看原銷貨單的那一行(佣金也是從那裡沖回)
+        **_plan_paths("original_item"),
     }),
     Fact("purchases", "進貨", _purchases, "po__doc_date", {
         "warehouse": Path("po__warehouse_id", "po__warehouse__name"),
@@ -288,6 +309,7 @@ FACTS = {f.key: f for f in [
         "sales_person": Path("so__sales_person_id", "so__sales_person__name"),
         "carrier": Path("telecom_plan__carrier_id", "telecom_plan__carrier__name"),
         "plan_kind": Path("telecom_plan__kind"),
+        "plan": Path("telecom_plan_id", "telecom_plan__name"),
         "contract_state": Path("state"),
         "source": NEW,
         **_people_paths("so"),
@@ -330,6 +352,13 @@ BASES = [
     Base("staff_commission", "門號業務員佣金", "sales", lambda: Sum("commission"), group="佣金"),
     Base("company_commission", "門號公司佣金", "sales", lambda: Sum("company_commission"),
          roles=MANAGERS, group="佣金"),
+    # 開通數(2026-10-12;取舊歐睿 SIM031):有方案的那一行 = 一門。跟上面兩個佣金是同一批明細(作廢的單不算)
+    Base("activations", "開通數(未扣銷退)", "sales",
+         lambda: Count("id", filter=Q(telecom_plan__isnull=False)), "int", group="門號合約"),
+    # 新辦 / 續約 / 攜碼各幾門(開通統計一列要同時看得到三種;動手前紅隊第 3 條)。三個加起來 = 上面那一個
+    *[Base(f"activations_{code}", f"{label}門數(未扣銷退)", "sales",
+           (lambda code=code: Count("id", filter=Q(telecom_plan__kind=code))), "int", group="門號合約")
+      for code, label in PLAN_KINDS],
 
     Base("return_untaxed", "銷退額(未稅)", "returns", lambda: Sum("untaxed_amount", filter=COUNTED)),
     Base("return_qty", "銷退量", "returns", lambda: Sum("qty", filter=COUNTED), "int"),
@@ -341,6 +370,9 @@ BASES = [
          lambda: Sum("original_item__commission"), group="佣金"),
     Base("return_company_commission", "沖回公司佣金", "returns",
          lambda: Sum("original_item__company_commission"), roles=MANAGERS, group="佣金"),
+    # 退掉的門號數:跟沖回佣金同一批(退的那一行原本是門號),算在退的那一天
+    Base("return_activations", "退掉的門號數", "returns",
+         lambda: Count("id", filter=Q(original_item__telecom_plan__isnull=False)), "int", group="門號合約"),
     Base("return_orders", "銷退單數", "returns",
          lambda: Count("sr_id", distinct=True, filter=COUNTED), "int"),
 
@@ -400,6 +432,9 @@ DERIVED = [
             lambda v: v["staff_commission"] - v["return_staff_commission"], group="佣金"),
     Derived("net_company_commission", "門號公司佣金(扣銷退)", ("company_commission", "return_company_commission"),
             lambda v: v["company_commission"] - v["return_company_commission"], group="佣金"),
+    # 期間內成交的門號 − 期間內退掉的門號(退的扣在退的那一天,跟佣金一樣;所以某一天、某一個月可能是負的)
+    Derived("net_activations", "開通數(扣銷退)", ("activations", "return_activations"),
+            lambda v: v["activations"] - v["return_activations"], "int", group="門號合約"),
     # 銷貨單清單與開單頁上的「業務員毛利」是含佣金的(每張單:業務員毛利 + 業務員佣金);這個數字就是它們加起來、再扣掉銷退
     Derived("staff_total", "業務員毛利加佣金(扣銷退)",
             ("sales_untaxed", "sales_staff_cost", "return_untaxed", "return_staff_cost",

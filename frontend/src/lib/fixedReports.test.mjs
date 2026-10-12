@@ -62,6 +62,7 @@ test("幾張彙總報表的名稱、網址、權限各是各的,而且導覽與�
     ["staff", "/reports/staff", "業績彙總", "report_staff"],
     ["products", "/reports/products", "商品排行", "report_products"],
     ["customers", "/reports/customers", "客戶排行", "report_customers"],      // 2026-10-12:照客戶 / 照會員
+    ["activations", "/reports/activations", "開通統計", "report_activations"],  // 2026-10-12:各家電信開了幾門
   ]);
   assert.deepEqual([...new Set(FIXED_REPORTS.map((r) => r.title.length))], [4]);
   const nav = readFileSync(new URL("../nav.ts", import.meta.url), "utf8");
@@ -71,4 +72,14 @@ test("幾張彙總報表的名稱、網址、權限各是各的,而且導覽與�
     assert.ok(nav.includes(`needs: ["${r.ability}"]`), `導覽的 ${r.title} 沒有掛權限`);
   }
   assert.ok(app.includes("FIXED_REPORTS.map"), "路由要照 FIXED_REPORTS 產生,不另外寫一份");
+  // 以前的空殼「開通查詢」那個網址(有人存了書籤)要帶到開通統計,不是停在「尚未實作」
+  assert.match(app, /path="\/telecom\/activations"\s+element=\{<Navigate to="\/reports\/activations" replace \/>\}/);
+  assert.ok(!app.includes('<Placeholder title="開通查詢" />'));
+});
+
+test("期間旁邊那幾個字(扣了什麼)是伺服器給的,頁面不自己寫死", () => {
+  // 開通統計的新辦 / 續約 / 攜碼三欄是成交的數、沒有扣銷退:頁面寫死「已扣銷退」就講錯了
+  const page = readFileSync(new URL("../pages/reports/FixedReportPage.tsx", import.meta.url), "utf8");
+  assert.ok(!page.includes("已扣銷退"));
+  assert.ok(page.includes("data.note"));
 });

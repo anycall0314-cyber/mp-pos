@@ -77,7 +77,8 @@ export function FixedReportPage({ report }: { report: PageInfo }) {
       {data && (
         <>
           <div className="ex-period">
-            {data.applied.period.from} ~ {data.applied.period.to}　已扣銷退
+            {data.applied.period.from} ~ {data.applied.period.to}
+            {data.note ? `　${data.note}` : ""}
           </div>
           <div className="sd-summary">
             {measures.map((m) => (

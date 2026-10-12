@@ -14,7 +14,7 @@ from decimal import Decimal
 from apps.tenants import abilities
 
 from . import engine
-from .catalog import MANAGERS
+from .catalog import MANAGERS, PLAN_KINDS
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,7 @@ class Report:
     grain: str = "month"
     keep: int = engine.MAX_ROWS     # 最多列幾列
     max_days: int = 0               # 期間最長幾天(0 = 照引擎的上限)
+    note: str = "已扣銷退"            # 期間旁邊那幾個字:這張表的數字扣了什麼(畫面不自己寫死)
 
 
 MONEY = (
@@ -61,6 +62,16 @@ REPORTS = {r.key: r for r in [
            (Col("sales_orders", "銷貨單數"), Col("net_sales", "淨銷售額"),
             Col("staff_gross_profit", "業務員毛利"), Col("gross_profit", "實際毛利", managers=True)),
            sort="-net_sales", keep=200),
+    # 取舊歐睿 SIM031 開通數量統計(owner 2026-10-12):各家電信、各種方案開了幾門、誰開最多。
+    # 逐筆的是佣金明細(sales/commission_views.py);這一張的開通數 = 那一頁的銷貨列數 − 銷退列數,佣金合計一樣
+    # 欄(動手前紅隊):新辦 / 續約 / 攜碼各幾門(一列就看得到「哪家電信、哪一種」)、退掉的另外一欄
+    # (成交與退掉分開,淨開通是負的時候看得出為什麼);新辦 + 續約 + 攜碼 − 退掉 = 淨開通
+    Report("activations", "開通統計", abilities.REPORT_ACTIVATIONS,
+           {"carrier": "電信", "plan": "方案", "sales_person": "業務", "warehouse": "門市"},
+           (*(Col(f"activations_{code}", label) for code, label in PLAN_KINDS),
+            Col("return_activations", "退掉"), Col("net_activations", "淨開通"),
+            Col("net_staff_commission", "業務員佣金"), Col("net_company_commission", "公司佣金", managers=True)),
+           sort="-net_activations", note="佣金已扣銷退"),       # 新辦 / 續約 / 攜碼三欄是成交的數,沒有扣
 ]}
 
 
@@ -98,6 +109,7 @@ def run(report: Report, tenant, user, *, start, end, by="", warehouse=None, only
     return {
         "key": report.key,
         "title": report.title,
+        "note": report.note,
         "by": [{"key": k, "label": v} for k, v in report.by.items()],
         "columns": {
             "dimensions": [{"key": dimension, "label": report.by[dimension]}],

@@ -203,15 +203,15 @@ test("員工帳號的權限:需要的幾項都被關掉的頁面收起來,有一
   for (const to of ["/sales", "/purchases", "/products", "/inventory", "/expenses", "/cash-adjustments"]) assert.ok(off.includes(to), to);
 });
 
-test("報表一張一個勾:關掉的那一張收起來,八張都關掉整個入口不見", () => {
+test("報表一張一個勾:關掉的那一張收起來,九張都關掉整個入口不見", () => {
   const reports = (abilities) => visibleModules({ role: "tenant_user", abilities }).find((m) => m.key === "reports");
-  // 2026-10-12 多了客戶排行(排在商品排行後面)
+  // 2026-10-12 多了客戶排行(排在商品排行後面)、開通統計(排在佣金明細後面)
   const order = ["/reports/sales-daily", "/reports/daily", "/reports/staff", "/reports/products", "/reports/customers",
-    "/reports/commissions", "/reports/explore", "/reports/parts-usage"];
+    "/reports/commissions", "/reports/activations", "/reports/explore", "/reports/parts-usage"];
   assert.deepEqual(reports(undefined).tabs.map((p) => p.to), order);
-  assert.deepEqual(reports(undefined).tabs.map((p) => p.label.length), [4, 4, 4, 4, 4, 4, 4, 4]);
+  assert.deepEqual(reports(undefined).tabs.map((p) => p.label.length), [4, 4, 4, 4, 4, 4, 4, 4, 4]);
   const keys = ["report_sales_daily", "report_daily", "report_staff", "report_products", "report_customers",
-    "report_commission", "report_explore", "report_parts"];
+    "report_commission", "report_activations", "report_explore", "report_parts"];
   keys.forEach((key, i) => {
     const left = reports({ [key]: false }).tabs.map((p) => p.to);
     assert.deepEqual(left, order.filter((_, j) => j !== i), key); // 只少那一張
@@ -223,9 +223,11 @@ test("報表一張一個勾:關掉的那一張收起來,八張都關掉整個入
   // 別的入口不受影響、管理員照舊
   assert.equal(visibleModules({ role: "tenant_user", abilities: allOff }).length,
     visibleModules({ role: "tenant_user" }).length - 1);
-  assert.equal(visibleModules({ role: "tenant_admin" }).find((m) => m.key === "reports").tabs.length, 8);
+  assert.equal(visibleModules({ role: "tenant_admin" }).find((m) => m.key === "reports").tabs.length, 9);
   // 打舊系統的名字找得到
   assert.equal(searchNav("毛利彙總", visibleModules({ role: "tenant_user" }))[0].page.to, "/reports/customers");
+  assert.equal(searchNav("開通查詢", visibleModules({ role: "tenant_user" }))[0].page.to, "/reports/activations");
+  assert.equal(searchNav("開通明細", visibleModules({ role: "tenant_user" }))[0].page.to, "/reports/commissions");
   // 功能搜尋找不到收起來的那一張
   const hits = (abilities) => searchNav("佣金", visibleModules({ role: "tenant_user", abilities })).map((h) => h.page.to);
   assert.ok(hits(undefined).includes("/reports/commissions"));

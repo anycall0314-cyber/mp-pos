@@ -1909,6 +1909,8 @@ export interface FixedReportResult extends AnalyticsResult {
   title: string;
   /** 可以照哪幾種分(商品排行:商品 / 品類 / 品牌) */
   by: { key: string; label: string }[];
+  /** 期間旁邊那幾個字(這張表的數字扣了什麼),伺服器決定 */
+  note?: string;
 }
 
 /** 門號佣金明細的一列;公司佣金只有管理員的回應裡有(沒有這一格 = 不是管理員) */
