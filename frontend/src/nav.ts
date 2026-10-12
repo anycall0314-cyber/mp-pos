@@ -237,6 +237,12 @@ export const NAV_MODULES: NavModule[] = [
         needs: ["report_explore"],
       },
       {
+        to: "/reports/repairs",
+        label: "維修月報",
+        aliases: ["維修單月報表", "維修報表", "維修毛利", "維修業績", "維修統計"],
+        needs: ["report_repairs"],
+      },
+      {
         to: "/reports/parts-usage",
         label: "零件耗用",
         aliases: ["零件耗用報表"],

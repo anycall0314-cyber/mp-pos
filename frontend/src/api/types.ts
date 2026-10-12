@@ -1290,6 +1290,8 @@ export interface RepairOrder {
   technician: number | null;
   technician_name: string;
   internal_settle_amount: string;
+  /** 這張單公司賺多少(伺服器算的;維修毛利只有一份算法:自修 / 內轉 = 實付 − 零件成本,委外 = 實付 − 委外實際費用) */
+  margin: string;
   margin_breakdown: {
     kind:
       | "in_house_solo"

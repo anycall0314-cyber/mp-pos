@@ -23,12 +23,42 @@ def compute_in_house_quote(repair_order: RepairOrder) -> Decimal:
 
 
 def _parts_cost(repair_order: RepairOrder) -> Decimal:
-    """合計這張單已領用零件的成本(用各 line 的 unit_cost,未填則用 product 加權平均)。"""
-    total = Decimal("0")
-    for p in repair_order.parts.select_related("part_product").all():
-        unit = p.unit_cost or (p.part_product.weighted_avg_cost or Decimal("0"))
-        total += Decimal(unit) * p.qty
-    return total
+    """合計這張單領用零件的成本:**每一行自己記的成本**(建單時抄零件當下的平均成本;完工時還沒記到的會再抄一次)。
+
+    不拿零件「現在」的平均成本來補(複審 2026-10-12 抓到的 P0):成本真的是 0 的零件,之後進貨把平均成本拉高,
+    已經完工的單毛利不能跟著變;而且開單頁看到的也是每一行記的這個數字 —— 這裡另外去補,同一張單又是兩個毛利。
+    """
+    # 用 .all():呼叫端先抓好明細的話(報表一次算很多張)就不再一張一張查
+    return sum((Decimal(p.unit_cost or 0) * p.qty for p in repair_order.parts.all()), Decimal("0"))
+
+
+# 一張維修單是怎麼修的(維修月報分這三種;字數一樣)。「內轉」= 委外模式、但修的是自己公司另一位技師
+IN_HOUSE, VENDOR, TRANSFER = "in_house", "vendor", "transfer"
+WAYS = {IN_HOUSE: "自修", VENDOR: "委外", TRANSFER: "內轉"}
+
+
+def way_of(repair_order: RepairOrder) -> str:
+    if repair_order.mode == RepairOrder.Mode.IN_HOUSE:
+        return IN_HOUSE
+    tech = repair_order.technician_id
+    return TRANSFER if tech and tech != repair_order.sales_person_id else VENDOR
+
+
+def money_of(repair_order: RepairOrder) -> dict:
+    """這張維修單公司賺多少、怎麼來的。**維修毛利全系統只有這一份算法**(owner 2026-10-12:「工資是分業績的」——
+    工資、內部結算價只是收件人與技師之間怎麼分,不是公司付出去的錢,所以不扣):
+
+    - 自修、內轉:客戶實付 − 零件成本
+    - 委外給外面的維修廠:客戶實付 − 委外實際費用
+
+    毛利 = 實付 − 零件成本 − 委外費用(每一張都成立);也 = 個人毛利分解(`compute_personal_margin`)兩個人加起來。
+    委外給外廠的單不算零件(那一種原本三個地方就都只扣委外費用)。
+    """
+    paid = repair_order.customer_paid_amount or Decimal("0")
+    way = way_of(repair_order)
+    parts = Decimal("0") if way == VENDOR else _parts_cost(repair_order)
+    outside = (repair_order.external_quote_actual or Decimal("0")) if way == VENDOR else Decimal("0")
+    return {"way": way, "paid": paid, "parts": parts, "outside": outside, "margin": paid - parts - outside}
 
 
 def compute_personal_margin(repair_order: RepairOrder) -> dict:
@@ -99,19 +129,9 @@ def compute_personal_margin(repair_order: RepairOrder) -> dict:
 
 
 def compute_margin(repair_order: RepairOrder) -> Decimal:
-    """完工毛利。
-    自修:客戶實付 - 零件成本合計 - 工資
-    委外:客戶實付 - 委外實際費用
-    """
-    paid = repair_order.customer_paid_amount or Decimal("0")
-    if repair_order.mode == RepairOrder.Mode.EXTERNAL:
-        return paid - (repair_order.external_quote_actual or Decimal("0"))
-    parts_cost = sum(
-        (p.qty * (p.unit_cost or Decimal("0")))
-        for p in repair_order.parts.all()
-    )
-    labor = repair_order.labor_fee or Decimal("0")
-    return paid - Decimal(parts_cost) - labor
+    """維修毛利(公司的)。怎麼算只有 `money_of` 那一份:自修 / 內轉 = 實付 − 零件成本;委外 = 實付 − 委外實際費用。
+    2026-10-12 以前這裡的自修還多扣了工資(同一張單在清單、開單頁、個人毛利分解是三個數字)。"""
+    return money_of(repair_order)["margin"]
 
 
 @transaction.atomic

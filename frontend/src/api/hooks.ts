@@ -10,6 +10,7 @@ import {
 import { listProductPhotos, type PhotosPayload } from "./photos";
 import { rangeQuery, rangeReady, type ReportRange } from "@/lib/fixedReports";
 import { invoiceQuery, type InvoiceFilter, type InvoiceListing } from "@/lib/invoiceList";
+import { repairQuery, type RepairFilter, type RepairListing } from "@/lib/repairReport";
 import { purchaseLineQuery, type PurchaseLine, type PurchaseLineFilter } from "@/lib/purchaseLines";
 import { dailyQuery, type DailyFilter, type DailyReport } from "@/lib/salesDaily";
 import {
@@ -2958,6 +2959,20 @@ export const useInvoiceList = (filter: InvoiceFilter, page: number) =>
 
 export const fetchInvoiceListExport = (filter: InvoiceFilter) =>
   api<InvoiceListing>(`/sales-invoice-report/?${invoiceQuery(filter, "export")}`);
+
+// 維修月報:期間內完工的維修單(合計、每個人分到多少、逐筆都是伺服器算的)
+export const useRepairMonthly = (filter: RepairFilter, page: number) =>
+  useQuery({
+    queryKey: ["repair-monthly", filter, page],
+    queryFn: () => api<RepairListing>(`/repair-monthly-report/?${repairQuery(filter, page)}`),
+    enabled: rangeReady(filter),
+    retry: false,
+    gcTime: 0,
+    placeholderData: keepPreviousData,
+  });
+
+export const fetchRepairMonthlyExport = (filter: RepairFilter) =>
+  api<RepairListing>(`/repair-monthly-report/?${repairQuery(filter, "export")}`);
 
 export const useAnalyticsOptions = (dimension: string | null, q: string) =>
   useQuery({

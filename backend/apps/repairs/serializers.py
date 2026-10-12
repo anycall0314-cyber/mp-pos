@@ -167,6 +167,12 @@ class RepairOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSer
     sales_person_name = serializers.CharField(source="sales_person.name", read_only=True, default="")
     technician_name = serializers.CharField(source="technician.name", read_only=True, default="")
     margin_breakdown = serializers.SerializerMethodField()
+    # 這張單公司賺多少(維修毛利只有 services.money_of 那一份算法;清單、開單頁、月報都是這個數字)
+    margin = serializers.SerializerMethodField()
+
+    def get_margin(self, obj) -> str:
+        from .services import compute_margin
+        return str(compute_margin(obj))
 
     def get_margin_breakdown(self, obj):
         from .services import compute_personal_margin
@@ -249,6 +255,7 @@ class RepairOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSer
             "technician_name",
             "internal_settle_amount",
             "margin_breakdown",
+            "margin",
             "repair_item",
             "repair_item_name",
             "labor_fee",
@@ -286,6 +293,7 @@ class RepairOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSer
             "sales_person_name",
             "technician_name",
             "margin_breakdown",
+            "margin",
             "mode_label",
             "status_label",
             "previous_repair_no",

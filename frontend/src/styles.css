@@ -7936,3 +7936,8 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   border-color: var(--border);
   font-variant-numeric: tabular-nums;
 }
+
+/* 維修月報:每個人分到多少那一張小表(在合計與逐筆之間) */
+.rm-people { margin-bottom: 12px; }
+.rm-people .report-grid { width: auto; min-width: 360px; }
+

@@ -41,6 +41,7 @@ import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { Toolbar } from "@/components/Toolbar";
 import { MoneyInput } from "@/components/MoneyInput";
 import { intStr, money } from "@/lib/money";
+import { marginFormula, personalSplit, repairMargin } from "@/lib/repairMargin";
 import { RepairHistoryModal } from "./RepairHistoryModal";
 import { UnlockPatternInput } from "./UnlockPatternInput";
 
@@ -275,54 +276,34 @@ function RepairEntryForm() {
     [parts],
   );
   const suggestedQuote = partsCost + Number(laborFee || 0);
-  const margin =
-    mode === "in_house"
-      ? Number(customerPaid || 0) - partsCost - Number(laborFee || 0)
-      : Number(customerPaid || 0) - Number(extActual || 0);
-
-  // 個人毛利分解(前端即時計算,與 backend compute_personal_margin 公式對齊)
-  const personalBreakdown = useMemo(() => {
-    const paid = Number(customerPaid || 0);
-    const labor = Number(laborFee || 0);
-    const settle = Number(internalSettle || 0);
-    const extA = Number(extActual || 0);
-    const samePerson = !technician || technician === salesPerson;
-    if (mode === "in_house") {
-      if (samePerson) {
-        return {
-          kind: "in_house_solo" as const,
-          spAmt: paid - partsCost,
-          techAmt: 0,
-        };
-      }
-      return {
-        kind: "in_house_split" as const,
-        spAmt: paid - labor - partsCost,
-        techAmt: labor,
-      };
-    }
-    if (!samePerson) {
-      return {
-        kind: "internal_transfer" as const,
-        spAmt: paid - settle,
-        techAmt: settle - partsCost,
-      };
-    }
-    return {
-      kind: "external_vendor" as const,
-      spAmt: paid - extA,
-      techAmt: 0,
-    };
-  }, [
+  // 維修毛利怎麼算只有 lib/repairMargin.ts 那一份(跟伺服器同一套規則):工資、內部結算價是兩個人怎麼分,公司的毛利不扣
+  const numbers = {
     mode,
-    customerPaid,
-    laborFee,
-    internalSettle,
-    extActual,
-    partsCost,
     salesPerson,
     technician,
-  ]);
+    paid: Number(customerPaid || 0),
+    partsCost,
+    labor: Number(laborFee || 0),
+    settle: Number(internalSettle || 0),
+    externalActual: Number(extActual || 0),
+  };
+  const margin = repairMargin({ ...numbers });
+
+  // 個人毛利分解(前端即時計算,與 backend compute_personal_margin 公式對齊)
+  const personalBreakdown = useMemo(
+    () =>
+      personalSplit({
+        mode,
+        salesPerson,
+        technician,
+        paid: Number(customerPaid || 0),
+        partsCost,
+        labor: Number(laborFee || 0),
+        settle: Number(internalSettle || 0),
+        externalActual: Number(extActual || 0),
+      }),
+    [mode, customerPaid, laborFee, internalSettle, extActual, partsCost, salesPerson, technician],
+  );
 
   const breakdownKindLabel = {
     in_house_solo: "自修(同人)",
@@ -1241,9 +1222,7 @@ function RepairEntryForm() {
                   </b>
                 </div>
                 <div className="re-summary-formula re-summary-margin-formula">
-                  {mode === "in_house"
-                    ? "= 實付 − 零件成本 − 工資"
-                    : "= 實付 − 委外實際費用"}
+                  {marginFormula({ mode, salesPerson, technician })}
                 </div>
               </div>
             </section>

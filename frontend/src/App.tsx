@@ -36,6 +36,7 @@ import { CommissionLinesPage } from "@/pages/reports/CommissionLinesPage";
 import { ExploreReportPage } from "@/pages/reports/ExploreReportPage";
 import { FixedReportPage } from "@/pages/reports/FixedReportPage";
 import { InvoiceListPage } from "@/pages/reports/InvoiceListPage";
+import { RepairMonthlyPage } from "@/pages/reports/RepairMonthlyPage";
 import { PartsUsageReportPage } from "@/pages/reports/PartsUsageReportPage";
 import { SalesDailyReportPage } from "@/pages/reports/SalesDailyReport";
 import { SecondhandAcquisitionPage } from "@/pages/secondhand-acquisition/SecondhandAcquisitionPage";
@@ -424,6 +425,14 @@ export function App() {
             element={
               <NeedsAbility ability="report_invoices" doing="看發票明細">
                 <InvoiceListPage />
+              </NeedsAbility>
+            }
+          />
+          <Route
+            path="/reports/repairs"
+            element={
+              <NeedsAbility ability="report_repairs" doing="看維修月報">
+                <RepairMonthlyPage />
               </NeedsAbility>
             }
           />

@@ -179,22 +179,18 @@ export function RepairsPage() {
                   預估
                 </th>
                 <th className="num" title="委外:實際費用 / 自修:工資">
-                  成本
+                  費用
                 </th>
                 <th className="num">客戶實付</th>
-                <th className="num" title="客戶實付 − 成本">
+                <th className="num" title="自修:實付 − 零件成本 / 委外:實付 − 委外費用">
                   毛利
                 </th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => {
-                const cost =
-                  r.mode === "external"
-                    ? Number(r.external_quote_actual || 0)
-                    : Number(r.labor_fee || 0);
-                const paid = Number(r.customer_paid_amount || 0);
-                const margin = paid - cost;
+                // 毛利用伺服器算好的(維修毛利只有一份算法:工資不扣、自修扣零件成本)
+                const margin = Number(r.margin || 0);
                 const locked = r.is_void || r.status === "completed";
                 return (
                   <tr key={r.id}>
@@ -291,7 +287,6 @@ export function RepairsPage() {
                               : "var(--text-dim)",
                         fontWeight: 600,
                       }}
-                      title="客戶實付 − 成本"
                     >
                       ${NUMBER_FMT(margin)}
                     </td>
