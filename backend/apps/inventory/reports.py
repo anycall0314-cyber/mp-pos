@@ -298,6 +298,8 @@ def _doc_models():
     from apps.sales.models import SalesOrder, SalesReturn
     from apps.transfers.models import TransferOrder
 
+    from .models import StockCount
+
     return {
         "purchase_order": ("purchase", PurchaseOrder),
         "sales_order": ("sale", SalesOrder),
@@ -306,6 +308,9 @@ def _doc_models():
         "repair_order": ("repair", RepairOrder),
         "repair_order_shortage": ("repair", RepairOrder),
         "repair_order_reopen": ("repair", RepairOrder),
+        # 盤點核准時的調整、盤虧的手機找回(備註開頭是「盤點單 SC-000001 …」)
+        "stock_count": ("stock_count", StockCount),
+        "stock_count_found": ("stock_count", StockCount),
     }
 
 

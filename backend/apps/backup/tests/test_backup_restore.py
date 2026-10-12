@@ -634,6 +634,35 @@ class NewEnvironmentRestoreTests(_Base):
         boss = UserProfile.objects.get(tenant=tenant, user__username="a-boss-a2")
         self.assertEqual(boss.denied_abilities, [])
 
+    def test_stock_counts_come_back_with_their_scope_and_decisions(self):
+        """盤點單(2026-10-12)跟著備份走:只盤哪幾個類別、數到的、刷到的、少了哪一台、核准的決定,
+        搬到新環境之後都還在,而且指到那邊的類別、商品、序號(不是原本那家公司的)。"""
+        from apps.inventory import stockcount
+        from apps.inventory.models import ProductSerial, StockCount
+
+        a = self.a
+        spare = ProductSerial.objects.filter(tenant=a.tenant, status="in_stock", warehouse=a.wh).first()
+        self.assertIsNotNone(spare)
+        count = stockcount.open_count(a.tenant, a.wh, [a.cat_case.pk, a.cat_phone.pk], a.clerk_user)
+        stockcount.set_line(count, a.case, 1, a.clerk_user)
+        stockcount.scan(count, "不認得的碼", a.clerk_user)
+        stockcount.submit(count, a.clerk_user, phones_done=True)
+        stockcount.approve(count, a.admin_user, missing={})
+        self.assertEqual(ProductSerial.objects.get(pk=spare.pk).status, "lost")
+        tenant, _, _, _ = self.restore_as_new()
+        back = StockCount.objects.get(tenant=tenant)
+        self.assertEqual((back.no, back.status, back.phones_done), (count.no, "approved", True))
+        self.assertEqual(sorted(back.scope.values_list("category__code", flat=True)), sorted([a.cat_case.code, a.cat_phone.code]))
+        self.assertTrue(all(s.category.tenant_id == tenant.id for s in back.scope.all()))
+        line = back.lines.get()
+        self.assertEqual((line.product.tenant_id, line.product.name, line.counted_qty, line.adjust_qty is not None),
+                         (tenant.id, a.case.name, 1, True))
+        self.assertEqual([(s.code, s.serial_id) for s in back.scans.all()], [("不認得的碼", None)])
+        missing = back.missing.get()
+        self.assertEqual((missing.serial.tenant_id, missing.serial.serial_no, missing.serial.status, missing.applied),
+                         (tenant.id, spare.serial_no, "lost", True))
+        self.assertEqual(back.approved_by.profile.tenant_id, tenant.id)
+
     def test_the_void_time_and_who_come_back(self):
         """銷貨單作廢的那一刻與誰按的(2026-10-12)跟著備份走:搬到新環境還原之後時間一樣,人換成那邊重建的同一位。"""
         so = SalesOrder.objects.get(tenant=self.a.tenant)

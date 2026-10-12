@@ -7941,3 +7941,6 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .rm-people { margin-bottom: 12px; }
 .rm-people .report-grid { width: auto; min-width: 360px; }
 
+/* 盤點:管理員改調整量的那一格(窄一點,靠右) */
+.sc-adjust { width: 72px; text-align: right; }
+

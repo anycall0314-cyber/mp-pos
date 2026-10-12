@@ -8,6 +8,7 @@ export type AbilityKey =
   | "void_others"
   // 第二批
   | "edit_products"
+  | "stock_count"
   | "purchase"
   | "secondhand_buy"
   | "cash_ops"

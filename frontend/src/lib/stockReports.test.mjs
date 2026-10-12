@@ -65,6 +65,8 @@ test("狀態選單:名稱都是兩個字,預設是在店,全部 = 不篩", () =>
   assert.equal(SERIAL_STATUS_CHOICES[0].key, "store");
   assert.deepEqual(statusesOf("store"), ["in_stock", "returned"]);
   assert.deepEqual(statusesOf("sold"), ["sold"]);
+  assert.deepEqual(statusesOf("lost"), ["lost"]);                      // 2026-10-12:盤點核准之後少的那幾台
+  assert.deepEqual([...new Set(SERIAL_STATUS_CHOICES.map((c) => c.label.length))], [2]);
   assert.deepEqual(statusesOf("in_transit"), ["in_transit"]);
   assert.deepEqual(statusesOf("all"), []);
   assert.deepEqual(statusesOf("沒有這個"), ["in_stock", "returned"]);
@@ -109,6 +111,7 @@ test("點單號去哪一頁", () => {
   assert.equal(docPath({ kind: "sale", id: 9, no: "SO-000009" }), "/sales/9");
   assert.equal(docPath({ kind: "sale_return", id: 3, no: "SR-000003" }), "/sales/returns/3");
   assert.equal(docPath({ kind: "transfer", id: 4, no: "TO-000004" }), "/transfers/4");
+  assert.equal(docPath({ kind: "stock_count", id: 6, no: "SC-000006" }), "/inventory/stocktake/6");     // 盤點調整點回那張盤點單
   assert.equal(docPath({ kind: "repair", id: 5, no: "R-5" }), "/repairs/5");
 });
 

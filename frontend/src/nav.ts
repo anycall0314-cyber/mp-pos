@@ -122,6 +122,7 @@ export const NAV_MODULES: NavModule[] = [
       { to: "/inventory/movements", label: "異動查詢", aliases: ["庫存異動查詢", "庫存異動", "異動紀錄"] },
       { to: "/inventory/alerts", label: "庫存警示" },
       { to: "/transfers", label: "調撥作業", aliases: ["調撥"] },
+      { to: "/inventory/stocktake", label: "盤點作業", aliases: ["盤點", "庫存盤點", "盤點單", "盤虧", "盤盈"], needs: ["stock_count"] },
     ],
   },
   {

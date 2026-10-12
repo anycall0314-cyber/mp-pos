@@ -39,7 +39,7 @@ export interface FlowResult {
 }
 
 export interface DocRef {
-  kind: "purchase" | "sale" | "sale_return" | "transfer" | "repair";
+  kind: "purchase" | "sale" | "sale_return" | "transfer" | "repair" | "stock_count";
   id: number;
   no: string;
 }
@@ -133,6 +133,7 @@ export const SERIAL_STATUS_CHOICES: { key: string; label: string; statuses: stri
   { key: "returned", label: "已退", statuses: ["returned"] },
   { key: "in_transit", label: "在途", statuses: ["in_transit"] },
   { key: "sold", label: "已售", statuses: ["sold"] },
+  { key: "lost", label: "盤虧", statuses: ["lost"] },
   { key: "void", label: "作廢", statuses: ["void"] },
   { key: "all", label: "全部", statuses: [] },
 ];
@@ -259,6 +260,8 @@ export function docPath(doc: DocRef): string {
       return `/transfers/${doc.id}`;
     case "repair":
       return `/repairs/${doc.id}`;
+    case "stock_count":
+      return `/inventory/stocktake/${doc.id}`;
   }
 }
 

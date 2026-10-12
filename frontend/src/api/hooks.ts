@@ -11,6 +11,7 @@ import { listProductPhotos, type PhotosPayload } from "./photos";
 import { rangeQuery, rangeReady, type ReportRange } from "@/lib/fixedReports";
 import { invoiceQuery, type InvoiceFilter, type InvoiceListing } from "@/lib/invoiceList";
 import { repairQuery, type RepairFilter, type RepairListing } from "@/lib/repairReport";
+import type { CountDetail, CountSummary } from "@/lib/stockCount";
 import { purchaseLineQuery, type PurchaseLine, type PurchaseLineFilter } from "@/lib/purchaseLines";
 import { dailyQuery, type DailyFilter, type DailyReport } from "@/lib/salesDaily";
 import {
@@ -2973,6 +2974,50 @@ export const useRepairMonthly = (filter: RepairFilter, page: number) =>
 
 export const fetchRepairMonthlyExport = (filter: RepairFilter) =>
   api<RepairListing>(`/repair-monthly-report/?${repairQuery(filter, "export")}`);
+
+// 盤點:規則都在伺服器(核准才動庫存;帳上數量只有管理員的回應裡有)
+export const useStockCounts = () =>
+  useQuery({
+    queryKey: ["stock-counts"],
+    queryFn: () => api<{ results: CountSummary[] }>("/stock-counts/").then((r) => r.results),
+    gcTime: 0,
+  });
+
+export const useStockCount = (id: number) =>
+  useQuery({
+    queryKey: ["stock-count", id],
+    queryFn: () => api<CountDetail>(`/stock-counts/${id}/`),
+    enabled: id > 0,
+    retry: false,
+    gcTime: 0,
+  });
+
+export function useOpenStockCount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { warehouse: number | ""; categories: number[] }) =>
+      api<CountDetail>("/stock-counts/", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["stock-counts"] }),
+  });
+}
+
+/** 盤點單上的每一個動作(輸入數量、刷碼、送出、核准…):伺服器都回整張單現在的樣子,直接換上去。 */
+export function useStockCountDo(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ path, method = "POST", body }: { path: string; method?: "POST" | "DELETE"; body?: object }) =>
+      api<CountDetail>(`/stock-counts/${id}/${path}`, { method, body: body ? JSON.stringify(body) : undefined }),
+    onSuccess: (data, vars) => {
+      qc.setQueryData(["stock-count", id], data);
+      qc.invalidateQueries({ queryKey: ["stock-counts"] });
+      // 核准、找回會動庫存:別頁看到的數量要重抓
+      if (vars.path.startsWith("approve") || vars.path.includes("/found")) {
+        for (const key of ["products", "serials", "stock-balances", "serial-list", "stock-flow", "stock-moves"])
+          qc.invalidateQueries({ queryKey: [key] });
+      }
+    },
+  });
+}
 
 export const useAnalyticsOptions = (dimension: string | null, q: string) =>
   useQuery({

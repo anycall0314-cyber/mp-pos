@@ -3,6 +3,16 @@ from rest_framework.routers import DefaultRouter
 
 from .label_views import label_data
 from .report_views import serial_report, stock_flow_report, stock_movement_report
+from .stockcount_views import (
+    stock_count,
+    stock_count_action,
+    stock_count_found,
+    stock_count_line,
+    stock_count_lines,
+    stock_count_scan,
+    stock_count_scans,
+    stock_counts,
+)
 from .views import (
     ProductSerialViewSet,
     StockBalanceViewSet,
@@ -36,4 +46,13 @@ urlpatterns = router.urls + [
     path("stock-flow-report/", stock_flow_report, name="stock-flow-report"),
     path("stock-movement-report/", stock_movement_report, name="stock-movement-report"),
     path("serial-report/", serial_report, name="serial-report"),
+    # 盤點(規則在 stockcount.py)
+    path("stock-counts/", stock_counts),
+    path("stock-counts/<int:pk>/", stock_count),
+    path("stock-counts/<int:pk>/lines/", stock_count_lines),
+    path("stock-counts/<int:pk>/lines/<int:line_id>/", stock_count_line),
+    path("stock-counts/<int:pk>/scans/", stock_count_scans),
+    path("stock-counts/<int:pk>/scans/<int:scan_id>/", stock_count_scan),
+    path("stock-counts/<int:pk>/missing/<int:missing_id>/found/", stock_count_found),
+    path("stock-counts/<int:pk>/<str:action>/", stock_count_action),
 ]

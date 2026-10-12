@@ -125,7 +125,9 @@ export type SerialStatus =
   | "sold"
   | "returned"
   | "rma"
-  | "void";
+  | "void"
+  // 盤點時帳上在庫、現場沒有,管理員核准之後標成這個(不算在庫、還佔著碼;找到了可以找回)
+  | "lost";
 
 export type ConditionGrade = "S" | "A" | "B" | "C" | "D" | "";
 

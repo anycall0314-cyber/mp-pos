@@ -28,6 +28,7 @@ SALES_RETURN = "sales_return"
 VOID_PURCHASE = "void_purchase"
 VOID_OTHERS = "void_others"
 EDIT_PRODUCTS = "edit_products"
+STOCK_COUNT = "stock_count"
 PURCHASE = "purchase"
 SECONDHAND_BUY = "secondhand_buy"
 CASH_OPS = "cash_ops"
@@ -51,6 +52,8 @@ ABILITIES = [
     Ability(VOID_OTHERS, "作廢其他單", "作廢與銷退", "調撥、維修、雜支、現金調整、代收話費"),
     # 第二批(只擋「做」;查商品、查庫存、看進貨單與雜支清單照舊)
     Ability(EDIT_PRODUCTS, "商品建檔", "商品", "新增、修改商品與類別品牌,含批次與匯入"),
+    # 盤點(2026-10-12):開盤點單、輸入數到的數量、刷手機、送出。**核准才動庫存,核准只有管理員**,不在這個勾裡
+    Ability(STOCK_COUNT, "盤點作業", "商品", "開盤點單、盤、送出;核准只有管理員"),
     Ability(PURCHASE, "進貨入庫", "進貨與帳務", "進貨單、進貨匯入、中古的廠商收購"),
     Ability(SECONDHAND_BUY, "中古收購", "進貨與帳務", "跟客人收購二手機"),
     Ability(CASH_OPS, "雜支調整", "進貨與帳務", "新增、修改雜支與現金調整"),

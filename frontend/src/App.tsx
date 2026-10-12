@@ -35,6 +35,8 @@ import { BusinessDailyReportPage } from "@/pages/reports/BusinessDailyReport";
 import { CommissionLinesPage } from "@/pages/reports/CommissionLinesPage";
 import { ExploreReportPage } from "@/pages/reports/ExploreReportPage";
 import { FixedReportPage } from "@/pages/reports/FixedReportPage";
+import { StockCountPage } from "@/pages/inventory/StockCountPage";
+import { StockCountsPage } from "@/pages/inventory/StockCountsPage";
 import { InvoiceListPage } from "@/pages/reports/InvoiceListPage";
 import { RepairMonthlyPage } from "@/pages/reports/RepairMonthlyPage";
 import { PartsUsageReportPage } from "@/pages/reports/PartsUsageReportPage";
@@ -313,7 +315,19 @@ export function App() {
           <Route path="/inventory/flow" element={<StockFlowPage />} />
           <Route
             path="/inventory/stocktake"
-            element={<Placeholder title="盤點作業" />}
+            element={
+              <NeedsAbility ability="stock_count" doing="盤點">
+                <StockCountsPage />
+              </NeedsAbility>
+            }
+          />
+          <Route
+            path="/inventory/stocktake/:id"
+            element={
+              <NeedsAbility ability="stock_count" doing="盤點">
+                <StockCountPage />
+              </NeedsAbility>
+            }
           />
           <Route path="/inventory/movements" element={<StockMovesPage />} />
           <Route

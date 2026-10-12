@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 from apps.core.models import TenantOwnedModel
@@ -34,6 +35,9 @@ class ProductSerial(TenantOwnedModel):
         RETURNED = "returned", "已退"
         RMA = "rma", "維修中"
         VOID = "void", "作廢"
+        # 盤點時帳上在庫、現場沒有,管理員核准之後標成這個(2026-10-12)。不算在庫、不能賣;
+        # **還佔著它的碼**(跟作廢不一樣:找到了可以按「找回」變回在庫,所以同一個 IMEI 不能再進一次貨)
+        LOST = "lost", "盤虧"
 
     class ConditionGrade(models.TextChoices):
         S = "S", "S 級 媲美新機 / 拆封未使用"
@@ -357,3 +361,129 @@ class StockMovement(TenantOwnedModel):
 
     def __str__(self) -> str:
         return f"{self.movement_type} {self.serial_id} @ {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class StockCount(TenantOwnedModel):
+    """盤點單:一家門市盤一次(可以只盤幾個類別)。規則在 `stockcount.py`。
+
+    owner 2026-10-12 定的三條:差異要管理員調整與核准(盤的人只記數到的,**核准才動庫存**);
+    帶序號的逐台刷;盤點中可以繼續開單(所以每一列記的是「輸入那一刻」的帳上數量)。
+    """
+
+    class Status(models.TextChoices):
+        COUNTING = "counting", "盤點中"
+        SUBMITTED = "submitted", "待核准"
+        APPROVED = "approved", "已核准"
+        VOID = "void", "已作廢"
+
+    no = models.CharField("盤點單號", max_length=20, blank=True, editable=False)
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name="+", verbose_name="門市")
+    status = models.CharField("狀態", max_length=12, choices=Status.choices, default=Status.COUNTING)
+    note = models.CharField("備註", max_length=200, blank=True)
+    # 送出的人有沒有表明「這個範圍的手機全部刷完了」。有才算手機少了哪幾台;沒有 = 手機這次只是刷了一部分,
+    # 沒刷到的是「沒盤」不是「少了」(動手前紅隊第 1 條:只刷了櫃台、保險櫃沒刷就送出,不能整櫃都變盤虧)
+    phones_done = models.BooleanField("手機全部刷完了", default=False)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+", null=True, blank=True, verbose_name="開單的人")
+    submitted_at = models.DateTimeField("送出時間", null=True, blank=True)
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+", null=True, blank=True, verbose_name="送出的人")
+    approved_at = models.DateTimeField("核准時間", null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+", null=True, blank=True, verbose_name="核准的人")
+
+    class Meta:
+        ordering = ["-id"]
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "no"], name="uniq_stockcount_no"),
+            # 同一家門市同時只有一張還沒結束的(盤點中 / 待核准):兩個人同時開也只會成一張
+            models.UniqueConstraint(
+                fields=["tenant", "warehouse"], condition=models.Q(status__in=["counting", "submitted"]),
+                name="uniq_stockcount_open_per_warehouse"),
+        ]
+        verbose_name = "盤點單"
+        verbose_name_plural = "盤點單"
+
+    def __str__(self) -> str:
+        return self.no or f"盤點單#{self.pk}"
+
+
+class StockCountCategory(TenantOwnedModel):
+    """這張盤點單只盤這個類別(一列一個;一列都沒有 = 這家門市全部的類別)。
+    自己一張表、帶著公司那一欄:公司備份才帶得走(Django 自動產生的多對多關聯表不會被備份)。"""
+
+    count = models.ForeignKey(StockCount, on_delete=models.CASCADE, related_name="scope", verbose_name="盤點單")
+    category = models.ForeignKey("catalog.Category", on_delete=models.PROTECT, related_name="+", verbose_name="類別")
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [models.UniqueConstraint(fields=["count", "category"], name="uniq_stockcountcategory")]
+        verbose_name = "盤點範圍"
+        verbose_name_plural = "盤點範圍"
+
+
+class StockCountLine(TenantOwnedModel):
+    """配件一個商品一列:數到幾個、輸入那一刻帳上幾個。核准時管理員可以改調整量或先不調。"""
+
+    count = models.ForeignKey(StockCount, on_delete=models.CASCADE, related_name="lines", verbose_name="盤點單")
+    product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+", verbose_name="商品")
+    counted_qty = models.PositiveIntegerField("數到的數量")
+    # 輸入的那一刻帳上是多少(盤點中照常開單,之後賣掉的是正常的異動,不算差異)
+    book_qty = models.PositiveIntegerField("當時帳上的數量")
+    counted_at = models.DateTimeField("輸入時間")
+    counted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+", null=True, blank=True, verbose_name="盤的人")
+    # 核准時定下來的:實際調了多少(可以跟「數到的 − 當時帳上的」不一樣)、這一列先不調、原因、當下的平均成本
+    adjust_qty = models.IntegerField("調整的數量", null=True, blank=True)
+    skipped = models.BooleanField("先不調", default=False)
+    reason = models.CharField("原因", max_length=100, blank=True)
+    unit_cost = models.DecimalField("核准當下的平均成本", max_digits=14, decimal_places=2, null=True, blank=True)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [models.UniqueConstraint(fields=["count", "product"], name="uniq_stockcountline_product")]
+        verbose_name = "盤點明細"
+        verbose_name_plural = "盤點明細"
+
+
+class StockCountScan(TenantOwnedModel):
+    """手機逐台刷到的碼(一個碼一列)。記下刷的那一刻那一台在帳上是什麼樣子。"""
+
+    count = models.ForeignKey(StockCount, on_delete=models.CASCADE, related_name="scans", verbose_name="盤點單")
+    code = models.CharField("刷到的碼", max_length=80)
+    code_key = models.CharField("比對鍵", max_length=80)
+    # 系統認得的那一台;不認得(打錯、沒有進過貨)= 空的
+    serial = models.ForeignKey(
+        ProductSerial, on_delete=models.PROTECT, related_name="+", null=True, blank=True, verbose_name="序號")
+    # 刷的那一刻:那一台帳上是不是就在這家門市(在庫 / 已退待處理)。不是的就是「多出來的」,只列出來不自動處理
+    here = models.BooleanField("當時帳上在這家門市", default=False)
+    state = models.CharField("當時的狀態", max_length=16, blank=True)
+    scanned_at = models.DateTimeField("刷的時間")
+    scanned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+", null=True, blank=True, verbose_name="刷的人")
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [models.UniqueConstraint(fields=["count", "code_key"], name="uniq_stockcountscan_code")]
+        verbose_name = "盤點刷碼"
+        verbose_name_plural = "盤點刷碼"
+
+
+class StockCountMissing(TenantOwnedModel):
+    """送出時算出來的「帳上在這家門市在庫、但沒刷到」的手機。管理員決定調不調;核准之後找到了可以找回。"""
+
+    count = models.ForeignKey(StockCount, on_delete=models.CASCADE, related_name="missing", verbose_name="盤點單")
+    serial = models.ForeignKey(ProductSerial, on_delete=models.PROTECT, related_name="+", verbose_name="序號")
+    skipped = models.BooleanField("先不調", default=False)
+    reason = models.CharField("原因", max_length=100, blank=True)
+    # 核准時真的改成盤虧了(核准當下已經不在庫的不會改)
+    applied = models.BooleanField("已標成盤虧", default=False)
+    found_at = models.DateTimeField("找回時間", null=True, blank=True)
+    found_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+", null=True, blank=True, verbose_name="找回的人")
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [models.UniqueConstraint(fields=["count", "serial"], name="uniq_stockcountmissing_serial")]
+        verbose_name = "盤虧序號"
+        verbose_name_plural = "盤虧序號"
