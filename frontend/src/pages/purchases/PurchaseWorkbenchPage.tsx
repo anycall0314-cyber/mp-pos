@@ -13,6 +13,7 @@ import {
   findDevicesByCode,
   restoreProduct,
   searchProductsForPurchase,
+  searchPurchaseDoors,
   searchSuppliers,
 } from "@/api/search";
 import type {
@@ -59,11 +60,13 @@ import {
   prefillReport,
   readPrefill,
   notForPurchase,
+  otherDoorBadge,
   sortFetched,
   tripBox,
   tripOwnEntry,
   tripSettles,
   withPrefill,
+  wrongDoor,
   type PrefillOutcome,
 } from "@/lib/purchasePrefill";
 
@@ -621,26 +624,45 @@ export function PurchaseWorkbenchPage({
     return null;
   }
 
+  /** 下拉清單的一筆。`elsewhere` = 另一個門的商品(掛「中古機」/「非中古」,點了不會加) */
+  function scanOption(p: Product, elsewhere = false): ScanOption<Product> {
+    return {
+      key: p.id,
+      code: p.sku,
+      label: p.name,
+      badge: elsewhere
+        ? otherDoorBadge(isSecondhandVendor)
+        : p.is_active === false
+          ? "已停用"
+          : undefined,
+      hint: p.spec || undefined,
+      peek: p.photo_count ? `照片 ${p.photo_count}` : undefined,
+      payload: p,
+    };
+  }
+
+  const doors = () => ({
+    secondhand: isSecondhandVendor,
+    supplierId: supplier,
+    warehouseId: warehouse,
+  });
+
+  /** 這一頁挑得到的商品(一般進貨:不含中古機;廠商收購:只有中古機)。刷碼的判斷只看這個 */
+  async function searchHere(q: string): Promise<ScanOption<Product>[]> {
+    const options = await searchProductsForPurchase(q, doors());
+    return options.filter((o) => !!o.payload).map((o) => scanOption(o.payload as Product));
+  }
+
+  /**
+   * 下拉清單:這一頁沒有一個「打的字都對得上」的時候,另一個門裡都對得上的排在最前面(那才是人打的東西)。
+   * 點了不會加進這張單,只會講該去哪一頁(`onPick`)。
+   */
   async function search(q: string): Promise<ScanOption<Product>[]> {
-    const options = await searchProductsForPurchase(q, {
-      secondhand: isSecondhandVendor,
-      supplierId: supplier,
-      warehouseId: warehouse,
-    });
-    return options
-      .filter((o) => !!o.payload)
-      .map((o) => {
-        const p = o.payload as Product;
-        return {
-          key: p.id,
-          code: p.sku,
-          label: p.name,
-          badge: p.is_active === false ? "已停用" : undefined,
-          hint: p.spec || undefined,
-          peek: p.photo_count ? `照片 ${p.photo_count}` : undefined,
-          payload: p,
-        };
-      });
+    const { here, elsewhere } = await searchPurchaseDoors(q, doors());
+    return [
+      ...elsewhere.filter((o) => !!o.payload).map((o) => scanOption(o.payload as Product, true)),
+      ...here.filter((o) => !!o.payload).map((o) => scanOption(o.payload as Product)),
+    ];
   }
 
   async function onPick(
@@ -648,6 +670,9 @@ export function PurchaseWorkbenchPage({
     via: "enter" | "mouse",
   ): Promise<string | null> {
     const p = opt.payload;
+    // 另一個門的商品(下拉清單在這一頁找不到東西時會列出來):不加,講該去哪一頁
+    const elsewhere = wrongDoor(p, isSecondhandVendor);
+    if (elsewhere) return elsewhere;
     if (p.is_active === false) {
       // 已停用的商品不會因為被選到就悄悄恢復,也**不算加進去了**:回一句話,這個碼會留在「沒加入」,
       // 有那一筆就不能儲存(不然東西進店了、單上卻沒有它)。管理員按「恢復」之後,再刷一次(或點「沒加入」那一筆)才加進明細
@@ -969,7 +994,7 @@ export function PurchaseWorkbenchPage({
     if (!looksLikeDeviceCode(text)) return false;
     // 三件事一起問:這個模式挑得到的商品、系統裡有沒有這一台、另一個模式的商品。各自看成敗
     const [found, device, other] = await Promise.allSettled([
-      search(text),
+      searchHere(text),
       findDevicesByCode(text),
       searchProductsForPurchase(text, { secondhand: !isSecondhandVendor }),
     ]);
@@ -997,11 +1022,8 @@ export function PurchaseWorkbenchPage({
     const foreign = other.value.find(
       (o) => o.payload && isExactProduct(o.payload as Product, text),
     )?.payload as Product | undefined;
-    if (foreign) {
-      return isSecondhandVendor
-        ? `「${foreign.name}」不是中古機,請到進貨單進`
-        : `「${foreign.name}」是中古機,請到中古收購進`;
-    }
+    const elsewhere = foreign ? wrongDoor(foreign, isSecondhandVendor) : null;
+    if (elsewhere) return elsewhere;
     // 查完之後才看「現在」正在刷哪一行(查的這段時間那一行可能被拿掉、或換成另一行)
     const now = linesRef.current.find(
       (l) => l.key === currentRef.current && l.product.requires_serial,

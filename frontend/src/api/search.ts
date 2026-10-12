@@ -2,6 +2,7 @@ import { api } from "./client";
 import type { ComboOption } from "@/components/ComboBox";
 import { codesLabel, normalizeCode } from "@/lib/deviceCodes";
 import { money } from "@/lib/money";
+import { askBothDoors } from "@/lib/purchasePrefill";
 import type {
   Carrier,
   Category,
@@ -147,6 +148,46 @@ export function candidateSummary(c: ResolveCandidate): string {
     .join(" / ");
 }
 
+type PurchaseSearchOpts = {
+  secondhand?: boolean;
+  supplierId?: number | "";
+  warehouseId?: number | "";
+};
+
+function candidateOption(c: ResolveCandidate): ComboOption<Product> {
+  return {
+    id: c.product.id,
+    label: c.product.name,
+    secondary: candidateSummary(c),
+    payload: c.product,
+    disabled: !c.selectable && !c.can_restore,
+  };
+}
+
+/** 進貨選商品的兩條路(共用比對 + 照字面搜尋)合起來;`candidates` = 比對那一條回來的(還沒打字時是空的)。 */
+async function purchaseOptions(
+  query: string,
+  opts?: PurchaseSearchOpts,
+): Promise<{ options: ComboOption<Product>[]; candidates: ResolveCandidate[] }> {
+  const plain = searchProducts(query, {
+    activeOnly: true,
+    secondhandOnly: opts?.secondhand === true,
+    excludeSecondhand: opts?.secondhand === false,
+    warehouseId: opts?.warehouseId,
+  });
+  if (!query.trim()) return { options: await plain, candidates: [] };
+  const [resolved, rest] = await Promise.all([
+    resolveProducts(query, { ...opts, limit: LIMIT }),
+    plain,
+  ]);
+  const options = resolved.candidates.map(candidateOption);
+  const seen = new Set(options.map((o) => o.id));
+  return {
+    options: options.concat(rest.filter((o) => !seen.has(o.id))),
+    candidates: resolved.candidates,
+  };
+}
+
 /**
  * 進貨選商品用:先列共用比對的候選(換個寫法、用別名、零庫存、已停用都找得到),
  * 再補上原本的搜尋結果(品號 / 條碼片段)。同一商品只出現一次。
@@ -154,32 +195,27 @@ export function candidateSummary(c: ResolveCandidate): string {
  */
 export async function searchProductsForPurchase(
   query: string,
-  opts?: {
-    secondhand?: boolean;
-    supplierId?: number | "";
-    warehouseId?: number | "";
-  },
+  opts?: PurchaseSearchOpts,
 ): Promise<ComboOption<Product>[]> {
-  const plain = searchProducts(query, {
-    activeOnly: true,
-    secondhandOnly: opts?.secondhand === true,
-    excludeSecondhand: opts?.secondhand === false,
-    warehouseId: opts?.warehouseId,
-  });
-  if (!query.trim()) return plain;
-  const [resolved, rest] = await Promise.all([
-    resolveProducts(query, { ...opts, limit: LIMIT }),
-    plain,
-  ]);
-  const options: ComboOption<Product>[] = resolved.candidates.map((c) => ({
-    id: c.product.id,
-    label: c.product.name,
-    secondary: candidateSummary(c),
-    payload: c.product,
-    disabled: !c.selectable && !c.can_restore,
-  }));
-  const seen = new Set(options.map((o) => o.id));
-  return options.concat(rest.filter((o) => !seen.has(o.id)));
+  return (await purchaseOptions(query, opts)).options;
+}
+
+/**
+ * 進貨開單頁的下拉清單:這一頁(一般進貨 = 不含中古機 / 廠商收購 = 只有中古機)挑得到的 `here`,
+ * 加上**另一個門**裡打的字都對得上的 `elsewhere`(點了不能加,頁面會講該去哪一頁)。
+ * 什麼時候問另一個門、問不到怎麼辦:`lib/purchasePrefill.ts` 的 `askBothDoors`(有測試)。
+ */
+export async function searchPurchaseDoors(
+  query: string,
+  opts: PurchaseSearchOpts & { secondhand: boolean },
+): Promise<{ here: ComboOption<Product>[]; elsewhere: ComboOption<Product>[] }> {
+  const found = await askBothDoors(
+    query,
+    () => purchaseOptions(query, opts),
+    async () =>
+      (await resolveProducts(query, { ...opts, secondhand: !opts.secondhand, limit: LIMIT })).candidates,
+  );
+  return { here: found.here, elsewhere: found.elsewhere.map(candidateOption) };
 }
 
 /** 恢復已停用的商品(限管理員);回傳恢復後的商品 */

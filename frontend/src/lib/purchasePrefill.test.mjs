@@ -2,11 +2,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { readFileSync } from "node:fs";
+
 import {
+  allWordsMatch,
+  askBothDoors,
   carriedQty,
   draftQty,
+  matchedHere,
   MAX_PREFILL,
   notForPurchase,
+  otherDoorBadge,
   prefillReport,
   purchaseLinkFor,
   readPrefill,
@@ -15,6 +21,7 @@ import {
   tripOwnEntry,
   tripSettles,
   withPrefill,
+  wrongDoor,
 } from "./purchasePrefill.ts";
 
 /** 網址上的 add 讀出來是哪幾個商品(走的就是進貨開單頁讀網址的那一支) */
@@ -185,6 +192,122 @@ test("把還沒做完的寫回網址:讀得回來、別的參數留著、做完�
   // 不是編號的不寫進去
   assert.deepEqual(readPrefill(withPrefill("", [0, -1, 2.5, 8], 0)).ids, [8]);
   assert.equal(withPrefill("", [0, -1, 2.5, 8], 0), "?add=8");
+});
+
+// ── 進貨開單頁的兩個門:一般進貨(不收中古機)/ 廠商收購(只收中古機) ──
+
+test("走錯門的商品:講該去哪一頁;是這一頁的不講", () => {
+  // 一般進貨
+  assert.equal(wrongDoor({ name: "iPhone 17 256G 黑色 全新" }, false), null);
+  assert.equal(wrongDoor({ name: "iPhone 17 256G 黑色 全新", is_secondhand: false }, false), null);
+  assert.equal(
+    wrongDoor({ name: "iPhone 17 256G 黑色 中古機", is_secondhand: true }, false),
+    "「iPhone 17 256G 黑色 中古機」是中古機,請到中古收購進",
+  );
+  // 中古收購的廠商收購
+  assert.equal(wrongDoor({ name: "iPhone 17 256G 黑色 中古機", is_secondhand: true }, true), null);
+  assert.equal(
+    wrongDoor({ name: "iPhone 17 256G 黑色 全新", is_secondhand: false }, true),
+    "「iPhone 17 256G 黑色 全新」不是中古機,請到進貨單進",
+  );
+  assert.equal(wrongDoor({ name: "殼" }, true), "「殼」不是中古機,請到進貨單進");
+  // 跟「當場找到的商品」那一句是同一句話
+  assert.equal(wrongDoor({ name: "中古 IP12", is_secondhand: true }, false), notForPurchase({ name: "中古 IP12", is_secondhand: true }));
+});
+
+test("下拉清單:這一頁沒有一個「打的字都對得上」的,才去問另一個門;小標講它是哪一種", () => {
+  const c = (level) => ({ level });
+  // 只是相關(有地方對不上)的不算對上
+  assert.equal(matchedHere([c("related"), c("related")]), false); // owner 的例子:這一頁只有「相關」的全新機
+  assert.equal(matchedHere([]), false);
+  for (const level of ["identifier", "exact", "covers", "subset"]) {
+    assert.equal(matchedHere([c("related"), c(level)]), true, level);
+  }
+  // 另一個門只列都對得上的,順序不動
+  const mixed = [{ level: "covers", id: 1 }, { level: "related", id: 2 }, { level: "exact", id: 3 }];
+  assert.deepEqual(allWordsMatch(mixed).map((x) => x.id), [1, 3]);
+  assert.deepEqual(allWordsMatch([]), []);
+  assert.equal(otherDoorBadge(false), "中古機"); // 一般進貨看到的是中古機
+  assert.equal(otherDoorBadge(true), "非中古");
+});
+
+test("進貨開單頁:下拉先列另一個門都對得上的、點到走錯門的不加、刷碼判斷只看這一頁的商品", () => {
+  const page = readFileSync(new URL("../pages/purchases/PurchaseWorkbenchPage.tsx", import.meta.url), "utf8");
+  // 下拉:另一個門的排前面、掛小標;這一頁的照舊
+  assert.match(
+    page,
+    /async function search\(q: string\)[^}]*const \{ here, elsewhere \} = await searchPurchaseDoors\(q, doors\(\)\);\s*return \[\s*\.\.\.elsewhere[^\]]*scanOption\(o\.payload as Product, true\)\),\s*\.\.\.here[^\]]*scanOption\(o\.payload as Product\)\),\s*\];/,
+  );
+  assert.match(page, /search=\{search\}/);
+  assert.match(page, /badge: elsewhere\s*\? otherDoorBadge\(isSecondhandVendor\)/);
+  // 點到:先看是不是走錯門,是就回那一句話(不會走到加進明細)
+  assert.match(page, /const p = opt\.payload;[^]*?const elsewhere = wrongDoor\(p, isSecondhandVendor\);\s*if \(elsewhere\) return elsewhere;[^]*?return addProduct\(p, via\);/);
+  // 刷碼判斷「這一頁挑得到的商品」不能混進另一個門的
+  assert.match(page, /Promise\.allSettled\(\[\s*searchHere\(text\),/);
+  assert.match(page, /async function searchHere\(q: string\)[^}]*await searchProductsForPurchase\(q, doors\(\)\);/);
+
+  const api = readFileSync(new URL("../api/search.ts", import.meta.url), "utf8");
+  // 什麼時候問、問不到怎麼辦走 askBothDoors(下面那幾條真的跑);這裡只看接的是對的兩個查詢:另一個門要反過來
+  assert.match(
+    api,
+    /await askBothDoors\(\s*query,\s*\(\) => purchaseOptions\(query, opts\),\s*async \(\) =>\s*\(await resolveProducts\(query, \{ \.\.\.opts, secondhand: !opts\.secondhand, limit: LIMIT \}\)\)\.candidates,\s*\);/,
+  );
+  assert.match(api, /elsewhere: found\.elsewhere\.map\(candidateOption\)/);
+  assert.match(api, /candidates: resolved\.candidates,/);
+});
+
+/** 假的兩個查詢:記下各被叫了幾次 */
+function doors({ options = ["這一頁的"], candidates = [], others = [], hereFails = false, elsewhereFails = false } = {}) {
+  const calls = { here: 0, elsewhere: 0 };
+  return {
+    calls,
+    here: async () => {
+      calls.here += 1;
+      if (hereFails) throw new Error("這一頁查不到");
+      return { options, candidates };
+    },
+    elsewhere: async () => {
+      calls.elsewhere += 1;
+      if (elsewhereFails) throw new Error("另一個門查不到");
+      return others;
+    },
+  };
+}
+const lv = (level, id) => ({ level, id });
+
+test("兩個門:這一頁有都對得上的 → 不問另一個門", async () => {
+  const d = doors({ candidates: [lv("related", 1), lv("covers", 2)], others: [lv("exact", 9)] });
+  assert.deepEqual(await askBothDoors("17 256", d.here, d.elsewhere), { here: ["這一頁的"], elsewhere: [] });
+  assert.deepEqual(d.calls, { here: 1, elsewhere: 0 });
+});
+
+test("兩個門:這一頁只有相關的(或什麼都沒有)→ 問另一個門,只留都對得上的、順序不動", async () => {
+  const d = doors({ candidates: [lv("related", 1)], others: [lv("covers", 7), lv("related", 8), lv("exact", 9)] });
+  const found = await askBothDoors("17 256 中古機", d.here, d.elsewhere);
+  assert.deepEqual(found.here, ["這一頁的"]);
+  assert.deepEqual(found.elsewhere.map((c) => c.id), [7, 9]);
+  assert.deepEqual(d.calls, { here: 1, elsewhere: 1 });
+
+  const none = doors({ options: [], candidates: [], others: [lv("covers", 7)] });
+  assert.deepEqual((await askBothDoors("17 256 中古機", none.here, none.elsewhere)).elsewhere.map((c) => c.id), [7]);
+});
+
+test("兩個門:還沒打字不問另一個門(預設清單)", async () => {
+  for (const query of ["", "   "]) {
+    const d = doors({ candidates: [], others: [lv("covers", 7)] });
+    assert.deepEqual(await askBothDoors(query, d.here, d.elsewhere), { here: ["這一頁的"], elsewhere: [] });
+    assert.equal(d.calls.elsewhere, 0, JSON.stringify(query));
+  }
+});
+
+test("兩個門:另一個門問不到 → 當成沒有,這一頁的結果照樣回;這一頁問不到 → 整個失敗", async () => {
+  const d = doors({ candidates: [lv("related", 1)], elsewhereFails: true });
+  assert.deepEqual(await askBothDoors("17 256 中古機", d.here, d.elsewhere), { here: ["這一頁的"], elsewhere: [] });
+  assert.equal(d.calls.elsewhere, 1);
+
+  const broken = doors({ hereFails: true, others: [lv("covers", 7)] });
+  await assert.rejects(askBothDoors("17 256 中古機", broken.here, broken.elsewhere), /這一頁查不到/);
+  assert.equal(broken.calls.elsewhere, 0);
 });
 
 // ── 進貨開單頁當場找 / 當場建 ──

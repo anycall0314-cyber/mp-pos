@@ -98,6 +98,19 @@ _SEP_SPLIT_RE = re.compile(r"([/\s,、，;；|()\[\]{}<>:：]+)")
 _ATOM_RE = re.compile(r"[A-Z]+|\d+(?:\.\d+)?|[一-鿿]+|\+")
 _CAP_RE = re.compile(r"(?<![\d.])(\d+)\s*(GB|G|TB|T)(?![A-Z])")
 _CAPACITY_TOKEN_RE = re.compile(r"^\d+(GB|TB)$")
+# 沒寫單位的容量:自己一塊的 64 / 128 / 256 / 512(`17 256`、`IP11PM/256/黑`、`8+256`、`256黑`)。
+# - `16`、`32` 不算:`iPhone 16`、`Reno 12` 這種型號數字分不出來。
+# - 前後黏著英文 / 數字的不算(`A256`、`1256`、`128CM`;`RC-128` 的連字號在這之前已經接成 `RC128`);
+#   後面黏著 `%`(電池健康度 64%)、`+`、或數量單位(`64片`、`128入`)的也不算。
+# - 中間隔著空白的,後面那一塊**整塊就是單位**才不算(`64 %`、`64 片`、`128 CM`、`64 W`);
+#   只是開頭像單位的照算(`256 米霧灰` 是顏色、`256 M4` 是晶片、`64 WHITE`)。
+_BARE_CAPACITY = ("64", "128", "256", "512")
+_BARE_CAP_RE = re.compile(
+    r"(?<![A-Z\d.])(%s)(?![A-Z\d.+%%]|[%s]|[ \t]+(?:%%|[%s](?![一-鿿])|(?:%s)(?![A-Z\d])))" % (
+        "|".join(_BARE_CAPACITY), _CJK_UNITS, _CJK_UNITS,
+        "|".join(sorted(_UNITS, key=len, reverse=True)),
+    )
+)
 _BARE_MODEL_RE = re.compile(r"^(\d{1,3})([A-Z+]{0,5})$")
 # 沒寫品牌字首的機型寫法:數字 + 英文後綴(`11PM`、`13P`、`11PROMAX`)。是不是機型由機型主檔決定,這裡只認形狀
 _BARE_TOKEN_RE = re.compile(r"^\d{1,3}[A-Z]{1,8}$")
@@ -154,6 +167,31 @@ def _norm_capacity(m: re.Match) -> str:
     if unit in ("TB", "T") and num in _CAPACITY_TB:
         return f"{num}TB"
     return m.group(0)
+
+
+def _names_a_model(seg: str) -> bool:
+    """這一塊像不像「帶數字的機型」:`IP17`、`S25U`、`RENO16`,或沒寫字首的 `17`、`11PRO`、`16+`(`20W`、`256GB` 這種規格不算)。"""
+    if _MODEL_HEAD_RE.match(seg):
+        return True
+    m = _BARE_MODEL_RE.match(seg)
+    return bool(m) and m.group(2) not in _UNITS
+
+
+def _bare_capacity(s: str) -> str:
+    """沒寫單位的容量補上單位:`17 256` → `17 256GB`、`IP11PM/256/黑` → `IP11PM/256GB/黑`。
+
+    店員打字常常不寫 G。不補的話這個數字會被當成普通的字(對不上商品的 `256GB`),
+    或被接到前一個英文字後面變成假的型號(`IPHONE256`、`PRO256`、`S256`)。
+
+    **同一段文字裡另外有帶數字的機型才認**(紅隊:別家可能有就叫「某系列 256」的東西,不能看到 256 就當容量)。
+    只有容量數字、或只有品牌字(`iphone 256`、`三星 256`)的維持原樣。查詢與品名走同一支,兩邊判得一樣。
+    """
+    if not _BARE_CAP_RE.search(s):
+        return s
+    segments = [seg for seg in _SEP_SPLIT_RE.split(s)[::2] if seg and seg not in _BARE_CAPACITY]
+    if not any(_names_a_model(seg) for seg in segments):
+        return s
+    return _BARE_CAP_RE.sub(lambda m: m.group(1) + "GB", s)
 
 
 def _join_hyphens(s: str) -> str:
@@ -297,10 +335,12 @@ def _split_cjk(run: str, terms: frozenset) -> tuple[list[str], list[str]]:
 
 
 @lru_cache(maxsize=50000)
-def _parse(text: str, terms: frozenset) -> Features:
+def _parse(text: str, terms: frozenset, bare_capacity: bool = True) -> Features:
     s = unicodedata.normalize("NFKC", text or "").upper()
     s = _CAP_RE.sub(_norm_capacity, s)
     s = _join_hyphens(s)
+    if bare_capacity:
+        s = _bare_capacity(s)
 
     segments: list[str] = []
     separators: list[str] = []
@@ -417,9 +457,12 @@ def build_terms(category_names=()) -> frozenset:
     return frozenset(_DEFAULT_TERMS | extra) if extra else _DEFAULT_TERMS
 
 
-def parse_features(text: str, terms: frozenset = _DEFAULT_TERMS) -> Features:
-    """一段文字(查詢或品名)→ 特徵。查詢端與商品端一定要用同一份 terms。"""
-    return _parse(text or "", terms)
+def parse_features(text: str, terms: frozenset = _DEFAULT_TERMS, *, bare_capacity: bool = True) -> Features:
+    """一段文字(查詢或品名)→ 特徵。查詢端與商品端一定要用同一份 terms。
+
+    `bare_capacity=False` = 以前的讀法:沒寫單位的 `256` 不當容量(`_bare_capacity`)。比對兩種讀法都會看(`MatchContext.scan`)。
+    """
+    return _parse(text or "", terms, bare_capacity)
 
 
 def is_broad_phrase(text: str, terms: frozenset = _DEFAULT_TERMS) -> bool:
@@ -817,6 +860,8 @@ class MatchContext:
 
         self.rows = []
         self._row_at: dict[int, int] = {}   # 商品編號 → 它在 rows 的第幾列
+        # 商品編號 → (品名的特徵, 其他叫法的特徵) 照**以前的讀法**(沒寫單位的 256 不當容量)。只記讀出來不一樣的那幾個
+        self._before: dict[int, tuple] = {}
         for pid, sku, name, spec, color, capacity, cat, active, pm_id, used in (
             Product.objects.for_tenant(tenant).values_list(
                 "id", "sku", "name", "spec", "color", "capacity", "category__name",
@@ -833,11 +878,16 @@ class MatchContext:
                 linked_ids=frozenset(), alts=()):
         own = " ".join(x for x in (name, spec, color, capacity) if x)
         soft = parse_features(cat or "", self.terms).words | {cat or ""}
+        mine = parse_features(own, self.terms)
+        named = [(alt, parse_features(alt, self.terms)) for alt in alts]
         self._row_at[pid] = len(self.rows)
-        self.rows.append((
-            pid, sku, active, used, parse_features(own, self.terms), soft, linked_ids,
-            [(alt, parse_features(alt, self.terms)) for alt in alts],
-        ))
+        self.rows.append((pid, sku, active, used, mine, soft, linked_ids, named))
+        mine_before = parse_features(own, self.terms, bare_capacity=False)
+        named_before = [(alt, parse_features(alt, self.terms, bare_capacity=False)) for alt in alts]
+        if mine_before != mine or named_before != named:
+            self._before[pid] = (mine_before, named_before)
+        else:
+            self._before.pop(pid, None)
 
     def states_capacity(self, product_id) -> bool:
         """這個商品有沒有寫容量:它自己的品名 / 規格 / 容量欄,**或它任何一個其他叫法** —— 比對看的就是這幾份。
@@ -873,49 +923,66 @@ class MatchContext:
                 best = v
         return best
 
+    def _verdict(self, q, mine, soft, linked_ids, alts, symmetric):
+        """這段文字(`q`)對一個商品最好的結果:正向,加上防重複才做的反向。沒有就回 None。"""
+        best = self._forward(q, mine, soft, linked_ids, alts)
+        # 防重複的對稱比對:正向沒有結果、或只是「資訊不足的相關」時,反過來再比一次 ——
+        # 既有商品的特徵都在這個品名裡,就是同一款(SUBSET)。正向是「相關、而且有明確不同」的不做(那是兩個不同的東西)。
+        #
+        # 新認得的寫法不能改掉這裡以前的結論,兩個方向都要守住:
+        # (1) 以前靠反向成立的同一款不能不見:正向現在因為新認法冒出一個「相關(明確不同)」時,照樣去看反向 ——
+        #     但只認**以前的比法**(plain)就成立的反向,不能用新認法在反向再多認一次
+        #     (`11PM/透/黑` 對 `IP11PM/黑`:寫成 `IP11PM/透/黑` 時明明是顏色不同的兩個東西)。
+        # (2) 以前不是同一款的不能變成同一款:要升成同一款之前,**以前的正向**也必須是會做反向比對的那一種
+        #     (主品名顏色明確不同、現在只是被某個其他叫法的結果蓋過去的,不能升)。
+        if symmetric and (
+            _wants_reverse(best) or (best.level == RELATED and best.via_new)
+        ):
+            # 既有商品本身太籠統就不算,不然什麼新品都會被它擋:
+            # 只叫「皮套」,或新品有寫機型而它沒有(「皮套 藍」對上
+            # 「Reno16 側翻皮套 藍」)—— 少了機型,它不是同一款的舊寫法。
+            generic = mine.kinds < 2 or (q.codes and not mine.codes)
+            differs_now = best is not None and best.conflict
+            back = None if generic else compare(
+                mine, q, model_ids=self._model_ids, plain=differs_now,
+            )
+            if back is not None and back.level in (EXACT, COVERS):
+                # 現在沒有正向結果的,以前也沒有(新認法只會多對上);用不到新認法的,以前就是這個結果
+                before = best
+                if best is not None and best.via_new:
+                    before = self._forward(q, mine, soft, linked_ids, alts, plain=True)
+                if _wants_reverse(before):
+                    best = Verdict(
+                        SUBSET, 88, ["既有商品的特徵都在這個品名裡"],
+                        [d.replace("商品另有", "這個品名多了") for d in back.differences],
+                        False,
+                    )
+        return best
+
     def scan(self, text, *, is_secondhand=None, with_related=True, symmetric=False,
              limit=20, exclude_id=None):
         q = parse_features(text, self.terms)
+        # 以前的讀法(沒寫單位的 256 不當容量)。兩種讀法**都比、取比較好的那個**:
+        # 新讀法只會多對上(`17 256` 找得到 `…256G…`),以前對得上的一定還在 ——
+        # `IP12P/256G/64 %/藍` 的 64、`MOTO G54/64 殼` 的 64(= G64)照新讀法會被當成容量而對不上原本的同一款,
+        # 用推的補不完,直接照以前的讀法再比一次。只有這段文字或那個商品「兩種讀法不一樣」時才多比這一次。
         if q.empty:
             return []
+        q_before = parse_features(text, self.terms, bare_capacity=False)
+        reads_two_ways = q_before != q
         found: list[Candidate] = []
         for pid, sku, active, used, mine, soft, linked_ids, alts in self.rows:
             if pid == exclude_id:
                 continue
             if is_secondhand is not None and used != is_secondhand:
                 continue
-            best = self._forward(q, mine, soft, linked_ids, alts)
-            # 防重複的對稱比對:正向沒有結果、或只是「資訊不足的相關」時,反過來再比一次 ——
-            # 既有商品的特徵都在這個品名裡,就是同一款(SUBSET)。正向是「相關、而且有明確不同」的不做(那是兩個不同的東西)。
-            #
-            # 新認得的寫法不能改掉這裡以前的結論,兩個方向都要守住:
-            # (1) 以前靠反向成立的同一款不能不見:正向現在因為新認法冒出一個「相關(明確不同)」時,照樣去看反向 ——
-            #     但只認**以前的比法**(plain)就成立的反向,不能用新認法在反向再多認一次
-            #     (`11PM/透/黑` 對 `IP11PM/黑`:寫成 `IP11PM/透/黑` 時明明是顏色不同的兩個東西)。
-            # (2) 以前不是同一款的不能變成同一款:要升成同一款之前,**以前的正向**也必須是會做反向比對的那一種
-            #     (主品名顏色明確不同、現在只是被某個其他叫法的結果蓋過去的,不能升)。
-            if symmetric and (
-                _wants_reverse(best) or (best.level == RELATED and best.via_new)
-            ):
-                # 既有商品本身太籠統就不算,不然什麼新品都會被它擋:
-                # 只叫「皮套」,或新品有寫機型而它沒有(「皮套 藍」對上
-                # 「Reno16 側翻皮套 藍」)—— 少了機型,它不是同一款的舊寫法。
-                generic = mine.kinds < 2 or (q.codes and not mine.codes)
-                differs_now = best is not None and best.conflict
-                back = None if generic else compare(
-                    mine, q, model_ids=self._model_ids, plain=differs_now,
-                )
-                if back is not None and back.level in (EXACT, COVERS):
-                    # 現在沒有正向結果的,以前也沒有(新認法只會多對上);用不到新認法的,以前就是這個結果
-                    before = best
-                    if best is not None and best.via_new:
-                        before = self._forward(q, mine, soft, linked_ids, alts, plain=True)
-                    if _wants_reverse(before):
-                        best = Verdict(
-                            SUBSET, 88, ["既有商品的特徵都在這個品名裡"],
-                            [d.replace("商品另有", "這個品名多了") for d in back.differences],
-                            False,
-                        )
+            best = self._verdict(q, mine, soft, linked_ids, alts, symmetric)
+            before = self._before.get(pid)
+            if reads_two_ways or before is not None:
+                mine_before, alts_before = before if before is not None else (mine, alts)
+                old = self._verdict(q_before, mine_before, soft, linked_ids, alts_before, symmetric)
+                if old is not None and (best is None or old.sort_key() < best.sort_key()):
+                    best = old
             if best is None or (best.level == RELATED and not with_related):
                 continue
             found.append(Candidate(pid, best.level, best.score, best.reasons,

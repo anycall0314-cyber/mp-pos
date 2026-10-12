@@ -145,6 +145,55 @@ export function notForPurchase(p: { name: string; is_secondhand?: boolean; is_vi
 }
 
 /**
+ * 進貨開單頁有兩個門:一般進貨(不收中古機)、中古收購的廠商收購(只收中古機)。
+ * 這個商品走的不是這一頁的門時回一句話(該去哪一頁);是這一頁的回 null。
+ */
+export function wrongDoor(p: { name: string; is_secondhand?: boolean }, secondhandDoc: boolean): string | null {
+  if (!!p.is_secondhand === secondhandDoc) return null;
+  return secondhandDoc ? `「${p.name}」不是中古機,請到進貨單進` : `「${p.name}」是中古機,請到中古收購進`;
+}
+
+/** 另一個門的商品列在這一頁的下拉清單時掛的小標。 */
+export function otherDoorBadge(secondhandDoc: boolean): string {
+  return secondhandDoc ? "非中古" : "中古機";
+}
+
+/** 比對回來的候選裡「打的字都對得上」的:拿掉「只是相關」(有地方對不上)的。 */
+export function allWordsMatch<C extends { level: string }>(candidates: C[]): C[] {
+  return candidates.filter((c) => c.level !== "related");
+}
+
+/**
+ * 這一頁有沒有「打的字都對得上」的商品 —— **只看比對那一條**的候選。
+ * 另一條照字面的搜尋不能拿來判斷:它一筆都沒中的時候會改用「長得像」去找(打錯字也找得到),有結果不代表對得上。
+ *
+ * 沒有的時候下拉清單才去問另一個門(owner 的例子:一般進貨打 `17 256 中古機`,這一頁只有「相關」的全新機 ——
+ * 中古的早就建好了,只是不在這一頁進;列出來人才不會以為沒建過又去新增)。
+ * 這一頁有都對得上的就不問:免得清單一半是點了也不能加的。
+ */
+export function matchedHere(candidates: { level: string }[]): boolean {
+  return allWordsMatch(candidates).length > 0;
+}
+
+/**
+ * 進貨開單頁下拉清單的兩個門:先問這一頁;這一頁沒有一筆都對得上的,才問另一個門(多一次查詢)。
+ * - `here()`:這一頁的結果(清單要顯示的 `options`,加上比對那一條的 `candidates`)。**它失敗就是整個失敗**(畫面要知道沒查到)。
+ * - `elsewhere()`:另一個門比對回來的候選。**它失敗當成沒有** —— 這一頁的結果是確定的,不能因為多問的那一次壞掉就整個不見。
+ * - 還沒打字不問另一個門(那是預設清單)。
+ * 回 `{ here, elsewhere }`;`elsewhere` 只留都對得上的,順序不動。
+ */
+export async function askBothDoors<O, C extends { level: string }>(
+  query: string,
+  here: () => Promise<{ options: O[]; candidates: C[] }>,
+  elsewhere: () => Promise<C[]>,
+): Promise<{ here: O[]; elsewhere: C[] }> {
+  const mine = await here();
+  if (!query.trim() || matchedHere(mine.candidates)) return { here: mine.options, elsewhere: [] };
+  const others = await elsewhere().catch(() => [] as C[]);
+  return { here: mine.options, elsewhere: allWordsMatch(others) };
+}
+
+/**
  * 「當場建 / 當場找」的一趟:從掃碼框的哪一串字、「沒加入」的哪一筆開始的。
  * **一趟只能帶回一個商品一次**(`take`):連按兩下「使用這款」、存檔的回應回來兩次,都只加一次。
  */

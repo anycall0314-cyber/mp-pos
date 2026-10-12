@@ -531,16 +531,20 @@ class PhoneWizardMainUnitTests(_Base):
         self.assertEqual(self.flagged(), {"iPhone 17 256G 黑色 全新": ["iPhone 17 256G 黑色"]})
 
     def test_what_counts_as_a_written_capacity(self):
-        """「有沒有寫容量」只認「數字 + GB / TB」(常見的 G、T 簡寫會補成 GB、TB),別的字、別的數字不算。"""
+        """「有沒有寫容量」認「數字 + GB / TB」(常見的 G、T 簡寫會補成 GB、TB),
+
+        以及**旁邊有機型**的 64 / 128 / 256 / 512(店員打字常常不寫 G:`iPhone 17 256 黑色`)。別的字、別的數字不算。
+        """
         from apps.identity.product_match import has_capacity, parse_features
 
         says = lambda text: has_capacity(parse_features(text))             # noqa: E731
         for text in ("iPhone 17 256G 黑", "iPhone 17 512GB 黑色 全新", "iPad Pro 1TB 銀", "256g",
-                     "256G/黑", "256GB黑色", "256 G", "１２８ＧＢ", "1T", "1024GB", "8GB"):
+                     "256G/黑", "256GB黑色", "256 G", "１２８ＧＢ", "1T", "1024GB", "8GB",
+                     "iPhone 17 256 黑色", "IP17/512/黑", "17 128"):
             self.assertTrue(says(text), text)
         for text in ("IP17/黑", "IP17 黑色 全新", "太空盾/極空戰甲/IP17/透", "行動電源 10000mAh", "充電線 2M", "17",
-                     # 認不出來的容量寫法(沒有單位、不在簡寫清單裡的 G):精靈遇到這種就不排除配件,見下一個測試
-                     "iPhone 17 256 黑色", "1024G", "8G"):
+                     # 認不出來的容量寫法(單獨一個沒單位的數字、不在簡寫清單裡的 G):精靈的容量那一格填這種就不排除配件,見下一個測試
+                     "256", "某系列 256 黑色", "iPhone 17 1024 黑色", "1024G", "8G"):
             self.assertFalse(says(text), text)
 
     def test_capacity_typed_in_a_form_we_cannot_read_keeps_asking(self):
@@ -558,15 +562,15 @@ class PhoneWizardMainUnitTests(_Base):
                 old.delete()
 
     def test_a_phone_matched_through_its_other_name_is_not_an_accessory(self):
-        """品名的容量認不出來(`256` 沒單位)、但另外登記了一個寫清楚的叫法的手機:是靠那個叫法對上的,它有寫容量,要照樣提醒。"""
+        """品名的容量認不出來、但另外登記了一個寫清楚的叫法的手機:是靠那個叫法對上的,它有寫容量,要照樣提醒。"""
         old = Product.objects.create(tenant=self.tenant, category=self.phones,
-                                     name="iPhone 17 256 黑色", requires_serial=False)
-        self.assertEqual(self.flagged(), {})          # 沒有那個叫法時本來就對不上(256 對 256G,比對的老問題)
+                                     name="蘋果十七 256 黑色", requires_serial=False)
+        self.assertEqual(self.flagged(), {})          # 沒有那個叫法時對不上(品名裡沒有認得的機型,256 也就不敢當容量)
         ProductAlias.objects.create(
             tenant=self.tenant, product=old, kind=ProductAlias.Kind.LEGACY_NAME,
             value="iPhone 17 256GB 黑色 台版 全新",
         )
-        self.assertEqual(self.flagged(), {"iPhone 17 256G 黑色 全新": ["iPhone 17 256 黑色"]})
+        self.assertEqual(self.flagged(), {"iPhone 17 256G 黑色 全新": ["蘋果十七 256 黑色"]})
         r = self.client_.post(self.URL, self.payload(), format="json")
         self.assertEqual(r.status_code, 409, r.content)
         self.assertFalse(Product.objects.filter(name="iPhone 17 256G 黑色 全新").exists())
@@ -576,7 +580,17 @@ class PhoneWizardMainUnitTests(_Base):
             tenant=self.tenant, product=case, kind=ProductAlias.Kind.LEGACY_NAME, value="iPhone 17 黑色 皮套",
         )
         self.assertEqual(list(self.flagged()), ["iPhone 17 256G 黑色 全新"])
-        self.assertEqual(self.flagged()["iPhone 17 256G 黑色 全新"], ["iPhone 17 256 黑色"])
+        self.assertEqual(self.flagged()["iPhone 17 256G 黑色 全新"], ["蘋果十七 256 黑色"])
+
+    def test_a_phone_named_without_the_unit_is_caught_without_any_other_name(self):
+        """以前的老問題:既有手機品名寫 `iPhone 17 256 黑色`(容量沒寫 G),精靈要建 `…256G…` 時對不上、也被當成配件略過。現在認得。"""
+        Product.objects.create(tenant=self.tenant, category=self.phones,
+                               name="iPhone 17 256 黑色", requires_serial=False)
+        self.assertEqual(self.flagged(), {"iPhone 17 256G 黑色 全新": ["iPhone 17 256 黑色"]})
+        r = self.client_.post(self.URL, self.payload(), format="json")
+        self.assertEqual(r.status_code, 409, r.content)
+        # 容量不一樣的不是同一支
+        self.assertEqual(self.flagged(capacities=["512G"]), {})
 
     def test_only_the_capacity_box_decides_whether_capacity_is_readable(self):
         """機型後綴或顏色裡剛好有 `8GB`(記憶體)不算:容量那一格填 `256` 就是認不出來,同樣寫法的既有手機要照樣提醒。"""

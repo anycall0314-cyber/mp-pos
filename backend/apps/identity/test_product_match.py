@@ -673,6 +673,190 @@ class BareModelTests(_Base):
         self.assertNotIn("機型相符", c.reasons)
 
 
+class BareCapacityTests(_Base):
+    """容量沒寫 G 的打法(`17 256`、`iphone 17 256`、`IP11PM/256/黑`)要等於寫了 G 的。
+
+    owner 的例子:商品叫 `iPhone 17 256G 黑色 中古機`,店員打 `17 256 中古機`。以前沒寫單位的 256 被當成普通的字
+    (說明寫「商品沒有:256」)、或接到前一個英文字後面變成假的型號(`IPHONE256`、`PRO256`、`S256`),找不到就再建一個品號。
+    只認 64 / 128 / 256 / 512,而且**同一段文字另外有帶數字的機型**才認(紅隊:別家可能有就叫「某系列 256」的東西)。
+    """
+
+    def setUp(self):
+        super().setUp()
+        phones = Category.objects.create(tenant=self.tenant, code="PH", name="手機")
+        used = Category.objects.create(tenant=self.tenant, code="UP", name="中古機")
+        self.new_256 = self._product("iPhone 17 256G 黑色 全新", category=phones, requires_serial=True)
+        self.new_512 = self._product("iPhone 17 512G 黑色 全新", category=phones, requires_serial=True)
+        self.used_256 = self._product(
+            "iPhone 17 256G 黑色 中古機", category=used, requires_serial=True, is_secondhand=True)
+        self.legacy = self._product(
+            "IP12P/256G/64%/藍/W", category=used, requires_serial=True, is_secondhand=True)
+
+    def _same(self, text, **kw):
+        """防重複會點名的(同一款的那幾級)。"""
+        found = find_candidates(self.tenant, text, symmetric=True, with_related=False, limit=0, **kw)
+        return {c.product_id for c in found.candidates if c.level in SAME_ITEM_LEVELS}
+
+    def test_bare_capacity_reads_the_same_as_written_with_a_unit(self):
+        for bare, full in [
+            ("17 256", "17 256G"), ("256 17", "256GB 17"), ("iphone 17 256", "iphone 17 256GB"),
+            ("IP17 256 黑", "IP17 256G 黑"), ("17 pro max 256 中古機", "17 pro max 256G 中古機"),
+            ("IP11PM/256/黑", "IP11PM/256G/黑"), ("s25 256", "s25 256G"), ("A56 128", "A56 128GB"),
+            ("17 256黑", "17 256G黑"), ("S26 8+256", "S26 8+256G"), ("iPhone 16 64", "iPhone 16 64G"),
+            ("17 512", "17 512G"), ("Galaxy S 25 Ultra 256", "Galaxy S 25 Ultra 256GB"),
+        ]:
+            self.assertEqual(parse_features(bare), parse_features(full), bare)
+        # 不再有接出來的假型號
+        self.assertEqual(parse_features("iphone 17 256").codes, frozenset({"IPHONE17"}))
+        self.assertEqual(parse_features("17 pro 256").codes, frozenset())
+        self.assertEqual(parse_features("s25 256").codes, frozenset({"S25"}))
+        self.assertIn("256GB", parse_features("17 256").words)
+
+    def test_only_these_four_sizes_and_not_model_numbers(self):
+        # 16、32 是不是容量分不出來(iPhone 16、Reno 12):維持原樣
+        self.assertNotIn("16GB", parse_features("17 16").words)
+        self.assertNotIn("32GB", parse_features("17 32").words)
+        self.assertEqual(parse_features("iPhone 16").codes, frozenset({"IPHONE16"}))
+        self.assertEqual(parse_features("iPhone 16 128").codes, frozenset({"IPHONE16"}))
+        # 省略字首的接續機型照舊
+        self.assertEqual(parse_features("IP7/8").codes, frozenset({"IP7", "IP8"}))
+        self.assertEqual(parse_features("RENO15/15F").codes, frozenset({"RENO15", "RENO15F"}))
+
+    def test_numbers_that_are_not_capacity_stay_as_they_were(self):
+        for text, not_expected in [
+            ("IP12P/256G/64%/藍/W", "64GB"),      # 電池健康度
+            ("IP15 保護貼 64片", "64GB"),           # 數量
+            ("IP15 傳輸線 128CM", "128GB"),         # 長度
+            ("IP15 REMAX RC-128 線", "128GB"),      # 料號(連字號接成 RC128)
+            ("17 1256", "256GB"), ("17 2560", "256GB"),   # 別的數字的一部分
+            ("IP15 A256 殼", "256GB"),              # 黏在英文後面的型號
+            ("17 256+", "256GB"),                   # 16+ 那一種寫法
+            ("IP12P/256G/64 %/藍/W", "64GB"),       # % 前面多一個空白
+            ("IP15 保護貼 64 片", "64GB"), ("IP15 傳輸線 128 CM", "128GB"), ("IP15 充電器 64 W", "64GB"),
+            ("17 1.256", "256GB"), ("17 256.5", "256GB"),   # 小數
+        ]:
+            self.assertNotIn(not_expected, parse_features(text).words, text)
+        self.assertIn("RC128", parse_features("IP15 REMAX RC-128 線").codes)
+        self.assertIn("A256", parse_features("IP15 A256 殼").codes)
+        self.assertIn("128CM", parse_features("IP15 傳輸線 128CM").words)
+        self.assertIn("64片", parse_features("IP15 保護貼 64片").words)
+        self.assertIn("1256", parse_features("17 1256").words)
+        self.assertIn("1.256", parse_features("17 1.256").words)
+        self.assertIn("256ABC", parse_features("17 256ABC").words)      # 黏著的英文不是單位也不算
+        # 隔著空白的:後面那一塊整塊就是單位才算單位。`64 W` 是瓦數、`64 片` 是數量;
+        # `64 WHITE`、`256 M4`(晶片)、`256 米霧灰`(顏色)的數字還是容量
+        self.assertIn("64GB", parse_features("IP15 64 WHITE").words)
+        self.assertNotIn("64GB", parse_features("IP15 64 W").words)
+        for bare, full in [
+            ("Galaxy Z Fold 4 256 米霧灰 台版 全新", "Galaxy Z Fold 4 256GB 米霧灰 台版 全新"),
+            ("Galaxy Tab S 9 128 米霧色", "Galaxy Tab S 9 128GB 米霧色"),
+            ("MacBook Air 13 256 M4 銀", "MacBook Air 13 256GB M4 銀"),
+        ]:
+            self.assertEqual(parse_features(bare), parse_features(full), bare)
+        self.assertNotIn("64GB", parse_features("IP15 保護貼 64 片 透明").words)
+        self.assertNotIn("128GB", parse_features("IP15 傳輸線 128 米").words)
+
+    def test_needs_a_numbered_model_in_the_same_text(self):
+        """只有容量數字、或只有品牌字的,不敢當容量:跟以前一模一樣。"""
+        self.assertEqual(parse_features("256").words, frozenset({"256"}))
+        self.assertEqual(parse_features("128 256").words, frozenset({"128", "256"}))
+        self.assertEqual(parse_features("三星 256").words, frozenset({"三星", "256"}))
+        self.assertEqual(parse_features("iphone 256").codes, frozenset({"IPHONE256"}))
+        self.assertEqual(parse_features("某系列 256 黑").words, frozenset({"某系列", "256"}))
+        # 沒有機型的儲存配件(隨身碟)也還認不出來:已知的缺口,記在 BACKLOG
+        self.assertEqual(parse_features("APPLE OTG 128").codes, frozenset({"OTG128"}))
+        # 規格不是機型:20W、5G、256GB 旁邊的 128 不算
+        self.assertNotIn("128GB", parse_features("充電器 20W 128").words)
+
+    def test_owner_example_is_found(self):
+        r = find_candidates(self.tenant, "17 256 中古機", is_secondhand=True)
+        self.assertEqual([c.product_id for c in r.candidates][:1], [self.used_256.id])
+        top = r.candidates[0]
+        self.assertEqual(top.level, COVERS)
+        self.assertFalse([d for d in top.differences if "256" in d and "沒有" in d], top.differences)
+
+        # 只打機型 + 容量:以前比對這條路一個都找不到
+        ids = find_candidates(self.tenant, "17 256").product_ids
+        self.assertEqual(set(ids[:2]), {self.new_256.id, self.used_256.id})
+        self.assertNotIn(self.new_512.id, self._same("17 256"))
+
+        # 帶品牌字:不再說「機型對不上:IPHONE256」
+        r = find_candidates(self.tenant, "iphone 17 256")
+        hit = next(c for c in r.candidates if c.product_id == self.new_256.id)
+        self.assertFalse([d for d in hit.differences if "機型對不上" in d], hit.differences)
+
+        # 舊品名(斜線分隔、有電池健康度)也一樣找得到
+        self.assertEqual(find_candidates(self.tenant, "IP12P 256 藍").product_ids[:1], [self.legacy.id])
+
+    def test_a_different_capacity_is_still_a_different_product(self):
+        self.assertNotIn(self.new_256.id, self._same("iPhone 17 512 黑色 全新", is_secondhand=False))
+        self.assertIn(self.new_512.id, self._same("iPhone 17 512 黑色 全新", is_secondhand=False))
+        r = find_candidates(self.tenant, "iphone 17 512 黑", is_secondhand=False)
+        other = next(c for c in r.candidates if c.product_id == self.new_256.id)
+        self.assertEqual(other.level, RELATED)
+        self.assertTrue(other.conflict)
+
+    def test_what_matched_under_the_old_reading_still_matches(self):
+        """兩種讀法都比、取比較好的:照新讀法會把某個數字當成容量而對不上的,照以前的讀法對得上就還是對得上。
+
+        (Codex 首輪:這兩種以前會提醒「可能已經建過」,只改讀法的話提醒會不見、同一個東西建得出第二個品號。)
+        """
+        # 電池健康度寫成 `64 %`(數字與 % 中間多一個空白)
+        self.assertIn(self.legacy.id, self._same("IP12P/256G/64 %/藍/W", is_secondhand=True))
+        # 健康度連 % 都沒寫:照新讀法 64 是「另一個容量」,照以前的讀法就是同一串字
+        self.assertIn(self.legacy.id, self._same("IP12P/256G/64/藍/W", is_secondhand=True))
+        # 省略字首的接續機型:`G54/64` = G54 / G64
+        case = self._product("MOTO G54/G64 保護殼 黑色")
+        self.assertIn(case.id, self._same("MOTO G54/64 保護殼 黑色"))
+        self.assertEqual(find_candidates(self.tenant, "MOTO G54/64 保護殼 黑色").candidates[0].product_id, case.id)
+        # 以前靠「反過來比」(既有商品的特徵都在新品名裡)才成立的同一款,也要照以前的讀法做那一步
+        self.assertIn(case.id, self._same("MOTO G54/64 保護殼 黑色 霧面"))
+        # 反過來:既有商品省略字首(`G84/64`),新的把字首寫出來 —— 商品那一邊也要照以前的讀法比
+        short = self._product("MOTO G84/64 保護殼 白色")
+        self.assertIn(short.id, self._same("MOTO G84/G64 保護殼 白色"))
+        # 只打後面那個型號:照新讀法這個商品沒有 G64(完全對不上、沒有結果),照以前的讀法有
+        self.assertIn(short.id, find_candidates(self.tenant, "MOTO G64 保護殼 白色").product_ids)
+        # 商品的「其他叫法」(舊系統的品名)也一樣照以前的讀法比
+        renamed = self._product("摩托保護殼 紅色")
+        ProductAlias.objects.create(
+            tenant=self.tenant, product=renamed, kind=ProductAlias.Kind.LEGACY_NAME,
+            value="MOTO G94/64 保護殼 紅色",
+        )
+        self.assertIn(renamed.id, self._same("MOTO G94/G64 保護殼 紅色"))
+        # 既有商品自己就是那樣寫的(品名裡沒單位的數字其實是型號):用它原本的寫法照樣找得到它
+        odd = self._product("ACME X9 256 轉接頭")       # 256 是料號,不是容量
+        self.assertEqual(find_candidates(self.tenant, "ACME X9 256 轉接頭").candidates[0].product_id, odd.id)
+        self.assertEqual(find_candidates(self.tenant, "ACME X9 256 轉接頭").candidates[0].level, EXACT)
+
+    def test_the_capacity_rule_itself_is_unchanged(self):
+        """「容量不同」的比法沒有動:輸入有商品沒有的容量、商品也寫了容量,就是不同(擴容機不是原本那一支)。"""
+        base = self._product("iPhone 11 64G 黑色 中古機", requires_serial=True, is_secondhand=True)
+        self.assertNotIn(base.id, self._same("iPhone 11 64G 擴容256G 黑色 中古機", is_secondhand=True))
+        v = compare(parse_features("iPhone 11 64G 擴容256G 黑色"), parse_features("iPhone 11 64G 黑色"))
+        self.assertTrue(v.conflict)
+        # 沒寫單位的也一樣
+        self.assertNotIn(base.id, self._same("iPhone 11 64 擴容256 黑色 中古機", is_secondhand=True))
+        self.assertNotIn(self.new_256.id, self._same("iPhone 17 512 黑色 全新", is_secondhand=False))
+
+    def test_old_reading_is_available_and_only_differs_for_bare_capacity(self):
+        self.assertEqual(parse_features("17 256", bare_capacity=False).words, frozenset({"17", "256"}))
+        self.assertEqual(parse_features("iphone 17 256", bare_capacity=False).codes,
+                         frozenset({"IPHONE17", "IPHONE256"}))
+        for text in ("iPhone 17 256G 黑色 中古機", "IP12P/256G/64%/藍/W", "reno16 側翻皮套 藍", "iphone 256", "256"):
+            self.assertEqual(parse_features(text, bare_capacity=False), parse_features(text), text)
+
+    def test_creating_the_same_phone_without_the_unit_is_caught(self):
+        """要建 `iPhone 17 256 黑色 全新`、已經有 `iPhone 17 256G 黑色 全新`:要說可能已經建過(以前不會)。"""
+        from .dedup import DuplicateProduct, check_new_product
+
+        dup = check_new_product(self.tenant, name="iPhone 17 256 黑色 全新", is_secondhand=False)
+        self.assertIsNotNone(dup)
+        self.assertEqual(dup.kind, DuplicateProduct.SIMILAR)
+        self.assertEqual([c["id"] for c in dup.candidates], [self.new_256.id])
+        # 容量真的不一樣的照樣可以建
+        self.assertIsNone(check_new_product(self.tenant, name="iPhone 17 128 黑色 全新", is_secondhand=False))
+
+
 class MatchLineIdentifierConflictTests(_Base):
     """待確認入庫遇到「同一個識別碼指到兩個商品」要回衝突,不能任選一筆自動對應。"""
 
