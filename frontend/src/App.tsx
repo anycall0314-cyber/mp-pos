@@ -13,6 +13,9 @@ import { PhoneBillReceiptPage } from "@/pages/phone-bills/PhoneBillReceiptPage";
 import { CategoriesPage } from "@/pages/inventory/CategoriesPage";
 import { InventoryAlertsPage } from "@/pages/inventory/InventoryAlertsPage";
 import { InventoryQueryPage } from "@/pages/inventory/InventoryQueryPage";
+import { SerialListPage } from "@/pages/inventory/SerialListPage";
+import { StockFlowPage } from "@/pages/inventory/StockFlowPage";
+import { StockMovesPage } from "@/pages/inventory/StockMovesPage";
 import { IntakePage } from "@/pages/intake/IntakePage";
 import { RepairEntryPage } from "@/pages/repairs/RepairEntryPage";
 import { RepairReceiptPrintPage } from "@/pages/repairs/RepairReceiptPrintPage";
@@ -302,15 +305,13 @@ export function App() {
           <Route path="/inventory" element={<InventoryQueryPage />} />
           <Route path="/inventory/alerts" element={<InventoryAlertsPage />} />
           <Route path="/inventory/categories" element={<CategoriesPage />} />
-          <Route path="/serials" element={<Placeholder title="序號查詢" />} />
+          <Route path="/serials" element={<SerialListPage />} />
+          <Route path="/inventory/flow" element={<StockFlowPage />} />
           <Route
             path="/inventory/stocktake"
             element={<Placeholder title="盤點作業" />}
           />
-          <Route
-            path="/inventory/movements"
-            element={<Placeholder title="異動查詢" />}
-          />
+          <Route path="/inventory/movements" element={<StockMovesPage />} />
           <Route
             path="/sales/pre-orders"
             element={<Placeholder title="訂購作業" />}

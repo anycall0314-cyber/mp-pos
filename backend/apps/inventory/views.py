@@ -19,7 +19,7 @@ from rest_framework.decorators import action, api_view
 from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 
-from apps.core.warehouse_scoping import report_warehouse_id
+from apps.core.warehouse_scoping import locked_warehouse_id, report_warehouse_id
 from apps.identity.normalize import normalize_serial
 from apps.tenants.permissions import is_tenant_admin
 from apps.catalog.models import Product, ProductRelation
@@ -329,10 +329,15 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ["movement_type", "from_warehouse", "to_warehouse", "serial"]
 
     def get_queryset(self):
-        return (
+        qs = (
             StockMovement.objects.for_tenant(self.request.tenant)
             .select_related("serial")
         )
+        # 鎖在門市的帳號只看跟自己門市有關的(異動查詢那一頁就是這樣;這一支不能是繞過去的門)
+        own = locked_warehouse_id(self.request.user)
+        if own is not None:
+            qs = qs.filter(Q(from_warehouse_id=own) | Q(to_warehouse_id=own))
+        return qs
 
 
 # ─────────────────────────────────────────────────────────

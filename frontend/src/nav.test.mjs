@@ -97,7 +97,15 @@ test("「商品設定」選單跟著商品管理在「進貨入庫」;「商品�
     ["/brand-series", "/product-types", "/conditions"],
   );
   assert.equal(byKey("stock").tools, undefined);
-  assert.deepEqual(byKey("stock").tabs.map((t) => t.to), ["/inventory", "/inventory/alerts", "/transfers"]);
+  // 2026-10-12 多了庫存三張(序號查詢、進銷存表、異動查詢):一樣是看庫存的,沒有建檔與設定
+  assert.deepEqual(
+    byKey("stock").tabs.map((t) => t.to),
+    ["/inventory", "/serials", "/inventory/flow", "/inventory/movements", "/inventory/alerts", "/transfers"],
+  );
+  assert.deepEqual([...new Set(byKey("stock").tabs.map((t) => t.label.length))], [4]);
+  assert.equal(searchNav("IMEI 明細表", clerk)[0].page.to, "/serials");
+  assert.equal(searchNav("進銷存", clerk)[0].page.to, "/inventory/flow");
+  assert.equal(searchNav("庫存異動", clerk)[0].page.to, "/inventory/movements");
   // 店員一樣看得到商品管理;功能搜尋打「商品管理」找得到,而且是在進貨入庫底下
   assert.ok(pagesOf(clerk).some((p) => p.to === "/products"));
   const hit = searchNav("商品管理", clerk)[0];

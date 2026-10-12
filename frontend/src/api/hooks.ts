@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiHttpError, api } from "./client";
 import {
@@ -9,6 +9,19 @@ import {
 } from "./contracts";
 import { listProductPhotos, type PhotosPayload } from "./photos";
 import { rangeQuery, rangeReady, type ReportRange } from "@/lib/fixedReports";
+import {
+  flowQuery,
+  moveQuery,
+  serialFilterReady,
+  serialQuery,
+  type FlowFilter,
+  type FlowResult,
+  type Listing,
+  type MoveFilter,
+  type MoveRow,
+  type SerialFilter,
+  type SerialRow,
+} from "@/lib/stockReports";
 import type { CatalogRow } from "@/lib/vendorOrder";
 import type { VendorCategoryOption } from "@/lib/vendorPick";
 import type { ManualPlan, ManualSend, PastedItem } from "@/lib/vendorManual";
@@ -2877,6 +2890,57 @@ export const useCommissionLines = (range: ReportRange) =>
     enabled: rangeReady(range),
     retry: false,
   });
+
+// ── 庫存三張:進銷存表、異動查詢、序號查詢(只讀;怎麼算在伺服器)──────────────
+// 不留舊的結果:庫存一直在動,換回看過的條件要重新抓(gcTime 0);同一份條件翻頁時先留著上一頁,不閃一下空白。
+
+export type MoveListing = Listing<MoveRow> & {
+  from: string;
+  to: string;
+  warehouse: number | null;
+  kinds: { key: string; label: string }[];
+};
+
+export type SerialListing = Listing<SerialRow> & {
+  cost_total: string;
+  statuses: { key: string; label: string }[];
+};
+
+export const useStockFlow = (filter: FlowFilter) =>
+  useQuery({
+    queryKey: ["stock-flow", filter],
+    queryFn: () => api<FlowResult>(`/stock-flow-report/?${flowQuery(filter)}`),
+    enabled: rangeReady(filter),
+    retry: false,
+    gcTime: 0,
+  });
+
+export const useStockMoves = (filter: MoveFilter, page: number) =>
+  useQuery({
+    queryKey: ["stock-moves", filter, page],
+    queryFn: () => api<MoveListing>(`/stock-movement-report/?${moveQuery(filter, page)}`),
+    enabled: rangeReady(filter),
+    retry: false,
+    gcTime: 0,
+    placeholderData: keepPreviousData,
+  });
+
+/** 匯出:照同樣的條件一次拿全部(有上限,超過會帶 truncated)。 */
+export const fetchStockMovesExport = (filter: MoveFilter) =>
+  api<MoveListing>(`/stock-movement-report/?${moveQuery(filter, "export")}`);
+
+export const useSerialReport = (filter: SerialFilter, page: number) =>
+  useQuery({
+    queryKey: ["serial-report", filter, page],
+    queryFn: () => api<SerialListing>(`/serial-report/?${serialQuery(filter, page)}`),
+    enabled: serialFilterReady(filter),
+    retry: false,
+    gcTime: 0,
+    placeholderData: keepPreviousData,
+  });
+
+export const fetchSerialReportExport = (filter: SerialFilter) =>
+  api<SerialListing>(`/serial-report/?${serialQuery(filter, "export")}`);
 
 export const useAnalyticsOptions = (dimension: string | null, q: string) =>
   useQuery({

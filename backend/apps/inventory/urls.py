@@ -2,6 +2,7 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .label_views import label_data
+from .report_views import serial_report, stock_flow_report, stock_movement_report
 from .views import (
     ProductSerialViewSet,
     StockBalanceViewSet,
@@ -31,4 +32,8 @@ urlpatterns = router.urls + [
         parts_usage_report,
         name="parts-usage-report",
     ),
+    # 庫存三張(進銷存表、異動查詢、序號查詢)
+    path("stock-flow-report/", stock_flow_report, name="stock-flow-report"),
+    path("stock-movement-report/", stock_movement_report, name="stock-movement-report"),
+    path("serial-report/", serial_report, name="serial-report"),
 ]

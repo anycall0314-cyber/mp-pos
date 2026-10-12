@@ -108,6 +108,10 @@ export const NAV_MODULES: NavModule[] = [
     to: "/inventory",
     tabs: [
       { to: "/inventory", label: "庫存查詢", aliases: ["庫存"] },
+      // 庫存三張(2026-10-12;取舊歐睿 MM020 / MM019 / MM017 的優點)。查庫存本來就不另外設權限的勾
+      { to: "/serials", label: "序號查詢", aliases: ["IMEI 明細表", "IMEI 明細", "序號明細", "IMEI"] },
+      { to: "/inventory/flow", label: "進銷存表", aliases: ["商品進銷存表", "進銷存", "期初期末"] },
+      { to: "/inventory/movements", label: "異動查詢", aliases: ["庫存異動查詢", "庫存異動", "異動紀錄"] },
       { to: "/inventory/alerts", label: "庫存警示" },
       { to: "/transfers", label: "調撥作業", aliases: ["調撥"] },
     ],

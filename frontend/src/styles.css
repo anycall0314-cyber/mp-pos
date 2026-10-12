@@ -7846,3 +7846,63 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 /* 金鑰那一格:打進去的字遮成圓點(不是密碼框,瀏覽器不會把存過的密碼填進來) */
 .vl-grid input.vl-secret { -webkit-text-security: disc; font-family: monospace; }
 .vl-grid input.vl-secret::placeholder { -webkit-text-security: none; font-family: inherit; }
+
+/* ── 庫存三張(進銷存表 / 異動查詢 / 序號查詢):篩選一排、表格吃掉剩下的高度、最下面翻頁 ── */
+.sr-page .report-table.sr-table { flex: 1; min-height: 0; height: auto; overflow: auto; }
+.sr-table.sr-busy { opacity: 0.6; }
+.sr-filter input[type="text"] {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: var(--font-body);
+  min-height: var(--control-height);
+  width: 200px;
+}
+.sr-filter label { white-space: nowrap; }
+.sr-filter input:disabled { opacity: 0.7; }
+/* 異動查詢:從進銷存表帶過來、鎖在那一個商品上 */
+.sr-only-one {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: var(--control-height);
+  padding: 0 6px 0 10px;
+  border: 1px solid var(--accent); border-radius: 6px;
+  background: var(--panel-2); color: var(--text);
+  max-width: 420px; overflow: hidden; text-overflow: ellipsis;
+}
+.sr-only-one button {
+  background: none; border: 0; color: var(--text-dim);
+  font: inherit; font-size: var(--font-section); line-height: 1;
+  cursor: pointer; padding: 4px 6px;
+}
+.sr-filter .sr-check { color: var(--text); cursor: pointer; }
+.sr-filter .sr-check input { width: 18px; height: 18px; }
+.sr-table .report-grid tfoot td {
+  position: sticky; bottom: 0;
+  background: var(--panel-2);
+  font-weight: 600;
+  border-top: 1px solid var(--border);
+}
+.sr-table .sr-dim {
+  color: var(--text-dim); font-size: var(--font-secondary);
+  white-space: normal; max-width: 320px;
+}
+.sr-table .sr-closing .wb-badge { margin-right: 8px; }
+.sr-table .report-neg-text { color: var(--danger-text); }
+.sr-table tr.sr-pick { cursor: pointer; }
+.sr-link {
+  background: none; border: 0; padding: 0;
+  color: var(--accent); font: inherit; cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.sr-link:hover { text-decoration: underline; }
+.sr-pager {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}

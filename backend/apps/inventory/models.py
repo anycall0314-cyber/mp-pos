@@ -349,6 +349,8 @@ class StockMovement(TenantOwnedModel):
         indexes = [
             models.Index(fields=["serial", "-created_at"]),
             models.Index(fields=["ref_doc_type", "ref_doc_id"]),
+            # 進銷存表、異動查詢:照公司、照時間找(期間內的每一筆)
+            models.Index(fields=["tenant", "created_at"], name="stockmove_tenant_time"),
         ]
         verbose_name = "庫存異動"
         verbose_name_plural = "庫存異動"
