@@ -22,7 +22,8 @@ export type AbilityKey =
   | "report_commission"
   | "report_daily"
   | "report_customers"
-  | "report_activations";
+  | "report_activations"
+  | "report_invoices";
 
 export interface AbilityInfo {
   key: string;

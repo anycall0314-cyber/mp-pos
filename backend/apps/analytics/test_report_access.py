@@ -36,7 +36,7 @@ LINES = "/api/v1/telecom-commissions/"
 SEP_Q = "from=2026-09-01&to=2026-09-30"
 REPORT_KEYS = ("report_sales_daily", "report_explore", "report_parts", "report_staff",
                "report_products", "report_commission", "report_daily", "report_customers",
-               "report_activations")
+               "report_activations", "report_invoices")
 
 
 def add_lines(c, tag="甲"):
@@ -105,12 +105,12 @@ class _Shop(TestCase):
 
 class ListTests(SimpleTestCase):
     def test_the_report_items(self):
-        # 2026-10-12 多了「客戶排行」(第八項)、「開通統計」(第九項)
+        # 2026-10-12 多了「客戶排行」(第八項)、「開通統計」(第九項)、「發票明細」(第十項)
         items = {a["key"]: a for a in abilities.catalog() if a["group"] == "報表"}
         self.assertEqual(tuple(items), REPORT_KEYS)
         self.assertEqual(
             [items[k]["label"] for k in REPORT_KEYS],
-            ["銷貨日報", "自訂分析", "零件耗用", "業績彙總", "商品排行", "佣金明細", "每日彙總", "客戶排行", "開通統計"])
+            ["銷貨日報", "自訂分析", "零件耗用", "業績彙總", "商品排行", "佣金明細", "每日彙總", "客戶排行", "開通統計", "發票明細"])
 
     def test_every_measure_can_be_limited_to_one_store(self):
         """鎖在門市的帳號靠「只算那一家」:哪個指標分不出門市,店員就整個不能用 —— 新增指標時這裡會提醒。"""

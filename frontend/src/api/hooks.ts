@@ -9,6 +9,7 @@ import {
 } from "./contracts";
 import { listProductPhotos, type PhotosPayload } from "./photos";
 import { rangeQuery, rangeReady, type ReportRange } from "@/lib/fixedReports";
+import { invoiceQuery, type InvoiceFilter, type InvoiceListing } from "@/lib/invoiceList";
 import { purchaseLineQuery, type PurchaseLine, type PurchaseLineFilter } from "@/lib/purchaseLines";
 import { dailyQuery, type DailyFilter, type DailyReport } from "@/lib/salesDaily";
 import {
@@ -2943,6 +2944,20 @@ export const usePurchaseLines = (filter: PurchaseLineFilter, page: number) =>
 
 export const fetchPurchaseLinesExport = (filter: PurchaseLineFilter) =>
   api<PurchaseLineListing>(`/purchase-line-report/?${purchaseLineQuery(filter, "export")}`);
+
+// 發票明細:有發票號碼的銷貨單一張一列(合計、狀態、下拉的選項都是伺服器給的)
+export const useInvoiceList = (filter: InvoiceFilter, page: number) =>
+  useQuery({
+    queryKey: ["invoice-list", filter, page],
+    queryFn: () => api<InvoiceListing>(`/sales-invoice-report/?${invoiceQuery(filter, page)}`),
+    enabled: rangeReady(filter),
+    retry: false,
+    gcTime: 0,
+    placeholderData: keepPreviousData,
+  });
+
+export const fetchInvoiceListExport = (filter: InvoiceFilter) =>
+  api<InvoiceListing>(`/sales-invoice-report/?${invoiceQuery(filter, "export")}`);
 
 export const useAnalyticsOptions = (dimension: string | null, q: string) =>
   useQuery({

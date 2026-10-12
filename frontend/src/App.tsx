@@ -35,6 +35,7 @@ import { BusinessDailyReportPage } from "@/pages/reports/BusinessDailyReport";
 import { CommissionLinesPage } from "@/pages/reports/CommissionLinesPage";
 import { ExploreReportPage } from "@/pages/reports/ExploreReportPage";
 import { FixedReportPage } from "@/pages/reports/FixedReportPage";
+import { InvoiceListPage } from "@/pages/reports/InvoiceListPage";
 import { PartsUsageReportPage } from "@/pages/reports/PartsUsageReportPage";
 import { SalesDailyReportPage } from "@/pages/reports/SalesDailyReport";
 import { SecondhandAcquisitionPage } from "@/pages/secondhand-acquisition/SecondhandAcquisitionPage";
@@ -414,7 +415,11 @@ export function App() {
           />
           <Route
             path="/reports/invoice-detail"
-            element={<Placeholder title="發票明細" />}
+            element={
+              <NeedsAbility ability="report_invoices" doing="看發票明細">
+                <InvoiceListPage />
+              </NeedsAbility>
+            }
           />
         </Routes>
         </div>

@@ -222,6 +222,12 @@ export const NAV_MODULES: NavModule[] = [
         needs: ["report_activations"],
       },
       {
+        to: "/reports/invoice-detail",
+        label: "發票明細",
+        aliases: ["開立發票表", "發票表", "發票查詢", "統一發票", "作廢發票"],
+        needs: ["report_invoices"],
+      },
+      {
         to: "/reports/explore",
         label: "自訂分析",
         aliases: ["自由組合"],
@@ -258,7 +264,7 @@ export const NAV_MODULES: NavModule[] = [
       {
         to: "/settings",
         label: "業務設定",
-        aliases: ["發票 / 付款 / 門市", "發票", "付款方式", "門市", "保固天數"],
+        aliases: ["發票 / 付款 / 門市", "發票", "發票字軌", "發票類型", "付款方式", "門市", "保固天數"],
       },
       {
         to: "/settings/backup",

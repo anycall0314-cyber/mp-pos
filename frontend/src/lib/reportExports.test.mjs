@@ -239,7 +239,7 @@ test("每一張會被截短的報表,存檔都走「完整才存檔」那一支,
     "pages/reports/FixedReportPage.tsx", "pages/reports/CommissionLinesPage.tsx", "pages/reports/SalesDailyReport.tsx",
     "pages/reports/ExploreReportPage.tsx", "pages/inventory/InventoryQueryPage.tsx", "pages/inventory/StockFlowPage.tsx",
     "pages/inventory/StockMovesPage.tsx", "pages/inventory/SerialListPage.tsx", "pages/purchases/PurchaseLinesPage.tsx",
-    "pages/telecom/ContractsPage.tsx",
+    "pages/telecom/ContractsPage.tsx", "pages/reports/InvoiceListPage.tsx",
   ]) {
     const text = read(path);
     assert.ok(text.includes("exportIfComplete("), `${path}:匯出要走 exportIfComplete`);
@@ -261,6 +261,7 @@ test("每一張會被截短的報表,存檔都走「完整才存檔」那一支,
     ["pages/inventory/StockMovesPage.tsx", "exportIfComplete(all,"],
     ["pages/inventory/SerialListPage.tsx", "exportIfComplete(\n          all,"],
     ["pages/purchases/PurchaseLinesPage.tsx", "exportIfComplete(all,"],
+    ["pages/reports/InvoiceListPage.tsx", "exportIfComplete(all,"],
   ]) {
     assert.ok(read(path).includes(wired), `${path}:沒有把 ${wired} 交給 exportIfComplete`);
   }

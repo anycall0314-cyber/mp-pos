@@ -7851,6 +7851,9 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 /* ── 庫存三張(進銷存表 / 異動查詢 / 序號查詢):篩選一排、表格吃掉剩下的高度、最下面翻頁 ── */
 .sr-page .report-table.sr-table { flex: 1; min-height: 0; height: auto; overflow: auto; }
 .sr-table.sr-busy { opacity: 0.6; }
+/* 發票明細:作廢的整列淡掉(金額不算進合計);待查的狀態那一格標出來 */
+.sr-table tr.inv-void td { color: var(--text-dim); }
+.sr-table tr.inv-check .inv-state { color: var(--danger-text); font-weight: 600; }
 .sr-filter input[type="text"] {
   background: var(--panel-2);
   color: var(--text);

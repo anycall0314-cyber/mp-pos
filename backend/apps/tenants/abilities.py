@@ -42,6 +42,7 @@ REPORT_COMMISSION = "report_commission"
 REPORT_DAILY = "report_daily"
 REPORT_CUSTOMERS = "report_customers"
 REPORT_ACTIVATIONS = "report_activations"
+REPORT_INVOICES = "report_invoices"
 
 ABILITIES = [
     Ability(VOID_SALES, "作廢銷貨單", "作廢與銷退"),
@@ -66,6 +67,7 @@ ABILITIES = [
     Ability(REPORT_DAILY, "每日彙總", "報表"),
     Ability(REPORT_CUSTOMERS, "客戶排行", "報表", "照客戶、照會員看誰買得最多"),
     Ability(REPORT_ACTIVATIONS, "開通統計", "報表", "各家電信、各種方案開了幾門"),
+    Ability(REPORT_INVOICES, "發票明細", "報表", "開過的發票逐張列出來"),
 ]
 KEYS = frozenset(a.key for a in ABILITIES)
 LABELS = {a.key: a.label for a in ABILITIES}
