@@ -26,6 +26,8 @@ import {
 import type {
   Customer,
   CustomerKind,
+  InvoicePeek,
+  InvoiceTrack,
   Member,
   Product,
   ProductSerial,
@@ -34,7 +36,8 @@ import type {
   TaxMethod,
   TelecomPlan,
 } from "@/api/types";
-import { useDefaultHandledBy, useDefaultWarehouse } from "@/auth/AuthContext";
+import { useCan, useDefaultHandledBy, useDefaultWarehouse } from "@/auth/AuthContext";
+import { InvoiceJumpDialog } from "@/components/invoice/InvoiceJumpDialog";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { SourcePicker, sourceOption } from "@/components/SourcePicker";
 import { memberSource, sourceAfterMemberChange, taxAfterMemberChange } from "@/lib/customerSources";
@@ -304,6 +307,12 @@ function loadDraft(): Draft | null {
 interface Peek {
   state: "idle" | "loading" | "ok" | "none" | "unknown";
   no: string | null;
+  /** 下一張是哪一條字軌的(「跳號」要用) */
+  track?: InvoiceTrack | null;
+  /** 取不到號的原因(伺服器講的,例「115年11-12月 的字軌還沒設定」) */
+  why?: string;
+  /** 快換期了、下一期還沒設定 → 下一期的名稱 */
+  upcoming?: string;
 }
 
 /** 還缺什麼,以及按下去要帶人去哪裡補 */
@@ -422,6 +431,8 @@ export function SalesWorkbenchPage() {
    */
   const [openLine, setOpenLine] = useState<string | null>(null);
   const [peek, setPeek] = useState<Peek>({ state: "idle", no: null });
+  const [jumpOpen, setJumpOpen] = useState(false);
+  const canJump = useCan("invoice_tracks");
   const [peekTick, setPeekTick] = useState(0);
 
   const [lines, setLines] = useState<Line[]>(draft?.lines ?? []);
@@ -544,7 +555,8 @@ export function SalesWorkbenchPage() {
     if (defaultInvoiceCode === "none") setTaxMethod("untaxed");
   }, [invoiceForm, defaultInvoiceCode]);
 
-  // 預覽下一張發票號碼(結帳時伺服器才真的取號)。這種發票沒有可用的字軌時結帳會被擋,所以先查、先講
+  // 預覽下一張發票號碼(結帳時伺服器才真的取號)。這種發票沒有可用的字軌時結帳會被擋,所以先查、先講。
+  // 字軌是一間門市、一期一條:要帶門市去問;換期了還沒設定、快換期了下一期還沒設定,伺服器會講(owner 2026-10-13)
   useEffect(() => {
     if (noInvoice) {
       setPeek({ state: "idle", no: null });
@@ -552,15 +564,15 @@ export function SalesWorkbenchPage() {
     }
     let cancelled = false;
     setPeek((p) => ({ ...p, state: "loading" }));
-    api<{ next_invoice_no: string | null }>(
-      `/invoice-tracks/peek/?invoice_type_code=${encodeURIComponent(invoiceForm)}`,
+    api<InvoicePeek>(
+      `/invoice-tracks/peek/?invoice_type_code=${encodeURIComponent(invoiceForm)}&warehouse=${warehouse}`,
     )
       .then((res) => {
         if (cancelled) return;
         setPeek(
           res.next_invoice_no
-            ? { state: "ok", no: res.next_invoice_no }
-            : { state: "none", no: null },
+            ? { state: "ok", no: res.next_invoice_no, track: res.track, upcoming: res.upcoming ?? "" }
+            : { state: "none", no: null, why: res.detail ?? "" },
         );
       })
       .catch(() => {
@@ -569,7 +581,7 @@ export function SalesWorkbenchPage() {
     return () => {
       cancelled = true;
     };
-  }, [invoiceForm, noInvoice, peekTick]);
+  }, [invoiceForm, noInvoice, peekTick, warehouse]);
   // 到別的分頁補了字軌再回來:重新查一次
   useEffect(() => {
     const again = () => setPeekTick((n) => n + 1);
@@ -2453,11 +2465,23 @@ export function SalesWorkbenchPage() {
                         : peek.state === "loading"
                           ? "查詢中…"
                           : "結帳時取號"}
+                  {/* 發票機卡紙、故障之後,紙上的號碼跟這裡對不上:在這裡直接跳號(跟系統設定是同一個視窗) */}
+                  {!noInvoice && peek.state === "ok" && peek.track && canJump && !locked && (
+                    <>
+                      {" "}
+                      <button type="button" className="wb-link" onClick={() => setJumpOpen(true)}>
+                        跳號
+                      </button>
+                    </>
+                  )}
                 </b>
               </div>
+              {!noInvoice && peek.state === "ok" && peek.upcoming && (
+                <div className="wb-warn">下一期 {peek.upcoming} 的字軌還沒設定</div>
+              )}
               {trackMissing && (
                 <div className="wb-warn err">
-                  這種發票沒有可用的字軌,結帳會被擋。先到系統設定新增字軌,或改選別種發票。{" "}
+                  {peek.why || "這種發票沒有可用的字軌"},結帳會被擋。{" "}
                   <a className="wb-link" href="/settings" target="_blank" rel="noreferrer">
                     開系統設定
                   </a>{" "}
@@ -2745,7 +2769,7 @@ export function SalesWorkbenchPage() {
 
             {trackMissing && (
               <div className="wb-warn err">
-                這種發票沒有可用的字軌,結帳會被擋。{" "}
+                {peek.why || "這種發票沒有可用的字軌"},結帳會被擋。{" "}
                 <button
                   type="button"
                   className="wb-link"
@@ -2767,6 +2791,13 @@ export function SalesWorkbenchPage() {
         )}
       </Drawer>
       {photoPeek.panel}
+      {jumpOpen && peek.track && (
+        <InvoiceJumpDialog
+          track={peek.track}
+          onClose={() => setJumpOpen(false)}
+          onDone={() => setPeekTick((n) => n + 1)}
+        />
+      )}
     </div>
   );
 }

@@ -1,20 +1,33 @@
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
+from django.db.models import Q
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core import staff_cost
+from apps.core.warehouse_scoping import locked_warehouse_id
 
+from . import abilities
 from .models import InvoiceTrack, InvoiceType, PaymentMethod
 from .serializers import (
+    InvoiceTrackJumpSerializer,
     InvoiceTrackSerializer,
     InvoiceTypeSerializer,
     PaymentMethodSerializer,
 )
-from .services import peek_next_invoice_no
+from .services import (
+    InvoiceTrackError,
+    jump_invoice_track,
+    lock_track_setup,
+    no_track_reason,
+    peek_next_track,
+    track_in_use,
+    upcoming_period_gap,
+)
 
 
 class InvoiceTypeViewSet(viewsets.ModelViewSet):
@@ -42,36 +55,129 @@ class InvoiceTypeViewSet(viewsets.ModelViewSet):
             ).update(is_default=False)
 
 
-class InvoiceTrackViewSet(viewsets.ModelViewSet):
-    """發票字軌主檔。"""
+class InvoiceTrackViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
+    """發票字軌主檔。
+
+    - 新增 / 修改 / 刪除 / 跳號要有「發票字軌」那一項(`abilities.INVOICE_TRACKS`);看字軌、預覽下一張不用(開單要用)。
+    - 鎖在門市的帳號只看得到自己門市的與全公司共用的;只能新增、修改、刪除自己門市的。
+      共用的(分門市之前建的舊字軌)它只能跳號(它的發票機卡紙時要對得回來),其他要管理員。
+    """
 
     serializer_class = InvoiceTrackSerializer
+    needs_ability = abilities.INVOICE_TRACKS
     search_fields = ["prefix", "period_label", "note"]
     ordering = ["-id"]
-    filterset_fields = ["invoice_type", "is_active"]
+    filterset_fields = ["invoice_type", "is_active", "warehouse"]
 
     def get_queryset(self):
-        return InvoiceTrack.objects.for_tenant(self.request.tenant).select_related(
-            "invoice_type"
+        qs = InvoiceTrack.objects.for_tenant(self.request.tenant).select_related(
+            "invoice_type", "warehouse"
         )
+        store = locked_warehouse_id(self.request.user)
+        if store is not None:
+            qs = qs.filter(Q(warehouse_id=store) | Q(warehouse__isnull=True))
+        return qs
+
+    def get_object(self):
+        """要改、要刪的那一條:**鎖住之後重新讀**(呼叫的地方已經在交易裡)。
+        不鎖的話,檢查與存檔用的是進來時讀到的那一份 —— 中間剛好有人結帳取了號(或跳了號),存檔會把「下一張」蓋回舊的,之後開出重複的號碼。"""
+        track = super().get_object()
+        if self.action in ("update", "partial_update", "destroy"):
+            track = self.get_queryset().select_for_update(of=("self",)).get(pk=track.pk)
+        return track
+
+    def create(self, request, *args, **kwargs):
+        with transaction.atomic():
+            lock_track_setup(request.tenant)          # 同一家公司一次一個人動字軌的設定(重疊檢查才看得到對方)
+            return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        with transaction.atomic():
+            lock_track_setup(request.tenant)          # 先拿公司這一把,get_object 才鎖字軌那一列
+            return super().update(request, *args, **kwargs)
+
+    def _own_store_only(self, warehouse_id):
+        store = locked_warehouse_id(self.request.user)
+        if store is not None and warehouse_id != store:
+            raise PermissionDenied("這個帳號只能設定自己門市的字軌")
 
     def perform_create(self, serializer):
+        self._own_store_only(getattr(serializer.validated_data.get("warehouse"), "id", None))
         serializer.save(tenant=self.request.tenant)
+
+    def perform_update(self, serializer):
+        self._own_store_only(serializer.instance.warehouse_id)
+        if "warehouse" in serializer.validated_data:
+            self._own_store_only(getattr(serializer.validated_data["warehouse"], "id", None))
+        serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        with transaction.atomic():
+            track = self.get_object()                 # 鎖住:檢查「用過沒有」到刪掉之間不會有人剛好取號
+            self._own_store_only(track.warehouse_id)
+            if track_in_use(track):
+                return Response(
+                    {"detail": "這條字軌已經開過發票或跳過號,不能刪;不用了請改成停用"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            track.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=["get"])
     def peek(self, request):
-        """預覽下一張要開的發票號碼(不真正取號)。
+        """預覽下一張要開的發票號碼(不真正取號),以及它是哪一條字軌的(開單頁的「跳號」要用)。
 
-        GET /api/v1/invoice-tracks/peek/?invoice_type_code=e_invoice
+        GET /api/v1/invoice-tracks/peek/?invoice_type_code=ev_tri&warehouse=3
+        鎖在門市的帳號一律看自己門市;沒有帶門市 → 只看全公司共用的字軌。
         """
         code = request.query_params.get("invoice_type_code", "")
-        no = peek_next_invoice_no(request.tenant, code)
-        if no is None:
+        store = locked_warehouse_id(request.user)
+        if store is None:
+            raw = request.query_params.get("warehouse") or ""
+            store = int(raw) if raw.isascii() and raw.isdigit() else None
+        track = peek_next_track(request.tenant, code, store)
+        if track is None:
+            # detail = 取不到號的原因(「115年11-12月 的字軌還沒設定」/「…用完了」):開單頁照著講
             return Response(
-                {"next_invoice_no": None, "detail": "無可用字軌"},
+                {"next_invoice_no": None, "track": None, "upcoming": "",
+                 "detail": no_track_reason(request.tenant, code, store) or "無可用字軌"},
                 status=status.HTTP_200_OK,
             )
-        return Response({"next_invoice_no": no})
+        return Response({
+            "next_invoice_no": track.format_number(track.next_number),
+            "track": InvoiceTrackSerializer(track, context=self.get_serializer_context()).data,
+            # 快換期了、下一期的字軌還沒設定 → 下一期的名稱(開單頁先提醒);不用提醒是空字串
+            "upcoming": upcoming_period_gap(request.tenant, code, store),
+        })
+
+    @action(detail=True, methods=["post"])
+    def jump(self, request, pk=None):
+        """跳號:把「下一張」改成發票機裡那捲紙的下一張。
+
+        POST /api/v1/invoice-tracks/{id}/jump/  {"next_number": 12345690, "reason": "卡紙"}
+        """
+        track = self.get_object()          # 看不到的字軌(別家公司、別間門市)在這裡就是 404
+        raw = request.data.get("next_number")
+        if isinstance(raw, str) and raw.isascii() and raw.isdigit():
+            raw = int(raw)
+        reason = request.data.get("reason") or ""
+        if not isinstance(reason, str):
+            reason = ""
+        try:
+            track, _ = jump_invoice_track(
+                request.tenant, track.pk, raw, user=request.user, reason=reason
+            )
+        except InvoiceTrackError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        track = self.get_queryset().get(pk=track.pk)
+        return Response(self.get_serializer(track).data)
+
+    @action(detail=True, methods=["get"])
+    def jumps(self, request, pk=None):
+        """這條字軌的跳號紀錄(新的在前)。"""
+        track = self.get_object()
+        rows = track.jumps.select_related("track", "created_by__profile").order_by("-id")
+        return Response(InvoiceTrackJumpSerializer(rows, many=True).data)
 
 
 class PaymentMethodViewSet(viewsets.ModelViewSet):

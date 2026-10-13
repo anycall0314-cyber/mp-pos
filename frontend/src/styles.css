@@ -900,6 +900,22 @@ button { font-family: inherit; }
 .checkout-modal { min-width: 420px; max-height: calc(100dvh - 32px); overflow-y: auto; }
 .serial-list-modal { min-width: 520px; max-width: 80vw; max-height: 80vh; }
 .serial-list-modal .modal-body { max-height: 60vh; overflow-y: auto; }
+
+/* 跳號視窗(系統設定的字軌清單、開單頁的發票號碼旁邊開的是同一個;不在 .wb 底下,顏色用全站的) */
+.invoice-jump-modal { min-width: 420px; }
+.invoice-jump-modal .modal-row { align-items: center; gap: 12px; }
+.invoice-jump-modal .modal-row input { width: 220px; font-variant-numeric: tabular-nums; }
+.invoice-jump-modal .modal-row b { font-variant-numeric: tabular-nums; }
+.invoice-jump-note { margin-top: 6px; color: var(--warn-text); font-size: var(--font-secondary); }
+.invoice-jump-note.err { color: var(--danger-text); }
+.invoice-jump-log {
+  max-height: 22vh;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  font-size: var(--font-secondary);
+}
 .stock-link {
   background: transparent;
   border: 0;

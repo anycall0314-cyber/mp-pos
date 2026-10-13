@@ -14,6 +14,7 @@ export type AbilityKey =
   | "cash_ops"
   | "view_business_daily"
   | "vendor_order"
+  | "invoice_tracks"
   // 第三批:報表一張一個勾
   | "report_sales_daily"
   | "report_explore"

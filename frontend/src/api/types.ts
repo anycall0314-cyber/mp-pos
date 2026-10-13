@@ -482,15 +482,45 @@ export interface InvoiceTrack {
   invoice_type: number;
   invoice_type_code: string;
   invoice_type_name: string;
+  /** 哪一間門市的;null = 全公司共用(分門市之前建的舊字軌) */
+  warehouse: number | null;
+  warehouse_name: string;
   period_label: string;
+  /** 哪一期的(那一期的第一天,例 2026-11-01);null = 沒登記期別的舊字軌 */
+  period_start: string | null;
+  /** 期別跟今天比:過期 / 這一期 / 還沒到;沒登記期別是空字串 */
+  period_state: "" | "past" | "now" | "future";
   prefix: string;
   range_start: number;
   range_end: number;
+  /** 只有新增時可以填;之後要改用跳號 */
   next_number: number;
   is_active: boolean;
   is_depleted: boolean;
   next_invoice_no: string | null;
   note: string;
+}
+
+/** 跳號紀錄:誰把「下一張」從幾號改成幾號 */
+export interface InvoiceTrackJump {
+  id: number;
+  created_at: string;
+  from_number: number;
+  to_number: number;
+  from_no: string;
+  to_no: string;
+  reason: string;
+  by: string;
+}
+
+/** 開單頁預覽下一張發票號碼 */
+export interface InvoicePeek {
+  next_invoice_no: string | null;
+  track: InvoiceTrack | null;
+  /** 取不到號的原因(例「115年11-12月 的字軌還沒設定」) */
+  detail?: string;
+  /** 快換期了、下一期還沒設定 → 下一期的名稱;不用提醒是空字串 */
+  upcoming?: string;
 }
 
 // purchasing

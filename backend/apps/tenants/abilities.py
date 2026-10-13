@@ -34,6 +34,7 @@ SECONDHAND_BUY = "secondhand_buy"
 CASH_OPS = "cash_ops"
 VIEW_BUSINESS_DAILY = "view_business_daily"
 VENDOR_ORDER = "vendor_order"
+INVOICE_TRACKS = "invoice_tracks"
 REPORT_SALES_DAILY = "report_sales_daily"
 REPORT_EXPLORE = "report_explore"
 REPORT_PARTS = "report_parts"
@@ -60,6 +61,8 @@ ABILITIES = [
     Ability(VIEW_BUSINESS_DAILY, "營業日報", "進貨與帳務", "看營業日報"),
     # 跟供應商的下單系統叫貨(會花到這家門市在廠商那邊的額度);金鑰只有管理員能設,不在這個勾裡
     Ability(VENDOR_ORDER, "廠商叫貨", "進貨與帳務", "送出叫貨單;看得到進價"),
+    # 發票字軌(2026-10-13):新增、修改、刪除字軌與跳號。看字軌、開單取號不在這個勾裡(開單一定要取得到號)
+    Ability(INVOICE_TRACKS, "發票字軌", "進貨與帳務", "新增、修改字軌與跳號"),
     # 第三批:報表一張一個勾(鎖在門市的帳號本來就只看自己門市)
     Ability(REPORT_SALES_DAILY, "銷貨日報", "報表", "只收起這一頁;內容跟銷貨單清單看得到的一樣"),
     Ability(REPORT_EXPLORE, "自訂分析", "報表", "要業績彙總、商品排行、每日彙總、開通統計、營業日報都開著"),

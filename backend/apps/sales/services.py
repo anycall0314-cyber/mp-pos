@@ -540,7 +540,8 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
         update_fields = ["subtotal", "tax_amount", "total"]
         if so.invoice_form and so.invoice_form != "none" and not so.invoice_no:
             try:
-                so.invoice_no = assign_invoice_no(so.tenant, so.invoice_form)
+                # 只取這間門市、發票日期那一期的字軌:每間門市的發票機各有一捲印好號碼的紙,換期之後上一期的號碼不能再開
+                so.invoice_no = assign_invoice_no(so.tenant, so.invoice_form, so.warehouse_id, so.invoice_date)
                 update_fields.append("invoice_no")
                 if not so.invoice_date:
                     so.invoice_date = timezone.now().date()

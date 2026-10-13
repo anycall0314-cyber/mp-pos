@@ -1318,6 +1318,99 @@ class RollbackTests(_Base):
         self.assertEqual(job.status, RestoreJob.Status.DONE, job.error)
         self.assertTrue(slept and 60 < slept[0] <= 75, slept)
 
+    def test_track_store_period_and_jumps_come_back_and_a_later_track_keeps_its_store(self):
+        """字軌是哪一間門市、哪一期的,連同跳號紀錄,備份帶得走、還原對得回去(門市換了新的編號也一樣)。
+        備份之後才設的字軌備份裡沒有:照現況補回去時門市照代碼對回還原之後的那一間 ——
+        掉成「全公司共用」的話,別間門市開單會拿到這一捲紙的號碼。
+        **備份之後開出去的號碼,還原之後那張單不見了也不能再開**(複審 2026-10-13 第 2 條):下一張不倒退,也不能用跳號跳回去。"""
+        from datetime import date
+
+        from apps.tenants import invoice_periods
+        from apps.tenants.models import InvoiceTrackJump
+        from apps.tenants.services import InvoiceTrackError, jump_invoice_track
+
+        tenant = self.a.tenant
+        this = invoice_periods.start_of(date.today())           # 銷貨單的發票日期是今天:字軌要是這一期的才開得出來
+        coming = invoice_periods.next_start(this)
+        tri = InvoiceType.objects.create(tenant=tenant, code="ev_tri", name="電子三聯式")
+        store = self.a.warehouses[1]
+        self.a.purchase(warehouse=store, case_qty=3)
+        before = InvoiceTrack.objects.create(
+            tenant=tenant, invoice_type=tri, warehouse=store, period_start=this,
+            prefix="KA", range_start=300, range_end=349, next_number=300)
+        jump_invoice_track(tenant, before.pk, 305, user=self.a.clerk_user, reason="卡紙")
+        saved = self.path(self.backup(self.a))
+        # 備份之後:又跳了一次、開了一張發票(KA00000309)、另外設了下一期的字軌(也開過號)
+        jump_invoice_track(tenant, before.pk, 309, user=self.a.admin_user, reason="之後的")
+        sold = self.a._post("/api/v1/sales-orders/", {
+            "customer": self.a.customer.id, "warehouse": store.id, "tax_method": "untaxed",
+            "sales_person": self.a.sales_person.id, "invoice_form": "ev_tri",
+            "items": [{"product": self.a.case.id, "qty": 1, "unit_price": "390"}],
+            "payments": [{"method": "cash", "amount": "390"}]})
+        self.assertEqual(sold["invoice_no"], "KA00000309")
+        InvoiceTrack.objects.create(
+            tenant=tenant, invoice_type=tri, warehouse=store, period_start=coming,
+            prefix="KB", range_start=400, range_end=449, next_number=403, floor_number=403)
+        job = self.rollback(self.a, saved)
+        self.assertEqual(job.status, RestoreJob.Status.DONE, job.error)
+        self.a.reload()
+        store = Warehouse.objects.get(tenant=tenant, code="w2")
+        back = InvoiceTrack.objects.get(tenant=tenant, prefix="KA")
+        self.assertEqual((back.warehouse_id, back.period_start, back.period_label),
+                         (store.id, this, invoice_periods.label(this)))
+        self.assertFalse(SalesOrder.objects.filter(tenant=tenant, invoice_no="KA00000309").exists())   # 那張單回到備份之前、不在了
+        self.assertEqual((back.next_number, back.floor_number), (310, 310))       # 下一張與「開過到哪」都不倒退(備份裡是 305、0)
+        with self.assertRaisesMessage(InvoiceTrackError, "KA00000309 已經開過,下一張不能排在它前面"):
+            jump_invoice_track(tenant, back.pk, 309)
+        # 跳號紀錄回到備份那時候的那一筆,掛在還原之後的那一條字軌上、人也對得回來
+        self.assertEqual(
+            list(InvoiceTrackJump.objects.filter(tenant=tenant).values_list(
+                "track_id", "from_number", "to_number", "reason", "created_by__username")),
+            [(back.id, 300, 305, "卡紙", self.a.clerk_user.username)])
+        later = InvoiceTrack.objects.get(tenant=tenant, prefix="KB")
+        self.assertEqual((later.warehouse_id, later.period_start, later.next_number, later.floor_number, later.is_active),
+                         (store.id, coming, 403, 403, True))
+        self.assertEqual(job.result["invoice_tracks_kept"], ["KB 400-449"])
+
+    def test_a_track_stretched_after_the_backup_keeps_its_length(self):
+        """備份之後把字軌的迄號加長、在加長的那一段開了發票:回到備份時迄號不縮回去。
+        縮回去的話那一段號碼不屬於任何字軌,再新增一條字軌不算重疊、就會把開過的號碼再開一次(複審 2026-10-13 第二輪)。"""
+        from datetime import date
+
+        from apps.tenants import invoice_periods
+        from apps.tenants.services import jump_invoice_track
+
+        tenant = self.a.tenant
+        this = invoice_periods.start_of(date.today())
+        tri = InvoiceType.objects.create(tenant=tenant, code="ev_tri", name="電子三聯式")
+        store = self.a.warehouses[1]
+        self.a.purchase(warehouse=store, case_qty=3)
+        track = InvoiceTrack.objects.create(
+            tenant=tenant, invoice_type=tri, warehouse=store, period_start=this,
+            prefix="KA", range_start=300, range_end=349, next_number=300)
+        saved = self.path(self.backup(self.a))
+        InvoiceTrack.objects.filter(pk=track.pk).update(range_end=399)      # 之後又買了一本,把迄號加長
+        jump_invoice_track(tenant, track.pk, 350)
+        sold = self.a._post("/api/v1/sales-orders/", {
+            "customer": self.a.customer.id, "warehouse": store.id, "tax_method": "untaxed",
+            "sales_person": self.a.sales_person.id, "invoice_form": "ev_tri",
+            "items": [{"product": self.a.case.id, "qty": 1, "unit_price": "390"}],
+            "payments": [{"method": "cash", "amount": "390"}]})
+        self.assertEqual(sold["invoice_no"], "KA00000350")
+        job = self.rollback(self.a, saved)
+        self.assertEqual(job.status, RestoreJob.Status.DONE, job.error)
+        self.a.reload()
+        back = InvoiceTrack.objects.get(tenant=tenant, prefix="KA")
+        self.assertEqual((back.range_start, back.range_end, back.next_number, back.floor_number), (300, 399, 351, 351))
+        # 那一段還是這條字軌的:再登記一條 350 ~ 399 會被當成重疊擋下來
+        store = Warehouse.objects.get(tenant=tenant, code="w2")
+        r = self.a.admin.post("/api/v1/invoice-tracks/", {
+            "invoice_type": InvoiceType.objects.get(tenant=tenant, code="ev_tri").id, "warehouse": store.id,
+            "period_start": this.isoformat(), "prefix": "KA", "range_start": 350, "range_end": 399}, format="json")
+        self.assertEqual((r.status_code, r.json()), (400, {"range_start": ["號碼跟另一條字軌重疊:KA00000300 ~ KA00000399"]}))
+        # 縮短過的不受影響:備份裡比較長的照備份(還原本來就是回到備份的樣子)
+        self.assertEqual(InvoiceTrack.objects.get(tenant=tenant, prefix="AB").range_end, 10000049)
+
     def test_floor_left_by_an_earlier_restore_is_not_lost(self):
         """之前還原留下的單號下限、備份之後才申請的發票字軌,備份裡都沒有 ——
         再還原一次也不能弄丟,不然會重用已經開出去的號碼。"""

@@ -34,6 +34,8 @@ REGISTRY: dict[str, Entry] = {
         # 系統設定主檔
         "tenants.InvoiceType", "tenants.InvoiceTrack", "tenants.PaymentMethod",
         "tenants.DocNumberFloor",
+        # 發票跳號紀錄(2026-10-13):誰把哪一條字軌的下一張從幾號改成幾號
+        "tenants.InvoiceTrackJump",
         # 往來對象
         "parties.Supplier", "parties.Customer", "parties.Member",
         "parties.SalesPerson", "parties.Carrier", "parties.TelecomPlan",
@@ -135,7 +137,10 @@ CLEARED_ON_RESTORE: dict[str, list[str]] = {
 HIGH_WATER: dict[str, tuple[tuple[str, ...], list[str]]] = {
     "catalog.Category": (("code",), ["next_sku_seq"]),
     "parties.Carrier": (("code",), ["next_plan_seq"]),
-    "tenants.InvoiceTrack": (("prefix", "range_start"), ["next_number"]),
+    # floor_number = 開出去過的最大號碼的下一號:回到較早的備份時那幾張單不見了,號碼還是不能再開(跳號看它)。
+    # range_end 也只取大的:備份之後把迄號加長、在加長的那一段開過發票,還原時迄號縮回去的話那一段號碼就不屬於任何字軌,
+    # 再新增一條字軌(不算重疊)會把開過的號碼再開一次
+    "tenants.InvoiceTrack": (("prefix", "range_start"), ["next_number", "floor_number", "range_end"]),
     "tenants.DocNumberFloor": (("prefix",), ["floor"]),
 }
 TENANT_HIGH_WATER = [

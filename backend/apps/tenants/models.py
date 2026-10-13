@@ -193,6 +193,11 @@ class InvoiceTrack(TenantOwnedModel):
 
     銷貨建單時依 invoice_type 自動取下一張號碼。
     範例:AB 字軌 12345678 ~ 12345887(200 張)。
+
+    **一條字軌是一間門市的**(owner 2026-10-13:發票機印的是號碼已經印在紙上的整捲發票,每間門市各有一捲):
+    開單只取自己門市的字軌。`warehouse` 空的 = 全公司共用,只有分門市之前建的舊資料會這樣(新增一定要選門市)。
+    **一條字軌是某一期的**(`period_start`,兩個月一期):開單只取發票日期那一期的,換期之後上一期的號碼不能再開。
+    「下一張」只能用跳號改(`services.jump_invoice_track`,每一次留一筆 `InvoiceTrackJump`),不能直接改欄位。
     """
 
     invoice_type = models.ForeignKey(
@@ -201,12 +206,24 @@ class InvoiceTrack(TenantOwnedModel):
         related_name="tracks",
         verbose_name="發票類型",
     )
+    warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.PROTECT,
+        related_name="invoice_tracks",
+        null=True,
+        blank=True,
+        verbose_name="門市",
+        help_text="空的 = 全公司共用(分門市之前建的舊字軌)",
+    )
     period_label = models.CharField(
         "期別",
         max_length=30,
         blank=True,
-        help_text="例:115年5-6月",
+        help_text="例:115年5-6月(有登記 period_start 的由系統填)",
     )
+    # 這條字軌是哪一期的(兩個月一期,記那一期的第一天;`invoice_periods.py`)。開單只取發票日期那一期的字軌。
+    # 空的 = 沒有登記期別的舊字軌:不檢查期別、什麼時候都能用(新增的一定要選)
+    period_start = models.DateField("期別的第一天", null=True, blank=True)
     prefix = models.CharField("字軌", max_length=4)
     range_start = models.PositiveIntegerField("起號")
     range_end = models.PositiveIntegerField("迄號")
@@ -214,6 +231,10 @@ class InvoiceTrack(TenantOwnedModel):
         "下一張號碼",
         help_text="開檔時 = 起號;每開一張遞增 1",
     )
+    # 這條字軌**系統自己開出去過**的最大號碼的下一號(沒開過 = 0);只往前、跳號不會動它。
+    # 往回跳號不能跳到它前面。跟「下一張」分開記:往後跳錯了要改得回來(那幾號沒開過),但開出去過的號碼不行 ——
+    # 就算那張銷貨單後來不在了(回到較早的備份,單沒了、紙已經用掉)。備份還原時跟「下一張」一樣只取大的。
+    floor_number = models.PositiveIntegerField("開過的最大號碼的下一號", default=0, db_default=0, editable=False)
     is_active = models.BooleanField("啟用", default=True)
     note = models.CharField("備註", max_length=200, blank=True)
 
@@ -241,6 +262,52 @@ class InvoiceTrack(TenantOwnedModel):
 
     def format_number(self, n: int) -> str:
         return f"{self.prefix}{n:08d}"
+
+    def save(self, *args, **kwargs):
+        # 有登記期別的:期別的字由系統照期別寫(例 `115年11-12月`),不收人打的 —— 清單與報表上看到的才會跟實際取號的期別一樣
+        if self.period_start is not None:
+            from . import invoice_periods
+
+            self.period_label = invoice_periods.label(self.period_start)
+            fields = kwargs.get("update_fields")
+            if fields is not None and "period_start" in fields and "period_label" not in fields:
+                kwargs["update_fields"] = [*fields, "period_label"]
+        super().save(*args, **kwargs)
+
+
+class InvoiceTrackJump(TenantOwnedModel):
+    """跳號紀錄:有人把某一條字軌的「下一張」從幾號改成幾號(owner 2026-10-13:發票機故障之後要能指定從幾號開始印)。
+
+    只記不改:往後跳 = 中間那幾號沒有開(卡紙、印壞的空白發票);往回 = 改打錯的(只有那一號之後都還沒開過才准)。
+    這幾號實際有沒有開過,看的是銷貨單上的發票號碼,不是這張表。
+    """
+
+    track = models.ForeignKey(
+        InvoiceTrack,
+        on_delete=models.PROTECT,
+        related_name="jumps",
+        verbose_name="字軌",
+    )
+    from_number = models.PositiveIntegerField("原本的下一張")
+    to_number = models.PositiveIntegerField("改成的下一張")
+    reason = models.CharField("原因", max_length=100, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="+",
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name="誰改的",
+    )
+
+    class Meta:
+        ordering = ["-id"]
+        verbose_name = "發票跳號紀錄"
+        verbose_name_plural = "發票跳號紀錄"
+
+    def __str__(self) -> str:
+        return f"{self.track.prefix} {self.from_number}→{self.to_number}"
 
 
 class PaymentMethod(TenantOwnedModel):

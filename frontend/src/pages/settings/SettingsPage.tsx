@@ -15,11 +15,23 @@ import {
   useWarehouses,
 } from "@/api/hooks";
 import type { InvoiceTrack, PaymentMethod, PaymentMethodKind } from "@/api/types";
+import { useAuth, useDefaultWarehouse } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
+import { InvoiceJumpDialog } from "@/components/invoice/InvoiceJumpDialog";
 import { openLabelPrint } from "@/components/labels/openLabelPrint";
 import { Toolbar } from "@/components/Toolbar";
 import { apiErrorText } from "@/components/workbench/errors";
 import { toast } from "@/components/workbench/toast";
+import { can } from "@/lib/abilities";
+import {
+  PERIOD_MONTHS,
+  monthsLabel,
+  periodOf,
+  periodParts,
+  periodStart,
+  trackStateLabel,
+  trackUsable,
+} from "@/lib/invoiceTracks";
 import {
   COMPANY_MODES,
   canSetStaffCost,
@@ -50,6 +62,15 @@ export function SettingsPage() {
   const saveTenantSettings = useSaveTenantSettings();
 
   const [editing, setEditing] = useState<Partial<InvoiceTrack> | null>(null);
+  // 字軌表單的期別:民國年 + 那一期的第一個月(存檔時換成那一期的第一天)。沒登記期別的舊字軌兩格都是空的
+  const [periodYear, setPeriodYear] = useState("");
+  const [periodMonth, setPeriodMonth] = useState("");
+  const [jumping, setJumping] = useState<InvoiceTrack | null>(null);
+  // 新增 / 修改 / 刪除字軌與跳號要有「發票字軌」那一項(伺服器會擋;這裡只是不讓人白按)
+  const canTracks = can(useAuth().user, "invoice_tracks");
+  // 鎖在門市的帳號只能設定自己門市的字軌
+  const myStore = useDefaultWarehouse();
+  const ownStore = myStore.locked ? myStore.id : null;
   const [editingPm, setEditingPm] = useState<Partial<PaymentMethod> | null>(null);
 
   const [warrantyDays, setWarrantyDays] = useState("");
@@ -122,10 +143,17 @@ export function SettingsPage() {
   }
 
   function startNew() {
-    const firstType = types.data?.[0];
+    // 預設選「會取號」的類型:公司預設的那一種;預設是免用發票就選第一種要開發票的
+    const numbered = (types.data ?? []).filter((t) => t.code !== "none");
+    const firstType = numbered.find((t) => t.is_default) ?? numbered[0] ?? types.data?.[0];
+    const stores = warehouses.data ?? [];
+    const now = periodOf(new Date());
+    setPeriodYear(String(now.rocYear));
+    setPeriodMonth(String(now.firstMonth));
     setEditing({
       invoice_type: firstType?.id ?? 0,
-      period_label: "",
+      // 只有一間門市、或這個帳號鎖在門市:直接帶好;不然要自己選(每間門市的發票機各有一捲紙)
+      warehouse: ownStore ?? (stores.length === 1 ? stores[0].id : null),
       prefix: "",
       range_start: 0,
       range_end: 0,
@@ -134,10 +162,34 @@ export function SettingsPage() {
     });
   }
 
+  function startEdit(t: InvoiceTrack) {
+    const period = periodParts(t.period_start);
+    setPeriodYear(period ? String(period.rocYear) : "");
+    setPeriodMonth(period ? String(period.firstMonth) : "");
+    setEditing(t);
+  }
+
+  // 期別兩格都填了才算有選;沒登記期別的舊字軌可以照舊留空
+  const pickedPeriod = periodStart(Number(periodYear), Number(periodMonth));
+  const periodMissing = !pickedPeriod && (!editing?.id || !!editing?.period_start || !!periodYear || !!periodMonth);
+
   async function submitTrack() {
     if (!editing) return;
+    // 只送改得了的欄位:「下一張」只有新增時送(之後要改用跳號)
+    const body: Partial<InvoiceTrack> & { id?: number } = {
+      id: editing.id,
+      invoice_type: editing.invoice_type,
+      warehouse: editing.warehouse ?? null,
+      prefix: editing.prefix,
+      range_start: editing.range_start,
+      range_end: editing.range_end,
+      is_active: editing.is_active,
+      note: editing.note,
+    };
+    if (pickedPeriod) body.period_start = pickedPeriod;
+    if (!editing.id && editing.next_number !== undefined) body.next_number = editing.next_number;
     try {
-      await saveTrack.mutateAsync(editing as Partial<InvoiceTrack> & { id?: number });
+      await saveTrack.mutateAsync(body);
       setEditing(null);
     } catch (e) {
       // banner picks up via mutation state
@@ -452,18 +504,22 @@ export function SettingsPage() {
 
         <h3 style={{ marginTop: 24 }}>發票字軌</h3>
         <p style={{ color: "var(--text-dim)", fontSize: 14 }}>
-          財政部每期發放的發票號碼區段。
-          銷貨單建立時依「發票類型」自動取下一張可用號碼,使用者不需手動輸入。
+          一間門市、一期一條。開單只取自己門市當期的字軌。
         </p>
 
-        <div style={{ marginBottom: 8 }}>
-          <button className="btn primary" onClick={startNew}>
-            + 新增字軌
-          </button>
-        </div>
+        {canTracks && (
+          <div style={{ marginBottom: 8 }}>
+            <button className="btn primary" onClick={startNew}>
+              + 新增字軌
+            </button>
+          </div>
+        )}
 
         {saveTrack.isError && (
-          <Banner kind="error" message={`儲存失敗:${String(saveTrack.error ?? "")}`} />
+          <Banner kind="error" message={`儲存失敗:${apiErrorText(saveTrack.error)}`} />
+        )}
+        {delTrack.isError && (
+          <Banner kind="error" message={`刪除失敗:${apiErrorText(delTrack.error)}`} />
         )}
 
         {editing && (
@@ -489,14 +545,27 @@ export function SettingsPage() {
                 </select>
               </label>
               <label>
-                期別
-                <input
-                  value={editing.period_label ?? ""}
+                門市
+                <select
+                  value={editing.warehouse ?? ""}
+                  disabled={ownStore !== null}
                   onChange={(e) =>
-                    setEditing({ ...editing, period_label: e.target.value })
+                    setEditing({
+                      ...editing,
+                      warehouse: e.target.value ? Number(e.target.value) : null,
+                    })
                   }
-                  placeholder="例:115年5-6月"
-                />
+                >
+                  {/* 空的選項:新增時 = 還沒選(存不了);舊的共用字軌 = 全部門市 */}
+                  {(editing.warehouse ?? null) === null && (
+                    <option value="">{editing.id ? "全部門市" : "請選擇"}</option>
+                  )}
+                  {(warehouses.data ?? []).map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label>
                 字軌
@@ -511,6 +580,28 @@ export function SettingsPage() {
                   maxLength={4}
                   placeholder="例:AB"
                 />
+              </label>
+            </div>
+            <div className="field-row-3">
+              <label>
+                年度
+                <input
+                  type="number"
+                  value={periodYear}
+                  onChange={(e) => setPeriodYear(e.target.value)}
+                  placeholder="民國"
+                />
+              </label>
+              <label>
+                月份
+                <select value={periodMonth} onChange={(e) => setPeriodMonth(e.target.value)}>
+                  {!periodMonth && <option value="">請選擇</option>}
+                  {PERIOD_MONTHS.map((m) => (
+                    <option key={m} value={m}>
+                      {monthsLabel(m)}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
             <div className="field-row-3">
@@ -540,21 +631,25 @@ export function SettingsPage() {
                   }
                 />
               </label>
-              <label>
-                下一張(可選,空白 = 起號)
-                <input
-                  type="number"
-                  value={editing.next_number ?? ""}
-                  onChange={(e) =>
-                    setEditing({
-                      ...editing,
-                      next_number: e.target.value === ""
-                        ? undefined
-                        : Number(e.target.value),
-                    })
-                  }
-                />
-              </label>
+              {/* 「下一張」只有新增時可以填(那一捲已經用掉幾張);之後要改用清單上的「跳號」 */}
+              {!editing.id && (
+                <label>
+                  下一張
+                  <input
+                    type="number"
+                    value={editing.next_number ?? ""}
+                    placeholder="空白 = 起號"
+                    onChange={(e) =>
+                      setEditing({
+                        ...editing,
+                        next_number: e.target.value === ""
+                          ? undefined
+                          : Number(e.target.value),
+                      })
+                    }
+                  />
+                </label>
+              )}
             </div>
             <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <input
@@ -574,7 +669,12 @@ export function SettingsPage() {
                 className="btn primary"
                 type="button"
                 onClick={submitTrack}
-                disabled={saveTrack.isPending || !editing.prefix}
+                disabled={
+                  saveTrack.isPending ||
+                  !editing.prefix ||
+                  periodMissing ||
+                  (!editing.id && (editing.warehouse ?? null) === null)
+                }
               >
                 {saveTrack.isPending ? "儲存中…" : "儲存"}
               </button>
@@ -584,9 +684,10 @@ export function SettingsPage() {
 
         {tracks.isLoading && <div className="md-empty">載入中…</div>}
         {!tracks.isLoading && (
-          <table className="line-table" style={{ maxWidth: 960 }}>
+          <table className="line-table" style={{ maxWidth: 1080 }}>
             <thead>
               <tr>
+                <th>門市</th>
                 <th>類型</th>
                 <th>期別</th>
                 <th>字軌</th>
@@ -600,6 +701,7 @@ export function SettingsPage() {
             <tbody>
               {(tracks.data ?? []).map((t) => (
                 <tr key={t.id}>
+                  <td>{t.warehouse_name || "全部門市"}</td>
                   <td>{t.invoice_type_name}</td>
                   <td>{t.period_label || "—"}</td>
                   <td>
@@ -609,40 +711,52 @@ export function SettingsPage() {
                   <td className="num">{t.range_end}</td>
                   <td className="num">
                     {t.is_depleted ? (
-                      <span style={{ color: "var(--danger-text)" }}>已用完</span>
+                      "—"
                     ) : (
-                      <span style={{ color: "var(--success-text-soft)" }}>
+                      <span style={trackUsable(t) ? { color: "var(--success-text-soft)" } : undefined}>
                         {t.next_invoice_no}
                       </span>
                     )}
                   </td>
-                  <td>
-                    {!t.is_active ? "停用" : t.is_depleted ? "已用完" : "啟用中"}
+                  <td style={trackUsable(t) ? undefined : { color: "var(--danger-text)" }}>
+                    {trackStateLabel(t)}
                   </td>
                   <td className="row-actions">
-                    <button onClick={() => setEditing(t)}>編輯</button>
-                    <button
-                      onClick={() => {
-                        if (confirm(`確定刪除字軌 ${t.prefix}?`)) {
-                          delTrack.mutate(t.id);
-                        }
-                      }}
-                    >
-                      刪
-                    </button>
+                    {canTracks && (
+                      <>
+                        <button onClick={() => setJumping(t)}>跳號</button>
+                        {/* 共用的舊字軌:鎖在門市的帳號只能跳號,改與刪要管理員 */}
+                        {(ownStore === null || t.warehouse === ownStore) && (
+                          <>
+                            <button onClick={() => startEdit(t)}>編輯</button>
+                            <button
+                              onClick={() => {
+                                if (confirm(`確定刪除字軌 ${t.prefix}?`)) {
+                                  delTrack.mutate(t.id);
+                                }
+                              }}
+                            >
+                              刪除
+                            </button>
+                          </>
+                        )}
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}
               {(tracks.data ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={8} className="md-empty">
-                    尚未新增任何字軌;點上方「+ 新增字軌」開始
+                  <td colSpan={9} className="md-empty">
+                    還沒有字軌
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         )}
+
+        {jumping && <InvoiceJumpDialog track={jumping} onClose={() => setJumping(null)} />}
 
         <h3 style={{ marginTop: 24 }}>付款方式</h3>
         <p style={{ color: "var(--text-dim)", fontSize: 14 }}>

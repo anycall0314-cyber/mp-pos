@@ -48,6 +48,7 @@ import {
   HomeSummary,
   InventoryAlertsResponse,
   InvoiceTrack,
+  InvoiceTrackJump,
   InvoiceType,
   PartsUsageReport,
   Brand,
@@ -257,19 +258,29 @@ export function useDeleteInvoiceTrack() {
   });
 }
 
-export async function peekInvoiceNo(
-  invoiceTypeCode: string,
-): Promise<string | null> {
-  if (!invoiceTypeCode || invoiceTypeCode === "none") return null;
-  try {
-    const res = await api<{ next_invoice_no: string | null }>(
-      `/invoice-tracks/peek/?invoice_type_code=${encodeURIComponent(invoiceTypeCode)}`,
-    );
-    return res.next_invoice_no;
-  } catch {
-    return null;
-  }
+/** 跳號:把這條字軌的「下一張」改成紙上的下一張(伺服器留紀錄、擋重複)。 */
+export function useJumpInvoiceTrack() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (p: { id: number; next_number: number; reason: string }) =>
+      api<InvoiceTrack>(`/invoice-tracks/${p.id}/jump/`, {
+        method: "POST",
+        body: JSON.stringify({ next_number: p.next_number, reason: p.reason }),
+      }),
+    onSuccess: (_track, p) => {
+      qc.invalidateQueries({ queryKey: ["invoice-tracks"] });
+      qc.invalidateQueries({ queryKey: ["invoice-track-jumps", p.id] });
+    },
+  });
 }
+
+/** 這條字軌的跳號紀錄(新的在前);沒有給編號就不查。 */
+export const useInvoiceTrackJumps = (trackId: number | null) =>
+  useQuery({
+    queryKey: ["invoice-track-jumps", trackId],
+    queryFn: () => api<InvoiceTrackJump[]>(`/invoice-tracks/${trackId}/jumps/`),
+    enabled: trackId !== null,
+  });
 
 export function useSaveInvoiceType() {
   const qc = useQueryClient();

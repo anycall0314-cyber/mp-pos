@@ -1185,7 +1185,7 @@ def _apply(tenant, pkg, mode, written_files, obsolete_files, user_map=None) -> d
         InvoiceTrack.objects.filter(tenant=company).values(
             "invoice_type__code", "invoice_type__name", "invoice_type__sort_order",
             "period_label", "prefix", "range_start", "range_end", "next_number",
-            "is_active", "note",
+            "is_active", "note", "warehouse__code", "period_start", "floor_number",
         )
     ) if rollback else []
     profile_codes = dict(
@@ -1370,10 +1370,19 @@ def _apply(tenant, pkg, mode, written_files, obsolete_files, user_map=None) -> d
                     "is_active": True, "is_default": False,
                 },
             )
+            # 字軌是哪一間門市的:照門市代碼對回還原之後的那一間。對不回來(備份裡沒有那間門市)就先停用 ——
+            # 留成「全公司共用」的話,別間門市開單會拿到這一捲紙的號碼
+            store = None
+            if t["warehouse__code"] is not None:
+                store = apps.get_model("inventory.Warehouse")._base_manager.filter(
+                    tenant=company, code=t["warehouse__code"]
+                ).first()
             InvoiceTrack.objects.create(
                 tenant=company, invoice_type=kind, period_label=t["period_label"],
                 prefix=t["prefix"], range_start=t["range_start"], range_end=t["range_end"],
-                next_number=t["next_number"], is_active=t["is_active"], note=t["note"],
+                next_number=t["next_number"], note=t["note"], warehouse=store,
+                period_start=t["period_start"], floor_number=t["floor_number"],
+                is_active=t["is_active"] and (t["warehouse__code"] is None or store is not None),
             )
             kept_tracks.append(f"{t['prefix']} {t['range_start']}-{t['range_end']}")
 
