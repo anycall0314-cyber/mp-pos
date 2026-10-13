@@ -1,0 +1,11872 @@
+[
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 11",
+  "specs": [
+   "64GB",
+   "128GB",
+   "256GB"
+  ],
+  "from_hub": [
+   "iPhone 11"
+  ],
+  "pos_name": "iPhone 11",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 11 Pro",
+  "specs": [
+   "64GB",
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [
+   "iPhone 11 Pro"
+  ],
+  "pos_name": "iPhone 11 Pro",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 11 Pro Max",
+  "specs": [
+   "64GB",
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [
+   "iPhone 11 Pro Max"
+  ],
+  "pos_name": "iPhone 11 Pro Max",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 12",
+  "specs": [
+   "64GB",
+   "128GB",
+   "256GB"
+  ],
+  "from_hub": [
+   "iPhone 12"
+  ],
+  "pos_name": "iPhone 12",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 12 mini",
+  "specs": [
+   "64GB",
+   "128GB",
+   "256GB"
+  ],
+  "from_hub": [
+   "iPhone 12 mini"
+  ],
+  "pos_name": "iPhone 12 mini",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 12 Pro",
+  "specs": [
+   "128GB",
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [
+   "iPhone 12 Pro"
+  ],
+  "pos_name": "iPhone 12 Pro",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 12 Pro Max",
+  "specs": [
+   "128GB",
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [
+   "iPhone 12 Pro Max"
+  ],
+  "pos_name": "iPhone 12 Pro Max",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 13",
+  "specs": [
+   "128GB",
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [
+   "iPhone 13"
+  ],
+  "pos_name": "iPhone 13",
+  "note": [],
+  "colors": [
+   "午夜色",
+   "星光色",
+   "粉紅色",
+   "藍色",
+   "紅色",
+   "綠色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 13 mini",
+  "specs": [
+   "128GB",
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [
+   "iPhone 13 mini"
+  ],
+  "pos_name": "iPhone 13 mini",
+  "note": [],
+  "colors": [
+   "午夜色",
+   "星光色",
+   "粉紅色",
+   "藍色",
+   "紅色",
+   "綠色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 13 Pro",
+  "specs": [
+   "128GB",
+   "256GB",
+   "512GB",
+   "1TB"
+  ],
+  "from_hub": [
+   "iPhone 13 Pro"
+  ],
+  "pos_name": "iPhone 13 Pro",
+  "note": [],
+  "colors": [
+   "石墨色",
+   "金色",
+   "銀色",
+   "天峰藍色",
+   "遠峰藍色",
+   "阿爾卑斯綠色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 13 Pro Max",
+  "specs": [
+   "128GB",
+   "256GB",
+   "512GB",
+   "1TB"
+  ],
+  "from_hub": [
+   "iPhone 13 Pro Max"
+  ],
+  "pos_name": "iPhone 13 Pro Max",
+  "note": [],
+  "colors": [
+   "石墨色",
+   "金色",
+   "銀色",
+   "天峰藍色",
+   "遠峰藍色",
+   "阿爾卑斯綠色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 14",
+  "specs": [
+   "128GB",
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [
+   "iPhone 14"
+  ],
+  "pos_name": "iPhone 14",
+  "note": [],
+  "colors": [
+   "午夜色",
+   "星光色",
+   "紫色",
+   "藍色",
+   "紅色",
+   "黃色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 14 Plus",
+  "specs": [
+   "128GB",
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [
+   "iPhone 14 Plus"
+  ],
+  "pos_name": "iPhone 14 Plus",
+  "note": [],
+  "colors": [
+   "午夜色",
+   "星光色",
+   "紫色",
+   "藍色",
+   "紅色",
+   "黃色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 14 Pro",
+  "specs": [
+   "128GB",
+   "256GB",
+   "512GB",
+   "1TB"
+  ],
+  "from_hub": [
+   "iPhone 14 Pro"
+  ],
+  "pos_name": "iPhone 14 Pro",
+  "note": [],
+  "colors": [
+   "太空黑色",
+   "銀色",
+   "金色",
+   "深紫色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 14 Pro Max",
+  "specs": [
+   "128GB",
+   "256GB",
+   "512GB",
+   "1TB"
+  ],
+  "from_hub": [
+   "iPhone 14 Pro Max"
+  ],
+  "pos_name": "iPhone 14 Pro Max",
+  "note": [],
+  "colors": [
+   "太空黑色",
+   "銀色",
+   "金色",
+   "深紫色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 15",
+  "specs": [
+   "128GB",
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [
+   "iPhone 15"
+  ],
+  "pos_name": "iPhone 15",
+  "note": [],
+  "colors": [
+   "黑色",
+   "藍色",
+   "綠色",
+   "黃色",
+   "粉紅色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 15 Plus",
+  "specs": [
+   "128GB",
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [
+   "iPhone 15 Plus"
+  ],
+  "pos_name": "iPhone 15 Plus",
+  "note": [],
+  "colors": [
+   "黑色",
+   "藍色",
+   "綠色",
+   "黃色",
+   "粉紅色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 15 Pro",
+  "specs": [
+   "128GB",
+   "256GB",
+   "512GB",
+   "1TB"
+  ],
+  "from_hub": [
+   "iPhone 15 Pro"
+  ],
+  "pos_name": "iPhone 15 Pro",
+  "note": [],
+  "colors": [
+   "原色鈦金屬",
+   "藍色鈦金屬",
+   "白色鈦金屬",
+   "黑色鈦金屬"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 15 Pro Max",
+  "specs": [
+   "256GB",
+   "512GB",
+   "1TB"
+  ],
+  "from_hub": [
+   "iPhone 15 Pro Max"
+  ],
+  "pos_name": "iPhone 15 Pro Max",
+  "note": [],
+  "colors": [
+   "原色鈦金屬",
+   "藍色鈦金屬",
+   "白色鈦金屬",
+   "黑色鈦金屬"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 16",
+  "specs": [
+   "128GB",
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [
+   "iPhone 16"
+  ],
+  "pos_name": "iPhone 16",
+  "note": [],
+  "colors": [
+   "黑色",
+   "白色",
+   "粉紅色",
+   "藍綠色",
+   "群青色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 16 Plus",
+  "specs": [
+   "128GB",
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [
+   "iPhone 16 Plus"
+  ],
+  "pos_name": "iPhone 16 Plus",
+  "note": [],
+  "colors": [
+   "黑色",
+   "白色",
+   "粉紅色",
+   "藍綠色",
+   "群青色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 16 Pro",
+  "specs": [
+   "128GB",
+   "256GB",
+   "512GB",
+   "1TB"
+  ],
+  "from_hub": [
+   "iPhone 16 Pro"
+  ],
+  "pos_name": "iPhone 16 Pro",
+  "note": [],
+  "colors": [
+   "黑色鈦金屬",
+   "白色鈦金屬",
+   "原色鈦金屬",
+   "沙漠色鈦金屬"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 16 Pro Max",
+  "specs": [
+   "256GB",
+   "512GB",
+   "1TB"
+  ],
+  "from_hub": [
+   "iPhone 16 Pro Max"
+  ],
+  "pos_name": "iPhone 16 Pro Max",
+  "note": [],
+  "colors": [
+   "黑色鈦金屬",
+   "白色鈦金屬",
+   "原色鈦金屬",
+   "沙漠色鈦金屬"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 16e",
+  "specs": [
+   "128GB",
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [
+   "iPhone 16e"
+  ],
+  "pos_name": "iPhone 16e",
+  "note": [],
+  "colors": [
+   "黑色",
+   "白色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 17",
+  "specs": [
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [
+   "iPhone 17"
+  ],
+  "pos_name": "iPhone 17",
+  "note": [],
+  "colors": [
+   "黑色",
+   "白色",
+   "薰衣草紫色",
+   "霧藍色",
+   "鼠尾草綠色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 17 Pro",
+  "specs": [
+   "256GB",
+   "512GB",
+   "1TB"
+  ],
+  "from_hub": [
+   "iPhone 17 Pro"
+  ],
+  "pos_name": "iPhone 17 Pro",
+  "note": [],
+  "colors": [
+   "深墨藍色",
+   "銀色",
+   "宇宙橘色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 17 Pro Max",
+  "specs": [
+   "256GB",
+   "512GB",
+   "1TB",
+   "2TB"
+  ],
+  "from_hub": [
+   "iPhone 17 Pro Max"
+  ],
+  "pos_name": "iPhone 17 Pro Max",
+  "note": [],
+  "colors": [
+   "深墨藍色",
+   "銀色",
+   "宇宙橘色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 17e",
+  "specs": [
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [
+   "iPhone 17e"
+  ],
+  "pos_name": "iPhone 17e",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 18 Pro",
+  "specs": [
+   "256GB",
+   "512GB",
+   "1TB",
+   "2TB"
+  ],
+  "from_hub": [
+   "iPhone 18 Pro"
+  ],
+  "pos_name": "iPhone 18 Pro",
+  "note": [],
+  "colors": [
+   "勃根地紅色",
+   "冰川藍色",
+   "銀色",
+   "黑色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 18 Pro Max",
+  "specs": [
+   "256GB",
+   "512GB",
+   "1TB",
+   "2TB"
+  ],
+  "from_hub": [
+   "iPhone 18 Pro Max"
+  ],
+  "pos_name": "iPhone 18 Pro Max",
+  "note": [],
+  "colors": [
+   "勃根地紅色",
+   "冰川藍色",
+   "銀色",
+   "黑色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 5",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "iPhone 5",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 5s",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "iPhone 5 s",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 6",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "iPhone 6",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 6 Plus",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "iPhone 6 Plus",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 6s",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "iPhone 6 s",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 6s Plus",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "iPhone 6 s Plus",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 7",
+  "specs": [
+   "32GB",
+   "128GB",
+   "256GB"
+  ],
+  "from_hub": [
+   "iPhone 7"
+  ],
+  "pos_name": "iPhone 7",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 7 Plus",
+  "specs": [
+   "32GB",
+   "128GB",
+   "256GB"
+  ],
+  "from_hub": [
+   "iPhone 7+"
+  ],
+  "pos_name": "iPhone 7 Plus",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 8",
+  "specs": [
+   "64GB",
+   "128GB",
+   "256GB"
+  ],
+  "from_hub": [
+   "iPhone 8"
+  ],
+  "pos_name": "iPhone 8",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone 8 Plus",
+  "specs": [
+   "64GB",
+   "128GB",
+   "256GB"
+  ],
+  "from_hub": [
+   "iPhone 8+"
+  ],
+  "pos_name": "iPhone 8 Plus",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone Air",
+  "specs": [
+   "256GB",
+   "512GB",
+   "1TB"
+  ],
+  "from_hub": [
+   "iPhone Air"
+  ],
+  "pos_name": "iPhone 17 Air",
+  "note": [],
+  "colors": [
+   "太空黑色",
+   "雲白色",
+   "淺金色",
+   "天藍色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone Duo",
+  "specs": [
+   "256GB",
+   "512GB",
+   "1TB",
+   "2TB"
+  ],
+  "from_hub": [
+   "iPhone Duo"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone SE",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "iPhone SE",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone SE 2",
+  "specs": [
+   "64GB",
+   "128GB",
+   "256GB"
+  ],
+  "from_hub": [
+   "iPhone SE2"
+  ],
+  "pos_name": "iPhone SE 2",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone SE 3",
+  "specs": [
+   "64GB",
+   "128GB",
+   "256GB"
+  ],
+  "from_hub": [
+   "iPhone SE3"
+  ],
+  "pos_name": "iPhone SE 3",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone X",
+  "specs": [
+   "64GB",
+   "256GB"
+  ],
+  "from_hub": [
+   "iPhone X"
+  ],
+  "pos_name": "iPhone 10",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone XR",
+  "specs": [
+   "64GB",
+   "128GB",
+   "256GB"
+  ],
+  "from_hub": [
+   "iPhone XR"
+  ],
+  "pos_name": "iPhone 10 R",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone XS",
+  "specs": [
+   "64GB",
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [
+   "iPhone XS"
+  ],
+  "pos_name": "iPhone 10 S",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手機",
+  "name": "iPhone XS Max",
+  "specs": [
+   "64GB",
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [
+   "iPhone XS Max"
+  ],
+  "pos_name": "iPhone 10 S Max",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad 10",
+  "specs": [
+   "64GB 插卡",
+   "64GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi"
+  ],
+  "from_hub": [
+   "iPad 10"
+  ],
+  "pos_name": "iPad 10",
+  "note": [],
+  "colors": [
+   "銀色",
+   "藍色",
+   "粉紅色",
+   "黃色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad 11",
+  "specs": [
+   "128GB 插卡",
+   "128GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi",
+   "512GB 插卡",
+   "512GB WiFi"
+  ],
+  "from_hub": [
+   "iPad 11"
+  ],
+  "pos_name": "iPad 11 (A16)",
+  "note": [],
+  "colors": [
+   "銀色",
+   "藍色",
+   "粉紅色",
+   "黃色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad 5",
+  "specs": [
+   "32GB 插卡",
+   "32GB WiFi",
+   "128GB 插卡",
+   "128GB WiFi"
+  ],
+  "from_hub": [
+   "iPad 5"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad 6",
+  "specs": [
+   "32GB 插卡",
+   "32GB WiFi",
+   "128GB 插卡",
+   "128GB WiFi"
+  ],
+  "from_hub": [
+   "iPad 6"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad 7",
+  "specs": [
+   "32GB 插卡",
+   "32GB WiFi",
+   "128GB 插卡",
+   "128GB WiFi"
+  ],
+  "from_hub": [
+   "iPad 7"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad 8",
+  "specs": [
+   "32GB 插卡",
+   "32GB WiFi",
+   "128GB 插卡",
+   "128GB WiFi"
+  ],
+  "from_hub": [
+   "iPad 8"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad 9",
+  "specs": [
+   "64GB 插卡",
+   "64GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi"
+  ],
+  "from_hub": [
+   "iPad 9"
+  ],
+  "pos_name": "iPad 9",
+  "note": [],
+  "colors": [
+   "太空灰色",
+   "銀色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Air 11 M2",
+  "specs": [
+   "128GB 插卡",
+   "128GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi",
+   "512GB 插卡",
+   "512GB WiFi",
+   "1TB 插卡",
+   "1TB WiFi"
+  ],
+  "from_hub": [
+   "iPad Air 11 M2"
+  ],
+  "pos_name": "iPad Air 11吋 (M2)",
+  "note": [],
+  "colors": [
+   "太空灰色",
+   "星光色",
+   "藍色",
+   "紫色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Air 11 M3",
+  "specs": [
+   "8+128GB 插卡",
+   "8+128GB WiFi",
+   "8+256GB 插卡",
+   "8+256GB WiFi",
+   "8+512GB 插卡",
+   "8+512GB WiFi",
+   "8+1TB 插卡",
+   "8+1TB WiFi"
+  ],
+  "from_hub": [
+   "iPad Air 11 M3"
+  ],
+  "pos_name": "iPad Air 11吋 (M3)",
+  "note": [],
+  "colors": [
+   "太空灰色",
+   "星光色",
+   "藍色",
+   "紫色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Air 11 M4",
+  "specs": [
+   "12+128GB 插卡",
+   "12+128GB WiFi",
+   "12+256GB 插卡",
+   "12+256GB WiFi",
+   "12+512GB 插卡",
+   "12+512GB WiFi",
+   "12+1TB 插卡",
+   "12+1TB WiFi"
+  ],
+  "from_hub": [
+   "iPad Air 11 M4"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Air 13 M2",
+  "specs": [
+   "128GB 插卡",
+   "128GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi",
+   "512GB 插卡",
+   "512GB WiFi",
+   "1TB 插卡",
+   "1TB WiFi"
+  ],
+  "from_hub": [
+   "iPad Air 13 M2"
+  ],
+  "pos_name": "iPad Air 13吋 (M2)",
+  "note": [],
+  "colors": [
+   "太空灰色",
+   "星光色",
+   "藍色",
+   "紫色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Air 13 M3",
+  "specs": [
+   "8+128GB 插卡",
+   "8+128GB WiFi",
+   "8+256GB 插卡",
+   "8+256GB WiFi",
+   "8+512GB 插卡",
+   "8+512GB WiFi",
+   "8+1TB 插卡",
+   "8+1TB WiFi"
+  ],
+  "from_hub": [
+   "iPad Air 13 M3"
+  ],
+  "pos_name": "iPad Air 13吋 (M3)",
+  "note": [],
+  "colors": [
+   "太空灰色",
+   "星光色",
+   "藍色",
+   "紫色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Air 13 M4",
+  "specs": [
+   "12+128GB 插卡",
+   "12+128GB WiFi",
+   "12+256GB 插卡",
+   "12+256GB WiFi",
+   "12+512GB 插卡",
+   "12+512GB WiFi",
+   "12+1TB 插卡",
+   "12+1TB WiFi"
+  ],
+  "from_hub": [
+   "iPad Air 13 M4"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Air 2",
+  "specs": [
+   "32GB 插卡",
+   "32GB WiFi",
+   "64GB 插卡",
+   "64GB WiFi",
+   "128GB 插卡",
+   "128GB WiFi"
+  ],
+  "from_hub": [
+   "iPad Air 2"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Air 3",
+  "specs": [
+   "64GB 插卡",
+   "64GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi"
+  ],
+  "from_hub": [
+   "iPad Air 3"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Air 4",
+  "specs": [
+   "64GB 插卡",
+   "64GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi"
+  ],
+  "from_hub": [
+   "iPad Air 4"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Air 5",
+  "specs": [
+   "64GB 插卡",
+   "64GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi"
+  ],
+  "from_hub": [
+   "iPad Air 5"
+  ],
+  "pos_name": "iPad Air 5 (M1)",
+  "note": [],
+  "colors": [
+   "太空灰色",
+   "星光色",
+   "粉紅色",
+   "紫色",
+   "藍色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad mini 4",
+  "specs": [
+   "32GB 插卡",
+   "32GB WiFi",
+   "64GB 插卡",
+   "64GB WiFi",
+   "128GB 插卡",
+   "128GB WiFi"
+  ],
+  "from_hub": [
+   "iPad mini 4"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad mini 5",
+  "specs": [
+   "64GB 插卡",
+   "64GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi"
+  ],
+  "from_hub": [
+   "iPad mini 5"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad mini 6",
+  "specs": [
+   "64GB 插卡",
+   "64GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi"
+  ],
+  "from_hub": [
+   "iPad mini 6"
+  ],
+  "pos_name": "iPad mini 6",
+  "note": [],
+  "colors": [
+   "太空灰色",
+   "星光色",
+   "粉紅色",
+   "紫色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad mini 7",
+  "specs": [
+   "128GB 插卡",
+   "128GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi",
+   "512GB 插卡",
+   "512GB WiFi"
+  ],
+  "from_hub": [
+   "iPad mini 7"
+  ],
+  "pos_name": "iPad mini 7 (A17 Pro)",
+  "note": [],
+  "colors": [
+   "太空灰色",
+   "星光色",
+   "藍色",
+   "紫色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Pro 11 M4",
+  "specs": [
+   "256GB 插卡",
+   "256GB WiFi",
+   "512GB 插卡",
+   "512GB WiFi",
+   "1TB 插卡",
+   "1TB WiFi",
+   "16+1TB 插卡",
+   "16+1TB WiFi",
+   "2TB 插卡",
+   "2TB WiFi",
+   "16+2TB 插卡",
+   "16+2TB WiFi"
+  ],
+  "from_hub": [
+   "iPad Pro 11 M4"
+  ],
+  "pos_name": "iPad Pro 11吋 (M4)",
+  "note": [],
+  "colors": [
+   "太空黑色",
+   "銀色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Pro 11 M5",
+  "specs": [
+   "12+256GB 插卡",
+   "12+256GB WiFi",
+   "12+512GB 插卡",
+   "12+512GB WiFi",
+   "16+1TB 插卡",
+   "16+1TB WiFi",
+   "16+2TB 插卡",
+   "16+2TB WiFi"
+  ],
+  "from_hub": [
+   "iPad Pro 11 M5"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Pro 11 第1代",
+  "specs": [
+   "64GB 插卡",
+   "64GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi",
+   "512GB 插卡",
+   "512GB WiFi",
+   "1TB 插卡",
+   "1TB WiFi"
+  ],
+  "from_hub": [
+   "iPad Pro 11 1"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Pro 11 第2代",
+  "specs": [
+   "128GB 插卡",
+   "128GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi",
+   "512GB 插卡",
+   "512GB WiFi",
+   "1TB 插卡",
+   "1TB WiFi"
+  ],
+  "from_hub": [
+   "iPad Pro 11 2"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Pro 11 第3代",
+  "specs": [
+   "128GB 插卡",
+   "128GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi",
+   "512GB 插卡",
+   "512GB WiFi",
+   "1TB 插卡",
+   "1TB WiFi",
+   "2TB 插卡",
+   "2TB WiFi"
+  ],
+  "from_hub": [
+   "iPad Pro 11 3"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Pro 11 第4代",
+  "specs": [
+   "128GB 插卡",
+   "128GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi",
+   "512GB 插卡",
+   "512GB WiFi",
+   "1TB 插卡",
+   "1TB WiFi",
+   "2TB 插卡",
+   "2TB WiFi"
+  ],
+  "from_hub": [
+   "iPad Pro 11 4"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Pro 12.9 第1代",
+  "specs": [
+   "32GB WiFi",
+   "128GB 插卡",
+   "128GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi"
+  ],
+  "from_hub": [
+   "iPad Pro 12.9 1"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Pro 12.9 第2代",
+  "specs": [
+   "64GB 插卡",
+   "64GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi",
+   "512GB 插卡",
+   "512GB WiFi"
+  ],
+  "from_hub": [
+   "iPad Pro 12.9 2"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Pro 12.9 第4代",
+  "specs": [
+   "128GB 插卡",
+   "128GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi",
+   "512GB 插卡",
+   "512GB WiFi",
+   "1TB 插卡",
+   "1TB WiFi"
+  ],
+  "from_hub": [
+   "iPad Pro 12.9 4"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Pro 12.9 第5代",
+  "specs": [
+   "128GB 插卡",
+   "128GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi",
+   "512GB 插卡",
+   "512GB WiFi",
+   "1TB 插卡",
+   "1TB WiFi",
+   "2TB 插卡",
+   "2TB WiFi"
+  ],
+  "from_hub": [
+   "iPad Pro 12.9 5"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Pro 12.9 第6代",
+  "specs": [
+   "128GB 插卡",
+   "128GB WiFi",
+   "256GB 插卡",
+   "256GB WiFi",
+   "512GB 插卡",
+   "512GB WiFi",
+   "1TB 插卡",
+   "1TB WiFi",
+   "2TB 插卡",
+   "2TB WiFi"
+  ],
+  "from_hub": [
+   "iPad Pro 12.9 6"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Pro 13 M4",
+  "specs": [
+   "256GB 插卡",
+   "256GB WiFi",
+   "512GB 插卡",
+   "512GB WiFi",
+   "1TB 插卡",
+   "1TB WiFi",
+   "16+1TB 插卡",
+   "16+1TB WiFi",
+   "2TB 插卡",
+   "2TB WiFi",
+   "16+2TB 插卡",
+   "16+2TB WiFi"
+  ],
+  "from_hub": [
+   "iPad Pro 13 M4"
+  ],
+  "pos_name": "iPad Pro 13吋 (M4)",
+  "note": [],
+  "colors": [
+   "太空黑色",
+   "銀色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "平板",
+  "name": "iPad Pro 13 M5",
+  "specs": [
+   "12+256GB 插卡",
+   "12+256GB WiFi",
+   "12+512GB 插卡",
+   "12+512GB WiFi",
+   "16+1TB 插卡",
+   "16+1TB WiFi",
+   "16+2TB 插卡",
+   "16+2TB WiFi"
+  ],
+  "from_hub": [
+   "iPad Pro 13 M5"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手錶",
+  "name": "Apple Watch SE 2 40mm",
+  "specs": [
+   "GPS",
+   "GPS+行動網路"
+  ],
+  "from_hub": [],
+  "pos_name": "Apple Watch SE 第2代 40mm",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "午夜色",
+   "星光色",
+   "銀色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手錶",
+  "name": "Apple Watch SE 2 44mm",
+  "specs": [
+   "GPS",
+   "GPS+行動網路"
+  ],
+  "from_hub": [],
+  "pos_name": "Apple Watch SE 第2代 44mm",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "午夜色",
+   "星光色",
+   "銀色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手錶",
+  "name": "Apple Watch Series 10 42mm",
+  "specs": [
+   "GPS",
+   "GPS+行動網路"
+  ],
+  "from_hub": [],
+  "pos_name": "Apple Watch 10 42mm",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "噴射黑色",
+   "玫瑰金色",
+   "銀色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手錶",
+  "name": "Apple Watch Series 10 46mm",
+  "specs": [
+   "GPS",
+   "GPS+行動網路"
+  ],
+  "from_hub": [],
+  "pos_name": "Apple Watch 10 46mm",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "噴射黑色",
+   "玫瑰金色",
+   "銀色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手錶",
+  "name": "Apple Watch Series 9 41mm",
+  "specs": [
+   "GPS",
+   "GPS+行動網路"
+  ],
+  "from_hub": [],
+  "pos_name": "Apple Watch 9 41mm",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "午夜色",
+   "星光色",
+   "銀色",
+   "粉紅色",
+   "紅色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手錶",
+  "name": "Apple Watch Series 9 45mm",
+  "specs": [
+   "GPS",
+   "GPS+行動網路"
+  ],
+  "from_hub": [],
+  "pos_name": "Apple Watch 9 45mm",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "午夜色",
+   "星光色",
+   "銀色",
+   "粉紅色",
+   "紅色"
+  ]
+ },
+ {
+  "brand": "Apple",
+  "brand_code": "apple",
+  "kind": "手錶",
+  "name": "Apple Watch Ultra 2 49mm",
+  "specs": [
+   "GPS+行動網路"
+  ],
+  "from_hub": [],
+  "pos_name": "Apple Watch Ultra 2 49mm",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "原色鈦金屬",
+   "黑色鈦金屬"
+  ]
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 2",
+  "specs": [
+   "12+512GB",
+   "12+1TB"
+  ],
+  "from_hub": [
+   "ROG Phone 2"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 3",
+  "specs": [
+   "12+512GB",
+   "16+512GB"
+  ],
+  "from_hub": [
+   "ROG Phone 3"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 5",
+  "specs": [
+   "16+256GB"
+  ],
+  "from_hub": [
+   "ROG Phone 5"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 5 Ultimate",
+  "specs": [
+   "18+512GB"
+  ],
+  "from_hub": [
+   "ROG Phone 5 Ultimate"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 5s",
+  "specs": [
+   "12+256GB",
+   "16+256GB",
+   "18+512GB"
+  ],
+  "from_hub": [
+   "ROG Phone 5s"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 5s Pro",
+  "specs": [
+   "18+512GB"
+  ],
+  "from_hub": [
+   "ROG Phone 5s PRO"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 6",
+  "specs": [
+   "12+256GB",
+   "16+512GB"
+  ],
+  "from_hub": [
+   "ROG Phone 6"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 6 Pro",
+  "specs": [
+   "18+512GB"
+  ],
+  "from_hub": [
+   "ROG Phone 6 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 6D",
+  "specs": [
+   "16+256GB"
+  ],
+  "from_hub": [
+   "ROG Phone 6D"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 6D Ultimate",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "ROG Phone 6D Ultimate"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 7",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "ROG Phone 7"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 7 Ultimate",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "ROG Phone 7 Ultimate"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 8",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "ROG Phone 8"
+  ],
+  "pos_name": "ROG Phone 8",
+  "note": [],
+  "colors": [
+   "幻影黑",
+   "曙光白"
+  ]
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 8 Pro",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "ROG Phone 8 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 8 Pro Edition",
+  "specs": [
+   "24+1TB"
+  ],
+  "from_hub": [
+   "ROG Phone 8 Pro Edition"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 9",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "ROG Phone 9"
+  ],
+  "pos_name": "ROG Phone 9",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "幻影白"
+  ]
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 9 Pro",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "ROG Phone 9 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "ROG Phone 9 Pro Edition",
+  "specs": [
+   "24+1TB"
+  ],
+  "from_hub": [
+   "ROG Phone 9 Pro Edition"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "Zenfone 10",
+  "specs": [
+   "8+128GB",
+   "8+256GB",
+   "16+512GB"
+  ],
+  "from_hub": [
+   "ZenFone 10"
+  ],
+  "pos_name": "Zenfone 10",
+  "note": [],
+  "colors": [
+   "午夜黑",
+   "極光綠",
+   "彗星白",
+   "星空藍"
+  ]
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "Zenfone 11 Ultra",
+  "specs": [
+   "12+256GB",
+   "16+512GB"
+  ],
+  "from_hub": [
+   "Zenfone 11 Ultra"
+  ],
+  "pos_name": "Zenfone 11 Ultra",
+  "note": [],
+  "colors": [
+   "永恆黑",
+   "曠世藍",
+   "拂曉灰",
+   "誤導白"
+  ]
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "Zenfone 12 Ultra",
+  "specs": [
+   "12+256GB",
+   "16+512GB"
+  ],
+  "from_hub": [
+   "Zenfone 12 Ultra"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "Zenfone 6",
+  "specs": [
+   "6+128GB",
+   "8+256GB",
+   "8+512GB"
+  ],
+  "from_hub": [
+   "ZenFone 6"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "Zenfone 7 5G",
+  "specs": [
+   "6+128GB",
+   "8+128GB"
+  ],
+  "from_hub": [
+   "ZenFone 7 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "Zenfone 7 Pro 5G",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "ZenFone 7 Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "Zenfone 8",
+  "specs": [
+   "8+128GB",
+   "8+256GB",
+   "12+256GB",
+   "16+256GB"
+  ],
+  "from_hub": [
+   "ZenFone 8"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "Zenfone 8 Flip",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "ZenFone 8 Flip"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "ASUS",
+  "brand_code": "asus",
+  "kind": "手機",
+  "name": "Zenfone 9",
+  "specs": [
+   "8+128GB",
+   "8+256GB",
+   "16+256GB"
+  ],
+  "from_hub": [
+   "Zenfone 9"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 10",
+  "specs": [
+   "12+128GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Pixel 10"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 10 Pro",
+  "specs": [
+   "16+128GB",
+   "16+256GB",
+   "16+512GB",
+   "16+1TB"
+  ],
+  "from_hub": [
+   "Pixel 10 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 10 Pro Fold",
+  "specs": [
+   "16+256GB",
+   "16+512GB",
+   "16+1TB"
+  ],
+  "from_hub": [
+   "Pixel 10 Pro Fold"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 10 Pro XL",
+  "specs": [
+   "16+256GB",
+   "16+512GB",
+   "16+1TB"
+  ],
+  "from_hub": [
+   "Pixel 10 Pro XL"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 10a",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Pixel 10a"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 11",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Pixel 11"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 11 Pro",
+  "specs": [
+   "12+256GB",
+   "16+512GB",
+   "16+1TB"
+  ],
+  "from_hub": [
+   "Pixel 11 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 11 Pro Fold",
+  "specs": [
+   "16+256GB",
+   "16+512GB",
+   "16+1TB"
+  ],
+  "from_hub": [
+   "Pixel 11 Pro Fold"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 11 Pro XL",
+  "specs": [
+   "12+256GB",
+   "16+512GB",
+   "16+1TB"
+  ],
+  "from_hub": [
+   "Pixel 11 Pro XL"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 4",
+  "specs": [
+   "6+64GB",
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Pixel 4"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 4 XL",
+  "specs": [
+   "6+64GB",
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Pixel 4 XL"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 4a",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Pixel 4a"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 4a 5G",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Pixel 4a 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 5 5G",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Pixel 5 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 6",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Pixel 6"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 6 Pro",
+  "specs": [
+   "12+128GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Pixel 6 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 6a",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Pixel 6a"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 7",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Pixel 7"
+  ],
+  "pos_name": "Pixel 7",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "雪花白",
+   "青檸黃"
+  ]
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 7 Pro",
+  "specs": [
+   "12+128GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Pixel 7 Pro"
+  ],
+  "pos_name": "Pixel 7 Pro",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "雪花白",
+   "松石綠"
+  ]
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 7a",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Pixel 7a"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 8",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Pixel 8"
+  ],
+  "pos_name": "Pixel 8",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "淺瓷白",
+   "玫瑰粉"
+  ]
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 8 Pro",
+  "specs": [
+   "12+128GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Pixel 8 Pro"
+  ],
+  "pos_name": "Pixel 8 Pro",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "淺瓷白",
+   "海灣藍"
+  ]
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 8a",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Pixel 8a"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 9",
+  "specs": [
+   "12+128GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Pixel 9"
+  ],
+  "pos_name": "Pixel 9",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "薄荷綠",
+   "玫瑰粉",
+   "石英白"
+  ]
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 9 Pro",
+  "specs": [
+   "16+128GB",
+   "16+256GB"
+  ],
+  "from_hub": [
+   "Pixel 9 Pro"
+  ],
+  "pos_name": "Pixel 9 Pro",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "石英白",
+   "玫瑰石英",
+   "青瓷"
+  ]
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 9 Pro Fold",
+  "specs": [
+   "16+256GB",
+   "16+512GB"
+  ],
+  "from_hub": [
+   "Pixel 9 Pro Fold"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 9 Pro XL",
+  "specs": [
+   "16+128GB",
+   "16+256GB",
+   "16+512GB"
+  ],
+  "from_hub": [
+   "Pixel 9 Pro XL"
+  ],
+  "pos_name": "Pixel 9 Pro XL",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "石英白",
+   "玫瑰石英",
+   "青瓷"
+  ]
+ },
+ {
+  "brand": "Google",
+  "brand_code": "google",
+  "kind": "手機",
+  "name": "Pixel 9a",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Pixel 9a"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HONOR",
+  "brand_code": "honor",
+  "kind": "手機",
+  "name": "HONOR 600",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "600"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HONOR",
+  "brand_code": "honor",
+  "kind": "手機",
+  "name": "HONOR 600 Lite",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "600 Lite"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HONOR",
+  "brand_code": "honor",
+  "kind": "手機",
+  "name": "HONOR 600 Pro",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "600 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HONOR",
+  "brand_code": "honor",
+  "kind": "手機",
+  "name": "HONOR 600 Pro MOLLY 限量版",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "600 Pro MOLLY 限量版"
+  ],
+  "pos_name": "",
+  "note": [
+   "特別版"
+  ]
+ },
+ {
+  "brand": "HONOR",
+  "brand_code": "honor",
+  "kind": "手機",
+  "name": "HONOR 600S",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "600S"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HONOR",
+  "brand_code": "honor",
+  "kind": "手機",
+  "name": "HONOR Magic8 Pro",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Magic8 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HONOR",
+  "brand_code": "honor",
+  "kind": "手機",
+  "name": "HONOR X6d",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "X6d"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HTC",
+  "brand_code": "htc",
+  "kind": "手機",
+  "name": "HTC Desire 19s",
+  "specs": [
+   "3+32GB",
+   "4+64GB"
+  ],
+  "from_hub": [
+   "Desire 19s"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HTC",
+  "brand_code": "htc",
+  "kind": "手機",
+  "name": "HTC Desire 20 Pro",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Desire 20 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HTC",
+  "brand_code": "htc",
+  "kind": "手機",
+  "name": "HTC Desire 20+",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Desire 20+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HTC",
+  "brand_code": "htc",
+  "kind": "手機",
+  "name": "HTC Desire 21 Pro 5G",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Desire 21 Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HTC",
+  "brand_code": "htc",
+  "kind": "手機",
+  "name": "HTC Desire 22 Pro 5G",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Desire 22 Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HTC",
+  "brand_code": "htc",
+  "kind": "手機",
+  "name": "HTC U20 5G",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "U20 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HTC",
+  "brand_code": "htc",
+  "kind": "手機",
+  "name": "HTC U23",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "U23"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HTC",
+  "brand_code": "htc",
+  "kind": "手機",
+  "name": "HTC U23 Pro",
+  "specs": [
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "U23 pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HTC",
+  "brand_code": "htc",
+  "kind": "手機",
+  "name": "HTC U24 Pro",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "U24 pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HUAWEI",
+  "brand_code": "huawei",
+  "kind": "手機",
+  "name": "HUAWEI P30",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "P30"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HUAWEI",
+  "brand_code": "huawei",
+  "kind": "手機",
+  "name": "HUAWEI P30 Pro",
+  "specs": [
+   "8+128GB",
+   "8+256GB",
+   "8+512GB"
+  ],
+  "from_hub": [
+   "P30 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "HUAWEI",
+  "brand_code": "huawei",
+  "kind": "平板",
+  "name": "HUAWEI MatePad 11",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "MatePad 11"
+  ],
+  "pos_name": "",
+  "note": [
+   "改成平板"
+  ]
+ },
+ {
+  "brand": "HUAWEI",
+  "brand_code": "huawei",
+  "kind": "平板",
+  "name": "HUAWEI MatePad 2022",
+  "specs": [
+   "4+64GB",
+   "4+128GB"
+  ],
+  "from_hub": [
+   "MatePad 2022"
+  ],
+  "pos_name": "",
+  "note": [
+   "改成平板"
+  ]
+ },
+ {
+  "brand": "HUAWEI",
+  "brand_code": "huawei",
+  "kind": "平板",
+  "name": "HUAWEI MatePad New",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "MatePad New"
+  ],
+  "pos_name": "",
+  "note": [
+   "改成平板"
+  ]
+ },
+ {
+  "brand": "HUAWEI",
+  "brand_code": "huawei",
+  "kind": "平板",
+  "name": "HUAWEI MatePad T 10s",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "MatePad T 10s/WIFI"
+  ],
+  "pos_name": "",
+  "note": [
+   "改成平板"
+  ]
+ },
+ {
+  "brand": "iQOO",
+  "brand_code": "iqoo",
+  "kind": "手機",
+  "name": "iQOO 15",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "15"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "iQOO",
+  "brand_code": "iqoo",
+  "kind": "手機",
+  "name": "iQOO 15R",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "15R"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "iQOO",
+  "brand_code": "iqoo",
+  "kind": "手機",
+  "name": "iQOO Z11",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Z11"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Lenovo",
+  "brand_code": "lenovo",
+  "kind": "手機",
+  "name": "Lenovo Legion Phone Duel",
+  "specs": [
+   "12+256GB",
+   "16+512GB"
+  ],
+  "from_hub": [
+   "Legion Phone Duel"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Lenovo",
+  "brand_code": "lenovo",
+  "kind": "手機",
+  "name": "Lenovo Legion Phone Duel 2",
+  "specs": [
+   "16+256GB",
+   "16+512GB"
+  ],
+  "from_hub": [
+   "Legion Phone Duel 2"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto E13",
+  "specs": [
+   "2+64GB"
+  ],
+  "from_hub": [
+   "E13"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto E32",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "E32"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto E40",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "E40"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto E6s",
+  "specs": [
+   "2+32GB"
+  ],
+  "from_hub": [
+   "e6s"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto E7i Power",
+  "specs": [
+   "2+32GB"
+  ],
+  "from_hub": [
+   "E7i Power"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G 5G Plus",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "G 5G Plus"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G Pure",
+  "specs": [
+   "3+32GB"
+  ],
+  "from_hub": [
+   "G Pure"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G06",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "G06"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G10",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "G10"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G30",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "G30"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G31",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "G31"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G34",
+  "specs": [
+   "4+64GB",
+   "4+128GB"
+  ],
+  "from_hub": [
+   "G34"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G37 Power",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "g37 power"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G50",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "G50"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G51 5G",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "G51 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G55",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "G55"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G56",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "G56"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G57",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "G57"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G62 5G",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "G62 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G8 Power Lite",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "G8 Power Lite"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G82",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "G82"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G85",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "G85"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G86 Power",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "g86 Power"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G9 Play",
+  "specs": [
+   "4+64GB",
+   "4+128GB"
+  ],
+  "from_hub": [
+   "G9 Play"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Moto G9 Plus",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "G9 Plus"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Edge 20 Fusion",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Edge 20 Fusion"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Edge 20 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Edge 20 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Edge 30",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Edge 30"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Edge 30 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Edge 30 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Edge 40",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Edge 40"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Edge 50",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Edge 50"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Edge 50 Fusion",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "edge 50 Fusion"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Edge 50 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "edge 50 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Edge 60 Fusion",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Edge 60 Fusion"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Edge 70",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "edge 70"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Edge 70 Fusion",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "edge 70 fusion"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Edge 70 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Edge 70 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola One Hyper",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "One Hyper"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola One Vision Plus",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "One Vision Plus(G8 PLUS)"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Razr",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Razr"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Razr 40",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Razr 40"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Razr 40 Ultra",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Razr 40 Ultra"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Razr 50",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Razr 50"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Razr 50 Ultra",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Razr 50 Ultra"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Razr 60",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Razr 60"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Razr 60 Ultra",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "Razr 60 Ultra"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Motorola",
+  "brand_code": "motorola",
+  "kind": "手機",
+  "name": "Motorola Razr Fold",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "razr fold"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Nokia",
+  "brand_code": "nokia",
+  "kind": "手機",
+  "name": "Nokia 5.4",
+  "specs": [
+   "6+64GB"
+  ],
+  "from_hub": [
+   "5.4"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Nokia",
+  "brand_code": "nokia",
+  "kind": "手機",
+  "name": "Nokia C31",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "C31"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Nokia",
+  "brand_code": "nokia",
+  "kind": "手機",
+  "name": "Nokia G21",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "G21"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Nokia",
+  "brand_code": "nokia",
+  "kind": "手機",
+  "name": "Nokia G42",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "G42"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Nokia",
+  "brand_code": "nokia",
+  "kind": "手機",
+  "name": "Nokia G50",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "G50"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Nokia",
+  "brand_code": "nokia",
+  "kind": "手機",
+  "name": "Nokia G60",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "G60"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Nokia",
+  "brand_code": "nokia",
+  "kind": "手機",
+  "name": "Nokia X30 5G",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "X30 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Nokia",
+  "brand_code": "nokia",
+  "kind": "平板",
+  "name": "Nokia T21",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "T21"
+  ],
+  "pos_name": "",
+  "note": [
+   "改成平板"
+  ]
+ },
+ {
+  "brand": "Nothing",
+  "brand_code": "nothing",
+  "kind": "手機",
+  "name": "CMF Phone 1",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "CMF Phone 1"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Nothing",
+  "brand_code": "nothing",
+  "kind": "手機",
+  "name": "CMF Phone 2 Pro",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "CMF Phone 2 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Nothing",
+  "brand_code": "nothing",
+  "kind": "手機",
+  "name": "Nothing Phone (1)",
+  "specs": [
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Phone(1)"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Nothing",
+  "brand_code": "nothing",
+  "kind": "手機",
+  "name": "Nothing Phone (2)",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Phone(2)"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Nothing",
+  "brand_code": "nothing",
+  "kind": "手機",
+  "name": "Nothing Phone (2a)",
+  "specs": [
+   "8+128GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Phone(2a)"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Nothing",
+  "brand_code": "nothing",
+  "kind": "手機",
+  "name": "Nothing Phone (3)",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "Phone (3)"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Nothing",
+  "brand_code": "nothing",
+  "kind": "手機",
+  "name": "Nothing Phone (3a)",
+  "specs": [
+   "8+128GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Phone (3a)"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Nothing",
+  "brand_code": "nothing",
+  "kind": "手機",
+  "name": "Nothing Phone (4a)",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Phone (4a)"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Nothing",
+  "brand_code": "nothing",
+  "kind": "手機",
+  "name": "Nothing Phone (4a) Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Phone (4a) Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A3 Pro 5G",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "A3 Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A31",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "A31"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A38",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "A38"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A3x",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "A3x"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A5 4G",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "A5 4G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A5 5G",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "A5 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A5 Pro",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "A5 Pro"
+  ],
+  "pos_name": "A 5 Pro",
+  "note": [],
+  "colors": [
+   "星曜黑",
+   "湖光綠"
+  ]
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A53",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "A53"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A54",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "A54"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A55",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "A55"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A57 (2022)",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "A57 2022"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A6s",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "A6s"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A6x",
+  "specs": [
+   "4+128GB",
+   "6+128GB"
+  ],
+  "from_hub": [
+   "A6x"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A7 Pro",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "A7 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A7 Pro Max",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "A7 Pro Max"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A72",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "A72"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A73 5G",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "A73 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A74 5G",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "A74 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A77 5G",
+  "specs": [
+   "4+64GB",
+   "6+128GB"
+  ],
+  "from_hub": [
+   "A77 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A78",
+  "specs": [
+   "4+128GB",
+   "8+128GB"
+  ],
+  "from_hub": [
+   "A78"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A79 5G",
+  "specs": [
+   "4+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "A79 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A9",
+  "specs": [
+   "4+128GB",
+   "8+128GB"
+  ],
+  "from_hub": [
+   "A9"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A91",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "A91"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO A98",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "A98"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO AX5s",
+  "specs": [
+   "3+64GB",
+   "4+64GB"
+  ],
+  "from_hub": [
+   "AX5s"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Find N2 Flip",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Find N2 Flip"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Find N3",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "Find N3"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Find N3 Flip",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Find N3 Flip"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Find N6",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "Find N6"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Find X2 5G",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Find X2 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Find X2 Pro 5G",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Find X2 Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Find X3 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Find X3 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Find X5 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Find X5 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Find X8",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Find X8"
+  ],
+  "pos_name": "Find X8",
+  "note": [],
+  "colors": [
+   "曜夜黑",
+   "微風藍",
+   "暮光粉"
+  ]
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Find X8 Pro",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "Find X8 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Find X9",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Find X9"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Find X9 Pro",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "Find X9 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Find X9 Ultra",
+  "specs": [
+   "12+512GB",
+   "16+1TB"
+  ],
+  "from_hub": [
+   "Find X9 Ultra"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Find X9s",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Find X9s"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Reno"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno Z",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Reno Z"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno 十倍變焦版",
+  "specs": [
+   "6+128GB",
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Reno 10倍變焦"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno10",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Reno 10"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno10 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Reno 10 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno10 Pro+",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Reno 10 Pro+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno11",
+  "specs": [
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Reno 11"
+  ],
+  "pos_name": "Reno 11",
+  "note": [],
+  "colors": [
+   "星海藍",
+   "月石灰"
+  ]
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno11 F",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Reno 11F"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno11 Pro",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Reno 11 pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno12",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Reno 12"
+  ],
+  "pos_name": "Reno 12",
+  "note": [],
+  "colors": [
+   "星幕黑",
+   "雲錦粉"
+  ]
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno12 F",
+  "specs": [
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Reno 12F"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno12 Pro",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Reno 12 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno13",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Reno 13"
+  ],
+  "pos_name": "Reno 13",
+  "note": [],
+  "colors": [
+   "蝶影紫",
+   "星曜藍",
+   "月夜黑"
+  ]
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno13 F",
+  "specs": [
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Reno 13F"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno13 Pro",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Reno 13 Pro"
+  ],
+  "pos_name": "Reno 13 Pro",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno14",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Reno 14"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno14 F",
+  "specs": [
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Reno 14 F"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno14 Pro",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Reno 14 PRO"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno15",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Reno15"
+  ],
+  "pos_name": "Reno 15",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno15 F",
+  "specs": [
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Reno 15F"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno15 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Reno15 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno15 Pro Max",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Reno15 Pro Max"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno16",
+  "specs": [
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Reno 16"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno16 F",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Reno 16F"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno2",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Reno 2"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno2 Z",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Reno 2Z"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno4 5G",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Reno 4 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno4 Pro 5G",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Reno 4 Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno4 Z 5G",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Reno 4Z 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno5 5G",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Reno 5 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno5 Pro 5G",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Reno 5 Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno5 Z 5G",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Reno 5Z 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno6",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Reno 6"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno6 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Reno 6 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno6 Z",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Reno 6Z"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno7",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Reno 7"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno7 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Reno 7 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno7 Z",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Reno 7Z"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno8",
+  "specs": [
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Reno 8"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno8 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Reno 8 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno8 T",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Reno 8T"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "OPPO",
+  "brand_code": "oppo",
+  "kind": "手機",
+  "name": "OPPO Reno8 Z",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Reno 8Z"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO C40",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "C40"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO C65",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "C65"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO C75",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "C75"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO C85",
+  "specs": [
+   "6+128GB",
+   "6+256GB"
+  ],
+  "from_hub": [
+   "C85"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO F3 5G",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "F3 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO F4",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "F4"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO F4 GT",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "F4 GT"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO F5",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "F5"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO F5 Pro",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "F5 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO F6",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "F6"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO F6 Pro",
+  "specs": [
+   "12+512GB",
+   "16+1TB"
+  ],
+  "from_hub": [
+   "F6 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO F7",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "F7"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO F7 Pro",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "F7 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO F7 Ultra",
+  "specs": [
+   "12+256GB",
+   "16+512GB"
+  ],
+  "from_hub": [
+   "F7 Ultra"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO F8 Pro",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "F8 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO F8 Ultra",
+  "specs": [
+   "12+256GB",
+   "16+512GB"
+  ],
+  "from_hub": [
+   "F8 Ultra"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO F9 Pro",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "F9 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO F9 Ultra",
+  "specs": [
+   "12+256GB",
+   "16+512GB"
+  ],
+  "from_hub": [
+   "F9 Ultra"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO M3 4G",
+  "specs": [
+   "4+64GB",
+   "4+128GB"
+  ],
+  "from_hub": [
+   "M3 4G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO M3 Pro 5G",
+  "specs": [
+   "4+64GB",
+   "6+128GB"
+  ],
+  "from_hub": [
+   "M3 Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO M4 Pro 4G",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "M4 Pro 4G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO M4 Pro 5G",
+  "specs": [
+   "4+64GB",
+   "6+128GB"
+  ],
+  "from_hub": [
+   "M4 Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO M5",
+  "specs": [
+   "4+64GB",
+   "4+128GB"
+  ],
+  "from_hub": [
+   "M5"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO M5s",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "M5s"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO M6",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "M6"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO M7",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "M7"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO M7 Pro",
+  "specs": [
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "M7 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO M8 5G",
+  "specs": [
+   "8+256GB",
+   "8+512GB"
+  ],
+  "from_hub": [
+   "M8 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO M8s 5G",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "M8s 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO X3 Pro 4G",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "X3 PRO 4G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO X4 GT",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "X4 GT"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO X4 Pro 5G",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "X4 Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO X5 5G",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "X5 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO X5 Pro 5G",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "X5 Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO X6 5G",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "X6 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO X6 Pro 5G",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "X6 Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO X7",
+  "specs": [
+   "8+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "X7"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO X7 Pro",
+  "specs": [
+   "8+256GB",
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "X7 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO X8 Pro",
+  "specs": [
+   "8+256GB",
+   "8+512GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "X8 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO X8 Pro Max",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "X8 Pro Max"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "POCO",
+  "brand_code": "poco",
+  "kind": "手機",
+  "name": "POCO X8 Pro 鋼鐵人聯名款",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "X8 Pro 鋼鐵人聯名款"
+  ],
+  "pos_name": "",
+  "note": [
+   "特別版"
+  ]
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 10 Pro",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "10 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 10 Pro+",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "10 Pro+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 10T 5G",
+  "specs": [
+   "4+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "10T 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 11",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "11"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 11 Pro",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "11 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 11 Pro+",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "11 Pro+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 11x",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "11X"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 12",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "12"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 12 Pro+",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "12 Pro+"
+  ],
+  "pos_name": "realme 12 Pro+",
+  "note": [],
+  "colors": [
+   "飛速藍",
+   "領航者"
+  ]
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 12+",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "12+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 12x",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "12X"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 13",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "13"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 13 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "13 pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 13 Pro+",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "13 pro+"
+  ],
+  "pos_name": "realme 13 Pro+",
+  "note": [],
+  "colors": [
+   "曙光金",
+   "深空紫",
+   "冰川綠"
+  ]
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 13+",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "13+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 14",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "14"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 14 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "14 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 14 Pro+",
+  "specs": [
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [],
+  "pos_name": "realme 14 Pro+",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "競速紫",
+   "極光白"
+  ]
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 14C",
+  "specs": [
+   "128GB",
+   "256GB"
+  ],
+  "from_hub": [],
+  "pos_name": "realme 14 C",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "曜石黑",
+   "海洋綠"
+  ]
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 14x",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "14x"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 15",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "15"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 15 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "15 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 15 Pro 權力遊戲限量版",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "15 Pro 權力遊戲限量版"
+  ],
+  "pos_name": "",
+  "note": [
+   "特別版"
+  ]
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 15T",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "15T"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 16",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "16"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 16 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "16 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 6",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "6"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 6i",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "6i"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 7 5G",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "7 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 8 5G",
+  "specs": [
+   "4+128GB",
+   "8+128GB"
+  ],
+  "from_hub": [
+   "8 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 9 Pro",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "9 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 9 Pro+",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "9 Pro+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 9i",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "9i"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme 9i 5G",
+  "specs": [
+   "4+64GB",
+   "6+128GB"
+  ],
+  "from_hub": [
+   "9i 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme C100",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "C100"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme C11 (2021)",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "C11 2021"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme C21 4G",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "C21 4G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme C3",
+  "specs": [
+   "3+64GB"
+  ],
+  "from_hub": [
+   "C3"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme C33",
+  "specs": [
+   "4+64GB",
+   "4+128GB"
+  ],
+  "from_hub": [
+   "C33"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme C35",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "C35"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme C51",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "C51"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme C61",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "C61"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme C71",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "C71"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme GT 5G",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "GT 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme GT 6",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "GT 6"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme GT 7",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "GT 7"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme GT 7 Pro",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "GT 7 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme GT 7T",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "GT 7T"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme GT 8 Pro",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "GT 8 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme GT 8 Pro F1限量版",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "GT 8 Pro F1限量版"
+  ],
+  "pos_name": "",
+  "note": [
+   "特別版"
+  ]
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme GT Neo 2",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "GT Neo 2"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme GT Neo 3",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "GT Neo 3"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme GT Neo 3T",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "GT Neo 3T"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme GT 大師版",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "GT 大師版"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme GT2 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "GT2 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme Narzo 30A",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "Narzo 30A"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme Narzo 50",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Narzo 50"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme Narzo 50 Pro",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Narzo 50 pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme Narzo 50A",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Narzo 50A"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme Narzo 50i",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "Narzo 50i"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme Note 50",
+  "specs": [
+   "4+64GB",
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Note 50"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme Note 80",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Note 80"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme X3",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "X3"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme X50 5G",
+  "specs": [
+   "6+128GB",
+   "8+128GB"
+  ],
+  "from_hub": [
+   "X50 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme X50 Pro 5G",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "X50 Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "realme",
+  "brand_code": "realme",
+  "kind": "手機",
+  "name": "realme X7 Pro 5G",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "X7 Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A07",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A07"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A13 5G",
+  "specs": [
+   "4+64GB",
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A13 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A14 5G",
+  "specs": [
+   "4+64GB",
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A14 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A15 5G",
+  "specs": [
+   "4+128GB",
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A15 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A16 5G",
+  "specs": [
+   "4+128GB",
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A16 5G"
+  ],
+  "pos_name": "Galaxy A 16 5G",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "薄荷綠",
+   "淺灰藍"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A17",
+  "specs": [
+   "6+128GB",
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A17"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A21s",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "Galaxy A21s"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A22 5G",
+  "specs": [
+   "4+64GB",
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A22 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A23 5G",
+  "specs": [
+   "4+64GB",
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A23 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A25 5G",
+  "specs": [
+   "6+128GB",
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A25 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A26",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A26"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A27",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy A27"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A31",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A31"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A32",
+  "specs": [
+   "4+64GB",
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A32"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A33 5G",
+  "specs": [
+   "6+128GB",
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A33 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A34 5G",
+  "specs": [
+   "6+128GB",
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A34 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A35 5G",
+  "specs": [
+   "6+128GB",
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A35 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A36",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy A36"
+  ],
+  "pos_name": "Galaxy A 36 5G",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "薰衣紫",
+   "薄荷綠"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A37",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy A37"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A42 5G",
+  "specs": [
+   "6+128GB",
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A42 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A51",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A51"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A51 5G",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A51 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A52 5G",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy A52 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A52s 5G",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy A52s 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A53 5G",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy A53 5G"
+  ],
+  "pos_name": "Galaxy A 53 5G",
+  "note": [],
+  "colors": [
+   "清新白",
+   "純真黑",
+   "禪意黑",
+   "魅力橙"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A54 5G",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy A54 5G"
+  ],
+  "pos_name": "Galaxy A 54 5G",
+  "note": [],
+  "colors": [
+   "爵士黑",
+   "醇香奶",
+   "微醺紫",
+   "萊姆綠"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A55 5G",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy A55 5G"
+  ],
+  "pos_name": "Galaxy A 55 5G",
+  "note": [],
+  "colors": [
+   "冰河藍",
+   "沁檸黃",
+   "峻嶺藍",
+   "曜石黑"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A56",
+  "specs": [
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Galaxy A56"
+  ],
+  "pos_name": "Galaxy A 56 5G",
+  "note": [],
+  "colors": [
+   "霧光灰",
+   "薄荷綠",
+   "珊瑚粉",
+   "曜石黑"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A57",
+  "specs": [
+   "8+256GB",
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Galaxy A57"
+  ],
+  "pos_name": "Galaxy A 57 5G",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A71",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A71"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy A71 5G",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Galaxy A71 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Fold",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Galaxy Fold"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy M11",
+  "specs": [
+   "3+32GB"
+  ],
+  "from_hub": [
+   "Galaxy M11"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy M12 4G",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Galaxy M12 4G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy M13",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "Galaxy M13"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy M14 5G",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "Galaxy M14 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy M32",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Galaxy M32"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy M33 5G",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Galaxy M33 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy M34 5G",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Galaxy M34 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy M53 5G",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Galaxy M53 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Note10",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy Note 10"
+  ],
+  "pos_name": "Galaxy Note 10",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Note10 Lite",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Galaxy Note10 Lite"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Note10+",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Galaxy Note 10+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Note2",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "Galaxy Note 2",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Note20",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy Note 20"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Note20 Ultra",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Galaxy Note 20 Ultra"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Note3",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "Galaxy Note 3",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Note4",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "Galaxy Note 4",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Note8",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "Galaxy Note 8",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S10",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Galaxy S10"
+  ],
+  "pos_name": "Galaxy S 10",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S10+",
+  "specs": [
+   "8+128GB",
+   "8+512GB",
+   "12+1TB"
+  ],
+  "from_hub": [
+   "Galaxy S10+"
+  ],
+  "pos_name": "Galaxy S 10 +",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S10e",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Galaxy S10e"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S20",
+  "specs": [
+   "12+128GB"
+  ],
+  "from_hub": [
+   "Galaxy S20"
+  ],
+  "pos_name": "Galaxy S 20",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S20 FE",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy S20 FE"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S20 Ultra",
+  "specs": [
+   "12+256GB",
+   "16+512GB"
+  ],
+  "from_hub": [
+   "Galaxy S20 Ultra"
+  ],
+  "pos_name": "Galaxy S 20 Ultra",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S20+",
+  "specs": [
+   "12+128GB"
+  ],
+  "from_hub": [
+   "Galaxy S20+"
+  ],
+  "pos_name": "Galaxy S 20 +",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S21 5G",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy S21 5G"
+  ],
+  "pos_name": "Galaxy S 21",
+  "note": [],
+  "colors": [
+   "幻影紫",
+   "幻影灰",
+   "幻影粉",
+   "幻影白"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S21 FE",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy S21 FE"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S21 Ultra 5G",
+  "specs": [
+   "12+256GB",
+   "16+512GB"
+  ],
+  "from_hub": [
+   "Galaxy S21 Ultra 5G"
+  ],
+  "pos_name": "Galaxy S 21 Ultra",
+  "note": [],
+  "colors": [
+   "星魅銀",
+   "星魅黑"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S21+ 5G",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy S21+ 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S22",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy S22"
+  ],
+  "pos_name": "Galaxy S 22",
+  "note": [],
+  "colors": [
+   "曜岩黑",
+   "皜雪白",
+   "植光綠",
+   "霧樾粉"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S22 Ultra",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Galaxy S22 Ultra"
+  ],
+  "pos_name": "Galaxy S 22 Ultra",
+  "note": [],
+  "colors": [
+   "曜岩黑",
+   "皜雪白",
+   "流墨紅",
+   "松墨綠"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S22+",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy S22+"
+  ],
+  "pos_name": "Galaxy S 22 +",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S23",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy S23"
+  ],
+  "pos_name": "Galaxy S 23",
+  "note": [],
+  "colors": [
+   "曜岩墨",
+   "植萃綠",
+   "雪境白",
+   "輕奢紫"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S23 FE",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy S23 FE"
+  ],
+  "pos_name": "Galaxy S 23 FE",
+  "note": [],
+  "colors": [
+   "石墨灰",
+   "薄荷綠",
+   "貝殼紫",
+   "水漾藍"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S23 Ultra",
+  "specs": [
+   "12+256GB",
+   "12+512GB",
+   "12+1TB"
+  ],
+  "from_hub": [
+   "Galaxy S23 Ultra"
+  ],
+  "pos_name": "Galaxy S 23 Ultra",
+  "note": [],
+  "colors": [
+   "曜岩墨",
+   "植萃綠",
+   "雪境白",
+   "輕奢紫"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S23+",
+  "specs": [
+   "8+256GB",
+   "8+512GB"
+  ],
+  "from_hub": [
+   "Galaxy S23+"
+  ],
+  "pos_name": "Galaxy S 23 +",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S24",
+  "specs": [
+   "8+256GB",
+   "8+512GB"
+  ],
+  "from_hub": [
+   "Galaxy S24"
+  ],
+  "pos_name": "Galaxy S 24",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "雲石灰",
+   "琥珀黃",
+   "湖光藍"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S24 FE",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy S24 FE"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S24 Ultra",
+  "specs": [
+   "12+256GB",
+   "12+512GB",
+   "12+1TB"
+  ],
+  "from_hub": [
+   "Galaxy S24 Ultra"
+  ],
+  "pos_name": "Galaxy S 24 Ultra",
+  "note": [],
+  "colors": [
+   "鈦黑",
+   "鈦灰",
+   "鈦紫",
+   "鈦黃"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S24+",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Galaxy S24+"
+  ],
+  "pos_name": "Galaxy S 24 +",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S25",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Galaxy S25"
+  ],
+  "pos_name": "Galaxy S 25",
+  "note": [],
+  "colors": [
+   "鈦黑",
+   "鈦銀藍",
+   "鈦銀",
+   "鈦玉"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S25 Edge",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Galaxy S25 Edge"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S25 FE",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy S25 FE"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S25 Ultra",
+  "specs": [
+   "12+256GB",
+   "12+512GB",
+   "16+1TB"
+  ],
+  "from_hub": [
+   "Galaxy S25 Ultra"
+  ],
+  "pos_name": "Galaxy S 25 Ultra",
+  "note": [],
+  "colors": [
+   "鈦黑",
+   "鈦銀藍",
+   "鈦灰",
+   "鈦白銀"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S25+",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Galaxy S25+"
+  ],
+  "pos_name": "Galaxy S 25 +",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S26",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Galaxy S26"
+  ],
+  "pos_name": "Galaxy S 26",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S26 FE",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy S26 FE"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S26 Ultra",
+  "specs": [
+   "12+256GB",
+   "12+512GB",
+   "16+1TB"
+  ],
+  "from_hub": [
+   "Galaxy S26 Ultra"
+  ],
+  "pos_name": "Galaxy S 26 Ultra",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S26+",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Galaxy S26+"
+  ],
+  "pos_name": "Galaxy S 26 +",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S4",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "Galaxy S 4",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S4 mini",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "Galaxy S 4 mini",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S5",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "Galaxy S 5",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S6",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "Galaxy S 6",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S8",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "Galaxy S 8",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S8+",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "Galaxy S 8 +",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S9",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "Galaxy S 9",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy S9+",
+  "specs": [],
+  "from_hub": [],
+  "pos_name": "Galaxy S 9 +",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy XCover6 Pro",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Galaxy XCover6 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Z Flip",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy Z Flip"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Z Flip 5G",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy Z Flip 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Z Flip3 5G",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy Z Flip3 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Z Flip4 5G",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Galaxy Z Flip4 5G"
+  ],
+  "pos_name": "Galaxy Z Flip 4",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "星河紫",
+   "沁光金",
+   "波瀾藍"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Z Flip5 5G",
+  "specs": [
+   "8+256GB",
+   "8+512GB"
+  ],
+  "from_hub": [
+   "Galaxy Z Flip5 5G"
+  ],
+  "pos_name": "Galaxy Z Flip 5",
+  "note": [],
+  "colors": [
+   "曜石灰",
+   "薰衣紫",
+   "奶霜黃",
+   "薄荷綠"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Z Flip6 5G",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Galaxy Z Flip6 5G"
+  ],
+  "pos_name": "Galaxy Z Flip 6",
+  "note": [],
+  "colors": [
+   "曜石藍",
+   "薄荷綠",
+   "銀影白",
+   "鵝黃色"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Z Flip7 5G",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Galaxy Z Flip7 5G"
+  ],
+  "pos_name": "Galaxy Z Flip 7",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "銀影白",
+   "水漾藍"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Z Flip8",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Galaxy Z Flip8"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Z Fold2 5G",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Galaxy Z Fold 2 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Z Fold3 5G",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Galaxy Z Fold3 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Z Fold4 5G",
+  "specs": [
+   "12+256GB",
+   "12+512GB",
+   "12+1TB"
+  ],
+  "from_hub": [
+   "Galaxy Z Fold4 5G"
+  ],
+  "pos_name": "Galaxy Z Fold 4",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "米霧灰",
+   "雪嵐白"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Z Fold5 5G",
+  "specs": [
+   "12+256GB",
+   "12+512GB",
+   "12+1TB"
+  ],
+  "from_hub": [
+   "Galaxy Z Fold5 5G"
+  ],
+  "pos_name": "Galaxy Z Fold 5",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "冰霜藍",
+   "乳霜白"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Z Fold6 5G",
+  "specs": [
+   "12+256GB",
+   "12+512GB",
+   "12+1TB"
+  ],
+  "from_hub": [
+   "Galaxy Z Fold6 5G"
+  ],
+  "pos_name": "Galaxy Z Fold 6",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "冷霜藍",
+   "月光白"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Z Fold7 5G",
+  "specs": [
+   "12+256GB",
+   "12+512GB",
+   "16+1TB"
+  ],
+  "from_hub": [
+   "Galaxy Z Fold7 5G"
+  ],
+  "pos_name": "Galaxy Z Fold 7",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "銀影白",
+   "藍影"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Z Fold8",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Galaxy Z Fold8"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Z Fold8 Ultra",
+  "specs": [
+   "12+256GB",
+   "12+512GB",
+   "16+1TB"
+  ],
+  "from_hub": [
+   "Galaxy Z Fold8 Ultra"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手機",
+  "name": "Galaxy Z TriFold",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "Galaxy Z TriFold"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab A11",
+  "specs": [
+   "4+64GB 插卡",
+   "4+64GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab A11"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab A11+",
+  "specs": [
+   "6+128GB 插卡",
+   "6+128GB WiFi",
+   "8+256GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab A11+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab A7",
+  "specs": [
+   "3+32GB 插卡",
+   "3+32GB WiFi",
+   "3+64GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab A7"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab A7 Lite",
+  "specs": [
+   "3+32GB 插卡",
+   "4+64GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab A7 Lite"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab A9",
+  "specs": [
+   "4+64GB WiFi",
+   "4+64GB 插卡"
+  ],
+  "from_hub": [
+   "Galaxy Tab A9"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab A9+",
+  "specs": [
+   "4+64GB 插卡",
+   "4+64GB WiFi",
+   "8+128GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab A9+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab S10 FE",
+  "specs": [
+   "8+128GB 插卡",
+   "8+128GB WiFi",
+   "12+256GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab S10 FE"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab S10 FE+",
+  "specs": [
+   "8+128GB 插卡",
+   "8+128GB WiFi",
+   "12+256GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab S10 FE+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab S10 Lite",
+  "specs": [
+   "6+128GB 插卡",
+   "6+128GB WiFi",
+   "8+256GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab S10 Lite"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab S10 Ultra",
+  "specs": [
+   "12+256GB 插卡",
+   "12+256GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab S10 Ultra"
+  ],
+  "pos_name": "Galaxy Tab S 10 Ultra",
+  "note": [],
+  "colors": [
+   "曜石灰",
+   "白金銀"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab S10+",
+  "specs": [
+   "12+256GB 插卡",
+   "12+256GB WiFi",
+   "12+512GB 插卡",
+   "12+512GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab S10+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab S11",
+  "specs": [
+   "12+128GB 插卡",
+   "12+128GB WiFi",
+   "12+256GB 插卡",
+   "12+256GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab S11"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab S11 Ultra",
+  "specs": [
+   "12+256GB 插卡",
+   "12+256GB WiFi",
+   "12+512GB 插卡",
+   "12+512GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab S11 Ultra"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab S6 Lite",
+  "specs": [
+   "4+64GB WiFi",
+   "4+64GB 插卡",
+   "4+128GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab S6 Lite"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab S7",
+  "specs": [
+   "6+128GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab S7"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab S7 FE",
+  "specs": [
+   "4+64GB WiFi",
+   "4+64GB 插卡"
+  ],
+  "from_hub": [
+   "Galaxy Tab S7 FE"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab S7+",
+  "specs": [
+   "6+128GB 插卡",
+   "6+128GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab S7+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab S8",
+  "specs": [
+   "8+128GB 插卡",
+   "8+128GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab S8"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab S8+",
+  "specs": [
+   "8+128GB 插卡",
+   "8+128GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab S8+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab S9",
+  "specs": [
+   "8+128GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab S9"
+  ],
+  "pos_name": "Galaxy Tab S 9",
+  "note": [],
+  "colors": [
+   "石墨黑",
+   "米霧色"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab S9 Ultra",
+  "specs": [
+   "12+256GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab S9 Ultra"
+  ],
+  "pos_name": "Galaxy Tab S 9 Ultra",
+  "note": [],
+  "colors": [
+   "石墨黑",
+   "米霧色"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "平板",
+  "name": "Galaxy Tab S9+",
+  "specs": [
+   "12+256GB WiFi"
+  ],
+  "from_hub": [
+   "Galaxy Tab S9+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手錶",
+  "name": "Galaxy Watch Ultra 47mm",
+  "specs": [
+   "LTE"
+  ],
+  "from_hub": [],
+  "pos_name": "Galaxy Watch Ultra 47mm",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "鈦灰",
+   "鈦白",
+   "鈦銀"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手錶",
+  "name": "Galaxy Watch6 40mm",
+  "specs": [
+   "藍牙",
+   "LTE"
+  ],
+  "from_hub": [],
+  "pos_name": "Galaxy Watch 6 40mm",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "曜石黑",
+   "曙光金"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手錶",
+  "name": "Galaxy Watch6 44mm",
+  "specs": [
+   "藍牙",
+   "LTE"
+  ],
+  "from_hub": [],
+  "pos_name": "Galaxy Watch 6 44mm",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "曜石黑",
+   "星光銀"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手錶",
+  "name": "Galaxy Watch7 40mm",
+  "specs": [
+   "藍牙",
+   "LTE"
+  ],
+  "from_hub": [],
+  "pos_name": "Galaxy Watch 7 40mm",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "霧光綠",
+   "霧光奶"
+  ]
+ },
+ {
+  "brand": "Samsung",
+  "brand_code": "samsung",
+  "kind": "手錶",
+  "name": "Galaxy Watch7 44mm",
+  "specs": [
+   "藍牙",
+   "LTE"
+  ],
+  "from_hub": [],
+  "pos_name": "Galaxy Watch 7 44mm",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "霧光綠",
+   "霧光奶"
+  ]
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS R10",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "AQUOS R10"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS R11",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "AQUOS R11"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS R5G",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "AQUOS R5G 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS R8s",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "AQUOS R8s"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS R8s Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "AQUOS R8s Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS R9",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "AQUOS R9"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS R9 Pro",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "AQUOS R9 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS sense10",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "AQUOS sense10"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS sense4 plus",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "AQUOS sense 4 plus",
+   "AQUOS sense 4+"
+  ],
+  "pos_name": "",
+  "note": [
+   "創宇有兩種寫法,併成一筆"
+  ]
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS sense5G",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "AQUOS sense5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS sense7",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "AQUOS sense7"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS sense7 plus",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "AQUOS sense7 plus"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS sense8",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "AQUOS sense8"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS sense9",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "AQUOS sense9"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS wish",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "AQUOS wish"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS wish4",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "AQUOS wish4"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS wish5",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "AQUOS wish 5"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS wish5s",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "AQUOS wish5s"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS wish6",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "AQUOS wish 6"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "SHARP",
+  "brand_code": "sharp",
+  "kind": "手機",
+  "name": "AQUOS zero6",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "AQUOS zero6"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 1 II",
+  "specs": [
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Xperia 1 II"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 1 III",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Xperia 1 III"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 1 IV",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Xperia 1 IV"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 1 V",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Xperia 1 V"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 1 VI",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Xperia 1 VI"
+  ],
+  "pos_name": "Xperia 1 VI",
+  "note": [],
+  "colors": [
+   "黑色",
+   "白金色",
+   "卡其綠",
+   "紅色"
+  ]
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 1 VII",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Xperia 1 VII"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 1 VIII",
+  "specs": [
+   "12+256GB",
+   "12+512GB",
+   "16+1TB"
+  ],
+  "from_hub": [
+   "Xperia 1 VIII"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 10 II",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Xperia 10 II"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 10 III",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Xperia 10 III"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 10 IV",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Xperia 10 IV"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 10 V",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Xperia 10 V"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 10 VI",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Xperia 10 VI"
+  ],
+  "pos_name": "Xperia 10 VI",
+  "note": [],
+  "colors": [
+   "黑色",
+   "白色",
+   "藍色"
+  ]
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 10 VII",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Xperia 10 VII"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 10 VIII",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Xperia 10 VIII"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 10 VIII x Hello Kitty 限量特仕版",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Xperia 10 VIII x Hello Kitty 限量特仕版"
+  ],
+  "pos_name": "",
+  "note": [
+   "特別版"
+  ]
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 5 II",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Xperia 5 II"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 5 III",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Xperia 5 III"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 5 IV",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Xperia 5 IV"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia 5 V",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Xperia 5 V"
+  ],
+  "pos_name": "Xperia 5 V",
+  "note": [],
+  "colors": [
+   "黑色",
+   "白金色",
+   "藍色"
+  ]
+ },
+ {
+  "brand": "Sony",
+  "brand_code": "sony",
+  "kind": "手機",
+  "name": "Xperia PRO-I",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Xperia PRO-I"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V17",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "V17"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V21 5G",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "V21 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V21s",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "V21s"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V23 5G",
+  "specs": [
+   "8+128GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "V23 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V23e 5G",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "V23e 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V25",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "V25"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V25 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "V25 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V27",
+  "specs": [
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "V27"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V29",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "V29"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V29e",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "V29e"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V30",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "V30"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V30 Pro",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "V30 pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V30e",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "V30e"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V40",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "V40"
+  ],
+  "pos_name": "V 40",
+  "note": [],
+  "colors": [
+   "鈦灰",
+   "月光白",
+   "翡冷翠"
+  ]
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V40 Lite",
+  "specs": [
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "V40 Lite"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V40 Pro",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "V40 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V50",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "V50"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V50 Lite",
+  "specs": [
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "V50 Lite"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V60",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "V60"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V60 Lite",
+  "specs": [
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "V60 Lite"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V70",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "V70"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V70 FE",
+  "specs": [
+   "8+128GB",
+   "8+256GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "V70 FE"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo V80 Lite",
+  "specs": [
+   "6+128GB",
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "V80 Lite"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X Fold5",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "X Fold 5"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X100",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "X100"
+  ],
+  "pos_name": "X 100",
+  "note": [],
+  "colors": [
+   "璀璨藍",
+   "傳奇黑"
+  ]
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X100 Pro",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "X100 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X200",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "X200"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X200 FE",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "X200 FE"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X200 Pro",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "X200 Pro"
+  ],
+  "pos_name": "X 200 Pro",
+  "note": [],
+  "colors": [
+   "天青藍",
+   "蔡司黑"
+  ]
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X300",
+  "specs": [
+   "12+256GB",
+   "16+512GB"
+  ],
+  "from_hub": [
+   "X300"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X300 FE",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "X300 FE"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X300 Pro",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "X300 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X300 Ultra",
+  "specs": [
+   "16+512GB",
+   "16+1TB"
+  ],
+  "from_hub": [
+   "X300 Ultra"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X50 5G",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "X50 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X50 Pro 5G",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "X50 Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X50e 5G",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "X50e 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X60",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "X60"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X60 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "X60 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X70",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "X70"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X70 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "X70 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X80",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "X80"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X90",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "X90"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo X90 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "X90 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y02s",
+  "specs": [
+   "3+32GB"
+  ],
+  "from_hub": [
+   "Y02S"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y03",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "Y03"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y04",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Y04"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y05",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Y05"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y100",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Y100"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y15",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Y15"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y16",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "Y16"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y17s",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Y17s"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y20",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "Y20"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y20s",
+  "specs": [
+   "4+128GB",
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Y20s"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y21",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "Y21"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y21 5G",
+  "specs": [
+   "4+128GB",
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Y21 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y21s",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Y21s"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y27",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Y27"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y28s",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Y28S"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y29s",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Y29S"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y31",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Y31"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y36",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Y36"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y38",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Y38"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y39",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Y39"
+  ],
+  "pos_name": "Y 39",
+  "note": [],
+  "colors": [
+   "曜石黑",
+   "晨曦金"
+  ]
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y50",
+  "specs": [
+   "6+128GB",
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Y50"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y52 5G (2021)",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Y52(2021) 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y52 5G (2022)",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Y52(2022) 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y55 5G",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Y55 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y55s 5G",
+  "specs": [
+   "4+128GB",
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Y55s 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y72",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Y72"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y76",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Y76"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "vivo",
+  "brand_code": "vivo",
+  "kind": "手機",
+  "name": "vivo Y78",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Y78"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 10 Lite 5G",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "10 Lite 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 10T",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "10T"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 10T Lite 5G",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "10T Lite 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 10T Pro 5G",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "10T Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 11",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "11"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 11 Lite 5G",
+  "specs": [
+   "6+128GB",
+   "8+128GB"
+  ],
+  "from_hub": [
+   "11 Lite 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 11 Lite 5G NE",
+  "specs": [
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "11 Lite_5G_NE"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 11T",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "11T"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 11T Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "11T Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 12",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "12"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 12 Lite",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "12 Lite"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 12 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "12 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 12T",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "12T"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 12T Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "12T Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 12X",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "12X"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 13",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "13"
+  ],
+  "pos_name": "小米 13",
+  "note": [],
+  "colors": [
+   "雪山白",
+   "曜石黑",
+   "遠山藍"
+  ]
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 13 Lite",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "13 Lite"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 13 Pro",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "13 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 13 Ultra",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "13 Ultra"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 13T",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "13T"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 13T Pro",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "13T Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 14",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "14"
+  ],
+  "pos_name": "小米 14",
+  "note": [],
+  "colors": [
+   "黑色",
+   "白色",
+   "岩石青"
+  ]
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 14 Ultra",
+  "specs": [
+   "16+512GB"
+  ],
+  "from_hub": [
+   "14 Ultra"
+  ],
+  "pos_name": "小米 14 Ultra",
+  "note": [],
+  "colors": [
+   "黑色",
+   "白色"
+  ]
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 14T",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "14T"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 14T Pro",
+  "specs": [
+   "12+512GB",
+   "12+1TB"
+  ],
+  "from_hub": [
+   "14T Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 15",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "15"
+  ],
+  "pos_name": "小米 15",
+  "note": [],
+  "colors": [
+   "黑色",
+   "白色",
+   "淺綠色"
+  ]
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 15 Ultra",
+  "specs": [
+   "16+512GB",
+   "16+1TB"
+  ],
+  "from_hub": [
+   "15 Ultra"
+  ],
+  "pos_name": "小米 15 Ultra",
+  "note": [],
+  "colors": [
+   "黑色",
+   "白色",
+   "銀鉻"
+  ]
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 15T",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "15T"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 15T Pro",
+  "specs": [
+   "12+512GB",
+   "12+1TB"
+  ],
+  "from_hub": [
+   "15T Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 17",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "17"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 17 Ultra",
+  "specs": [
+   "16+512GB",
+   "16+1TB"
+  ],
+  "from_hub": [
+   "17 Ultra"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 17T",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "17T"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 17T Pro",
+  "specs": [
+   "12+256GB",
+   "12+512GB",
+   "12+1TB"
+  ],
+  "from_hub": [
+   "17T Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 9T Pro",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "9T Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手機",
+  "name": "小米 MIX Flip",
+  "specs": [
+   "12+512GB"
+  ],
+  "from_hub": [
+   "MIX Flip"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "平板",
+  "name": "小米平板 6",
+  "specs": [
+   "128GB",
+   "256GB"
+  ],
+  "from_hub": [],
+  "pos_name": "小米平板 6",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "黑色",
+   "藍色",
+   "金色"
+  ]
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "平板",
+  "name": "小米平板 7 Pro",
+  "specs": [
+   "256GB",
+   "512GB"
+  ],
+  "from_hub": [],
+  "pos_name": "小米平板 7 Pro",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "黑色",
+   "藍色",
+   "綠色"
+  ]
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手錶",
+  "name": "小米 Watch S4",
+  "specs": [
+   "藍牙"
+  ],
+  "from_hub": [],
+  "pos_name": "Xiaomi Watch S4",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "曜石黑",
+   "銀色"
+  ]
+ },
+ {
+  "brand": "小米",
+  "brand_code": "xiaomi",
+  "kind": "手錶",
+  "name": "小米手環 9",
+  "specs": [
+   "標準版"
+  ],
+  "from_hub": [],
+  "pos_name": "小米手環 9",
+  "note": [
+   "創宇沒有,POS 原本就有"
+  ],
+  "colors": [
+   "曜石黑",
+   "月光白"
+  ]
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 10",
+  "specs": [
+   "4+64GB",
+   "4+128GB"
+  ],
+  "from_hub": [
+   "10"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 10 (2022)",
+  "specs": [
+   "4+64GB",
+   "4+128GB"
+  ],
+  "from_hub": [
+   "10 (2022)"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 10 5G",
+  "specs": [
+   "4+64GB",
+   "4+128GB",
+   "6+128GB"
+  ],
+  "from_hub": [
+   "10 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 10A",
+  "specs": [
+   "3+64GB"
+  ],
+  "from_hub": [
+   "10A"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 10C",
+  "specs": [
+   "4+64GB"
+  ],
+  "from_hub": [
+   "10C"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 12",
+  "specs": [
+   "4+128GB",
+   "8+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "12"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 12C",
+  "specs": [
+   "4+64GB",
+   "4+128GB"
+  ],
+  "from_hub": [
+   "12C"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 13C",
+  "specs": [
+   "4+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "13C"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 13C 5G",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "13C 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 14C",
+  "specs": [
+   "4+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "14C"
+  ],
+  "pos_name": "Redmi 14 C",
+  "note": [],
+  "colors": [
+   "黑色",
+   "藍色",
+   "綠色"
+  ]
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 15",
+  "specs": [
+   "4+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "15"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 15 4G",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "15_LTE"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 15C",
+  "specs": [
+   "4+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "15C"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 17 4G",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "17_LTE"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 17 5G",
+  "specs": [
+   "4+128GB",
+   "6+256GB"
+  ],
+  "from_hub": [
+   "17 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 9T",
+  "specs": [
+   "4+64GB",
+   "6+128GB"
+  ],
+  "from_hub": [
+   "9T"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 A1+",
+  "specs": [
+   "2+32GB"
+  ],
+  "from_hub": [
+   "A1+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 A2",
+  "specs": [
+   "3+64GB"
+  ],
+  "from_hub": [
+   "A2"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 10 5G",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Note 10 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 10 Pro",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Note 10 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 10S",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Note 10S"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 11 Pro",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Note 11 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 11 Pro 5G",
+  "specs": [
+   "6+128GB",
+   "8+128GB"
+  ],
+  "from_hub": [
+   "Note 11 Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 11 Pro+ 5G",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Note 11 Pro+ 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 11S",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Note 11S"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 11S 5G",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Note 11S 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 12",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Note 12"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 12 Pro",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Note 12 Pro"
+  ],
+  "pos_name": "Redmi Note 12 Pro",
+  "note": [],
+  "colors": [
+   "星燦藍",
+   "星圖灰",
+   "星辰白"
+  ]
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 12 Pro+",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Note 12 Pro+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 12S",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Note 12S"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 13 4G",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Note 13 4G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 13 5G",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Note 13 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 13 Pro",
+  "specs": [
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Note 13 pro"
+  ],
+  "pos_name": "Redmi Note 13 Pro",
+  "note": [],
+  "colors": [
+   "午夜黑",
+   "月光白",
+   "森野綠"
+  ]
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 13 Pro+",
+  "specs": [
+   "8+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Note 13 pro+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 14 4G",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Note 14 4G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 14 5G",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Note 14 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 14 Pro",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "Note 14 Pro"
+  ],
+  "pos_name": "Redmi Note 14 Pro",
+  "note": [],
+  "colors": [
+   "午夜黑",
+   "薰衣紫",
+   "海洋藍"
+  ]
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 14 Pro+",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Note 14 Pro+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 15 4G",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Note 15 4G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 15 5G",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Note 15 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 15 Pro",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Note 15 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 15 Pro+",
+  "specs": [
+   "12+256GB",
+   "12+512GB"
+  ],
+  "from_hub": [
+   "Note 15 Pro+"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 17",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Note 17"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 17 5G",
+  "specs": [
+   "6+128GB",
+   "8+256GB"
+  ],
+  "from_hub": [
+   "Note 17 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 17 Pro 5G",
+  "specs": [
+   "8+256GB",
+   "12+256GB",
+   "8+512GB"
+  ],
+  "from_hub": [
+   "Note 17 Pro 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 17 Pro Max 5G",
+  "specs": [
+   "8+256GB",
+   "12+256GB",
+   "8+512GB"
+  ],
+  "from_hub": [
+   "Note 17 Pro Max 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 9",
+  "specs": [
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Note 9"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 9 Pro",
+  "specs": [
+   "6+128GB"
+  ],
+  "from_hub": [
+   "Note 9 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "紅米",
+  "brand_code": "redmi",
+  "kind": "手機",
+  "name": "紅米 Note 9T 5G",
+  "specs": [
+   "4+64GB",
+   "4+128GB"
+  ],
+  "from_hub": [
+   "Note 9T 5G"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "黑鯊",
+  "brand_code": "blackshark",
+  "kind": "手機",
+  "name": "黑鯊 3",
+  "specs": [
+   "8+128GB"
+  ],
+  "from_hub": [
+   "3"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "黑鯊",
+  "brand_code": "blackshark",
+  "kind": "手機",
+  "name": "黑鯊 4",
+  "specs": [
+   "8+128GB",
+   "12+256GB"
+  ],
+  "from_hub": [
+   "4"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "黑鯊",
+  "brand_code": "blackshark",
+  "kind": "手機",
+  "name": "黑鯊 5",
+  "specs": [
+   "12+256GB"
+  ],
+  "from_hub": [
+   "5"
+  ],
+  "pos_name": "",
+  "note": []
+ },
+ {
+  "brand": "黑鯊",
+  "brand_code": "blackshark",
+  "kind": "手機",
+  "name": "黑鯊 5 Pro",
+  "specs": [
+   "12+256GB",
+   "16+256GB"
+  ],
+  "from_hub": [
+   "5 Pro"
+  ],
+  "pos_name": "",
+  "note": []
+ }
+]
