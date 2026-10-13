@@ -29,6 +29,27 @@ export interface ReceiveLine {
   unit_price: string;
   /** 這個料號已經對到店裡哪個品號(null = 還沒對過:這次選了就記住;對照也可以先在「對照」那一頁連好) */
   product: ReceiveProduct | null;
+  /** v2(手機):對方說這一行帶序號、是不是一台一筆(中古機);`serials` = 對方出了、這邊還沒入的每一台 —— 入庫入的就是這幾台,不用再刷 */
+  requires_serial?: boolean;
+  per_unit?: boolean;
+  serials?: ShippedUnit[];
+  /** 對方的「已出」是準的(有給每一次出貨;平台內的同行):還沒出的不能先入。沒有這一格的(膜總裁)照舊只提醒 */
+  strict_shipped?: boolean;
+}
+
+export interface ShippedUnit {
+  imei: string;
+  sn: string;
+  grade: string;
+  battery: number | null;
+  note: string;
+}
+
+/** 出貨單上的一台:碼 + 機況(有的才寫) */
+export function unitText(unit: ShippedUnit): string {
+  return [unit.imei || unit.sn, unit.grade && `${unit.grade} 級`, unit.battery !== null && `電池 ${unit.battery}%`, unit.note]
+    .filter(Boolean)
+    .join(" ");
 }
 
 export interface ReceivePlan {
@@ -126,10 +147,17 @@ export function withProduct<D extends Picks>(draft: D, key: string, picked: Pick
 export function fill(plan: ReceivePlan, draft: ReceiveDraft, how: "shipped" | "remaining"): ReceiveDraft {
   const qty: Record<string, number> = {};
   for (const line of plan.lines) {
-    const n = how === "shipped" ? line.suggested_qty : Math.max(line.remaining_qty, 0);
+    // 帶序號的只能入對方已經出的那幾台(還沒出的沒有序號可以入)
+    const n = how === "shipped" || line.requires_serial || line.strict_shipped ? line.suggested_qty : Math.max(line.remaining_qty, 0);
     if (n > 0) qty[line.key] = n;
   }
   return { ...draft, qty };
+}
+
+/** 這一行這一次最多可以入幾個:還沒入的;對方的出貨是準的 → 不超過已出、還沒入的。 */
+export function roomOf(line: Pick<ReceiveLine, "remaining_qty" | "shipped_qty" | "received_qty" | "strict_shipped">): number {
+  const left = Math.max(line.remaining_qty, 0);
+  return line.strict_shipped ? Math.min(left, Math.max(line.shipped_qty - line.received_qty, 0)) : left;
 }
 
 /**
@@ -140,7 +168,11 @@ export type LineState = "none" | "ok" | "early" | "over";
 
 export function lineState(line: ReceiveLine, qty: number): LineState {
   if (!qty) return "none";
+  // 帶序號的:要嘛不入、要嘛入對方出了還沒入的那幾台(伺服器也是這樣收)
+  if (line.requires_serial) return qty === line.suggested_qty ? "ok" : "over";
   if (qty > line.remaining_qty) return "over";
+  // 對方的出貨是準的:比已出、還沒入的多就是不行(取消的出貨、退掉的出貨不能再入一次)
+  if (line.strict_shipped && qty > roomOf(line)) return "over";
   if (qty > Math.max(line.shipped_qty - line.received_qty, 0)) return "early";
   return "ok";
 }

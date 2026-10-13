@@ -84,7 +84,7 @@ export function MappingTab({ link }: { link: VendorLinkRow }) {
    */
   async function use(row: MappingRow | null, p: Linkable & { id: number }) {
     if (!row) return;
-    const why = whyNot(p);
+    const why = whyNot(p, row);
     if (why) {
       toast(why, "err", { ms: 6000 });
       return;

@@ -26,7 +26,10 @@ import { useSerialCheck } from "@/api/serialCheck";
 import { looksLikeImei, normalizeCode } from "@/lib/deviceCodes";
 import { buybackText, codesOf } from "@/lib/serialCheck";
 import { MoneyInput } from "@/components/MoneyInput";
-import { intStr, money } from "@/lib/money";
+import { intStr, money, roundInt } from "@/lib/money";
+import { useTradeSetting } from "@/api/trade";
+import { useCan } from "@/auth/AuthContext";
+import { autoPrice, priceOf } from "@/lib/trade";
 
 const GRADE_OPTIONS: { value: ConditionGrade; label: string }[] = [
   { value: "S", label: "S 媲美新機 / 拆封未使用" },
@@ -80,6 +83,12 @@ export function SecondhandPersonalEntry() {
   const [batteryHealth, setBatteryHealth] = useState("");
   const [conditionNote, setConditionNote] = useState("");
   const [acquisitionPrice, setAcquisitionPrice] = useState("");
+  // 批發(公司有開放批發、這個帳號有「批發出貨」才出現):這一台的批發價(空的 = 照設定的規則算)、要不要上架(預設照設定)
+  const trade = useTradeSetting(useCan("trade_sell")).data;
+  const tradeOn = !!trade?.is_open;
+  const [wholesalePrice, setWholesalePrice] = useState("");
+  const [wholesaleList, setWholesaleList] = useState<boolean | null>(null);
+  const listIt = wholesaleList ?? !!trade?.auto_list_units;
   const [paymentMethod, setPaymentMethod] = useState("");
   const [docDate, setDocDate] = useState(todayStr);
   const [note, setNote] = useState("");
@@ -112,6 +121,8 @@ export function SecondhandPersonalEntry() {
     setBatteryHealth("");
     setConditionNote("");
     setAcquisitionPrice("");
+    setWholesalePrice("");
+    setWholesaleList(null);
     setNote("");
     setDocDate(todayStr());
   }
@@ -199,6 +210,9 @@ export function SecondhandPersonalEntry() {
         payment_method_code: paymentMethod,
         doc_date: docDate || null,
         note,
+        ...(tradeOn
+          ? { wholesale_list: listIt, ...(listIt && typeof priceOf(wholesalePrice) === "number" ? { wholesale_price: priceOf(wholesalePrice) as number } : {}) }
+          : {}),
       });
       setSuccess(
         `收購完成:序號 ${res.serial.serial_no},對應銷貨單 ${res.sales_order.no},付款 ${money(acquisitionPrice)} 元給 ${member?.name ?? "會員"}`,
@@ -377,6 +391,28 @@ export function SecondhandPersonalEntry() {
             />
           </Field>
         </div>
+        {tradeOn && trade && (
+          <div className="field-row-3">
+            <Field label="批發上架">
+              <select value={listIt ? "on" : "off"} onChange={(e) => setWholesaleList(e.target.value === "on")}>
+                <option value="on">上架</option>
+                <option value="off">不上</option>
+              </select>
+            </Field>
+            <Field label="批發價">
+              <MoneyInput
+                value={wholesalePrice}
+                onChange={setWholesalePrice}
+                disabled={!listIt}
+                placeholder={(() => {
+                  const retail = roundInt(customPrice || productOption?.payload?.list_price);
+                  const auto = autoPrice(trade.unit_rule, trade.unit_value, retail, roundInt(acquisitionPrice));
+                  return auto === null ? "要填" : money(auto);
+                })()}
+              />
+            </Field>
+          </div>
+        )}
         <div className="field-row-3">
           <Field label="付款方式" required>
             <select

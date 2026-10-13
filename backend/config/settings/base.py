@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     "apps.analytics",
     "apps.photos",
     "apps.vendor_orders",
+    "apps.trade",
 ]
 
 MIDDLEWARE = [

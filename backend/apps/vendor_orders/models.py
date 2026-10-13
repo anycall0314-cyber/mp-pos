@@ -46,6 +46,8 @@ class Vendor(TimestampedModel):
         # 半自動:廠商沒有可以接的系統(多半是租來的進銷存,沒有串接功能)。商品與參考價由平台建價目表;
         # 叫貨單在 POS 自己成立、由人傳給廠商(複製貼 LINE / 寄信);進度靠人記;到貨照店家叫的那張單入庫。廠商那邊什麼都不用改。
         MANUAL = "manual", "半自動(人工傳單)"
+        # 平台內的同行:用這套 POS、開了批發的經銷商(`platform.py`)。跟全自動同一套,不用金鑰、不走網路;名單上的這一筆是自動建的
+        PLATFORM = "platform", "平台內(同行)"
 
     # 代碼建了不能改:公司的串接、叫貨單、料號對照都靠它認
     code = models.SlugField("代碼", max_length=20, unique=True)
@@ -66,6 +68,9 @@ class Vendor(TimestampedModel):
     # 平台上的公司是互相競爭的經銷商:這一家廠商與它的價目表不能讓名單以外的公司看到。
     # **兩格分開**:開關開著、名單空的 = 沒有任何公司看得到(不會因為名單一時是空的就變成全部都看得到)。
     # 名單記公司代碼(`Tenant.code`),用逗號分開;判斷只有 `vendors.open_to` 一份。
+    # 平台內的同行才有:賣家是哪一家公司(誰看得到這一家是問賣家那邊的規則,不看下面那兩格)
+    seller = models.ForeignKey(
+        "tenants.Tenant", null=True, blank=True, on_delete=models.PROTECT, related_name="+", verbose_name="賣家(平台內的同行)")
     is_private = models.BooleanField("只給指定的公司", default=False, db_default=False)
     only_for = models.CharField("給哪幾家公司(代碼)", max_length=200, blank=True, default="", db_default="")
 
@@ -329,6 +334,9 @@ class VendorReceiptItem(TenantOwnedModel):
     qty = models.PositiveIntegerField("這一次入庫幾個")
     unit_price = models.DecimalField("廠商的單價", max_digits=14, decimal_places=2)      # 不含運費
     product = models.ForeignKey("catalog.Product", on_delete=models.PROTECT, related_name="+", verbose_name="入到哪個品號")
+    # 帶序號的商品(手機):這一次入了哪幾台(`[{"imei": …, "sn": …}]`,賣家出貨單上的碼)。同一台不會入兩次靠它認。
+    # 空的 = 按數量管的商品,或有這一格之前的入庫
+    serials = models.JSONField("這一次入的每一台", null=True, blank=True)
 
     class Meta:
         verbose_name = "到貨入庫明細"

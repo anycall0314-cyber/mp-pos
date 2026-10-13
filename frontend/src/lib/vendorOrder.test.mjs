@@ -347,3 +347,14 @@ test("拿回來的是先前就成立的那一張、當時連到的店內商品�
   const body = page.slice(page.indexOf("async function send()"));
   assert.match(body, /const then = linkedThen\(sent, order\.items\);\s*if \(then\.length > 0\) \{\s*toast\(`這張單先前就成立了,沒有再叫一次。\$\{then\.join\(";"\)\}`/);
 });
+
+test("平台內的同行:一台一筆的只能訂 1、露了數量的不超過、缺貨的不能訂", async () => {
+  const { maxPacks: maxPacksOf, soldOut } = await import("./vendorOrder.ts");
+  assert.equal(maxPacksOf({ per_unit: true, pack_qty: 1 }), 1);
+  assert.equal(maxPacksOf({ per_unit: false, available_qty: 7, pack_qty: 1 }), 7);
+  assert.equal(maxPacksOf({ available_qty: 7, pack_qty: 5 }), 1);
+  assert.equal(maxPacksOf({ pack_qty: 25 }), 9999);                       // 沒講數量的(膜總裁)照舊
+  assert.equal(maxPacksOf({ available_qty: null, pack_qty: 1 }), 9999);
+  assert.deepEqual([soldOut({ available: "缺貨" }), soldOut({ available: "有貨" }), soldOut({}), soldOut({ available: "有貨", available_qty: 0 })],
+    [true, false, false, true]);
+});

@@ -164,3 +164,18 @@ test("選了「就是這個」:查不回來、或那個商品連不了 → 講�
   // 伺服器不給連(存的那一步回 false):照實回沒連成
   assert.equal(await linkFetched(ROWS[1], { fetch: async () => ({ id: 3 }), link: async () => false, say: () => {}, errorText: String }), false);
 });
+
+test("帶序號的品項(手機)連到帶序號的商品;全新的不能連到中古機", async () => {
+  const { whyNot } = await import("./vendorMapping.ts");
+  const phone = { requires_serial: true, per_unit: false };
+  const unit = { requires_serial: true, per_unit: true };
+  assert.equal(whyNot({ requires_serial: true }, phone), null);
+  assert.equal(whyNot({ requires_serial: true, is_secondhand: true }, phone), "全新的不能連到中古機");
+  assert.equal(whyNot({ requires_serial: false }, phone), "要連到帶序號的商品");
+  assert.equal(whyNot({ requires_serial: true, is_virtual: true }, phone), "要連到帶序號的商品");
+  assert.equal(whyNot({ requires_serial: true, is_secondhand: true }, unit), null);
+  assert.equal(whyNot({ requires_serial: true, is_active: false }, unit), "這個商品已經停用");
+  // 按數量的品項照舊
+  assert.equal(whyNot({ requires_serial: true }, {}), "要刷序號的商品不能連");
+  assert.equal(whyNot({ requires_serial: true }), "要刷序號的商品不能連");
+});

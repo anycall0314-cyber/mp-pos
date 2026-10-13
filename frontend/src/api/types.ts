@@ -1825,6 +1825,8 @@ export interface VendorLinkRow {
   vendor_active: boolean;
   /** 這家門市的店員能不能跟這家叫貨(管理員一律可以) */
   clerk_ordering: boolean;
+  /** 平台內的同行(開了批發的經銷商):跟全自動同一套,但沒有金鑰,看「開通」 */
+  platform?: boolean;
   saved: boolean;
   /** 半自動的廠商(對方沒有系統):沒有金鑰,管理員按「開通」;商品是平台的價目表 */
   manual: boolean;
@@ -1875,6 +1877,8 @@ export interface VendorOrderLine {
 }
 
 export interface VendorOrder {
+  /** 平台內的同行的單:還沒出的部分買家可以自己取消 */
+  can_cancel?: boolean;
   id: number;
   /** 哪一家廠商(代碼與名稱) */
   provider: string;

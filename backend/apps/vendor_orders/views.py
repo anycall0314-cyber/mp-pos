@@ -25,7 +25,7 @@ from apps.tenants.permissions import is_tenant_admin
 
 from apps.parties.models import Supplier
 
-from . import handoff, manual, mapping, receiving, secrets, services, standard, vendors
+from . import handoff, manual, mapping, platform, receiving, secrets, services, standard, vendors
 from .models import Vendor, VendorCategory, VendorLink, VendorOrder, VendorSecret
 
 LIST_ROWS = 100
@@ -87,8 +87,8 @@ def _link(request, store, vendor):
 
 def _need_link(request, store, vendor):
     link = _link(request, store, vendor)
-    if manual.is_manual(vendor):
-        manual.need_open(link, vendor)          # 半自動的沒有金鑰:看的是管理員開通了沒
+    if manual.is_manual(vendor) or platform.is_platform(vendor):
+        manual.need_open(link, vendor)          # 半自動的、平台內的同行沒有金鑰:看的是管理員開通了沒
     elif link is None:
         raise services.VendorError(f"這家門市還沒有設定{vendor.name}的金鑰,請管理員到「系統設定 → 叫貨串接」設定")
     return link
@@ -139,8 +139,10 @@ def _link_data(store, vendor, link, hints, manager) -> dict:
         "clerk_ordering": link.clerk_ordering if link else True,
         # 怎麼接:半自動的沒有金鑰,看的是「開通」;`ready` = 這家門市現在可以跟這家往來了(全自動 = 有金鑰,半自動 = 開通了)
         "manual": manual.is_manual(vendor),
+        # 平台內的同行(開了批發的經銷商):跟全自動同一套,但沒有金鑰,一樣看「開通」
+        "platform": platform.is_platform(vendor),
         "opened": bool(link and link.opened),
-        "ready": bool(link and (link.opened if manual.is_manual(vendor) else link.id in hints)),
+        "ready": bool(link and (link.opened if manual.is_manual(vendor) or platform.is_platform(vendor) else link.id in hints)),
         "contact": vendor.contact,
         "has_key": bool(link and link.id in hints),
         # 廠商說這把是測試(沙盒)金鑰:用它叫的是測試單。大家都看得到(叫貨的人要知道現在是不是玩真的)
@@ -193,6 +195,8 @@ def _order_data(order: VendorOrder, names=None, vendor_by_code=None) -> dict:
         "id": order.id,
         "provider": order.provider,
         "provider_label": (names or {}).get(order.provider) or vendors.name_of(order.provider),
+        # 平台內的同行的單:還沒出的部分買家可以自己取消(問對方、以對方回的為準)
+        "can_cancel": _can_cancel(order, vendor_by_code),
         "source": order.source,
         "issue_note": order.issue_note,
         "receipts": [_receipt_data(r) for r in order.receipts.all()],
@@ -240,6 +244,13 @@ def _order_data(order: VendorOrder, names=None, vendor_by_code=None) -> dict:
             "product": i.product_id, "product_sku": i.product_sku, "product_name": i.product_name,
         } for i in order.items.all()],
     }
+
+
+def _can_cancel(order: VendorOrder, vendor_by_code=None) -> bool:
+    if order.manual or order.state != VendorOrder.State.PLACED or not order.vendor_order_no:
+        return False
+    vendor = vendor_by_code.get(order.provider) if vendor_by_code is not None else vendors.find(order.provider)
+    return platform.is_platform(vendor) and order.vendor_status in ("", "待接單", "已接單", "部分出貨")
 
 
 def _orders(request, store=None, vendor=None):
@@ -301,7 +312,8 @@ def links(request):
         store = _store(request, data.get("warehouse"))
         vendor = _vendor(request, data.get("vendor"), active=False)
         link = _link(request, store, vendor)
-        is_manual = manual.is_manual(vendor)
+        # 沒有金鑰、看「開通」的兩種:半自動的廠商、平台內的同行
+        is_manual = manual.is_manual(vendor) or platform.is_platform(vendor)
         opening = is_manual and data.get("opened") is True and not (link and link.opened)
         if not vendor.is_active and (link is None or data.get("key") or opening):
             raise services.VendorError(f"「{vendor.name}」已經停用,不能新開通或換金鑰")
@@ -395,7 +407,8 @@ def catalog(request):
     # 每一列連到店裡的哪個商品(跟「對照」分頁、到貨入庫同一套查法):叫貨那一頁用店內品名,廠商的品名拿來核對
     owners = mapping.owners_by_key(request.tenant, link, rows)
     # `manual` = 半自動的廠商:價錢是平台價目表上的參考價,沒有價錢的也可以叫
-    return Response({"warehouse": store.id, "vendor": vendor.code, "manual": manual.is_manual(vendor), "rows": [{
+    return Response({"warehouse": store.id, "vendor": vendor.code, "manual": manual.is_manual(vendor),
+                     "platform": platform.is_platform(vendor), "rows": [{
         **row,
         "unit_price": _money(row["unit_price"]),
         "pack_price": None if row["unit_price"] is None else _money(row["unit_price"] * row["pack_qty"]),
@@ -634,6 +647,28 @@ def order_progress(request, pk: int):
 
 @api_view(["POST"])
 def order_cancel(request, pk: int):
-    """取消(`cancelled: true`)/ 恢復(false)。只是 POS 這邊的標記,要自己跟廠商講。"""
+    """取消。半自動廠商的單(`cancelled: true` / 恢復 false):只是 POS 這邊的標記,要自己跟廠商講。
+    平台內的同行的單:跟對方說還沒出的部分不要了(成不成以對方回的為準;不能恢復)。"""
     abilities.require(request.user, abilities.VENDOR_ORDER)
-    return _manual_action(request, pk, lambda order, data: manual.set_cancelled(order, request.user, data.get("cancelled")))
+
+    def work(order, data):
+        if order.manual or not platform.is_platform(vendors.find(order.provider)):
+            return manual.set_cancelled(order, request.user, data.get("cancelled"))      # 全自動廠商的單在裡面被擋(照舊)
+        _may_order(request, order.link)
+        if data.get("cancelled") is not True:
+            raise services.VendorError("這張單取消之後不能恢復,要的話請重新叫")
+        return services.cancel(order)
+    return _manual_action(request, pk, work)
+
+
+@api_view(["POST"])
+def join(request):
+    """輸入同行給的往來代碼:變成對方核准的往來對象,每一間門市自動開通。只有管理員(之後店員就可以跟它叫貨)。"""
+    if not is_tenant_admin(request.user):
+        return _bad("只有管理員可以加入同行", status.HTTP_403_FORBIDDEN)
+    data = request.data if isinstance(request.data, dict) else {}
+    try:
+        vendor = platform.join(request.tenant, request.user, data.get("code"))
+    except platform.Wrong as exc:
+        return _bad(exc)
+    return Response({"vendor": vendor.code, "name": vendor.name})

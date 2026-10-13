@@ -7997,3 +7997,79 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 /* 盤點:管理員改調整量的那一格(窄一點,靠右) */
 .sc-adjust { width: 72px; text-align: right; }
 
+
+/* ─────────────────────────────────────────────────────────
+ * 批發單(賣家):待出貨一張單一塊、直接刷機;中古機上架;同行帳
+ * ───────────────────────────────────────────────────────── */
+.tr-count {
+  margin-left: 6px;
+  padding: 0 7px;
+  font-size: var(--font-secondary);
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(79, 140, 255, 0.28);
+  border-radius: 999px;
+}
+.tr-list { flex: 1; min-height: 0; overflow: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+.tr-order { border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+.tr-order.tr-pending { border-color: var(--warn-text); }
+.tr-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 10px 14px; }
+.tr-head b { font-size: var(--font-section); }
+.tr-state { color: var(--text-dim); }
+.tr-state.tr-live { color: var(--success-text); font-weight: 600; }
+.tr-dim { color: var(--text-dim); font-size: var(--font-secondary); }
+.tr-money { margin-left: auto; white-space: nowrap; }
+.tr-note { padding: 0 14px 8px; color: var(--warn-text); }
+.tr-lines { width: 100%; border-top: 1px solid var(--border); }
+.tr-lines td.tr-now { white-space: nowrap; }
+.tr-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.tr-check input, .tr-page .report-grid input[type="checkbox"] { width: 20px; height: 20px; }
+.tr-qty, .tr-fee, .tr-price, .tr-track {
+  min-height: var(--control-height);
+  padding: 0 8px;
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.tr-qty { width: 5rem; text-align: right; }
+.tr-fee { width: 6rem; text-align: right; }
+.tr-price { width: 7.5rem; text-align: right; }
+.tr-track { width: 11rem; }
+.tr-code {
+  margin: 0 6px 2px 0;
+  padding: 0 8px;
+  font: inherit;
+  font-family: monospace;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.tr-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 14px; padding: 10px 14px; }
+.tr-foot label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-dim); white-space: nowrap; }
+.tr-foot label select, .tr-foot label input[type="date"], .tr-page .report-grid select {
+  min-height: var(--control-height);
+  padding: 0 8px;
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.tr-sum { font-weight: 600; white-space: nowrap; }
+.tr-ships { border-top: 1px solid var(--border); padding: 6px 14px; display: flex; flex-direction: column; gap: 4px; }
+.tr-ship { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; font-size: var(--font-secondary); }
+.tr-off, .tr-off td { color: var(--text-dim); text-decoration: line-through; }
+.tr-more { align-self: center; margin: 8px auto; }
+.tr-invite { font-family: monospace; font-size: var(--font-section); letter-spacing: 0.12em; }
+.tr-ledger { display: flex; flex-direction: column; gap: 8px; }
+.tr-ledger .tr-foot { justify-content: flex-start; padding: 4px 0; }
+.tr-two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.tr-setting { margin: 16px; max-width: 760px; }
+@media (max-width: 900px) {
+  .tr-two { grid-template-columns: 1fr; }
+  .tr-money { margin-left: 0; }
+}

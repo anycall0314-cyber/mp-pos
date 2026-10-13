@@ -20,7 +20,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from . import secrets, standard, vendors
+from . import platform, secrets, standard, vendors
 from .models import VendorOrder, VendorOrderItem, VendorSecret
 
 MAX_LINES = 100
@@ -64,8 +64,15 @@ def _client(vendor):
 
 
 # ── 金鑰與商品清單 ──────────────────────────────────────────────────────────
+def key_now(link, vendor):
+    """現在拿得到的那一把(沒有回 None)。平台內的同行沒有金鑰:給的是「哪一家公司的哪一間門市」的標記(`platform.token`)。"""
+    if link is None:
+        return None
+    return platform.token(link) if platform.is_platform(vendor) else secrets.reveal(link)
+
+
 def key_of(link, vendor) -> str:
-    raw = secrets.reveal(link) if link is not None else None
+    raw = key_now(link, vendor)
     if not raw:
         raise VendorError(f"這家門市還沒有設定{vendor.name}的金鑰,請管理員到「系統設定 → 叫貨串接」設定")
     return raw
@@ -79,7 +86,7 @@ def _read(vendor, what: str, *args):
     except standard.Unreachable:
         raise VendorError(f"連不到{vendor.name},請稍後再試") from None
     except standard.Refused as exc:
-        if exc.status in (401, 403):
+        if exc.status in (401, 403) and not platform.is_platform(vendor):
             raise VendorError(f"{vendor.name}不認得這家門市的金鑰(可能已經作廢),請管理員重新設定") from None
         raise VendorError(f"{vendor.name}:{exc.reason}") from None
 
@@ -112,6 +119,13 @@ def rows_from(products) -> list[dict]:
             "size": p["size"] if isinstance(p.get("size"), str) else "",
             "unit": p["unit"] if isinstance(p.get("unit"), str) else "",
             "pack_qty": pack if isinstance(pack, int) and not isinstance(pack, bool) and pack >= 1 else 1,
+            # v2 多的(沒講的都是 False / 空的):帶不帶序號、是不是一台一筆(中古機:每一個規格是一台,只能訂 1)、有貨沒
+            "requires_serial": p.get("requires_serial") is True,
+            "per_unit": p.get("per_unit") is True,
+            "condition": p["condition"] if isinstance(p.get("condition"), str) else "",
+            "available": p["available"] if isinstance(p.get("available"), str) else "",
+            "available_qty": p["available_qty"] if isinstance(p.get("available_qty"), int)
+            and not isinstance(p.get("available_qty"), bool) else None,
         }
         specs = [
             s for s in (p.get("specs") if isinstance(p.get("specs"), list) else [])
@@ -177,6 +191,16 @@ def check_header(*, payment_method, delivery_method, ship_name, ship_phone, ship
         raise VendorError("要有發票信箱(請管理員到「系統設定 → 叫貨串接」填)")
 
 
+def check_shipping(*, payment_method, delivery_method, ship_name, ship_phone, ship_address, **_invoice) -> None:
+    """只看付款、取貨、收件(不要求發票那幾格)。"""
+    if payment_method not in standard.PAYMENT_METHODS:
+        raise VendorError("付款方式只能是 月結 / 貨到付款 / 匯款")
+    if delivery_method not in standard.DELIVERY_METHODS:
+        raise VendorError("取貨方式只能是 宅配 / 自取")
+    if delivery_method == "宅配" and not (ship_name and ship_phone and ship_address):
+        raise VendorError("宅配要有收件人、電話、地址(請管理員到「系統設定 → 叫貨串接」填)")
+
+
 # ── 明細 ────────────────────────────────────────────────────────────────────
 def _lines(rows: list[dict], wanted, who: str = "廠商", *, unpriced_ok: bool = False) -> list[dict]:
     """畫面送來的 [{key, packs}] → 要存的明細。品名、一包幾個、單價一律用廠商剛剛回的(半自動的 = 平台價目表上的),不看畫面送來的。
@@ -200,6 +224,8 @@ def _lines(rows: list[dict], wanted, who: str = "廠商", *, unpriced_ok: bool =
             raise VendorError(f"「{row['name']}」的包數要是 1 到 {MAX_PACKS} 的整數")
         if row["unit_price"] is None and not unpriced_ok:
             raise VendorError(f"「{row['name']}」這個帳號還沒有報價,不能叫")
+        if row.get("per_unit") and packs != 1:
+            raise VendorError(f"「{row['name']}」是一台一筆的,同一台只能訂 1")
         out.append({**row, "packs": packs, "qty": packs * row["pack_qty"]})
     return out
 
@@ -278,6 +304,8 @@ def _send(order: VendorOrder, key: str, vendor, *, first: bool) -> VendorOrder:
     order.total_amount, order.shipping_fee = total, fee
     order.amount_matches = None if total is None or fee is None else (total - fee == order.expected_goods)
     order.is_test = result.sandbox
+    if isinstance(result.payment_method, str) and result.payment_method.strip():
+        order.payment_method = result.payment_method.strip()[:20]       # 賣家定的付款方式(v2;平台內的同行)
     with transaction.atomic():
         # 這張單「不確定」的時候,有人可能已經從「不是從這裡叫的」把廠商那一張認進來、甚至入過庫了。
         # 現在確定是同一張:入庫紀錄搬過來、那一筆拿掉(廠商的同一張單在這家公司只留一筆)。
@@ -316,7 +344,8 @@ def place(*, tenant, user, link, request_key, lines, payment_method=None, delive
         invoice_type=link.invoice_type, buyer_tax_id=link.buyer_tax_id, buyer_name=link.buyer_name,
         invoice_email=link.invoice_email,
     )
-    check_header(**header)
+    # 平台內的同行不用發票那幾格(發票是雙方自己的事):只看付款、取貨、收件
+    (check_shipping if platform.is_platform(vendor) else check_header)(**header)
     note = note.strip()[:200] if isinstance(note, str) else ""
     try:
         with transaction.atomic():
@@ -368,7 +397,7 @@ def resend(order: VendorOrder) -> VendorOrder:
         locked.state, locked.sending_since = VendorOrder.State.SENDING, timezone.now()
         locked.save(update_fields=["state", "sending_since", "updated_at"])
     order = locked
-    key = secrets.reveal(order.link)
+    key = key_now(order.link, vendor)
     if not key:
         _mark_unknown(order, order.problem or "這家門市現在沒有金鑰")
         raise VendorError(f"這家門市現在沒有{vendor.name}的金鑰,沒辦法確認這張單;請管理員重新設定之後再送一次")
@@ -386,6 +415,51 @@ def resend(order: VendorOrder) -> VendorOrder:
     return _send(order, key, vendor, first=False)
 
 
+# ── 取消(買家自己取消還沒出的)────────────────────────────────────────────────
+def cancel(order: VendorOrder) -> VendorOrder:
+    """跟賣家說這張單還沒出的部分不要了(賣家要有這一項能力;現在只有平台內的同行)。成不成以對方回的為準,進度跟著更新。"""
+    vendor = vendor_of(order.provider)
+    if not platform.is_platform(vendor):
+        raise VendorError(f"{vendor.name}不能從這裡取消,請直接聯絡廠商")
+    if order.state != VendorOrder.State.PLACED or not order.vendor_order_no:
+        raise VendorError("這張叫貨單還沒有確定成立,不能取消")
+    client, key = _client(vendor), key_of(order.link, vendor)
+    try:
+        client.cancel(key, order.vendor_order_no)
+    except standard.Unreachable:
+        raise VendorError(f"連不到{vendor.name},請稍後再試") from None
+    except standard.Refused as exc:
+        raise VendorError(f"{vendor.name}:{exc.reason}") from None
+    _apply(order, _read(vendor, "order", key, order.vendor_order_no), live_total=True)
+    return order
+
+
+# ── 跟賣家說收了多少(平台內的同行)────────────────────────────────────────────
+def report_received(order: VendorOrder) -> None:
+    """跟賣家回報這張單**到現在為止**每一行收進庫存幾個、哪幾台(進貨單被作廢的那幾次不算)。賣家照它擋「取消出貨」與整張銷退 ——
+    買家收進去的貨,賣家那邊不能再變回它的庫存(同一批貨不能兩家都在庫;複審第一輪)。
+    每次到貨入庫、每次作廢到貨入庫開的進貨單之後呼叫,**跟那一次的入庫 / 作廢在同一個交易裡**:對方沒有收下這份回報,這邊就不入 / 不作廢。
+    **呼叫的人要鎖著這張叫貨單**(入庫整段鎖著;作廢進貨單在一開始 `receiving.before_purchase_void` 鎖):報的是整張單現在的樣子,
+    兩個交易各算各的、後送的蓋掉先送的就會報錯(複審第二輪)。
+    只有平台內的同行有這一項;其他廠商不做事。"""
+    from .models import VendorReceiptItem          # 這一支在 receiving 與進貨作廢都用得到,放這裡不繞一圈
+
+    vendor = vendors.find(order.provider)
+    if not platform.is_platform(vendor) or order.state != VendorOrder.State.PLACED or not order.vendor_order_no:
+        return
+    lines: dict = {}
+    for item in VendorReceiptItem.objects.filter(receipt__order=order, receipt__purchase_order__is_void=False):
+        row = lines.setdefault((item.sku, item.spec_id), {"sku": item.sku, "spec_id": item.spec_id, "received_qty": 0, "serials": []})
+        row["received_qty"] += item.qty
+        row["serials"] += [{"imei": s.get("imei", ""), "sn": s.get("sn", "")} for s in (item.serials or []) if isinstance(s, dict)]
+    try:
+        _client(vendor).received(key_of(order.link, vendor), order.vendor_order_no, list(lines.values()))
+    except standard.Unreachable:
+        raise VendorError(f"連不到{vendor.name},請稍後再試") from None
+    except standard.Refused as exc:
+        raise VendorError(f"{vendor.name}:{exc.reason}") from None
+
+
 # ── 進度 ────────────────────────────────────────────────────────────────────
 def _text(value, limit):
     return value[:limit] if isinstance(value, str) else ""
@@ -395,7 +469,17 @@ PROGRESS_FIELDS = ["vendor_status", "vendor_payment_status", "vendor_logistics_s
                    "vendor_tracking_no", "vendor_ordered_at", "total_amount", "status_checked_at", "updated_at"]
 
 
-def _set_progress(order: VendorOrder, row: dict) -> None:
+def _set_progress(order: VendorOrder, row: dict, *, live_total: bool = False) -> None:
+    """`live_total` = 總額與運費也跟著對方現在的走(平台內的同行:對方不出某一台、加了運費,這張單的金額就變了)。
+    全自動的廠商照舊只在還沒有總額時補(那一格記的是成立當下廠商算的)。"""
+    if live_total:
+        total, fee = _price(row.get("total_amount")), _price(row.get("shipping_fee"))
+        if total is not None:
+            order.total_amount = total
+        if fee is not None:
+            order.shipping_fee = fee
+        if isinstance(row.get("payment_method"), str) and row["payment_method"].strip():
+            order.payment_method = row["payment_method"].strip()[:20]
     order.vendor_status = _text(row.get("status"), 40)
     order.vendor_payment_status = _text(row.get("payment_status"), 40)
     order.vendor_logistics_status = _text(row.get("logistics_status"), 60)
@@ -408,10 +492,10 @@ def _set_progress(order: VendorOrder, row: dict) -> None:
     order.status_checked_at = timezone.now()
 
 
-def _apply(order: VendorOrder, row: dict) -> None:
+def _apply(order: VendorOrder, row: dict, *, live_total: bool = False) -> None:
     """只寫進度那幾格(整列重存的話,會把別人剛寫的「到貨問題」蓋回舊的)。"""
-    _set_progress(order, row)
-    order.save(update_fields=PROGRESS_FIELDS)
+    _set_progress(order, row, live_total=live_total)
+    order.save(update_fields=[*PROGRESS_FIELDS, *(["shipping_fee", "payment_method"] if live_total else [])])
 
 
 def sync(tenant, link) -> list[dict]:
@@ -424,7 +508,7 @@ def sync(tenant, link) -> list[dict]:
     ours = set()
     for order in VendorOrder.objects.filter(
             tenant=tenant, provider=link.provider, state=VendorOrder.State.PLACED, vendor_order_no__in=by_no):
-        _apply(order, by_no[order.vendor_order_no])
+        _apply(order, by_no[order.vendor_order_no], live_total=platform.is_platform(vendor))
         ours.add(order.vendor_order_no)
     return [{
         "order_no": r["order_no"],

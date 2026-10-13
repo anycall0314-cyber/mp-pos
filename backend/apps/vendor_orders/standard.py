@@ -94,6 +94,7 @@ class Placed:
     shipping_fee: object = None
     replay: bool = False
     sandbox: object = None            # 這張是不是測試單(沙盒金鑰下的);None = 廠商沒有講
+    payment_method: object = None     # v2:賣家說這張單的付款方式(賣家定的);沒講 = None,照買家送的
 
 
 @dataclass
@@ -141,6 +142,25 @@ class Client:
     def order(self, key: str, order_no: str) -> dict:
         return self.detail(key, order_no).order
 
+    def cancel(self, key: str, order_no: str) -> dict:
+        """取消還沒出的部分(v2;賣家要有 `cancel` 這一項能力)。回 `{order_no, status}`;不行丟 `Refused`(原因在裡面)。"""
+        reply = self._send("POST", "/orders/" + urllib.parse.quote(order_no, safe="") + "/cancel", key, {})
+        if reply.status >= 500:
+            raise Unreachable(f"{self.name}那邊出錯(HTTP {reply.status})")
+        if reply.status != 200 or reply.data.get("ok") is not True:
+            raise Refused(reply.status, self._reason(reply))
+        return reply.data
+
+    def received(self, key: str, order_no: str, items: list) -> dict:
+        """回報這張單到現在為止每一行收進庫存幾個、哪幾台(v2;賣家要有 `receipts` 這一項能力)。
+        賣家照它擋「取消出貨」。不行丟 `Refused`(例:那一次出貨已經取消了);沒有明確答覆丟 `Unreachable`。"""
+        reply = self._send("POST", "/orders/" + urllib.parse.quote(order_no, safe="") + "/received", key, {"items": items})
+        if reply.status >= 500:
+            raise Unreachable(f"{self.name}那邊出錯(HTTP {reply.status})")
+        if reply.status != 200 or reply.data.get("ok") is not True:
+            raise Refused(reply.status, self._reason(reply))
+        return reply.data
+
     def place(self, key: str, payload: dict):
         """下單。回 `Placed` / `Rejected`;沒有明確答覆丟 `Unreachable`(= 不知道有沒有成立)。"""
         reply = self._send("POST", "/orders", key, payload, timeout=30)
@@ -148,7 +168,7 @@ class Client:
         has_no = isinstance(order_no, str) and order_no != ""
         if reply.status == 200 and reply.data.get("ok") is True and has_no:
             return Placed(order_no, reply.data.get("total_amount"), reply.data.get("shipping_fee"),
-                          sandbox=_sandbox(reply.data))
+                          sandbox=_sandbox(reply.data), payment_method=reply.data.get("payment_method"))
         if reply.status == 409 and has_no:
             # 這把鑰匙送過、而且成立了:不是錯誤
             return Placed(order_no, replay=True, sandbox=_sandbox(reply.data))

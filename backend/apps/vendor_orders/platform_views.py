@@ -191,7 +191,8 @@ def _vendor_values(data, current=None):
     if current is None or "name" in data:
         out["name"] = _text(data, "name", 40)
     if "protocol" in data:
-        if data["protocol"] not in Vendor.Protocol.values:
+        # 「平台內(同行)」不是平台管理員建的:經銷商開放批發時自動多一筆(`platform.sync_vendor`)
+        if data["protocol"] not in Vendor.Protocol.values or data["protocol"] == Vendor.Protocol.PLATFORM:
             raise Wrong("怎麼接只能選清單上的")
         out["protocol"] = data["protocol"]
     protocol = out.get("protocol", current.protocol if current is not None else Vendor.Protocol.STANDARD)
@@ -250,15 +251,18 @@ def vendor_list(request):
         return Response(_vendor_data(row), status=status.HTTP_201_CREATED)
     opened = _opened()
     return Response({
-        "results": [_vendor_data(v, opened) for v in Vendor.objects.prefetch_related("categories")],
-        "protocols": [{"value": value, "label": label} for value, label in Vendor.Protocol.choices],
+        # 平台內的同行(經銷商自己開的批發)不在這張名單上:那是各家經銷商自己的往來,不是平台招的廠商
+        "results": [_vendor_data(v, opened) for v in Vendor.objects.exclude(protocol=Vendor.Protocol.PLATFORM)
+                    .prefetch_related("categories")],
+        "protocols": [{"value": value, "label": label} for value, label in Vendor.Protocol.choices
+                      if value != Vendor.Protocol.PLATFORM],
     })
 
 
 @api_view(["PATCH"])
 @permission_classes(PLATFORM_ONLY)
 def vendor(request, pk: int):
-    row = Vendor.objects.filter(pk=pk).first()
+    row = Vendor.objects.exclude(protocol=Vendor.Protocol.PLATFORM).filter(pk=pk).first()
     if row is None:
         return Response({"detail": "找不到這家廠商"}, status=status.HTTP_404_NOT_FOUND)
     data = request.data if isinstance(request.data, dict) else {}

@@ -45,6 +45,7 @@ import { SecondhandAcquisitionPage } from "@/pages/secondhand-acquisition/Second
 import { TransferWorkbenchPage } from "@/pages/transfers/TransferWorkbenchPage";
 import { ToastHost } from "@/components/workbench/toast";
 import { SalesReturnsPage } from "@/pages/sales/SalesPage";
+import { TradePage } from "@/pages/trade/TradePage";
 import { SalesListPage } from "@/pages/sales/SalesListPage";
 import { SalesWorkbenchPage } from "@/pages/sales/SalesWorkbenchPage";
 import { SalesPrintPage } from "@/pages/sales/SalesPrintPage";
@@ -274,6 +275,7 @@ export function App() {
           <Route path="/sales" element={<SalesListPage />} />
           <Route path="/sales/new" element={<SalesWorkbenchPage />} />
           <Route path="/sales/returns" element={<SalesReturnsPage />} />
+          <Route path="/trade" element={<TradePage />} />
           <Route
             path="/sales/returns/new"
             element={<SalesReturnEntryPage />}

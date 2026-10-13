@@ -390,12 +390,18 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
 
     with transaction.atomic():
         # 先鎖再檢查:序號是不是還在庫、卡是不是還沒發出去,都要看鎖到之後的狀態
+        sold_serial_ids = list(
+            SalesOrderItemSerial.objects.filter(item__so=so).values_list("serial_id", flat=True))
         _lock_rows(
-            so.tenant, so.warehouse,
-            serial_ids=SalesOrderItemSerial.objects.filter(item__so=so).values_list("serial_id", flat=True),
+            so.tenant, so.warehouse, serial_ids=sold_serial_ids,
             sim_ids=[it.sim_card_id for it in items if it.sim_card_id],
-            products=_stock_products(items),
         )
+        # 批發:這張單裡有被同行訂走、還沒出貨的機器 → 開單的人沒有明講要抽回就整張擋下來(規則在 apps/trade/holds.py)。
+        # 放在「序號鎖到之後、庫存餘額鎖之前」:批發那邊也是先鎖序號、才鎖批發單、最後才是庫存餘額(順序相反會互相等)
+        from apps.trade import holds as trade_holds
+
+        trade_holds.before_sale(so, sold_serial_ids, SalesOrderError)
+        _lock_rows(so.tenant, so.warehouse, products=_stock_products(items))
         _validate_items(so, items)
         now = timezone.now()
         subtotal_raw = Decimal("0")
@@ -526,6 +532,9 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
                 card.issued_at = now
                 card.save(update_fields=["status", "issued_at"])
 
+        # 賣掉的機器從批發清單下架(之後銷退回來不會自己回到清單)
+        trade_holds.after_sale(so.tenant, sold_serial_ids)
+
         subtotal, tax_amount, total = _calc_tax(subtotal_raw, so.tax_method)
         so.subtotal = subtotal
         so.tax_amount = tax_amount
@@ -639,8 +648,12 @@ def acquire_secondhand_from_member(
     note: str = "",
     imei: str = "",
     sn: str = "",
+    wholesale: dict | None = None,
+    user=None,
 ):
     """個人會員收購中古機:一個 transaction 內同時建立序號 + 收購二手銷貨單。
+
+    `wholesale` = 表單上對批發的指定 `{"list": 要不要上架, "price": 批發價}`;沒給就照公司的批發設定。
 
     記帳方向:銷貨單 total 為負數(現金流出),與一般銷貨(正數現金流入)在報表自然相加。
     銷貨單 customer 自動帶該會員對應的個人 Customer(查無則新建),member 欄位記會員本身。
@@ -728,6 +741,10 @@ def acquire_secondhand_from_member(
 
         serial.acquired_via_sales_order = so
         serial.save(update_fields=["acquired_via_sales_order"])
+        # 批發:照設定自動上架(表單上個別指定的優先);規則在 apps/trade/listing.py
+        from apps.trade import listing as trade_listing
+
+        trade_listing.after_intake(tenant, [serial], user=user, wanted={serial.id: wholesale} if wholesale else None)
 
         StockMovement.objects.create(
             tenant=tenant,
@@ -754,6 +771,10 @@ def void_sales_order(so: SalesOrder, user=None) -> SalesOrder:
         so.refresh_from_db()
         if so.is_void:
             raise SalesOrderError("此單已作廢")
+        # 批發出貨開的銷貨單要從批發單「取消出貨」(兩邊的數字才會一起回去)
+        from apps.trade import holds as trade_holds
+
+        trade_holds.guard_void(so, SalesOrderError)
         returned_by = (
             SalesReturn.objects.filter(original_so=so, is_void=False)
             .values_list("no", flat=True).first()
@@ -914,6 +935,12 @@ def commit_sales_return(sr: SalesReturn) -> SalesReturn:
     - void_original_invoice=True 時把 SO.invoice_voided 標 True(冪等)
     """
     with transaction.atomic():
+        # 批發出貨開的銷貨單:買家已經把貨入庫的不能整張銷退(同一批貨不能兩家都在庫;規則在 apps/trade/shipping.py)。
+        # 放在鎖原銷貨單之前:批發那邊的順序是「序號 → 批發單 → 銷貨單」(取消出貨也是)。
+        # **呼叫這一支之前自己先鎖了原銷貨單的入口(銷退單的端點),要在鎖之前先呼叫一次 `before_return`**(見 sales/views.py)
+        from apps.trade import shipping as trade_shipping
+
+        trade_shipping.before_return(sr.tenant, sr.original_so_id, SalesReturnError)
         # 先鎖原銷貨單:同一張單的兩張銷退同時送出時,一張做完另一張才檢查「還能退多少」
         so = SalesOrder.objects.select_for_update().filter(
             pk=sr.original_so_id, tenant_id=sr.tenant_id

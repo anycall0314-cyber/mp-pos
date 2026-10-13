@@ -16,7 +16,7 @@ owner 2026-10-10 定的:
 """
 import hashlib
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 from django.db import IntegrityError, connection, transaction
@@ -26,7 +26,7 @@ from rest_framework import serializers as drf_serializers
 
 from apps.catalog.models import Product, SupplierProduct
 from apps.core.money import round_money
-from apps.identity.normalize import alias_key
+from apps.identity.normalize import alias_key, normalize_serial
 from apps.identity.services import _vendor_sku_owner
 from apps.parties.models import Supplier
 from apps.purchasing.models import PurchaseOrder
@@ -79,6 +79,12 @@ class Line:
     qty: int = 0
     shipped: int = 0
     amount: Decimal = ZERO          # 這一行實際要付的錢(免費補發的是 0)
+    # v2(帶序號的商品):對方說這一行是不是帶序號的、是不是一台一筆(中古機);對方出貨單上這一行的每一台(碼與機況)
+    requires_serial: bool = False
+    per_unit: bool = False
+    serials: list = field(default_factory=list)
+    # 對方有給每一次出貨(v2):「已出」是準的 → 還沒出的不能先入(全自動的舊格式沒有這一項:貨可能已經到了、廠商還沒按出貨,只提醒不擋)
+    strict: bool = False
 
     @property
     def key(self) -> str:
@@ -90,7 +96,8 @@ class Line:
 
     @property
     def vendor_sku(self) -> str:
-        return vendor_sku_of(self.sku, self.spec_id)
+        # 一台一筆的(中古機):「規格」是哪一台,對照記在商品那一層(不然每一台都要連一次)
+        return self.sku if self.per_unit else vendor_sku_of(self.sku, self.spec_id)
 
     @property
     def title(self) -> str:
@@ -121,8 +128,39 @@ def _whole(value):
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
-def lines_of(items, who: str = "廠商") -> list[Line]:
-    """廠商回的明細 → 行。**有一行看不懂就整張不給入**(少算一行,庫存就少一行,而且沒有人會發現)。"""
+def serial_key(entry) -> str:
+    """出貨單上的一台 → 比對用的碼(有 IMEI 用 IMEI,沒有才用 SN;去掉符號)。看不懂的回空的。"""
+    if not isinstance(entry, dict):
+        return ""
+    code = entry.get("imei") if isinstance(entry.get("imei"), str) and entry["imei"].strip() else entry.get("sn")
+    return normalize_serial(code) if isinstance(code, str) else ""
+
+
+def _shipped_serials(shipments) -> dict[str, list]:
+    """對方的每一次出貨 → {哪一行: [那一行出過的每一台]}。看不懂的那一台不收(寧可少列,不入一台不知道是什麼的)。"""
+    out: dict[str, list] = {}
+    for shipment in shipments if isinstance(shipments, list) else []:
+        for item in (shipment.get("items") if isinstance(shipment, dict) and isinstance(shipment.get("items"), list) else []):
+            if not isinstance(item, dict) or not isinstance(item.get("sku"), str):
+                continue
+            spec_id = item.get("spec_id")
+            rows = out.setdefault(line_key(item["sku"], spec_id if _whole(spec_id) is not None else None, False), [])
+            for entry in item.get("serials") if isinstance(item.get("serials"), list) else []:
+                if serial_key(entry) and serial_key(entry) not in {serial_key(r) for r in rows}:
+                    battery = entry.get("battery")
+                    rows.append({
+                        "imei": entry["imei"].strip() if isinstance(entry.get("imei"), str) else "",
+                        "sn": entry["sn"].strip() if isinstance(entry.get("sn"), str) else "",
+                        "grade": entry["grade"] if isinstance(entry.get("grade"), str) else "",
+                        "battery": battery if isinstance(battery, int) and not isinstance(battery, bool) and 0 <= battery <= 100 else None,
+                        "note": entry["note"][:200] if isinstance(entry.get("note"), str) else "",
+                    })
+    return out
+
+
+def lines_of(items, who: str = "廠商", shipments=None) -> list[Line]:
+    """廠商回的明細 → 行。**有一行看不懂就整張不給入**(少算一行,庫存就少一行,而且沒有人會發現)。
+    `shipments` = 對方的每一次出貨(v2;帶序號的商品照它入庫)。"""
     if not isinstance(items, list) or not items:
         raise VendorError(f"{who}沒有回這張單的明細,先不要入庫")
     merged: dict[str, Line] = {}
@@ -145,11 +183,31 @@ def lines_of(items, who: str = "廠商") -> list[Line]:
             name=row["name"] if isinstance(row.get("name"), str) else "",
             unit=row["unit"] if isinstance(row.get("unit"), str) else "",
             pack_qty=pack if pack and pack >= 1 else 1,
+            requires_serial=row.get("requires_serial") is True, per_unit=row.get("per_unit") is True,
         ))
         line.qty += qty
         line.shipped += max(shipped or 0, 0)
         line.amount += amount
+    by_line = _shipped_serials(shipments)
+    for line in merged.values():
+        line.strict = isinstance(shipments, list)
+        if line.requires_serial:
+            line.serials = by_line.get(line.key, [])
     return list(merged.values())
+
+
+def received_serials(order) -> set[str]:
+    """這張叫貨單已經入過庫的每一台(比對用的碼)。進貨單被作廢的那幾次不算。"""
+    out = set()
+    for rows in (VendorReceiptItem.objects.filter(receipt__order=order, receipt__purchase_order__is_void=False)
+                 .exclude(serials__isnull=True).values_list("serials", flat=True)):
+        out |= {serial_key(entry) for entry in rows if serial_key(entry)}
+    return out
+
+
+def pending_serials(line: Line, done: set[str]) -> list:
+    """這一行對方出了、這邊還沒入的每一台。"""
+    return [entry for entry in line.serials if serial_key(entry) not in done]
 
 
 def received_by_line(order) -> dict[str, int]:
@@ -175,7 +233,7 @@ def _detail(order):
         raise VendorError("這張叫貨單還沒有確定成立,不能入庫")
     vendor = services.vendor_of(order.provider)          # 廠商停用了照樣可以入庫(貨已經叫了)
     found = services._read(vendor, "detail", services.key_of(order.link, vendor), order.vendor_order_no)
-    return found, lines_of(found.order.get("items"), vendor.name)
+    return found, lines_of(found.order.get("items"), vendor.name, found.order.get("shipments"))
 
 
 def _in_lock_order(lines):
@@ -192,6 +250,7 @@ def plan(tenant, order) -> dict:
     found, lines = _detail(order)
     row = found.order
     got = received_by_line(order)
+    got_serials = received_serials(order)
     link = order.link
     fee = _fee(row)
     with transaction.atomic():          # 查對照會拿一把交易內的鎖
@@ -199,11 +258,16 @@ def plan(tenant, order) -> dict:
     out = []
     for line in lines:
         done, owner = got.get(line.key, 0), owners[line.key]
+        waiting = pending_serials(line, got_serials) if line.requires_serial else []
         out.append({
             "key": line.key, "sku": line.sku, "spec_id": line.spec_id, "spec_label": line.spec_label,
             "name": line.name, "unit": line.unit, "pack_qty": line.pack_qty, "is_reissue": line.is_reissue,
             "qty": line.qty, "shipped_qty": line.shipped, "received_qty": done, "remaining_qty": line.qty - done,
-            "suggested_qty": suggested_qty(line.qty, line.shipped, done),
+            # 帶序號的:這一次入的就是對方出了、這邊還沒入的那幾台(不用再刷一次)
+            "suggested_qty": len(waiting) if line.requires_serial else suggested_qty(line.qty, line.shipped, done),
+            "requires_serial": line.requires_serial, "per_unit": line.per_unit, "serials": waiting,
+            # 對方的「已出」是準的(有給每一次出貨):還沒出的不能先入
+            "strict_shipped": line.strict,
             "unit_price": str(line.unit_price),
             "product": None if owner is None else {
                 "id": owner.id, "sku": owner.sku, "name": owner.name, "is_active": owner.is_active},
@@ -241,12 +305,21 @@ def supplier_for(link):
     return supplier
 
 
-def _fits(product, title) -> None:
-    """叫貨來的膜只入到按數量管的一般商品。"""
+def _fits(product, title, line=None) -> None:
+    """這一行可以入到這個商品嗎。按數量的(膜、配件)只入到按數量管的一般商品;
+    帶序號的(對方說的;手機)要入到帶序號的商品,而且一台一筆的(中古機)對逐台記機況的、全新的對全新的 —— 不然機況沒地方記、成本算法也不一樣。"""
     if not product.is_active:
         raise VendorError(f"「{product.name}」已經停用,不能入庫")
-    if product.requires_serial or product.is_secondhand or product.is_virtual:
-        raise VendorError(f"「{title}」不能對到「{product.name}」:只能入到按數量管的一般商品(不追序號、不是中古機、不是虛擬商品)")
+    if line is None or not line.requires_serial:
+        if product.requires_serial or product.is_secondhand or product.is_virtual:
+            raise VendorError(f"「{title}」不能對到「{product.name}」:只能入到按數量管的一般商品(不追序號、不是中古機、不是虛擬商品)")
+        return
+    if product.is_virtual or not product.requires_serial:
+        raise VendorError(f"「{title}」是帶序號的,要對到帶序號的商品(「{product.name}」不是)")
+    if line.per_unit and not product.tracks_unit_condition:
+        raise VendorError(f"「{title}」是一台一筆的(中古機),要對到中古機 / 已拆封的商品(「{product.name}」不是)")
+    if not line.per_unit and product.tracks_unit_condition:
+        raise VendorError(f"「{title}」是全新的,不能對到中古機 / 已拆封的商品「{product.name}」")
 
 
 def _remember(tenant, supplier, line: Line, product, user, supplier_platform: str) -> None:
@@ -322,9 +395,9 @@ def _spread(share: Decimal, picked) -> dict[str, Decimal]:
     return out
 
 
-def _wanted(lines) -> list[tuple[str, int, int, object]]:
-    """畫面送來的每一行 → (哪一行, 幾個, 入到哪個品號, 他看到這一行原本對到誰)。
-    `was` 沒帶 = 他看到的是還沒對過(None)。"""
+def _wanted(lines) -> list[tuple[str, int, int, object, object]]:
+    """畫面送來的每一行 → (哪一行, 幾個, 入到哪個品號, 他看到這一行原本對到誰, 帶序號的:要入哪幾台)。
+    `was` 沒帶 = 他看到的是還沒對過(None)。`serials` 沒帶 = 對方出了、還沒入的全部。"""
     if not isinstance(lines, list) or not lines:
         raise VendorError("這一次沒有要入庫的東西")
     seen, out = set(), []
@@ -340,8 +413,25 @@ def _wanted(lines) -> list[tuple[str, int, int, object]]:
         if key in seen:
             raise VendorError("同一行重複了")
         seen.add(key)
-        out.append((key, qty, product, was))
+        codes = row.get("serials")
+        if codes is not None and (not isinstance(codes, list) or any(not isinstance(c, str) or not c.strip() for c in codes)):
+            raise VendorError("入庫的內容不完整(要入哪幾台的寫法不對)")
+        out.append((key, qty, product, was, codes))
     return out
+
+
+def _units_now(line: Line, qty: int, codes, done: set[str]) -> list:
+    """帶序號的這一行這一次入哪幾台:只能是對方出了、這邊還沒入的。`codes` = 畫面勾的那幾台(沒給 = 全部)。"""
+    waiting = pending_serials(line, done)
+    if codes is not None:
+        wanted = {normalize_serial(c) for c in codes}
+        chosen = [entry for entry in waiting if serial_key(entry) in wanted]
+        if len(chosen) != len(wanted):
+            raise VendorError(f"「{line.title}」有一台不在這次可以入的清單裡(可能入過了、或對方改過出貨),請重新打開入庫再試")
+        waiting = chosen
+    if qty != len(waiting):
+        raise VendorError(f"「{line.title}」這一次可以入的是 {len(waiting)} 台(對方出了、還沒入的),請重新打開入庫再試")
+    return waiting
 
 
 def _lock_request(tenant, request_key) -> None:
@@ -390,12 +480,14 @@ def _receive(*, tenant, user, order, request_key, lines, freight):
             supplier = supplier_for(locked.link)
             link = VendorLink.objects.get(pk=locked.link_id)
             got = received_by_line(locked)
-            products = {p.id: p for p in Product.objects.filter(tenant=tenant, pk__in=[w[2] for w in wanted])}
+            got_serials = received_serials(locked)
+            products = {p.id: p for p in Product.objects.filter(tenant=tenant, pk__in=[w[2] for w in wanted])
+                        .select_related("condition")}
             for key, *_ in wanted:
                 if key not in by_key:
                     raise VendorError(f"{who}那張單現在沒有這一行(可能改過單),請重新打開入庫再試")
-            picked = []
-            for key, qty, product_id, was in sorted(wanted, key=lambda w: alias_key(by_key[w[0]].vendor_sku)):
+            picked, units = [], {}
+            for key, qty, product_id, was, codes in sorted(wanted, key=lambda w: alias_key(by_key[w[0]].vendor_sku)):
                 line = by_key[key]
                 left = line.qty - got.get(key, 0)
                 if qty > left:
@@ -403,7 +495,15 @@ def _receive(*, tenant, user, order, request_key, lines, freight):
                 product = products.get(product_id)
                 if product is None:
                     raise VendorError(f"「{line.title}」對到的商品找不到")
-                _fits(product, line.title)
+                _fits(product, line.title, line)
+                if line.requires_serial:
+                    units[line.key] = _units_now(line, qty, codes, got_serials)
+                elif codes:
+                    raise VendorError(f"「{line.title}」不是帶序號的商品")
+                elif line.strict and qty > line.shipped - got.get(key, 0):
+                    # 對方的出貨是準的:取消的出貨、整張退掉的出貨不能再入一次(複審第一輪)
+                    raise VendorError(
+                        f"「{line.title}」{who}現在算數的出貨是 {line.shipped} 個、已經入 {got.get(key, 0)} 個,還沒出的不能先入")
                 _map(tenant, supplier, line, product, user, locked.provider, seen=was)
                 picked.append((line, qty, product))
             pay = _payment(locked, found.order)
@@ -421,7 +521,13 @@ def _receive(*, tenant, user, order, request_key, lines, freight):
                     items.append({"product": product.id, "qty": qty, "billed_qty": 0, "unit_price": "0"})
                 else:
                     cost = ((line.unit_price * qty + extra.get(line.key, ZERO)) / qty).quantize(CENT)
-                    items.append({"product": product.id, "qty": qty, "unit_price": str(cost)})
+                    item = {"product": product.id, "qty": qty, "unit_price": str(cost)}
+                    if line.requires_serial:
+                        # 對方出貨單上的每一台直接變成這邊庫存裡的那幾台(碼、成色、電池、備註一起帶;每一台的成本 = 這一行的單價 + 攤到的運費)
+                        item["serial_numbers"] = [{
+                            "imei": entry["imei"], "sn": entry["sn"], "grade": entry["grade"], "battery": entry["battery"],
+                            "note": entry["note"], "cost": str(cost)} for entry in units[line.key]]
+                    items.append(item)
             note = f"{who} {locked.vendor_order_no} 到貨入庫"
             if shipping_paid is not None and shipping_paid > 0 and share == 0:
                 note += f"(運費 {shipping_paid:.0f} 沒有算進成本)"
@@ -445,9 +551,13 @@ def _receive(*, tenant, user, order, request_key, lines, freight):
                 VendorReceiptItem(
                     tenant=tenant, receipt=receipt, sku=line.sku[:80], spec_id=line.spec_id, is_reissue=line.is_reissue,
                     name=line.title[:200], qty=qty, unit_price=line.unit_price, product=product,
+                    serials=[{"imei": e["imei"], "sn": e["sn"]} for e in units[line.key]] if line.key in units else None,
                 ) for line, qty, product in picked
             ])
-            services._apply(locked, found.order)       # 順手把廠商那邊現在的進度記回來
+            # 平台內的同行:跟賣家說這張單現在收了多少(它照這個擋取消出貨;對方不收這份回報,這一次就不入)
+            services.report_received(locked)
+            # 順手把廠商那邊現在的進度記回來(平台內的同行:金額也跟著對方現在的)
+            services._apply(locked, found.order, live_total=services.platform.is_platform(vendors.find(locked.provider)))
             if pay != locked.payment_method:           # 付款方式被廠商改過:叫貨紀錄跟著寫現在的(跟進貨單一致)
                 locked.payment_method = pay
                 locked.save(update_fields=["payment_method", "updated_at"])
@@ -462,6 +572,25 @@ def _receive(*, tenant, user, order, request_key, lines, freight):
             raise
         return done, False
     return receipt, True
+
+
+def before_purchase_void(po) -> None:
+    """進貨單作廢的一開始(`purchasing.services.void_purchase_order` 在交易裡、**鎖任何庫存之前**呼叫):
+    它是到貨入庫開的 → 先鎖那張叫貨單。
+
+    為什麼:作廢完要跟賣家回報「這張單現在收了多少」(整張單現在的樣子),這個數要在**鎖著叫貨單**的時候算 ——
+    到貨入庫整段也鎖著同一張叫貨單。不鎖的話,「作廢 A 的進貨單」與「入庫 B」同時來,作廢那一邊先算好(還看不到 B)、後送出,
+    會把 B 剛回報的蓋掉,賣家就取消得了 B 的出貨(複審第二輪)。鎖的順序跟入庫一樣:叫貨單 → 進貨單與庫存 → 賣家的批發單。"""
+    ids = sorted(set(VendorReceipt.objects.filter(purchase_order=po).values_list("order_id", flat=True)))
+    if ids:
+        list(VendorOrder.objects.select_for_update().filter(pk__in=ids).order_by("pk").values_list("pk", flat=True))
+
+
+def after_purchase_void(po) -> None:
+    """進貨單作廢之後(`purchasing.services.void_purchase_order` 在同一個交易裡呼叫):它是哪一張叫貨單到貨入庫開的,
+    就跟那個賣家更新「收了多少」(平台內的同行才有這一項)。對方連不上就丟 `VendorError`,那一次作廢整個退回。"""
+    for receipt in VendorReceipt.objects.filter(purchase_order=po).select_related("order__link"):
+        services.report_received(receipt.order)
 
 
 # ── 不是從 POS 叫的單 ────────────────────────────────────────────────────────

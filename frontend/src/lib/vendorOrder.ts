@@ -20,6 +20,24 @@ export interface CatalogRow {
   pack_price: string | null;
   /** 這個廠商品項連到店裡的哪個商品(「對照」分頁連的;沒連 = null)。叫貨用店內的品名,廠商的品名拿來核對 */
   product?: StoreProduct | null;
+  /** v2(平台內的同行):帶不帶序號、是不是一台一筆(中古機:這一列就是那一台,只能訂 1)、有貨沒、可以訂幾個(對方有露才有) */
+  requires_serial?: boolean;
+  per_unit?: boolean;
+  condition?: string;
+  available?: string;
+  available_qty?: number | null;
+}
+
+/** 這一列最多可以訂幾包:一台一筆的 1;對方露了數量的不超過它;其餘照舊。 */
+export function maxPacks(row: Pick<CatalogRow, "per_unit" | "available_qty" | "pack_qty">): number {
+  if (row.per_unit) return 1;
+  if (typeof row.available_qty === "number") return Math.min(Math.floor(row.available_qty / Math.max(row.pack_qty, 1)), MAX_PACKS);
+  return MAX_PACKS;
+}
+
+/** 對方說缺貨(訂不到)。沒講有沒有貨的當成有。 */
+export function soldOut(row: Pick<CatalogRow, "available" | "available_qty">): boolean {
+  return row.available === "缺貨" || row.available_qty === 0;
 }
 
 export interface StoreProduct {

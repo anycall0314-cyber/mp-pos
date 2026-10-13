@@ -33,6 +33,8 @@ import {
   type PendingReceive,
   type ReceiveDraft,
   type ReceiveLine,
+  unitText,
+  roomOf,
 } from "@/lib/vendorReceive";
 
 /** 還不知道結果的那一次記在這個分頁裡(重新整理還在);讀寫不了(無痕、被擋)就當成沒有。 */
@@ -60,6 +62,13 @@ async function pickable(query: string) {
     ...o,
     disabled: o.disabled || o.payload?.requires_serial === true || o.payload?.is_virtual === true,
   }));
+}
+
+/** 帶序號的那一行(手機):入到帶序號的商品;全新的不列中古機(一台一筆的對不對得上逐台記的,伺服器會再看一次)。 */
+async function pickableFor(line: Pick<ReceiveLine, "requires_serial" | "per_unit">, query: string) {
+  if (!line.requires_serial) return pickable(query);
+  const found = await searchProducts(query, line.per_unit ? { activeOnly: true } : { activeOnly: true, excludeSecondhand: true });
+  return found.map((o) => ({ ...o, disabled: o.disabled || o.payload?.requires_serial !== true || o.payload?.is_virtual === true }));
 }
 
 /**
@@ -169,7 +178,7 @@ export function ReceiveDrawer({ order, onClose }: { order: VendorOrder; onClose:
         value={picked?.id ?? ""}
         selectedOption={picked ? { id: picked.id, label: picked.label } : null}
         onChange={(id, opt) => setDraft(withProduct(draft, line.key, id === "" || !opt ? null : { id, label: opt.label }))}
-        fetchOptions={pickable}
+        fetchOptions={(query: string) => pickableFor(line, query)}
         disabled={locked}
         placeholder="入到哪個品號(品名 / 品號)"
       />
@@ -240,13 +249,18 @@ export function ReceiveDrawer({ order, onClose }: { order: VendorOrder; onClose:
               {data.lines.map((line) => {
                 const qty = draft.qty[line.key] ?? 0;
                 const state = lineState(line, qty);
-                const room = Math.max(line.remaining_qty, 0);
+                const room = roomOf(line);
                 return (
                   <tr key={line.key} className={qty > 0 ? "vo-picked" : undefined}>
                     <td className="vo-name">
                       {lineTitle(line)}
                       {line.is_reissue && <span className="vo-test">免費補發</span>}
                       <div className="vo-sub">{line.sku}</div>
+                      {(line.serials ?? []).map((unit) => (
+                        <div key={unit.imei || unit.sn} className="vo-sub report-serial">
+                          {unitText(unit)}
+                        </div>
+                      ))}
                       {/* 品號放在品名底下(不是另一欄):窄的平板一樣整行看得到,不用左右捲 */}
                       <div className="vr-map">{productCell(line)}</div>
                     </td>
@@ -254,18 +268,32 @@ export function ReceiveDrawer({ order, onClose }: { order: VendorOrder; onClose:
                     <td className="num">{line.shipped_qty}</td>
                     <td className="num">{line.received_qty}</td>
                     <td className="num">
-                      <QtyInput
-                        className="vo-qty"
-                        aria-label={`${lineTitle(line)} 這次入庫`}
-                        value={qty}
-                        min={0}
-                        max={Math.min(room, MAX_QTY)}
-                        disabled={locked || room === 0}
-                        onCommit={(n) => setDraft(withQty(draft, line.key, n))}
-                        onRejected={() => toast(`${lineTitle(line)} 最多還能入 ${room} 個`, "err")}
-                      />
+                      {line.requires_serial ? (
+                        // 帶序號的(手機):入的就是對方出貨單上的那幾台(列在品名底下),勾了就全入、不用再刷
+                        <label className="tr-check">
+                          <input
+                            type="checkbox"
+                            aria-label={`${lineTitle(line)} 這次入庫`}
+                            checked={qty > 0}
+                            disabled={locked || line.suggested_qty === 0}
+                            onChange={(e) => setDraft(withQty(draft, line.key, e.target.checked ? line.suggested_qty : 0))}
+                          />
+                          {line.suggested_qty} 台
+                        </label>
+                      ) : (
+                        <QtyInput
+                          className="vo-qty"
+                          aria-label={`${lineTitle(line)} 這次入庫`}
+                          value={qty}
+                          min={0}
+                          max={Math.min(room, MAX_QTY)}
+                          disabled={locked || room === 0}
+                          onCommit={(n) => setDraft(withQty(draft, line.key, n))}
+                          onRejected={() => toast(`${lineTitle(line)} 最多還能入 ${room} 個`, "err")}
+                        />
+                      )}
                       {state === "early" && <div className="vo-sub vo-diff">比已出的多</div>}
-                      {state === "over" && <div className="vo-sub vo-diff">最多 {room}</div>}
+                      {state === "over" && !line.requires_serial && <div className="vo-sub vo-diff">最多 {room}</div>}
                     </td>
                     <td className="num">{line.is_reissue ? "0" : money(line.unit_price)}</td>
                   </tr>

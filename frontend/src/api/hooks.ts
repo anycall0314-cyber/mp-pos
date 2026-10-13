@@ -1348,6 +1348,9 @@ export interface SecondhandAcquisitionPayload {
   payment_method_code: string;
   doc_date?: string | null;
   note?: string;
+  /** 批發:要不要上架、批發價(都沒給 = 照公司的批發設定) */
+  wholesale_list?: boolean;
+  wholesale_price?: number;
 }
 
 export interface SecondhandAcquisitionResult {

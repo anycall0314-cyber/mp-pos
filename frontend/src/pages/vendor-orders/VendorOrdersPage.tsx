@@ -25,7 +25,6 @@ import { toast } from "@/components/workbench/toast";
 import { money } from "@/lib/money";
 import { isManager } from "@/lib/roles";
 import {
-  MAX_PACKS,
   afterSend,
   amountText,
   beforeSend,
@@ -49,6 +48,8 @@ import {
   whenText,
   withPacks,
   type OrderDraft,
+  maxPacks,
+  soldOut,
 } from "@/lib/vendorOrder";
 import {
   categoryTabs,
@@ -218,9 +219,9 @@ export function VendorOrdersPage() {
       {links.data && !link && <div className="md-empty">這個帳號沒有可以叫貨的門市</div>}
       {link && !link.ready && (
         <div className="md-empty">
-          {link.warehouse_name}還沒有{link.manual ? "開通" : "設定"}
+          {link.warehouse_name}還沒有{link.manual || link.platform ? "開通" : "設定"}
           {link.provider_label}
-          {link.manual ? "" : "的金鑰"}(管理員:系統設定 → 叫貨串接)
+          {link.manual || link.platform ? "" : "的金鑰"}(管理員:系統設定 → 叫貨串接)
         </div>
       )}
       {link && link.ready && tab === "order" && blocked === "已停用" && (
@@ -453,6 +454,8 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
               {shown.map((row) => {
                 const packs = draft.cart[row.key] ?? 0;
                 const priced = row.unit_price !== null;
+                // 平台內的同行:對方說缺貨的不能訂;中古機一台一筆(這一列就是那一台)用勾的
+                const out = soldOut(row);
                 return (
                   <tr key={row.key} className={packs > 0 ? "report-row vo-picked" : "report-row"}>
                     <td className="vo-name">
@@ -469,15 +472,32 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
                     <td className="num">{priced ? money(row.unit_price) : manual ? "—" : "未報價"}</td>
                     <td className="num">{priced ? money(row.pack_price) : "—"}</td>
                     <td className="num">
-                      <QtyInput
-                        className="vo-qty"
-                        aria-label={`${storeTitle(row)} 包數`}
-                        value={packs}
-                        min={0}
-                        max={MAX_PACKS}
-                        disabled={(!priced && !manual) || locked}
-                        onCommit={(n) => setDraft({ ...draftRef.current, cart: withPacks(draftRef.current.cart, row.key, n) })}
-                      />
+                      {row.per_unit ? (
+                        <label className="tr-check">
+                          <input
+                            type="checkbox"
+                            aria-label={`${storeTitle(row)} 訂這一台`}
+                            checked={packs > 0}
+                            disabled={!priced || locked}
+                            onChange={(e) =>
+                              setDraft({ ...draftRef.current, cart: withPacks(draftRef.current.cart, row.key, e.target.checked ? 1 : 0) })
+                            }
+                          />
+                          訂
+                        </label>
+                      ) : (
+                        <QtyInput
+                          className="vo-qty"
+                          aria-label={`${storeTitle(row)} 包數`}
+                          value={packs}
+                          min={0}
+                          max={maxPacks(row)}
+                          disabled={(!priced && !manual) || locked || out}
+                          onCommit={(n) => setDraft({ ...draftRef.current, cart: withPacks(draftRef.current.cart, row.key, n) })}
+                        />
+                      )}
+                      {out && <div className="vo-sub vo-diff">缺貨</div>}
+                      {!out && typeof row.available_qty === "number" && <div className="vo-sub">可訂 {row.available_qty}</div>}
                     </td>
                     <td className="num">
                       {packs > 0 && (priced || manual) ? (
@@ -566,18 +586,21 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
           </tbody>
         </table>
         <div className="vo-form">
-          <label>
-            付款方式
-            <select
-              value={payment}
-              disabled={sending}
-              onChange={(e) => setDraft({ ...draftRef.current, payment_method: e.target.value })}
-            >
-              {link.choices.payment_method.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </label>
+          {/* 平台內的同行:付款方式是對方跟這家講好的那一種(對方定的),這裡不選 */}
+          {!link.platform && (
+            <label>
+              付款方式
+              <select
+                value={payment}
+                disabled={sending}
+                onChange={(e) => setDraft({ ...draftRef.current, payment_method: e.target.value })}
+              >
+                {link.choices.payment_method.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             取貨方式
             <select
@@ -611,7 +634,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
               </dd>
             </>
           )}
-          {!manual && (
+          {!manual && !link.platform && (
             <>
               <dt>發票</dt>
               <dd>
@@ -630,9 +653,11 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
         <div className="vo-warn">
           {manual
             ? `成立後要自己把叫貨內容傳給${link.provider_label}`
-            : link.sandbox === true
-              ? `測試金鑰:這張是測試單,${link.provider_label}不會出貨`
-              : "送出後不能在這裡修改或取消"}
+            : link.platform
+              ? "對方出貨之前可以在紀錄取消"
+              : link.sandbox === true
+                ? `測試金鑰:這張是測試單,${link.provider_label}不會出貨`
+                : "送出後不能在這裡修改或取消"}
         </div>
       </Drawer>
     </>
@@ -1009,6 +1034,17 @@ function HistoryTab({ link, openFirst }: { link: VendorLinkRow; openFirst: numbe
                             <ProgressNote key={o.progress_note} order={o} busy={act.isPending} onSave={(note) => run(o, "progress", { note })} />
                           </div>
                         )}
+                        {o.can_cancel && canOrder && (
+                          <div className="vm-manual-acts">
+                            <ArmButton
+                              className="btn"
+                              label="取消叫貨"
+                              armedLabel="確定取消"
+                              disabled={act.isPending}
+                              onConfirm={() => run(o, "cancel", { cancelled: true }, "還沒出的已經取消")}
+                            />
+                          </div>
+                        )}
                         {o.items.length > 0 && (
                           <table className="report-grid vo-confirm">
                             <tbody>
@@ -1058,7 +1094,7 @@ function HistoryTab({ link, openFirst }: { link: VendorLinkRow; openFirst: numbe
             </tbody>
           </table>
         )}
-        {others !== null && (
+        {others !== null && !link.platform && (
           <>
             <div className="vo-section">不是從這裡叫的(電話、LINE、{link.provider_label}代下)</div>
             {others.length === 0 && <div className="md-empty">沒有</div>}

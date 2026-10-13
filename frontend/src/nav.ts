@@ -49,6 +49,13 @@ export const NAV_MODULES: NavModule[] = [
     tabs: [
       { to: "/sales", label: "銷貨單", aliases: ["銷貨作業"] },
       { to: "/sales/returns", label: "銷退單", aliases: ["銷貨退回", "退貨"] },
+      // 批發(2026-10-14):同行下的單、出貨、中古機上架;管理員另外有批發品、同行帳、設定(都在這一頁裡)
+      {
+        to: "/trade",
+        label: "批發單",
+        aliases: ["批發", "同行", "同行訂單", "批發出貨", "中古機上架", "同行帳", "往來代碼"],
+        needs: ["trade_sell"],
+      },
     ],
     tools: {
       label: "作業設定",

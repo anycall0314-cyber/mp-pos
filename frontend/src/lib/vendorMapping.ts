@@ -22,6 +22,9 @@ export interface MappingRow {
   pack_qty: number;
   /** 對到店裡哪個商品(null = 還沒連) */
   product: MappedProduct | null;
+  /** v2(手機):這個品項帶序號、是不是一台一筆(中古機)。沒有這兩格 = 按數量的 */
+  requires_serial?: boolean;
+  per_unit?: boolean;
 }
 
 export interface MappingData {
@@ -75,8 +78,14 @@ export type Linkable = { is_active?: boolean; requires_serial?: boolean; is_seco
  * 這個商品為什麼連不了(null = 可以)。叫貨來的東西只入到按數量管的一般商品 —— 伺服器同一條、它說了算;
  * 這裡先講是讓人不用送出去才知道。
  */
-export function whyNot(p: Linkable): string | null {
+export function whyNot(p: Linkable, row?: Pick<MappingRow, "requires_serial" | "per_unit">): string | null {
   if (p.is_active === false) return "這個商品已經停用";
+  if (row?.requires_serial) {
+    // 帶序號的(手機):連到帶序號的商品;全新的不能連到中古機(中古對不對得上逐台記的,伺服器會再看一次)
+    if (p.is_virtual || !p.requires_serial) return "要連到帶序號的商品";
+    if (!row.per_unit && p.is_secondhand) return "全新的不能連到中古機";
+    return null;
+  }
   if (p.is_secondhand) return "中古機要逐台記,不能連";
   if (p.requires_serial) return "要刷序號的商品不能連";
   if (p.is_virtual) return "虛擬商品沒有庫存,不能連";
@@ -127,7 +136,7 @@ export async function linkFetched<P extends Linkable>(
     deps.say(deps.errorText(e));
     return false;
   }
-  const why = whyNot(product);
+  const why = whyNot(product, row);
   if (why) {
     deps.say(why);
     return false;

@@ -66,6 +66,22 @@ def _normalize_serial_entry(raw):
     return out
 
 
+def _wholesale_wish(entry) -> dict:
+    """進貨的一台設備上對批發的指定:`wholesale_list`(要不要上架)、`wholesale_price`(批發價,正的整數才認)。沒寫的不回。"""
+    wish = {}
+    if isinstance(entry.get("wholesale_list"), bool):
+        wish["list"] = entry["wholesale_list"]
+    raw = entry.get("wholesale_price")
+    if raw not in (None, "", 0, "0"):
+        try:
+            price = round_money(Decimal(str(raw)))
+        except Exception:
+            price = None
+        if price is not None and price > 0:
+            wish["price"] = price
+    return wish
+
+
 def _entry_code(entry):
     """這一台的主碼(訊息與主序號用):有 IMEI 用 IMEI,沒有才用 SN。"""
     return main_code(entry["imei"], entry["sn"])
@@ -254,6 +270,7 @@ def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
         #   per (product, warehouse) + 重算 Product.weighted_avg_cost(全域)
         # - is_virtual=True:不動庫存,只計入單頭金額(手續費 / 折抵 / 補成本等)
         now = timezone.now()
+        new_units, unit_wishes = [], {}      # 批發:這張單建的逐台記機況的機器、表單上個別指定的批發價與要不要上架
         for it in items:
             product = it.product
             if not product.requires_serial:
@@ -340,6 +357,17 @@ def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
                     ref_doc_id=po.id,
                     note=f"進貨單 {po.no} 第 {it.line_no} 行",
                 )
+                if tracks_unit:
+                    new_units.append(serial)
+                    wish = _wholesale_wish(entry)
+                    if wish:
+                        unit_wishes[serial.id] = wish
+
+        # 批發:逐台記機況的機器照設定自動上架(規則在 apps/trade/listing.py;算不出批發價的不上架、不擋進貨)
+        if new_units:
+            from apps.trade import listing as trade_listing
+
+            trade_listing.after_intake(po.tenant, new_units, user=po.created_by, wanted=unit_wishes)
 
         # 3. 更新單頭金額
         subtotal, tax_amount, total = _calc_doc_tax(items, po.tax_method)
@@ -428,7 +456,12 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
     """
     from apps.catalog.models import Product
 
+    from apps.vendor_orders import receiving as vendor_receiving
+    from apps.vendor_orders.services import VendorError
+
     with transaction.atomic():
+        # 這張進貨單是叫貨到貨入庫開的:先鎖那張叫貨單(之後跟賣家回報收了多少要在鎖著它的時候算;見 `before_purchase_void`)
+        vendor_receiving.before_purchase_void(po)
         if lock_document(po) is None:
             raise PurchaseOrderError("找不到這張進貨單")
         if po.is_void:
@@ -545,6 +578,11 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
 
         po.is_void = True
         po.save(update_fields=["is_void"])
+        # 這張進貨單是跟平台內的同行到貨入庫開的:跟賣家更新「收了多少」(之後它才取消得了那一次出貨;規則在 vendor_orders/services.py)
+        try:
+            vendor_receiving.after_purchase_void(po)
+        except VendorError as exc:
+            raise PurchaseOrderError(f"這張進貨單是同行到貨入庫開的,作廢要跟對方更新:{exc}") from None
 
     return po
 

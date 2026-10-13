@@ -47,11 +47,15 @@ def owners_of(tenant, supplier, vendor_skus) -> dict:
     return {sku: found[key] for sku, key in keys.items() if key in found}
 
 
+def _sku_of(item: dict) -> str:
+    """這個品項的對照記在哪個料號底下。一台一筆的(中古機:「規格」是哪一台)記在商品那一層,連一次、每一台都算。"""
+    return item["sku"] if item.get("per_unit") else vendor_sku_of(item["sku"], item["spec_id"])
+
+
 def owners_by_key(tenant, link, items) -> dict:
     """這幾個廠商品項(`key` / `sku` / `spec_id`)各自連到店裡的哪個商品:{key: 商品}。沒連的不在裡面。"""
-    owners = owners_of(tenant, link.supplier, [vendor_sku_of(i["sku"], i["spec_id"]) for i in items])
-    return {i["key"]: owners[vendor_sku_of(i["sku"], i["spec_id"])]
-            for i in items if vendor_sku_of(i["sku"], i["spec_id"]) in owners}
+    owners = owners_of(tenant, link.supplier, [_sku_of(i) for i in items])
+    return {i["key"]: owners[_sku_of(i)] for i in items if _sku_of(i) in owners}
 
 
 def internal_of(tenant, link, items, wanted) -> dict:
@@ -100,12 +104,22 @@ def _row(item: dict, product) -> dict:
         "key": item["key"], "sku": item["sku"], "spec_id": item["spec_id"], "name": item["name"],
         "spec_label": item["spec_label"], "kind": item["kind"], "size": item["size"], "unit": item["unit"],
         "pack_qty": item["pack_qty"], "product": product_data(product),
+        # 帶序號的(手機)才多這兩格(沒有 = 按數量的):要連到帶序號的商品;一台一筆的(中古機)連到中古機 / 已拆封的商品
+        **({"requires_serial": True, "per_unit": bool(item.get("per_unit"))} if item.get("requires_serial") else {}),
     }
 
 
 def rows(tenant, link, vendor) -> dict:
     """連連看那一頁:這家廠商現在的每一個品項,與它對到的店內商品。"""
-    items = manual.catalog_rows(link, vendor)
+    items, seen = [], set()
+    for item in manual.catalog_rows(link, vendor):
+        # 一台一筆的(中古機):同一個商品底下有幾台就有幾列,對照只要連一次 → 只留一列、不寫是哪一台
+        if item.get("per_unit"):
+            if item["sku"] in seen:
+                continue
+            seen.add(item["sku"])
+            item = {**item, "spec_label": ""}
+        items.append(item)
     owners = owners_by_key(tenant, link, items)
     return {
         "supplier": None if link.supplier_id is None else {"id": link.supplier_id, "name": link.supplier.name},
@@ -123,8 +137,10 @@ def set_product(*, tenant, user, link, vendor, key, product_id) -> dict:
     item = next((i for i in manual.catalog_rows(link, vendor) if i["key"] == key), None)
     if item is None:
         raise VendorError(f"{vendor.name}現在沒有這個品項,請重新整理")
-    line = Line(sku=item["sku"], spec_id=item["spec_id"], is_reissue=False, spec_label=item["spec_label"],
-                name=item["name"], unit=item["unit"], pack_qty=item["pack_qty"])
+    per_unit = bool(item.get("per_unit"))
+    line = Line(sku=item["sku"], spec_id=item["spec_id"], is_reissue=False, spec_label="" if per_unit else item["spec_label"],
+                name=item["name"], unit=item["unit"], pack_qty=item["pack_qty"],
+                requires_serial=bool(item.get("requires_serial")), per_unit=per_unit)
     with transaction.atomic():
         supplier = supplier_for(link)
         if product_id is None:
@@ -136,6 +152,6 @@ def set_product(*, tenant, user, link, vendor, key, product_id) -> dict:
         product = Product.objects.filter(tenant=tenant, pk=product_id).first()
         if product is None:
             raise VendorError("找不到這個商品")
-        _fits(product, line.title)
+        _fits(product, line.title, line)
         _map(tenant, supplier, line, product, user, link.provider, seen=NOT_CHECKED)
         return _row(item, _owner(tenant, supplier, line))

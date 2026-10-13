@@ -123,10 +123,13 @@ class SalesOrderViewSet(
         self.check_create_warehouse(serializer)
         with transaction.atomic():
             serializer.save(tenant=self.request.tenant, created_by=user)
+            # 批發:被同行訂走的機器,開單的人明講「賣給現場客人」的那幾台(序號編號);沒講的過帳時會被擋下來
+            release = self.request.data.get("release_trade_units")
+            serializer.instance.trade_release = release if isinstance(release, list) else []
             try:
                 commit_sales_order(serializer.instance)
             except SalesOrderError as exc:
-                raise serializers.ValidationError({"detail": str(exc)})
+                raise serializers.ValidationError(getattr(exc, "payload", None) or {"detail": str(exc)})
 
     @action(detail=False, methods=["get"])
     def summary(self, request):
@@ -251,6 +254,17 @@ class SalesOrderViewSet(
         so = self.get_queryset().get(pk=so.pk)
         return Response(self.get_serializer(so).data)
 
+    @staticmethod
+    def _wholesale_wish(data) -> dict | None:
+        """收購表單上對批發的指定:`wholesale_list`(要不要上架)、`wholesale_price`(批發價;正的整數才認)。都沒寫 = 照公司的批發設定。"""
+        wish = {}
+        if isinstance(data.get("wholesale_list"), bool):
+            wish["list"] = data["wholesale_list"]
+        raw = data.get("wholesale_price")
+        if isinstance(raw, int) and not isinstance(raw, bool) and raw > 0:
+            wish["price"] = raw
+        return wish or None
+
     @action(detail=False, methods=["post"], url_path="secondhand-acquisition")
     def secondhand_acquisition(self, request):
         """個人收購入庫:一個 transaction 內建立中古機序號 + 收購二手銷貨單。"""
@@ -299,6 +313,8 @@ class SalesOrderViewSet(
                 condition_note=data.get("condition_note", ""),
                 doc_date=data.get("doc_date"),
                 note=data.get("note", ""),
+                wholesale=self._wholesale_wish(request.data),
+                user=request.user,
             )
         except SecondhandIntakeError as exc:
             return Response(
@@ -396,6 +412,15 @@ class SalesReturnViewSet(
         )
         self.check_create_warehouse(serializer)
         with transaction.atomic():
+            # 批發出貨開的銷貨單:先照批發那邊的順序鎖(那一次的序號 → 批發單)、看買家是不是已經入庫,**才**鎖原銷貨單。
+            # 取消出貨是「批發單 → 銷貨單」;這裡如果先鎖銷貨單才去等批發單,兩個人同時對同一次出貨按銷退與取消出貨會互相等到死結
+            # (複審第二輪)。`commit_sales_return` 裡還會再問一次(別的入口也擋得到;同一個交易裡再鎖一次不會等)。
+            from apps.trade import shipping as trade_shipping
+
+            try:
+                trade_shipping.before_return(self.request.tenant, serializer.validated_data["original_so"].pk, SalesReturnError)
+            except SalesReturnError as exc:
+                raise serializers.ValidationError({"detail": str(exc)})
             # 建立銷退單之前就先鎖原銷貨單。建立銷退時資料庫會替原單上一把較弱的鎖,
             # 兩張同時送出若都先建立再升級成排他鎖,會互相等到死結。
             SalesOrder.objects.select_for_update().filter(

@@ -272,3 +272,36 @@ test("實付運費明填，未確認的重送保留同一筆運費", () => {
   assert.equal(pending.freight, 80);
   assert.equal(pendingFrom(pendingText(pending), 1).freight, 80);
 });
+
+// ── v2:帶序號的商品(平台內的同行出的手機) ──
+const phoneLine = {
+  key: "PH-1||p", sku: "PH-1", spec_id: null, spec_label: "", name: "iPhone 17", unit: "台", pack_qty: 1, is_reissue: false,
+  qty: 3, shipped_qty: 2, received_qty: 0, remaining_qty: 3, suggested_qty: 2, unit_price: "23000.00", product: null,
+  requires_serial: true, per_unit: false,
+  serials: [{ imei: "356938035643809", sn: "", grade: "", battery: null, note: "" }, { imei: "", sn: "F2LX", grade: "A", battery: 91, note: "小刮" }],
+};
+
+test("帶序號的一行:要嘛不入、要嘛入對方出了還沒入的那幾台", async () => {
+  const { lineState, fill, startDraft, unitText } = await import("./vendorReceive.ts");
+  assert.deepEqual([lineState(phoneLine, 0), lineState(phoneLine, 2), lineState(phoneLine, 1), lineState(phoneLine, 3)],
+    ["none", "ok", "over", "over"]);
+  const plan = { lines: [phoneLine], issue_note: "" };
+  const draft = startDraft(plan, "k");
+  assert.deepEqual(draft.qty, { "PH-1||p": 2 });
+  // 「整張還沒入的」那一顆對帶序號的也只帶已出的(還沒出的沒有序號)
+  assert.deepEqual(fill(plan, draft, "remaining").qty, { "PH-1||p": 2 });
+  assert.equal(unitText(phoneLine.serials[0]), "356938035643809");
+  assert.equal(unitText(phoneLine.serials[1]), "F2LX A 級 電池 91% 小刮");
+});
+
+test("對方的出貨是準的(平台內的同行):比已出、還沒入的多就不行;膜總裁照舊只提醒", async () => {
+  const { lineState, fill, roomOf } = await import("./vendorReceive.ts");
+  const loose = { key: "A||p", remaining_qty: 4, shipped_qty: 2, received_qty: 0, suggested_qty: 2 };
+  const strict = { ...loose, strict_shipped: true };
+  assert.deepEqual([lineState(loose, 2), lineState(loose, 3), lineState(loose, 5)], ["ok", "early", "over"]);
+  assert.deepEqual([lineState(strict, 2), lineState(strict, 3), lineState(strict, 5)], ["ok", "over", "over"]);
+  assert.deepEqual([roomOf(loose), roomOf(strict), roomOf({ ...strict, received_qty: 2 }), roomOf({ ...strict, shipped_qty: 0 })], [4, 2, 0, 0]);
+  // 「帶未入的」對準的那一行也只帶已出的
+  assert.deepEqual(fill({ lines: [strict] }, { qty: {} }, "remaining").qty, { "A||p": 2 });
+  assert.deepEqual(fill({ lines: [loose] }, { qty: {} }, "remaining").qty, { "A||p": 4 });
+});

@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useRemoveVendorKey, useSaveVendorLink, useVendorLinks } from "@/api/hooks";
+import { useJoinDealer } from "@/api/trade";
 import { searchSuppliers } from "@/api/search";
 import type { VendorLinkRow } from "@/api/types";
 import { useCurrentUser } from "@/auth/AuthContext";
@@ -49,6 +50,7 @@ export function VendorLinksPage() {
       <div className="entry-body">
         {links.isLoading && <div className="md-empty">載入中…</div>}
         {links.isError && <div className="md-empty">{apiErrorText(links.error)}</div>}
+        <JoinDealer />
         {links.data && mine.length === 0 && <div className="md-empty">平台還沒有開放任何廠商</div>}
         {mine.map((row) => (
           <LinkCard
@@ -59,6 +61,47 @@ export function VendorLinksPage() {
         ))}
       </div>
     </div>
+  );
+}
+
+/** 同行(開了批發的經銷商)給的往來代碼:輸入之後每一間門市自動開通,那一家就出現在下面與叫貨頁。 */
+function JoinDealer() {
+  const join = useJoinDealer();
+  const [code, setCode] = useState("");
+  async function submit() {
+    try {
+      const got = await join.mutateAsync(code.trim());
+      setCode("");
+      toast(`已加入${got.name}`, "ok");
+    } catch (e) {
+      toast(apiErrorText(e), "err");
+    }
+  }
+  return (
+    <section className="vl-card">
+      <h3 className="vl-title">加入同行</h3>
+      <div className="vl-grid">
+        <label>
+          往來代碼
+          <input
+            value={code}
+            maxLength={12}
+            autoComplete="off"
+            placeholder="同行給的八碼"
+            disabled={join.isPending}
+            onChange={(e) => setCode(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && code.trim()) void submit();
+            }}
+          />
+        </label>
+      </div>
+      <div className="vl-actions">
+        <button type="button" className="btn primary" disabled={!code.trim() || join.isPending} onClick={() => void submit()}>
+          加入
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -84,6 +127,8 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
   const [opened, setOpened] = useState(row.opened);
   const set = (name: FieldName, value: string) => setForm((f) => ({ ...f, [name]: value }));
   const busy = save.isPending || removeKey.isPending;
+  // 沒有金鑰、看「開通」的兩種:半自動的廠商、平台內的同行(開了批發的經銷商)
+  const keyless = row.manual || !!row.platform;
 
   async function submit() {
     try {
@@ -94,7 +139,7 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
         supplier: supplier?.id ?? null,
         freight_into_cost: freight,
         clerk_ordering: clerks,
-        ...(row.manual ? { opened } : key.trim() ? { key: key.trim() } : {}),
+        ...(keyless ? { opened } : key.trim() ? { key: key.trim() } : {}),
       });
       setKey("");
       toast(`${row.provider_label}已儲存`, "ok");
@@ -109,7 +154,7 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
         {row.provider_label}
         <span className="vl-vendor">{[row.warehouse_name, categories].filter(Boolean).join(" · ")}</span>
         {!row.vendor_active && <span className="vo-test">已停用</span>}
-        {row.manual ? (
+        {keyless ? (
           <span className={row.opened ? "vl-state vl-on" : "vl-state"}>{row.opened ? "已開通" : "尚未開通"}</span>
         ) : (
           <span className={row.has_key ? "vl-state vl-on" : "vl-state"}>
@@ -125,7 +170,7 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
         {row.sandbox === true && <span className="vo-test">測試金鑰</span>}
       </h3>
       <div className="vl-grid">
-        {row.manual && (
+        {keyless && (
           <label className="vl-wide">
             開通
             <select
@@ -138,7 +183,7 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
             </select>
           </label>
         )}
-        {!row.manual && (
+        {!keyless && (
         <label className="vl-wide">
           金鑰
           {/* 不用 type="password":瀏覽器會把存過的登入密碼自動填進來(填進來的字按儲存就會被當成金鑰送出去)。
@@ -189,7 +234,7 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
           <input value={form.ship_address} maxLength={200} disabled={busy} onChange={(e) => set("ship_address", e.target.value)} />
         </label>
         {/* 發票那幾格是全自動那一套(對方的下單系統)要的;半自動的廠商不用 */}
-        {!row.manual && (
+        {!keyless && (
           <>
             <label>
               發票
@@ -205,7 +250,7 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
             </label>
           </>
         )}
-        {!row.manual && form.invoice_type === "公司" && (
+        {!keyless && form.invoice_type === "公司" && (
           <>
             <label>
               統一編號
@@ -244,7 +289,7 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
         </label>
       </div>
       <div className="vl-actions">
-        {!row.manual && row.has_key && (
+        {!keyless && row.has_key && (
           <ArmButton
             label="拿掉金鑰"
             armedLabel="確定拿掉"

@@ -90,6 +90,10 @@ REGISTRY: dict[str, Entry] = {
         "vendor_orders.VendorReceipt", "vendor_orders.VendorReceiptItem",
         # 把叫貨單送進廠商下單網站的每一次(2026-10-13):哪一次待確認、最後有沒有成立,跟著叫貨單走
         "vendor_orders.VendorHandoff",
+        # 批發(2026-10-14;賣家那一半):設定、往來的同行、上架、收到的單、出貨、收款。往來代碼只存雜湊、七天就過期,一起帶走無妨
+        "trade.TradeSetting", "trade.TradePartner", "trade.TradeInvite", "trade.TradeUnit", "trade.TradeProduct",
+        "trade.TradeOrder", "trade.TradeOrderLine", "trade.TradeShipment", "trade.TradeShipmentLine",
+        "trade.TradeShipmentSerial", "trade.TradePayment",
     ),
     "auth.User": Entry(ACCOUNT, "只留帳號名稱等對照資訊;不含密碼"),
     "tenants.UserProfile": Entry(ACCOUNT, "角色、預設門市、鎖倉;還原時依對照處理"),
@@ -162,6 +166,8 @@ DOC_NUMBERED = {
     "sales.SalesOrder": "SO",
     "sales.SalesReturn": "SR",
     "transfers.TransferOrder": "TR",
+    # 批發單的單號買家那邊記著:還原到較早的備份之後不能把同一個號碼再發給另一張單
+    "trade.TradeOrder": "TO",
 }
 
 USER_LABEL = "auth.User"

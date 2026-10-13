@@ -3,7 +3,7 @@
 公司的資料(串接、叫貨單)只記廠商的代碼;要名稱、網址、能不能叫貨都從這裡問。
 名單上找不到那個代碼(備份還原到別台、那邊沒有這一家)= 那幾張單照樣看得到,但不能再對廠商做任何事。
 """
-from . import standard
+from . import platform, standard
 from .models import Vendor
 
 
@@ -28,6 +28,8 @@ def company_codes(vendor: Vendor) -> list[str]:
 def open_to(vendor: Vendor, tenant) -> bool:
     """這家公司看不看得到這家廠商(廠商清單、價目、開通、連品名、叫貨)。
     沒有設「只給指定的公司」→ 每一家都看得到;有設 → 只有名單上的(名單空的 = 沒有人)。"""
+    if platform.is_platform(vendor):
+        return platform.open_to(vendor, tenant)          # 平台內的同行:問賣家那邊的規則(核准的、或它開了平台販售)
     if not vendor.is_private:
         return True
     return tenant is not None and tenant.code in company_codes(vendor)
@@ -41,6 +43,8 @@ def name_of(code) -> str:
 
 def client(vendor: Vendor):
     """跟這家廠商講話的那一支。現在只有一種接法(標準格式);之後不同格式的廠商在這裡分。"""
+    if platform.is_platform(vendor) and vendor.seller_id:
+        return platform.client(vendor)
     if vendor.protocol == Vendor.Protocol.STANDARD and vendor.api_base:
         return standard.Client(vendor.api_base, vendor.name)
     raise UnknownVendor(f"「{vendor.name}」還沒有設定怎麼連線,請平台管理員處理")

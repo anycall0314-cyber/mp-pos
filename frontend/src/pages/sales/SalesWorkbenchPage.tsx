@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api, ApiHttpError } from "@/api/client";
+import { heldUnits, type HeldUnit } from "@/lib/trade";
 import {
   lookupMemberLastPrice,
   useCreateSalesOrder,
@@ -473,6 +474,10 @@ export function SalesWorkbenchPage() {
   const [busy, setBusy] = useState(false);
   /** 上一次送出之後不知道那張單有沒有成立(連線中斷,或送到一半頁面被關掉) */
   const [unsure, setUnsure] = useState(!!draft?.pending);
+  // 批發:這張單裡有被同行訂走、還沒出貨的機器 → 伺服器擋下來,這裡讓人選「賣給客人」(同行那一台當下取消)或「留給同行」。
+  // 選了賣給客人的那幾台記在 releaseRef,再送一次時帶給伺服器(沒帶的照樣會被擋)
+  const [held, setHeld] = useState<HeldUnit[] | null>(null);
+  const releaseRef = useRef<string[]>([]);
   const [error, setError] = useState<string | null>(
     draft?.pending
       ? "上一次送出之後沒有等到結果。按「再送一次」:已經成立的話不會開第二張,也不會重複收款。"
@@ -1377,6 +1382,7 @@ export function SalesWorkbenchPage() {
     submitting.current = true;
     setBusy(true);
     setError(null);
+    setHeld(null);
     setDone(null);
     try {
       // 上一次送出結果不明:原樣重送那一份(不重新組、不照現在的庫存重新檢查)
@@ -1421,6 +1427,7 @@ export function SalesWorkbenchPage() {
           invoice_date: noInvoice ? null : docDate,
           sales_person: salesPerson === "" ? null : (salesPerson as number),
           note,
+          release_trade_units: releaseRef.current,
           items: ordered.map((l, idx) => ({
             line_no: idx + 1,
             product: l.product.id,
@@ -1468,7 +1475,9 @@ export function SalesWorkbenchPage() {
           sentRef.current = null;
           saveDraftRef.current();
           setUnsure(false);
-          setError(apiErrorText(e));
+          const taken = e instanceof ApiHttpError ? heldUnits(e.body) : null;
+          setHeld(taken);
+          setError(taken ? null : apiErrorText(e));
           setPeekTick((n) => n + 1);
           if (resend) {
             // 原樣重送被擋 = 第一次沒有成立、現在的庫存也不一樣了:重新載每一行在庫的那幾台讓人改
@@ -1503,6 +1512,7 @@ export function SalesWorkbenchPage() {
         );
         return;
       }
+      releaseRef.current = [];
       // 只拿掉送出去的那幾行:送出這段時間才處理完的碼還留著。原樣重送的那一份 = 畫面上全部
       commit((ls) => (resend ? [] : ls.filter((l) => !sent.has(l.key))));
       resetForm();
@@ -1958,6 +1968,33 @@ export function SalesWorkbenchPage() {
         )}
         {error && panel !== "checkout" && (
           <div className="wb-warn err ws-msg">{error}</div>
+        )}
+        {held && panel !== "checkout" && (
+          <div className="wb-warn err ws-msg ws-held">
+            {held.map((u) => `${u.serial_no} 被同行「${u.partner}」訂走(${u.order_no})`).join("、")}
+            <button
+              type="button"
+              className="wb-btn"
+              disabled={busy}
+              onClick={() => {
+                releaseRef.current = held.map((u) => u.serial);
+                void submit();
+              }}
+            >
+              賣給客人
+            </button>
+            <button
+              type="button"
+              className="wb-btn"
+              disabled={busy}
+              onClick={() => {
+                releaseRef.current = [];
+                setHeld(null);
+              }}
+            >
+              留給同行
+            </button>
+          </div>
         )}
       </div>
 
@@ -2804,6 +2841,33 @@ export function SalesWorkbenchPage() {
               </ul>
             )}
             {error && <div className="wb-warn err">{error}</div>}
+            {held && (
+              <div className="wb-warn err ws-msg ws-held">
+                {held.map((u) => `${u.serial_no} 被同行「${u.partner}」訂走(${u.order_no})`).join("、")}
+                <button
+                  type="button"
+                  className="wb-btn"
+                  disabled={busy}
+                  onClick={() => {
+                    releaseRef.current = held.map((u) => u.serial);
+                    void submit();
+                  }}
+                >
+                  賣給客人
+                </button>
+                <button
+                  type="button"
+                  className="wb-btn"
+                  disabled={busy}
+                  onClick={() => {
+                    releaseRef.current = [];
+                    setHeld(null);
+                  }}
+                >
+                  留給同行
+                </button>
+              </div>
+            )}
           </div>
         )}
       </Drawer>
