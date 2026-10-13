@@ -1,0 +1,241 @@
+<title>買賣串接規格</title>
+<style>
+/* 版面:一欄的文件,寬度留給閱讀;要定的事放在最後、一件一格。 */
+:root {
+  --bg: #f4f5f1; --surface: #ffffff; --fg: #1a2026; --muted: #5b6670; --line: #d9ddd6;
+  --accent: #1f5f8b; --accent-soft: #e1edf5; --ok: #2c6b3f; --ok-soft: #e2f0e4; --wait: #96500a; --wait-soft: #f8ead6;
+  --sans: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12171b; --surface: #1a2228; --fg: #e7ecef; --muted: #98a4ad; --line: #2c3840;
+  --accent: #7fbde6; --accent-soft: #173446; --ok: #8fcf9d; --ok-soft: #1b3524; --wait: #edb571; --wait-soft: #3c2b12; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12171b; --surface: #1a2228; --fg: #e7ecef; --muted: #98a4ad; --line: #2c3840;
+  --accent: #7fbde6; --accent-soft: #173446; --ok: #8fcf9d; --ok-soft: #1b3524; --wait: #edb571; --wait-soft: #3c2b12; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 1.0625rem; line-height: 1.7; }
+.wrap { max-width: 46rem; margin: 0 auto; padding-inline: 16px; padding-block: 28px 64px; display: grid; gap: 28px; }
+header { display: grid; gap: 8px; }
+h1 { margin: 0; font-size: 1.875rem; line-height: 1.25; font-weight: 700; text-wrap: balance; }
+.stamp { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+.lede { margin: 0; font-size: 1.1875rem; }
+section { display: grid; gap: 12px; }
+h2 { margin: 0; font-size: 1.3125rem; line-height: 1.35; font-weight: 700; padding-top: 6px; border-top: 2px solid var(--fg); text-wrap: balance; }
+p { margin: 0; }
+ul { margin: 0; padding-left: 1.25rem; display: grid; gap: 6px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 12px; }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.box h3 { margin: 0; font-size: 1.0625rem; font-weight: 700; }
+.tag { display: inline-block; font-size: 0.875rem; font-weight: 600; border-radius: 4px; padding: 1px 8px; }
+.tag.ok { background: var(--ok-soft); color: var(--ok); }
+.tag.wait { background: var(--wait-soft); color: var(--wait); }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+.steps { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.step { background: var(--accent-soft); color: var(--accent); font-weight: 600; border-radius: 999px; padding: 4px 14px; white-space: nowrap; }
+.step.side { background: var(--surface); border: 1px dashed var(--line); color: var(--muted); }
+.arrow { color: var(--muted); }
+.who { color: var(--muted); font-size: 0.9375rem; font-weight: 600; flex-basis: 100%; }
+.asks { display: grid; gap: 12px; counter-reset: ask; }
+.ask { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 6px; padding: 12px 16px; display: grid; gap: 6px; }
+.ask h3 { margin: 0; font-size: 1.0625rem; font-weight: 700; }
+.ask h3::before { counter-increment: ask; content: counter(ask) ". "; color: var(--accent); }
+.ask .rec { color: var(--muted); }
+.ask .rec b { color: var(--fg); }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; }
+summary { cursor: pointer; font-weight: 700; }
+summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+details > div { display: grid; gap: 12px; margin-top: 12px; }
+code { font-family: var(--mono); font-size: 0.875rem; background: var(--bg); border-radius: 4px; padding: 1px 5px; overflow-wrap: anywhere; }
+</style>
+<div class="wrap">
+  <header>
+    <h1>買賣串接規格</h1>
+    <p class="stamp">草稿 · 2026-10-14 · 還沒有實作 · 要你定的七件事在最下面</p>
+    <p class="lede">用這套 POS 的經銷商可以互相買賣;外面的系統照同一份規格也接得進來。錢不經過平台,只管帳。</p>
+  </header>
+
+  <section>
+    <h2>現在有的、還沒有的</h2>
+    <div class="two">
+      <div class="box">
+        <h3>買家那一半 <span class="tag ok">已經有</span></h3>
+        <p>看商品與進價、下單、查單、到貨變進貨單。POS 跟膜總裁叫貨就是照這套做的,在測試站。</p>
+      </div>
+      <div class="box">
+        <h3>賣家那一半 <span class="tag wait">還沒有</span></h3>
+        <p>讓別人看我的批發商品、對我下單;我接單、出貨,對方收貨入庫。這一份規格主要在補這一半。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>管什麼、不管什麼</h2>
+    <div class="two">
+      <div class="box">
+        <h3>管</h3>
+        <ul>
+          <li>誰可以跟誰買</li>
+          <li>看商品與價錢</li>
+          <li>下單、接單、出貨</li>
+          <li>收貨入庫</li>
+          <li>對帳:哪幾張單、多少錢、收了沒</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>不管</h3>
+        <ul>
+          <li>錢:不收款、不付款、不抽成</li>
+          <li>叫物流(只帶託運單號)</li>
+          <li>開發票(只帶抬頭與統編給賣家)</li>
+          <li>退貨與瑕疵換貨(這一版不做)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>兩種身分、兩種接法</h2>
+    <p>同一家經銷商可以同時是賣家與買家。買家以門市為單位:一間門市一個收貨地點、一份往來。</p>
+    <div class="scroll">
+      <table>
+        <tr><th>接法</th><th>什麼時候用</th><th>怎麼認人</th></tr>
+        <tr><td>平台內</td><td>買賣雙方都用這套 POS</td><td>不用金鑰。賣家在 POS 裡核准這個買家就通了</td></tr>
+        <tr><td>對外</td><td>有一方不在這套 POS(別人的 POS、廠商自己的系統)</td><td>賣家發一把金鑰給買家的一間門市</td></tr>
+      </table>
+    </div>
+    <p>兩種接法是同一份規格,資料長得一樣。之後有經銷商換系統、或廠商要接進來,不用重談格式。</p>
+  </section>
+
+  <section>
+    <h2>一張單的一生</h2>
+    <div class="steps">
+      <span class="who">買家</span>
+      <span class="step">看商品</span><span class="arrow">→</span>
+      <span class="step">下單</span><span class="arrow">→</span>
+      <span class="step">收貨入庫</span>
+    </div>
+    <div class="steps">
+      <span class="who">賣家</span>
+      <span class="step">待接單</span><span class="arrow">→</span>
+      <span class="step">已接單</span><span class="arrow">→</span>
+      <span class="step">部分出貨</span><span class="arrow">→</span>
+      <span class="step">已出貨</span><span class="arrow">→</span>
+      <span class="step">已完成</span>
+      <span class="step side">已拒絕</span>
+      <span class="step side">已取消</span>
+    </div>
+    <ul>
+      <li>一張單可以分好幾次出貨,買家照每一次出貨收貨。</li>
+      <li>手機、平板這類帶序號的,出貨時帶著每一台的序號。買家收貨直接變成自己庫存裡的那幾台,不用再刷一次。</li>
+      <li>價錢只有賣家算。買家下單不送價錢,以賣家回的為準。</li>
+      <li>同一張單只會成立一次。斷線了再送,不會變成兩張(現在叫貨就是這樣做的)。</li>
+      <li>訂單現在的樣子以賣家那邊為準。賣家事後改單,買家再查就是新的。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>誰看得到什麼</h2>
+    <p>平台上的經銷商是互相競爭的,所以預設都收著。</p>
+    <div class="two">
+      <div class="box">
+        <h3>買家看得到</h3>
+        <ul>
+          <li>賣家開放給他的商品</li>
+          <li>他自己的價錢</li>
+          <li>他自己下的單</li>
+        </ul>
+        <p>看不到賣家的成本、別的買家的價錢。</p>
+      </div>
+      <div class="box">
+        <h3>賣家看得到</h3>
+        <ul>
+          <li>下給他的單</li>
+          <li>那張單的收貨資料與聯絡方式</li>
+        </ul>
+        <p>看不到買家的庫存、買家跟別家買了什麼。</p>
+      </div>
+    </div>
+    <p>沒被核准的買家,連這個賣家有沒有在賣都不知道。</p>
+  </section>
+
+  <section>
+    <h2>共同語言</h2>
+    <div class="two">
+      <div class="box">
+        <h3>手機、平板、穿戴</h3>
+        <p>用平台的標準機型。買賣雙方講的是同一支,買家不用連品名,直接對到自己的品號。</p>
+      </div>
+      <div class="box">
+        <h3>配件與其他</h3>
+        <p>沒有共同語言。賣家給自己的料號與品名,買家用「品名連連看」連一次,之後自動。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>管帳</h2>
+    <ul>
+      <li>每張單有金額、付款方式(雙方講好的文字)、收款記號(賣家自己按:未收款或已收款)。</li>
+      <li>對帳單:某一段期間跟某一個對象的每一張單、出貨金額、收了沒、合計。買賣雙方各拉各的,數字同一個來源。</li>
+      <li>價錢含不含稅,每個賣家講清楚一次。</li>
+      <li>不做收款沖帳、預收、抽成。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>要你定的七件事</h2>
+    <div class="asks">
+      <div class="ask">
+        <h3>誰可以跟我買</h3>
+        <p class="rec"><b>建議:</b>賣家核准每一個買家,才看得到商品與價錢。另一種是設成公開批發價。</p>
+      </div>
+      <div class="ask">
+        <h3>庫存露多少</h3>
+        <p class="rec"><b>建議:</b>只露「有貨、缺貨」。同業看得到數量,等於看得到我的底。</p>
+      </div>
+      <div class="ask">
+        <h3>買家可不可以自己取消</h3>
+        <p class="rec"><b>建議:</b>賣家接單之前可以;接了之後要聯絡賣家。</p>
+      </div>
+      <div class="ask">
+        <h3>中古機批發要不要一起做</h3>
+        <p class="rec"><b>建議:</b>第一版先做全新機與配件。中古機每一台機況與價錢不同,要「一台一台上架」,另開一版。</p>
+      </div>
+      <div class="ask">
+        <h3>管帳做到哪</h3>
+        <p class="rec"><b>建議:</b>每張單的收款記號,加上對帳單。不做沖帳。</p>
+      </div>
+      <div class="ask">
+        <h3>對外的金鑰誰發</h3>
+        <p class="rec"><b>建議:</b>賣家自己在 POS 後台發給買家,弄丟了自己作廢重發。</p>
+      </div>
+      <div class="ask">
+        <h3>平台內買賣,兩邊的單怎麼開</h3>
+        <p class="rec"><b>建議:</b>賣家按出貨,自動開一張銷貨單並扣庫存;買家按收貨,自動開一張進貨單。兩邊各按一次,像調撥的派發與確認。</p>
+      </div>
+    </div>
+  </section>
+
+  <details>
+    <summary>給寫程式的人</summary>
+    <div>
+      <p>現有的 v1(看商品、下單、查單)每一支照舊能用。v2 多了下面這些;每個賣家用「會哪些」講自己做了哪幾項,買家的畫面照它顯示。完整的欄位在專案的 <code>docs/api/買賣串接規格_v2_草稿.md</code>。</p>
+      <div class="scroll">
+        <table>
+          <tr><th>動作</th><th>路徑</th><th>v1 有沒有</th></tr>
+          <tr><td>會哪些</td><td><code>GET /capabilities</code></td><td>新的</td></tr>
+          <tr><td>商品</td><td><code>GET /products</code></td><td>有;多了標準機型、適用機型、有貨沒</td></tr>
+          <tr><td>下單</td><td><code>POST /orders</code></td><td>有</td></tr>
+          <tr><td>查單</td><td><code>GET /orders/{單號}</code></td><td>有;多了每一次出貨與序號</td></tr>
+          <tr><td>取消</td><td><code>POST /orders/{單號}/cancel</code></td><td>新的</td></tr>
+          <tr><td>對帳單</td><td><code>GET /statements</code></td><td>新的</td></tr>
+          <tr><td>通知</td><td>賣家打買家登記的網址</td><td>新的;只說有事,內容以查單為準</td></tr>
+        </table>
+      </div>
+    </div>
+  </details>
+</div>
