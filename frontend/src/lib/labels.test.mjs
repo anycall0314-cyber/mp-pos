@@ -18,6 +18,7 @@ import {
   halfText,
   layoutBars,
   leftPadDots,
+  moduleDotsFor,
   moveNudge,
   nudgeText,
   printableCode,
@@ -262,15 +263,32 @@ test("放得下用 3 點,放不下用 2 點", () => {
   assert.equal(layoutBars(code128Bits("F2LXK1ABCD")).moduleDots, 2);         // 10 碼英數的序號:剛好放得下
 });
 
-test("細線(一個單位 1 點)只有明講才用:測試標籤的那一張", () => {
+test("細線(一個單位 1 點)只有「有序號的、2 點放不下」才用", () => {
+  // owner 2026-10-13:有序號的條碼印序號;細線他實機刷得到 → 太長的序號改用細線,不再只印文字
+  const serial = moduleDotsFor("serial");
   const bits = code128Bits("F2LXK1ABCDEF");
-  assert.equal(layoutBars(bits), null);                                      // 一般的標籤:12 碼英數印不下
-  const thin = layoutBars(bits, undefined, [1]);
+  assert.equal(layoutBars(bits), null);                                      // 一般的線寬:12 碼英數印不下
+  const thin = layoutBars(bits, undefined, serial);
   assert.equal(thin.moduleDots, 1);
   assert.equal(thin.widthDots, bits.length + 20);
   assert.ok(thin.widthDots <= barAreaDots());
-  assert.equal(layoutBars(code128Bits("356789012345671")).moduleDots, 2);    // 沒有明講就不會用到 1 點
+  // 放得下的照舊用粗的:IMEI 與 10 碼英數是 2 點、短的是 3 點
+  assert.equal(layoutBars(code128Bits("356789012345671"), undefined, serial).moduleDots, 2);
+  assert.equal(layoutBars(code128Bits("F2LXK1ABCD"), undefined, serial).moduleDots, 2);
+  assert.equal(layoutBars(code128Bits("A1"), undefined, serial).moduleDots, 3);
+  // 細線放得下 25 碼英數;再長就真的沒有條碼(整串印成字)
+  assert.equal(layoutBars(code128Bits("A".repeat(25)), undefined, serial).moduleDots, 1);
+  assert.equal(layoutBars(code128Bits("A".repeat(26)), undefined, serial), null);
+  // 原廠條碼、品號不用細線(太長的原廠條碼改印品號)
+  for (const kind of ["barcode", "sku", "", "other"]) assert.deepEqual([...moduleDotsFor(kind)], [3, 2], kind);
+  assert.deepEqual([...serial], [3, 2, 1]);
   assert.ok(!LABEL.moduleDots.includes(1));
+  // 畫面照碼的種類挑線寬;沒有另外的開關
+  const tile = readFileSync(new URL("../components/labels/LabelTile.tsx", import.meta.url), "utf8");
+  assert.match(tile, /return layoutBars\(bits, undefined, moduleDotsFor\(codeKind\)\);/);
+  assert.match(tile, /printableCode\(label, \(code\) => barsFor\(code, label\.code_kind\) !== null\)/);
+  assert.match(tile, /barsFor\(printed\.code, label\.code_kind\)/);
+  assert.doesNotMatch(tile, /thin/);
 });
 
 test("太長的碼不印條碼(不印糊的)", () => {

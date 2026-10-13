@@ -111,12 +111,12 @@ const TEST_LABELS: LabelData[] = [
     copies: 1,
   },
   {
-    // 45 mm 的紙,英數超過 10 碼的序號用一般的線寬印不下條碼。這一張用最細的線(一個單位 1 點)印一個 12 碼的:
-    // 這台印表機與條碼槍刷得到的話,之後太長的序號可以改用細線印,不用只印文字
+    // 45 mm 的紙,英數超過 10 碼的序號用一般的線寬(2 點)印不下條碼:有序號的會改用細線(一個單位 1 點)。
+    // 這一張就是一個 12 碼的序號,平常這樣的序號印出來就是這個樣子(owner 2026-10-13 實機刷得到)
     key: "test-thin",
     product_id: 0,
     serial_id: 0,
-    name: "測試標籤:細線條碼(刷得到嗎)",
+    name: "測試標籤:長序號(細線條碼)",
     sku: "細線",
     code: "F2LXK1ABCDEF",
     code_kind: "serial",
@@ -126,7 +126,6 @@ const TEST_LABELS: LabelData[] = [
     doc_no: "條碼槍刷得到 F2LXK1ABCDEF",
     doc_date: "",
     copies: 1,
-    thin_bars: true,
   },
 ];
 

@@ -24,8 +24,6 @@ export interface LabelData {
   doc_date: string;
   /** 配件預設印幾張(進貨數量 / 補印時打的張數);某一台固定 1 */
   copies: number;
-  /** 只有測試標籤的「細線」那一張有:條碼一個單位 1 點(伺服器不會給) */
-  thin_bars?: boolean;
 }
 
 export interface LabelResponse {
