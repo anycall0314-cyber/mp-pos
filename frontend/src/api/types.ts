@@ -2024,6 +2024,10 @@ export interface PlatformVendor {
   order_email: string;
   contact: string;
   items: number;
+  /** 只給指定的公司:名單以外的公司看不到這家廠商與它的價目(開著、名單空的 = 沒有人看得到) */
+  is_private: boolean;
+  /** 給哪幾家公司(公司代碼) */
+  only_for: string[];
 }
 
 /** 半自動廠商價目表上的一項(平台的資料) */

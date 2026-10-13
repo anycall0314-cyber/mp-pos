@@ -62,6 +62,12 @@ class Vendor(TimestampedModel):
     # 停用:不能叫新的貨、不能貼新金鑰;已經叫的單照樣看得到、照樣可以重送與到貨入庫
     is_active = models.BooleanField("啟用", default=True)
     sort_order = models.PositiveIntegerField("排序", default=0)
+    # 只給指定的公司(owner 2026-10-13:kcimos 的價目是手機玩家那個帳號的進價,「Kcimos只有手機玩家看得到沒錯」)。
+    # 平台上的公司是互相競爭的經銷商:這一家廠商與它的價目表不能讓名單以外的公司看到。
+    # **兩格分開**:開關開著、名單空的 = 沒有任何公司看得到(不會因為名單一時是空的就變成全部都看得到)。
+    # 名單記公司代碼(`Tenant.code`),用逗號分開;判斷只有 `vendors.open_to` 一份。
+    is_private = models.BooleanField("只給指定的公司", default=False, db_default=False)
+    only_for = models.CharField("給哪幾家公司(代碼)", max_length=200, blank=True, default="", db_default="")
 
     class Meta:
         verbose_name = "叫貨廠商"

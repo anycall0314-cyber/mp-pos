@@ -301,6 +301,9 @@ def place(*, tenant, user, link, request_key, lines, payment_method=None, delive
         return _again(existing, link), False
 
     vendor = vendor_of(link.provider, active=True)
+    if not vendors.open_to(vendor, tenant):
+        # 以前設定過、後來平台把這家廠商收回成「只給別的公司」:已經叫的單照樣看得到、入得了庫,新的不能叫
+        raise VendorError(f"「{vendor.name}」沒有開放給這家公司,不能叫新的貨")
     _client(vendor)                 # 這家連線還沒設好:現在就講,不要等叫貨單存了才發現送不出去
     key = key_of(link, vendor)
     items = _lines(live_rows(link, vendor, key), lines, vendor.name)

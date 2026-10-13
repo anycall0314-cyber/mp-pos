@@ -16,7 +16,10 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.tenants.models import Tenant
 from apps.tenants.permissions import IsPlatformAdmin
+
+from . import vendors
 
 from .models import Vendor, VendorCategory, VendorItem, VendorLink, VendorSecret
 
@@ -24,7 +27,7 @@ PLATFORM_ONLY = [IsAuthenticated, IsPlatformAdmin]
 CODE = re.compile(r"^[a-z0-9][a-z0-9-]{1,19}$")
 PREFIX = re.compile(r"^[A-Za-z0-9_-]{0,20}$")
 MAX_ORDER = 9999
-LABELS = {"name": "名稱", "is_active": "啟用"}
+LABELS = {"name": "名稱", "is_active": "啟用", "is_private": "只給指定的公司"}
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MAX_PRICE = Decimal("9999999.99")
 MAX_PACK = 100000
@@ -147,10 +150,30 @@ def _vendor_data(v: Vendor, opened=None) -> dict:
         "protocol": v.protocol, "protocol_label": v.get_protocol_display(),
         "api_base": v.api_base, "key_prefix": v.key_prefix, "is_active": v.is_active, "sort_order": v.sort_order,
         "order_email": v.order_email, "contact": v.contact,
+        # 只給指定的公司:開關 + 公司代碼的名單(開關開著、名單空的 = 沒有任何公司看得到)
+        "is_private": v.is_private, "only_for": vendors.company_codes(v),
         "stores": (opened or {}).get(v.code, 0),
         # 半自動的廠商:價目表上有幾項(啟用中的)
         "items": v.items.filter(is_active=True).count() if v.protocol == Vendor.Protocol.MANUAL else 0,
     }
+
+
+def _companies(value) -> str:
+    """「給哪幾家公司」:公司代碼的清單 → 存成逗號分開的字。代碼要真的有這家公司(打錯一個字,那家公司就看不到了)。"""
+    if not isinstance(value, list) or any(not isinstance(c, str) for c in value):
+        raise Wrong("給哪幾家公司要是公司代碼的清單")
+    codes = []
+    for code in (c.strip() for c in value):
+        if code and code not in codes:
+            codes.append(code)
+    known = set(Tenant.objects.filter(code__in=codes).values_list("code", flat=True))
+    missing = [c for c in codes if c not in known]
+    if missing:
+        raise Wrong(f"沒有這家公司:{'、'.join(missing)}")
+    text = ",".join(codes)
+    if len(text) > 200:
+        raise Wrong("名單太長了")
+    return text
 
 
 def _vendor_values(data, current=None):
@@ -197,6 +220,10 @@ def _vendor_values(data, current=None):
         out["sort_order"] = _order(data)
     if "is_active" in data:
         out["is_active"] = _flag(data, "is_active")
+    if "is_private" in data:
+        out["is_private"] = _flag(data, "is_private")
+    if "only_for" in data:
+        out["only_for"] = _companies(data["only_for"])
     picked = None
     if "categories" in data:
         ids = data["categories"]

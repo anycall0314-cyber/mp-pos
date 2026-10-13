@@ -7870,6 +7870,8 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .pv-add input { min-height: var(--control-height); padding: 0 10px; font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; }
 .pv-checks { display: flex; flex-wrap: wrap; gap: 6px 16px; }
 .pv-checks label { display: inline-flex; align-items: center; gap: 6px; }
+/* 廠商清單:名稱後面「只給哪幾家公司」那一小段 */
+.pv-audience { margin-left: 8px; color: var(--warn-text); font-size: var(--font-secondary); white-space: nowrap; }
 /* 到貨入庫的面板 */
 .vr-head {
   display: flex;

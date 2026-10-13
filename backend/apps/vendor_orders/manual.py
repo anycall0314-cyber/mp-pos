@@ -103,6 +103,9 @@ def place(*, tenant, user, link, vendor, request_key, lines, payment_method=None
         return _same(existing, link), False
     if not vendor.is_active:
         raise VendorError(f"「{vendor.name}」已經停用,不能叫新的貨")
+    if not vendors.open_to(vendor, tenant):
+        # 以前開通過、後來平台把這家廠商收回成「只給別的公司」:已經叫的單照樣看得到、入得了庫,新的不能叫
+        raise VendorError(f"「{vendor.name}」沒有開放給這家公司,不能叫新的貨")
     need_open(link, vendor)
     items = services._lines(rows(vendor), lines, vendor.name, unpriced_ok=True)
     owners = services._internal(tenant, link, items, lines)
@@ -204,6 +207,25 @@ def set_cancelled(order: VendorOrder, user, cancelled) -> VendorOrder:
 
 
 # ── 到貨入庫 ────────────────────────────────────────────────────────────────
+def still_open(tenant, provider) -> bool:
+    """這家廠商現在還給不給這家公司看(名單上沒有這一家了也算不給)。"""
+    vendor = vendors.find(provider)
+    return vendor is not None and vendors.open_to(vendor, tenant)
+
+
+def past_extras(order) -> dict:
+    """這張單沒叫、但**入過**的品項(後來那張進貨單作廢了的也算):照**當時入庫記下來的**料號與品名。{行的鑰匙: (料號, 品名)}
+
+    給「廠商已經不給這家公司看」的舊單用:這幾行是這家公司自己的紀錄,要看得到、作廢之後要能重入 ——
+    但品名不能去讀廠商**現在**的價目表(可能改過名、改過規格;那已經不是給這家公司看的東西)。"""
+    out = {}
+    rows = (VendorReceiptItem.objects.filter(receipt__order=order).order_by("id")
+            .values_list("sku", "spec_id", "is_reissue", "name"))
+    for sku, spec_id, is_reissue, name in rows:
+        out[line_key(sku, spec_id, is_reissue)] = (sku, name)
+    return out
+
+
 def _line(sku, spec, name, unit, pack_qty, qty=0, amount=ZERO) -> Line:
     return Line(sku=sku, spec_id=None, is_reissue=False, spec_label=spec, name=name, unit=unit, pack_qty=pack_qty,
                 qty=qty, amount=amount)
@@ -219,14 +241,24 @@ def plan(tenant, order: VendorOrder) -> dict:
     got = received_by_line(order)
     ordered = {line_key(i.sku, None, False): i for i in order.items.all()}
     listed = {line_key(i.sku, None, False): i for i in VendorItem.objects.filter(vendor__code=order.provider)}
+    # 這家廠商現在還給不給這家公司看(只給指定公司的廠商,後來被平台收回的):不給的話這一頁只有這張單自己的東西 ——
+    # 不列價目表上現在的品項、不帶現在的參考價(那是別家公司的進價了)
+    seen = still_open(tenant, order.provider)
     lines = [(key, _line(i.sku, i.spec_label, i.name, i.unit, i.pack_qty), i.qty, i.unit_price) for key, i in ordered.items()]
     # 這張單沒叫、但入過的(換款、多送):也列出來(叫 0、已入 N),不然入過的東西在這一頁看不到
-    for key in got:
-        if key not in ordered and key in listed:
-            i = listed[key]
-            lines.append((key, _line(i.sku, i.spec, i.name, i.unit, i.pack_qty), 0, i.ref_price))
+    if seen:
+        for key in got:
+            if key not in ordered and key in listed:
+                i = listed[key]
+                lines.append((key, _line(i.sku, i.spec, i.name, i.unit, i.pack_qty), 0, i.ref_price))
+    else:
+        # 不給看了:照當時入庫記下來的料號與品名列(不讀現在的價目表;規格、單位、一包幾個、參考價都不帶)。
+        # 後來作廢的那幾次也列(已入 0):作廢之後要能照原單重入
+        for key, (sku, name) in past_extras(order).items():
+            if key not in ordered:
+                lines.append((key, _line(sku, "", name, "", 1), 0, None))
     extras = [(key, _line(i.sku, i.spec, i.name, i.unit, i.pack_qty), i.ref_price)
-              for key, i in listed.items() if i.is_active and key not in ordered and key not in got]
+              for key, i in listed.items() if seen and i.is_active and key not in ordered and key not in got]
     with transaction.atomic():          # 查對照會拿一把交易內的鎖
         owners = {l.key: _owner(tenant, link.supplier, l)
                   for l in _in_lock_order([l for _, l, *_ in lines] + [l for _, l, _ in extras])}
@@ -335,12 +367,20 @@ def _receive(*, tenant, user, order, request_key, lines, freight):
             listed = {line_key(i.sku, None, False): i for i in VendorItem.objects.filter(vendor__code=locked.provider)}
             products = {p.id: p for p in Product.objects.filter(tenant=tenant, pk__in=[w[2] for w in wanted])}
             sources = {}
+            seen = still_open(tenant, locked.provider)
+            past = {} if seen else past_extras(locked)
             for key, *_ in wanted:
                 if key in ordered:
                     sources[key] = ordered[key]
-                elif key in listed and (listed[key].is_active or key in got):
-                    i = listed[key]            # 這張單沒叫的:要是價目表上現在有的(或這張單先前入過的)
+                elif seen and key in listed and (listed[key].is_active or key in got):
+                    i = listed[key]            # 這張單沒叫的:要是價目表上現在有的,或這張單先前入過的
                     sources[key] = (i.sku, i.spec, i.name, i.unit, i.pack_qty)
+                elif key in past:
+                    # 廠商已經不給這家公司看:只能重入這張單以前入過的(含後來作廢的),品名照當時記下來的;
+                    # 一包幾個只拿來記對照(不會顯示),照現在的,沒有就 1
+                    sku, name = past[key]
+                    now = listed.get(key)
+                    sources[key] = (sku, "", name, "", now.pack_qty if now is not None else 1)
                 else:
                     raise VendorError(f"有一項不在這張叫貨單上、{who}的價目表上現在也沒有,請重新打開入庫再試")
             picked = []

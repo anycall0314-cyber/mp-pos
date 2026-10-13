@@ -56,16 +56,26 @@ def _store(request, raw, *, required=True):
     return store
 
 
-def _vendor(raw, *, active=True) -> Vendor:
-    """這個請求指的是哪一家廠商。沒講:名單上只有一家在合作就是它,不然要講。
-    `active` = 要還在合作中的(看商品、叫貨、貼金鑰);查紀錄、更新進度、到貨入庫不要求。"""
+def _vendor(request, raw, *, active=True, open_now=None) -> Vendor:
+    """這個請求指的是哪一家廠商。沒講:這家公司看得到的名單上只有一家在合作就是它,不然要講。
+    `active` = 要還在合作中的(看商品、叫貨、貼金鑰);查紀錄、更新進度、到貨入庫不要求。
+
+    **只給指定公司的廠商**(`vendors.open_to`):名單以外的公司一律當成「沒有這一家」—— 講的話跟代碼打錯一模一樣,不透露有這家廠商。
+    例外:這家公司以前就設定過它(後來才被收回的)→ 已經叫的單照樣查得到、入得了庫(`active=False` 的那幾條路),新的事不能做。
+    `open_now` = 一定要現在還看得到(預設跟 `active` 一樣):會列出廠商**現在**的品項與價目的路(看商品、連品名)都要 —— 被收回的公司不能再看到之後才有的品項與進價。
+    **先看這家公司看不看得到,才看廠商有沒有停用**:順序反過來的話「『某某』已經停用」那一句會把名單以外的廠商名字講出去。"""
     if raw in (None, ""):
-        only = list(Vendor.objects.filter(is_active=True)[:2])
+        only = [v for v in Vendor.objects.filter(is_active=True) if vendors.open_to(v, request.tenant)][:2]
         if len(only) != 1:
             raise services.VendorError("要指定廠商")
         return only[0]
     if not isinstance(raw, str):
         raise services.VendorError("廠商不對")
+    vendor = services.vendor_of(raw)             # 只看名單上有沒有;停用留到後面看
+    if not vendors.open_to(vendor, request.tenant):
+        had = VendorLink.objects.filter(tenant=request.tenant, provider=vendor.code).exists()
+        if (active if open_now is None else open_now) or not had:
+            raise services.VendorError(f"廠商名單上沒有「{raw}」這一家,請平台管理員處理")
     return services.vendor_of(raw, active=active)
 
 
@@ -262,6 +272,8 @@ def links(request):
                 link = saved.get((store.id, vendor.code))
                 if not vendor.is_active and link is None:
                     continue        # 停用的廠商:這家門市沒設定過就不列(設定過的留著,紀錄還要看)
+                if not vendors.open_to(vendor, request.tenant) and link is None:
+                    continue        # 只給別家公司的廠商:不列(以前設定過、後來被收回的留著,紀錄還要看)
                 rows.append(_link_data(store, vendor, link, hints, manager))
         return Response({
             "results": rows,
@@ -274,12 +286,14 @@ def links(request):
     data = request.data if isinstance(request.data, dict) else {}
     try:
         store = _store(request, data.get("warehouse"))
-        vendor = _vendor(data.get("vendor"), active=False)
+        vendor = _vendor(request, data.get("vendor"), active=False)
         link = _link(request, store, vendor)
         is_manual = manual.is_manual(vendor)
         opening = is_manual and data.get("opened") is True and not (link and link.opened)
         if not vendor.is_active and (link is None or data.get("key") or opening):
             raise services.VendorError(f"「{vendor.name}」已經停用,不能新開通或換金鑰")
+        if not vendors.open_to(vendor, request.tenant) and (link is None or data.get("key") or opening):
+            raise services.VendorError(f"「{vendor.name}」沒有開放給這家公司,不能新開通或換金鑰")
         if is_manual and data.get("key"):
             raise services.VendorError(f"「{vendor.name}」不用金鑰(按「開通」就可以叫貨)")
         values = {}
@@ -336,7 +350,7 @@ def remove_key(request, warehouse_id: int):
     data = request.data if isinstance(request.data, dict) else {}
     try:
         store = _store(request, warehouse_id)
-        vendor = _vendor(data.get("vendor"), active=False)
+        vendor = _vendor(request, data.get("vendor"), active=False)
     except services.VendorError as exc:
         return _bad(exc, exc.status)
     link = _link(request, store, vendor)
@@ -351,7 +365,7 @@ def catalog(request):
     abilities.require(request.user, abilities.VENDOR_ORDER)
     try:
         store = _store(request, request.query_params.get("warehouse"))
-        vendor = _vendor(request.query_params.get("vendor"))
+        vendor = _vendor(request, request.query_params.get("vendor"))
         link = _need_link(request, store, vendor)
         _may_order(request, link)
         rows = manual.catalog_rows(link, vendor)
@@ -374,7 +388,7 @@ def orders(request):
         try:
             store = _store(request, request.query_params.get("warehouse"), required=False)
             wanted = request.query_params.get("vendor")
-            vendor = _vendor(wanted, active=False) if wanted else None       # 沒講 = 每一家的都列
+            vendor = _vendor(request, wanted, active=False) if wanted else None       # 沒講 = 每一家的都列
         except services.VendorError as exc:
             return _bad(exc, exc.status)
         return Response({"results": _page(request, store, vendor)})
@@ -384,7 +398,7 @@ def orders(request):
     try:
         store = _store(request, data.get("warehouse"))
         # 停用的廠商在 services.place 擋(同一把鑰匙再來確認先前那一張,廠商停用了也要回得了)
-        vendor = _vendor(data.get("vendor"), active=False)
+        vendor = _vendor(request, data.get("vendor"), active=False)
         is_manual = manual.is_manual(vendor)
         # 半自動:開通了沒在 manual.place 裡看(同一把鑰匙再來確認先前那一張,之後被關掉了也要回得了)
         link = _link(request, store, vendor) if is_manual else _need_link(request, store, vendor)
@@ -432,7 +446,7 @@ def sync(request):
     data = request.data if isinstance(request.data, dict) else {}
     try:
         store = _store(request, data.get("warehouse"))
-        vendor = _vendor(data.get("vendor"), active=False)
+        vendor = _vendor(request, data.get("vendor"), active=False)
         link = _need_link(request, store, vendor)
         # 半自動的廠商沒有系統可以問:進度是人記的,也沒有「不是從 POS 叫的單」可以列
         others = [] if manual.is_manual(vendor) else services.sync(request.tenant, link)
@@ -492,7 +506,7 @@ def adopt(request):
     data = request.data if isinstance(request.data, dict) else {}
     try:
         store = _store(request, data.get("warehouse"))
-        vendor = _vendor(data.get("vendor"), active=False)       # 廠商停用了,已經叫的貨照樣要入得了庫
+        vendor = _vendor(request, data.get("vendor"), active=False)       # 廠商停用了,已經叫的貨照樣要入得了庫
         link = _need_link(request, store, vendor)
         if manual.is_manual(vendor):
             raise services.VendorError(f"「{vendor.name}」沒有系統可以查單;不是從這裡叫的貨請開一般的進貨單入庫")
@@ -524,7 +538,9 @@ def mappings(request):
     data = request.query_params if request.method == "GET" else (request.data if isinstance(request.data, dict) else {})
     try:
         store = _store(request, data.get("warehouse"))
-        vendor = _vendor(data.get("vendor"), active=False)       # 廠商停用了,已經叫的貨還要入庫,對照照樣看得到、改得了
+        # 廠商停用了,已經叫的貨還要入庫,對照照樣看得到、改得了;但這一頁列的是廠商現在的全部品項 ——
+        # 被平台收回的公司不能再看(舊單入庫時在入庫的面板對品號,不經過這裡)
+        vendor = _vendor(request, data.get("vendor"), active=False, open_now=True)
         link = _need_link(request, store, vendor)
         if request.method == "GET":
             return Response({"warehouse": store.id, "vendor": vendor.code, **mapping.rows(request.tenant, link, vendor)})

@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import {
   useImportPlatformVendorItems,
+  usePlatformTenants,
   usePlatformVendorCategories,
   usePlatformVendorItems,
   usePlatformVendors,
@@ -17,6 +18,7 @@ import { apiErrorText } from "@/components/workbench/errors";
 import { toast } from "@/components/workbench/toast";
 import { money } from "@/lib/money";
 import { IMPORT_LABEL, PASTE_COLUMNS, parseSheet } from "@/lib/vendorManual";
+import { audienceLabel, audienceProblem, toggleCompany } from "@/lib/vendorAudience";
 
 const MANUAL = "manual";
 
@@ -25,6 +27,7 @@ const MANUAL = "manual";
  * 類別只用來篩廠商;廠商與類別只能停用、不能刪(各家門市的叫貨單還指著它)。
  * 「對方的網址」決定各家門市的金鑰會被送到哪裡:伺服器只收 https 的完整網址。
  * **半自動的廠商**(對方沒有可以接的系統):不用網址;商品與參考價在「價目表」建(一項一項加,或從 Excel 整批貼上),所有店家同一份。
+ * **誰看得到**:預設全部公司;「指定公司」= 名單以外的公司看不到這家廠商與它的價目(例:kcimos 的價目是某一家的進價)。規則在 `lib/vendorAudience.ts`。
  */
 export function PlatformVendorsTab() {
   const categories = usePlatformVendorCategories();
@@ -64,7 +67,10 @@ export function PlatformVendorsTab() {
             {vendors.data.results.map((v) => (
               <tr key={v.id} style={v.is_active ? undefined : { opacity: 0.55 }}>
                 <td>{v.code}</td>
-                <td>{v.name}</td>
+                <td>
+                  {v.name}
+                  {v.is_private && <span className="pv-audience">{audienceLabel(v)}</span>}
+                </td>
                 <td>{v.categories.map((id) => names.get(id)).filter(Boolean).join("、")}</td>
                 <td>{v.protocol_label}</td>
                 <td style={{ overflowWrap: "anywhere" }}>
@@ -220,6 +226,11 @@ function VendorDrawer({
   const [email, setEmail] = useState(vendor?.order_email ?? "");
   const [contact, setContact] = useState(vendor?.contact ?? "");
   const manual = protocol === MANUAL;
+  // 誰看得到:全部公司 / 指定公司(名單記公司代碼)
+  const tenants = usePlatformTenants();
+  const [isPrivate, setIsPrivate] = useState(vendor?.is_private ?? false);
+  const [companies, setCompanies] = useState<string[]>(vendor?.only_for ?? []);
+  const audienceWarn = audienceProblem(isPrivate, companies);
   const [error, setError] = useState("");
   // 已經有門市開通的廠商改網址:那些門市的金鑰之後會送到新的地方
   const moving = vendor !== null && vendor.stores > 0 && base.trim().replace(/\/+$/, "") !== vendor.api_base;
@@ -235,6 +246,9 @@ function VendorDrawer({
         categories: picked,
         sort_order: Number(order) || 0,
         is_active: active,
+        // 兩格都送:關掉「指定公司」不清名單(再開回來還在)
+        is_private: isPrivate,
+        only_for: companies,
       });
       toast(`${name.trim()}已儲存`, "ok");
       onClose();
@@ -310,6 +324,28 @@ function VendorDrawer({
             <input value={email} maxLength={200} placeholder="沒有就留空" onChange={(e) => setEmail(e.target.value)} />
           </Field>
         </>
+      )}
+      <Field label="誰看得到" error={audienceWarn || undefined}>
+        <select value={isPrivate ? "some" : "all"} onChange={(e) => setIsPrivate(e.target.value === "some")}>
+          <option value="all">全部公司</option>
+          <option value="some">指定公司</option>
+        </select>
+      </Field>
+      {isPrivate && (
+        <Field label="給哪幾家">
+          <div className="pv-checks">
+            {(tenants.data ?? []).map((t) => (
+              <label key={t.id}>
+                <input
+                  type="checkbox"
+                  checked={companies.includes(t.code)}
+                  onChange={(e) => setCompanies(toggleCompany(companies, t.code, e.target.checked))}
+                />
+                {t.name}
+              </label>
+            ))}
+          </div>
+        </Field>
       )}
       <Field label="排序">
         <input type="number" min={0} max={9999} value={order} onChange={(e) => setOrder(e.target.value)} />

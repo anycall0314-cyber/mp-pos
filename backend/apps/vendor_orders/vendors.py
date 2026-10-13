@@ -15,6 +15,24 @@ def find(code) -> Vendor | None:
     return Vendor.objects.filter(code=code).first() if isinstance(code, str) and code else None
 
 
+def company_codes(vendor: Vendor) -> list[str]:
+    """這家廠商的名單上有哪幾家公司(代碼,照存的順序、不重複)。"""
+    seen = []
+    for code in vendor.only_for.split(","):
+        code = code.strip()
+        if code and code not in seen:
+            seen.append(code)
+    return seen
+
+
+def open_to(vendor: Vendor, tenant) -> bool:
+    """這家公司看不看得到這家廠商(廠商清單、價目、開通、連品名、叫貨)。
+    沒有設「只給指定的公司」→ 每一家都看得到;有設 → 只有名單上的(名單空的 = 沒有人)。"""
+    if not vendor.is_private:
+        return True
+    return tenant is not None and tenant.code in company_codes(vendor)
+
+
 def name_of(code) -> str:
     """畫面與訊息裡怎麼稱呼這一家。名單上沒有就寫代碼(至少認得出是哪一家)。"""
     vendor = find(code)
