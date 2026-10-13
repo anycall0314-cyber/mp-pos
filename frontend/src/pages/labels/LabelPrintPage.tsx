@@ -17,13 +17,13 @@ import {
 } from "@/lib/labels";
 
 /**
- * 商品標籤列印頁(50 × 30 mm,一張標籤一頁;用瀏覽器的列印送到條碼機)。
+ * 商品標籤列印頁(45 × 25 mm、上下兩聯,一張標籤一頁;用瀏覽器的列印送到條碼機)。
  *
  * 要印什麼看網址:
  * - `/purchases/:id/print/labels` = 那張進貨單整張(序號商品每一台一張,配件照進貨數量)
  * - `/labels/print?serials=1,2,3` = 那幾台各一張
  * - `/labels/print?product=5&copies=3` = 那個配件印 3 張
- * - `/labels/print?test=1` = 測試標籤(裝好印表機先印這個:看邊框有沒有被切、條碼刷不刷得到)
+ * - `/labels/print?test=1` = 測試標籤(裝好印表機先印這個:看邊框有沒有被切、短線有沒有對到撕線、條碼刷不刷得到)
  * `auto=0` = 不要自己跳出列印視窗。
  *
  * 配件的張數可以在上面那一排改(0 = 不印);某一台固定一張。
@@ -34,8 +34,8 @@ const TEST_LABELS: LabelData[] = [
     key: "test-frame",
     product_id: 0,
     serial_id: 0,
-    name: "測試標籤:四邊的框線要完整",
-    sku: "50 × 30 mm",
+    name: "測試標籤:框線完整、短線對撕線",
+    sku: "45 × 25 mm",
     code: "TEST1234",
     code_kind: "sku",
     last5: "",
@@ -59,6 +59,40 @@ const TEST_LABELS: LabelData[] = [
     doc_no: "PO-000001",
     doc_date: "2026-10-06",
     copies: 1,
+  },
+  {
+    // 配件:品名長、要壓扁才放得下;條碼是原廠條碼,字印整串
+    key: "test-accessory",
+    product_id: 0,
+    serial_id: 0,
+    name: "9H/平板/IMOS/低藍光/IPAD/AIR/13吋(2024)",
+    sku: "G03-000330",
+    code: "4710007836224",
+    code_kind: "barcode",
+    last5: "",
+    price: 1990,
+    grade: "",
+    doc_no: "PO-000002",
+    doc_date: "2025-02-04",
+    copies: 1,
+  },
+  {
+    // 45 mm 的紙,英數超過 10 碼的序號用一般的線寬印不下條碼。這一張用最細的線(一個單位 1 點)印一個 12 碼的:
+    // 這台印表機與條碼槍刷得到的話,之後太長的序號可以改用細線印,不用只印文字
+    key: "test-thin",
+    product_id: 0,
+    serial_id: 0,
+    name: "測試標籤:細線條碼(刷得到嗎)",
+    sku: "細線",
+    code: "F2LXK1ABCDEF",
+    code_kind: "serial",
+    last5: "BCDEF",
+    price: null,
+    grade: "",
+    doc_no: "條碼槍刷得到 F2LXK1ABCDEF",
+    doc_date: "",
+    copies: 1,
+    thin_bars: true,
   },
 ];
 

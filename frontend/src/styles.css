@@ -1014,11 +1014,15 @@ button { font-family: inherit; }
 .pf-guide { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 4px 0 16px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
 .pf-guide-note { flex: 1 1 100%; color: var(--text-dim); font-size: var(--font-secondary); }
 
-/* 商品標籤(50 × 30 mm,熱感 203 dpi;一張標籤一頁)。尺寸跟 lib/labels.ts 的 LABEL 是同一組數字。
+/* 商品標籤(45 × 25 mm、上下兩聯,熱感 203 dpi;一張標籤一頁)。尺寸跟 lib/labels.ts 的 LABEL 是同一組數字(labels.test.mjs 會對)。
+   紙中間(12.5 mm)有一條撕線:上半、下半各印一份、上下對稱,條碼只有一個、跨在撕線上。
+   每一聯從紙的外緣往中間:品名 2.8 → 進貨單與售價 2.8 → 碼的字 2.3 → 條碼的一半 3.5(共 11.4 mm,離外緣 0.8、離撕線 0.3)。
    字一律用 mm、純黑:熱感只有黑跟白,灰色的字會被印成一點一點的。
    紙張尺寸用「有名字的頁面」(page: label):這份樣式裡別的列印頁(收據、維修單)各有自己的 @page,
    沒有名字的 @page 會互相蓋掉(最後那一條是 A4),標籤不能被它們影響。 */
-@page label { size: 50mm 30mm; margin: 0; }
+@page label { size: 45mm 25mm; margin: 0; }
+/* 全站預設是暗色:列印時紙的底色也會是暗的。最後一張標籤底下沒被蓋到的那一條細縫,有人在列印視窗勾了「背景圖形」就會印成一條線 */
+@media print { html:has(.label-sheet) { color-scheme: light; background: #fff; } }
 .label-sheet {
   page: label;
   background: #fff;
@@ -1027,14 +1031,12 @@ button { font-family: inherit; }
   line-height: 1.15;
 }
 .label-tile {
-  width: 50mm;
-  /* 比紙(30 mm)矮一點:印表機驅動回報的可印高度常常比紙小一點點,剛好 30 mm 的話溢出一條線、每一張後面就多吐一張空白的 */
-  height: 29.5mm;
+  position: relative;
+  width: 45mm;
+  /* 比紙(25 mm)矮一點:印表機驅動回報的可印高度常常比紙小一點點,剛好 25 mm 的話溢出一條線、每一張後面就多吐一張空白的。
+     裡面的東西都是從上緣算位置的,所以撕線還是在 12.5 mm */
+  height: 24.5mm;
   box-sizing: border-box;
-  padding: 1mm 1.5mm;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
   overflow: hidden;
   background: #fff;
   color: #000;
@@ -1042,29 +1044,40 @@ button { font-family: inherit; }
 }
 /* 第二張起,每一張之前換頁(不用「每一張之後換頁、最後一張除外」:那樣最後面多一個東西就會多吐一張空白的) */
 .label-tile + .label-tile { break-before: page; page-break-before: always; }
-.label-name {
-  font-size: 2.9mm;
-  font-weight: 700;
-  line-height: 1.15;
-  max-height: 6.7mm;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  word-break: break-all;
-}
-.label-sub { display: flex; justify-content: space-between; gap: 2mm; font-size: 2.2mm; line-height: 1; white-space: nowrap; }
-.label-bars { display: block; }
-/* 印不出條碼時,條碼那一塊改印這個碼的字(可以折行) */
-.label-nobars {
-  height: 10.7mm;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
+.label-half { position: absolute; left: 1.5mm; right: 1.5mm; height: 11.4mm; display: flex; flex-direction: column; overflow: hidden; }
+.label-half.top { top: 0.8mm; }
+/* 下半那一聯:同樣的內容、順序倒過來(條碼那一半貼著撕線、品名在最下面) */
+.label-half.bottom { top: 12.8mm; flex-direction: column-reverse; }
+.label-name { flex: none; height: 2.8mm; font-size: 2.3mm; font-weight: 700; line-height: 2.8mm; white-space: nowrap; overflow: hidden; }
+/* 放不下時只壓寬度(比例由畫面量出來填),從左邊壓 */
+.label-name > span { display: inline-block; transform-origin: left center; }
+.label-meta { flex: none; height: 2.8mm; display: flex; align-items: baseline; gap: 1.2mm; line-height: 2.8mm; white-space: nowrap; overflow: hidden; }
+.label-src { flex: 1 1 auto; min-width: 0; overflow: hidden; font-size: 1.9mm; }
+.label-grade { flex: none; font-size: 2.2mm; font-weight: 700; }
+.label-price { flex: none; font-size: 2.8mm; font-weight: 700; }
+.label-codeline { flex: none; height: 2.3mm; display: flex; align-items: baseline; justify-content: space-between; gap: 1.5mm; line-height: 2.3mm; white-space: nowrap; overflow: hidden; }
+.label-code {
+  flex: none;
   font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: 2.8mm;
-  line-height: 1.15;
+  font-size: 2.1mm;
+  /* pre:不折行,而且碼裡面連續的空白照原樣印(nowrap 會把兩個空白併成一個,字就跟條碼不是同一個碼了) */
+  white-space: pre;
+}
+/* 有序號的那一台:字只印末 5 碼(條碼是整支序號) */
+.label-last5 { flex: none; font-size: 1.9mm; white-space: pre; }
+.label-last5 b { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 2.4mm; font-weight: 900; letter-spacing: 0.1mm; }
+.label-nobars b { font-weight: 900; }
+.label-sku { min-width: 0; overflow: hidden; font-size: 1.9mm; }
+.label-slot { flex: none; height: 3.5mm; }
+/* 條碼:疊在兩聯中間(位置與大小由畫面照點數算出來填) */
+.label-bars { position: absolute; display: block; z-index: 1; }
+/* 印不出條碼時,碼的字那一行連同條碼的那一半改印這個碼(可以折行;兩聯各印一份) */
+.label-nobars {
+  flex: none;
+  height: 5.8mm;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 2.4mm;
+  line-height: 2.8mm;
   overflow: hidden;
   overflow-wrap: anywhere;
   word-break: break-all;
@@ -1072,24 +1085,13 @@ button { font-family: inherit; }
   white-space: pre-wrap;
 }
 /* 很長的碼(序號最長 80 個字):字小一點,整個放得進去 */
-.label-nobars.long { font-size: 2.1mm; line-height: 1.1; }
-.label-code {
-  margin-top: 0.4mm;
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: 2.3mm;
-  line-height: 1;
-  letter-spacing: 0.1mm;
-  text-align: center;
-  /* pre:不折行,而且碼裡面連續的空白照原樣印(nowrap 會把兩個空白併成一個,字就跟條碼不是同一個碼了) */
-  white-space: pre;
-  overflow: hidden;
-}
-.label-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 2.6mm; line-height: 1; white-space: nowrap; }
-.label-price { font-size: 4.2mm; font-weight: 700; }
-.label-foot { font-size: 1.9mm; line-height: 1; white-space: nowrap; overflow: hidden; min-height: 1.9mm; }
-/* 測試標籤:四邊各一條 0.25 mm 的線,看有沒有哪一邊被切掉。
-   用真的邊框(陰影、背景色瀏覽器列印時可能不印);內距扣掉邊框,裡面的東西位置不變 */
-.label-frame { border: 0.25mm solid #000; padding: 0.75mm 1.25mm; }
+.label-nobars.long { font-size: 1.9mm; line-height: 1.9mm; }
+/* 測試標籤:四邊各一條 0.25 mm 的線,看有沒有哪一邊被切掉;左右各一小段線要落在撕線上。
+   用真的邊框線(陰影、背景色瀏覽器列印時可能不印);疊在上面、不佔位置,裡面的東西位置不變 */
+.label-frame::before { content: ""; position: absolute; inset: 0; border: 0.25mm solid #000; pointer-events: none; }
+.label-fold { position: absolute; top: 12.375mm; width: 4mm; border-top: 0.25mm solid #000; }
+.label-fold.l { left: 0; }
+.label-fold.r { right: 0; }
 .label-msg { padding: 20px; background: #fff; color: #000; }
 @media screen { .label-msg { min-height: 100vh; } }
 .label-msg-actions { display: flex; gap: 12px; margin-top: 16px; }
@@ -1126,6 +1128,8 @@ button { font-family: inherit; }
   /* 螢幕上放大兩倍看(印出來是原寸) */
   .label-sheet { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 12px; padding: 16px; background: #e4e4e4; }
   .label-tile { zoom: 2; outline: 1px solid #aaa; }
+  /* 撕線在哪裡(只在螢幕上畫,不會印出來) */
+  .label-tile::after { content: ""; position: absolute; left: 0; right: 0; top: 12.5mm; border-top: 1px dashed #c4c4c4; pointer-events: none; }
 }
 
 @media print {

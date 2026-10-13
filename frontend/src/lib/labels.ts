@@ -1,6 +1,10 @@
 /**
- * 商品標籤(50 × 30 mm,Argox OS-2130D 熱感式 203 dpi)的尺寸與「條碼照印表機的點數畫」的規則。
+ * 商品標籤(45 × 25 mm、上下兩聯,Argox OS-2130D 熱感式 203 dpi)的尺寸與「條碼照印表機的點數畫」的規則。
  * 純函式,`labels.test.mjs` 有測試。
+ *
+ * **標籤紙是上下兩聯**(owner 2026-10-13:寬 45 mm、高 25 mm,中間有一條撕線,撕開各自是一張):
+ * 上半、下半印一樣的內容、上下對稱(字都是正的,只是順序倒過來),條碼只有一個、跨在撕線上 ——
+ * 撕開之後兩邊各留半個高度的條碼、各自刷得到。跨著印的好處是撕線的位置差一點也沒關係。
  *
  * 為什麼要自己算:熱感印表機一個點 0.125 mm,只有黑跟白。條碼的每一條線如果不是剛好整數個點
  * (例如把條碼圖拉寬到貼滿標籤),印出來的線有粗有細、邊緣是灰的,條碼槍刷不到。
@@ -8,21 +12,99 @@
  * 2 點還放不下就是這個碼太長 —— 不印糊的條碼,只印文字,並且在畫面上講出來。
  */
 
-/** 標籤紙與印表機。尺寸只寫在這裡(列印樣式 `.label-*` 用同一組數字) */
+/** 標籤紙與印表機。尺寸只寫在這裡(列印樣式 `.label-*` 用同一組數字,`labels.test.mjs` 會對) */
 export const LABEL = {
-  widthMm: 50,
-  heightMm: 30,
+  widthMm: 45,
+  heightMm: 25,
   /** 203 dpi = 一公釐 8 個點 */
   dotsPerMm: 8,
   /** 左右留白(標籤紙對位會有一點偏,貼著邊印會被切掉) */
   sideMarginMm: 1.5,
-  /** 條碼的高度 */
-  barHeightMm: 8,
+  /** 條碼的高度:跨在撕線上,上下兩聯各一半 */
+  barHeightMm: 7.2,
   /** 條碼兩邊要留的空白:10 個單位(Code 128 的規定,少了槍會讀不到) */
   quietModules: 10,
   /** 一個單位幾個點:先試大的 */
   moduleDots: [3, 2],
+  /** 品名一行放不下時最多壓扁到多少(再放不下才切掉尾巴) */
+  minSqueeze: 0.75,
+  /** 品名壓到格子的幾成寬:留一點點,螢幕上量的跟印表機畫的字寬會差一點,不然最後一個字的邊會被切到 */
+  nameRoom: 0.985,
 } as const;
+
+/** 撕線離標籤上緣幾公釐 */
+export function foldMm(): number {
+  return LABEL.heightMm / 2;
+}
+
+/** 條碼的上緣離標籤上緣幾公釐(條碼的正中間就是撕線) */
+export function barTopMm(): number {
+  return (LABEL.heightMm - LABEL.barHeightMm) / 2;
+}
+
+/**
+ * 品名只有一行:放不下時把字壓扁(只壓寬度)讓整個品名進得去 —— 配件的品名差別常常在最後面(`…/13吋` 與 `…/11吋`),
+ * 切掉尾巴就分不出來。最多壓到 `minSqueeze`,再放不下才切。量不到寬度(0)當成不用壓。
+ */
+export function squeezeFor(textWidth: number, boxWidth: number): number {
+  if (!(textWidth > 0) || !(boxWidth > 0)) return 1;
+  const room = boxWidth * LABEL.nameRoom;
+  if (textWidth <= room) return 1;
+  return Math.max(LABEL.minSqueeze, room / textWidth);
+}
+
+/**
+ * 標籤上的日期:中華民國年月日、中間不分隔(owner 2026-10-13;舊標籤就是這樣印:`1140204`)。
+ * 給的是 "2026-10-06" 這種;看不懂的回空的(不印,不猜)。
+ */
+export function rocDay(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
+  if (!m) return "";
+  const year = Number(m[1]) - 1911;
+  if (year < 1) return "";
+  return `${year}${m[2]}${m[3]}`;
+}
+
+/**
+ * 序號拆成 [前面, 末幾碼](店員對實機看的是末幾碼:有條碼時字只印末幾碼,印不出條碼時整串都印、末幾碼標粗)。
+ * 拆不出來就是 [整串, ""]:紙上印的那一串不是以它結尾(原廠條碼改印品號時,後端給的末 5 碼是另一個碼的)、或整串就那麼長。
+ */
+export function splitTail(code: string, tail: string): [string, string] {
+  if (!tail || code.length <= tail.length || !code.endsWith(tail)) return [code, ""];
+  return [code.slice(0, code.length - tail.length), tail];
+}
+
+/** 一聯上面的字(上下兩聯印的一樣)。畫面照這個排,不自己決定印什麼 */
+export interface HalfText {
+  /** 進貨單號 · 日期(民國);都沒有就是空的 */
+  source: string;
+  /**
+   * 碼的那一行怎麼印:
+   * - `tail`:只印末幾碼(放在 `tail`)—— **有序號、而且條碼印得出來的那一台**(owner 2026-10-13「有序號的產品,僅需印後五碼」;
+   *   條碼仍然是整支序號,刷了才找得到這一台)
+   * - `full`:整串都印(`head` + `tail`;`tail` 是序號的末幾碼,畫面標粗)—— 配件的原廠條碼 / 品號,
+   *   以及**印不出條碼的序號**(只剩字可以對,不能只印末幾碼)
+   */
+  mode: "tail" | "full";
+  head: string;
+  tail: string;
+  /** 右邊的品號;條碼印的就是品號時不重複印 */
+  sku: string;
+}
+
+/** `code` = 紙上實際印的那個碼(`printableCode` 的結果),`bars` = 條碼印不印得出來 */
+export function halfText(
+  label: { code_kind: string; sku: string; last5: string; doc_no: string; doc_date: string },
+  code: string,
+  bars: boolean,
+): HalfText {
+  const source = [label.doc_no, rocDay(label.doc_date)].filter(Boolean).join(" · ");
+  const sku = label.sku.trim() === code ? "" : label.sku.trim();
+  if (label.code_kind !== "serial") return { source, mode: "full", head: code, tail: "", sku };
+  const [head, tail] = splitTail(code, label.last5);
+  if (bars) return { source, mode: "tail", head: "", tail: tail || code, sku };
+  return { source, mode: "full", head, tail, sku };
+}
 
 /** 條碼可以用的寬度(點) */
 export function barAreaDots(): number {
@@ -41,11 +123,16 @@ export interface BarLayout {
 /**
  * 把條碼的黑白樣式("1101001…",1 = 黑)排成整數個點。
  * 放不下回 null(這個碼太長,不印條碼)。
+ * `tryDots` 只有測試標籤的「細線」那一張會給(一個單位 1 點:看這台印表機與條碼槍吃不吃得下);一般的標籤不給。
  */
-export function layoutBars(bits: string, areaDots: number = barAreaDots()): BarLayout | null {
+export function layoutBars(
+  bits: string,
+  areaDots: number = barAreaDots(),
+  tryDots: readonly number[] = LABEL.moduleDots,
+): BarLayout | null {
   if (!/^[01]+$/.test(bits)) return null;
   const modules = bits.length + LABEL.quietModules * 2;
-  const moduleDots = LABEL.moduleDots.find((d) => modules * d <= areaDots);
+  const moduleDots = tryDots.find((d) => modules * d <= areaDots);
   if (!moduleDots) return null;
   const bars: { x: number; w: number }[] = [];
   let i = 0;

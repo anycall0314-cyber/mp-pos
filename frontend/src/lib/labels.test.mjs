@@ -1,5 +1,6 @@
 // 商品標籤:條碼的每一條線要剛好是印表機的整數個點(不然熱感印出來刷不到);張數不能亂。跑法:npm test。
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { code128Bits } from "./code128.ts";
@@ -8,20 +9,132 @@ import {
   MAX_SHEETS,
   MAX_TOTAL_SHEETS,
   barAreaDots,
+  barTopMm,
   copiesOf,
   dotsToMm,
   expandSheets,
+  foldMm,
+  halfText,
   layoutBars,
   leftPadDots,
   printableCode,
+  rocDay,
   shouldAutoPrint,
+  splitTail,
+  squeezeFor,
   totalSheets,
 } from "./labels.ts";
 
-test("50 mm 的標籤扣掉左右留白,條碼可以用 376 個點", () => {
-  assert.equal(barAreaDots(), 376);
-  assert.equal(dotsToMm(376), 47);
+const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+
+test("45 mm 的標籤扣掉左右留白,條碼可以用 336 個點", () => {
+  assert.equal(barAreaDots(), 336);
+  assert.equal(dotsToMm(336), 42);
   assert.equal(dotsToMm(1), 0.125);
+});
+
+test("上下兩聯:撕線在正中間,條碼跨在撕線上、上下各一半", () => {
+  assert.equal(LABEL.widthMm, 45);
+  assert.equal(LABEL.heightMm, 25);
+  assert.equal(foldMm(), 12.5);
+  assert.ok(Math.abs(barTopMm() - 8.9) < 1e-9);
+  // 條碼的正中間就是撕線
+  assert.ok(Math.abs(barTopMm() + LABEL.barHeightMm / 2 - foldMm()) < 1e-9);
+  // 一聯留得下的條碼至少 3 mm 高(再矮槍很難對)
+  assert.ok(LABEL.barHeightMm / 2 >= 3);
+});
+
+test("樣式裡的尺寸跟 LABEL 是同一組數字", () => {
+  const css = read("../styles.css");
+  assert.ok(css.includes(`@page label { size: ${LABEL.widthMm}mm ${LABEL.heightMm}mm; margin: 0; }`));
+  const tile = css.match(/\.label-tile \{[^}]*\}/)[0];
+  assert.match(tile, new RegExp(`width: ${LABEL.widthMm}mm;`));
+  // 比紙矮一點(剛好一樣高會每張多吐一張空白的),但不能矮到下半那一聯放不下
+  const height = Number(tile.match(/height: ([\d.]+)mm;/)[1]);
+  assert.ok(height < LABEL.heightMm && height >= LABEL.heightMm - 0.5, String(height));
+  const half = css.match(/\.label-half \{[^}]*\}/)[0];
+  assert.match(half, new RegExp(`left: ${LABEL.sideMarginMm}mm; right: ${LABEL.sideMarginMm}mm;`));
+  const halfHeight = Number(half.match(/height: ([\d.]+)mm;/)[1]);
+  const top = Number(css.match(/\.label-half\.top \{ top: ([\d.]+)mm; \}/)[1]);
+  const bottom = Number(css.match(/\.label-half\.bottom \{ top: ([\d.]+)mm;/)[1]);
+  // 上半那一聯不能印過撕線,下半那一聯不能從撕線上面開始、也不能超出那一張
+  assert.ok(top + halfHeight < foldMm(), "上半超過撕線");
+  assert.ok(bottom > foldMm(), "下半從撕線上面開始");
+  assert.ok(bottom + halfHeight <= height, "下半超出標籤");
+  // 兩聯對稱:離撕線一樣遠
+  assert.ok(Math.abs((foldMm() - (top + halfHeight)) - (bottom - foldMm())) < 1e-9);
+  // 每一聯留給條碼的那一半,要蓋得住條碼伸進來的那一截
+  const slot = Number(css.match(/\.label-slot \{[^}]*height: ([\d.]+)mm;/)[1]);
+  assert.ok(slot + (foldMm() - (top + halfHeight)) >= LABEL.barHeightMm / 2 - 1e-9, "條碼會蓋到碼的字");
+  // 測試標籤對撕線的短線:線的正中間在撕線上
+  const fold = css.match(/\.label-fold \{ position: absolute; top: ([\d.]+)mm; width: [\d.]+mm; border-top: ([\d.]+)mm solid #000; \}/);
+  assert.ok(Math.abs(Number(fold[1]) + Number(fold[2]) / 2 - foldMm()) < 1e-9);
+});
+
+test("品名放不下才壓扁,最多壓到下限", () => {
+  assert.equal(squeezeFor(100, 200), 1);
+  assert.equal(squeezeFor(197, 200), 1);                       // 留的那一點點以內:不壓
+  // 剛好一樣寬也要壓一點:螢幕上量的跟印出來的會差一點,不留的話最後一個字的邊會被切到
+  assert.ok(squeezeFor(200, 200) < 1 && squeezeFor(200, 200) > 0.98);
+  assert.ok(Math.abs(squeezeFor(250, 200) - 200 * LABEL.nameRoom / 250) < 1e-12);
+  assert.ok(250 * squeezeFor(250, 200) < 200);                 // 壓完一定進得去
+  assert.equal(squeezeFor(1000, 200), LABEL.minSqueeze);      // 再長就切掉尾巴,不壓到看不懂
+  assert.equal(squeezeFor(0, 200), 1);                         // 量不到寬度:不壓
+  assert.equal(squeezeFor(200, 0), 1);
+  assert.equal(squeezeFor(NaN, 200), 1);
+});
+
+test("日期印中華民國年月日、不分隔", () => {
+  assert.equal(rocDay("2026-10-06"), "1151006");
+  assert.equal(rocDay("2025-02-04"), "1140204");                // 舊標籤上的那一種
+  assert.equal(rocDay("2011-01-01"), "1000101");
+  assert.equal(rocDay("2010-12-31"), "991231");                 // 民國兩位數的年不補 0
+  assert.equal(rocDay("2026-10-06T08:00:00+08:00"), "1151006");
+  assert.equal(rocDay(""), "");
+  assert.equal(rocDay("1151006"), "");                          // 看不懂的不印,不猜
+  assert.equal(rocDay("1900-01-01"), "");                       // 民國前
+});
+
+test("一聯上面印什麼:有序號的只印末 5 碼,配件印整串", () => {
+  const phone = { code_kind: "serial", sku: "PH-000001", last5: "45671", doc_no: "PO-000001", doc_date: "2026-10-06" };
+  // 有序號、條碼印得出來:字只有末 5 碼(整支序號不印成字)
+  assert.deepEqual(halfText(phone, "356789012345671", true),
+    { source: "PO-000001 · 1151006", mode: "tail", head: "", tail: "45671", sku: "PH-000001" });
+  // 印不出條碼的序號:只剩字可以對,整串都印(末 5 碼另外給,畫面標粗)
+  assert.deepEqual(halfText({ ...phone, last5: "XYZ77" }, "R58M12345ABXYZ77", false),
+    { source: "PO-000001 · 1151006", mode: "full", head: "R58M12345AB", tail: "XYZ77", sku: "PH-000001" });
+  // 序號比 5 碼還短:就印它
+  assert.equal(halfText({ ...phone, last5: "A12" }, "A12", true).tail, "A12");
+  // 配件:原廠條碼整串印,右邊是品號
+  const part = { code_kind: "barcode", sku: "G03-000330", last5: "", doc_no: "PO-000002", doc_date: "2025-02-04" };
+  assert.deepEqual(halfText(part, "4710007836224", true),
+    { source: "PO-000002 · 1140204", mode: "full", head: "4710007836224", tail: "", sku: "G03-000330" });
+  // 條碼印的就是品號(沒有原廠條碼、或原廠條碼太長改印品號):右邊不重複印品號
+  assert.equal(halfText({ ...part, code_kind: "sku" }, "G03-000330", true).sku, "");
+  assert.equal(halfText({ ...part, sku: " G03-000330 " }, "G03-000330", true).sku, "");
+  // 配件補印沒有哪一張單:那一格是空的;只有單號或只有日期就只印有的
+  assert.equal(halfText({ ...part, doc_no: "", doc_date: "" }, "4710007836224", true).source, "");
+  assert.equal(halfText({ ...part, doc_date: "" }, "4710007836224", true).source, "PO-000002");
+  assert.equal(halfText({ ...part, doc_no: "" }, "4710007836224", true).source, "1140204");
+});
+
+test("標籤的畫面:上下兩聯都畫、印什麼照 halfText", () => {
+  const tile = read("../components/labels/LabelTile.tsx");
+  assert.match(tile, /\{half\("top"\)\}/);
+  assert.match(tile, /\{half\("bottom"\)\}/);
+  assert.match(tile, /const text = halfText\(label, code, bars\);/);
+  // 畫面不自己決定印哪個日期、哪幾碼
+  assert.doesNotMatch(tile, /label\.doc_date|label\.doc_no|label\.last5|\.slice\(/);
+  // 條碼的位置從 LABEL 算(不寫死)
+  assert.match(tile, /top: `\$\{barTopMm\(\)\}mm`/);
+  assert.match(tile, /left: `\$\{LABEL\.sideMarginMm \+ dotsToMm\(leftPadDots\(layout\.widthDots\)\)\}mm`/);
+});
+
+test("序號拆出末 5 碼;紙上印的不是那一串就拆不出來", () => {
+  assert.deepEqual(splitTail("356789012345671", "45671"), ["3567890123", "45671"]);
+  assert.deepEqual(splitTail("CH-000007", "45671"), ["CH-000007", ""]);       // 改印品號:末 5 碼是別的碼的
+  assert.deepEqual(splitTail("4710000123456", ""), ["4710000123456", ""]);    // 配件沒有末 5 碼
+  assert.deepEqual(splitTail("45671", "45671"), ["45671", ""]);               // 整串就那幾碼:不用標
 });
 
 test("Code 128:開頭、結尾與長度", () => {
@@ -41,7 +154,7 @@ test("Code 128:開頭、結尾與長度", () => {
 });
 
 test("每一條線都是整數個點、而且是同一個倍數", () => {
-  for (const value of ["356789012345671", "LC-000001", "4710000123456", "F2LXK1ABCDEF", "A1"]) {
+  for (const value of ["356789012345671", "LC-000001", "4710000123456", "F2LXK1ABCD", "A1"]) {
     const bits = code128Bits(value);
     const layout = layoutBars(bits);
     assert.ok(layout, value);
@@ -64,11 +177,23 @@ test("每一條線都是整數個點、而且是同一個倍數", () => {
 test("放得下用 3 點,放不下用 2 點", () => {
   assert.equal(layoutBars(code128Bits("A1")).moduleDots, 3);                 // 短的:線粗一點比較好刷
   assert.equal(layoutBars(code128Bits("356789012345671")).moduleDots, 2);    // IMEI:3 點放不下
-  assert.equal(layoutBars(code128Bits("F2LXK1ABCDEF")).moduleDots, 2);       // 12 碼英數的序號:剛好放得下
+  assert.equal(layoutBars(code128Bits("F2LXK1ABCD")).moduleDots, 2);         // 10 碼英數的序號:剛好放得下
+});
+
+test("細線(一個單位 1 點)只有明講才用:測試標籤的那一張", () => {
+  const bits = code128Bits("F2LXK1ABCDEF");
+  assert.equal(layoutBars(bits), null);                                      // 一般的標籤:12 碼英數印不下
+  const thin = layoutBars(bits, undefined, [1]);
+  assert.equal(thin.moduleDots, 1);
+  assert.equal(thin.widthDots, bits.length + 20);
+  assert.ok(thin.widthDots <= barAreaDots());
+  assert.equal(layoutBars(code128Bits("356789012345671")).moduleDots, 2);    // 沒有明講就不會用到 1 點
+  assert.ok(!LABEL.moduleDots.includes(1));
 });
 
 test("太長的碼不印條碼(不印糊的)", () => {
   assert.equal(layoutBars(code128Bits("ABCDEFGHJKLMNP")), null);             // 14 碼英數:2 點也放不下
+  assert.equal(layoutBars(code128Bits("F2LXK1ABCDE")), null);                // 45 mm 的紙:11 碼英數就放不下了
   assert.equal(layoutBars("1101", 40), null);                                // 寬度根本不夠
   assert.equal(layoutBars(""), null);
   assert.equal(layoutBars("11x1"), null);
@@ -113,9 +238,9 @@ test("頭尾有空白的碼:條碼跟下面的字用同一個去掉空白的字�
 });
 
 test("置中時左邊空的也是整數個點", () => {
-  assert.equal(leftPadDots(308), 34);
-  assert.equal(leftPadDots(375), 0);
-  assert.equal(leftPadDots(376), 0);
+  assert.equal(leftPadDots(308), 14);
+  assert.equal(leftPadDots(335), 0);
+  assert.equal(leftPadDots(336), 0);
   assert.equal(leftPadDots(400), 0);       // 不會是負的
 });
 
