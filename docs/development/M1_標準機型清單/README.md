@@ -1,21 +1,43 @@
 # M1 標準機型清單 · 草稿的工作檔
 
-owner 2026-10-14:手機、平板、穿戴的型號由平台統一制定;名稱「照一般的寫法」;參考查價系統裡創宇的機型與規格;
-要開一個資料池,共享給底下每一家經銷商。任務的範圍與分步在 `../CURRENT_TASK.md`「M1 標準機型清單」。
-
-| 檔 | 是什麼 |
-|---|---|
-| `hub_by_model.json` | 2026-10-14 從查價系統(`~/phone-buyback-hub`,正式庫在 mini)唯讀匯出:724 個機型的品牌、名稱、類型、每一種規格(容量、RAM、平板 WiFi / 插卡)。只有名稱與規格,沒有價格 |
-| `curate.py` | 把上面那一份整理成一般寫法的標準名稱(統一大小寫與空白、補品牌字、標出特別版、把放錯類的平板改回來),再跟 POS 現有的標準型錄(168 個)合併 |
-| `standard_draft.json` | 產出的草稿:760 個機型(手機 683、平板 63、手錶 14) |
+owner 2026-10-14:手機、平板、穿戴(手錶、手環、耳機)的型號由平台統一制定;名稱「照一般的寫法」;
+參考**比價王與手機王**(有顏色、建議售價,平板與穿戴也有);要開一個資料池,共享給底下每一家經銷商。
+任務的範圍與分步在 `../CURRENT_TASK.md`「M1 標準機型清單」。
 
 給 owner 看的可搜尋頁面:https://claude.ai/artifact/MoNKjuQjUc93byoiB6QGqE (私人的,只有他開得到)。
 
-重抓查價系統的資料(唯讀;每天 16:00 排程在跑的時候不要動):
+## 來源(2026-10-14 抓的;都是公開頁面,照對方的 robots,一頁隔 2.5 秒)
 
-```
-ssh mini 'sqlite3 -readonly /Volumes/Data/phone-buyback-hub/hub.db -json "select m.brand, m.canonical_name as name, m.form_factor as form, v.storage_label as storage, v.ram_gb as ram, v.connectivity as conn from device_models m left join device_variants v on v.model_id = m.id order by m.brand, m.canonical_name, v.storage_gb, v.ram_gb"'
-```
-再整理成 `{"品牌|名稱": {"form": "phone|tablet", "variants": [[容量, RAM, 網路], …]}}`。
+| 來源 | 拿什麼 | 數量 |
+|---|---|---|
+| 手機王 SOGI(主要) | 清單 `/search/cellphone`、`/search/tablet`、`/search/wearable`;每個商品頁的名稱、上市年月、每一種版本的原廠售價、機身顏色、裝置分類 | 277 + 102 + 192 = 571 頁 |
+| 比價王 ePrice(核對、補漏) | `market.eprice.com.tw/markets` 的商品清單(名稱) | 173 + 65 + 60 |
+| 創宇(查價系統 `~/phone-buyback-hub` 的機型表;補舊機型) | 機型名稱、容量、RAM、平板 WiFi / 插卡 | 724 個機型 |
+| POS 現有的標準型錄 `backend/apps/catalog/data/` | 現在的名稱(之後改名要對照) | 168 個 |
 
-**這些都還是草稿**:沒有進 `backend/apps/catalog/data/`、沒有寫進任何資料庫。
+兩個網站只列現在還在賣的;舊機型只有創宇有(沒有顏色與售價)。
+
+## 檔
+
+| 檔 | 是什麼 |
+|---|---|
+| `web/fetch_sogi.py` | 把手機王清單上的每一個商品頁抓下來(存在同一層的 `sogi/`,**原始網頁沒有進版本庫**,要重抓就跑它;抓過的不重抓) |
+| `web/parse_sogi.py` → `web/sogi_products.json` | 把商品頁讀成一筆一筆(名稱、上市年月、版本與原廠售價、顏色、分類) |
+| `web/keys.mjs` → `web/keys.json` | 用查價系統自己的規則(`~/phone-buyback-hub/src/lib/normalize.js`)把手機王 / 比價王的品名收斂:去掉容量、連線方式,iPad 的年份換成世代 / 晶片 |
+| `web/sogi_*.json`、`web/eprice_*.json` | 兩個網站的清單(名稱與商品頁的路徑) |
+| `hub_by_model.json`、`hub_keys.json` | 查價系統正式庫唯讀匯出的機型、規格與機型鍵 |
+| `curate.py` → `standard_draft.json` | 合併成草稿:手機王為主(名稱以它為準)→ 創宇補規格與舊機型 → 比價王核對 → 對上 POS 現有的名稱 |
+
+`curate.py` 的規則(都寫在檔裡的註解):
+- 標準名稱:拿掉重複的品牌字、統一大小寫;機型名稱自己認得出來的品牌(Apple、Samsung、Google、Sony、SHARP、ASUS)不帶品牌字,其餘帶(`OPPO Reno16`、`realme 16 Pro`、`Xiaomi 17T Pro`、`Redmi Note 17 5G`、`Moto G57`)。
+- **4G 與 5G 是不同的手機**;但同一支常常有人寫 5G、有人不寫:同一個來源自己把兩個都列出來才算兩支,不然併成一筆。
+- 舊機型一個容量一個商品的併成一支;平板的 WiFi / 插卡併成一支、寫在規格上;手錶的藍牙 / LTE 也是。
+- iPad 用世代 / 晶片的寫法(`iPad Air 11 M4`),手機王的年份寫法(`iPad Air 11 (2026)`)記在來源裡。
+- 同名不同年(`vivo Y21 5G` 2021 與 2026):比價王把年份寫出來、手機王同名同年的,名稱帶上年份。
+
+## 現在的草稿(第二版)
+
+996 個機型:手機 705、平板 101、手錶 97、手環 19、耳機 72、其他穿戴 2。有顏色 522、有原廠售價 331、有上市年月 482。
+舊機型(只有創宇有)441;POS 現有 168 個裡對上 139 個。
+
+**都還是草稿**:沒有進 `backend/apps/catalog/data/`、沒有寫進任何資料庫。
