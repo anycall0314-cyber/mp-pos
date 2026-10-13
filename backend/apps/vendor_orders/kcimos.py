@@ -21,6 +21,15 @@ from .models import Vendor, VendorItem
 
 SCHEMA = "kcimos-catalog-snapshot/1.0"
 CODE = "kcimos"
+# 下單網站(沒有加密、沒有 API;流程實測在 docs/kcimos_下單流程實測.md)。小幫手只在這個來源的頁面裡跑,POS 也只對它開跨來源
+SITE = {"origin": "http://kcimos.kv.idv.tw", "start": "/frontend/index.shtml", "label": "kcimos"}
+SKU_PREFIX = "KCIMOS-"
+
+
+def site_pk(sku: str) -> str | None:
+    """價目表的料號 → 網站的商品編號(`KCIMOS-2685` → `2685`);不是這個樣子的回 None。"""
+    pk = sku[len(SKU_PREFIX):] if isinstance(sku, str) and sku.startswith(SKU_PREFIX) else ""
+    return pk if pk.isascii() and pk.isdigit() else None
 NAME = "kcimos"
 STOPPED = "停產／請勿下單"
 # 網站上用 9999 / 9999999 表示「沒有報價」;當成正常進價會讓叫貨金額與成本大錯
@@ -63,7 +72,7 @@ def rows(snapshot) -> list[dict]:
             raise SnapshotError(f"商品 {pk} 沒有品名")
         flags = p.get("flags") if isinstance(p.get("flags"), list) else []
         out.append({
-            "sku": f"KCIMOS-{pk}",
+            "sku": f"{SKU_PREFIX}{pk}",
             "values": {
                 "name": name,
                 "kind": _text(p.get("category"), 40),

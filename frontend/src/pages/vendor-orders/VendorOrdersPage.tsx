@@ -9,6 +9,7 @@ import {
   useVendorCatalog,
   useVendorLinks,
   useVendorOrderAction,
+  useVendorOrderHandoff,
   useVendorOrders,
 } from "@/api/hooks";
 import { ApiHttpError } from "@/api/client";
@@ -64,6 +65,22 @@ import {
   type PageTab,
 } from "@/lib/vendorPick";
 import { cancelReminder, manualMark, needsSending } from "@/lib/vendorManual";
+import {
+  bookmarklet,
+  canDeny,
+  canHandOff,
+  canMarkSent,
+  cleanOrderNo,
+  clockText,
+  denyAt,
+  helperName,
+  helperUrl,
+  needsResolving,
+  nextFlip,
+  openSiteTab,
+  pendingMark,
+  siteOf,
+} from "@/lib/vendorSite";
 import { mayReceive, receivedText } from "@/lib/vendorReceive";
 
 import { ManualReceiveDrawer } from "./ManualReceiveDrawer";
@@ -647,6 +664,70 @@ function ProgressNote({ order, busy, onSave }: { order: VendorOrder; busy: boole
   );
 }
 
+/**
+ * 書籤列用的那一顆(每台電腦拖一次):在廠商網站的頁面按它,會載入這一套 POS 的小幫手(`public/kcimos-helper.js`)。
+ * `javascript:` 的網址 React 不給寫在 href,掛上去之後自己設。
+ */
+function HelperBookmark({ label }: { label: string }) {
+  const ref = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    ref.current?.setAttribute("href", bookmarklet(helperUrl(window.location.origin, import.meta.env.BASE_URL)));
+  }, []);
+  return (
+    <span className="vm-helper">
+      <a
+        ref={ref}
+        className="btn"
+        draggable
+        onClick={(e) => {
+          e.preventDefault();
+          toast("用拖的:把這顆拖到書籤列", "ok");
+        }}
+      >
+        {helperName(label)}
+      </a>
+      <span className="vo-sub">拖到書籤列</span>
+    </span>
+  );
+}
+
+/** 待確認:上一次送進廠商的網站不知道有沒有成立。人到那邊的訂單查詢看過,填訂單編號按「訂單成立」,或按「沒有成立」。 */
+function SitePending({
+  order,
+  now,
+  busy,
+  onResolve,
+}: {
+  order: VendorOrder;
+  now: number;
+  busy: boolean;
+  onResolve: (placed: boolean, orderNo: string) => void;
+}) {
+  const [text, setText] = useState("");
+  const orderNo = cleanOrderNo(text);
+  const site = siteOf(order);
+  // 剛送出的那幾分鐘小幫手可能還在送:「沒有成立」先不能按(看到訂單了隨時可以填編號按成立)
+  const settled = canDeny(order, now);
+  return (
+    <div className="vm-pending">
+      <span className="vo-diff">
+        {settled ? "待確認" : `送出中,${clockText(denyAt(order))} 後才能按沒有成立`}:到 {site.label} 查備註「{site.memo}」
+      </span>
+      <input
+        aria-label={`${site.label} 訂單編號`}
+        value={text}
+        maxLength={40}
+        placeholder={`${site.label} 訂單編號`}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <button type="button" className="btn primary" disabled={busy || !orderNo} onClick={() => onResolve(true, orderNo)}>
+        訂單成立
+      </button>
+      <ArmButton className="btn" label="沒有成立" armedLabel="確定沒有" disabled={busy || !settled} onConfirm={() => onResolve(false, "")} />
+    </div>
+  );
+}
+
 function HistoryTab({ link, openFirst }: { link: VendorLinkRow; openFirst: number | null }) {
   const qc = useQueryClient();
   const orders = useVendorOrders(link.warehouse, link.provider);
@@ -658,8 +739,27 @@ function HistoryTab({ link, openFirst }: { link: VendorLinkRow; openFirst: numbe
   const [busyId, setBusyId] = useState<number | null>(null);
   const act = useVendorOrderAction();
 
-  /** 半自動廠商的單:標記已傳 / 記進度 / 取消與恢復。 */
-  async function run(o: VendorOrder, action: "sent" | "progress" | "cancel", body: Record<string, unknown>, done = "已儲存") {
+  const handoff = useVendorOrderHandoff();
+
+  /** 送進廠商的下單網站:開那個網站的分頁(網址帶一次性的代碼),人在那一頁按書籤列的小幫手。 */
+  async function sendToSite(o: VendorOrder) {
+    if (handoff.isPending) return;
+    const problem = await openSiteTab(
+      () => window.open("about:blank", "_blank"),
+      () => handoff.mutateAsync(o.id),
+      apiErrorText,
+    );
+    if (problem) toast(problem, "err");
+    else toast(`在新分頁按書籤「${helperName(siteOf(o).label)}」`, "ok", { ms: 8000 });
+  }
+
+  /** 半自動廠商的單:標記已傳 / 記進度 / 取消與恢復 / 把待確認確認掉。 */
+  async function run(
+    o: VendorOrder,
+    action: "sent" | "progress" | "cancel" | "handoff/resolve",
+    body: Record<string, unknown>,
+    done = "已儲存",
+  ) {
     if (act.isPending) return;
     try {
       await act.mutateAsync({ order: o.id, action, body });
@@ -684,6 +784,32 @@ function HistoryTab({ link, openFirst }: { link: VendorLinkRow; openFirst: numbe
   const adopt = useAdoptVendorOrder();
   const [receiving, setReceiving] = useState<VendorOrder | null>(null);
   const rows = orders.data?.results ?? [];
+
+  // 送單是在另一個分頁做的:回到這一頁就重抓一次(待確認、已成立要看得到)
+  const hasSite = rows.some((o) => siteOf(o).supported);
+  const refetchOrders = orders.refetch;
+  useEffect(() => {
+    if (!hasSite) return;
+    const back = () => {
+      if (document.visibilityState === "visible") refetchOrders();
+    };
+    window.addEventListener("focus", back);
+    document.addEventListener("visibilitychange", back);
+    return () => {
+      window.removeEventListener("focus", back);
+      document.removeEventListener("visibilitychange", back);
+    };
+  }, [hasSite, refetchOrders]);
+
+  // 「送出中」過了時間要自己變成「待確認」(不用等人點什麼)
+  const [, setTick] = useState(0);
+  const now = Date.now();
+  const flipAt = nextFlip(rows, now);
+  useEffect(() => {
+    if (!flipAt) return;
+    const timer = window.setTimeout(() => setTick((n) => n + 1), Math.max(0, flipAt - Date.now()) + 500);
+    return () => window.clearTimeout(timer);
+  }, [flipAt]);
 
   /** 不是從這裡叫的單:先認進來(認兩次是同一筆),再打開入庫 */
   async function takeIn(orderNo: string) {
@@ -733,6 +859,7 @@ function HistoryTab({ link, openFirst }: { link: VendorLinkRow; openFirst: numbe
           </button>
         )}
         {link.manual && link.contact && <span className="vo-sub">聯絡 {link.contact}</span>}
+        {link.site?.supported && canOrder && <HelperBookmark label={link.site.label} />}
         <span className="list-filterbar-count">{rows.length} 張</span>
       </div>
       <div className="report-table vo-table">
@@ -767,9 +894,14 @@ function HistoryTab({ link, openFirst }: { link: VendorLinkRow; openFirst: numbe
                       {o.vendor_order_no || "—"}
                       {o.is_test === true && <span className="vo-test">測試單</span>}
                       {o.source === "outside" && <span className="vo-test">外部單</span>}
+                      {siteOf(o).external_order_no && (
+                        <div className="vo-sub">
+                          {siteOf(o).label} {siteOf(o).external_order_no}
+                        </div>
+                      )}
                     </td>
                     <td>
-                      {o.manual ? manualMark(o) : statusOf(o)}
+                      {o.manual ? (needsResolving(o) ? pendingMark(o, now) : manualMark(o)) : statusOf(o)}
                       {o.manual && o.progress_note && <div className="vo-sub">{o.progress_note}</div>}
                       {o.amount_matches === false && <div className="vo-sub vo-diff">金額與叫貨時不同</div>}
                       {o.issue_note && <div className="vo-sub vo-diff">到貨問題:{o.issue_note}</div>}
@@ -824,11 +956,27 @@ function HistoryTab({ link, openFirst }: { link: VendorLinkRow; openFirst: numbe
                         {o.manual && (
                           <div className="vm-manual">
                             <pre className="vm-message">{o.message}</pre>
+                            {needsResolving(o) && canOrder && (
+                              <SitePending
+                                order={o}
+                                now={now}
+                                busy={act.isPending}
+                                onResolve={(placed, orderNo) =>
+                                  run(o, "handoff/resolve", { placed, order_no: orderNo }, placed ? "已記成訂單成立" : "已記成沒有成立,可以再送")
+                                }
+                              />
+                            )}
                             <div className="vm-manual-acts">
-                              <button type="button" className="btn primary" onClick={() => copy(o)}>
+                              {canOrder && canHandOff(o) && (
+                                <button type="button" className="btn primary" disabled={handoff.isPending} onClick={() => sendToSite(o)}>
+                                  自動送單
+                                </button>
+                              )}
+                              <button type="button" className={canOrder && canHandOff(o) ? "btn" : "btn primary"} onClick={() => copy(o)}>
                                 複製內容
                               </button>
                               {canOrder &&
+                                canMarkSent(o) &&
                                 (o.sent_at ? (
                                   <button type="button" className="btn" disabled={act.isPending} onClick={() => run(o, "sent", { sent: false }, "已收回")}>
                                     收回標記

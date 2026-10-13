@@ -28,7 +28,9 @@ from apps.purchasing.serializers import PurchaseOrderSerializer
 from apps.purchasing.services import PurchaseOrderError, commit_purchase_order
 
 from . import services, standard, vendors
-from .models import Vendor, VendorItem, VendorLink, VendorOrder, VendorOrderItem, VendorReceipt, VendorReceiptItem
+from .models import (
+    Vendor, VendorHandoff, VendorItem, VendorLink, VendorOrder, VendorOrderItem, VendorReceipt, VendorReceiptItem,
+)
 from .receiving import (
     CENT, ZERO, Line, _fits, _in_lock_order, _lock_request, _map, _owner, _spread, _whole,
     cash_method_for, line_key, received_by_line, shipping_paid_for, supplier_for,
@@ -176,12 +178,26 @@ def mark_sent(order: VendorOrder, user, sent) -> VendorOrder:
     _need_manual(order)
     if not isinstance(sent, bool):
         raise VendorError("傳了沒只能是「已傳」或「還沒」")
-    if sent and order.sent_at is None:
-        order.sent_at, order.sent_how, order.sent_by = timezone.now(), "manual", user
-    elif not sent:
-        order.sent_at, order.sent_how, order.sent_by = None, "", None
-    order.save(update_fields=["sent_at", "sent_how", "sent_by", "updated_at"])
+    with transaction.atomic():
+        order = _locked(order)
+        # 送進廠商下單網站的單(`handoff.py`):送出去就是真的訂單 ——
+        # 待確認的要先確認有沒有成立;已經成立的不能收回(收回就能再送一次,變成兩張)
+        if order.handoffs.filter(state=VendorHandoff.State.SUBMITTING).exists():
+            raise VendorError("這張單上一次送出還不知道有沒有成立(待確認),請先選「訂單成立」或「沒有成立」")
+        if not sent and order.external_order_no:
+            raise VendorError(f"這張單已經在廠商那邊成立了({order.external_order_no}),不能收回")
+        if sent and order.sent_at is None:
+            order.sent_at, order.sent_how, order.sent_by = timezone.now(), "manual", user
+        elif not sent:
+            order.sent_at, order.sent_how, order.sent_by = None, "", None
+        order.save(update_fields=["sent_at", "sent_how", "sent_by", "updated_at"])
     return order
+
+
+def _locked(order: VendorOrder) -> VendorOrder:
+    """鎖住這張叫貨單重讀(要在交易裡)。標記已傳 / 取消跟「送進廠商下單網站」(`handoff.py`,也先鎖叫貨單)排隊:
+    那邊看到「還沒傳、沒取消」才送,這邊同一瞬間標成已傳的話,人以為叫過了、網站上又成立一張。"""
+    return VendorOrder.objects.select_for_update(of=("self",)).get(pk=order.pk)
 
 
 def set_progress(order: VendorOrder, note) -> VendorOrder:
@@ -198,11 +214,13 @@ def set_cancelled(order: VendorOrder, user, cancelled) -> VendorOrder:
     _need_manual(order)
     if not isinstance(cancelled, bool):
         raise VendorError("只能是「取消」或「恢復」")
-    if cancelled and order.cancelled_at is None:
-        order.cancelled_at, order.cancelled_by = timezone.now(), user
-    elif not cancelled:
-        order.cancelled_at, order.cancelled_by = None, None
-    order.save(update_fields=["cancelled_at", "cancelled_by", "updated_at"])
+    with transaction.atomic():
+        order = _locked(order)
+        if cancelled and order.cancelled_at is None:
+            order.cancelled_at, order.cancelled_by = timezone.now(), user
+        elif not cancelled:
+            order.cancelled_at, order.cancelled_by = None, None
+        order.save(update_fields=["cancelled_at", "cancelled_by", "updated_at"])
     return order
 
 

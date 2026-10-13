@@ -2647,7 +2647,7 @@ export const useVendorLinks = () =>
 export const useSaveVendorLink = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: Partial<VendorLinkRow> & { warehouse: number; vendor: string; key?: string }) =>
+    mutationFn: (body: Partial<VendorLinkRow> & { warehouse: number; vendor: string; key?: string; forget_site_account?: true }) =>
       api<VendorLinkRow>(`/vendor-links/`, { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["vendor-links"] });
@@ -2829,8 +2829,11 @@ export const useVendorOrderAction = () => {
   const qc = useQueryClient();
   return useMutation({
     retry: false,
-    mutationFn: (vars: { order: number; action: "sent" | "progress" | "cancel"; body: Record<string, unknown> }) =>
-      api<VendorOrder>(`/vendor-orders/${vars.order}/${vars.action}/`, { method: "POST", body: JSON.stringify(vars.body) }),
+    mutationFn: (vars: {
+      order: number;
+      action: "sent" | "progress" | "cancel" | "handoff/resolve";
+      body: Record<string, unknown>;
+    }) => api<VendorOrder>(`/vendor-orders/${vars.order}/${vars.action}/`, { method: "POST", body: JSON.stringify(vars.body) }),
     onSuccess: (order) => {
       qc.setQueriesData<{ results: VendorOrder[] }>({ queryKey: ["vendor-orders"] }, (old) =>
         old ? { ...old, results: old.results.map((o) => (o.id === order.id ? order : o)) } : old,
@@ -2838,6 +2841,14 @@ export const useVendorOrderAction = () => {
     },
   });
 };
+
+/** 把叫貨單送進廠商的下單網站:跟伺服器要一個帶一次性代碼的網址(真正送單的是那一頁裡的小幫手)。 */
+export const useVendorOrderHandoff = () =>
+  useMutation({
+    retry: false,
+    mutationFn: (order: number) =>
+      api<{ url: string; expires_at: string }>(`/vendor-orders/${order}/handoff/`, { method: "POST", body: "{}" }),
+  });
 
 // 平台管理:半自動廠商的價目表
 export const usePlatformVendorItems = (vendorId: number | null) =>

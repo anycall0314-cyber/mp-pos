@@ -88,6 +88,8 @@ REGISTRY: dict[str, Entry] = {
         # 廠商叫貨:串接設定(不含金鑰)與叫貨單
         "vendor_orders.VendorLink", "vendor_orders.VendorOrder", "vendor_orders.VendorOrderItem",
         "vendor_orders.VendorReceipt", "vendor_orders.VendorReceiptItem",
+        # 把叫貨單送進廠商下單網站的每一次(2026-10-13):哪一次待確認、最後有沒有成立,跟著叫貨單走
+        "vendor_orders.VendorHandoff",
     ),
     "auth.User": Entry(ACCOUNT, "只留帳號名稱等對照資訊;不含密碼"),
     "tenants.UserProfile": Entry(ACCOUNT, "角色、預設門市、鎖倉;還原時依對照處理"),

@@ -7745,6 +7745,9 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 }
 .vm-manual-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .vm-progress { display: flex; gap: 8px; }
+/* 待確認:上一次送進廠商網站不知道有沒有成立 */
+.vm-pending { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.vm-pending input,
 .vm-progress input {
   flex: 1 1 14rem;
   min-width: 0;
@@ -7756,6 +7759,10 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   border: 1px solid var(--border);
   border-radius: 6px;
 }
+.vm-pending input { flex: 0 1 14rem; }
+/* 書籤列用的小幫手那一顆(用拖的) */
+.vm-helper { display: inline-flex; align-items: center; gap: 8px; }
+.vm-helper a { cursor: grab; text-decoration: none; }
 .vr-grid .vm-price { width: 6.5rem; }
 .vr-grid .vm-price.bad { border-color: var(--danger-text); }
 .vr-grid .vm-drop { margin-left: 8px; }

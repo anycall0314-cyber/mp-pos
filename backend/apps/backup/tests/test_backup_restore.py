@@ -1411,6 +1411,129 @@ class RollbackTests(_Base):
         # 縮短過的不受影響:備份裡比較長的照備份(還原本來就是回到備份的樣子)
         self.assertEqual(InvoiceTrack.objects.get(tenant=tenant, prefix="AB").range_end, 10000049)
 
+    def test_orders_sent_to_a_vendor_site_stay_sent_after_going_back(self):
+        """備份倒不回廠商那邊的訂單:備份之後才送進廠商下單網站的叫貨單,還原之後不能變回「還沒傳」(再按一次自動送單就是第二張訂單)。
+        已經成立的照樣是成立的(帶著廠商的訂單編號);送了還不知道結果的照樣是待確認。複審 2026-10-14 第一輪 P0。"""
+        from types import SimpleNamespace
+
+        from rest_framework.test import APIClient
+
+        from apps.vendor_orders import handoff, kcimos
+        from apps.vendor_orders.models import VendorHandoff, VendorOrder
+        from apps.vendor_orders.test_handoff import SITE, buy
+        from apps.vendor_orders.test_kcimos import snapshot
+
+        tenant, boss = self.a.tenant, self.a.admin
+        kcimos.apply(snapshot(), [tenant.code])
+        store = self.a.warehouses[0]
+        r = boss.post("/api/v1/vendor-links/", {"warehouse": store.id, "vendor": "kcimos", "opened": True, "ship_name": "手機玩家",
+                                                "ship_phone": "035551234", "ship_address": "新竹市湳雅街 18 號一樓"}, format="json")
+        self.assertEqual(r.status_code, 200, r.content.decode())
+        shop = SimpleNamespace(clerk=boss, wh1=store)
+        placed, waiting, untouched = (buy(shop, f"draft-r00{n}") for n in (1, 2, 3))
+        saved = self.path(self.backup(self.a))                           # ← 備份:三張單都還沒送
+        helper = APIClient()
+
+        def step(code, name, body=None, expect=200):
+            r = helper.post(f"/api/v1/site-handoff/{code}/{name}/", json.dumps(body or {}), content_type="text/plain", HTTP_ORIGIN=SITE)
+            self.assertEqual(r.status_code, expect, r.content.decode())
+            return r.json()
+
+        def start(order_id, expect=200):
+            r = boss.post(f"/api/v1/vendor-orders/{order_id}/handoff/", {}, format="json")
+            self.assertEqual(r.status_code, expect, r.content.decode())
+            return r.json()["url"].split("#mppos=")[1] if expect == 200 else r.json()["detail"]
+
+        def send(order, *finish):
+            code = start(order["id"])
+            step(code, "claim")
+            step(code, "submitting", {"account": "77", "bind": True})
+            for name, body in finish:
+                step(code, name, body)
+            return code
+
+        send(placed, ("done", {"order_no": "SO20261014001"}))            # 備份之後:這一張在廠商那邊成立了
+        waiting_code = send(waiting)                                     # 這一張送了、還不知道結果
+        later = buy(shop, "draft-r004")                                  # 備份之後才叫的:還原之後整張不在(跟別的單一樣)
+        job = self.rollback(self.a, saved)
+        self.assertEqual(job.status, RestoreJob.Status.DONE, job.error)
+        self.assertEqual(job.result["site_orders_kept"], 2)
+        self.a.reload()
+
+        def now(order):
+            return VendorOrder.objects.get(tenant=tenant, vendor_order_no=order["vendor_order_no"])
+
+        back = now(placed)
+        self.assertNotEqual(back.id, placed["id"])                       # 還原回來的是新的一列
+        self.assertEqual((back.external_order_no, back.sent_how, back.sent_at is not None), ("SO20261014001", "site", True))
+        self.assertEqual(list(VendorHandoff.objects.filter(tenant=tenant).values_list("order_id", "state", "problem")),
+                         [(now(waiting).id, VendorHandoff.State.SUBMITTING, "還原備份之前就待確認")])
+        self.assertEqual((now(untouched).sent_at, now(untouched).external_order_no), (None, ""))
+        self.assertFalse(VendorOrder.objects.filter(tenant=tenant, vendor_order_no=later["vendor_order_no"]).exists())
+        # 重點:送過的兩張都不能再送
+        self.assertEqual(start(now(placed).id, expect=400), "這張叫貨單已經傳給廠商了")
+        self.assertIn("這張單上一次送出還不知道有沒有成立", start(now(waiting).id, expect=400))
+        # 沒送過的那一張:同一家門市有一張待確認,先不能開始;把那一張確認掉才可以
+        code = start(now(untouched).id)
+        self.assertIn("上一次送出還沒確認有沒有成立", step(code, "claim", expect=400)["detail"])
+        kept = VendorHandoff.objects.get(tenant=tenant, state=VendorHandoff.State.SUBMITTING)
+        self.assertLess(abs((kept.submitting_at - timezone.now()).total_seconds()), 120)       # 什麼時候說要送的照原本的(等待時間照算)
+        r = boss.post(f"/api/v1/vendor-orders/{now(waiting).id}/handoff/resolve/", {"placed": False}, format="json")
+        self.assertEqual((r.status_code, r.json()["detail"][:8]), (400, "小幫手可能還在送"))
+        VendorHandoff.objects.filter(pk=kept.pk).update(submitting_at=timezone.now() - timedelta(minutes=handoff.DENY_WAIT_MINUTES, seconds=1))
+        r = boss.post(f"/api/v1/vendor-orders/{now(waiting).id}/handoff/resolve/", {"placed": False}, format="json")
+        self.assertEqual(r.status_code, 200, r.content.decode())
+        self.assertIsNone(handoff.pending(now(waiting)))
+        step(code, "claim")
+        # 還原之前那一次的代碼還對得到同一筆:人選了「沒有成立」之後小幫手才回報成立,照樣記得回去(這張單還沒再送)
+        step(code, "release")
+        step(waiting_code, "done", {"order_no": "SO20261014002"})
+        self.assertEqual((now(waiting).external_order_no, now(waiting).sent_how), ("SO20261014002", "site"))
+        self.assertEqual(now(waiting).sent_by, self.a.admin_user)
+
+    def test_site_orders_already_in_the_backup_are_left_as_the_backup_has_them(self):
+        """備份裡就已經成立 / 待確認的,照備份(不重複放、不多一筆);備份當時待確認、之後成立了的,還原之後是成立。"""
+        from types import SimpleNamespace
+
+        from rest_framework.test import APIClient
+
+        from apps.vendor_orders import kcimos
+        from apps.vendor_orders.models import VendorHandoff, VendorOrder
+        from apps.vendor_orders.test_handoff import SITE, buy
+        from apps.vendor_orders.test_kcimos import snapshot
+
+        tenant, boss = self.a.tenant, self.a.admin
+        kcimos.apply(snapshot(), [tenant.code])
+        store = self.a.warehouses[0]
+        boss.post("/api/v1/vendor-links/", {"warehouse": store.id, "vendor": "kcimos", "opened": True, "ship_name": "手機玩家",
+                                            "ship_phone": "035551234", "ship_address": "新竹市湳雅街 18 號一樓"}, format="json")
+        shop = SimpleNamespace(clerk=boss, wh1=store)
+        first, second = buy(shop, "draft-r001"), buy(shop, "draft-r002")
+        helper = APIClient()
+
+        def step(code, name, body=None):
+            r = helper.post(f"/api/v1/site-handoff/{code}/{name}/", json.dumps(body or {}), content_type="text/plain", HTTP_ORIGIN=SITE)
+            self.assertEqual(r.status_code, 200, r.content.decode())
+
+        def begin(order):
+            code = boss.post(f"/api/v1/vendor-orders/{order['id']}/handoff/", {}, format="json").json()["url"].split("#mppos=")[1]
+            step(code, "claim")
+            step(code, "submitting", {"account": "77", "bind": True})
+            return code
+
+        step(begin(first), "done", {"order_no": "SO20261014001"})        # 備份之前就成立了
+        code = begin(second)                                             # 備份當時:待確認
+        saved = self.path(self.backup(self.a))
+        step(code, "done", {"order_no": "SO20261014002"})                # 備份之後:小幫手回報成立
+        job = self.rollback(self.a, saved)
+        self.assertEqual(job.status, RestoreJob.Status.DONE, job.error)
+        self.assertEqual(job.result["site_orders_kept"], 1)              # 只有第二張需要放回去
+        got = {o.vendor_order_no: (o.external_order_no, o.sent_at is not None)
+               for o in VendorOrder.objects.filter(tenant=tenant)}
+        self.assertEqual(got, {first["vendor_order_no"]: ("SO20261014001", True), second["vendor_order_no"]: ("SO20261014002", True)})
+        states = sorted(VendorHandoff.objects.filter(tenant=tenant).values_list("state", "external_order_no"))
+        self.assertEqual(states, [(VendorHandoff.State.DONE, "SO20261014001"), (VendorHandoff.State.DONE, "SO20261014002")])
+
     def test_floor_left_by_an_earlier_restore_is_not_lost(self):
         """之前還原留下的單號下限、備份之後才申請的發票字軌,備份裡都沒有 ——
         再還原一次也不能弄丟,不然會重用已經開出去的號碼。"""

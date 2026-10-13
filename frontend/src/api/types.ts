@@ -1852,6 +1852,8 @@ export interface VendorLinkRow {
   /** 運費要不要算進入庫成本(這家門市固定一種做法) */
   freight_into_cost: boolean;
   choices: { payment_method: string[]; delivery_method: string[]; invoice_type: string[] };
+  /** 這家廠商有下單網站可以自動送單;`bound` = 這家門市已經綁了那個網站的帳號(第一次送單時綁的) */
+  site?: { supported: boolean; label: string; bound: boolean };
 }
 
 export interface VendorOrderLine {
@@ -1926,6 +1928,24 @@ export interface VendorOrder {
   progress_note: string;
   cancelled_at: string | null;
   cancelled_by: string;
+  /** 送進廠商的下單網站(有下單網站的半自動廠商,例 kcimos) */
+  site: VendorOrderSite;
+}
+
+export interface VendorOrderSite {
+  /** 這張單可以從 POS 送進廠商的網站 */
+  supported: boolean;
+  /** 那個網站怎麼稱呼(按鈕與提示上的字) */
+  label: string;
+  /** 待確認:說了「要送了」之後沒有回報結果 —— 要人確認有沒有成立才能再送 */
+  pending: boolean;
+  pending_since: string | null;
+  /** 這個時間之前不能按「沒有成立」(小幫手可能還在送);那之前畫面寫「送出中」 */
+  can_deny_at: string | null;
+  /** 廠商那邊的訂單編號(成立之後才有) */
+  external_order_no: string;
+  /** 寫在廠商那張訂單備註裡的字(待確認時到廠商的訂單查詢找它) */
+  memo: string;
 }
 
 /** 廠商那邊「不是從 POS 叫的」訂單(電話、LINE、廠商後台代下的) */

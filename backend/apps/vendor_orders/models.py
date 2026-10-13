@@ -131,6 +131,9 @@ class VendorLink(TenantOwnedModel):
     clerk_ordering = models.BooleanField("店員也可以叫貨", default=True)
     # 半自動的廠商沒有金鑰:管理員按了「開通」這家門市才叫得了(全自動的看的是有沒有金鑰,這一格不看)
     opened = models.BooleanField("開通(半自動的廠商)", default=False)
+    # 這家門市在廠商**下單網站**上的帳號編號(有下單網站的半自動廠商,例 kcimos;`handoff.py`)。
+    # 第一次從 POS 把叫貨單送進廠商網站時綁上去;之後那個瀏覽器登入的不是同一個帳號就不送(單不會下到別的帳號去)。空的 = 還沒綁
+    site_account = models.CharField("廠商網站的帳號編號", max_length=40, blank=True, default="", db_default="")
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
     )
@@ -239,6 +242,9 @@ class VendorOrder(TenantOwnedModel):
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+", verbose_name="取消的人",
     )
 
+    # 廠商那邊的訂單編號(半自動的單:`vendor_order_no` 是 POS 自己編的 VO- 號;這一格是送進廠商網站之後它給的,或人確認時填的)
+    external_order_no = models.CharField("廠商那邊的訂單編號", max_length=40, blank=True, default="", db_default="")
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
         verbose_name="叫貨的人",
@@ -328,3 +334,51 @@ class VendorReceiptItem(TenantOwnedModel):
         verbose_name = "到貨入庫明細"
         verbose_name_plural = "到貨入庫明細"
         ordering = ["id"]
+
+
+class VendorHandoff(TenantOwnedModel):
+    """一次「把叫貨單送進廠商的下單網站」(owner 2026-10-13:kcimos 要全自動,不用再看它的長品名)。規則在 `handoff.py`。
+
+    廠商的網站沒有 API,送單的那一段是 POS 提供的小幫手在**人登入過的那個瀏覽器分頁**裡做的;這張表記的是 POS 這一側知道的進度。
+    送出去就是真的訂單、不能自己取消,所以最怕的是「不知道有沒有成立就再送一次」:
+    `submitting` = 小幫手說「要送了」之後還沒有回報結果 —— 這張叫貨單在有人確認之前不能再送。
+    """
+
+    class State(models.TextChoices):
+        OPEN = "open", "發了代碼"                 # 還沒有人拿它開始做
+        CLAIMED = "claimed", "正在放進購物車"      # 小幫手開始動購物車:同一家門市 × 廠商同時只能有一張
+        SUBMITTING = "submitting", "待確認"        # 要送了 / 送了但不知道結果:要人確認才能再送
+        DONE = "done", "已成立"
+        FAILED = "failed", "廠商沒有收"            # 廠商的網站明講不行(確定沒有成立)
+        DROPPED = "dropped", "沒有送"              # 取消、過期、人確認沒有成立
+
+    order = models.ForeignKey(VendorOrder, on_delete=models.PROTECT, related_name="handoffs", verbose_name="叫貨單")
+    # 一次性的代碼只存雜湊(代碼本身只出現在開給那個瀏覽器分頁的網址後面)
+    code_hash = models.CharField("代碼的雜湊", max_length=64, unique=True)
+    expires_at = models.DateTimeField("代碼到什麼時候")
+    state = models.CharField("進度", max_length=12, choices=State.choices, default=State.OPEN)
+    account = models.CharField("送的時候登入的廠商帳號編號", max_length=40, blank=True, default="")
+    claimed_at = models.DateTimeField("開始動購物車", null=True, blank=True)
+    submitting_at = models.DateTimeField("說要送了", null=True, blank=True)
+    finished_at = models.DateTimeField("有結果", null=True, blank=True)
+    external_order_no = models.CharField("廠商那邊的訂單編號", max_length=40, blank=True, default="")
+    problem = models.CharField("沒有成的原因", max_length=300, blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+", verbose_name="按送出的人",
+    )
+    # 「待確認」是誰確認掉的(已成立 / 沒有成立);小幫手自己回報結果的是空的
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+", verbose_name="確認的人",
+    )
+
+    class Meta:
+        verbose_name = "送進廠商網站"
+        verbose_name_plural = "送進廠商網站"
+        ordering = ["-id"]
+        constraints = [
+            # 一張叫貨單同時只會有一筆「待確認」
+            models.UniqueConstraint(fields=["order"], condition=models.Q(state="submitting"), name="uniq_vendor_handoff_pending"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.order_id} {self.state}"

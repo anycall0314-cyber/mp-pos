@@ -1192,6 +1192,10 @@ def _apply(tenant, pkg, mode, written_files, obsolete_files, user_map=None) -> d
         UserProfile.objects.filter(tenant=company)
         .values_list("pk", "default_warehouse__code")
     )
+    # 已經送進廠商下單網站的叫貨單(成立了的、待確認的):備份倒不回廠商那邊的訂單,還原之後不能變回「還沒傳」
+    from apps.vendor_orders import handoff as site_orders
+
+    live_site_orders = site_orders.facts_before_restore(company) if rollback else None
     for label, fields in FILE_FIELDS.items():
         for row in apps.get_model(label)._base_manager.filter(tenant=company).values(*fields):
             obsolete_files.extend(v for v in row.values() if v)
@@ -1385,6 +1389,7 @@ def _apply(tenant, pkg, mode, written_files, obsolete_files, user_map=None) -> d
                 is_active=t["is_active"] and (t["warehouse__code"] is None or store is not None),
             )
             kept_tracks.append(f"{t['prefix']} {t['range_start']}-{t['range_end']}")
+    site_orders_kept = site_orders.reapply_after_restore(company, live_site_orders) if rollback else 0
 
     # ── 6. 帳號的門市:用門市代碼對回新的那一筆;對不回來就留空。
     #    留空的帳號如果是鎖倉的,等於沒有門市可用 —— 不會因此變成可以看全部。
@@ -1409,6 +1414,8 @@ def _apply(tenant, pkg, mode, written_files, obsolete_files, user_map=None) -> d
         "snapshot_at": m["snapshot_at"],
         "profiles_without_store": orphaned,
         "invoice_tracks_kept": kept_tracks,
+        # 備份之後才送進廠商網站的叫貨單,有幾張把「已成立 / 待確認」放回去了
+        "site_orders_kept": site_orders_kept,
         # 還原前各種號碼用到哪裡。留在工作紀錄裡,事後查得到「當時到底開到幾號」。
         "numbers_before": {
             "counters": live_counters,

@@ -117,6 +117,11 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
           </span>
         )}
         {row.manual && row.contact && <span className="vl-vendor">{row.contact}</span>}
+        {row.site?.supported && (
+          <span className={row.site.bound ? "vl-state vl-on" : "vl-state"}>
+            {row.site.label} 帳號{row.site.bound ? "已綁定" : "未綁定"}
+          </span>
+        )}
         {row.sandbox === true && <span className="vo-test">測試金鑰</span>}
       </h3>
       <div className="vl-grid">
@@ -249,6 +254,23 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
               try {
                 await removeKey.mutateAsync({ warehouse: row.warehouse, vendor: row.provider });
                 toast(`${row.provider_label}的金鑰已拿掉`, "ok");
+              } catch (e) {
+                toast(apiErrorText(e), "err");
+              }
+            }}
+          />
+        )}
+        {/* 自動送單第一次送的時候綁的帳號;綁錯(登入的是別家店的帳號)在這裡解除,下一次送單重新綁 */}
+        {row.site?.supported && row.site.bound && (
+          <ArmButton
+            label="解除綁定"
+            armedLabel="確定解除"
+            className="btn"
+            disabled={busy}
+            onConfirm={async () => {
+              try {
+                await save.mutateAsync({ warehouse: row.warehouse, vendor: row.provider, forget_site_account: true });
+                toast(`${row.site?.label ?? ""} 帳號已解除綁定`, "ok");
               } catch (e) {
                 toast(apiErrorText(e), "err");
               }

@@ -10,6 +10,8 @@
   收貨的人不一定是叫貨的人 —— 用 LINE 叫的、廠商直接出的貨,要先列得出來才能認進來入庫,而認進來與入庫看的本來就是「進貨入庫」。
 - **半自動的廠商**(`manual.py`;沒有可以接的系統):開通 = 管理員在串接上按「開通」(沒有金鑰);商品清單 = 平台的價目表;叫貨單 POS 自己成立;
   「已貼給廠商」「取消 / 恢復」→ 要有「廠商叫貨」;「進度備註」→ 兩項有一項;到貨入庫照舊看「進貨入庫」。沒有 再送一次 / 把外面的單認進來;更新進度不問任何系統。
+- **送進廠商的下單網站**(`handoff.py`;現在只有 kcimos):發代碼(`…/handoff/`)與把待確認確認掉(`…/handoff/resolve/`)→ 要有「廠商叫貨」;
+  小幫手自己用的那幾支不用登入、認代碼,在 `handoff_views.py`。解除帳號綁定 → 只有管理員(串接的 `forget_site_account`)。
 """
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -23,7 +25,7 @@ from apps.tenants.permissions import is_tenant_admin
 
 from apps.parties.models import Supplier
 
-from . import manual, mapping, receiving, secrets, services, standard, vendors
+from . import handoff, manual, mapping, receiving, secrets, services, standard, vendors
 from .models import Vendor, VendorCategory, VendorLink, VendorOrder, VendorSecret
 
 LIST_ROWS = 100
@@ -145,10 +147,18 @@ def _link_data(store, vendor, link, hints, manager) -> dict:
         "sandbox": hints[link.id][1] if link and link.id in hints else None,
         "choices": {"payment_method": list(standard.PAYMENT_METHODS), "delivery_method": list(standard.DELIVERY_METHODS),
                     "invoice_type": list(standard.INVOICE_TYPES)},
+        # 這家廠商有沒有下單網站可以自動送單(`handoff.py`);`bound` = 這家門市已經綁了那個網站的帳號(第一次送單時綁的)
+        "site": _site_data(vendor, link),
     }
     if manager:
         data["key_hint"] = hints[link.id][0] if link and link.id in hints else ""
     return data
+
+
+def _site_data(vendor, link) -> dict:
+    site = handoff.site_of(vendor)
+    return {"supported": site is not None, "label": site["label"] if site else "",
+            "bound": bool(site and link and link.site_account)}
 
 
 def _hints(tenant, link=None) -> dict:
@@ -175,9 +185,11 @@ def _receipt_data(receipt) -> dict:
     }
 
 
-def _order_data(order: VendorOrder, names=None) -> dict:
-    """`names` = {廠商代碼: 名稱}(列一整頁時先查好,不要一張單查一次)。"""
+def _order_data(order: VendorOrder, names=None, vendor_by_code=None) -> dict:
+    """`names` = {廠商代碼: 名稱}、`vendor_by_code` = {廠商代碼: 廠商}(列一整頁時先查好,不要一張單查一次)。"""
     return {
+        # 送進廠商的下單網站(有下單網站的半自動廠商,例 kcimos):能不能送、是不是「待確認」、廠商那邊的訂單編號
+        "site": handoff.status(order, vendor_by_code),
         "id": order.id,
         "provider": order.provider,
         "provider_label": (names or {}).get(order.provider) or vendors.name_of(order.provider),
@@ -233,7 +245,7 @@ def _order_data(order: VendorOrder, names=None) -> dict:
 def _orders(request, store=None, vendor=None):
     qs = VendorOrder.objects.filter(tenant=request.tenant) \
         .select_related("warehouse", "created_by", "sent_by", "cancelled_by", "tenant") \
-        .prefetch_related("items", "receipts__purchase_order", "receipts__items", "receipts__created_by")
+        .prefetch_related("items", "receipts__purchase_order", "receipts__items", "receipts__created_by", "handoffs")
     own = locked_warehouse_id(request.user)
     if own is not None:
         qs = qs.filter(warehouse_id=own)
@@ -249,8 +261,9 @@ def _names() -> dict:
 
 
 def _page(request, store=None, vendor=None) -> list:
-    names = _names()
-    return [_order_data(o, names) for o in _orders(request, store, vendor)[:LIST_ROWS]]
+    by_code = {v.code: v for v in Vendor.objects.all()}
+    names = {code: v.name for code, v in by_code.items()}
+    return [_order_data(o, names, by_code) for o in _orders(request, store, vendor)[:LIST_ROWS]]
 
 
 # ── 叫貨串接 ────────────────────────────────────────────────────────────────
@@ -326,6 +339,10 @@ def links(request):
                 if supplier is None:
                     raise services.VendorError("找不到這個供應商")
             merged["supplier"] = supplier
+        # 解除下單網站的帳號綁定(綁錯帳號時管理員按的;下一次送單會重新問、重新綁)
+        forget = data.get("forget_site_account")
+        if forget not in (None, True):
+            raise services.VendorError("解除綁定只能是「要」")
         # 會去打這家廠商一次(金鑰只送給它所屬的那一家)
         raw, sandbox = services.check_key(vendor, data["key"]) if data.get("key") else (None, None)
     except services.VendorError as exc:
@@ -337,7 +354,11 @@ def links(request):
     for name, value in merged.items():
         setattr(link, name, value)
     link.updated_by = request.user
-    link.save()
+    # 只寫這裡管的那幾格:`site_account` 是送單時綁的(`handoff.submitting`,鎖著這一列寫的),整列重存會把剛綁好的蓋回空的
+    link.save(update_fields=[*merged, "updated_by", "updated_at"])
+    if forget:
+        VendorLink.objects.filter(pk=link.pk).update(site_account="")       # 一句更新:正在綁的那一筆會先做完
+        link.site_account = ""
     if raw:
         secrets.store(link, raw, request.user, sandbox)
     return Response(_link_data(store, vendor, link, _hints(request.tenant, link), True))
@@ -549,6 +570,39 @@ def mappings(request):
     except services.VendorError as exc:
         return _bad(exc, exc.status)
     return Response(row)
+
+
+# ── 送進廠商的下單網站(kcimos)────────────────────────────────────────────────
+@api_view(["POST"])
+def order_handoff(request, pk: int):
+    """叫貨單上按「自動送單」:回要開的網址(後面帶一次性的代碼)。真正送單的是那一頁裡的小幫手,見 `handoff.py`。"""
+    abilities.require(request.user, abilities.VENDOR_ORDER)
+    order = _own_order(request, pk)
+    if order is None:
+        return _bad("找不到這張叫貨單", status.HTTP_404_NOT_FOUND)
+    try:
+        _may_order(request, order.link)
+        url, issued = handoff.start(tenant=request.tenant, user=request.user, order=order)
+    except services.VendorError as exc:
+        return _bad(exc, exc.status)
+    return Response({"url": url, "expires_at": issued.expires_at})
+
+
+@api_view(["POST"])
+def order_handoff_resolve(request, pk: int):
+    """把「待確認」確認掉:`{"placed": true, "order_no": "…"}` 已成立 / `{"placed": false}` 沒有成立(可以再送)。"""
+    abilities.require(request.user, abilities.VENDOR_ORDER)
+    order = _own_order(request, pk)
+    if order is None:
+        return _bad("找不到這張叫貨單", status.HTTP_404_NOT_FOUND)
+    data = request.data if isinstance(request.data, dict) else {}
+    try:
+        _may_order(request, order.link)
+        handoff.resolve(tenant=request.tenant, user=request.user, order=order,
+                        placed=data.get("placed"), order_no=data.get("order_no") or "")
+    except services.VendorError as exc:
+        return _bad(exc, exc.status)
+    return Response(_order_data(_orders(request).get(pk=order.pk)))
 
 
 # ── 半自動廠商的叫貨單:傳了沒、進度、取消 ────────────────────────────────────
