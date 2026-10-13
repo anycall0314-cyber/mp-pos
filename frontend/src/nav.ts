@@ -294,6 +294,13 @@ export const NAV_MODULES: NavModule[] = [
         aliases: ["廠商金鑰", "叫貨設定", "開通廠商"],
         adminOnly: true,
       },
+      {
+        // 發票機(WP-103)測試頁:在接發票機的那台電腦選埠、印行號測試與樣張。會用掉發票,所以跟著「發票字軌」那一項走
+        to: "/settings/invoice-printer",
+        label: "發票機台",
+        aliases: ["發票機", "發票列印", "WP-103", "發票機測試"],
+        needs: ["invoice_tracks"],
+      },
       { to: "/settings/legacy", label: "舊系統對照", adminOnly: true },
       { to: "/settings/ledger", label: "每日對帳", adminOnly: true },
     ],

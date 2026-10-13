@@ -158,6 +158,13 @@ test("開單頁:預覽帶門市去問;換期沒設定講是哪一期;發票號�
   assert.equal(page.match(/\{peek\.why \|\| "這種發票沒有可用的字軌"\},結帳會被擋。/g).length, 2);
   // 快換期了先提醒(不擋)
   assert.match(page, /\{!noInvoice && peek\.state === "ok" && peek\.upcoming && \(\s*<div className="wb-warn">下一期 \{peek\.upcoming\} 的字軌還沒設定<\/div>/);
+  // **主動提醒**(owner:「單數月一號遇到發票尚未更新字軌，主動提醒需更換，並且不得打印發票」):
+  // 一進開單頁就在最上面(工具列上面、不在抽屜裡),講是哪一期、不能開發票、去哪裡新增;快換期的那一條也在最上面
+  const top = page.slice(0, page.indexOf('<div className="ws-tools">'));
+  assert.match(top, /\{trackMissing && \(\s*<div className="wb-warn err ws-track-alert" role="alert">\s*\{peek\.why \|\| "這種發票沒有可用的字軌"\},不能開發票。/);
+  assert.match(top, /<a className="wb-link" href="\/settings" target="_blank" rel="noreferrer">\s*新增字軌\s*<\/a>/);
+  assert.match(top, /\{!trackMissing && !noInvoice && peek\.state === "ok" && peek\.upcoming && \(\s*<div className="wb-warn ws-track-alert">下一期 \{peek\.upcoming\} 的字軌還沒設定<\/div>/);
+  assert.ok(top.indexOf("ws-track-alert") > top.indexOf("</header>"));       // 在頁首下面、不是藏在選單裡
   // 跳號:要有那一項權限;跳完重新問下一張
   assert.match(page, /const canJump = useCan\("invoice_tracks"\);/);
   assert.match(page, /peek\.state === "ok" && peek\.track && canJump && !locked && \(/);

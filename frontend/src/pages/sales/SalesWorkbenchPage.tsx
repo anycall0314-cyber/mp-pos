@@ -1890,6 +1890,23 @@ export function SalesWorkbenchPage() {
           </button>
         </div>
 
+        {/* 換期了還沒設定字軌(或這一期的用完了):一進來就在最上面講,不用點開單據資訊才看得到。
+            owner 2026-10-13:「單數月一號遇到發票尚未更新字軌，主動提醒需更換，並且不得打印發票」(結帳本來就會被擋) */}
+        {trackMissing && (
+          <div className="wb-warn err ws-track-alert" role="alert">
+            {peek.why || "這種發票沒有可用的字軌"},不能開發票。換上新發票後{" "}
+            <a className="wb-link" href="/settings" target="_blank" rel="noreferrer">
+              新增字軌
+            </a>{" "}
+            <button type="button" className="wb-link" onClick={() => setPeekTick((n) => n + 1)}>
+              重新檢查
+            </button>
+          </div>
+        )}
+        {!trackMissing && !noInvoice && peek.state === "ok" && peek.upcoming && (
+          <div className="wb-warn ws-track-alert">下一期 {peek.upcoming} 的字軌還沒設定</div>
+        )}
+
         <div className="ws-tools">
           <ScanBox<SalesProductHit>
             inputRef={scanRef}

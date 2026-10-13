@@ -59,6 +59,7 @@ import { ManagersOnly, NeedsAbility } from "@/components/NeedsAbility";
 import { VendorLinksPage } from "@/pages/settings/VendorLinksPage";
 import { VendorOrdersPage } from "@/pages/vendor-orders/VendorOrdersPage";
 import { FIXED_REPORTS } from "@/lib/fixedReports";
+import { InvoicePrinterPage } from "@/pages/settings/InvoicePrinterPage";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { StaffAccountsPage } from "@/pages/settings/StaffAccountsPage";
 import { SimCardsPage } from "@/pages/sim-cards/SimCardsPage";
@@ -364,6 +365,7 @@ export function App() {
             element={<StaffAccountsPage />}
           />
           <Route path="/settings/vendors" element={<VendorLinksPage />} />
+          <Route path="/settings/invoice-printer" element={<InvoicePrinterPage />} />
           <Route
             path="/vendor-orders"
             element={

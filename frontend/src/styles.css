@@ -908,6 +908,22 @@ button { font-family: inherit; }
 .invoice-jump-modal .modal-row b { font-variant-numeric: tabular-nums; }
 .invoice-jump-note { margin-top: 6px; color: var(--warn-text); font-size: var(--font-secondary); }
 .invoice-jump-note.err { color: var(--danger-text); }
+/* 發票機測試頁 */
+.invoice-printer-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.invoice-printer-row label { display: flex; align-items: center; gap: 6px; }
+.invoice-printer-hint { color: var(--text-dim); font-size: var(--font-secondary); }
+.invoice-printer-preview {
+  margin-top: 12px;
+  padding: 10px 12px;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans Mono CJK TC", monospace;
+  font-size: 13px;
+  line-height: 1.35;
+}
 .invoice-jump-log {
   max-height: 22vh;
   overflow-y: auto;
@@ -7161,6 +7177,8 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .ws-form .combobox, .ws-form .combobox-input { width: 100%; }
 .ws-form textarea { resize: vertical; }
 .ws-form .wb-warn { margin-top: 0; }
+/* 開單頁最上面的字軌提醒(換期沒設定、快換期):佔一整排,不跟旁邊的欄位擠 */
+.ws-track-alert { margin: 6px 16px 0; }
 .ws-form .wb-chips { gap: 8px; }
 .ws-kv { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .ws-kv > span { color: var(--wb-dim); }

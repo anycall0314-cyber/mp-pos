@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .commission_views import commission_lines
 from .contract_views import contract_follow_up, contract_list
 from .daily_report import sales_daily_report
+from .invoice_printer import invoice_printer_test
 from .invoice_report import sales_invoice_report
 from .views import LegacyPurchaseViewSet, SalesOrderViewSet, SalesReturnViewSet
 
@@ -22,4 +23,6 @@ urlpatterns = router.urls + [
     path("sales-daily-report/", sales_daily_report),
     # 發票明細(有發票號碼的銷貨單一張一列;員工帳號的權限「發票明細」)
     path("sales-invoice-report/", sales_invoice_report),
+    # 發票機(WP-103)測試頁:行號測試與樣張的位元組(畫面直接送進 COM 埠)
+    path("invoice-printer/test/", invoice_printer_test),
 ]
