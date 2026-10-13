@@ -141,6 +141,9 @@ def _link_data(store, vendor, link, hints, manager) -> dict:
         "manual": manual.is_manual(vendor),
         # 平台內的同行(開了批發的經銷商):跟全自動同一套,但沒有金鑰,一樣看「開通」
         "platform": platform.is_platform(vendor),
+        # 對方說自己會哪些(v2;空的 = v1 或沒問過)、對方自稱的名稱(貼金鑰之後看一眼是不是這一家)
+        "can_statement": services.can(vendor, "statements"),
+        "remote_name": vendor.remote_name,
         "opened": bool(link and link.opened),
         "ready": bool(link and (link.opened if manual.is_manual(vendor) or platform.is_platform(vendor) else link.id in hints)),
         "contact": vendor.contact,
@@ -250,7 +253,8 @@ def _can_cancel(order: VendorOrder, vendor_by_code=None) -> bool:
     if order.manual or order.state != VendorOrder.State.PLACED or not order.vendor_order_no:
         return False
     vendor = vendor_by_code.get(order.provider) if vendor_by_code is not None else vendors.find(order.provider)
-    return platform.is_platform(vendor) and order.vendor_status in ("", "待接單", "已接單", "部分出貨")
+    # 平台內的同行一定可以;外面的賣家要它自己說會取消(v2 的能力表)
+    return vendor is not None and services.can(vendor, "cancel") and order.vendor_status in ("", "待接單", "已接單", "部分出貨")
 
 
 def _orders(request, store=None, vendor=None):
@@ -652,13 +656,28 @@ def order_cancel(request, pk: int):
     abilities.require(request.user, abilities.VENDOR_ORDER)
 
     def work(order, data):
-        if order.manual or not platform.is_platform(vendors.find(order.provider)):
-            return manual.set_cancelled(order, request.user, data.get("cancelled"))      # 全自動廠商的單在裡面被擋(照舊)
+        vendor = vendors.find(order.provider)
+        if order.manual or vendor is None or not services.can(vendor, "cancel"):
+            return manual.set_cancelled(order, request.user, data.get("cancelled"))      # 不會取消的全自動廠商的單在裡面被擋(照舊)
         _may_order(request, order.link)
         if data.get("cancelled") is not True:
             raise services.VendorError("這張單取消之後不能恢復,要的話請重新叫")
         return services.cancel(order)
     return _manual_action(request, pk, work)
+
+
+@api_view(["GET"])
+def statement(request):
+    """對帳單(賣家算的):這家門市跟這家賣家出過貨的每一張單出了多少、收了多少、還欠多少。看得到進價的人才看得到(跟叫貨同一個勾)。"""
+    abilities.require(request.user, abilities.VENDOR_ORDER)
+    try:
+        store = _store(request, request.query_params.get("warehouse"))
+        vendor = _vendor(request, request.query_params.get("vendor"), active=False)
+        link = _need_link(request, store, vendor)
+        _may_order(request, link)
+        return Response(services.statement(link, vendor))
+    except services.VendorError as exc:
+        return _bad(exc, exc.status)
 
 
 @api_view(["POST"])

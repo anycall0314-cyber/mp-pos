@@ -4,6 +4,7 @@
 
 - `TradeSetting`:這家公司的批發設定(一家一列)。
 - `TradePartner`:往來的同行(買家)。平台內的記對方公司的識別碼,**不用外鍵指到別家公司**(兩家的備份各自帶得走)。
+- `TradeKey`:對外的同行(不在這套 POS 上的系統)用的金鑰(只存雜湊)。**不進公司備份**:還原之後舊的金鑰不能自己活過來,要重發。
 - `TradeInvite`:給同行的一次性往來代碼(同行在叫貨頁輸入 → 變成核准的往來對象)。平台上的經銷商互相競爭,不提供「所有經銷商的名單」給人挑。
 - `TradeUnit`:中古機**一台一筆**的上架(批發價是這一台的)。在不在賣 = 有上架、而且那一台現在在庫、沒有被訂走。
 - `TradeProduct`:按數量賣的商品(全新機、配件)有沒有開放批發、有沒有固定的批發價。
@@ -80,6 +81,8 @@ class TradePartner(TenantOwnedModel):
     customer = models.ForeignKey(
         "parties.Customer", null=True, blank=True, on_delete=models.PROTECT, related_name="+", verbose_name="客戶")
     note = models.CharField("備註", max_length=200, blank=True, default="")
+    # 對外的同行才填:怎麼聯絡(電話、LINE)。單上只有這個名字與這一格認得出是誰(紅隊 2026-10-14)
+    contact = models.CharField("聯絡方式", max_length=120, blank=True, default="", db_default="")
     updated_by = _by("改的人")
 
     class Meta:
@@ -93,6 +96,24 @@ class TradePartner(TenantOwnedModel):
 
     def __str__(self) -> str:
         return self.name
+
+
+class TradeKey(TenantOwnedModel):
+    """對外的同行的金鑰。原文只在發的那一次回給畫面;這裡只有雜湊(認得出是誰)與前幾碼(給管理員認是哪一把)。
+    一個同行同時只有一把:換一把 = 舊的立刻失效。"""
+
+    partner = models.OneToOneField(TradePartner, on_delete=models.CASCADE, related_name="key", verbose_name="同行")
+    key_hash = models.CharField("金鑰的雜湊", max_length=64, unique=True)
+    hint = models.CharField("前幾碼", max_length=12)
+    # 每分鐘最多幾次:這一分鐘從什麼時候算起、已經幾次(`keys.hit` 一句更新)
+    window_start = models.DateTimeField("這一分鐘的開始", null=True, blank=True)
+    window_count = models.PositiveIntegerField("這一分鐘幾次", default=0)
+    last_used_at = models.DateTimeField("最後一次用", null=True, blank=True)
+    created_by = _by("發的人")
+
+    class Meta:
+        verbose_name = "對外金鑰"
+        verbose_name_plural = "對外金鑰"
 
 
 class TradeInvite(TenantOwnedModel):

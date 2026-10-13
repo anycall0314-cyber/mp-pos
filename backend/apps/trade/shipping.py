@@ -250,7 +250,10 @@ def report_received(order: TradeOrder, items) -> TradeOrder:
             spec = row.get("spec_id") if isinstance(row, dict) else None
             qty = row.get("received_qty") if isinstance(row, dict) else None
             serials = row.get("serials", []) if isinstance(row, dict) else None
-            line = by_key.get((sku, spec)) if isinstance(sku, str) else None
+            # 先看型別才拿去查(規格給了一個清單之類的東西,拿去當字典的鍵會直接壞掉)
+            if not isinstance(sku, str) or not (spec is None or (isinstance(spec, int) and not isinstance(spec, bool))):
+                raise TradeError("回報的內容不對", "bad_item")
+            line = by_key.get((sku, spec))
             if (line is None or line.id in wanted or isinstance(qty, bool) or not isinstance(qty, int) or qty < 0
                     or not isinstance(serials, list)):
                 raise TradeError("回報的內容不對", "bad_item")

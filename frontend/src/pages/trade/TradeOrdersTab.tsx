@@ -11,7 +11,7 @@ import { toast } from "@/components/workbench/toast";
 import { money } from "@/lib/money";
 import { newId } from "@/lib/newId";
 import {
-  NO_PICKS, feeOf, lineProgress, pickQty, placeScan, setQty, shipLines, shipTo, shipTotal, toggleUnit, unpick,
+  NO_PICKS, feeOf, lineProgress, pickQty, placeScan, prepayNote, setQty, shipLines, shipTo, shipTotal, toggleUnit, unpick,
   type Picks, type TradeLine, type TradeOrder,
 } from "@/lib/trade";
 
@@ -175,6 +175,8 @@ function OrderCard({
   const lines = shipLines(order, picks);
   const feeValue = feeOf(fee);
   const count = lines.reduce((n, l) => n + l.qty, 0);
+  // 不是月結的:出貨之前講預收了多少 / 還差多少(只提醒;錢不經過系統)
+  const prepay = prepayNote(order, shipTotal(order, picks) + (feeValue ?? 0));
 
   const call = async (path: string, body?: object, done?: string) => {
     try {
@@ -206,11 +208,14 @@ function OrderCard({
     <section className={order.status === "pending" ? "tr-order tr-pending" : "tr-order"}>
       <header className="tr-head" onClick={() => !open && setExpanded((v) => !v)}>
         <b>{order.partner_name}</b>
+        {order.partner_kind === "external" && <span className="vo-test">對外</span>}
         <span>{order.no}</span>
         <span>{order.placed_at.slice(5, 16).replace("T", " ")}</span>
         <span className={order.status === "accepted" || order.status === "pending" ? "tr-state tr-live" : "tr-state"}>{order.status_text}</span>
         {order.is_test && <span className="vo-test">測試單</span>}
-        <span className="tr-dim">{[order.buyer_store, order.payment_method, shipTo(order)].filter(Boolean).join(" · ")}</span>
+        <span className="tr-dim">
+          {[order.partner_kind === "external" ? order.partner_contact : order.buyer_store, order.payment_method, shipTo(order)].filter(Boolean).join(" · ")}
+        </span>
         {order.owed > 0 && (
           <span className="tr-money">
             應收 {money(order.owed)} {order.payment_status}
@@ -268,6 +273,7 @@ function OrderCard({
             託運單號
             <input className="tr-track" value={tracking} maxLength={60} onChange={(e) => setTracking(e.target.value)} />
           </label>
+          {prepay && <span className={prepay.warn ? "tr-warn" : "tr-dim"}>{prepay.text}</span>}
           <span className="tr-sum">
             {count} 件 {money(shipTotal(order, picks) + (feeValue ?? 0))}
           </span>

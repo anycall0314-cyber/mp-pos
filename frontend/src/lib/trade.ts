@@ -53,6 +53,11 @@ export interface TradeOrder {
   no: string;
   partner: number;
   partner_name: string;
+  /** 平台內的同行 / 對外(不在這套 POS 上的系統,用金鑰來買);對外的另外有怎麼聯絡 */
+  partner_kind?: "platform" | "external";
+  partner_contact?: string;
+  /** 這個同行已經給了、還沒被出過貨的單用掉的錢(先收款再出貨的看這個數) */
+  credit?: number;
   buyer_store: string;
   status: "pending" | "accepted" | "shipped" | "rejected" | "cancelled";
   status_text: string;
@@ -210,4 +215,15 @@ export function heldUnits(body: unknown): HeldUnit[] | null {
   if (!body || typeof body !== "object" || (body as { code?: unknown }).code !== "trade_hold") return null;
   const units = (body as { units?: unknown }).units;
   return Array.isArray(units) && units.length > 0 ? (units as HeldUnit[]) : null;
+}
+
+/**
+ * 出貨之前提醒收款(紅隊 2026-10-14:外面今天才接上的,跟月結的老同行在同一張清單上)。錢不經過系統,所以**只提醒、不擋**。
+ * 月結的不提醒;其他的:預收的錢夠這一次 → 「預收 N」;不夠 → 「未收款 還差 N」(warn)。這一次沒有要出的不講。
+ */
+export function prepayNote(order: Pick<TradeOrder, "payment_method" | "credit">, shipping: number): { text: string; warn: boolean } | null {
+  if (order.payment_method === "月結" || shipping <= 0) return null;
+  const credit = order.credit ?? 0;
+  if (credit >= shipping) return { text: `預收 ${credit.toLocaleString("en-US")}`, warn: false };
+  return { text: `未收款 還差 ${(shipping - credit).toLocaleString("en-US")}`, warn: true };
 }

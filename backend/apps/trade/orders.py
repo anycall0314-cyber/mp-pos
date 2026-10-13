@@ -25,6 +25,7 @@ MAX_LINES = 100
 MAX_QTY = 9999
 BUYER_KEY = re.compile(r"^[A-Za-z0-9_.:-]{8,100}$")
 BUYER_CANCEL = "買家取消"
+DELIVERY = ("宅配", "自取")
 
 
 def status_text(order: TradeOrder, lines=None) -> str:
@@ -59,10 +60,16 @@ def _text(value, limit) -> str:
 def _header(partner: TradePartner, body: dict) -> dict:
     ship = body.get("ship_to") if isinstance(body.get("ship_to"), dict) else {}
     invoice = body.get("invoice") if isinstance(body.get("invoice"), dict) else {}
+    # 取貨方式要講清楚(賣家出貨的人照單上寫的寄或等人來拿;紅隊 2026-10-14):沒講 = 自取;宅配要有收件人、電話、地址
+    delivery = _text(body.get("delivery_method"), 20) or "自取"
+    if delivery not in DELIVERY:
+        raise TradeError("取貨方式只能是 宅配 / 自取", "bad_ship")
+    if delivery == "宅配" and not all(_text(ship.get(name), 200) for name in ("name", "phone", "address")):
+        raise TradeError("宅配要有收件人、電話、地址", "bad_ship")
     return {
         # 付款方式是賣家跟這個同行講好的那一種(賣家在「同行帳」定的);買家送什麼都不看
         "payment_method": partner.terms,
-        "delivery_method": _text(body.get("delivery_method"), 20),
+        "delivery_method": delivery,
         "ship_name": _text(ship.get("name"), 60), "ship_phone": _text(ship.get("phone"), 40),
         "ship_address": _text(ship.get("address"), 200),
         "invoice_type": _text(invoice.get("type"), 10), "buyer_tax_id": _text(invoice.get("buyer_tax_id"), 20),
@@ -110,6 +117,7 @@ def place(*, seller, partner: TradePartner, key, body: dict, store: str = "", is
     if partner.status == TradePartner.Status.BLOCKED:
         raise TradeError("這家沒有開放給你", "forbidden", 403)
     wanted = _wanted(body.get("items"))
+    header = _header(partner, body)
     products = {p.sku: p for p in Product.objects.filter(tenant=seller, sku__in=[w[0] for w in wanted], is_active=True)
                 .select_related("condition")}
     gone = TradeError("有一項現在沒有在賣(清單可能更新過),請重新整理再選", "not_available")
@@ -166,7 +174,7 @@ def place(*, seller, partner: TradePartner, key, body: dict, store: str = "", is
             order = TradeOrder.objects.create(
                 tenant=seller, partner=partner, buyer_key=key, buyer_store=_text(store, 120), is_test=is_test,
                 status=S.ACCEPTED if setting.auto_accept else S.PENDING,
-                accepted_at=now if setting.auto_accept else None, **_header(partner, body))
+                accepted_at=now if setting.auto_accept else None, **header)
             for row in rows:
                 row.order = order
             TradeOrderLine.objects.bulk_create(rows)

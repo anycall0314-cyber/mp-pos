@@ -29,6 +29,10 @@ export interface TradePartner {
   percent: number;
   terms: string;
   note: string;
+  /** 對外的同行:怎麼聯絡、金鑰的前幾碼(原文只在發的那一次看得到)、最後一次用 */
+  contact?: string;
+  key_hint?: string;
+  key_used_at?: string;
   owed: number;
   received: number;
   due: number;
@@ -118,6 +122,7 @@ export const useTradeSummary = (enabled = true) =>
     queryFn: () => api<{ pending: number; to_ship: number }>("/trade/summary/"),
     enabled,
     refetchInterval: 60_000,
+    staleTime: 0,
   });
 
 export const useTradeOrders = (state: "open" | "closed" | "all", q: string, limit: number) =>
@@ -125,8 +130,10 @@ export const useTradeOrders = (state: "open" | "closed" | "all", q: string, limi
     queryKey: ["trade-orders", state, q, limit],
     queryFn: () => api<Page<TradeOrder>>(`/trade/orders/?${query({ state, q, limit })}`),
     placeholderData: keepPreviousData,
-    // 同行隨時會下單、取消:待出貨那一頁每半分鐘看一次
+    // 同行隨時會下單、取消:待出貨那一頁每半分鐘看一次,而且每次切回來都重抓(全站預設 30 秒內不重抓,新單會晚出現)
     refetchInterval: state === "open" ? 30_000 : false,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
 /** 批發單上的每一個動作(接單、拒絕、不出、出貨、取消出貨):伺服器回整張單現在的樣子 */
@@ -233,3 +240,36 @@ export function useJoinDealer() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["vendor-links"] }),
   });
 }
+
+/** 剛發的金鑰:原文只在這一次的回應裡(畫面收起來就沒有了)。`base` = 對外的網址 */
+export interface IssuedKey {
+  partner: TradePartner;
+  key: string;
+  base: string;
+}
+
+/** 建一個對外的同行並發金鑰 / 換一把(舊的立刻失效)。只有管理員。 */
+export function useTradeKeyDo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { name: string; contact: string } | { rotate: number }) =>
+      "rotate" in vars ? post<IssuedKey>(`/trade/partners/${vars.rotate}/key/`) : post<IssuedKey>("/trade/partners/external/", vars),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["trade-partners"] }),
+  });
+}
+
+export interface VendorStatement {
+  orders: { order_no: string; ordered_at: string; shipped_amount: number; paid_amount: number; due_amount: number; payment_method: string; payment_status: string }[];
+  totals: { shipped: number; paid: number; due: number };
+  credit: number;
+}
+
+/** 買家這一側:跟這家賣家的對帳單(賣家算的)。按了才問。 */
+export const useVendorStatement = (warehouse: number | null, vendor: string | null, enabled: boolean) =>
+  useQuery({
+    queryKey: ["vendor-statement", warehouse, vendor],
+    queryFn: () => api<VendorStatement>(`/vendor-orders/statement/?${query({ warehouse: warehouse ?? "", vendor: vendor ?? "" })}`),
+    enabled: enabled && warehouse !== null && !!vendor,
+    gcTime: 0,
+    retry: false,
+  });

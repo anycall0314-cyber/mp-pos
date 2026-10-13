@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 
 import {
-  useTradeInvite, useTradeLedger, useTradePartnerDo, useTradePartners, useTradePaymentDo, useTradeSetting,
-  type TradePartner,
+  useTradeInvite, useTradeKeyDo, useTradeLedger, useTradePartnerDo, useTradePartners, useTradePaymentDo, useTradeSetting,
+  type IssuedKey, type TradePartner,
 } from "@/api/trade";
 import { Banner } from "@/components/Banner";
 import { ArmButton } from "@/components/workbench/ArmButton";
@@ -18,6 +18,8 @@ const STATUSES = [
   { key: "blocked", label: "不往來" },
 ] as const;
 const METHODS = ["匯款", "現金", "其他"];
+/** 對外的網址:用瀏覽器現在開的這個站組(伺服器在通道後面,它自己看到的網址不一定是對外的那一個) */
+const PUBLIC_BASE = () => `${window.location.origin}/api/trade/v2`;
 
 /**
  * 同行帳:往來的同行(折數、付款方式、往不往來)、發往來代碼、每一個同行還欠多少、記一筆收到的錢。
@@ -28,8 +30,21 @@ export function TradeBookTab() {
   const setting = useTradeSetting();
   const change = useTradePartnerDo();
   const invite = useTradeInvite();
+  const keyDo = useTradeKeyDo();
   const [open, setOpen] = useState<number | null>(null);
   const [code, setCode] = useState("");
+  // 外部同行(不在這套 POS 上的系統):填名稱與聯絡方式 → 發金鑰。金鑰原文只留在這一格,收起來就沒有了
+  const [outside, setOutside] = useState<{ name: string; contact: string } | null>(null);
+  const [issued, setIssued] = useState<IssuedKey | null>(null);
+
+  async function issue(vars: { name: string; contact: string } | { rotate: number }) {
+    try {
+      setIssued(await keyDo.mutateAsync(vars));
+      setOutside(null);
+    } catch (e) {
+      toast(apiErrorText(e), "err");
+    }
+  }
   const terms = setting.data?.terms ?? [];
 
   async function save(partner: TradePartner, body: Parameters<typeof change.mutateAsync>[0]["body"]) {
@@ -55,6 +70,9 @@ export function TradeBookTab() {
         <button className="btn primary" type="button" disabled={invite.isPending} onClick={() => void newInvite()}>
           發往來代碼
         </button>
+        <button className={outside ? "btn primary" : "btn"} type="button" onClick={() => setOutside(outside ? null : { name: "", contact: "" })}>
+          加外部同行
+        </button>
         {code && (
           <>
             <b className="tr-invite">{code}</b>
@@ -68,6 +86,38 @@ export function TradeBookTab() {
           {partners.data && partners.data.invites.length > 0 ? `還沒用的代碼 ${partners.data.invites.length} 個` : ""}
         </span>
       </div>
+      {outside && (
+        <div className="tr-foot tr-outside">
+          <label>
+            名稱
+            <input className="tr-track" value={outside.name} maxLength={120} onChange={(e) => setOutside({ ...outside, name: e.target.value })} />
+          </label>
+          <label>
+            聯絡
+            <input className="tr-track" value={outside.contact} maxLength={120} placeholder="電話 LINE"
+              onChange={(e) => setOutside({ ...outside, contact: e.target.value })} />
+          </label>
+          <button className="btn primary" type="button" disabled={!outside.name.trim() || !outside.contact.trim() || keyDo.isPending}
+            onClick={() => void issue({ name: outside.name.trim(), contact: outside.contact.trim() })}>
+            發金鑰
+          </button>
+        </div>
+      )}
+      {issued && (
+        <div className="tr-key">
+          <b>{issued.partner.name}</b>
+          <span className="tr-dim">只顯示這一次</span>
+          <code>{PUBLIC_BASE()}</code>
+          <code>{issued.key}</code>
+          <button className="btn" type="button"
+            onClick={() => void navigator.clipboard?.writeText(`${PUBLIC_BASE()}\n${issued.key}`).then(() => toast("已複製", "ok"))}>
+            複製
+          </button>
+          <button className="btn" type="button" onClick={() => setIssued(null)}>
+            收起
+          </button>
+        </div>
+      )}
       {partners.isError && <Banner kind="error" message={apiErrorText(partners.error)} />}
       <div className="report-table sr-table">
         {partners.isLoading && <div className="md-empty">載入中…</div>}
@@ -89,8 +139,8 @@ export function TradeBookTab() {
             </thead>
             <tbody>
               {rows.map((p) => (
-                <PartnerRow key={p.id} partner={p} terms={terms} busy={change.isPending} save={(body) => save(p, body)}
-                  open={open === p.id} toggle={() => setOpen(open === p.id ? null : p.id)} />
+                <PartnerRow key={p.id} partner={p} terms={terms} busy={change.isPending || keyDo.isPending} save={(body) => save(p, body)}
+                  open={open === p.id} toggle={() => setOpen(open === p.id ? null : p.id)} rotate={() => issue({ rotate: p.id })} />
               ))}
             </tbody>
           </table>
@@ -101,7 +151,7 @@ export function TradeBookTab() {
 }
 
 function PartnerRow({
-  partner, terms, busy, save, open, toggle,
+  partner, terms, busy, save, open, toggle, rotate,
 }: {
   partner: TradePartner;
   terms: string[];
@@ -109,6 +159,7 @@ function PartnerRow({
   save: (body: Partial<Pick<TradePartner, "status" | "percent" | "terms">>) => Promise<void>;
   open: boolean;
   toggle: () => void;
+  rotate: () => Promise<void>;
 }) {
   const [percent, setPercent] = useState(String(partner.percent));
   const savePercent = () => {
@@ -121,7 +172,19 @@ function PartnerRow({
   return (
     <>
       <tr className={open ? "report-row vo-picked" : "report-row"}>
-        <td className="vo-name">{partner.name}</td>
+        <td className="vo-name">
+          {partner.name}
+          {partner.kind === "external" && (
+            <>
+              <span className="vo-test">對外</span>
+              <div className="vo-sub">
+                {[partner.contact, partner.key_hint && `金鑰 ${partner.key_hint}…`, partner.key_used_at && `上次用 ${partner.key_used_at.slice(5, 16).replace("T", " ")}`]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </div>
+            </>
+          )}
+        </td>
         <td>
           <select value={partner.status} disabled={busy} onChange={(e) => void save({ status: e.target.value as TradePartner["status"] })}>
             {STATUSES.map((s) => (
@@ -148,8 +211,9 @@ function PartnerRow({
         <td className="num">{partner.credit ? money(partner.credit) : ""}</td>
         <td>
           <button className={open ? "btn primary" : "btn"} type="button" onClick={toggle}>
-            收款
+            記收款
           </button>
+          {partner.kind === "external" && <ArmButton label="換金鑰" className="btn" disabled={busy} onConfirm={rotate} />}
         </td>
       </tr>
       {open && (

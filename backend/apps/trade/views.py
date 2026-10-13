@@ -22,7 +22,7 @@ from apps.inventory.models import ProductSerial, Warehouse
 from apps.tenants import abilities
 from apps.tenants.permissions import is_tenant_admin
 
-from . import listing, orders, partners, payments, shipping
+from . import keys, listing, orders, partners, payments, shipping
 from .base import TradeError, setting_of
 from .models import (
     TradeInvite, TradeOrder, TradeOrderLine, TradePartner, TradePayment, TradeProduct, TradeSetting, TradeShipment,
@@ -152,7 +152,10 @@ def settings_view(request):
 def _partner_data(partner: TradePartner, book=None) -> dict:
     book = payments.ledger(partner) if book is None else book
     return {
-        "id": partner.id, "name": partner.name, "kind": partner.kind, "status": partner.status,
+        "id": partner.id, "name": partner.name, "kind": partner.kind, "status": partner.status, "contact": partner.contact,
+        # 對外的同行:金鑰的前幾碼(原文只在發的那一次看得到)、最後一次用是什麼時候
+        "key_hint": getattr(getattr(partner, "key", None), "hint", ""),
+        "key_used_at": _when(partner.key.last_used_at) if getattr(partner, "key", None) and partner.key.last_used_at else "",
         "status_label": partner.get_status_display(), "percent": partner.percent, "terms": partner.terms, "note": partner.note,
         "owed": _money(book["owed"]), "received": _money(book["received"]), "due": _money(book["due"]),
         "credit": _money(book["credit"]),
@@ -162,7 +165,7 @@ def _partner_data(partner: TradePartner, book=None) -> dict:
 @api_view(["GET"])
 def partner_list(request):
     _admin(request)
-    rows = TradePartner.objects.filter(tenant=request.tenant).order_by("status", "id")
+    rows = TradePartner.objects.filter(tenant=request.tenant).select_related("key").order_by("status", "id")
     invites = TradeInvite.objects.filter(tenant=request.tenant, used_at__isnull=True, expires_at__gt=timezone.now())
     return Response({
         "partners": [_partner_data(p) for p in rows],
@@ -182,6 +185,35 @@ def partner_change(request, pk: int):
     except TradeError as exc:
         return _bad(exc)
     return Response(_partner_data(partner))
+
+
+@api_view(["POST"])
+def external_create(request):
+    """建一個對外的同行(不在這套 POS 上的系統)並發金鑰。**金鑰原文只在這一次的回應裡**。"""
+    _admin(request)
+    data = request.data if isinstance(request.data, dict) else {}
+    try:
+        partner, raw = keys.create_external(request.tenant, request.user, name=data.get("name"), contact=data.get("contact"),
+                                            percent=data.get("percent"), terms=data.get("terms"))
+    except TradeError as exc:
+        return _bad(exc)
+    return Response({"partner": _partner_data(partner), "key": raw, "base": request.build_absolute_uri("/api/trade/v2")},
+                    status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+def partner_key(request, pk: int):
+    """換一把金鑰(舊的立刻失效)。新的原文只在這一次的回應裡。"""
+    _admin(request)
+    partner = TradePartner.objects.filter(tenant=request.tenant, pk=pk).first()
+    if partner is None:
+        return _bad("找不到這個同行", status.HTTP_404_NOT_FOUND)
+    try:
+        raw = keys.rotate(partner, request.user)
+    except TradeError as exc:
+        return _bad(exc)
+    partner = TradePartner.objects.select_related("key").get(pk=partner.pk)
+    return Response({"partner": _partner_data(partner), "key": raw, "base": request.build_absolute_uri("/api/trade/v2")})
 
 
 @api_view(["POST"])
@@ -321,11 +353,16 @@ def _order_rows(found) -> list[dict]:
     books = {}
     out = []
     for order in found:
-        book = books.setdefault(order.partner_id, {r["order"].id: r for r in payments.ledger(order.partner)["orders"]})
-        money = book.get(order.id) or {"owed": 0, "paid": 0, "due": 0}
+        if order.partner_id not in books:          # 一個同行算一次(同一頁常常是同一個同行的好幾張單)
+            books[order.partner_id] = payments.ledger(order.partner)
+        book = books[order.partner_id]
+        money = next((r for r in book["orders"] if r["order"].id == order.id), None) or {"owed": 0, "paid": 0, "due": 0}
         mine = lines.get(order.id, [])
         out.append({
             "id": order.id, "no": order.no, "partner": order.partner_id, "partner_name": order.partner.name,
+            # 這個同行是誰:平台內 / 對外(紅隊:外面今天才接上的,跟月結的老同行在同一張清單上要分得出來)、怎麼聯絡、
+            # 他已經給了、還沒被出過貨的單用掉的錢(先收款再出貨的,出貨的人看這個數)
+            "partner_kind": order.partner.kind, "partner_contact": order.partner.contact, "credit": _money(book["credit"]),
             "buyer_store": order.buyer_store, "status": order.status, "status_text": orders.status_text(order, mine),
             "placed_at": _when(order.created_at), "payment_method": order.payment_method,
             "delivery_method": order.delivery_method, "ship_name": order.ship_name, "ship_phone": order.ship_phone,

@@ -557,7 +557,7 @@ def _receive(*, tenant, user, order, request_key, lines, freight):
             # 平台內的同行:跟賣家說這張單現在收了多少(它照這個擋取消出貨;對方不收這份回報,這一次就不入)
             services.report_received(locked)
             # 順手把廠商那邊現在的進度記回來(平台內的同行:金額也跟著對方現在的)
-            services._apply(locked, found.order, live_total=services.platform.is_platform(vendors.find(locked.provider)))
+            services._apply(locked, found.order, live_total=services.follows_seller(vendors.find(locked.provider)))
             if pay != locked.payment_method:           # 付款方式被廠商改過:叫貨紀錄跟著寫現在的(跟進貨單一致)
                 locked.payment_method = pay
                 locked.save(update_fields=["payment_method", "updated_at"])

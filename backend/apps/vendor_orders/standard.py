@@ -142,6 +142,19 @@ class Client:
     def order(self, key: str, order_no: str) -> dict:
         return self.detail(key, order_no).order
 
+    def capabilities(self, key: str):
+        """對方會哪些(v2)。回 `{seller: {…}, capabilities: […], …}`;對方沒有這一支(v1)回 None。"""
+        reply = self._send("GET", "/capabilities", key)
+        if reply.status >= 500:
+            raise Unreachable(f"{self.name}那邊出錯(HTTP {reply.status})")
+        if reply.status == 200 and reply.data.get("ok") is True and isinstance(reply.data.get("capabilities"), list):
+            return reply.data
+        return None
+
+    def statement(self, key: str) -> dict:
+        """對帳單(v2;賣家要有 `statements`):這個買家出過貨的每一張單 —— 出了多少、收了多少、還欠多少。"""
+        return self._read("/statements", key)
+
     def cancel(self, key: str, order_no: str) -> dict:
         """取消還沒出的部分(v2;賣家要有 `cancel` 這一項能力)。回 `{order_no, status}`;不行丟 `Refused`(原因在裡面)。"""
         reply = self._send("POST", "/orders/" + urllib.parse.quote(order_no, safe="") + "/cancel", key, {})

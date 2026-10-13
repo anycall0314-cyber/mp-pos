@@ -25,6 +25,8 @@ urlpatterns = [
     path("api/v1/", include("apps.photos.urls")),
     path("api/v1/", include("apps.vendor_orders.urls")),
     path("api/v1/", include("apps.trade.urls")),
+    # 對外的買家(不在這套 POS 上的系統)用金鑰來買:買賣串接規格 v2
+    path("api/trade/v2/", include("apps.trade.public_urls")),
 ]
 
 # dev 模式:由 Django 直接 serve 上傳的原圖(進貨單照片);prod 由前面的靜態服務代理

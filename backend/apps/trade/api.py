@@ -9,6 +9,7 @@
 """
 import re
 from datetime import date
+from urllib.parse import parse_qsl
 
 from django.conf import settings
 from django.utils import timezone
@@ -45,7 +46,8 @@ def _ok(**data) -> tuple[int, dict]:
 def handle(seller, partner: TradePartner, method: str, path: str, body=None, *, store: str = "") -> tuple[int, dict]:
     """`partner` 可以是還沒存檔的「平台同行」(只看商品);要下單的時候呼叫的人要先給存檔的那一筆。"""
     path, _, query = path.partition("?")
-    params = dict(part.split("=", 1) for part in query.split("&") if "=" in part)
+    # 查詢字串照一般的網址寫法解開(`%3A`、`%2B`…);同一個名字給兩次用最後一個
+    params = dict(parse_qsl(query, keep_blank_values=True))
     setting = setting_of(seller)
     visible = any(partners.can_see(setting, partner))
     try:
@@ -228,6 +230,29 @@ def order_data(order: TradeOrder, partner: TradePartner) -> dict:
     }
 
 
+def _moment(text: str):
+    try:
+        found = parse_datetime(text)
+    except ValueError:
+        return None
+    if found is not None and timezone.is_naive(found):
+        found = timezone.make_aware(found)
+    return found
+
+
+def _day(text):
+    """對帳單的起訖日(YYYY-MM-DD)。沒給 = 不限;看不懂的要講。"""
+    if not text:
+        return None
+    try:
+        found = parse_date(text)
+    except ValueError:
+        found = None
+    if found is None:
+        raise TradeError("日期看不懂(例:2026-10-14)", "bad_date")
+    return found
+
+
 def _limit(params, default=100, most=200) -> int:
     raw = params.get("limit", "")
     return min(int(raw), most) if raw.isdigit() and int(raw) > 0 else default
@@ -237,8 +262,11 @@ def _orders(partner, params):
     if not partner.pk:
         return _ok(orders=[])
     found = TradeOrder.objects.filter(partner=partner).order_by("-id")
-    since = parse_datetime(params.get("since", "").replace(" ", "+")) if params.get("since") else None
-    if since is not None:
+    if params.get("since"):
+        # 時區的加號沒有編碼的話會被解成空白:補回去。看不懂的時間要講(默默不篩的話,對方以為拿到的是「之後有變動的全部」)
+        since = _moment(params["since"].replace(" ", "+"))
+        if since is None:
+            raise TradeError("since 的時間看不懂(例:2026-10-14T00:00:00+08:00)", "bad_since")
         found = found.filter(changed_at__gte=since)
     found = list(found.prefetch_related("lines")[:_limit(params)])
     paid = {row["order"].id: payments.status_text(row["owed"], row["paid"]) for row in payments.ledger(partner)["orders"]}
@@ -252,8 +280,7 @@ def _statement(partner, params):
     if not partner.pk:
         return _ok(orders=[], totals={"shipped": 0, "paid": 0, "due": 0}, credit=0)
     book = payments.ledger(partner)
-    start, end = parse_date(params.get("from", "")) if params.get("from") else None, \
-        parse_date(params.get("to", "")) if params.get("to") else None
+    start, end = _day(params.get("from")), _day(params.get("to"))
     rows = []
     for row in book["orders"]:
         day = timezone.localtime(row["order"].created_at).date()

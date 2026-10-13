@@ -27,7 +27,7 @@ PLATFORM_ONLY = [IsAuthenticated, IsPlatformAdmin]
 CODE = re.compile(r"^[a-z0-9][a-z0-9-]{1,19}$")
 PREFIX = re.compile(r"^[A-Za-z0-9_-]{0,20}$")
 MAX_ORDER = 9999
-LABELS = {"name": "名稱", "is_active": "啟用", "is_private": "只給指定的公司"}
+LABELS = {"name": "名稱", "is_active": "啟用", "is_private": "只給指定的公司", "v2": "新格式"}
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MAX_PRICE = Decimal("9999999.99")
 MAX_PACK = 100000
@@ -152,6 +152,7 @@ def _vendor_data(v: Vendor, opened=None) -> dict:
         "order_email": v.order_email, "contact": v.contact,
         # 只給指定的公司:開關 + 公司代碼的名單(開關開著、名單空的 = 沒有任何公司看得到)
         "is_private": v.is_private, "only_for": vendors.company_codes(v),
+        "v2": v.v2, "capabilities": v.capabilities or [], "remote_name": v.remote_name,
         "stores": (opened or {}).get(v.code, 0),
         # 半自動的廠商:價目表上有幾項(啟用中的)
         "items": v.items.filter(is_active=True).count() if v.protocol == Vendor.Protocol.MANUAL else 0,
@@ -223,6 +224,9 @@ def _vendor_values(data, current=None):
         out["is_active"] = _flag(data, "is_active")
     if "is_private" in data:
         out["is_private"] = _flag(data, "is_private")
+    if "v2" in data:
+        # 對方照的是不是買賣串接規格 v2(會多問它「會哪些」:取消、出貨帶序號、對帳單);半自動的沒有系統可以問
+        out["v2"] = _flag(data, "v2") and protocol == Vendor.Protocol.STANDARD
     if "only_for" in data:
         out["only_for"] = _companies(data["only_for"])
     picked = None

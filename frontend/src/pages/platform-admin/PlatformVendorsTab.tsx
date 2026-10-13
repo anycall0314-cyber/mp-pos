@@ -218,6 +218,8 @@ function VendorDrawer({
   const [name, setName] = useState(vendor?.name ?? "");
   const [base, setBase] = useState(vendor?.api_base ?? "");
   const [prefix, setPrefix] = useState(vendor?.key_prefix ?? "");
+  // 全自動的廠商:對方照的是舊格式(膜總裁那一套)還是新格式(多了取消、出貨帶序號、對帳單;存金鑰時會問它會哪些)
+  const [v2, setV2] = useState(vendor?.v2 ?? false);
   const [picked, setPicked] = useState<number[]>(vendor?.categories ?? []);
   const [order, setOrder] = useState(String(vendor?.sort_order ?? 0));
   const [active, setActive] = useState(vendor?.is_active ?? true);
@@ -242,7 +244,7 @@ function VendorDrawer({
         ...(vendor ? { id: vendor.id } : { code: code.trim() }),
         name: name.trim(),
         protocol,
-        ...(manual ? { order_email: email.trim(), contact: contact.trim() } : { api_base: base.trim(), key_prefix: prefix.trim() }),
+        ...(manual ? { order_email: email.trim(), contact: contact.trim() } : { api_base: base.trim(), key_prefix: prefix.trim(), v2 }),
         categories: picked,
         sort_order: Number(order) || 0,
         is_active: active,
@@ -312,6 +314,12 @@ function VendorDrawer({
           </Field>
           <Field label="金鑰的開頭">
             <input value={prefix} maxLength={20} placeholder="沒有固定開頭就留空" onChange={(e) => setPrefix(e.target.value)} />
+          </Field>
+          <Field label="對方的格式">
+            <select value={v2 ? "v2" : "v1"} onChange={(e) => setV2(e.target.value === "v2")}>
+              <option value="v1">舊格式</option>
+              <option value="v2">新格式</option>
+            </select>
           </Field>
         </>
       )}

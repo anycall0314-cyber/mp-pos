@@ -13,6 +13,7 @@ import {
   useVendorOrders,
 } from "@/api/hooks";
 import { ApiHttpError } from "@/api/client";
+import { useVendorStatement } from "@/api/trade";
 import type { VendorLinkRow, VendorOrder, VendorOutsideOrder } from "@/api/types";
 import { useCan, useCurrentUser, useDefaultWarehouse } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
@@ -664,6 +665,54 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
   );
 }
 
+/** 對帳單(賣家算的):跟這家往來到現在,出過貨的每一張單出了多少、收了多少、還欠多少。 */
+function StatementDrawer({ link, onClose }: { link: VendorLinkRow; onClose: () => void }) {
+  const state = useVendorStatement(link.warehouse, link.provider, true);
+  return (
+    <Drawer open title={`對帳單 ${link.provider_label}`} onClose={onClose} width={640}>
+      {state.isLoading && <div className="md-empty">載入中…</div>}
+      {state.isError && <div className="md-empty">{apiErrorText(state.error)}</div>}
+      {state.data && (
+        <table className="report-grid vo-confirm">
+          <thead>
+            <tr>
+              <th>單號</th>
+              <th>下單</th>
+              <th className="num">出貨</th>
+              <th className="num">已付</th>
+              <th className="num">還欠</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.data.orders.length === 0 && (
+              <tr>
+                <td colSpan={5}>還沒有出過貨的單</td>
+              </tr>
+            )}
+            {state.data.orders.map((o) => (
+              <tr key={o.order_no}>
+                <td>{o.order_no}</td>
+                <td>{o.ordered_at.slice(0, 10)}</td>
+                <td className="num">{money(o.shipped_amount)}</td>
+                <td className="num">{money(o.paid_amount)}</td>
+                <td className={o.due_amount > 0 ? "num report-neg" : "num"}>{money(o.due_amount)}</td>
+              </tr>
+            ))}
+            <tr className="vo-confirm-total">
+              <td colSpan={2}>合計{state.data.credit > 0 ? `(另外多付 ${money(state.data.credit)})` : ""}</td>
+              <td className="num">{money(state.data.totals.shipped)}</td>
+              <td className="num">{money(state.data.totals.paid)}</td>
+              <td className="num">
+                <b>{money(state.data.totals.due)}</b>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      )}
+    </Drawer>
+  );
+}
+
 /** 這張叫貨單現在的狀況:沒成立的講 POS 這邊的狀況;成立的講廠商那邊的(還沒更新過就先寫「已送出」)。 */
 function statusOf(o: VendorOrder): string {
   if (o.state !== "placed") return o.state_label;
@@ -808,6 +857,7 @@ function HistoryTab({ link, openFirst }: { link: VendorLinkRow; openFirst: numbe
   const canOrder = useCan("vendor_order");
   const adopt = useAdoptVendorOrder();
   const [receiving, setReceiving] = useState<VendorOrder | null>(null);
+  const [statement, setStatement] = useState(false);
   const rows = orders.data?.results ?? [];
 
   // 送單是在另一個分頁做的:回到這一頁就重抓一次(待確認、已成立要看得到)
@@ -885,6 +935,11 @@ function HistoryTab({ link, openFirst }: { link: VendorLinkRow; openFirst: numbe
         )}
         {link.manual && link.contact && <span className="vo-sub">聯絡 {link.contact}</span>}
         {link.site?.supported && canOrder && <HelperBookmark label={link.site.label} />}
+        {link.can_statement && canOrder && (
+          <button type="button" className="btn" onClick={() => setStatement(true)}>
+            看對帳單
+          </button>
+        )}
         <span className="list-filterbar-count">{rows.length} 張</span>
       </div>
       <div className="report-table vo-table">
@@ -1135,6 +1190,7 @@ function HistoryTab({ link, openFirst }: { link: VendorLinkRow; openFirst: numbe
           </>
         )}
       </div>
+      {statement && <StatementDrawer link={link} onClose={() => setStatement(false)} />}
       {receiving && !receiving.manual && <ReceiveDrawer key={receiving.id} order={receiving} onClose={() => setReceiving(null)} />}
       {receiving && receiving.manual && (
         <ManualReceiveDrawer key={receiving.id} order={receiving} onClose={() => setReceiving(null)} />

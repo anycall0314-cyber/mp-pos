@@ -71,6 +71,12 @@ class Vendor(TimestampedModel):
     # 平台內的同行才有:賣家是哪一家公司(誰看得到這一家是問賣家那邊的規則,不看下面那兩格)
     seller = models.ForeignKey(
         "tenants.Tenant", null=True, blank=True, on_delete=models.PROTECT, related_name="+", verbose_name="賣家(平台內的同行)")
+    # 全自動的廠商:對方照的是不是買賣串接規格 v2(平台管理員設;預設不是 —— 膜總裁是 v1,不會去問它沒有的那一支)。
+    v2 = models.BooleanField("照買賣串接規格 v2", default=False, db_default=False)
+    # v2 的才有:對方說自己會哪些(`GET /capabilities`;門市存金鑰時問一次)。空的 = 沒問過。
+    # `remote_name` = 對方自稱的名稱(管理員貼金鑰之後看得到:網址或金鑰貼錯地方時認得出來;紅隊 2026-10-14)
+    capabilities = models.JSONField("對方會哪些", null=True, blank=True)
+    remote_name = models.CharField("對方自稱的名稱", max_length=120, blank=True, default="", db_default="")
     is_private = models.BooleanField("只給指定的公司", default=False, db_default=False)
     only_for = models.CharField("給哪幾家公司(代碼)", max_length=200, blank=True, default="", db_default="")
 

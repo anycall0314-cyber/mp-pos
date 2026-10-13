@@ -113,3 +113,13 @@ test("銷貨被擋:認得出是「被同行訂走」的才問要不要抽回", (
   assert.equal(heldUnits(null), null);
   assert.equal(heldUnits("trade_hold"), null);
 });
+
+test("出貨之前提醒收款:月結不提醒;預收夠了講預收多少;不夠講還差多少(只提醒)", async () => {
+  const { prepayNote } = await import("./trade.ts");
+  assert.equal(prepayNote({ payment_method: "月結", credit: 0 }, 15000), null);
+  assert.equal(prepayNote({ payment_method: "匯款", credit: 0 }, 0), null);
+  assert.deepEqual(prepayNote({ payment_method: "匯款", credit: 0 }, 15000), { text: "未收款 還差 15,000", warn: true });
+  assert.deepEqual(prepayNote({ payment_method: "匯款", credit: 5000 }, 15000), { text: "未收款 還差 10,000", warn: true });
+  assert.deepEqual(prepayNote({ payment_method: "現金", credit: 15000 }, 15000), { text: "預收 15,000", warn: false });
+  assert.deepEqual(prepayNote({ payment_method: "匯款" }, 100), { text: "未收款 還差 100", warn: true });
+});

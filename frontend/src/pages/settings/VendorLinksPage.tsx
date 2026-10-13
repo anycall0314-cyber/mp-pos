@@ -167,6 +167,7 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
             {row.site.label} 帳號{row.site.bound ? "已綁定" : "未綁定"}
           </span>
         )}
+        {row.remote_name && <span className="vl-vendor">對方:{row.remote_name}</span>}
         {row.sandbox === true && <span className="vo-test">測試金鑰</span>}
       </h3>
       <div className="vl-grid">

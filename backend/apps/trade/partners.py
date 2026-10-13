@@ -139,6 +139,9 @@ def change(partner: TradePartner, user, data: dict) -> TradePartner:
     if "note" in data:
         partner.note = data["note"].strip()[:200] if isinstance(data["note"], str) else ""
         fields.append("note")
+    if "contact" in data:
+        partner.contact = data["contact"].strip()[:120] if isinstance(data["contact"], str) else ""
+        fields.append("contact")
     partner.updated_by = user
     partner.save(update_fields=fields)
     return partner

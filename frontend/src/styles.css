@@ -8069,6 +8069,13 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .tr-ledger .tr-foot { justify-content: flex-start; padding: 4px 0; }
 .tr-two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
 .tr-setting { margin: 16px; max-width: 760px; }
+.tr-warn { color: var(--warn-text); font-weight: 600; white-space: nowrap; }
+.tr-outside { justify-content: flex-start; background: var(--panel); border-bottom: 1px solid var(--border); }
+.tr-key {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 16px;
+  background: var(--panel); border-bottom: 1px solid var(--border);
+}
+.tr-key code { font-family: monospace; padding: 2px 8px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; overflow-wrap: anywhere; }
 @media (max-width: 900px) {
   .tr-two { grid-template-columns: 1fr; }
   .tr-money { margin-left: 0; }

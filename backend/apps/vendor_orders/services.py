@@ -11,6 +11,7 @@
 
 價錢一律不送:單價、運費、總額是廠商算的。畫面與這裡存的單價只是叫貨當下的牌價。
 """
+import logging
 import re
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
@@ -23,6 +24,7 @@ from django.utils.dateparse import parse_datetime
 from . import platform, secrets, standard, vendors
 from .models import VendorOrder, VendorOrderItem, VendorSecret
 
+logger = logging.getLogger(__name__)
 MAX_LINES = 100
 MAX_PACKS = 9999
 SENDING_GRACE = timedelta(seconds=90)       # 「送出中」超過這麼久沒有結果,當成那一次沒有回來(可以重送)
@@ -170,7 +172,59 @@ def check_key(vendor, raw):
             raise VendorError(f"{vendor.name}不認得這把金鑰(打錯、或已經作廢),沒有存") from None
         raise VendorError(f"{vendor.name}:{exc.reason}(沒有存)") from None
     _only_sandbox_here(listing.sandbox, vendor.name)
+    learn(vendor, client, raw)
     return raw, listing.sandbox
+
+
+def follows_seller(vendor) -> bool:
+    """這家的單,金額、運費、付款方式是不是一律跟著對方**現在**回的(買賣串接規格 v2:事實只有一份,以賣家那邊為準 ——
+    對方不出某一台、加了運費、買家取消一部分,這張單的金額就變了)。平台內的同行、外面標成新格式的廠商都是;
+    舊格式的(膜總裁)照舊只在還沒有總額時補。"""
+    return platform.is_platform(vendor) or bool(getattr(vendor, "v2", False))
+
+
+def can(vendor, what: str) -> bool:
+    """這家廠商會不會這一項(買賣串接規格 v2 的能力)。平台內的同行每一項都會;全自動的看它自己說的;半自動的都不會。"""
+    if platform.is_platform(vendor):
+        return True
+    return bool(vendor.v2) and isinstance(vendor.capabilities, list) and what in vendor.capabilities
+
+
+def learn(vendor, client, key) -> None:
+    """問對方「會哪些」並記在廠商名單上(存金鑰時問一次)。**只問平台管理員標成 v2 的廠商**(v1 的沒有這一支,不去打它)。
+    問不到就照舊(不因為這個讓金鑰存不了)。"""
+    if not vendor.v2:
+        return
+    try:
+        told = client.capabilities(key)
+    except standard.Unreachable:
+        return
+    caps = [c for c in told["capabilities"] if isinstance(c, str)][:40] if told else []
+    seller = told.get("seller") if told and isinstance(told.get("seller"), dict) else {}
+    name = seller["name"].strip()[:120] if isinstance(seller.get("name"), str) else ""
+    if caps != (vendor.capabilities or []) or name != vendor.remote_name:
+        vendor.capabilities, vendor.remote_name = caps, name
+        vendor.save(update_fields=["capabilities", "remote_name", "updated_at"])
+
+
+def statement(link, vendor) -> dict:
+    """對帳單:跟這家賣家往來到現在,出過貨的每一張單出了多少、收了多少、還欠多少(賣家算的)。"""
+    if not can(vendor, "statements"):
+        raise VendorError(f"{vendor.name}沒有對帳單可以查")
+    data = _read(vendor, "statement", key_of(link, vendor))
+    rows = [r for r in (data.get("orders") if isinstance(data.get("orders"), list) else []) if isinstance(r, dict)]
+    number = lambda value: value if isinstance(value, int) and not isinstance(value, bool) else 0      # noqa: E731
+    totals = data.get("totals") if isinstance(data.get("totals"), dict) else {}
+    return {
+        "orders": [{
+            "order_no": _text(r.get("order_no"), 40), "ordered_at": _text(r.get("ordered_at"), 40),
+            "shipped_amount": number(r.get("shipped_amount")), "paid_amount": number(r.get("paid_amount")),
+            "due_amount": number(r.get("due_amount")), "payment_method": _text(r.get("payment_method"), 20),
+            "payment_status": _text(r.get("payment_status"), 40),
+        } for r in rows[:500]],
+        "totals": {name: number(totals.get(name)) for name in ("shipped", "paid", "due")},
+        "credit": number(data.get("credit")),
+    }
 
 
 # ── 單頭:付款、取貨、收件、發票 ───────────────────────────────────────────────
@@ -419,7 +473,7 @@ def resend(order: VendorOrder) -> VendorOrder:
 def cancel(order: VendorOrder) -> VendorOrder:
     """跟賣家說這張單還沒出的部分不要了(賣家要有這一項能力;現在只有平台內的同行)。成不成以對方回的為準,進度跟著更新。"""
     vendor = vendor_of(order.provider)
-    if not platform.is_platform(vendor):
+    if not can(vendor, "cancel"):
         raise VendorError(f"{vendor.name}不能從這裡取消,請直接聯絡廠商")
     if order.state != VendorOrder.State.PLACED or not order.vendor_order_no:
         raise VendorError("這張叫貨單還沒有確定成立,不能取消")
@@ -430,7 +484,7 @@ def cancel(order: VendorOrder) -> VendorOrder:
         raise VendorError(f"連不到{vendor.name},請稍後再試") from None
     except standard.Refused as exc:
         raise VendorError(f"{vendor.name}:{exc.reason}") from None
-    _apply(order, _read(vendor, "order", key, order.vendor_order_no), live_total=True)
+    _apply(order, _read(vendor, "order", key, order.vendor_order_no), live_total=follows_seller(vendor))
     return order
 
 
@@ -441,23 +495,47 @@ def report_received(order: VendorOrder) -> None:
     每次到貨入庫、每次作廢到貨入庫開的進貨單之後呼叫,**跟那一次的入庫 / 作廢在同一個交易裡**:對方沒有收下這份回報,這邊就不入 / 不作廢。
     **呼叫的人要鎖著這張叫貨單**(入庫整段鎖著;作廢進貨單在一開始 `receiving.before_purchase_void` 鎖):報的是整張單現在的樣子,
     兩個交易各算各的、後送的蓋掉先送的就會報錯(複審第二輪)。
-    只有平台內的同行有這一項;其他廠商不做事。"""
-    from .models import VendorReceiptItem          # 這一支在 receiving 與進貨作廢都用得到,放這裡不繞一圈
-
+    平台內的同行:在交易裡報、對方不收就整段退回。**外面照 v2 的賣家(說自己會 `receipts` 的)**:不在同一個資料庫,
+    只能等這邊提交之後盡力報一次(報不到不影響這邊的入庫;下一次入庫 / 作廢會再報整張單現在的樣子)。其他廠商不做事。"""
     vendor = vendors.find(order.provider)
-    if not platform.is_platform(vendor) or order.state != VendorOrder.State.PLACED or not order.vendor_order_no:
+    if vendor is None or order.state != VendorOrder.State.PLACED or not order.vendor_order_no:
         return
+    if not platform.is_platform(vendor):
+        if can(vendor, "receipts") and vendor.protocol == vendor.Protocol.STANDARD:
+            transaction.on_commit(lambda: _report_later(order.pk))
+        return
+    try:
+        _client(vendor).received(key_of(order.link, vendor), order.vendor_order_no, _received_now(order))
+    except standard.Unreachable:
+        raise VendorError(f"連不到{vendor.name},請稍後再試") from None
+    except standard.Refused as exc:
+        raise VendorError(f"{vendor.name}:{exc.reason}") from None
+
+
+def _received_now(order: VendorOrder) -> list:
+    from .models import VendorReceiptItem
+
     lines: dict = {}
     for item in VendorReceiptItem.objects.filter(receipt__order=order, receipt__purchase_order__is_void=False):
         row = lines.setdefault((item.sku, item.spec_id), {"sku": item.sku, "spec_id": item.spec_id, "received_qty": 0, "serials": []})
         row["received_qty"] += item.qty
         row["serials"] += [{"imei": s.get("imei", ""), "sn": s.get("sn", "")} for s in (item.serials or []) if isinstance(s, dict)]
+    return list(lines.values())
+
+
+def _report_later(order_id: int) -> None:
+    """提交之後跟外面的賣家報一次收了多少。報不到就算了(對方連不上、不收都不能讓這邊已經提交的入庫出錯)。"""
+    order = VendorOrder.objects.filter(pk=order_id).select_related("link").first()
+    vendor = vendors.find(order.provider) if order is not None else None
+    key = key_now(order.link, vendor) if vendor is not None else None
+    if not key:
+        return
     try:
-        _client(vendor).received(key_of(order.link, vendor), order.vendor_order_no, list(lines.values()))
-    except standard.Unreachable:
-        raise VendorError(f"連不到{vendor.name},請稍後再試") from None
-    except standard.Refused as exc:
-        raise VendorError(f"{vendor.name}:{exc.reason}") from None
+        vendors.client(vendor).received(key, order.vendor_order_no, _received_now(order))
+    except (standard.Unreachable, standard.Refused, vendors.UnknownVendor):
+        pass
+    except Exception:          # noqa: BLE001 —— 這邊的入庫已經提交了:不管出什麼錯都不能變成這個請求的失敗,記下來就好
+        logger.exception("跟廠商回報收貨失敗(叫貨單 %s)", order_id)
 
 
 # ── 進度 ────────────────────────────────────────────────────────────────────
@@ -508,7 +586,7 @@ def sync(tenant, link) -> list[dict]:
     ours = set()
     for order in VendorOrder.objects.filter(
             tenant=tenant, provider=link.provider, state=VendorOrder.State.PLACED, vendor_order_no__in=by_no):
-        _apply(order, by_no[order.vendor_order_no], live_total=platform.is_platform(vendor))
+        _apply(order, by_no[order.vendor_order_no], live_total=follows_seller(vendor))
         ours.add(order.vendor_order_no)
     return [{
         "order_no": r["order_no"],

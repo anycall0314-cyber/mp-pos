@@ -1827,6 +1827,10 @@ export interface VendorLinkRow {
   clerk_ordering: boolean;
   /** 平台內的同行(開了批發的經銷商):跟全自動同一套,但沒有金鑰,看「開通」 */
   platform?: boolean;
+  /** 這家賣家有對帳單可以查(平台內的同行、或說自己會的新格式廠商) */
+  can_statement?: boolean;
+  /** 對方自稱的名稱(新格式的廠商;貼金鑰之後看一眼是不是這一家) */
+  remote_name?: string;
   saved: boolean;
   /** 半自動的廠商(對方沒有系統):沒有金鑰,管理員按「開通」;商品是平台的價目表 */
   manual: boolean;
@@ -2040,6 +2044,8 @@ export interface PlatformVendor {
   /** 對方系統的網址:各家門市的金鑰只會送到這裡 */
   api_base: string;
   key_prefix: string;
+  /** 對方照的是不是買賣串接規格的新格式(會多問它會哪些:取消、出貨帶序號、對帳單) */
+  v2?: boolean;
   is_active: boolean;
   sort_order: number;
   /** 幾家門市開通了(全自動 = 貼了金鑰;半自動 = 按了開通) */
