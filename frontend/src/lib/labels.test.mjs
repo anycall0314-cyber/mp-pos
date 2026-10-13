@@ -8,6 +8,7 @@ import {
   LABEL,
   MAX_SHEETS,
   MAX_TOTAL_SHEETS,
+  NUDGE,
   barAreaDots,
   barTopMm,
   copiesOf,
@@ -17,7 +18,10 @@ import {
   halfText,
   layoutBars,
   leftPadDots,
+  moveNudge,
+  nudgeText,
   printableCode,
+  readNudge,
   rocDay,
   shouldAutoPrint,
   splitTail,
@@ -128,6 +132,84 @@ test("標籤的畫面:上下兩聯都畫、印什麼照 halfText", () => {
   // 條碼的位置從 LABEL 算(不寫死)
   assert.match(tile, /top: `\$\{barTopMm\(\)\}mm`/);
   assert.match(tile, /left: `\$\{LABEL\.sideMarginMm \+ dotsToMm\(leftPadDots\(layout\.widthDots\)\)\}mm`/);
+});
+
+test("位置微調:一次一格、不超過上限、壞掉的設定收回來", () => {
+  const zero = { x: 0, y: 0 };
+  // 一格是印表機的整數個點:條碼的線推完還在點上
+  assert.equal((NUDGE.stepMm * LABEL.dotsPerMm) % 1, 0);
+  for (const raw of [null, undefined, "", "不是 JSON", "null", "12", '{"x":"1","y":[]}', '{"x":null}', '{"x":1e999}']) {
+    assert.deepEqual(readNudge(raw), zero, String(raw));
+  }
+  assert.deepEqual(readNudge('{"x":-0.5,"y":-0.75}'), { x: -0.5, y: -0.75 });
+  assert.deepEqual(readNudge('{"x":0.3,"y":-0.6}'), { x: 0.25, y: -0.5 });      // 不在格子上的收到最近的一格
+  assert.deepEqual(readNudge('{"x":99,"y":-99}'), { x: NUDGE.maxMm, y: -NUDGE.maxMm });   // 推到紙外面的設定收回來
+  // 印出來偏下按「往上」:往上、往左是負的
+  assert.deepEqual(moveNudge(zero, "up"), { x: 0, y: -0.25 });
+  assert.deepEqual(moveNudge(zero, "down"), { x: 0, y: 0.25 });
+  assert.deepEqual(moveNudge(zero, "left"), { x: -0.25, y: 0 });
+  assert.deepEqual(moveNudge(zero, "right"), { x: 0.25, y: 0 });
+  assert.deepEqual(moveNudge({ x: 0.5, y: -0.75 }, "up"), { x: 0.5, y: -1 });  // 只動那一個方向
+  // 到上限就不再動
+  assert.deepEqual(moveNudge({ x: 0, y: -NUDGE.maxMm }, "up"), { x: 0, y: -NUDGE.maxMm });
+  assert.deepEqual(moveNudge({ x: NUDGE.maxMm, y: 0 }, "right"), { x: NUDGE.maxMm, y: 0 });
+  // 推回來是 0,不是 −0(畫面會把 −0 印成「上 0」);存的數字比半格還小也是
+  assert.ok(Object.is(readNudge('{"x":-0.1,"y":-0.1}').x, 0));
+  assert.ok(Object.is(readNudge('{"x":-0.1,"y":-0.1}').y, 0));
+  assert.ok(Object.is(moveNudge({ x: 0, y: -0.25 }, "down").y, 0));
+  assert.ok(Object.is(moveNudge({ x: 0.25, y: 0 }, "left").x, 0));
+  // 連按十二下往上再十二下往下:回到原點(一格一格加不會累積出小數的誤差)
+  let at = zero;
+  for (let i = 0; i < 12; i += 1) at = moveNudge(at, "up");
+  assert.deepEqual(at, { x: 0, y: -3 });
+  for (let i = 0; i < 12; i += 1) at = moveNudge(at, "down");
+  assert.deepEqual(at, zero);
+});
+
+test("位置微調:畫面上寫現在推了多少", () => {
+  assert.equal(nudgeText({ x: 0, y: 0 }), "");
+  assert.equal(nudgeText({ x: 0, y: -0.75 }), "上 0.75 mm");
+  assert.equal(nudgeText({ x: 0, y: 1 }), "下 1 mm");
+  assert.equal(nudgeText({ x: -0.25, y: 0 }), "左 0.25 mm");
+  assert.equal(nudgeText({ x: 1.5, y: -0.5 }), "上 0.5 · 右 1.5 mm");
+});
+
+test("位置微調:推的是整張的內容,外框與紙不動;只有測試標籤那一頁能調", () => {
+  const css = read("../styles.css");
+  assert.ok(css.includes(".label-inner { position: absolute; inset: 0; transform: translate(var(--label-dx, 0mm), var(--label-dy, 0mm)); }"));
+  const tile = read("../components/labels/LabelTile.tsx");
+  // 兩聯、條碼、對撕線的短線都在會被推的那一層裡面;外框是標籤自己的(留在紙的四邊)
+  const from = tile.indexOf('<div className="label-inner">');
+  // 那一層收尾之後緊接著就是標籤自己收尾:中間沒有別的東西(放在這裡的不會跟著推)
+  const to = tile.indexOf("      </div>\n    </div>\n  );\n});");
+  assert.ok(from > 0 && to > from, "找不到會被推的那一層,或它後面還有別的東西");
+  const inner = tile.slice(from, to);
+  for (const piece of ['{half("top")}', '{half("bottom")}', 'className="label-bars"', 'className="label-fold l"', 'className="label-fold r"']) {
+    assert.ok(inner.includes(piece), piece);
+  }
+  assert.match(css, /\.label-frame::before \{[^}]*inset: 0;[^}]*\}/);
+  const page = read("../pages/labels/LabelPrintPage.tsx");
+  // 數字帶著單位填進樣式;讀與存都用同一把鑰匙、讀回來的一律先收過
+  assert.ok(page.includes('style={{ "--label-dx": `${nudge.x}mm`, "--label-dy": `${nudge.y}mm` } as React.CSSProperties}'));
+  assert.ok(page.includes("readNudge(window.localStorage.getItem(NUDGE.storageKey))"));
+  assert.ok(page.includes("window.localStorage.setItem(NUDGE.storageKey, JSON.stringify(nudge))"));
+  // 每按一下都接在上一下後面(不是從這一次畫面抓到的那個算)
+  assert.ok(page.includes("const next = change(nudgeNow.current);"));
+  assert.ok(page.includes("onClick={() => changeNudge((now) => moveNudge(now, move))}"));
+  // 四顆按鈕只在測試標籤那一頁;平常的列印頁只寫現在推了多少
+  assert.match(page, /\{test \? \(\s*<div className="label-bar-nudge">/);
+  assert.match(page, /nudged && <div>位置 \{nudged\}<\/div>/);
+  // 位置微調不算「要先讓人看到的提醒」:不會擋住自己跳出來的列印視窗
+  assert.doesNotMatch(page.match(/const hasWarning = [^;]*;/)[0], /nudge/);
+});
+
+test("標籤上的小字都是粗體(熱感印表機細的筆畫印不出來)", () => {
+  const css = read("../styles.css");
+  for (const cls of ["label-name", "label-src", "label-grade", "label-price", "label-code", "label-last5", "label-sku", "label-nobars"]) {
+    const rule = css.match(new RegExp(`\\.${cls} \\{[^}]*\\}`));
+    assert.ok(rule, cls);
+    assert.match(rule[0], /font-weight: (700|900);/, cls);
+  }
 });
 
 test("序號拆出末 5 碼;紙上印的不是那一串就拆不出來", () => {

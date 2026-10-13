@@ -1044,6 +1044,8 @@ button { font-family: inherit; }
 }
 /* 第二張起,每一張之前換頁(不用「每一張之後換頁、最後一張除外」:那樣最後面多一個東西就會多吐一張空白的) */
 .label-tile + .label-tile { break-before: page; page-break-before: always; }
+/* 位置微調:這台電腦的印表機偏了多少,整張的內容就反方向推多少(列印頁把數字填在 --label-dx / --label-dy;沒有調就是 0) */
+.label-inner { position: absolute; inset: 0; transform: translate(var(--label-dx, 0mm), var(--label-dy, 0mm)); }
 .label-half { position: absolute; left: 1.5mm; right: 1.5mm; height: 11.4mm; display: flex; flex-direction: column; overflow: hidden; }
 .label-half.top { top: 0.8mm; }
 /* 下半那一聯:同樣的內容、順序倒過來(條碼那一半貼著撕線、品名在最下面) */
@@ -1052,7 +1054,8 @@ button { font-family: inherit; }
 /* 放不下時只壓寬度(比例由畫面量出來填),從左邊壓 */
 .label-name > span { display: inline-block; transform-origin: left center; }
 .label-meta { flex: none; height: 2.8mm; display: flex; align-items: baseline; gap: 1.2mm; line-height: 2.8mm; white-space: nowrap; overflow: hidden; }
-.label-src { flex: 1 1 auto; min-width: 0; overflow: hidden; font-size: 1.9mm; }
+/* 小字一律粗體:熱感一個點 0.125 mm,一般粗細的 1.9 mm 小字筆畫只有一個點,橫的那一筆常印不出來(實機印出來 PO 的 P 像 F) */
+.label-src { flex: 1 1 auto; min-width: 0; overflow: hidden; font-size: 1.9mm; font-weight: 700; }
 .label-grade { flex: none; font-size: 2.2mm; font-weight: 700; }
 .label-price { flex: none; font-size: 2.8mm; font-weight: 700; }
 .label-codeline { flex: none; height: 2.3mm; display: flex; align-items: baseline; justify-content: space-between; gap: 1.5mm; line-height: 2.3mm; white-space: nowrap; overflow: hidden; }
@@ -1060,14 +1063,15 @@ button { font-family: inherit; }
   flex: none;
   font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 2.1mm;
+  font-weight: 700;
   /* pre:不折行,而且碼裡面連續的空白照原樣印(nowrap 會把兩個空白併成一個,字就跟條碼不是同一個碼了) */
   white-space: pre;
 }
 /* 有序號的那一台:字只印末 5 碼(條碼是整支序號) */
-.label-last5 { flex: none; font-size: 1.9mm; white-space: pre; }
+.label-last5 { flex: none; font-size: 1.9mm; font-weight: 700; white-space: pre; }
 .label-last5 b { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 2.4mm; font-weight: 900; letter-spacing: 0.1mm; }
 .label-nobars b { font-weight: 900; }
-.label-sku { min-width: 0; overflow: hidden; font-size: 1.9mm; }
+.label-sku { min-width: 0; overflow: hidden; font-size: 1.9mm; font-weight: 700; }
 .label-slot { flex: none; height: 3.5mm; }
 /* 條碼:疊在兩聯中間(位置與大小由畫面照點數算出來填) */
 .label-bars { position: absolute; display: block; z-index: 1; }
@@ -1077,6 +1081,7 @@ button { font-family: inherit; }
   height: 5.8mm;
   font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 2.4mm;
+  font-weight: 700;
   line-height: 2.8mm;
   overflow: hidden;
   overflow-wrap: anywhere;
@@ -1122,6 +1127,7 @@ button { font-family: inherit; }
 .label-bar-name { max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .label-bar-grow { flex: 1 1 auto; }
 .label-bar-warn { color: #8a4b00; }
+.label-bar-nudge { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 @media screen {
   /* 這一頁自己捲(外面那一層的版面不能捲):張數很多時下面的標籤、上面的按鈕都要看得到 */
   .label-page { height: 100vh; overflow: auto; background: #e4e4e4; }

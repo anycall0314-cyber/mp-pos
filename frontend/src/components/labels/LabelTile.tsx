@@ -81,35 +81,38 @@ export const LabelTile = memo(function LabelTile({
   );
   return (
     <div className={`label-tile${frame ? " label-frame" : ""}`}>
-      {half("top")}
-      {layout && (
-        <svg
-          className="label-bars"
-          // 寬度、左邊的空白都是整數個點(一個點 0.125 mm):每一條線才會落在印表機的點上
-          style={{
-            width: `${dotsToMm(layout.widthDots)}mm`,
-            height: `${LABEL.barHeightMm}mm`,
-            top: `${barTopMm()}mm`,
-            left: `${LABEL.sideMarginMm + dotsToMm(leftPadDots(layout.widthDots))}mm`,
-          }}
-          viewBox={`0 0 ${layout.widthDots} 10`}
-          preserveAspectRatio="none"
-          shapeRendering="crispEdges"
-          aria-label={`條碼 ${printed.code}`}
-        >
-          {layout.bars.map((b) => (
-            <rect key={b.x} x={b.x} y={0} width={b.w} height={10} fill="#000" />
-          ))}
-        </svg>
-      )}
-      {half("bottom")}
-      {frame && (
-        <>
-          {/* 測試標籤:左右各一小段線,要剛好落在撕線上 */}
-          <span className="label-fold l" />
-          <span className="label-fold r" />
-        </>
-      )}
+      {/* 內容包一層:位置微調推的是這一層(樣式 `.label-inner`);測試標籤的外框留在紙的四邊不跟著動 */}
+      <div className="label-inner">
+        {half("top")}
+        {layout && (
+          <svg
+            className="label-bars"
+            // 寬度、左邊的空白都是整數個點(一個點 0.125 mm):每一條線才會落在印表機的點上
+            style={{
+              width: `${dotsToMm(layout.widthDots)}mm`,
+              height: `${LABEL.barHeightMm}mm`,
+              top: `${barTopMm()}mm`,
+              left: `${LABEL.sideMarginMm + dotsToMm(leftPadDots(layout.widthDots))}mm`,
+            }}
+            viewBox={`0 0 ${layout.widthDots} 10`}
+            preserveAspectRatio="none"
+            shapeRendering="crispEdges"
+            aria-label={`條碼 ${printed.code}`}
+          >
+            {layout.bars.map((b) => (
+              <rect key={b.x} x={b.x} y={0} width={b.w} height={10} fill="#000" />
+            ))}
+          </svg>
+        )}
+        {half("bottom")}
+        {frame && (
+          <>
+            {/* 測試標籤:左右各一小段線,要剛好落在撕線上 */}
+            <span className="label-fold l" />
+            <span className="label-fold r" />
+          </>
+        )}
+      </div>
     </div>
   );
 });

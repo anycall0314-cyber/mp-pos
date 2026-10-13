@@ -10,8 +10,14 @@ import { QtyInput } from "@/components/workbench/QtyInput";
 import {
   MAX_SHEETS,
   MAX_TOTAL_SHEETS,
+  NUDGE,
+  type Nudge,
+  type NudgeMove,
   copiesOf,
   expandSheets,
+  moveNudge,
+  nudgeText,
+  readNudge,
   shouldAutoPrint,
   totalSheets,
 } from "@/lib/labels";
@@ -27,7 +33,35 @@ import {
  * `auto=0` = 不要自己跳出列印視窗。
  *
  * 配件的張數可以在上面那一排改(0 = 不印);某一台固定一張。
+ *
+ * 位置微調(印出來偏了,整張往反方向推):在測試標籤那一頁調,**記在這台電腦的瀏覽器**,之後這台電腦印的每一張標籤都照調過的位置。
  */
+
+/** 四顆一樣長的按鈕:印出來偏下就按「往上」 */
+const NUDGE_MOVES: [NudgeMove, string][] = [
+  ["up", "往上"],
+  ["down", "往下"],
+  ["left", "往左"],
+  ["right", "往右"],
+];
+
+/** 這台電腦記的位置微調。瀏覽器不給存(無痕、被擋)就當成沒有調、也不報錯 */
+function loadNudge(): Nudge {
+  try {
+    return readNudge(window.localStorage.getItem(NUDGE.storageKey));
+  } catch {
+    return readNudge(null);
+  }
+}
+
+function saveNudge(nudge: Nudge) {
+  try {
+    if (nudge.x || nudge.y) window.localStorage.setItem(NUDGE.storageKey, JSON.stringify(nudge));
+    else window.localStorage.removeItem(NUDGE.storageKey);
+  } catch {
+    // 存不了:這一次照樣用調過的位置印,下次再調
+  }
+}
 
 const TEST_LABELS: LabelData[] = [
   {
@@ -135,6 +169,17 @@ function LabelSheet({ query, test, auto }: { query: string | null; test: boolean
 
   /** 配件改過的張數(key → 張數) */
   const [edited, setEdited] = useState<Record<string, number>>({});
+  /** 這台電腦的位置微調(公釐) */
+  const [nudge, setNudge] = useState<Nudge>(loadNudge);
+  const nudged = nudgeText(nudge);
+  // 從「現在的」算下一格(另外記一份,不看這一次畫面抓到的那個:連按很快時每一下都要接在上一下後面)
+  const nudgeNow = useRef(nudge);
+  function changeNudge(change: (now: Nudge) => Nudge) {
+    const next = change(nudgeNow.current);
+    nudgeNow.current = next;
+    saveNudge(next);
+    setNudge(next);
+  }
   const total = totalSheets(entries, edited);
   /** 整批太多張:不畫、不印,請人把配件的張數改少 */
   const tooMany = total > MAX_TOTAL_SHEETS;
@@ -223,6 +268,22 @@ function LabelSheet({ query, test, auto }: { query: string | null; test: boolean
             關閉
           </button>
         </div>
+        {test ? (
+          <div className="label-bar-nudge">
+            <span>位置</span>
+            {NUDGE_MOVES.map(([move, text]) => (
+              <button key={move} type="button" onClick={() => changeNudge((now) => moveNudge(now, move))}>
+                {text}
+              </button>
+            ))}
+            <button type="button" disabled={!nudged} onClick={() => changeNudge(() => readNudge(null))}>
+              歸零
+            </button>
+            <span>{nudged || "未調整"}</span>
+          </div>
+        ) : (
+          nudged && <div>位置 {nudged}</div>
+        )}
         {tooMany && (
           <div className="label-bar-warn">
             一次最多印 {MAX_TOTAL_SHEETS} 張:請把下面配件的張數改少(0 = 這一筆不印)
@@ -273,7 +334,10 @@ function LabelSheet({ query, test, auto }: { query: string | null; test: boolean
           </div>
         )}
       </div>
-      <div className="label-sheet">
+      <div
+        className="label-sheet"
+        style={{ "--label-dx": `${nudge.x}mm`, "--label-dy": `${nudge.y}mm` } as React.CSSProperties}
+      >
         {sheets.map((s) => (
           <LabelTile key={s.key} label={s.entry} frame={s.entry.key === "test-frame"} />
         ))}

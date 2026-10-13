@@ -74,6 +74,57 @@ export function splitTail(code: string, tail: string): [string, string] {
   return [code.slice(0, code.length - tail.length), tail];
 }
 
+/**
+ * 位置微調:這台印表機印出來偏了多少,就把整張反方向推回去(公釐;往右、往下是正的)。
+ * **記在這台電腦的瀏覽器**,不是公司的設定:每一台印表機、每一次校正偏的都不一樣(owner 2026-10-13 實機:偏下不到 1 mm)。
+ * 一格 0.25 mm = 印表機的 2 個點,所以條碼的線推完還是落在點上;最多推 3 mm(再多就是紙張尺寸設錯,不是微調該處理的)。
+ */
+export const NUDGE = { stepMm: 0.25, maxMm: 3, storageKey: "mp_pos_label_nudge" } as const;
+
+export interface Nudge {
+  x: number;
+  y: number;
+}
+
+export type NudgeMove = "up" | "down" | "left" | "right";
+
+/** 收成一格一格的、不超過上限;不是數字的當 0 */
+function snapNudge(value: unknown): number {
+  const mm = typeof value === "number" && Number.isFinite(value) ? value : 0;
+  const most = NUDGE.maxMm / NUDGE.stepMm;
+  const steps = Math.max(-most, Math.min(most, Math.round(mm / NUDGE.stepMm)));
+  // `|| 0`:−0 也收成 0(不然畫面會印出「上 0」)
+  return steps * NUDGE.stepMm || 0;
+}
+
+/** 存在瀏覽器的那一份讀回來。看不懂的、超出範圍的都收回來:壞掉的設定不能把標籤推到紙外面 */
+export function readNudge(raw: string | null | undefined): Nudge {
+  if (!raw) return { x: 0, y: 0 };
+  try {
+    const saved = JSON.parse(raw) as { x?: unknown; y?: unknown } | null;
+    return { x: snapNudge(saved?.x), y: snapNudge(saved?.y) };
+  } catch {
+    return { x: 0, y: 0 };
+  }
+}
+
+/** 按一下推一格(印出來偏下就按「往上」) */
+export function moveNudge(now: Nudge, move: NudgeMove): Nudge {
+  const step = NUDGE.stepMm;
+  if (move === "up") return { x: now.x, y: snapNudge(now.y - step) };
+  if (move === "down") return { x: now.x, y: snapNudge(now.y + step) };
+  if (move === "left") return { x: snapNudge(now.x - step), y: now.y };
+  return { x: snapNudge(now.x + step), y: now.y };
+}
+
+/** 現在推了多少:「上 0.75 · 左 0.25 mm」;沒有推就是空的 */
+export function nudgeText(now: Nudge): string {
+  const parts: string[] = [];
+  if (now.y) parts.push(`${now.y < 0 ? "上" : "下"} ${Math.abs(now.y)}`);
+  if (now.x) parts.push(`${now.x < 0 ? "左" : "右"} ${Math.abs(now.x)}`);
+  return parts.length ? `${parts.join(" · ")} mm` : "";
+}
+
 /** 一聯上面的字(上下兩聯印的一樣)。畫面照這個排,不自己決定印什麼 */
 export interface HalfText {
   /** 進貨單號 · 日期(民國);都沒有就是空的 */
