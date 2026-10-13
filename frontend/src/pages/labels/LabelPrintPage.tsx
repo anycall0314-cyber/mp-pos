@@ -111,19 +111,19 @@ const TEST_LABELS: LabelData[] = [
     copies: 1,
   },
   {
-    // 45 mm 的紙,英數超過 10 碼的序號用一般的線寬(2 點)印不下條碼:有序號的會改用細線(一個單位 1 點)。
-    // 這一張就是一個 12 碼的序號,平常這樣的序號印出來就是這個樣子(owner 2026-10-13 實機刷得到)
-    key: "test-thin",
+    // 45 mm 的紙,英數超過 10 碼的序號印不下條碼(最細只用 2 點;owner 2026-10-13「不要用細線，熱感紙粉久會掉墨變淡掃不到」):
+    // 整串序號印成字、末 5 碼標粗。這一張就是一個 12 碼的序號,平常這樣的序號印出來就是這個樣子
+    key: "test-long",
     product_id: 0,
     serial_id: 0,
-    name: "測試標籤:長序號(細線條碼)",
-    sku: "細線",
+    name: "測試標籤:長序號(只印文字)",
+    sku: "長序號",
     code: "F2LXK1ABCDEF",
     code_kind: "serial",
     last5: "BCDEF",
     price: null,
     grade: "",
-    doc_no: "條碼槍刷得到 F2LXK1ABCDEF",
+    doc_no: "序號太長:沒有條碼",
     doc_date: "",
     copies: 1,
   },

@@ -9,18 +9,17 @@ import {
   dotsToMm,
   layoutBars,
   leftPadDots,
-  moduleDotsFor,
   halfText,
   printableCode,
   squeezeFor,
 } from "@/lib/labels";
 import { money } from "@/lib/money";
 
-/** 這個碼的條碼怎麼畫(整數個點);畫不出來回 null:太長放不下、或有 Code 128 沒有的字。線寬照碼的種類(有序號的可以用細線) */
-function barsFor(code: string, codeKind: string): BarLayout | null {
+/** 這個碼的條碼怎麼畫(整數個點);畫不出來回 null:太長放不下(最細只用 2 點,不用細線)、或有 Code 128 沒有的字 */
+function barsFor(code: string): BarLayout | null {
   const bits = code128Bits(code);
   if (!bits) return null;
-  return layoutBars(bits, undefined, moduleDotsFor(codeKind));
+  return layoutBars(bits);
 }
 
 /**
@@ -28,7 +27,7 @@ function barsFor(code: string, codeKind: string): BarLayout | null {
  * 標籤與列印頁上面的提醒用同一支,兩邊講的才會一樣。
  */
 export function codeToPrint(label: Pick<LabelData, "code" | "code_kind" | "sku">) {
-  return printableCode(label, (code) => barsFor(code, label.code_kind) !== null);
+  return printableCode(label, (code) => barsFor(code) !== null);
 }
 
 /** 印不出條碼時,碼的字超過這麼多就用小一號的字(兩聯各自要放得下整串) */
@@ -51,8 +50,8 @@ export const LabelTile = memo(function LabelTile({
     [label.code, label.code_kind, label.sku],
   );
   const layout = useMemo(
-    () => (printed.bars ? barsFor(printed.code, label.code_kind) : null),
-    [printed.bars, printed.code, label.code_kind],
+    () => (printed.bars ? barsFor(printed.code) : null),
+    [printed.bars, printed.code],
   );
   // 品名一行放不下就壓扁:量上半那一份(字本來多寬、格子多寬),上下兩聯用同一個比例。
   // 量的是畫出來的寬度(有小數;`offsetWidth` 是整數,差那半個點最後一個字會被切到),所以要除掉**畫面上現在**已經壓的比例 ——

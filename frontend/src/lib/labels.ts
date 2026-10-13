@@ -24,10 +24,11 @@ export const LABEL = {
   barHeightMm: 7.2,
   /** 條碼兩邊要留的空白:10 個單位(Code 128 的規定,少了槍會讀不到) */
   quietModules: 10,
-  /** 一個單位幾個點:先試大的 */
+  /**
+   * 一個單位幾個點:先試大的。**最細 2 點,不用 1 點的細線**(owner 2026-10-13:「不要用細線，熱感紙粉久會掉墨變淡掃不到」)——
+   * 2 點放不下的碼(英數超過 10 碼的序號)不印條碼、整串印成字。
+   */
   moduleDots: [3, 2],
-  /** 有序號的那一台:多一種細線(1 點),見 `moduleDotsFor` */
-  serialModuleDots: [3, 2, 1],
   /** 品名一行放不下時最多壓扁到多少(再放不下才切掉尾巴) */
   minSqueeze: 0.75,
   /** 品名壓到格子的幾成寬:留一點點,螢幕上量的跟印表機畫的字寬會差一點,不然最後一個字的邊會被切到 */
@@ -176,7 +177,7 @@ export interface BarLayout {
 /**
  * 把條碼的黑白樣式("1101001…",1 = 黑)排成整數個點。
  * 放不下回 null(這個碼太長,不印條碼)。
- * `tryDots` = 可以用哪幾種線寬(從粗到細試);照這個碼是哪一種給(`moduleDotsFor`)。
+ * `tryDots` = 可以用哪幾種線寬(從粗到細試);平常不給,就是 `LABEL.moduleDots`(最細 2 點)。
  */
 export function layoutBars(
   bits: string,
@@ -219,16 +220,6 @@ export function dotsToMm(dots: number): number {
  *   刷品號一樣找得到這個商品,比完全沒有條碼好;條碼下面的字也跟著印品號(字跟線要是同一個碼)。
  * - 序號印不下不能換:那是「這一台」的碼,換成品號就刷不到這一台了。只印文字(`bars: false`)。
  */
-/**
- * 這種碼的條碼可以用哪幾種線寬(一個單位幾個點,從粗到細試)。
- * **有序號的那一台多一種細線(1 點)**:它的條碼只能是那支序號(owner 2026-10-13:「我個人偏向序號，因為查庫存銷貨都可以以序號做查詢依據與帶入欄位」),
- * 2 點放不下就沒有別的條碼可以印;細線他在實機印過、槍刷得到(「印出來的條碼都刷得過」)。45 mm 的紙細線放得下 25 碼英數。
- * 其他的(原廠條碼、品號)不用細線:原廠條碼太長就改印品號(`printableCode`),線粗一點比較好刷。
- */
-export function moduleDotsFor(codeKind: string): readonly number[] {
-  return codeKind === "serial" ? LABEL.serialModuleDots : LABEL.moduleDots;
-}
-
 export function printableCode(
   label: { code: string; code_kind: string; sku: string },
   fits: (code: string) => boolean,
