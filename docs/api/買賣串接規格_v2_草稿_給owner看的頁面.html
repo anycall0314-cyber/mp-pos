@@ -54,21 +54,59 @@ code { font-family: var(--mono); font-size: 0.875rem; background: var(--bg); bor
 <div class="wrap">
   <header>
     <h1>買賣串接規格</h1>
-    <p class="stamp">草稿 · 2026-10-14 · 還沒有實作 · 要你定的七件事在最下面</p>
+    <p class="stamp">2026-10-14 · 平台內的買與賣已經在測試站 · 對外的接法還沒做</p>
     <p class="lede">用這套 POS 的經銷商可以互相買賣;外面的系統照同一份規格也接得進來。錢不經過平台,只管帳。</p>
   </header>
 
   <section>
-    <h2>現在有的、還沒有的</h2>
+    <h2>做到哪了</h2>
     <div class="two">
       <div class="box">
-        <h3>買家那一半 <span class="tag ok">已經有</span></h3>
-        <p>看商品與進價、下單、查單、到貨變進貨單。POS 跟膜總裁叫貨就是照這套做的,在測試站。</p>
+        <h3>賣家那一半 <span class="tag ok">測試站</span></h3>
+        <p>批發設定、往來的同行、中古機進貨就上架、全新機與配件開放批發、收到的單、刷機出貨、收款記帳。</p>
       </div>
       <div class="box">
-        <h3>賣家那一半 <span class="tag wait">還沒有</span></h3>
-        <p>讓別人看我的批發商品、對我下單;我接單、出貨,對方收貨入庫。這一份規格主要在補這一半。</p>
+        <h3>買家那一半 <span class="tag ok">測試站</span></h3>
+        <p>叫貨頁看得到同行、中古機一台一筆、下單、取消、查進度、到貨入庫(手機序號直接帶進來)。</p>
       </div>
+      <div class="box">
+        <h3>對外的接法 <span class="tag wait">還沒做</span></h3>
+        <p>給不在這套 POS 的系統用的金鑰、網址、通知。規格跟平台內同一份。</p>
+      </div>
+      <div class="box">
+        <h3>維修串接 <span class="tag wait">等智盛</span></h3>
+        <p>查料、報價、進度。方向寫在專案的規格第 8 節。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>賣家怎麼用</h2>
+    <div class="scroll">
+      <table>
+        <tr><th>要做的事</th><th>在哪裡</th><th>幾步</th></tr>
+        <tr><td>開起來(一次)</td><td>銷貨作業 → 批發單 → 設定</td><td>開放批發選開 → 儲存</td></tr>
+        <tr><td>讓一個同行可以買</td><td>批發單 → 同行帳</td><td>發往來代碼 → 把八碼傳給對方</td></tr>
+        <tr><td>中古機上架</td><td>進貨、收購的表單</td><td>不用做:存檔就上架,批發價自動算</td></tr>
+        <tr><td>全新機、配件開放</td><td>批發單 → 批發品</td><td>勾「批發」</td></tr>
+        <tr><td>出貨</td><td>批發單 → 待出貨</td><td>直接刷那一台 → 出貨</td></tr>
+        <tr><td>找不到那一台</td><td>那一行</td><td>不出(按兩下),其餘照出</td></tr>
+        <tr><td>現場客人要被訂走的那一台</td><td>照平常結帳</td><td>系統問:賣給客人 / 留給同行</td></tr>
+        <tr><td>收到錢</td><td>批發單 → 同行帳 → 收款</td><td>填金額 → 記一筆</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>買家怎麼用</h2>
+    <div class="scroll">
+      <table>
+        <tr><th>要做的事</th><th>在哪裡</th><th>幾步</th></tr>
+        <tr><td>加入(一次)</td><td>系統設定 → 叫貨串接 → 加入同行</td><td>輸入對方給的八碼 → 加入</td></tr>
+        <tr><td>叫貨</td><td>進貨入庫 → 廠商叫貨</td><td>選同行 → 中古機勾「訂」、其他填數量 → 送出</td></tr>
+        <tr><td>取消</td><td>廠商叫貨 → 紀錄</td><td>對方出貨之前:取消叫貨(按兩下)</td></tr>
+        <tr><td>貨到了</td><td>紀錄 → 到貨入庫</td><td>序號已經列好,不用再刷 → 確認入庫</td></tr>
+      </table>
     </div>
   </section>
 
@@ -187,37 +225,26 @@ code { font-family: var(--mono); font-size: 0.875rem; background: var(--bg); bor
   </section>
 
   <section>
-    <h2>要你定的七件事</h2>
+    <h2>你定的八件事</h2>
     <div class="asks">
-      <div class="ask">
-        <h3>誰可以跟我買</h3>
-        <p class="rec"><b>建議:</b>賣家核准每一個買家,才看得到商品與價錢。另一種是設成公開批發價。</p>
-      </div>
-      <div class="ask">
-        <h3>庫存露多少</h3>
-        <p class="rec"><b>建議:</b>只露「有貨、缺貨」。同業看得到數量,等於看得到我的底。</p>
-      </div>
-      <div class="ask">
-        <h3>買家可不可以自己取消</h3>
-        <p class="rec"><b>建議:</b>賣家接單之前可以;接了之後要聯絡賣家。</p>
-      </div>
-      <div class="ask">
-        <h3>中古機批發要不要一起做</h3>
-        <p class="rec"><b>建議:</b>第一版先做全新機與配件。中古機每一台機況與價錢不同,要「一台一台上架」,另開一版。</p>
-      </div>
-      <div class="ask">
-        <h3>管帳做到哪</h3>
-        <p class="rec"><b>建議:</b>每張單的收款記號,加上對帳單。不做沖帳。</p>
-      </div>
-      <div class="ask">
-        <h3>對外的金鑰誰發</h3>
-        <p class="rec"><b>建議:</b>賣家自己在 POS 後台發給買家,弄丟了自己作廢重發。</p>
-      </div>
-      <div class="ask">
-        <h3>平台內買賣,兩邊的單怎麼開</h3>
-        <p class="rec"><b>建議:</b>賣家按出貨,自動開一張銷貨單並扣庫存;買家按收貨,自動開一張進貨單。兩邊各按一次,像調撥的派發與確認。</p>
-      </div>
+      <div class="ask"><h3>誰可以跟我買</h3><p class="rec"><b>中古機:平台販售</b>(平台上每一家同行都看得到;可以改成只給核准的)。<b>全新機與配件:只給核准的同行</b>,用往來代碼加入。</p></div>
+      <div class="ask"><h3>庫存露多少</h3><p class="rec"><b>只露有貨、缺貨。</b>賣家可以改成露數量。</p></div>
+      <div class="ask"><h3>同一台被同行訂了、現場客人也要</h3><p class="rec"><b>出貨之前賣家可以抽回來賣給現場客人</b>,同行那一台當下取消。</p></div>
+      <div class="ask"><h3>管帳</h3><p class="rec"><b>記一筆收到的金額,由舊到新銷單</b>,看得到還欠多少。錢不經過平台。</p></div>
+      <div class="ask"><h3>買家取消</h3><p class="rec"><b>賣家出貨之前,買家可以自己取消</b>還沒出的部分。</p></div>
+      <div class="ask"><h3>對外的金鑰</h3><p class="rec"><b>賣家自己在後台發。</b>(還沒做)</p></div>
+      <div class="ask"><h3>平台內兩邊的單</h3><p class="rec"><b>賣家出貨自動開銷貨單、扣庫存;買家收貨開進貨單</b>,手機序號直接帶進來。</p></div>
+      <div class="ask"><h3>維修串接</h3><p class="rec"><b>等智盛加入再排。</b></p></div>
     </div>
+  </section>
+
+  <section>
+    <h2>要先知道的</h2>
+    <ul>
+      <li>賣出去的同一台再收回來,系統原本就還沒有。甲批給乙、乙之後又批回甲,甲入庫那一台會被擋。要另外排。</li>
+      <li>手機現在要連一次品名(中古機連一次,每一台都算)。標準機型做好之後就不用連。</li>
+      <li>出貨開的銷貨單付款方式是「同行記帳」,不算當日現金。收到錢在同行帳記。</li>
+    </ul>
   </section>
 
   <details>
