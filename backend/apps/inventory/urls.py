@@ -9,6 +9,7 @@ from .stockcount_views import (
     stock_count_found,
     stock_count_line,
     stock_count_lines,
+    stock_count_old_units,
     stock_count_scan,
     stock_count_scans,
     stock_counts,
@@ -48,6 +49,7 @@ urlpatterns = router.urls + [
     path("serial-report/", serial_report, name="serial-report"),
     # 盤點(規則在 stockcount.py)
     path("stock-counts/", stock_counts),
+    path("stock-counts/old-units/", stock_count_old_units),
     path("stock-counts/<int:pk>/", stock_count),
     path("stock-counts/<int:pk>/lines/", stock_count_lines),
     path("stock-counts/<int:pk>/lines/<int:line_id>/", stock_count_line),

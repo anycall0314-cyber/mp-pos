@@ -21,6 +21,8 @@ owner 2026-10-12 定的三條:
 - 庫存的每一次增減都記一筆「盤點調整」異動(增加寫目的門市、減少寫來源門市 —— 每日對帳的「庫存 = 異動加總」靠這個)。
 - 鎖的順序照 `locking.py`:先鎖盤點單自己,再鎖序號、庫存餘額(跟銷貨同一個順序;核准時不另外「先鎖商品」)。
 """
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -28,7 +30,7 @@ from apps.catalog.models import Category, Product
 from apps.identity.normalize import normalize_serial
 from apps.tenants.models import Tenant
 
-from .identifiers import find_serial_ids
+from .identifiers import IdentifierError, create_serial, find_serial_ids
 from .locking import lock_document, lock_stock_rows, locked_balance
 from .models import (
     ProductSerial,
@@ -48,6 +50,7 @@ ON_SHELF = (ProductSerial.Status.IN_STOCK, ProductSerial.Status.RETURNED)
 REF = "stock_count"
 REF_FOUND = "stock_count_found"
 MAX_QTY = 1_000_000
+MAX_AMOUNT = Decimal("1e12")
 
 
 class CountError(Exception):
@@ -137,17 +140,44 @@ def remove_line(count, line_id):
             raise CountError("這一列不在這張盤點單上")
 
 
+def _first_intake(count, code):
+    """系統不認得的碼:對舊系統的機器清單(第一次盤點入庫;`legacy/units.py`)。回 (要記的碼, 那一台) 或 (碼, None)。
+
+    刷到型號用的舊貼紙、或是配件的條碼 → 直接講要怎麼刷(紅隊:店員會習慣性刷舊貼紙)。"""
+    from apps.legacy import units
+    from apps.legacy.products import _barcode_owner
+
+    try:
+        hit = units.lookup(count.tenant, code)
+    except units.ModelSticker as exc:
+        raise CountError(f"這是「{exc}」型號的貼紙,請刷這一台的 IMEI") from None
+    if hit is not None:
+        return hit.code, hit.unit
+    owner = _barcode_owner(count.tenant, code)
+    if owner is not None:
+        p = Product.objects.filter(pk=owner).values_list("name", "requires_serial").first()
+        if p and not p[1]:
+            raise CountError(f"「{p[0]}」是配件,請在配件那一格打數量")
+    return code, None
+
+
 def scan(count, code, user):
-    """手機:刷一個碼。記下刷的那一刻那一台在帳上是什麼樣子(之後賣掉的不算多、也不算少)。"""
+    """手機:刷一個碼。記下刷的那一刻那一台在帳上是什麼樣子(之後賣掉的不算多、也不算少)。
+    系統不認得的碼另外對舊系統的機器清單,照抄那一台的舊品號、舊品名、成本、售價(核准時給管理員看)。"""
     code = str(code or "").strip()
     key = normalize_serial(code)
     if not key or len(code) > 80:
         raise CountError("這不是有效的碼")
     with transaction.atomic():
         _locked(count, S.COUNTING)
+        ids = find_serial_ids(count.tenant, code)
+        unit = None
+        if not ids:
+            code, unit = _first_intake(count, code)
+            key = normalize_serial(code)
+            ids = find_serial_ids(count.tenant, code)
         if StockCountScan.objects.filter(count=count, code_key=key).exists():
             raise CountError("這個碼刷過了")
-        ids = find_serial_ids(count.tenant, code)
         if len(ids) > 1:
             raise CountError("這個碼對到不只一台,請改刷那一台的另一個碼")
         serial = ProductSerial.objects.select_related("product").get(pk=ids[0]) if ids else None
@@ -158,9 +188,12 @@ def scan(count, code, user):
             if scope and serial.product.category_id not in scope:
                 raise CountError(f"「{serial.product.name}」不在這張盤點單的類別裡")
         here = bool(serial and serial.warehouse_id == count.warehouse_id and serial.status in ON_SHELF)
+        old = unit if serial is None else None
         return StockCountScan.objects.create(
             tenant=count.tenant, count=count, code=code, code_key=key, serial=serial, here=here,
-            state=serial.status if serial else "", scanned_at=timezone.now(), scanned_by=_by(user))
+            state=serial.status if serial else "", scanned_at=timezone.now(), scanned_by=_by(user),
+            old_code=old.product_code_raw if old else "", old_name=old.product_name_raw if old else "",
+            old_cost=old.cost if old else None, old_price=old.price if old else None)
 
 
 def remove_scan(count, scan_id):
@@ -235,19 +268,57 @@ def _decision(decisions, pk):
     return d
 
 
-def approve(count, user, lines=None, missing=None):
+def _amount(value, what, required=True):
+    """管理員填的成本 / 售價:0 以上、到分。空的:要的話擋下,不要的話是 None。"""
+    text = str(value if value is not None else "").replace(",", "").strip()
+    if not text:
+        if required:
+            raise CountError(f"{what}要填(沒有就填 0)")
+        return None
+    try:
+        amount = Decimal(text)
+    except InvalidOperation:
+        raise CountError(f"{what}要是數字") from None
+    if not amount.is_finite() or amount < 0 or amount >= MAX_AMOUNT:
+        raise CountError(f"{what}要是 0 以上的數字")
+    return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _new_units(count, extras):
+    """系統不認得、要入庫的那幾台:[(刷碼那一列, 品號編號, 成本, 售價)]。沒有送的 = 不入(沒講就不入,不猜)。"""
+    plans = []
+    for row in count.scans.filter(serial__isnull=True).order_by("id"):
+        d = _decision(extras, row.pk)
+        row.reason = str(d.get("reason") or "")[:100]
+        pid = d.get("product")
+        row.skipped = bool(d.get("skipped", False)) or pid in (None, "")
+        if row.skipped:
+            row.product = row.unit_cost = row.unit_price = None
+            row.save(update_fields=["skipped", "reason", "product", "unit_cost", "unit_price"])
+            continue
+        if not isinstance(pid, int) or isinstance(pid, bool):
+            raise CountError(f"{row.code}:品號不對")
+        plans.append((row, pid, _amount(d.get("unit_cost"), f"{row.code} 的成本"),
+                      _amount(d.get("unit_price"), f"{row.code} 的售價", required=False)))
+    return plans
+
+
+def approve(count, user, lines=None, missing=None, extras=None):
     """核准(管理員):照差異動庫存。lines / missing = {編號: {"adjust_qty": 整數, "skipped": 是否, "reason": 字}}
     沒有送的列 = 照「數到的 − 當時帳上的」調;手機沒有送的 = 標成盤虧。
+    extras = 系統不認得的碼 {刷碼編號: {"product": 品號編號, "unit_cost": 成本, "unit_price": 售價, "skipped", "reason"}}:
+    有給品號的入庫成那個品號的一台(第一次盤點入庫,記成盤點調整);**沒有送的不入**。
 
     這一步才動庫存,而且整張在一個交易裡:任何一列不夠扣就整張不動、講是哪一個商品。
     """
-    lines, missing = lines or {}, missing or {}
+    lines, missing, extras = lines or {}, missing or {}, extras or {}
     M = StockMovement.MovementType
     with transaction.atomic():
         _locked(count, S.SUBMITTED)
         tenant, wh = count.tenant, count.warehouse
         rows = list(count.lines.select_related("product").order_by("id"))
         gone = list(count.missing.select_related("serial__product").order_by("id"))
+        plans = _new_units(count, extras)
         for row in rows:
             d = _decision(lines, row.pk)
             row.skipped = bool(d.get("skipped", False))
@@ -263,10 +334,16 @@ def approve(count, user, lines=None, missing=None):
         todo = [row for row in rows if row.adjust_qty]
         # 鎖的順序跟銷貨一樣:**序號 → 庫存餘額**。讀餘額的那個查詢照品號排序、會帶到商品那一列,
         # 所以鎖到餘額的同時商品那一列也鎖住了(銷貨也是這樣)。
-        # **不可以改成「先鎖商品」**(複審第二輪 P1):那樣這裡是 商品 → 序號,銷貨是 序號 → 餘額連帶商品,
+        # **配件的商品不可以改成「先鎖商品」**(複審第二輪 P1):那樣這裡是 商品 → 序號,銷貨是 序號 → 餘額連帶商品,
         # 一張銷貨單同時有那一台手機與那個配件、又剛好同時核准時,兩邊會互相等到死結。
+        # 第一次入庫的手機要重算它的平均成本,所以**那幾個(帶序號的)品號**照 locking.py 先鎖(跟進貨一樣:商品 → 序號);
+        # 銷貨不鎖帶序號的商品那一列,不會反過來等。
+        targets = {p.pk: p for p in Product.objects.filter(tenant=tenant, pk__in=[pid for _, pid, _, _ in plans])}
+        if len(targets) != len({pid for _, pid, _, _ in plans}):
+            raise CountError("品號不屬於這家公司")
         lock_stock_rows(
-            tenant, serial_ids=[m.serial_id for m in gone if not m.skipped],
+            tenant, products=[p for p in targets.values() if p.requires_serial],
+            serial_ids=[m.serial_id for m in gone if not m.skipped],
             balances=[(row.product, wh) for row in todo], create=True)
         # 送出之後商品被改成「帶序號」或「虛擬」(複審 P0):那種商品不能有數量庫存,這一列不能調 —— 管理員把它勾成先不調。
         # 在餘額(連帶商品)鎖住之後才讀;這裡再明確鎖一次商品(已經握著,不會等),讀到的就是鎖住的那一刻的樣子
@@ -311,9 +388,98 @@ def approve(count, user, lines=None, missing=None):
                     ref_doc_type=REF, ref_doc_id=count.id, note=f"盤點單 {count.no} 盤虧"[:200])
                 m.applied = True
         StockCountMissing.objects.bulk_update(gone, ["skipped", "reason", "applied"])
+        _blend_average(tenant, plans, targets)      # 先算(在庫的台數是入庫之前的),跟進貨一樣
+        _add_units(count, plans, targets, user)
         count.status, count.approved_at, count.approved_by = S.APPROVED, timezone.now(), _by(user)
         count.save(update_fields=["status", "approved_at", "approved_by", "updated_at"])
         return count
+
+
+def _blend_average(tenant, plans, targets):
+    """入庫之前先算那幾個品號的平均成本,**跟進貨同一個算法**(`purchasing.commit_purchase_order`):
+    (全公司現在在庫的台數 × 現在的平均成本 + 這一次的成本合計)÷(台數 + 這一次的台數)。
+    不可以用「現在在庫那幾台的成本平均」重算(複審 P0):中間賣掉過的話,兩種算法的數字不一樣,
+    同一個品號從進貨入、從盤點入會得到不同的平均成本。品號已經鎖住、平均成本是鎖到之後重讀的。"""
+    from apps.purchasing.services import CENTS
+
+    batches: dict[int, list] = {}
+    for _, pid, cost, _ in plans:
+        batches.setdefault(pid, []).append(cost)
+    for pid in sorted(batches):
+        product = targets[pid]
+        product.refresh_from_db(fields=["weighted_avg_cost"])
+        here = ProductSerial.objects.filter(tenant=tenant, product=product, status=ProductSerial.Status.IN_STOCK).count()
+        costs = batches[pid]
+        product.weighted_avg_cost = (
+            (Decimal(here) * product.weighted_avg_cost + sum(costs, Decimal("0"))) / Decimal(here + len(costs))
+        ).quantize(CENTS)
+        product.save(update_fields=["weighted_avg_cost"])
+
+
+def _add_units(count, plans, targets, user):
+    """第一次盤點入庫:每一台建成那個品號在這家門市在庫的一台(成本 = 管理員核准的),記一筆盤點調整。
+    品號已經在 `approve` 裡鎖住(商品 → 序號);平均成本照進貨的算法(`_blend_average`)。"""
+    from apps.legacy import units
+
+    tenant, wh = count.tenant, count.warehouse
+    scope = scope_ids(count)
+    now = timezone.now()
+    for row, pid, cost, price in plans:
+        product = targets[pid]
+        product.refresh_from_db(fields=["requires_serial", "is_virtual", "is_active", "is_secondhand", "condition"])
+        if not product.requires_serial or product.is_virtual:
+            raise CountError(f"{row.code}:「{product.name}」不是一台一個碼的商品")
+        if not product.is_active:
+            raise CountError(f"{row.code}:「{product.name}」已停用")
+        if scope and product.category_id not in scope:
+            raise CountError(f"{row.code}:「{product.name}」不在這張盤點單的類別裡")
+        extra = {}
+        if product.tracks_unit_condition:
+            if price:
+                extra["custom_unit_price"] = price
+            battery = units.battery_of(row.old_name)
+            if battery is not None:
+                extra["battery_health"] = battery
+            if row.old_name:
+                extra["condition_note"] = f"舊系統:{row.old_name}"[:200]
+        try:
+            serial = create_serial(
+                tenant=tenant, product=product, code=row.code, warehouse=wh, status=ProductSerial.Status.IN_STOCK,
+                purchase_unit_cost=cost, received_at=now, **extra)
+        except IdentifierError as exc:
+            raise CountError(f"{row.code}:{exc}") from None
+        StockMovement.objects.create(
+            tenant=tenant, serial=serial, qty=1, movement_type=StockMovement.MovementType.ADJUST, to_warehouse=wh,
+            ref_doc_type=REF, ref_doc_id=count.id, note=f"盤點單 {count.no} 第一次入庫"[:200])
+        row.product, row.unit_cost, row.unit_price, row.added = product, cost, price, serial
+        row.save(update_fields=["skipped", "reason", "product", "unit_cost", "unit_price", "added"])
+        if row.old_code:
+            _remember(tenant, row.old_code, row.old_name, product, user)
+
+
+def _remember(tenant, old_code, old_name, product, user):
+    """舊品號 → 這一次指定的品號,記在舊品號對照(下一次刷到同一個舊品號的機器就先帶出來)。已經對照到別的不動。"""
+    from apps.legacy.archive import SOURCE_SYSTEM
+    from apps.legacy.mapping import confirm_map
+    from apps.legacy.models import LegacyMappingLog, LegacyProductMap, MapMethod, MapStatus
+
+    row, _ = LegacyProductMap.objects.get_or_create(
+        tenant=tenant, source_system=SOURCE_SYSTEM, product_code_raw=old_code[:60],
+        defaults={"product_name_seen": old_name[:500]})
+    if row.status != MapStatus.CONFIRMED:
+        confirm_map(LegacyMappingLog.Kind.PRODUCT, row, product, user, method=MapMethod.MANUAL, note="盤點入庫")
+
+
+def suggested_products(tenant, old_codes) -> dict:
+    """舊品號 → 已經對照好的品號(核准畫面先帶出來,管理員確認)。"""
+    from apps.legacy.archive import SOURCE_SYSTEM
+    from apps.legacy.models import LegacyProductMap, MapStatus
+
+    rows = LegacyProductMap.objects.filter(
+        tenant=tenant, source_system=SOURCE_SYSTEM, status=MapStatus.CONFIRMED,
+        product_code_raw__in=[c for c in old_codes if c], product__requires_serial=True, product__is_active=True,
+    ).select_related("product")
+    return {r.product_code_raw: r.product for r in rows}
 
 
 def found(count, missing_id, user):

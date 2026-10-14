@@ -246,9 +246,11 @@ class PhoneTests(_Count):
             ("甲IMEI2", True, self.phone.name)])
         self.ok(self.act(count, "submit", self.c.clerk, phones_done=True))
         seen = self.detail(count)
-        self.assertEqual([(e["code"], e["state"]) for e in seen["extra_rows"]],
-                         [("甲IMEI1", "已售"), ("甲IMEI9", "在庫"), ("不認得的碼123", "")])
+        self.assertEqual([(e["code"], e["state"]) for e in seen["extra_rows"]], [("甲IMEI1", "已售"), ("甲IMEI9", "在庫")])
+        # 系統不認得的另外一份(第一次盤點入庫:要管理員指定品號才入;沒講就不入)
+        self.assertEqual([(e["code"], e["product"]) for e in seen["new_rows"]], [("不認得的碼123", None)])
         self.ok(self.act(count, "approve"))
+        self.assertFalse(ProductSerial.objects.filter(tenant=self.c.tenant, serial_no="不認得的碼123").exists())
         self.assertEqual((self.status_of("甲IMEI1"), self.status_of("甲IMEI9")), ("sold", "in_stock"))
         self.assertEqual(ProductSerial.objects.get(serial_no="甲IMEI9").warehouse, self.w2)
         self.books_agree()

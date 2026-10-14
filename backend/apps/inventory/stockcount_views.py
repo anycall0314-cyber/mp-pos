@@ -16,6 +16,8 @@ from rest_framework.response import Response
 
 from apps.catalog.models import Product
 from apps.core.warehouse_scoping import locked_warehouse_id
+from apps.legacy import units as legacy_units
+from apps.legacy.units import group_of
 from apps.tenants import abilities
 from apps.tenants.permissions import is_tenant_admin
 
@@ -80,7 +82,7 @@ def _detail(count, user):
     manager = is_tenant_admin(user)
     wh = count.warehouse_id
     lines = list(count.lines.select_related("product").order_by("id"))
-    scans = list(count.scans.select_related("serial__product").order_by("id"))
+    scans = list(count.scans.select_related("serial__product", "product").order_by("id"))
     moved = stockcount.moved_since_start(count, lines)
     out = _summary(count, len(lines), len(scans))
     out["manager"] = manager
@@ -119,7 +121,8 @@ def _detail(count, user):
     states = dict(ProductSerial.Status.choices)
     out["scan_rows"] = [{
         "id": s.id, "code": s.code, "known": s.serial_id is not None,
-        "name": s.serial.product.name if s.serial_id else "",
+        # 系統不認得、舊系統的機器清單對得到的:舊品名(盤的人知道刷到的是哪一台)
+        "name": s.serial.product.name if s.serial_id else s.old_name,
         **({"here": s.here, "state": states.get(s.state, "")} if manager else {}),
     } for s in scans]
     if manager:
@@ -135,10 +138,33 @@ def _detail(count, user):
         out["extra_rows"] = [{
             "id": s.id, "code": s.code, "name": s.serial.product.name if s.serial_id else "",
             "state": states.get(s.state, "") if s.serial_id else "",
-        } for s in scans if not s.here]
+        } for s in scans if not s.here and s.serial_id]
+        # 系統不認得的:第一次盤點入庫要指定品號與成本(舊系統的機器清單對得到的先帶出來)
+        unknown = [s for s in scans if s.serial_id is None]
+        suggested = stockcount.suggested_products(count.tenant, [s.old_code for s in unknown])
+        out["new_rows"] = []
+        for s in unknown:
+            chosen = s.product or (None if count.status == S.APPROVED else suggested.get(s.old_code))
+            out["new_rows"].append({
+                "id": s.id, "code": s.code, "old_code": s.old_code, "old_name": s.old_name,
+                "group": group_of(s.old_name) if s.old_name else "",
+                "old_cost": _money(s.old_cost) if s.old_cost is not None else None,
+                "old_price": _money(s.old_price) if s.old_price is not None else None,
+                "product": ({"id": chosen.id, "sku": chosen.sku, "name": chosen.name,
+                             "unit": chosen.tracks_unit_condition} if chosen else None),
+                "unit_cost": _money(s.unit_cost) if s.unit_cost is not None else None,
+                "unit_price": _money(s.unit_price) if s.unit_price is not None else None,
+                "skipped": s.skipped, "reason": s.reason, "added": s.added_id is not None,
+            })
         lost = sum((Decimal(m.serial.purchase_unit_cost or 0) for m in missing
                     if (m.applied and m.found_at is None) or (count.status == S.SUBMITTED and not m.skipped)), Decimal("0"))
-        out["amounts"] = {"lines": _money(total), "phones": _money(-lost), "total": _money(total - lost)}
+        # 第一次入庫的:核准之後是入了的那幾台;還沒核准是「照現在的樣子核准」會入的(先帶出品號、有舊成本的)
+        added = sum((Decimal(r["unit_cost"] if count.status == S.APPROVED else r["old_cost"] or 0)
+                     for r in out["new_rows"]
+                     if (r["added"] if count.status == S.APPROVED else (r["product"] and r["old_cost"] is not None))),
+                    Decimal("0"))
+        phones = added - lost
+        out["amounts"] = {"lines": _money(total), "phones": _money(phones), "total": _money(total + phones)}
     return out
 
 
@@ -225,7 +251,7 @@ def stock_count_scan(request, pk, scan_id):
 
 @api_view(["POST"])
 def stock_count_action(request, pk, action):
-    """送出 submit {phones_done} / 作廢 void / 退回 return / 核准 approve {lines, missing}。後兩個與作廢已送出的只有管理員。"""
+    """送出 submit {phones_done} / 作廢 void / 退回 return / 核准 approve {lines, missing, extras}。後兩個與作廢已送出的只有管理員。"""
     abilities.require(request.user, abilities.STOCK_COUNT)
     count = _get(request, pk)
     data = request.data if isinstance(request.data, dict) else {}
@@ -242,10 +268,10 @@ def stock_count_action(request, pk, action):
             stockcount.give_back(count)
         elif action == "approve":
             _managers_only(request.user)
-            lines, missing = data.get("lines") or {}, data.get("missing") or {}
-            if not isinstance(lines, dict) or not isinstance(missing, dict):
+            lines, missing, extras = data.get("lines") or {}, data.get("missing") or {}, data.get("extras") or {}
+            if not isinstance(lines, dict) or not isinstance(missing, dict) or not isinstance(extras, dict):
                 return _bad("送來的內容格式不對")
-            stockcount.approve(count, request.user, lines=lines, missing=missing)
+            stockcount.approve(count, request.user, lines=lines, missing=missing, extras=extras)
         else:
             return Response({"detail": "沒有這個動作"}, status=404)
     except stockcount.CountError as exc:
@@ -264,3 +290,23 @@ def stock_count_found(request, pk, missing_id):
     except stockcount.CountError as exc:
         return _bad(exc)
     return Response(_detail(count, request.user))
+
+
+OLD_UNITS_MAX = 2000
+
+
+@api_view(["GET"])
+def stock_count_old_units(request):
+    """舊系統的機器清單上有、新系統還沒入庫的(管理員;第一次盤點入庫時看哪幾台還沒刷到)。只有數字與舊系統的字,沒有成本。"""
+    abilities.require(request.user, abilities.STOCK_COUNT)
+    _managers_only(request.user)
+    left = legacy_units.not_in_yet(request.tenant)
+    stores: dict[str, int] = {}
+    for u in left:
+        stores[u.store_raw] = stores.get(u.store_raw, 0) + 1
+    return Response({
+        "total": len(left),
+        "stores": [{"store": k or "(沒寫)", "count": v} for k, v in stores.items()],
+        "rows": [{"code": u.code_raw, "old_code": u.product_code_raw, "old_name": u.product_name_raw,
+                  "store": u.store_raw, "purchased_on": u.purchased_on} for u in left[:OLD_UNITS_MAX]],
+    })

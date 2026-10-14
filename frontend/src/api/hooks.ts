@@ -17,7 +17,7 @@ import {
 } from "@/lib/listAll";
 import { invoiceQuery, type InvoiceFilter, type InvoiceListing } from "@/lib/invoiceList";
 import { repairQuery, type RepairFilter, type RepairListing } from "@/lib/repairReport";
-import type { CountDetail, CountSummary } from "@/lib/stockCount";
+import type { CountDetail, CountSummary, OldUnitsLeft } from "@/lib/stockCount";
 import { purchaseLineQuery, type PurchaseLine, type PurchaseLineFilter } from "@/lib/purchaseLines";
 import { dailyQuery, type DailyFilter, type DailyReport } from "@/lib/salesDaily";
 import {
@@ -3091,6 +3091,15 @@ export const useStockCounts = () =>
   useQuery({
     queryKey: ["stock-counts"],
     queryFn: () => api<{ results: CountSummary[] }>("/stock-counts/").then((r) => r.results),
+    gcTime: 0,
+  });
+
+/** 舊系統的機器清單上有、新系統還沒入庫的(只有管理員拿得到;別人不發這個請求) */
+export const useOldUnitsLeft = (enabled: boolean) =>
+  useQuery({
+    queryKey: ["stock-counts", "old-units"],
+    queryFn: () => api<OldUnitsLeft>("/stock-counts/old-units/"),
+    enabled,
     gcTime: 0,
   });
 

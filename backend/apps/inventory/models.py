@@ -461,6 +461,21 @@ class StockCountScan(TenantOwnedModel):
     scanned_at = models.DateTimeField("刷的時間")
     scanned_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+", null=True, blank=True, verbose_name="刷的人")
+    # ── 系統不認得的碼(第一次盤點入庫;2026-10-14)──
+    # 刷到的那一刻在舊系統的機器清單(legacy.LegacyUnit)對到的那一台,照抄(之後清單重匯也不變)
+    old_code = models.CharField("舊品號", max_length=60, blank=True, default="", db_default="")
+    old_name = models.CharField("舊品名", max_length=500, blank=True, default="", db_default="")
+    old_cost = models.DecimalField("舊系統成本", max_digits=14, decimal_places=2, null=True, blank=True)
+    old_price = models.DecimalField("舊系統售價", max_digits=14, decimal_places=2, null=True, blank=True)
+    # 核准時管理員的決定:入哪個品號、成本、售價(逐台記機況的才有)、不入 + 原因;入了的那一台
+    product = models.ForeignKey(
+        "catalog.Product", on_delete=models.PROTECT, related_name="+", null=True, blank=True, verbose_name="入庫品號")
+    unit_cost = models.DecimalField("入庫成本", max_digits=14, decimal_places=2, null=True, blank=True)
+    unit_price = models.DecimalField("售價", max_digits=14, decimal_places=2, null=True, blank=True)
+    skipped = models.BooleanField("不入", default=False, db_default=False)
+    reason = models.CharField("原因", max_length=100, blank=True, default="", db_default="")
+    added = models.ForeignKey(
+        ProductSerial, on_delete=models.PROTECT, related_name="+", null=True, blank=True, verbose_name="入庫的那一台")
 
     class Meta:
         ordering = ["id"]

@@ -78,7 +78,7 @@ REGISTRY: dict[str, Entry] = {
         "legacy.LegacySalespersonMap", "legacy.LegacyMember", "legacy.LegacyMappingLog",
         "legacy.LegacyMemberListSnapshot", "legacy.LegacySourceSnapshot",
         "legacy.LegacyDocument", "legacy.LegacyDocumentVersion", "legacy.LegacyItem",
-        "legacy.LegacySourceException",
+        "legacy.LegacySourceException", "legacy.LegacyUnit",
         # 每日庫存快照:過去的庫存事後算不回來,一定要備份
         "ledger.StockSnapshot", "ledger.StockSnapshotDay",
         # 存起來的報表(查詢單)

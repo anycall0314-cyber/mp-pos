@@ -7996,6 +7996,8 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 
 /* 盤點:管理員改調整量的那一格(窄一點,靠右) */
 .sc-adjust { width: 72px; text-align: right; }
+/* 第一次入庫:舊品名分組的那一列 */
+.sc-group td { font-weight: 600; color: var(--text-dim, inherit); }
 
 
 /* ─────────────────────────────────────────────────────────

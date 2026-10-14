@@ -73,6 +73,26 @@ export interface CountExtra {
   state: string;
 }
 
+/** 系統不認得的碼(第一次盤點入庫):舊系統的機器清單對得到的帶著舊品號、舊品名、成本、售價。只有管理員的回應裡有。 */
+export interface CountNew {
+  id: number;
+  code: string;
+  old_code: string;
+  old_name: string;
+  /** 核准時分組用:舊品名的前三段(空的 = 舊系統清單上沒有) */
+  group: string;
+  old_cost: string | null;
+  old_price: string | null;
+  /** 先帶出來的品號(舊品號對照過的)/ 核准之後是入的那一個;unit = 逐台記售價的 */
+  product: { id: number; sku: string; name: string; unit: boolean } | null;
+  unit_cost: string | null;
+  unit_price: string | null;
+  skipped: boolean;
+  reason: string;
+  /** 核准時入庫了 */
+  added: boolean;
+}
+
 export interface CountDetail extends CountSummary {
   manager: boolean;
   /** 帳上有數量、還沒輸入的配件有幾樣(只有數字) */
@@ -81,7 +101,20 @@ export interface CountDetail extends CountSummary {
   scan_rows: CountScan[];
   missing_rows?: CountMissing[];
   extra_rows?: CountExtra[];
+  new_rows?: CountNew[];
   amounts?: { lines: string; phones: string; total: string };
+}
+
+/** 舊系統清單上有、新系統還沒入庫的(管理員;沒有成本)。 */
+export interface OldUnitsLeft {
+  total: number;
+  stores: { store: string; count: number }[];
+  rows: { code: string; old_code: string; old_name: string; store: string; purchased_on: string | null }[];
+}
+
+/** 「還沒入庫」那一行:各家舊店幾台。 */
+export function oldStoresText(left: Pick<OldUnitsLeft, "stores">): string {
+  return left.stores.map((s) => `${s.store} ${s.count}`).join("　");
 }
 
 /** 範圍那一格:沒挑類別 = 全部。 */
@@ -140,14 +173,74 @@ export interface MissingEdit {
   reason: string;
 }
 
+/** 系統不認得的那一台,管理員在畫面上定的:入哪個品號、成本、售價(逐台記售價的才有)、不入。 */
+export interface NewEdit {
+  product: CountNew["product"];
+  cost: string;
+  price: string;
+  skipped: boolean;
+  reason: string;
+}
+
+/** 金額照伺服器給的字放進輸入框:整數就不帶「.00」。 */
+export function plainAmount(text: string | null | undefined): string {
+  if (text === null || text === undefined) return "";
+  return text.replace(/\.00$/, "");
+}
+
+/** 還沒動過的那一台:先帶出來的品號、舊系統的成本與售價。 */
+export function newEditOf(row: CountNew, edits: Record<number, NewEdit | undefined>): NewEdit {
+  return edits[row.id] ?? {
+    product: row.product,
+    cost: plainAmount(row.unit_cost ?? row.old_cost),
+    price: plainAmount(row.unit_price ?? row.old_price),
+    skipped: false,
+    reason: "",
+  };
+}
+
+/** 照舊品名分組(紅隊:同一組一次指定型號)。照出現的順序;舊系統清單上沒有的一組。 */
+export function newGroups(rows: CountNew[]): { key: string; label: string; rows: CountNew[] }[] {
+  const out: { key: string; label: string; rows: CountNew[] }[] = [];
+  for (const row of rows) {
+    const key = row.group;
+    let group = out.find((g) => g.key === key);
+    if (!group) {
+      group = { key, label: key || "舊系統沒有", rows: [] };
+      out.push(group);
+    }
+    group.rows.push(row);
+  }
+  return out;
+}
+
+/** 勾著的那幾台換成同一個品號(售價只有逐台記售價的品號才留著)。 */
+export function assignProduct(
+  rows: CountNew[],
+  picked: Set<number>,
+  product: NonNullable<CountNew["product"]>,
+  edits: Record<number, NewEdit | undefined>,
+): Record<number, NewEdit | undefined> {
+  const next = { ...edits };
+  for (const row of rows) {
+    if (!picked.has(row.id)) continue;
+    const edit = newEditOf(row, edits);
+    next[row.id] = { ...edit, product, skipped: false, price: product.unit ? edit.price : "" };
+  }
+  return next;
+}
+
+const AMOUNT = /^\d{1,12}(\.\d{1,2})?$/;
+
 /**
  * 核准時送的內容。調整量空的 = 不送(伺服器照「數到的 − 當時帳上的」調);有填就要是整數,不是的話回一句話、不送。
  */
 export function approveBody(
-  detail: Pick<CountDetail, "line_rows" | "missing_rows">,
+  detail: Pick<CountDetail, "line_rows" | "missing_rows" | "new_rows">,
   lineEdits: Record<number, LineEdit | undefined>,
   missingEdits: Record<number, MissingEdit | undefined>,
-): { error: string } | { lines: Record<string, object>; missing: Record<string, object> } {
+  newEdits: Record<number, NewEdit | undefined> = {},
+): { error: string } | { lines: Record<string, object>; missing: Record<string, object>; extras: Record<string, object> } {
   const lines: Record<string, object> = {};
   for (const row of detail.line_rows) {
     const edit = lineEdits[row.id];
@@ -165,7 +258,32 @@ export function approveBody(
     const edit = missingEdits[row.id];
     if (edit) missing[String(row.id)] = { skipped: edit.skipped, reason: edit.reason.trim() };
   }
-  return { lines, missing };
+  // 系統不認得的:有品號、沒勾不入的才入庫(伺服器那邊沒送的一律不入)。成本一定要填(沒有就 0),售價可以空著
+  const extras: Record<string, object> = {};
+  for (const row of detail.new_rows ?? []) {
+    const edit = newEditOf(row, newEdits);
+    if (edit.skipped || !edit.product) {
+      extras[String(row.id)] = { skipped: true, reason: edit.reason.trim() };
+      continue;
+    }
+    const cost = edit.cost.replace(/,/g, "").trim();
+    if (!AMOUNT.test(cost)) return { error: `${row.code} 的成本要填(沒有就填 0)` };
+    const one: { product: number; unit_cost: string; unit_price?: string; reason: string } = {
+      product: edit.product.id, unit_cost: cost, reason: edit.reason.trim(),
+    };
+    const price = edit.price.replace(/,/g, "").trim();
+    if (edit.product.unit && price !== "") {
+      if (!AMOUNT.test(price)) return { error: `${row.code} 的售價要是數字` };
+      one.unit_price = price;
+    }
+    extras[String(row.id)] = one;
+  }
+  return { lines, missing, extras };
+}
+
+/** 系統不認得的那一台在核准之後怎麼寫:入了 / 不入。 */
+export function newResult(row: Pick<CountNew, "added" | "skipped">): string {
+  return row.added ? "已入" : "不入";
 }
 
 /** 數量那一格打的字 → 0 以上的整數;不是就 null(不送)。 */

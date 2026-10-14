@@ -13,21 +13,27 @@ import { money } from "@/lib/money";
 import {
   amountCards,
   approveBody,
+  assignProduct,
   countedQty,
   extraText,
   missingText,
   movedHint,
+  newEditOf,
+  newGroups,
+  newResult,
   progressText,
   scopeText,
   signed,
   type LineEdit,
   type MissingEdit,
+  type NewEdit,
 } from "@/lib/stockCount";
 
 /**
  * 一張盤點單。盤點中:配件輸入數到的數量、手機逐台刷,送出。
  * 待核准:管理員看差異(帳上、數到、差多少、金額),每一列可以改調整量或先不調,核准才動庫存。
  * 帳上數量、差異、金額只有管理員的回應裡有;盤的人的畫面沒有那幾欄(伺服器沒給)。
+ * 系統不認得的碼(第一次盤點入庫):管理員照舊品名分組勾、指定品號,填成本(舊系統的先帶出來)才入庫;沒指定的不入。
  */
 export function StockCountPage() {
   const id = Number(useParams().id);
@@ -39,6 +45,9 @@ export function StockCountPage() {
   const [phonesDone, setPhonesDone] = useState(false);
   const [lineEdits, setLineEdits] = useState<Record<number, LineEdit | undefined>>({});
   const [missingEdits, setMissingEdits] = useState<Record<number, MissingEdit | undefined>>({});
+  const [newEdits, setNewEdits] = useState<Record<number, NewEdit | undefined>>({});
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const [assignTo, setAssignTo] = useState<{ id: number | ""; option: ComboOption<Product> | null }>({ id: "", option: null });
   const [note, setNote] = useState("");
 
   if (isLoading) return <div className="page"><div className="md-empty">載入中…</div></div>;
@@ -72,7 +81,7 @@ export function StockCountPage() {
 
   async function approve() {
     if (!detail) return;
-    const body = approveBody(detail, lineEdits, missingEdits);
+    const body = approveBody(detail, lineEdits, missingEdits, newEdits);
     if ("error" in body) {
       setNote(body.error);
       return;
@@ -82,6 +91,23 @@ export function StockCountPage() {
 
   const lineEdit = (rowId: number, diff: number): LineEdit => lineEdits[rowId] ?? { adjust: String(diff), skipped: false, reason: "" };
   const missingEdit = (rowId: number): MissingEdit => missingEdits[rowId] ?? { skipped: false, reason: "" };
+  const newRows = detail.new_rows ?? [];
+  const togglePick = (ids: number[], on: boolean) =>
+    setPicked((old) => {
+      const next = new Set(old);
+      for (const one of ids) {
+        if (on) next.add(one);
+        else next.delete(one);
+      }
+      return next;
+    });
+  function assign() {
+    const p = assignTo.option?.payload;
+    if (!p) return;
+    setNewEdits((all) => assignProduct(newRows, picked, { id: p.id, sku: p.sku, name: p.name, unit: !!p.tracks_unit_condition }, all));
+    setPicked(new Set());
+    setAssignTo({ id: "", option: null });
+  }
 
   return (
     <div className="page sr-page">
@@ -243,7 +269,7 @@ export function StockCountPage() {
               {detail.scan_rows.map((s) => (
                 <tr key={s.id} className="report-row">
                   <td>{s.code}</td>
-                  <td>{s.known ? s.name : "不認得"}</td>
+                  <td>{s.known ? s.name : s.name || "不認得"}</td>
                   {counting && (
                     <td>
                       <button className="btn" type="button" disabled={run.isPending} onClick={() => void call(`scans/${s.id}/`, undefined, "DELETE")}>
@@ -297,6 +323,97 @@ export function StockCountPage() {
                     {approved && <td>{m.applied && !m.found && <ArmButton label="找回" className="btn" onConfirm={() => call(`missing/${m.id}/found/`)} />}</td>}
                   </tr>
                 );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {detail.manager && newRows.length > 0 && (submitted || approved) && (
+        <div className="report-table sr-table">
+          {reviewing && (
+            <div className="list-filterbar sr-filter">
+              <label>
+                品號
+                <ComboBox<Product>
+                  value={assignTo.id}
+                  selectedOption={assignTo.option}
+                  onChange={(pid, opt) => setAssignTo({ id: pid, option: opt ?? null })}
+                  fetchOptions={async (q) => (await searchProducts(q, { activeOnly: true })).filter((o) => o.payload?.requires_serial)}
+                  placeholder="品名"
+                />
+              </label>
+              <button className="btn" type="button" disabled={!assignTo.option || picked.size === 0} onClick={assign}>
+                指定 {picked.size || ""}
+              </button>
+            </div>
+          )}
+          <table className="report-grid">
+            <thead>
+              <tr>
+                {reviewing && <th />}
+                <th>新入庫</th>
+                <th>舊品名</th>
+                <th>品號</th>
+                <th className="num">成本</th>
+                <th className="num">售價</th>
+                <th>{reviewing ? "不入" : "結果"}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {newGroups(newRows).map((g) => {
+                const ids = g.rows.map((r) => r.id);
+                const all = ids.every((one) => picked.has(one));
+                return [
+                  <tr key={`g-${g.key}`} className="report-row sc-group">
+                    {reviewing && (
+                      <td>
+                        <input type="checkbox" checked={all} aria-label={g.label} onChange={() => togglePick(ids, !all)} />
+                      </td>
+                    )}
+                    <td colSpan={6}>
+                      {g.label} {g.rows.length}
+                    </td>
+                  </tr>,
+                  ...g.rows.map((r) => {
+                    const edit = newEditOf(r, newEdits);
+                    const change = (next: Partial<NewEdit>) => setNewEdits((all2) => ({ ...all2, [r.id]: { ...edit, ...next } }));
+                    return (
+                      <tr key={r.id} className={picked.has(r.id) ? "report-row vo-picked" : "report-row"}>
+                        {reviewing && (
+                          <td>
+                            <input type="checkbox" checked={picked.has(r.id)} aria-label={r.code} onChange={(e) => togglePick([r.id], e.target.checked)} />
+                          </td>
+                        )}
+                        <td>{r.code}</td>
+                        <td>{r.old_name}</td>
+                        <td>{(reviewing ? edit.product : r.product)?.name ?? "—"}</td>
+                        <td className="num">
+                          {reviewing ? (
+                            <input type="text" inputMode="decimal" className="sc-adjust" value={edit.cost} disabled={edit.skipped || !edit.product}
+                              onChange={(e) => change({ cost: e.target.value })} />
+                          ) : r.unit_cost !== null ? money(r.unit_cost) : ""}
+                        </td>
+                        <td className="num">
+                          {reviewing ? (
+                            edit.product?.unit && (
+                              <input type="text" inputMode="numeric" className="sc-adjust" value={edit.price} disabled={edit.skipped}
+                                onChange={(e) => change({ price: e.target.value })} />
+                            )
+                          ) : r.unit_price !== null ? money(r.unit_price) : ""}
+                        </td>
+                        <td>
+                          {reviewing ? (
+                            <input type="checkbox" checked={edit.skipped || !edit.product} disabled={!edit.product}
+                              onChange={(e) => change({ skipped: e.target.checked })} />
+                          ) : (
+                            newResult(r)
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  }),
+                ];
               })}
             </tbody>
           </table>

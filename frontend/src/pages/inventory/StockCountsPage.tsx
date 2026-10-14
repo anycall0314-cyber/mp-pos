@@ -1,23 +1,28 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { useOpenStockCount, useStockCounts } from "@/api/hooks";
+import { useOldUnitsLeft, useOpenStockCount, useStockCounts } from "@/api/hooks";
 import type { Category, Warehouse } from "@/api/types";
-import { useDefaultWarehouse } from "@/auth/AuthContext";
+import { useCurrentUser, useDefaultWarehouse } from "@/auth/AuthContext";
 import { Banner, errorMessageOf } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
-import { scopeText } from "@/lib/stockCount";
+import { isManager } from "@/lib/roles";
+import { oldStoresText, scopeText } from "@/lib/stockCount";
 import { CategoryField, NOT_PICKED, StoreField, type Picked } from "@/pages/inventory/stockReportParts";
 
 /**
  * 盤點作業:開一張盤點單(一家門市,可以只盤一個類別)、看之前的。
  * 盤的人只記數到的;差異要管理員核准才動庫存(規則在伺服器)。鎖在門市的帳號只看得到自己門市的。
+ * 管理員另外看得到「舊系統清單上有、還沒入庫」的機器(第一次盤點入庫:沒刷到的也要看見)。
  */
 export function StockCountsPage() {
   const navigate = useNavigate();
   const own = useDefaultWarehouse();
   const { data, isLoading, isError, error } = useStockCounts();
   const open = useOpenStockCount();
+  const manager = isManager(useCurrentUser()?.profile?.role);
+  const left = useOldUnitsLeft(manager);
+  const [showLeft, setShowLeft] = useState(false);
   const [store, setStore] = useState<Picked<Warehouse>>(NOT_PICKED);
   const [category, setCategory] = useState<Picked<Category>>(NOT_PICKED);
   const ready = own.locked || store.id !== "";
@@ -78,6 +83,38 @@ export function StockCountsPage() {
           </table>
         )}
       </div>
+      {left.data && left.data.total > 0 && (
+        <div className="report-table sr-table">
+          <div className="list-filterbar sr-filter">
+            <button className="btn" type="button" onClick={() => setShowLeft((v) => !v)}>
+              還沒入庫 {left.data.total}
+            </button>
+            <span className="tr-dim">{oldStoresText(left.data)}</span>
+          </div>
+          {showLeft && (
+            <table className="report-grid">
+              <thead>
+                <tr>
+                  <th>舊店</th>
+                  <th>碼</th>
+                  <th>舊品名</th>
+                  <th>進貨</th>
+                </tr>
+              </thead>
+              <tbody>
+                {left.data.rows.map((u) => (
+                  <tr key={u.code} className="report-row">
+                    <td>{u.store}</td>
+                    <td>{u.code}</td>
+                    <td>{u.old_name}</td>
+                    <td>{u.purchased_on ?? ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
     </div>
   );
 }

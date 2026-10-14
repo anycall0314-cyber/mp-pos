@@ -496,3 +496,38 @@ class LegacySourceException(TenantOwnedModel):
         ordering = ["id"]
         verbose_name = "舊 POS 來源差異"
         verbose_name_plural = "舊 POS 來源差異"
+
+
+# ─────────────────────────── 舊系統的機器清單(盤點入庫的參考) ───────────────────────────
+class LegacyUnit(TenantOwnedModel):
+    """舊系統「IMEI 明細表」上「庫存中」的一台(2026-10-14,12/1 盤點入庫用)。
+
+    **只是參考,不是庫存**:盤點時刷到的碼對得到這一筆,就帶出它的舊品號、舊品名、成本與售價給管理員核准;
+    沒刷到的不會入庫。舊資料很髒(同一台登記好幾筆、IMEI 尾巴加字母、很久以前的還掛著),所以原文照存,
+    比對鍵另外算(`apps/legacy/units.py`)。
+    """
+
+    source_system = models.CharField("來源系統", max_length=40)
+    code_raw = models.CharField("IMEI 原文", max_length=80)
+    code_key = models.CharField("比對鍵", max_length=80, db_index=True)
+    sn_raw = models.CharField("S/N 原文", max_length=80, blank=True)
+    product_code_raw = models.CharField("舊品號", max_length=60)
+    product_code_key = models.CharField("舊品號比對鍵", max_length=80, db_index=True)
+    product_name_raw = models.CharField("舊品名", max_length=500, blank=True)
+    store_raw = models.CharField("舊店別", max_length=60, blank=True)
+    purchased_on = models.DateField("進貨日期", null=True, blank=True)
+    supplier_raw = models.CharField("進貨廠商", max_length=60, blank=True)
+    # 舊系統的成本(存量金額表,一件的成本)與零售價(商品價格查詢表);沒有就是空的
+    cost = models.DecimalField("成本", max_digits=14, decimal_places=2, null=True, blank=True)
+    price = models.DecimalField("零售價", max_digits=14, decimal_places=2, null=True, blank=True)
+    imported_at = models.DateTimeField("匯入時間")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "source_system", "code_raw"], name="uniq_legacy_unit_code",
+            ),
+        ]
+        ordering = ["id"]
+        verbose_name = "舊系統機器"
+        verbose_name_plural = "舊系統機器"
