@@ -103,7 +103,7 @@ export function TradeBookTab() {
           </label>
           <button className="btn primary" type="button" disabled={!outside.name.trim() || !outside.contact.trim() || keyDo.isPending}
             onClick={() => void issue({ name: outside.name.trim(), contact: outside.contact.trim() })}>
-            發金鑰
+            建立
           </button>
         </div>
       )}
