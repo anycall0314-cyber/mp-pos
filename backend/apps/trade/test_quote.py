@@ -70,6 +70,12 @@ class QuotePageTests(_Quote, TestCase):
         self.assertIn(f"A 級 電池 85% 背蓋小刮 編號 U{ids['A3']} 9,100", text)
         self.assertIn(f"B 級 電池 90% 編號 U{ids['B1']} 15,000", text)
         self.assertLess(text.index(f"U{ids['A1']}"), text.index(f"U{ids['A2']}"))          # 同成色電池高的在前
+        # 中古機一個型號一段、預設收起來;每一行帶成色 / 電池 / 價給手機上篩(owner:預設把明細折疊、可以照成色 / 電池 / 價格篩)
+        self.assertRegex(html, r"<section class='unit' data-name='甲 中古 iphone 13 128gb'><button type='button' class='head'>")
+        self.assertIn("<div class='lines' hidden>", html)
+        self.assertIn(f"data-g='A' data-b='85' data-p='9100'", html)
+        for chip in ("data-g='S'", "data-b='90'", "id='lo'", "id='hi'", "class='cart' hidden"):
+            self.assertIn(chip, html)
         for secret in ("A1", "A2", "A3", "B1", "12000.00", self.wh1.name, "成本"):
             self.assertNotIn(secret, html, secret)
         # 複製的那一句:賣家、型號、哪一格、價、編號、報價時間
@@ -82,6 +88,7 @@ class QuotePageTests(_Quote, TestCase):
         self.stock_units("A1")
         TradePartner.objects.filter(pk=self.ding.pk).update(percent=80)
         self.assertIn(f"{self.a.case.name}", self.text())
+        self.assertIn("<section class='goods'><h2>其他商品</h2>", self.page().content.decode())        # 全新機與配件另一段(成色 / 電池篩不到它們)
         price = int(round_money(self.a.case.list_price * D("0.8")))                # 四捨五入(跟伺服器同一個)
         self.assertIn(f"{price:,} 有貨", self.text())
         other = self.a.admin.post(T + "partners/external/", {"name": "外面的戊", "contact": "0922"}, format="json").json()["partner"]
@@ -112,7 +119,7 @@ class QuotePageTests(_Quote, TestCase):
             self.assertNotIn(raw, html, raw)
         self.assertIn("&lt;script&gt;", html)
         self.assertRegex(html, r"data-copy='[^']*&#x27;&gt;&lt;img")
-        self.assertRegex(html, r"data-q='[^']*&#x27;&gt;&lt;img")
+        self.assertRegex(html, r"data-t='[^']*&#x27;&gt;&lt;img")
 
     def test_closing_or_renewing_a_link_shuts_only_that_one(self):
         other = self.a.admin.post(T + "partners/external/", {"name": "外面的戊", "contact": "0922"}, format="json").json()["partner"]

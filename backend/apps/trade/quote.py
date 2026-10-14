@@ -101,8 +101,9 @@ def sections(seller, partner) -> list[dict]:
             serial = unit.serial
             bits = [f"{serial.condition_grade} 級" if serial.condition_grade else "",
                     f"電池 {serial.battery_health}%" if serial.battery_health is not None else "", (serial.condition_note or "").strip()]
-            groups.setdefault(serial.product_id, {"name": serial.product.name, "lines": []})["lines"].append({
+            groups.setdefault(serial.product_id, {"name": serial.product.name, "kind": "unit", "lines": []})["lines"].append({
                 "label": " ".join(b for b in bits if b), "price": unit.price, "stock": "", "code": f"U{unit.id}",
+                "grade": serial.condition_grade or "", "battery": serial.battery_health,
                 "rank": (grade_rank.get(serial.condition_grade, 9), -(serial.battery_health or 0), unit.price)})
         for section in groups.values():
             section["lines"].sort(key=lambda line: line.pop("rank"))
@@ -116,57 +117,169 @@ def sections(seller, partner) -> list[dict]:
             if price is None:
                 continue
             n = left.get(offer.product_id, 0)
-            out.append({"name": offer.product.name, "lines": [
-                {"label": offer.product.spec or "", "price": price, "code": "",
+            out.append({"name": offer.product.name, "kind": "goods", "lines": [
+                {"label": offer.product.spec or "", "price": price, "code": "", "grade": None, "battery": None,
                  "stock": ("缺貨" if n <= 0 else (f"{n} 個" if setting.show_qty else "有貨"))}]})
     out.sort(key=lambda s: s["name"])
     return out
 
 
 STYLE = """
-:root { --bg:#f6f7f9; --card:#fff; --text:#1d2129; --dim:#6b7280; --line:#e5e7eb; --accent:#2563eb; --warn:#b45309; }
-@media (prefers-color-scheme: dark) { :root { --bg:#111418; --card:#1b1f24; --text:#e8eaed; --dim:#9aa0a6; --line:#2c3138; --accent:#6ea8ff; --warn:#f0b35a; } }
+:root { --bg:#f6f7f9; --card:#fff; --text:#1d2129; --dim:#6b7280; --line:#e5e7eb; --accent:#2563eb; --warn:#b45309; --on:#dbeafe; }
+@media (prefers-color-scheme: dark) { :root { --bg:#111418; --card:#1b1f24; --text:#e8eaed; --dim:#9aa0a6; --line:#2c3138; --accent:#6ea8ff; --warn:#f0b35a; --on:#1e3a5f; } }
 * { box-sizing: border-box; }
-body { margin:0; background:var(--bg); color:var(--text); font:17px/1.5 -apple-system, "PingFang TC", "Noto Sans TC", sans-serif; }
-header { padding:16px; background:var(--card); border-bottom:1px solid var(--line); }
+body { margin:0; background:var(--bg); color:var(--text); font:17px/1.5 -apple-system, "PingFang TC", "Noto Sans TC", sans-serif; padding-bottom:84px; }
+header { padding:14px 16px; background:var(--card); border-bottom:1px solid var(--line); }
 h1 { margin:0 0 4px; font-size:21px; }
 .meta { color:var(--dim); font-size:15px; overflow-wrap:anywhere; }
-.search { position:sticky; top:0; padding:10px 16px; background:var(--bg); border-bottom:1px solid var(--line); }
-.search input { width:100%; min-height:44px; padding:0 12px; font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; }
-main { padding:8px 16px 32px; }
-section { margin:12px 0; background:var(--card); border:1px solid var(--line); border-radius:12px; }
+.bar { position:sticky; top:0; z-index:2; display:flex; flex-direction:column; gap:8px; padding:10px 16px; background:var(--bg); border-bottom:1px solid var(--line); }
+.bar input { min-height:44px; padding:0 12px; font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; min-width:0; }
+.row { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.row .tag { color:var(--dim); font-size:15px; min-width:2.4em; }
+.price { display:flex; align-items:center; gap:6px; flex:1 1 14em; }
+.price input { flex:1 1 0; width:0; }
+button { min-height:40px; padding:0 14px; font:inherit; font-size:15px; color:var(--accent); background:var(--card); border:1px solid var(--accent); border-radius:999px; }
+button.on { background:var(--on); font-weight:700; }
+.sum { justify-content:space-between; color:var(--dim); font-size:15px; }
+main { padding:8px 16px 16px; }
+section { margin:10px 0; background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+.head { display:flex; flex-wrap:wrap; align-items:center; gap:2px 10px; width:100%; padding:12px 14px; text-align:left; color:var(--text); background:var(--card); border:0; border-radius:0; min-height:56px; }
+.head .name { font-size:18px; font-weight:700; flex:1 1 12em; }
+.head .n { color:var(--dim); font-size:15px; white-space:nowrap; }
+.head .chev { color:var(--accent); font-size:22px; line-height:1; transition:transform .15s; }
+section.open .head .chev { transform:rotate(90deg); }
+.head .grades { flex:1 1 100%; color:var(--dim); font-size:15px; overflow-wrap:anywhere; }
 h2 { margin:0; padding:12px 14px 6px; font-size:18px; }
 .line { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; padding:10px 14px; border-top:1px solid var(--line); }
 .label { flex:1 1 12em; min-width:0; overflow-wrap:anywhere; }
 .code { color:var(--dim); font-size:14px; }
-.price { font-weight:700; white-space:nowrap; }
+.pr { font-weight:700; white-space:nowrap; }
 .stock { color:var(--dim); white-space:nowrap; }
 .stock.out { color:var(--warn); }
-button { min-height:40px; padding:0 14px; font:inherit; font-size:15px; color:var(--accent); background:transparent; border:1px solid var(--accent); border-radius:999px; }
-footer { padding:0 16px 32px; color:var(--dim); font-size:14px; }
+.none { padding:8px 4px; color:var(--dim); font-size:15px; }
+.cart { position:fixed; left:0; right:0; bottom:0; z-index:3; display:flex; align-items:center; gap:10px; padding:12px 16px; background:var(--card); border-top:1px solid var(--line); }
+.cart .t { flex:1; font-weight:700; }
+footer { padding:0 16px 24px; color:var(--dim); font-size:14px; }
 .empty { padding:24px 16px; color:var(--dim); }
+[hidden] { display:none !important; }
 """
 
 SCRIPT = """
-document.querySelector('.search input').addEventListener('input', function (e) {
-  var q = e.target.value.trim().toLowerCase();
-  document.querySelectorAll('section').forEach(function (s) {
-    var hit = s.getAttribute('data-q').indexOf(q) >= 0;
-    s.style.display = q === '' || hit ? '' : 'none';
+(function () {
+  var $ = function (s, el) { return (el || document).querySelector(s); };
+  var $$ = function (s, el) { return Array.prototype.slice.call((el || document).querySelectorAll(s)); };
+  var f = { q: '', g: {}, b: '', lo: null, hi: null };
+  var picked = [];
+  var money = function (n) { return n.toLocaleString('en-US'); };
+  var num = function (v) { var t = String(v).replace(/[^0-9]/g, ''); return t === '' ? null : Number(t); };
+  function okBattery(line) {
+    if (!f.b) return true;
+    var b = line.dataset.b === '' ? null : Number(line.dataset.b);
+    if (b === null) return false;
+    return f.b === '-79' ? b <= 79 : b >= Number(f.b);
+  }
+  function okPrice(line) {
+    var p = Number(line.dataset.p);
+    return (f.lo === null || p >= f.lo) && (f.hi === null || p <= f.hi);
+  }
+  function apply() {
+    var grades = Object.keys(f.g).filter(function (k) { return f.g[k]; });
+    var total = 0, shown = 0, hiddenModels = 0;
+    $$('section.unit').forEach(function (sec) {
+      var nameHit = f.q === '' || sec.dataset.name.indexOf(f.q) >= 0;
+      var per = {}, n = 0;
+      $$('.line', sec).forEach(function (line) {
+        var hit = nameHit && (grades.length === 0 || grades.indexOf(line.dataset.g) >= 0) && okBattery(line) && okPrice(line);
+        line.hidden = !hit;
+        if (hit) {
+          n += 1;
+          var g = line.dataset.g || '-', p = Number(line.dataset.p);
+          if (!per[g]) per[g] = { n: 0, lo: p, hi: p };
+          per[g].n += 1; per[g].lo = Math.min(per[g].lo, p); per[g].hi = Math.max(per[g].hi, p);
+        }
+      });
+      sec.hidden = n === 0;
+      if (n === 0) { hiddenModels += 1; return; }
+      shown += 1; total += n;
+      $('.n', sec).textContent = n + ' 台';
+      $('.grades', sec).textContent = ['S', 'A', 'B', 'C', 'D', '-'].filter(function (g) { return per[g]; }).map(function (g) {
+        var x = per[g];
+        return (g === '-' ? '' : g + ' ') + x.n + ' 台 ' + money(x.lo) + (x.hi > x.lo ? ' 起' : '');
+      }).join(' · ');
+    });
+    $$('.goods .line').forEach(function (line) {
+      var hit = (f.q === '' || line.dataset.t.indexOf(f.q) >= 0) && okPrice(line);
+      line.hidden = !hit;
+    });
+    var goods = $('.goods');
+    if (goods) goods.hidden = $$('.line', goods).every(function (l) { return l.hidden; });
+    var active = f.q !== '' || grades.length > 0 || f.b !== '' || f.lo !== null || f.hi !== null;
+    // 篩到只剩一個型號就直接展開
+    if (shown === 1) $$('section.unit').forEach(function (sec) { if (!sec.hidden) open(sec, true); });
+    $('#count').textContent = '符合 ' + total + ' 台';
+    var none = $('#none');
+    none.hidden = !(active && hiddenModels > 0);
+    $('#none-n').textContent = hiddenModels;
+    $('#clear').hidden = !active;
+  }
+  function open(sec, on) {
+    sec.classList.toggle('open', on);
+    $('.lines', sec).hidden = !on;
+  }
+  $$('section.unit .head').forEach(function (h) {
+    h.addEventListener('click', function () { var sec = h.parentNode; open(sec, !sec.classList.contains('open')); });
   });
-});
-document.querySelectorAll('button[data-copy]').forEach(function (b) {
-  b.addEventListener('click', function () {
-    var text = b.getAttribute('data-copy');
-    var done = function () { b.textContent = '已複製'; setTimeout(function () { b.textContent = '複製'; }, 1500); };
-    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(done, function () { fallback(text); done(); }); }
+  $('#q').addEventListener('input', function (e) { f.q = e.target.value.trim().toLowerCase(); apply(); });
+  $$('[data-g]', $('#grades')).forEach(function (b) {
+    b.addEventListener('click', function () { f.g[b.dataset.g] = !f.g[b.dataset.g]; b.classList.toggle('on', f.g[b.dataset.g]); apply(); });
+  });
+  $$('[data-b]', $('#batteries')).forEach(function (b) {
+    b.addEventListener('click', function () {
+      f.b = f.b === b.dataset.b ? '' : b.dataset.b;
+      $$('[data-b]', $('#batteries')).forEach(function (x) { x.classList.toggle('on', x.dataset.b === f.b); });
+      apply();
+    });
+  });
+  $('#lo').addEventListener('input', function (e) { f.lo = num(e.target.value); apply(); });
+  $('#hi').addEventListener('input', function (e) { f.hi = num(e.target.value); apply(); });
+  function clear() {
+    f = { q: '', g: {}, b: '', lo: null, hi: null };
+    $('#q').value = ''; $('#lo').value = ''; $('#hi').value = '';
+    $$('.bar button.on').forEach(function (b) { b.classList.remove('on'); });
+    apply();
+  }
+  $('#clear').addEventListener('click', clear);
+  $('#none-clear').addEventListener('click', clear);
+  // 加入 / 取消:底下一條「已選幾台、合計」,一次複製全部(紅隊:湊一批的人不用一台一台貼回 LINE)
+  function cart() {
+    var bar = $('.cart');
+    bar.hidden = picked.length === 0;
+    var sum = picked.reduce(function (a, b) { return a + Number(b.dataset.p); }, 0);
+    $('.cart .t').textContent = '已選 ' + picked.length + ' · ' + money(sum);
+  }
+  $$('button[data-copy]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var line = b.closest('.line');
+      var at = picked.indexOf(line);
+      if (at >= 0) { picked.splice(at, 1); b.textContent = '加入'; b.classList.remove('on'); }
+      else { picked.push(line); b.textContent = '取消'; b.classList.add('on'); }
+      cart();
+    });
+  });
+  $('#copy').addEventListener('click', function () {
+    var sum = picked.reduce(function (a, b) { return a + Number(b.dataset.p); }, 0);
+    var text = picked.map(function (l) { return $('button[data-copy]', l).getAttribute('data-copy'); }).join('\\n')
+      + '\\n共 ' + picked.length + ' · ' + money(sum);
+    var done = function () { $('#copy').textContent = '已複製'; setTimeout(function () { $('#copy').textContent = '複製'; }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () { fallback(text); done(); });
     else { fallback(text); done(); }
   });
-});
-function fallback(text) {
-  var t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select();
-  try { document.execCommand('copy'); } catch (e) {} document.body.removeChild(t);
-}
+  function fallback(text) {
+    var t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select();
+    try { document.execCommand('copy'); } catch (e) {} document.body.removeChild(t);
+  }
+  apply();
+})();
 """
 
 
@@ -180,38 +293,56 @@ def closed_page(message: str) -> str:
     return _page("報價", f"<div class='empty'>{escape(message)}</div>")
 
 
+def _line(seller, section, line, stamp) -> str:
+    words = " ".join(w for w in (section["name"], line["label"], _money(line["price"]), line["code"] and f"編號 {line['code']}") if w)
+    copy = f"{seller.name} {words}({stamp} 報價)"
+    out = " out" if line["stock"] == "缺貨" else ""
+    battery = "" if line["battery"] is None else str(line["battery"])
+    return (f"<div class='line' data-g='{escape(line['grade'] or '')}' data-b='{battery}' data-p='{int(line['price'])}'"
+            f" data-t='{escape((section['name'] + ' ' + line['label']).lower())}'>"
+            + (f"<span class='label'>{escape(line['label'])}{f' <span class=code>編號 {escape(line['code'])}</span>' if line['code'] else ''}</span>"
+               if line["label"] or line["code"] else "")
+            + f"<span class='pr'>{_money(line['price'])}</span>"
+            + (f"<span class='stock{out}'>{escape(line['stock'])}</span>" if line["stock"] else "")
+            + f"<button type='button' data-copy='{escape(copy)}'>加入</button></div>")
+
+
 def render(seller, partner, now=None) -> str:
-    """整頁 HTML。每一段的 `data-q` 是型號與每一行的字(搜尋用)。"""
+    """整頁 HTML。中古機一個型號一段、預設收起來(owner:「預設顯示把型號下方的所有明細先折疊起來」),型號那一列寫每個成色幾台、從多少起;
+    上面一條篩選(找型號、成色、電池、價格)在手機上就篩;全新機與配件放最後「其他商品」那一段(成色 / 電池不會把它們藏起來)。"""
     setting = setting_of(seller)
     now = timezone.localtime(now or timezone.now())
     stamp = now.strftime("%m/%d %H:%M")
     found = sections(seller, partner)
+    units = [s for s in found if s.get("kind") == "unit"]
+    goods = [s for s in found if s.get("kind") != "unit"]
     parts = []
-    for section in found:
-        rows = []
-        for line in section["lines"]:
-            words = " ".join(w for w in (section["name"], line["label"], _money(line["price"]), line["code"] and f"編號 {line['code']}") if w)
-            copy = f"{seller.name} {words}({stamp} 報價)"
-            out = " out" if line["stock"] == "缺貨" else ""
-            rows.append(
-                "<div class='line'>"
-                + (f"<span class='label'>{escape(line['label'])}{f' <span class=code>編號 {escape(line['code'])}</span>' if line['code'] else ''}</span>"
-                   if line["label"] or line["code"] else "")
-                + 
-                f"<span class='price'>{_money(line['price'])}</span>"
-                + (f"<span class='stock{out}'>{escape(line['stock'])}</span>" if line["stock"] else "")
-                + 
-                f"<button type='button' data-copy='{escape(copy)}'>複製</button></div>")
-        q = " ".join([section["name"], *(line["label"] for line in section["lines"])]).lower()
-        parts.append(f"<section data-q='{escape(q)}'><h2>{escape(section['name'])}</h2>{''.join(rows)}</section>")
+    for section in units:
+        rows = "".join(_line(seller, section, line, stamp) for line in section["lines"])
+        parts.append(f"<section class='unit' data-name='{escape(section['name'].lower())}'>"
+                     f"<button type='button' class='head'><span class='name'>{escape(section['name'])}</span>"
+                     f"<span class='n'>{len(section['lines'])} 台</span><span class='chev'>›</span><span class='grades'></span></button>"
+                     f"<div class='lines' hidden>{rows}</div></section>")
+    if goods:
+        rows = "".join(_line(seller, section, {**line, "label": " ".join(x for x in (section["name"], line["label"]) if x)}, stamp)
+                       for section in goods for line in section["lines"])
+        parts.append(f"<section class='goods'><h2>其他商品</h2>{rows}</section>")
     contact = " · ".join(x for x in (setting.contact.strip(), setting.pay_note.strip()) if x)
+    grade_buttons = "".join(f"<button type='button' data-g='{g}'>{g}</button>" for g in ("S", "A", "B", "C", "D"))
+    battery_buttons = "".join(f"<button type='button' data-b='{v}'>{t}</button>" for v, t in (("95", "95↑"), ("90", "90↑"), ("85", "85↑"), ("80", "80↑"), ("-79", "79↓")))
     body = (
         f"<header><h1>{escape(seller.name)} 報價</h1>"
         f"<div class='meta'>給 {escape(partner.name)} · {stamp}</div>"
         + (f"<div class='meta'>{escape(contact)}</div>" if contact else "")
         + "</header>"
-        "<div class='search'><input type='search' placeholder='找型號' aria-label='找型號'></div>"
-        f"<main>{''.join(parts) or '<div class=empty>目前沒有報價</div>'}</main>"
+        "<div class='bar'><input id='q' type='search' placeholder='找型號' aria-label='找型號'>"
+        + (f"<div class='row' id='grades'><span class='tag'>成色</span>{grade_buttons}</div>"
+           f"<div class='row' id='batteries'><span class='tag'>電池</span>{battery_buttons}</div>" if units else "<div id='grades'></div><div id='batteries'></div>")
+        + "<div class='row'><span class='tag'>價格</span><div class='price'><input id='lo' inputmode='numeric' placeholder='從'>–<input id='hi' inputmode='numeric' placeholder='到'></div></div>"
+        "<div class='row sum'><span id='count'></span><button type='button' id='clear' hidden>清除</button></div></div>"
+        f"<main>{''.join(parts) or '<div class=empty>目前沒有報價</div>'}"
+        "<div class='none' id='none' hidden>另外 <span id='none-n'></span> 款不符合 <button type='button' id='none-clear'>清除</button></div></main>"
         "<footer>以下單為準</footer>"
+        "<div class='cart' hidden><span class='t'></span><button type='button' id='copy'>複製</button></div>"
         f"<script>{SCRIPT}</script>")
     return _page(f"{seller.name} 報價", body)
