@@ -63,9 +63,13 @@ class QuotePageTests(_Quote, TestCase):
         text = self.text()
         self.assertIn("甲通訊行 報價", text)
         self.assertIn("給 外面的丁通訊", text)
-        self.assertIn("A 級 沒備註 12,000 有貨", text)                              # 同一格的兩台合成一行
-        self.assertIn(f"A 級 電池 85% 背蓋小刮 編號 U{TradeUnit.objects.get(serial=units[2]).id} 9,100 1 台", text)   # 獨立定價的一台一行
-        self.assertIn("B 級 15,000 有貨", text)                                     # 沒有價目的照成色合
+        # 一台一行:成色、電池、備註、價、編號(owner:中古機要能看到電池、備註打的機況)
+        ids = {s.serial_no: TradeUnit.objects.get(serial=s).id for s in units}
+        self.assertIn(f"A 級 電池 90% 編號 U{ids['A1']} 12,000", text)
+        self.assertIn(f"A 級 電池 88% 編號 U{ids['A2']} 12,000", text)
+        self.assertIn(f"A 級 電池 85% 背蓋小刮 編號 U{ids['A3']} 9,100", text)
+        self.assertIn(f"B 級 電池 90% 編號 U{ids['B1']} 15,000", text)
+        self.assertLess(text.index(f"U{ids['A1']}"), text.index(f"U{ids['A2']}"))          # 同成色電池高的在前
         for secret in ("A1", "A2", "A3", "B1", "12000.00", self.wh1.name, "成本"):
             self.assertNotIn(secret, html, secret)
         # 複製的那一句:賣家、型號、哪一格、價、編號、報價時間
@@ -92,10 +96,10 @@ class QuotePageTests(_Quote, TestCase):
         self.assertIn("目前沒有報價", self.text())
         # 顯示數量
         TradePartner.objects.filter(pk=self.ding.pk).update(status="approved")
-        self.assertIn("A 級 15,000 有貨", self.text())                             # 沒開「顯示數量」:中古機也只寫有貨
+        self.assertIn("A 級 電池 90% 小刮 編號 U", self.text())                      # 中古機一台一行
+        self.assertIn("有貨", self.text())                                          # 沒開「顯示數量」:商品只寫有貨
         self.open_shop(show_qty=True)
         self.assertIn("10 個", self.text())
-        self.assertIn("A 級 15,000 1 台", self.text())
 
     def test_names_are_escaped(self):
         Product.objects.filter(pk=self.used.pk).update(name="<script>alert(1)</script> 中古機")

@@ -2,7 +2,7 @@
 
 - **一個同行一條**(紅隊:一條大家共用的會被轉給零售客人與對手,關掉又連熟客一起斷)。看到的跟他在平台內看到的一樣:
   中古機(他看得到的話)與按數量賣的商品,價是**他的**價(折數照他的);不出現成本、序號、門市、別人的價。
-- 中古機照型號一段一段:用同一格價目、同一個價的合成一行(「A 級 沒備註 11,800 有貨」);獨立定價的一台一行,帶編號(買家在 LINE 講得清楚是哪一台)。
+- 中古機照型號一段一段、**一台一行**:成色、電池、備註(機況)、價、編號(買家在 LINE 講得清楚是哪一台)。
 - 每一行一顆「複製」:複製的那一句帶賣家、型號、哪一格、價、編號與報價時間,貼到 LINE 就是一張報價(紅隊:看完回 LINE 憑記憶講,講錯就是一台上萬的糾紛)。
 - 數量:賣家設定「顯示數量」才寫幾台,不然只寫有貨 / 缺貨(跟平台內同一條規則)。
 - 頁面本身不帶任何外部資源、不給搜尋引擎收錄、不快取。
@@ -14,7 +14,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.html import escape
 
-from . import listing, partners, pricing
+from . import listing, partners
 from .base import TradeError, setting_of
 from .models import TradePartner, TradeQuoteLink
 
@@ -92,27 +92,21 @@ def sections(seller, partner) -> list[dict]:
     see_units, see_goods = partners.can_see(setting, partner)
     out = []
     if see_units:
-        units = list(listing.units_for_sale(seller).select_related("serial__product").order_by("serial__product__name", "price", "id"))
-        rules = pricing.rules_of(seller, {u.serial.product_id for u in units})
+        # 中古機一台一行:成色、電池、備註(機況)、價、編號(owner 2026-10-14:「中古機要能看到品項,電池,備註打的機況」;
+        # 合成一行的話上架 300 台只看得到幾行)
+        grade_rank = {g: i for i, g in enumerate(["S", "A", "B", "C", "D", ""])}
+        units = listing.units_for_sale(seller).select_related("serial__product").order_by("serial__product__name", "id")
         groups: dict[int, dict] = {}
         for unit in units:
             serial = unit.serial
-            product = serial.product
-            section = groups.setdefault(product.id, {"name": product.name, "merged": {}, "single": []})
-            if unit.own_price:
-                bits = [f"{serial.condition_grade} 級" if serial.condition_grade else "",
-                        f"電池 {serial.battery_health}%" if serial.battery_health is not None else "", (serial.condition_note or "").strip()]
-                section["single"].append({"label": " ".join(b for b in bits if b), "price": unit.price, "stock": "1 台", "code": f"U{unit.id}"})
-                continue
-            rule = pricing.best(rules.get(product.id, []), serial)
-            label = pricing.text_of(rule) if rule is not None else (f"{serial.condition_grade} 級" if serial.condition_grade else "")
-            key = (label, unit.price)
-            section["merged"][key] = section["merged"].get(key, 0) + 1
+            bits = [f"{serial.condition_grade} 級" if serial.condition_grade else "",
+                    f"電池 {serial.battery_health}%" if serial.battery_health is not None else "", (serial.condition_note or "").strip()]
+            groups.setdefault(serial.product_id, {"name": serial.product.name, "lines": []})["lines"].append({
+                "label": " ".join(b for b in bits if b), "price": unit.price, "stock": "", "code": f"U{unit.id}",
+                "rank": (grade_rank.get(serial.condition_grade, 9), -(serial.battery_health or 0), unit.price)})
         for section in groups.values():
-            lines = [{"label": label, "price": price, "stock": _stock_text(setting, n), "code": ""}
-                     for (label, price), n in sorted(section["merged"].items(), key=lambda kv: (-kv[0][1], kv[0][0]))]
-            lines += sorted(section["single"], key=lambda line: -line["price"])
-            out.append({"name": section["name"], "lines": lines})
+            section["lines"].sort(key=lambda line: line.pop("rank"))
+            out.append(section)
     if see_goods:
         offers = [o for o in listing.products_for_sale(seller).order_by("product__category__sort_order", "product__name", "id")
                   if not listing.is_unit_product(o.product)]
@@ -204,7 +198,9 @@ def render(seller, partner, now=None) -> str:
                 + (f"<span class='label'>{escape(line['label'])}{f' <span class=code>編號 {escape(line['code'])}</span>' if line['code'] else ''}</span>"
                    if line["label"] or line["code"] else "")
                 + 
-                f"<span class='price'>{_money(line['price'])}</span><span class='stock{out}'>{escape(line['stock'])}</span>"
+                f"<span class='price'>{_money(line['price'])}</span>"
+                + (f"<span class='stock{out}'>{escape(line['stock'])}</span>" if line["stock"] else "")
+                + 
                 f"<button type='button' data-copy='{escape(copy)}'>複製</button></div>")
         q = " ".join([section["name"], *(line["label"] for line in section["lines"])]).lower()
         parts.append(f"<section data-q='{escape(q)}'><h2>{escape(section['name'])}</h2>{''.join(rows)}</section>")
