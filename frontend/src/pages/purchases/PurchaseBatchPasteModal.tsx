@@ -6,17 +6,7 @@ import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { pickActiveProduct } from "@/pages/products/pickActiveProduct";
 import { MoneyInput } from "@/components/MoneyInput";
-
-/**
- * 解析後尚未經過商品比對的原始一行
- */
-interface RawRow {
-  raw: string; // 使用者貼進來的原文,用於提示
-  rawProductText: string;
-  qty: number;
-  unit_price: string;
-  serials: string[];
-}
+import { parseLine, type RawRow } from "@/lib/batchPaste";
 
 /**
  * 經過比對後、可編輯的一行
@@ -51,46 +41,6 @@ interface Props {
   mode?: "regular" | "secondhand-vendor";
   /** 工作台版型:不開彈出視窗,直接放在頁面裡 */
   inline?: boolean;
-}
-
-/** 切割「商品 數量 單價 序號」一行(支援 Tab、多個空白、逗號) */
-function parseLine(line: string): RawRow | null {
-  const t = line.trim();
-  if (!t) return null;
-  // 優先用 Tab,再用 ; 等切;最後 fallback 多空白
-  let parts: string[];
-  if (t.includes("\t")) {
-    parts = t.split("\t");
-  } else if (t.split(/\s{2,}/).length >= 2) {
-    parts = t.split(/\s{2,}/);
-  } else {
-    parts = t.split(/[, ]+/);
-  }
-  parts = parts.map((p) => p.trim());
-
-  // 至少要有商品 + 數量
-  if (parts.length < 2) return null;
-
-  // 最後一個欄位若含分號或多個 IMEI 樣式的字串 → 視為序號;否則第 4 欄
-  let productText = parts[0];
-  let qty = Number(parts[1] ?? "1");
-  let unit_price = parts[2] ?? "0";
-  let serialsText = parts.slice(3).join(" ");
-
-  if (!Number.isFinite(qty) || qty < 1) qty = 1;
-
-  const serials = serialsText
-    .split(/[;、，,\s]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  return {
-    raw: t,
-    rawProductText: productText,
-    qty,
-    unit_price: String(unit_price),
-    serials,
-  };
 }
 
 function makeKey(): string {
@@ -132,9 +82,9 @@ function downloadSampleCsv(mode: "regular" | "secondhand-vendor") {
   const rows =
     mode === "secondhand-vendor"
       ? [
-          ["商品", "數量", "單價", "序號(分號分隔)", "成色", "售價", "電池%", "備註"],
-          ["iPhone 14 Pro 256G 黑色", "1", "25000", "356121234567890", "A", "32000", "92", ""],
-          ["iPhone 13 128G 白色", "1", "12000", "356121234567891", "B", "16800", "85", "輕微擦痕"],
+          ["商品", "數量", "單價", "序號(分號分隔)"],
+          ["iPhone 14 Pro 256G 黑色", "1", "25000", "356121234567890"],
+          ["iPhone 13 128G 白色", "1", "12000", "356121234567891"],
         ]
       : [
           ["商品", "數量", "單價", "序號(分號分隔,沒序號可留空)"],

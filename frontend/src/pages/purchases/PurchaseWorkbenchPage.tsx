@@ -74,6 +74,7 @@ import {
   BatchPasteResult,
   PurchaseBatchPasteModal,
 } from "./PurchaseBatchPasteModal";
+import { SecondhandSheetImport } from "./SecondhandSheetImport";
 import {
   PickerProduct,
   PurchaseProductPickerModal,
@@ -374,7 +375,7 @@ export function PurchaseWorkbenchPage({
       ? "上一次送出之後沒有等到結果。按「再送一次」:已經成立的話不會重複進貨。"
       : null,
   );
-  const [tool, setTool] = useState<"picker" | "paste" | null>(null);
+  const [tool, setTool] = useState<"picker" | "paste" | "sheet" | null>(null);
   /** 勾選商品 / 批次貼上之後要人看一眼的結果(併了哪些、哪些沒加):留在明細上方,按了才收 */
   const [notice, setNotice] = useState<string[] | null>(null);
   // 序號防呆:這張單上每一個碼(掃的、打的、貼的、批次貼上的、草稿帶回來的)都問一次「是不是已經在系統裡」,
@@ -1237,6 +1238,15 @@ export function PurchaseWorkbenchPage({
     );
   }
 
+  function appendSheet(groups: { product: Product; entries: SerialEntry[] }[]) {
+    // 中古機 Excel:每一台有自己的成本(進價,一定大於 0);那一行的單價只是沒填成本時的預設,所以不用來擋併行
+    // (複審:明細裡已經有同一個品號、單價不是 0 的話,整組會被當成「單價不一樣」不加)
+    appendLines(
+      groups.map((g) => ({ ...newLineOf(g.product, g.entries.length, "0"), serials: g.entries })),
+      false,
+    );
+  }
+
   // 試算跟伺服器存檔用同一套算法(整數元、四捨五入)
   const [estSubtotal, estTax, estTotal] = splitTax(
     lines.map(lineAmount),
@@ -1657,6 +1667,12 @@ export function PurchaseWorkbenchPage({
           >
             批次貼上
           </button>
+          {isSecondhandVendor && (
+            <button type="button" className={`wb-btn${tool === "sheet" ? " on" : ""}`} disabled={locked}
+              onClick={() => setTool(tool === "sheet" ? null : "sheet")}>
+              匯入表格
+            </button>
+          )}
         </div>
 
         {serialBlock && (
@@ -1729,6 +1745,19 @@ export function PurchaseWorkbenchPage({
           onConfirm={appendBatch}
           mode={mode}
         />
+        {isSecondhandVendor && (
+          <SecondhandSheetImport
+            open={tool === "sheet"}
+            onClose={() => setTool(null)}
+            onConfirm={appendSheet}
+            supplier={supplier}
+            supplierName={supplierOption?.label ?? ""}
+            warehouse={warehouse}
+            warehouseName={stores.find((w) => w.id === warehouse)?.name ?? ""}
+            taxMethod={taxMethod}
+            taxLabel={TAX_METHODS.find((t) => t.value === taxMethod)?.label ?? ""}
+          />
+        )}
 
         <table className="wb-table wb-lines ws-table ws-pur" ref={tableRef}>
           <thead>
