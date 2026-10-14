@@ -5,7 +5,7 @@
 - 批發設定、往來的同行與代碼、商品開不開放與固定批發價、收款 → 只有管理員(價錢與帳)。
 買家那一側不在這裡:平台內走 `vendor_orders` 的串接器、對外走金鑰,兩邊最後都是 `api.handle`。
 """
-from datetime import date
+from datetime import date, timedelta
 
 from django.db import transaction
 from django.db.models import Count, Exists, Max, Min, OuterRef, Q
@@ -16,7 +16,7 @@ from rest_framework.decorators import api_view
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
-from apps.catalog.models import Product
+from apps.catalog.models import Product, ProductRelation
 from apps.core.warehouse_scoping import locked_warehouse_id
 from apps.inventory.identifiers import codes_of
 from apps.inventory.models import ProductSerial, Warehouse
@@ -450,26 +450,79 @@ def product_list(request):
             return _bad(exc)
         return Response({"changed": done})
     listed = TradeProduct.objects.filter(product_id=OuterRef("pk"), is_listed=True)
-    rows = (Product.objects.filter(tenant=tenant, is_active=True, is_virtual=False)
+    params = request.query_params
+    ids = lambda key: [int(x) for x in (params.get(key) or "").split(",") if x.strip().isdigit()]   # noqa: E731
+    base = (Product.objects.filter(tenant=tenant, is_active=True, is_virtual=False)
             .exclude(Q(requires_serial=True) & (Q(is_secondhand=True) | Q(condition__tracks_unit_condition=True)))
             .annotate(is_on=Exists(listed)))
-    if (request.query_params.get("state") or "listed") == "listed":
-        rows = rows.filter(is_on=True)
-    q = (request.query_params.get("q") or "").strip()
-    if q:
-        rows = rows.filter(Q(name__icontains=q) | Q(sku__icontains=q) | Q(barcode__icontains=q))
-    category = _int(request.query_params.get("category"))
-    if category:
-        rows = rows.filter(category_id=category)
+    # 多重分類疊在一起用(owner 2026-10-14):類別、品牌、型號可以各點好幾個;型號 = 商品本身的機型或它適用的機型
+    wanted = {"category": ids("category"), "brand": ids("brand"), "model": ids("model")}
+    q = (params.get("q") or "").strip()
+    state = params.get("state") or "listed"
+    priced = params.get("priced") or ""
+    fresh = _int(params.get("fresh"))
+    fixed_on = TradeProduct.objects.filter(product_id=OuterRef("pk"), price__isnull=False)
+    percent_on = TradeProduct.objects.filter(product_id=OuterRef("pk"), percent__isnull=False)
+
+    def narrowed(skip=""):
+        rows = base
+        if state == "listed":
+            rows = rows.filter(is_on=True)
+        elif state == "unlisted":
+            rows = rows.filter(is_on=False)
+        if q:
+            rows = rows.filter(Q(name__icontains=q) | Q(sku__icontains=q) | Q(barcode__icontains=q))
+        if priced == "fixed":
+            rows = rows.filter(Exists(fixed_on))
+        elif priced == "percent":
+            rows = rows.filter(Exists(percent_on))
+        elif priced == "none":
+            rows = rows.exclude(Exists(fixed_on)).exclude(Exists(percent_on))
+        if fresh:
+            # 新到 N 天:這幾天有進貨(沒作廢)的(紅隊:新進的那一批要篩得出來,不要跟以前沒開放的舊料混在一起)
+            since = timezone.localdate() - timedelta(days=fresh)
+            rows = rows.filter(purchase_items__po__doc_date__gte=since, purchase_items__po__is_void=False)
+        if wanted["category"] and skip != "category":
+            rows = rows.filter(category_id__in=wanted["category"])
+        if wanted["brand"] and skip != "brand":
+            rows = rows.filter(brand_id__in=wanted["brand"])
+        if wanted["model"] and skip != "model":
+            rows = rows.filter(Q(phone_model_id__in=wanted["model"]) | Q(host_relations__host_model_id__in=wanted["model"]))
+        return rows.distinct()
+
+    rows = narrowed()
     total = rows.count()
-    limit, offset = _page(request)
-    page = list(rows.select_related("category").order_by("category__sort_order", "name", "id")[offset:offset + limit])
+    limit = min(max(_int(params.get("limit")) or PAGE, 1), UNIT_PAGE_MAX)
+    offset = _int(params.get("offset")) or 0
+    page = list(rows.select_related("category", "brand", "phone_model").order_by("category__sort_order", "name", "id")[offset:offset + limit])
     offers = {t.product_id: t for t in TradeProduct.objects.filter(product__in=page)}
     left = listing.available_qty(tenant, [p.id for p in page])
-    return Response({"total": total, "results": [{
-        "product": p.id, "sku": p.sku, "name": p.name, "category": p.category.name, "list_price": _money(p.list_price),
-        "requires_serial": p.requires_serial, "is_listed": bool(offers.get(p.id) and offers[p.id].is_listed),
-        "price": _money(offers[p.id].price) if p.id in offers else None, "available": left.get(p.id, 0),
+    fits = {}
+    for rel in ProductRelation.objects.filter(tenant=tenant, accessory_product__in=page, host_model__isnull=False).select_related("host_model"):
+        fits.setdefault(rel.accessory_product_id, set()).add(rel.host_model.name)
+    # 每一顆選項旁邊的數字:別的條件照舊、只換這一類會剩幾個
+    facets = {
+        "categories": [{"id": r["category_id"], "name": r["category__name"], "count": r["n"]} for r in
+                       narrowed("category").values("category_id", "category__name").annotate(n=Count("id", distinct=True)).order_by("category__name")],
+        "brands": [{"id": r["brand_id"], "name": r["brand__name"], "count": r["n"]} for r in
+                   narrowed("brand").exclude(brand__isnull=True).values("brand_id", "brand__name").annotate(n=Count("id", distinct=True)).order_by("brand__name")],
+        "models": [],
+    }
+    # 型號:商品本身的機型與它適用的機型合起來算(同一個型號底下有手機也有零件,兩邊的商品都要算到,不能一邊蓋掉另一邊)
+    by_model: dict[int, list] = {}
+    for path in ("phone_model", "host_relations__host_model"):
+        for pid, mid, name in (narrowed("model").exclude(**{f"{path}__isnull": True}).order_by()
+                               .values_list("id", f"{path}_id" if path == "phone_model" else f"{path}_id", f"{path}__name")):
+            by_model.setdefault(mid, [name, set()])[1].add(pid)
+    facets["models"] = [{"id": mid, "name": name, "count": len(found)} for mid, (name, found) in sorted(by_model.items(), key=lambda kv: kv[1][0])]
+    return Response({"total": total, "facets": facets, "results": [{
+        "product": p.id, "sku": p.sku, "name": p.name, "category": p.category.name, "brand": p.brand.name if p.brand_id else "",
+        "models": sorted(({p.phone_model.name} if p.phone_model_id else set()) | fits.get(p.id, set())),
+        # 門市價原樣給(不截掉小數):畫面算「門市價的幾 %」要跟伺服器算的一樣(複審 P1)
+        "list_price": float(p.list_price or 0), "requires_serial": p.requires_serial,
+        "is_listed": bool(offers.get(p.id) and offers[p.id].is_listed),
+        "price": _money(offers[p.id].price) if p.id in offers else None,
+        "percent": offers[p.id].percent if p.id in offers else None, "available": left.get(p.id, 0),
     } for p in page]})
 
 

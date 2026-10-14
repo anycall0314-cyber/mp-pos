@@ -323,4 +323,5 @@ test("剛加的外部同行那一格:報價連結跟著清單上最新的(換新
   assert.deepEqual(liveQuote(issued, [{ id: 7, quote: { path: "/api/trade/quote/new/", on: true } }]), { path: "/api/trade/quote/new/", on: true });
   assert.deepEqual(liveQuote(issued, [{ id: 7, quote: { path: "/api/trade/quote/old/", on: false } }]).on, false);
   assert.deepEqual(liveQuote(issued, []), issued.quote);                      // 清單還沒回來:先用建立當下的
+  assert.equal(liveQuote(issued, [{ id: 7, status: "blocked", quote: { path: "/api/trade/quote/new/", on: true } }]).on, false);   // 不往來:打不開
 });

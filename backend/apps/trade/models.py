@@ -254,8 +254,10 @@ class TradeProduct(TenantOwnedModel):
     product = models.OneToOneField(
         "catalog.Product", on_delete=models.CASCADE, related_name="trade_product", verbose_name="商品")
     is_listed = models.BooleanField("開放批發", default=True)
-    # 有填 = 每一個同行都是這個價錢;空的 = 門市售價 × 那個同行的折數
+    # 批發價三種(owner 2026-10-14 批次改價;紅隊:「門市價 × 70%」要真的跟著門市價走,不是存成當下算好的金額):
+    # price 有填 = 每一個同行都是這個價錢;percent 有填 = 門市價的幾 %(每一個同行一樣、門市價改了跟著變);都空 = 門市價 × 那個同行的折數
     price = models.DecimalField("固定批發價", max_digits=14, decimal_places=2, null=True, blank=True)
+    percent = models.PositiveSmallIntegerField("門市價的幾 %", null=True, blank=True)
     updated_by = _by("改的人")
 
     class Meta:

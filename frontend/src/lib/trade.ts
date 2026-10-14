@@ -504,6 +504,8 @@ export function prepayNote(order: Pick<TradeOrder, "payment_method" | "credit">,
 }
 
 /** 剛加的外部同行那一格要顯示的報價連結:用清單上最新的那一份(複審 P1:換新之後還拿著建立當下那一份,複製出去的是打不開的舊連結);關掉的不給複製 */
-export function liveQuote<T extends { id: number; quote: { path: string; on: boolean } | null }>(issued: T, rows: T[]): { path: string; on: boolean } | null {
-  return (rows.find((p) => p.id === issued.id) ?? issued).quote;
+export function liveQuote<T extends { id: number; status?: string; quote: { path: string; on: boolean } | null }>(issued: T, rows: T[]): { path: string; on: boolean } | null {
+  const now = rows.find((p) => p.id === issued.id) ?? issued;
+  // 不往來的同行打不開那一頁:這一格也不給複製
+  return now.quote && now.status === "blocked" ? { ...now.quote, on: false } : now.quote;
 }

@@ -80,11 +80,32 @@ export interface TradeProductRow {
   sku: string;
   name: string;
   category: string;
+  brand: string;
+  /** 商品本身的機型與它適用的機型 */
+  models: string[];
   list_price: number;
   requires_serial: boolean;
   is_listed: boolean;
+  /** 固定價 / 門市價的幾 %(每個同行一樣);都是 null = 照同行折數 */
   price: number | null;
+  percent: number | null;
   available: number;
+}
+
+export interface GoodsFacet {
+  id: number;
+  name: string;
+  count: number;
+}
+
+export interface GoodsQuery {
+  state: "listed" | "unlisted" | "all";
+  q: string;
+  category: number[];
+  brand: number[];
+  model: number[];
+  priced: "" | "fixed" | "percent" | "none";
+  fresh: 0 | 7 | 30;
 }
 
 export interface TradeLedger {
@@ -238,20 +259,24 @@ export function useTradeUnitsDo() {
   });
 }
 
-export const useTradeProducts = (state: "listed" | "all", q: string, limit: number, enabled = true) =>
+/** 批發品:篩出來的全部一次拿回來(最多 2000)。**不留上一份**:換篩選那一下手上的不是現在這一群,不能拿來勾、拿來送 */
+export const useTradeProducts = (f: GoodsQuery, enabled = true) =>
   useQuery({
-    queryKey: ["trade-products", state, q, limit],
-    queryFn: () => api<Page<TradeProductRow>>(`/trade/products/?${query({ state, q, limit })}`),
-    placeholderData: keepPreviousData,
+    queryKey: ["trade-products", f],
+    queryFn: () =>
+      api<Page<TradeProductRow> & { facets: { categories: GoodsFacet[]; brands: GoodsFacet[]; models: GoodsFacet[] } }>(
+        `/trade/products/?${query({ state: f.state, q: f.q, priced: f.priced, fresh: f.fresh || undefined, limit: 2000,
+          category: f.category.join(","), brand: f.brand.join(","), model: f.model.join(",") })}`),
     enabled,
   });
 
 export function useTradeProductsDo() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (rows: { product: number; is_listed?: boolean; price?: number | null }[]) =>
+    mutationFn: (rows: { product: number; is_listed?: boolean; price?: number | null; percent?: number | null }[]) =>
       post<{ changed: number }>("/trade/products/", { rows }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["trade-products"] }),
+    // 沒成功也重新拿(多半是清單上有一個剛被別人改了)
+    onSettled: () => qc.invalidateQueries({ queryKey: ["trade-products"] }),
   });
 }
 

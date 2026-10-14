@@ -353,49 +353,98 @@ def products_for_sale(tenant):
 
 
 def price_for(trade_product: TradeProduct, partner: TradePartner):
-    """這個同行買這個商品的單價(整數元)。固定批發價優先;沒有就是門市售價 × 他的折數。算不出正的 = 不能訂(None)。"""
+    """這個同行買這個商品的單價(整數元)。固定批發價 → 門市價的幾 %(每個同行一樣)→ 門市售價 × 他的折數。算不出正的 = 不能訂(None)。"""
     if trade_product.price is not None:
         price = trade_product.price
+    elif trade_product.percent is not None:
+        price = round_money((trade_product.product.list_price or ZERO) * Decimal(trade_product.percent) / Decimal("100"))
     else:
         price = round_money((trade_product.product.list_price or ZERO) * Decimal(partner.percent) / Decimal("100"))
     return price if price > 0 else None
 
 
+def _everyone_price(product, price, percent):
+    """每個同行一樣的那個價(固定價、門市價的幾 %);照同行折數的回 None。"""
+    if price is not None:
+        return price
+    if percent is not None:
+        return round_money((product.list_price or ZERO) * Decimal(percent) / Decimal("100"))
+    return None
+
+
+def _how(price, percent) -> str:
+    return "固定價" if price is not None else f"門市價 {percent}%" if percent is not None else "照折數"
+
+
+def clean_percent_of_list(value, what: str):
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 200:
+        raise TradeError(f"{what}的 % 要是 1 到 200 的整數")
+    return value
+
+
 def set_products(tenant, user, rows) -> int:
-    """開放 / 收回幾個商品,或改固定批發價(`rows` = [{product, is_listed?, price?}];price 給 null = 改回照折數算)。"""
+    """開放 / 收回幾個商品,或改批發價(`rows` = [{product, is_listed?, price?, percent?}]):
+    `price` = 固定價、`percent` = 門市價的幾 %(兩個只能給一個;給了一個另一個清掉);`price: null` 且沒給 `percent` = 回到照同行折數。
+
+    **整批一起成立**(有一個不對就都不動),一次最多 `MAX_ROWS` 個(維修零件一家上千個品項);每一個有變的記一筆改價紀錄。
+    """
     if not isinstance(rows, list) or not rows:
         raise TradeError("沒有要改的")
-    if len(rows) > 500:
-        raise TradeError("一次最多改 500 個")
+    if len(rows) > MAX_ROWS:
+        raise TradeError(f"一次最多改 {MAX_ROWS} 個")
     ids = [r.get("product") for r in rows if isinstance(r, dict)]
     if len(ids) != len(rows) or any(isinstance(i, bool) or not isinstance(i, int) for i in ids) or len(set(ids)) != len(ids):
         raise TradeError("要改的內容不對")
-    products = {p.id: p for p in Product.objects.filter(tenant=tenant, pk__in=ids).select_related("condition")}
-    done = 0
-    for row in rows:
-        product = products.get(row["product"])
-        if product is None:
-            raise TradeError("有一個商品找不到")
-        if product.is_virtual:
-            raise TradeError(f"「{product.name}」是虛擬商品,不能批發")
-        if is_unit_product(product):
-            raise TradeError(f"「{product.name}」是一台一筆賣的(中古機 / 已拆封),請用上架")
-        current = TradeProduct.objects.filter(tenant=tenant, product=product).first()
-        fields = {"updated_by": user}
-        if "is_listed" in row:
-            if not isinstance(row["is_listed"], bool):
-                raise TradeError("要改的內容不對")
-            fields["is_listed"] = row["is_listed"]
-        if "price" in row:
-            fields["price"] = clean_price(row["price"], f"「{product.name}」")
-        if current is None:
-            TradeProduct.objects.create(tenant=tenant, product=product, **{"is_listed": True, **fields})
-        else:
-            for name, value in fields.items():
-                setattr(current, name, value)
-            current.save(update_fields=[*fields, "updated_at"])
-        done += 1
-    return done
+    with transaction.atomic():
+        products = {p.id: p for p in Product.objects.filter(tenant=tenant, pk__in=ids).select_related("condition")}
+        have = {t.product_id: t for t in TradeProduct.objects.select_for_update().filter(tenant=tenant, product_id__in=ids)}
+        now = timezone.now()
+        new, old, logs = [], [], []
+        for row in rows:
+            product = products.get(row["product"])
+            if product is None:
+                raise TradeError("有一個商品找不到")
+            if product.is_virtual:
+                raise TradeError(f"「{product.name}」是虛擬商品,不能批發")
+            if is_unit_product(product):
+                raise TradeError(f"「{product.name}」是一台一筆賣的(中古機 / 已拆封),請用上架")
+            if "price" in row and row.get("price") is not None and row.get("percent") is not None:
+                raise TradeError(f"「{product.name}」固定價與 % 只能填一個")
+            current = have.get(product.id)
+            was_listed, was_price, was_percent = (current.is_listed, current.price, current.percent) if current else (False, None, None)
+            # 只改價、沒講開不開放的:原本沒開放就還是沒開放(改價不會順便把它開放給同行)
+            listed, price, percent = was_listed, was_price, was_percent
+            if "is_listed" in row:
+                if not isinstance(row["is_listed"], bool):
+                    raise TradeError("要改的內容不對")
+                listed = row["is_listed"]
+            if "percent" in row and row["percent"] is not None:
+                percent, price = clean_percent_of_list(row["percent"], f"「{product.name}」"), None
+            elif "price" in row:
+                price = clean_price(row["price"], f"「{product.name}」")
+                percent = None
+            if current is None:
+                new.append(TradeProduct(tenant=tenant, product=product, is_listed=listed, price=price, percent=percent, updated_by=user))
+            else:
+                current.is_listed, current.price, current.percent, current.updated_by, current.updated_at = listed, price, percent, user, now
+                old.append(current)
+            # 改價紀錄:開放 / 收回 / 價變了(價記「每個同行一樣」的那個金額;照折數的記成空的,哪一種寫在「哪一群」)
+            before = _everyone_price(product, was_price, was_percent) if was_listed else None
+            after = _everyone_price(product, price, percent) if listed else None
+            What = pricing.TradePriceChange.What
+            if listed != was_listed:
+                logs.append((product, What.LIST if listed else What.UNLIST, _how(price, percent), before, after))
+            elif listed and (price, percent) != (was_price, was_percent):
+                logs.append((product, What.PRICE, f"{_how(was_price, was_percent)} → {_how(price, percent)}", before, after))
+        TradeProduct.objects.bulk_create(new, batch_size=500)
+        TradeProduct.objects.bulk_update(old, ["is_listed", "price", "percent", "updated_by", "updated_at"], batch_size=500)
+        pricing.TradePriceChange.objects.bulk_create([
+            pricing.TradePriceChange(tenant=tenant, product=product, what=what, scope=scope[:120], count=1, by=user,
+                                     old_low=before, old_high=before, new_low=after, new_high=after)
+            for product, what, scope, before, after in logs], batch_size=500)
+    return len(rows)
 
 
 def available_qty(tenant, product_ids) -> dict[int, int]:
