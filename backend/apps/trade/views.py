@@ -7,7 +7,7 @@
 """
 from datetime import date
 
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework import status
@@ -229,26 +229,50 @@ def invite_create(request):
 
 
 # ── 中古機上架 ──────────────────────────────────────────────────────────────
-@api_view(["GET"])
-def unit_list(request):
-    """在庫的一台一筆商品(中古機 / 已拆封)與它們的上架狀況。`state` = unlisted(預設)/ listed / held / all。"""
-    _seller(request)
-    tenant = request.tenant
+# 一個型號的每一台要一次列得出來(同型號在庫幾百台、整群篩、整群定價;owner 2026-10-14)
+UNIT_PAGE_MAX = 2000
+
+
+def _units_in_stock(request):
+    """這個人看得到的、在庫的一台一筆商品(中古機 / 已拆封),帶著「有沒有被訂著」「有沒有上架」。鎖門市的人只有自己那一間。"""
     held = TradeOrderLine.objects.filter(unit_id=OuterRef("pk"), holding=True)
-    rows = (ProductSerial.objects.filter(tenant=tenant, status=ProductSerial.Status.IN_STOCK, product__requires_serial=True,
+    listed = TradeUnit.objects.filter(serial_id=OuterRef("pk"), is_listed=True)
+    rows = (ProductSerial.objects.filter(tenant=request.tenant, status=ProductSerial.Status.IN_STOCK, product__requires_serial=True,
                                          product__is_virtual=False)
             .filter(Q(product__is_secondhand=True) | Q(product__condition__tracks_unit_condition=True))
-            .annotate(is_held=Exists(held)))
-    own = locked_warehouse_id(request.user)
-    store = own or _int(request.query_params.get("warehouse"))
+            .annotate(is_held=Exists(held), is_on=Exists(listed)))
+    store = locked_warehouse_id(request.user) or _int(request.query_params.get("warehouse"))
     if store:
         rows = rows.filter(warehouse_id=store)
+    return rows
+
+
+@api_view(["GET"])
+def unit_models(request):
+    """中古機照型號算:每一個型號在庫幾台、其中沒上架 / 上架中 / 被訂走各幾台。上架那一頁先看這個,再點進一個型號。"""
+    _seller(request)
+    found = (_units_in_stock(request).values("product_id", "product__name", "product__sku")
+             .annotate(total=Count("id"), listed=Count("id", filter=Q(is_on=True, is_held=False)), held=Count("id", filter=Q(is_held=True)))
+             .order_by("product__name", "product_id"))
+    return Response({"results": [{
+        "product": row["product_id"], "name": row["product__name"], "sku": row["product__sku"], "total": row["total"],
+        "unlisted": row["total"] - row["listed"] - row["held"], "listed": row["listed"], "held": row["held"],
+    } for row in found]})
+
+
+@api_view(["GET"])
+def unit_list(request):
+    """在庫的一台一筆商品(中古機 / 已拆封)與它們的上架狀況。`state` = unlisted(預設)/ listed / held / all;`product` = 只看一個型號。"""
+    _seller(request)
+    tenant = request.tenant
+    rows = _units_in_stock(request)
+    product = _int(request.query_params.get("product"))
+    if product:
+        rows = rows.filter(product_id=product)
     q = (request.query_params.get("q") or "").strip()
     if q:
         rows = rows.filter(Q(product__name__icontains=q) | Q(serial_no__icontains=q) | Q(identifiers__value__icontains=q)).distinct()
     state = request.query_params.get("state") or "unlisted"
-    listed = TradeUnit.objects.filter(serial_id=OuterRef("pk"), is_listed=True)
-    rows = rows.annotate(is_on=Exists(listed))
     if state == "unlisted":
         rows = rows.filter(is_on=False, is_held=False)
     elif state == "listed":
@@ -256,7 +280,8 @@ def unit_list(request):
     elif state == "held":
         rows = rows.filter(is_held=True)
     total = rows.count()
-    limit, offset = _page(request)
+    limit = min(max(_int(request.query_params.get("limit")) or PAGE, 1), UNIT_PAGE_MAX)
+    offset = _int(request.query_params.get("offset")) or 0
     page = list(rows.select_related("product__condition", "warehouse").prefetch_related("identifiers")
                 .order_by("-id")[offset:offset + limit])
     units = {u.serial_id: u for u in TradeUnit.objects.filter(serial__in=page)}
@@ -277,11 +302,18 @@ def unit_list(request):
     return Response({"total": total, "results": out})
 
 
+def _seen(request):
+    """畫面送出時說它看的是哪個型號 / 哪一間門市(沒說的不查)。"""
+    data = request.data if isinstance(request.data, dict) else {}
+    return {"product": _int(data.get("product")), "warehouse": _int(data.get("warehouse"))}
+
+
 @api_view(["POST"])
 def unit_put_on(request):
     _seller(request)
     try:
-        done = listing.put_on(request.tenant, request.user, request.data.get("rows") if isinstance(request.data, dict) else None)
+        done = listing.put_on(request.tenant, request.user, request.data.get("rows") if isinstance(request.data, dict) else None,
+                              store=locked_warehouse_id(request.user), seen=_seen(request))
     except TradeError as exc:
         return _bad(exc)
     return Response({"listed": len(done)})
@@ -291,7 +323,8 @@ def unit_put_on(request):
 def unit_take_off(request):
     _seller(request)
     try:
-        done = listing.take_off(request.tenant, request.data.get("serials") if isinstance(request.data, dict) else None)
+        done = listing.take_off(request.tenant, request.data.get("serials") if isinstance(request.data, dict) else None,
+                                store=locked_warehouse_id(request.user), seen=_seen(request))
     except TradeError as exc:
         return _bad(exc)
     return Response({"unlisted": done})

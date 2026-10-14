@@ -179,6 +179,142 @@ export function priceOf(text: string): number | undefined | null {
   return Number(t) >= 1 ? Number(t) : null;
 }
 
+// ── 中古機上架:同一個型號在庫幾百台,篩出差不多機況的那一群、整群同價(owner 2026-10-14) ──────────────
+/** 上架那一頁的一台(篩選與定價只用到這幾格) */
+export interface UnitLike {
+  serial: number;
+  serial_no: string;
+  imei: string;
+  sn: string;
+  grade: string;
+  battery: number | null;
+  note: string;
+  retail_price: number;
+  auto_price: number | null;
+  is_listed: boolean;
+  /** 上架中的價;下架過的是它上一次的價;沒上過架是 null */
+  price: number | null;
+}
+
+/** 成色一次只看一個(跟狀態一樣點一個換一個;紅隊:可以複選的話換下一個成色時上一個還亮著,會把剛改好的蓋掉) */
+export interface UnitFilter {
+  grade: string | null;
+  batteryMin: string;
+  batteryMax: string;
+  noted: "" | "yes" | "no";
+  q: string;
+}
+export const NO_UNIT_FILTER: UnitFilter = { grade: null, batteryMin: "", batteryMax: "", noted: "", q: "" };
+
+const GRADE_ORDER = ["S", "A", "B", "C", "D", ""];
+const gradeRank = (grade: string) => {
+  const at = GRADE_ORDER.indexOf(grade);
+  return at < 0 ? GRADE_ORDER.length : at;
+};
+
+/**
+ * 手上這一份清單能不能拿來勾、拿來送:只有「現在問的這一份」的答案才行。
+ * 換門市 / 狀態的那一下拿在手上的是上一份 —— 那一份一列都不算(複審 P0:不然「同價」會勾到上一間門市的那一群)。
+ */
+export function currentRows<T>(rows: T[] | undefined, isPrevious: boolean): T[] {
+  return rows && !isPrevious ? rows : [];
+}
+
+/** 電池的上下限:空的 = 不限(undefined);0 到 100 的整數;不然 null(打錯,當成沒有符合的) */
+export function percentOf(text: string): number | undefined | null {
+  const t = text.trim();
+  if (t === "") return undefined;
+  if (!/^\d{1,3}$/.test(t) || Number(t) > 100) return null;
+  return Number(t);
+}
+
+/** 照成色(S 到 D,沒評的最後)、電池高到低排:差不多機況的排在一起 */
+export function sortUnits<T extends UnitLike>(rows: T[]): T[] {
+  return [...rows].sort(
+    (a, b) => gradeRank(a.grade) - gradeRank(b.grade) || (b.battery ?? -1) - (a.battery ?? -1) || a.serial - b.serial,
+  );
+}
+
+export function filterUnits<T extends UnitLike>(rows: T[], f: UnitFilter): T[] {
+  const low = percentOf(f.batteryMin);
+  const high = percentOf(f.batteryMax);
+  if (low === null || high === null) return [];
+  const q = f.q.trim().toLowerCase();
+  return rows.filter((r) => {
+    if (f.grade !== null && r.grade !== f.grade) return false;
+    // 有限電池的時候,沒記電池的那幾台不算符合(不知道是幾 %)
+    if ((low !== undefined || high !== undefined) && r.battery === null) return false;
+    if (low !== undefined && (r.battery as number) < low) return false;
+    if (high !== undefined && (r.battery as number) > high) return false;
+    if (f.noted === "yes" && r.note.trim() === "") return false;
+    if (f.noted === "no" && r.note.trim() !== "") return false;
+    return q === "" || [r.serial_no, r.imei, r.sn, r.note].some((text) => text.toLowerCase().includes(q));
+  });
+}
+
+/** 篩選列每一顆上面寫的台數:是「別的條件照舊、只換這一顆」會剩幾台(點了 A 之後,「有備註」寫的是 A 裡面有備註的) */
+export function unitFacets<T extends UnitLike>(rows: T[], f: UnitFilter) {
+  const byGrade = new Map<string, number>();
+  for (const r of filterUnits(rows, { ...f, grade: null })) byGrade.set(r.grade, (byGrade.get(r.grade) ?? 0) + 1);
+  const others = filterUnits(rows, { ...f, noted: "" });
+  const noted = others.filter((r) => r.note.trim() !== "").length;
+  return {
+    grades: [...byGrade.entries()].map(([grade, count]) => ({ grade, count })).sort((a, b) => gradeRank(a.grade) - gradeRank(b.grade)),
+    noted,
+    plain: others.length - noted,
+  };
+}
+
+/** 這一列批發價那一格現在的字:自己打的優先 → 有勾而且上面有整群的價就是那個價 → 它原本的價(上架中的、或下架前的那個) → 空的(照規則) */
+export function unitPriceText(row: UnitLike, typed: Record<number, string>, group: string, picked: boolean): string {
+  if (typed[row.serial] !== undefined) return typed[row.serial];
+  if (picked && group.trim() !== "") return group;
+  return row.price !== null ? String(row.price) : "";
+}
+
+export interface UnitBatch {
+  rows: { serial: number; price?: number }[];
+  /** 用上面那個整群的價的有幾台 */
+  grouped: number;
+}
+
+/** 勾著的這幾台要送出去什麼;有一台的價不對(或算不出來又沒填)就回是哪一台 */
+export function unitBatch(chosen: UnitLike[], typed: Record<number, string>, group: string): UnitBatch | { error: string } {
+  if (priceOf(group) === null) return { error: "批發價要填正的整數" };
+  const rows: UnitBatch["rows"] = [];
+  let grouped = 0;
+  for (const r of chosen) {
+    const price = priceOf(unitPriceText(r, typed, group, true));
+    if (price === null || (price === undefined && r.auto_price === null)) return { error: `${r.serial_no} 的批發價要填正的整數` };
+    if (typed[r.serial] === undefined && group.trim() !== "") grouped += 1;
+    rows.push(price === undefined ? { serial: r.serial } : { serial: r.serial, price });
+  }
+  return { rows, grouped };
+}
+
+/** 一次動到很多台、或好幾台要變成同一個價:按下去之前先講清楚、再按一次才做(紅隊:這是同行馬上看得到的價,不能回頭) */
+export const UNIT_CONFIRM_FROM = 10;
+export function unitNeedsConfirm(count: number, grouped: number): boolean {
+  return count >= UNIT_CONFIRM_FROM || grouped > 1;
+}
+
+/** 再按一次之前給人看的那一句:幾台、變成什麼價、原本是多少到多少;跟門市價差很多的另外提醒(只提醒) */
+export function unitConfirmText(verb: string, chosen: UnitLike[], batch: UnitBatch, group: string): string {
+  const price = priceOf(group);
+  if (!batch.grouped || typeof price !== "number") return `${verb} ${chosen.length} 台`;
+  const before = chosen.map((r) => r.price ?? r.auto_price).filter((n): n is number => n !== null);
+  const range = before.length ? (Math.min(...before) === Math.max(...before) ? `${Math.min(...before)}` : `${Math.min(...before)}–${Math.max(...before)}`) : "";
+  const retail = chosen.map((r) => r.retail_price).filter((n) => n > 0);
+  const odd = retail.length > 0 && (price > Math.max(...retail) || price * 2 < Math.min(...retail));
+  const rest = chosen.length - batch.grouped;
+  return [
+    `${batch.grouped} 台都${verb === "上架" ? "用" : "改成"} ${price}`,
+    range && `原本 ${range}`,
+    rest > 0 && `另外 ${rest} 台各自的價`,
+    odd && "跟門市價差很多",
+  ].filter(Boolean).join(",");
+}
+
 export type UnitRule = "price_minus" | "price_percent" | "cost_plus";
 
 /** 照規則預填這一台的批發價(跟伺服器 `listing.auto_price` 同一個算法);算出來不是正的 = 空的,要人填 */

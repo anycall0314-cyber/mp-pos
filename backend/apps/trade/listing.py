@@ -6,11 +6,13 @@
 """
 from decimal import Decimal
 
+from django.db import transaction
 from django.db.models import Count, Exists, F, OuterRef, Sum
 from django.utils import timezone
 
 from apps.catalog.models import Product
 from apps.core.money import round_money
+from apps.inventory.locking import lock_stock_rows
 from apps.inventory.models import ProductSerial, StockBalance
 
 from .base import ZERO, TradeError, setting_of
@@ -18,6 +20,8 @@ from .models import TradeOrder, TradeOrderLine, TradePartner, TradeProduct, Trad
 
 OPEN_STATES = (TradeOrder.Status.PENDING, TradeOrder.Status.ACCEPTED)
 MAX_PRICE = Decimal("9999999")
+# 一次上架 / 改價最多幾台:同一個型號在庫幾百台、整群定同一個價是常態(owner 2026-10-14)
+MAX_ROWS = 2000
 
 
 def is_unit_product(product) -> bool:
@@ -102,43 +106,96 @@ def after_intake(tenant, serials, *, user=None, wanted=None) -> int:
     return done
 
 
-def put_on(tenant, user, rows) -> list[TradeUnit]:
-    """上架幾台(`rows` = [{serial, price?}];沒給價錢的照規則算)。只有現在在庫的中古機能上架。"""
+def _save_units(tenant, priced, user) -> list[TradeUnit]:
+    """把這幾台(`priced` = [(序號, 批發價)])記成上架。幾百台一起來也只有幾句查詢。"""
+    now = timezone.now()
+    have = {u.serial_id: u for u in TradeUnit.objects.filter(tenant=tenant, serial_id__in=[serial.id for serial, _ in priced])}
+    new, old = [], []
+    for serial, price in priced:
+        unit = have.get(serial.id)
+        if unit is None:
+            new.append(TradeUnit(tenant=tenant, serial=serial, price=price, is_listed=True, listed_at=now, listed_by=user))
+        else:
+            unit.price, unit.is_listed, unit.listed_at, unit.listed_by, unit.updated_at = price, True, now, user, now
+            old.append(unit)
+    TradeUnit.objects.bulk_create(new, batch_size=500)
+    TradeUnit.objects.bulk_update(old, ["price", "is_listed", "listed_at", "listed_by", "updated_at"], batch_size=500)
+    return new + old
+
+
+def _not_what_was_seen(serial, seen):
+    """畫面說它看的是哪個型號 / 哪一間門市(`seen`);這一台不是的話回要講的話。
+
+    畫面換門市、換型號的那一下,手上可能還是上一份清單(複審 P0:會把上一間門市的整群改掉)。畫面自己會擋,這裡是伺服器這一側的保險。
+    """
+    if not seen:
+        return None
+    if seen.get("product") and serial.product_id != seen["product"]:
+        return f"{serial.serial_no} 不是畫面上那個型號的,請重新整理"
+    if seen.get("warehouse") and serial.warehouse_id != seen["warehouse"]:
+        return f"{serial.serial_no} 不在畫面選的那一間門市,請重新整理"
+    return None
+
+
+def put_on(tenant, user, rows, *, store=None, seen=None) -> list[TradeUnit]:
+    """上架 / 改價幾台(`rows` = [{serial, price?}];沒給價錢的照規則算)。只有現在在庫的中古機能上架。
+    `store` = 這個人被鎖在哪一間門市(沒鎖給 None):鎖門市的人只能動自己那一間的。
+    `seen` = 畫面看的是哪個型號 / 門市(`{product, warehouse}`,沒給的不查):有一台不是就整批不動。
+
+    **整批一起成立**:有一台不行(剛被賣掉、算不出價)就整批都不動,畫面把那一台講出來 —— 幾百台改到一半停住,
+    沒有人知道哪幾台改了。先鎖序號(跟銷貨、批發下單同一個順序)才看在不在庫:剛賣掉的那一台不會被上架回去。
+    """
     if not isinstance(rows, list) or not rows:
         raise TradeError("沒有要上架的")
-    if len(rows) > 500:
-        raise TradeError("一次最多上架 500 台")
+    if len(rows) > MAX_ROWS:
+        raise TradeError(f"一次最多上架 {MAX_ROWS} 台")
     wanted = {}
     for row in rows:
         serial_id = row.get("serial") if isinstance(row, dict) else None
         if isinstance(serial_id, bool) or not isinstance(serial_id, int) or serial_id in wanted:
             raise TradeError("上架的內容不對")
         wanted[serial_id] = row.get("price")
-    serials = {s.id: s for s in ProductSerial.objects.filter(tenant=tenant, pk__in=wanted).select_related("product__condition")}
     setting = setting_of(tenant)
-    out = []
-    for serial_id, raw in wanted.items():
-        serial = serials.get(serial_id)
-        if serial is None:
-            raise TradeError("有一台找不到")
-        if not is_unit_product(serial.product):
-            raise TradeError(f"{serial.serial_no} 不是一台一筆賣的商品(中古機 / 已拆封)")
-        if serial.status != ProductSerial.Status.IN_STOCK:
-            raise TradeError(f"{serial.serial_no} 現在是「{serial.get_status_display()}」,不能上架")
-        price = clean_price(raw, serial.serial_no) or auto_price(setting, serial)
-        if price is None:
-            raise TradeError(f"{serial.serial_no} 算不出批發價,請填")
-        out.append(_save_unit(tenant, serial, price, user))
-    return out
+    with transaction.atomic():
+        lock_stock_rows(tenant, serial_ids=list(wanted))
+        serials = {s.id: s for s in ProductSerial.objects.filter(tenant=tenant, pk__in=wanted).select_related("product__condition")}
+        priced = []
+        for serial_id, raw in wanted.items():
+            serial = serials.get(serial_id)
+            if serial is None:
+                raise TradeError("有一台找不到")
+            if not is_unit_product(serial.product):
+                raise TradeError(f"{serial.serial_no} 不是一台一筆賣的商品(中古機 / 已拆封)")
+            if serial.status != ProductSerial.Status.IN_STOCK:
+                raise TradeError(f"{serial.serial_no} 現在是「{serial.get_status_display()}」,不能上架")
+            if store and serial.warehouse_id != store:
+                raise TradeError(f"{serial.serial_no} 不在你的門市")
+            wrong = _not_what_was_seen(serial, seen)
+            if wrong:
+                raise TradeError(wrong)
+            price = clean_price(raw, serial.serial_no) or auto_price(setting, serial)
+            if price is None:
+                raise TradeError(f"{serial.serial_no} 算不出批發價,請填")
+            priced.append((serial, price))
+        return _save_units(tenant, priced, user)
 
 
-def take_off(tenant, serial_ids) -> int:
-    """下架。已經被訂走的那一台不受影響(那張單還是訂著它)。"""
+def take_off(tenant, serial_ids, *, store=None, seen=None) -> int:
+    """下架。已經被訂走的那一台不受影響(那張單還是訂著它)。`store`、`seen` 同 `put_on`。"""
     ids = [x for x in serial_ids if isinstance(x, int) and not isinstance(x, bool)] if isinstance(serial_ids, list) else []
     if not ids:
         raise TradeError("沒有要下架的")
-    return TradeUnit.objects.filter(tenant=tenant, serial_id__in=ids, is_listed=True).update(
-        is_listed=False, updated_at=timezone.now())
+    if len(ids) > MAX_ROWS:
+        raise TradeError(f"一次最多下架 {MAX_ROWS} 台")
+    if seen:
+        for serial in ProductSerial.objects.filter(tenant=tenant, pk__in=ids).only("serial_no", "product_id", "warehouse_id"):
+            wrong = _not_what_was_seen(serial, seen)
+            if wrong:
+                raise TradeError(wrong)
+    found = TradeUnit.objects.filter(tenant=tenant, serial_id__in=ids, is_listed=True)
+    if store:
+        found = found.filter(serial__warehouse_id=store)
+    return found.update(is_listed=False, updated_at=timezone.now())
 
 
 # ── 按數量賣的商品 ──────────────────────────────────────────────────────────

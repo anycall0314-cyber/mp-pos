@@ -151,21 +151,45 @@ export function useTradeOrderDo() {
 
 export const scanTradeUnit = (code: string, warehouse: number | "") => post<ScanFound>("/trade/scan/", { code, warehouse });
 
-export const useTradeUnits = (state: string, q: string, warehouse: number | "", limit: number) =>
+/**
+ * `product` 有給 = 只看一個型號(那個型號的每一台一次拿回來,畫面自己篩)。
+ * **不留上一份**(沒有 `keepPreviousData`):換門市 / 狀態的那一下如果還拿著上一份,「同價」會勾到上一間門市的那一群、把它們的價改掉(複審 P0)。
+ */
+export const useTradeUnits = (state: string, q: string, warehouse: number | "", limit: number, product?: number) =>
   useQuery({
-    queryKey: ["trade-units", state, q, warehouse, limit],
-    queryFn: () => api<Page<TradeUnitRow>>(`/trade/units/?${query({ state, q, warehouse, limit })}`),
+    queryKey: ["trade-units", state, q, warehouse, limit, product ?? 0],
+    queryFn: () => api<Page<TradeUnitRow>>(`/trade/units/?${query({ state, q, warehouse, limit, product })}`),
+  });
+
+export interface TradeUnitModelRow {
+  product: number;
+  name: string;
+  sku: string;
+  total: number;
+  unlisted: number;
+  listed: number;
+  held: number;
+}
+
+/** 中古機照型號算:每個型號在庫幾台、沒上架 / 上架中 / 被訂走各幾台 */
+export const useTradeUnitModels = (warehouse: number | "") =>
+  useQuery({
+    queryKey: ["trade-units", "models", warehouse],
+    queryFn: () => api<{ results: TradeUnitModelRow[] }>(`/trade/units/models/?${query({ warehouse })}`),
     placeholderData: keepPreviousData,
   });
 
 export function useTradeUnitsDo() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { list: { serial: number; price?: number }[] } | { unlist: number[] }): Promise<{ listed?: number; unlisted?: number }> =>
+    // `seen` = 畫面現在看的是哪個型號 / 哪一間門市:伺服器照它核對每一台,對不上整批不動
+    mutationFn: (vars: ({ list: { serial: number; price?: number }[] } | { unlist: number[] }) & { seen?: { product?: number; warehouse?: number } }):
+      Promise<{ listed?: number; unlisted?: number }> =>
       "list" in vars
-        ? post("/trade/units/list/", { rows: vars.list })
-        : post("/trade/units/unlist/", { serials: vars.unlist }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["trade-units"] }),
+        ? post("/trade/units/list/", { rows: vars.list, ...vars.seen })
+        : post("/trade/units/unlist/", { serials: vars.unlist, ...vars.seen }),
+    // 沒成功也重新拿:多半是清單上有一台剛被賣掉,重新拿它就不在清單上了
+    onSettled: () => qc.invalidateQueries({ queryKey: ["trade-units"] }),
   });
 }
 

@@ -12,6 +12,7 @@ urlpatterns = [
     path("trade/partners/<int:pk>/ledger/", views.partner_ledger),
     path("trade/invites/", views.invite_create),
     path("trade/units/", views.unit_list),
+    path("trade/units/models/", views.unit_models),
     path("trade/units/list/", views.unit_put_on),
     path("trade/units/unlist/", views.unit_take_off),
     path("trade/products/", views.product_list),

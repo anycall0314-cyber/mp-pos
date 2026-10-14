@@ -9,8 +9,11 @@
 5. 收款由舊到新銷單;出貨取消、作廢收款之後欠多少自己會對。
 """
 from decimal import Decimal as D
+from unittest import mock
 
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 
 from apps.backup.tests.factory import Company
 from apps.catalog.models import Product
@@ -254,6 +257,144 @@ class ListingTests(_Trade):
             self.assertNotIn(self.used.sku, self.products(self.b), status)
         ProductSerial.objects.filter(pk=one.id).update(status="in_stock")
         self.assertIn(self.used.sku, self.products(self.b))             # 調到了、修好了:還是這家公司的貨
+
+
+class ManyUnitsTests(_Trade):
+    """同一個型號在庫幾百台:先照型號看、一個型號一次列完、篩出來的整群定同一個價(owner 2026-10-14)。"""
+
+    def many(self, n, start=0, **entry):
+        return self.stock_units(*[f"M{i:04d}" for i in range(start, start + n)], **entry)
+
+    def put(self, rows, client=None, expect=200, **seen):
+        r = (client or self.a.admin).post(T + "units/list/", {"rows": rows, **seen}, format="json")
+        self.assertEqual(r.status_code, expect, r.content.decode())
+        return r.json()
+
+    def test_the_model_list_counts_each_model_by_state(self):
+        one, two, three = self.many(3)
+        far, = self.stock_units("M9000", warehouse=self.wh2)
+        other = Product.objects.create(tenant=self.seller, category=self.a.cat_phone, name="甲 中古 iPhone 12 64GB", is_secondhand=True, list_price=9000)
+        self.a._post("/api/v1/purchase-orders/", {
+            "supplier": self.a.supplier.id, "warehouse": self.wh1.id, "tax_method": "untaxed",
+            "items": [{"product": other.id, "qty": 1, "unit_price": "6000", "serial_numbers": [{"sn": "K0001", "grade": "B", "cost": "6000", "price": "9000"}]}]})
+        self.a.purchase(phone_serials=["N100"])                                   # 全新機不在這份清單
+        self.open_shop()
+        self.put([{"serial": one.id}, {"serial": two.id}])
+        self.buy_unit(self.b, two)                                                # 被訂走的不算上架中
+        rows = {r["name"]: r for r in self.a.admin.get(T + "units/models/").json()["results"]}
+        self.assertEqual(set(rows), {self.used.name, other.name})
+        self.assertEqual(rows[self.used.name], {"product": self.used.id, "name": self.used.name, "sku": self.used.sku,
+                                                "total": 4, "unlisted": 2, "listed": 1, "held": 1})
+        self.assertEqual((rows[other.name]["total"], rows[other.name]["unlisted"]), (1, 1))
+        there = self.a.admin.get(f"{T}units/models/?warehouse={self.wh2.id}").json()["results"]
+        self.assertEqual([(r["name"], r["total"]) for r in there], [(self.used.name, 1)])
+        # 鎖門市的店員只算自己那一間(另一間的那一台不在裡面)
+        mine = {r["name"]: r["total"] for r in self.a.clerk.get(f"{T}units/models/?warehouse={self.wh2.id}").json()["results"]}
+        self.assertEqual(mine, {self.used.name: 3, other.name: 1})
+        self.assertEqual(self.b.admin.get(T + "units/models/").json()["results"], [])
+
+    def test_one_model_comes_back_whole(self):
+        self.many(3)
+        other = Product.objects.create(tenant=self.seller, category=self.a.cat_phone, name="甲 中古 iPhone 12 64GB", is_secondhand=True, list_price=9000)
+        ProductSerial.objects.create(tenant=self.seller, product=other, serial_no="K0002", warehouse=self.wh1)
+        self.open_shop()
+        got = self.a.admin.get(f"{T}units/?state=all&product={self.used.id}&limit=1500").json()
+        self.assertEqual((got["total"], {u["product"] for u in got["results"]}, len(got["results"])), (3, {self.used.id}, 3))
+        self.assertEqual(self.a.admin.get(f"{T}units/?state=all&limit=1500").json()["total"], 4)
+        with mock.patch("apps.trade.views.UNIT_PAGE_MAX", 2):                     # 上限是清單自己的,不是別的清單那個 500
+            got = self.a.admin.get(f"{T}units/?state=all&product={self.used.id}&limit=1500").json()
+        self.assertEqual((got["total"], len(got["results"])), (3, 2))
+
+    def test_a_whole_group_gets_one_price_without_a_query_per_unit(self):
+        units = self.many(40)
+        self.open_shop()
+        self.put([{"serial": u.id, "price": 15500} for u in units[:10]])          # 其中十台本來就上架了(另一個價)
+        with CaptureQueriesContext(connection) as seen:
+            got = self.put([{"serial": u.id, "price": 12000} for u in units])
+        self.assertEqual(got, {"listed": 40})
+        self.assertLess(len(seen), 30, len(seen))                                 # 一台一句的話至少 80 句
+        self.assertEqual(set(TradeUnit.objects.values_list("price", "is_listed", "listed_by_id")), {(D("12000"), True, self.a.admin_user.id)})
+        self.assertEqual(TradeUnit.objects.count(), 40)
+        self.assertEqual({s["unit_price"] for s in self.products(self.b)[self.used.sku]["specs"]}, {12000})
+        # 下架也是整群
+        r = self.a.admin.post(T + "units/unlist/", {"serials": [u.id for u in units]}, format="json")
+        self.assertEqual(r.json(), {"unlisted": 40})
+        self.assertNotIn(self.used.sku, self.products(self.b))
+
+    def test_one_unit_that_cannot_be_listed_stops_the_whole_batch(self):
+        one, two, three = self.many(3)
+        self.open_shop()
+        self.put([{"serial": one.id, "price": 15000}])
+        ProductSerial.objects.filter(pk=three.id).update(status="sold", warehouse=None)      # 剛被門市賣掉
+        got = self.put([{"serial": one.id, "price": 11000}, {"serial": two.id, "price": 11000}, {"serial": three.id, "price": 11000}], expect=400)
+        self.assertIn("M0002", got["detail"])
+        self.assertEqual(list(TradeUnit.objects.values_list("serial_id", "price")), [(one.id, D("15000"))])   # 前兩台也沒有動
+        got = self.put([{"serial": one.id, "price": 11000}, {"serial": two.id, "price": -5}], expect=400)
+        self.assertEqual(list(TradeUnit.objects.values_list("serial_id", "price")), [(one.id, D("15000"))])
+
+    def test_two_thousand_go_through_and_one_more_does_not(self):
+        self.open_shop()
+        ProductSerial.objects.bulk_create([
+            ProductSerial(tenant=self.seller, product=self.used, serial_no=f"T{i:05d}", warehouse=self.wh1, condition_grade="A")
+            for i in range(2001)])
+        ids = list(ProductSerial.objects.filter(tenant=self.seller, serial_no__startswith="T").order_by("id").values_list("id", flat=True))
+        got = self.put([{"serial": i, "price": 9000} for i in ids], expect=400)
+        self.assertEqual((got["detail"], TradeUnit.objects.count()), ("一次最多上架 2000 台", 0))
+        with CaptureQueriesContext(connection) as seen:
+            got = self.put([{"serial": i, "price": 9000} for i in ids[:2000]])
+        self.assertEqual((got, TradeUnit.objects.filter(is_listed=True, price=9000).count()), ({"listed": 2000}, 2000))
+        self.assertLess(len(seen), 40, len(seen))
+        got = self.a.admin.get(f"{T}units/?state=listed&product={self.used.id}&limit=2000").json()
+        self.assertEqual((got["total"], len(got["results"])), (2000, 2000))                 # 一個型號的 2,000 台一次列得完
+
+    def test_what_is_sent_must_be_what_the_screen_was_looking_at(self):
+        """畫面換門市 / 換型號的那一下手上可能還是上一份清單:送出時帶著它看的是什麼,對不上就整批不動(複審 P0)。"""
+        here, also = self.many(2)
+        there, = self.stock_units("M9002", warehouse=self.wh2)
+        other = Product.objects.create(tenant=self.seller, category=self.a.cat_phone, name="甲 中古 iPhone 12 64GB", is_secondhand=True, list_price=9000)
+        odd = ProductSerial.objects.create(tenant=self.seller, product=other, serial_no="K0003", warehouse=self.wh1)
+        self.open_shop()
+        rows = [{"serial": here.id, "price": 9000}, {"serial": there.id, "price": 9000}]
+        # 畫面現在選的是另一間門市,送來的卻有這一間的(上一份清單)
+        got = self.put(rows, expect=400, product=self.used.id, warehouse=self.wh2.id)
+        self.assertEqual(got["detail"], "M0000 不在畫面選的那一間門市,請重新整理")
+        got = self.put([{"serial": here.id, "price": 9000}, {"serial": odd.id, "price": 9000}], expect=400, product=self.used.id)
+        self.assertEqual(got["detail"], "K0003 不是畫面上那個型號的,請重新整理")
+        self.assertEqual(TradeUnit.objects.count(), 0)
+        self.assertEqual(self.put(rows, product=self.used.id), {"listed": 2})                # 門市選「全部」:兩間的都可以
+        self.assertEqual(self.put([{"serial": here.id, "price": 8000}, {"serial": also.id, "price": 8000}],
+                                  product=self.used.id, warehouse=self.wh1.id), {"listed": 2})
+        # 下架也一樣
+        r = self.a.admin.post(T + "units/unlist/", {"serials": [here.id, there.id], "product": self.used.id, "warehouse": self.wh1.id}, format="json")
+        self.assertEqual((r.status_code, r.json()["detail"]), (400, "M9002 不在畫面選的那一間門市,請重新整理"))
+        r = self.a.admin.post(T + "units/unlist/", {"serials": [here.id], "product": other.id}, format="json")
+        self.assertEqual((r.status_code, r.json()["detail"]), (400, "M0000 不是畫面上那個型號的,請重新整理"))
+        self.assertEqual(TradeUnit.objects.filter(is_listed=True).count(), 3)
+        r = self.a.admin.post(T + "units/unlist/", {"serials": [here.id], "product": self.used.id, "warehouse": self.wh1.id}, format="json")
+        self.assertEqual(r.json(), {"unlisted": 1})
+
+    def test_there_is_a_ceiling_on_how_many_at_once(self):
+        one, two, three = self.many(3)
+        self.open_shop()
+        with mock.patch.object(listing, "MAX_ROWS", 2):
+            got = self.put([{"serial": u.id} for u in (one, two, three)], expect=400)
+            self.assertEqual(got["detail"], "一次最多上架 2 台")
+            r = self.a.admin.post(T + "units/unlist/", {"serials": [one.id, two.id, three.id]}, format="json")
+            self.assertEqual((r.status_code, r.json()["detail"]), (400, "一次最多下架 2 台"))
+        self.assertEqual(TradeUnit.objects.count(), 0)
+
+    def test_a_clerk_tied_to_one_store_only_touches_that_store(self):
+        here, = self.many(1)
+        there, = self.stock_units("M9001", warehouse=self.wh2)
+        self.open_shop()
+        got = self.put([{"serial": here.id, "price": 9000}, {"serial": there.id, "price": 9000}], client=self.a.clerk, expect=400)
+        self.assertEqual(got["detail"], "M9001 不在你的門市")
+        self.assertEqual(TradeUnit.objects.count(), 0)
+        self.assertEqual(self.put([{"serial": here.id, "price": 9000}], client=self.a.clerk), {"listed": 1})
+        self.put([{"serial": there.id, "price": 9000}])                           # 管理員不鎖門市
+        r = self.a.clerk.post(T + "units/unlist/", {"serials": [here.id, there.id]}, format="json")
+        self.assertEqual(r.json(), {"unlisted": 1})
+        self.assertEqual(set(TradeUnit.objects.filter(is_listed=True).values_list("serial_id", flat=True)), {there.id})
 
 
 class WhoSeesWhatTests(_Trade):
@@ -891,7 +1032,7 @@ class AccessTests(_Trade):
         line = self.order.lines.get()
         for method, url, body in (
             ("get", f"{T}orders/", None), ("get", f"{T}orders/{self.order.id}/", None), ("get", f"{T}units/", None),
-            ("get", f"{T}summary/", None), ("get", f"{T}settings/", None),
+            ("get", f"{T}summary/", None), ("get", f"{T}settings/", None), ("get", f"{T}units/models/", None),
             ("post", f"{T}scan/", {"code": "U600", "warehouse": self.wh1.id}),
             ("post", f"{T}orders/{self.order.id}/ship/", {"request_key": "ship-x-0001", "warehouse": self.wh1.id,
                                                           "lines": [{"line": line.id, "qty": 1, "serials": [self.one.id]}]}),
@@ -979,6 +1120,16 @@ class TwoAtOnceTests(_Helpers, TransactionTestCase):
         self.assertGreater(time.monotonic() - began, 0.5)
         self.assertEqual(got["code"], "unit_gone")
         self.assertEqual(TradeOrder.objects.count(), 0)
+
+    def test_listing_waits_for_the_counter_sale_and_does_not_put_a_sold_unit_back(self):
+        # 另一邊(門市)鎖著那一台、把它賣掉;這邊同時把兩台一起改價
+        began = self.meanwhile([(self.LOCK_SERIAL, [self.one.id]),
+                                ("UPDATE inventory_productserial SET status = 'sold', warehouse_id = NULL WHERE id = %s", [self.one.id])])
+        r = self.a.admin.post(T + "units/list/", {"rows": [{"serial": self.two.id, "price": 9000}, {"serial": self.one.id, "price": 9000}]}, format="json")
+        self.assertGreater(time.monotonic() - began, 0.5)
+        self.assertEqual(r.status_code, 400, r.content.decode())
+        self.assertIn("U700", r.json()["detail"])
+        self.assertEqual(set(TradeUnit.objects.values_list("price", flat=True)), {D("15000")})     # 整批沒動(另一台也是)
 
     def test_the_counter_sale_waits_and_then_sees_the_unit_was_just_ordered(self):
         # 先有一張單的一行指著這一台但沒有訂著(不出過);另一邊鎖著那一台、把那一行改成訂著(= 剛被同行訂走)
