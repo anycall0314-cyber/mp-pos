@@ -5,6 +5,8 @@
 - `TradeSetting`:這家公司的批發設定(一家一列)。
 - `TradePartner`:往來的同行(買家)。平台內的記對方公司的識別碼,**不用外鍵指到別家公司**(兩家的備份各自帶得走)。
 - `TradeKey`:對外的同行(不在這套 POS 上的系統)用的金鑰(只存雜湊)。**不進公司備份**:還原之後舊的金鑰不能自己活過來,要重發。
+- `TradeQuoteLink`:給一個同行的**報價連結**(沒用這套 POS 的同行用手機打開看現在的價;一個同行一條,可以關、可以換)。
+  跟金鑰一樣**不進公司備份**:還原之後關掉 / 換掉的舊連結不能自己活過來。
 - `TradeInvite`:給同行的一次性往來代碼(同行在叫貨頁輸入 → 變成核准的往來對象)。平台上的經銷商互相競爭,不提供「所有經銷商的名單」給人挑。
 - `TradeUnit`:中古機**一台一筆**的上架(批發價是這一台的)。在不在賣 = 有上架、而且那一台現在在庫、沒有被訂走。
 - `TradePriceRule`:中古機**價目表的一格**(型號 + 成色 + 電池區間 + 有沒有備註 → 一個價)。全公司符合那一格的每一台都用那個價,
@@ -118,6 +120,28 @@ class TradeKey(TenantOwnedModel):
     class Meta:
         verbose_name = "對外金鑰"
         verbose_name_plural = "對外金鑰"
+
+
+class TradeQuoteLink(TenantOwnedModel):
+    """給一個同行的報價連結(owner 2026-10-14:「報價連結這個想法超棒可以,但是要可以關閉連結分享」)。
+
+    一個同行一條(紅隊:一條大家共用的會被轉給零售客人與對手,關掉又連熟客一起斷)。網址裡的那一串就是鑰匙,
+    所以要長、要隨機;老闆要能隨時再複製給同一個人,所以存原文(不是金鑰那種只給一次的)。
+    """
+
+    partner = models.OneToOneField(TradePartner, on_delete=models.CASCADE, related_name="quote_link", verbose_name="給誰")
+    token = models.CharField("連結", max_length=64, unique=True)
+    is_on = models.BooleanField("開著", default=True, db_default=True)
+    opened_at = models.DateTimeField("上次看", null=True, blank=True)
+    open_count = models.PositiveIntegerField("看過幾次", default=0, db_default=0)
+    # 每分鐘最多幾次(一句更新算;程式一直抓的話擋掉)
+    window_start = models.DateTimeField(null=True, blank=True)
+    window_count = models.PositiveIntegerField(default=0, db_default=0)
+    created_by = _by("開的人")
+
+    class Meta:
+        verbose_name = "報價連結"
+        verbose_name_plural = "報價連結"
 
 
 class TradeInvite(TenantOwnedModel):

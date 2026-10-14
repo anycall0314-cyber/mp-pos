@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import {
-  useTradeInvite, useTradeKeyDo, useTradeLedger, useTradePartnerDo, useTradePartners, useTradePaymentDo, useTradeSetting,
+  useTradeInvite, useTradeKeyDo, useTradeLedger, useTradePartnerDo, useTradePartners, useTradePaymentDo, useTradeQuoteDo, useTradeSetting,
   type IssuedKey, type TradePartner,
 } from "@/api/trade";
 import { Banner } from "@/components/Banner";
@@ -10,7 +10,7 @@ import { apiErrorText } from "@/components/workbench/errors";
 import { toast } from "@/components/workbench/toast";
 import { money } from "@/lib/money";
 import { newId } from "@/lib/newId";
-import { amountOf } from "@/lib/trade";
+import { amountOf, liveQuote } from "@/lib/trade";
 
 const STATUSES = [
   { key: "approved", label: "往來中" },
@@ -20,6 +20,8 @@ const STATUSES = [
 const METHODS = ["匯款", "現金", "其他"];
 /** 對外的網址:用瀏覽器現在開的這個站組(伺服器在通道後面,它自己看到的網址不一定是對外的那一個) */
 const PUBLIC_BASE = () => `${window.location.origin}/api/trade/v2`;
+const quoteUrl = (path: string) => `${window.location.origin}${path}`;
+const copy = (text: string) => void navigator.clipboard?.writeText(text).then(() => toast("已複製", "ok"), () => toast("沒複製到", "err"));
 
 /**
  * 同行帳:往來的同行(折數、付款方式、往不往來)、發往來代碼、每一個同行還欠多少、記一筆收到的錢。
@@ -31,7 +33,8 @@ export function TradeBookTab() {
   const change = useTradePartnerDo();
   const invite = useTradeInvite();
   const keyDo = useTradeKeyDo();
-  const [open, setOpen] = useState<number | null>(null);
+  // 每一列底下打開的是收款還是報價連結
+  const [open, setOpen] = useState<{ id: number; what: "ledger" | "quote" } | null>(null);
   const [code, setCode] = useState("");
   // 外部同行(不在這套 POS 上的系統):填名稱與聯絡方式 → 發金鑰。金鑰原文只留在這一格,收起來就沒有了
   const [outside, setOutside] = useState<{ name: string; contact: string } | null>(null);
@@ -64,6 +67,7 @@ export function TradeBookTab() {
   }
 
   const rows = partners.data?.partners ?? [];
+  const fresh = issued ? liveQuote(issued.partner, rows) : null;
   return (
     <>
       <div className="list-filterbar sr-filter">
@@ -79,7 +83,7 @@ export function TradeBookTab() {
             <button className="btn" type="button" onClick={() => void navigator.clipboard?.writeText(code).then(() => toast("已複製", "ok"))}>
               複製
             </button>
-            <span className="tr-dim">七天內給同行在「廠商叫貨」輸入,只能用一次</span>
+            <span className="tr-dim">七天內有效</span>
           </>
         )}
         <span className="list-filterbar-count">
@@ -106,11 +110,25 @@ export function TradeBookTab() {
       {issued && (
         <div className="tr-key">
           <b>{issued.partner.name}</b>
-          <span className="tr-dim">只顯示這一次</span>
+          {fresh && (
+            <>
+              <span className="tr-dim">報價連結</span>
+              <code className={fresh.on ? "" : "tr-off"}>{quoteUrl(fresh.path)}</code>
+              {fresh.on && (
+                <button className="btn" type="button" onClick={() => copy(quoteUrl(fresh.path))}>
+                  複製
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+      {issued && (
+        <div className="tr-key">
+          <span className="tr-dim">金鑰只顯示一次</span>
           <code>{PUBLIC_BASE()}</code>
           <code>{issued.key}</code>
-          <button className="btn" type="button"
-            onClick={() => void navigator.clipboard?.writeText(`${PUBLIC_BASE()}\n${issued.key}`).then(() => toast("已複製", "ok"))}>
+          <button className="btn" type="button" onClick={() => copy(`${PUBLIC_BASE()}\n${issued.key}`)}>
             複製
           </button>
           <button className="btn" type="button" onClick={() => setIssued(null)}>
@@ -140,7 +158,9 @@ export function TradeBookTab() {
             <tbody>
               {rows.map((p) => (
                 <PartnerRow key={p.id} partner={p} terms={terms} busy={change.isPending || keyDo.isPending} save={(body) => save(p, body)}
-                  open={open === p.id} toggle={() => setOpen(open === p.id ? null : p.id)} rotate={() => issue({ rotate: p.id })} />
+                  open={open?.id === p.id ? open.what : null}
+                  toggle={(what) => setOpen(open?.id === p.id && open.what === what ? null : { id: p.id, what })}
+                  rotate={() => issue({ rotate: p.id })} />
               ))}
             </tbody>
           </table>
@@ -157,8 +177,8 @@ function PartnerRow({
   terms: string[];
   busy: boolean;
   save: (body: Partial<Pick<TradePartner, "status" | "percent" | "terms">>) => Promise<void>;
-  open: boolean;
-  toggle: () => void;
+  open: "ledger" | "quote" | null;
+  toggle: (what: "ledger" | "quote") => void;
   rotate: () => Promise<void>;
 }) {
   const [percent, setPercent] = useState(String(partner.percent));
@@ -210,20 +230,60 @@ function PartnerRow({
         <td className={partner.due > 0 ? "num report-neg" : "num"}>{money(partner.due)}</td>
         <td className="num">{partner.credit ? money(partner.credit) : ""}</td>
         <td>
-          <button className={open ? "btn primary" : "btn"} type="button" onClick={toggle}>
+          <button className={open === "ledger" ? "btn primary" : "btn"} type="button" onClick={() => toggle("ledger")}>
             記收款
+          </button>
+          <button className={open === "quote" ? "btn primary" : "btn"} type="button" onClick={() => toggle("quote")}>
+            報價頁
           </button>
           {partner.kind === "external" && <ArmButton label="換金鑰" className="btn" disabled={busy} onConfirm={rotate} />}
         </td>
       </tr>
       {open && (
         <tr className="vo-detail">
-          <td colSpan={9}>
-            <Ledger partner={partner.id} />
-          </td>
+          <td colSpan={9}>{open === "ledger" ? <Ledger partner={partner.id} /> : <QuotePanel partner={partner} />}</td>
         </tr>
       )}
     </>
+  );
+}
+
+/**
+ * 這個同行的報價連結:給他用手機打開看現在的價(不用登入)。一個同行一條:外流了只關他那一條,別人不受影響;
+ * 看得到誰、什麼時候看過、看了幾次。
+ */
+function QuotePanel({ partner }: { partner: TradePartner }) {
+  const run = useTradeQuoteDo();
+  const link = partner.quote;
+  const act = (what: "on" | "off" | "new") =>
+    void run.mutateAsync({ partner: partner.id, do: what }).then(
+      () => toast(what === "off" ? "已關掉" : what === "new" ? "已換新" : "已打開", "ok"),
+      (e) => toast(apiErrorText(e), "err"));
+  if (!link) {
+    return (
+      <div className="tr-foot tr-outside">
+        <button className="btn primary" type="button" disabled={run.isPending} onClick={() => act("on")}>
+          打開連結
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="tr-key">
+      <code className={link.on ? "" : "tr-off"}>{quoteUrl(link.path)}</code>
+      {link.on && (
+        <button className="btn" type="button" onClick={() => copy(quoteUrl(link.path))}>
+          複製連結
+        </button>
+      )}
+      <button className="btn" type="button" disabled={run.isPending} onClick={() => act(link.on ? "off" : "on")}>
+        {link.on ? "關掉連結" : "打開連結"}
+      </button>
+      <ArmButton label="換新連結" armedLabel="確定換新" className="btn" disabled={run.isPending} onConfirm={async () => act("new")} />
+      <span className="tr-dim">
+        {link.count ? `${link.count} 次 · ${link.opened_at.slice(5, 16).replace("T", " ")}` : "—"}
+      </span>
+    </div>
   );
 }
 

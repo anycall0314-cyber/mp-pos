@@ -153,19 +153,19 @@ def _not_what_was_seen(serial, seen):
     if not seen:
         return None
     if seen.get("product") and serial.product_id != seen["product"]:
-        return f"{serial.serial_no} 不是畫面上那個型號的,請重新整理"
+        return f"{serial.serial_no} 型號不符,請重新整理"
     if seen.get("warehouse") and serial.warehouse_id != seen["warehouse"]:
-        return f"{serial.serial_no} 不在畫面選的那一間門市,請重新整理"
+        return f"{serial.serial_no} 門市不符,請重新整理"
     return None
 
 
 def _price_table_product(tenant, product_id, store):
     """要改價目的那個型號。價目是全公司的(一改每一間門市符合的都變):鎖在一間門市的人不能改。"""
     if store:
-        raise TradeError("價目表只有不鎖門市的人能改")
+        raise TradeError("沒有改價目的權限")
     product = Product.objects.filter(tenant=tenant, pk=product_id or 0).select_related("condition").first()
     if product is None or not is_unit_product(product):
-        raise TradeError("價目要先選一個中古機的型號")
+        raise TradeError("要先選型號")
     return product
 
 
@@ -279,7 +279,7 @@ def set_cells(tenant, user, cells, *, store=None) -> int:
             raise TradeError("價目要填價")
         wanted[rule_id] = price
     if store:
-        raise TradeError("價目表只有不鎖門市的人能改")
+        raise TradeError("沒有改價目的權限")
     now = timezone.now()
     total = 0
     with transaction.atomic():
@@ -303,7 +303,7 @@ def set_cells(tenant, user, cells, *, store=None) -> int:
 def drop_cell(tenant, user, rule_id, *, store=None) -> int:
     """刪掉價目表的一格。原本用它的那幾台改用下一格的價(沒有下一格就維持現在的價)。回價錢變了的台數。"""
     if store:
-        raise TradeError("價目表只有不鎖門市的人能改")
+        raise TradeError("沒有改價目的權限")
     found = TradePriceRule.objects.filter(tenant=tenant, pk=rule_id).select_related("product").first()
     if found is None:
         raise TradeError("找不到這一格價目", status=404)

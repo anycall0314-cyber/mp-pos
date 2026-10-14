@@ -9,6 +9,7 @@ urlpatterns = [
     path("trade/partners/external/", views.external_create),
     path("trade/partners/<int:pk>/", views.partner_change),
     path("trade/partners/<int:pk>/key/", views.partner_key),
+    path("trade/partners/<int:pk>/quote/", views.partner_quote),
     path("trade/partners/<int:pk>/ledger/", views.partner_ledger),
     path("trade/invites/", views.invite_create),
     path("trade/units/", views.unit_list),

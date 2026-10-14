@@ -37,6 +37,8 @@ export interface TradePartner {
   received: number;
   due: number;
   credit: number;
+  /** 報價連結(給沒用這套 POS 的同行用手機看現在的價);沒有是 null。`path` 要接在這個站的網址後面 */
+  quote: { path: string; on: boolean; count: number; opened_at: string } | null;
 }
 
 export interface TradeInvite {
@@ -321,6 +323,15 @@ export function useTradeKeyDo() {
   return useMutation({
     mutationFn: (vars: { name: string; contact: string } | { rotate: number }) =>
       "rotate" in vars ? post<IssuedKey>(`/trade/partners/${vars.rotate}/key/`) : post<IssuedKey>("/trade/partners/external/", vars),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["trade-partners"] }),
+  });
+}
+
+/** 報價連結:開(第一次開會建一條)、關、換一條(舊的立刻不能看) */
+export function useTradeQuoteDo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { partner: number; do: "on" | "off" | "new" }) => post<{ partner: TradePartner }>(`/trade/partners/${vars.partner}/quote/`, { do: vars.do }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["trade-partners"] }),
   });
 }

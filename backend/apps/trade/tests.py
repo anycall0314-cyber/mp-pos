@@ -358,18 +358,18 @@ class ManyUnitsTests(_Trade):
         rows = [{"serial": here.id, "price": 9000}, {"serial": there.id, "price": 9000}]
         # 畫面現在選的是另一間門市,送來的卻有這一間的(上一份清單)
         got = self.put(rows, expect=400, product=self.used.id, warehouse=self.wh2.id)
-        self.assertEqual(got["detail"], "M0000 不在畫面選的那一間門市,請重新整理")
+        self.assertEqual(got["detail"], "M0000 門市不符,請重新整理")
         got = self.put([{"serial": here.id, "price": 9000}, {"serial": odd.id, "price": 9000}], expect=400, product=self.used.id)
-        self.assertEqual(got["detail"], "K0003 不是畫面上那個型號的,請重新整理")
+        self.assertEqual(got["detail"], "K0003 型號不符,請重新整理")
         self.assertEqual(TradeUnit.objects.count(), 0)
         self.assertEqual(self.put(rows, product=self.used.id), {"listed": 2})                # 門市選「全部」:兩間的都可以
         self.assertEqual(self.put([{"serial": here.id, "price": 8000}, {"serial": also.id, "price": 8000}],
                                   product=self.used.id, warehouse=self.wh1.id), {"listed": 2})
         # 下架也一樣
         r = self.a.admin.post(T + "units/unlist/", {"serials": [here.id, there.id], "product": self.used.id, "warehouse": self.wh1.id}, format="json")
-        self.assertEqual((r.status_code, r.json()["detail"]), (400, "M9002 不在畫面選的那一間門市,請重新整理"))
+        self.assertEqual((r.status_code, r.json()["detail"]), (400, "M9002 門市不符,請重新整理"))
         r = self.a.admin.post(T + "units/unlist/", {"serials": [here.id], "product": other.id}, format="json")
-        self.assertEqual((r.status_code, r.json()["detail"]), (400, "M0000 不是畫面上那個型號的,請重新整理"))
+        self.assertEqual((r.status_code, r.json()["detail"]), (400, "M0000 型號不符,請重新整理"))
         self.assertEqual(TradeUnit.objects.filter(is_listed=True).count(), 3)
         r = self.a.admin.post(T + "units/unlist/", {"serials": [here.id], "product": self.used.id, "warehouse": self.wh1.id}, format="json")
         self.assertEqual(r.json(), {"unlisted": 1})

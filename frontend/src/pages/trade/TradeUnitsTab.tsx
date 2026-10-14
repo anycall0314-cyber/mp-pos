@@ -87,7 +87,7 @@ function ModelList({ rows, sum, loading, error, storePicker, canPrice, onPick }:
     }
     try {
       const got = await run.mutateAsync({ cells: edits.cells });
-      toast(`改了 ${edits.cells.length} 格,${got.changed ?? 0} 台跟著變`, "ok");
+      toast(`改了 ${edits.cells.length} 格 · ${got.changed ?? 0} 台`, "ok");
       setTyped({});
     } catch (e) {
       toast(apiErrorText(e), "err");
@@ -122,7 +122,7 @@ function ModelList({ rows, sum, loading, error, storePicker, canPrice, onPick }:
       {error && <Banner kind="error" message={error} />}
       {bad && <Banner kind="error" message={bad} />}
       {asking && !("error" in edits) && (
-        <Banner kind="info" message={`${edits.cells.length} 格價目:全公司用這幾格的 ${edits.followers} 台都改成新的價,之後進貨的也是。再按一次確定`} />
+        <Banner kind="info" message={`${edits.cells.length} 格 · ${edits.followers} 台`} />
       )}
       <div className="report-table sr-table">
         {loading && <div className="md-empty">載入中…</div>}
@@ -163,7 +163,7 @@ function ModelList({ rows, sum, loading, error, storePicker, canPrice, onPick }:
                   <td>
                     <div className="tr-cells">
                       {r.rules.map((rule) => (
-                        <label key={rule.id} className="tr-cell" title={`全公司 ${rule.followers ?? 0} 台用這一格`}>
+                        <label key={rule.id} className="tr-cell" title={`${rule.followers ?? 0} 台`}>
                           {rule.text}
                           <input className="tr-price" inputMode="numeric" disabled={!canPrice} value={typed[rule.id] ?? String(rule.price)}
                             onChange={(e) => {

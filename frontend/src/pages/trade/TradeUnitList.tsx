@@ -88,7 +88,7 @@ export function TradeUnitList({ product, name, counts, store, storePicker, canPr
     }
     try {
       const got = await run.mutateAsync({ list: ready.rows, cell: ready.cell, cell_price: ready.cell_price, seen });
-      toast(listing ? `上架 ${got.listed ?? 0} 台` : ready.cell ? `價目「${cellText(ready.cell)}」改好了` : `改了 ${got.listed ?? 0} 台`, "ok");
+      toast(listing ? `上架 ${got.listed ?? 0} 台` : "已改價", "ok");
       clear();
     } catch (e) {
       setAsking("");
@@ -120,7 +120,7 @@ export function TradeUnitList({ product, name, counts, store, storePicker, canPr
     }
     try {
       const got = await run.mutateAsync({ drop: exact.id });
-      toast(`刪了「${exact.text}」,${got.changed ?? 0} 台的價跟著變`, "ok");
+      toast(`已刪 · ${got.changed ?? 0} 台`, "ok");
       clear();
     } catch (e) {
       setAsking("");
@@ -169,7 +169,7 @@ export function TradeUnitList({ product, name, counts, store, storePicker, canPr
         <div className="list-filterbar sr-filter">
           <span className="tr-dim">價目</span>
           {rules.map((r) => (
-            <button key={r.id} type="button" className={cell && sameCell(r, cell) ? "vo-chip active" : "vo-chip"} title={`全公司 ${r.followers ?? 0} 台用這一格`}
+            <button key={r.id} type="button" className={cell && sameCell(r, cell) ? "vo-chip active" : "vo-chip"} title={`${r.followers ?? 0} 台`}
               onClick={() => narrow({ grade: r.grade || null, batteryMin: r.battery_min === 0 ? "" : String(r.battery_min),
                                       batteryMax: r.battery_max === 100 ? "" : String(r.battery_max), noted: r.noted, onlyOwn: false })}>
               {r.text} {money(r.price)}
@@ -231,12 +231,11 @@ export function TradeUnitList({ product, name, counts, store, storePicker, canPr
       {units.isError && <Banner kind="error" message={apiErrorText(units.error)} />}
       {bad && <Banner kind="error" message={bad} />}
       {asking === "save" && ready && (
-        <Banner kind="info" message={`${unitConfirmText(ready, ready.cell ? (exact?.followers ?? null) : null, rows.map((r) => r.retail_price).filter((n) => n > 0))}。再按一次確定`} />
+        <Banner kind="info" message={unitConfirmText(ready, ready.cell ? (exact?.followers ?? null) : null, rows.map((r) => r.retail_price).filter((n) => n > 0))} />
       )}
-      {asking === "off" && <Banner kind="info" message={`下架畫面上這 ${rows.length} 台(價留著,之後再上架用得到)。再按一次確定`} />}
-      {asking === "drop" && exact && <Banner kind="info" message={`刪掉價目「${exact.text}」:用它的 ${exact.followers} 台改用下一格的價,沒有下一格就維持現在的價。再按一次確定`} />}
+      {asking === "drop" && exact && <Banner kind="info" message={`${exact.text} · ${exact.followers ?? 0} 台`} />}
       {units.data && !units.isPlaceholderData && units.data.total > all.length && (
-        <Banner kind="info" message={`只列出 ${all.length} / ${units.data.total} 台,選門市縮小`} />
+        <Banner kind="info" message={`只列 ${all.length} / ${units.data.total} 台`} />
       )}
       <div className="report-table sr-table">
         {(units.isLoading || units.isPlaceholderData) && <div className="md-empty">載入中…</div>}

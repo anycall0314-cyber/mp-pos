@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  NO_PICKS, NO_UNIT_EDITS, NO_UNIT_FILTER, amountOf, autoPrice, bestCell, cellEdits, cellOf, cellText, currentRows, feeOf, filterUnits, fitsCell,
+  NO_PICKS, NO_UNIT_EDITS, NO_UNIT_FILTER, liveQuote, amountOf, autoPrice, bestCell, cellEdits, cellOf, cellText, currentRows, feeOf, filterUnits, fitsCell,
   followsNow, heldUnits, lineProgress, pendingCells, percentOf, pickQty, placeScan, planIsEmpty, priceOf, sameCell, setQty, shipLines, shipTo,
   shipTotal, sortUnits, toggleUnit, unitConfirmText, unitFacets, unitNeedsConfirm, unitPlan, unitPriceShown, unpick,
 } from "./trade.ts";
@@ -274,16 +274,16 @@ test("要不要再按一次、按之前講什麼", () => {
   const shown = [unit(1, "A", 90, "", { price: 12000 }), unit(2, "A", 88, "", { price: 12000 })];
   let plan = unitPlan(shown, [A_PLAIN], cell, { ...NO_UNIT_EDITS, cellPrice: "11500" }, false, 5);
   assert.equal(unitNeedsConfirm(plan), true);                                // 改到價目:全公司符合的都會變
-  assert.equal(unitConfirmText(plan, 80, [16000, 16000]), "價目「A 級 沒備註」12500 → 11500:全公司用這一格的 80 台都用這個價,之後進貨的也是");
+  assert.equal(unitConfirmText(plan, 80, [16000, 16000]), "A 級 沒備註 12500 → 11500 · 80 台");
   plan = unitPlan(shown, [], cell, { ...NO_UNIT_EDITS, cellPrice: "1150" }, false, 5);        // 新的一格、少打一個 0
-  assert.equal(unitConfirmText(plan, null, [16000, 16000]), "價目「A 級 沒備註」1150:全公司符合的都用這個價,之後進貨的也是(跟門市價差很多)");
+  assert.equal(unitConfirmText(plan, null, [16000, 16000]), "A 級 沒備註 1150 · 價差大");
   plan = unitPlan(shown, [A_PLAIN], cell, { ...NO_UNIT_EDITS, follow: { 1: false } }, false, 5);
   assert.equal(unitNeedsConfirm(plan), true);                                // 變成獨立:之後不跟著動,要講清楚(紅隊:店員以為只是這次跳過)
-  assert.equal(unitConfirmText(plan, null, []), "1 台改成獨立定價(之後價目怎麼改都不動它)");
+  assert.equal(unitConfirmText(plan, null, []), "獨立 1 台");
   plan = unitPlan(shown, [A_PLAIN], cell, { ...NO_UNIT_EDITS, typed: { 1: "9000" } }, false, 5);
-  assert.deepEqual([unitNeedsConfirm(plan), unitConfirmText(plan, null, [])], [false, "1 台各自的價"]);   // 一台打一個價:直接改
+  assert.deepEqual([unitNeedsConfirm(plan), unitConfirmText(plan, null, [])], [false, "自訂 1 台"]);   // 一台打一個價:直接改
   plan = unitPlan([unit(1, "A", 90, "", { own: true })], [A_PLAIN], cell, { ...NO_UNIT_EDITS, follow: { 1: true } }, false, 5);
-  assert.deepEqual([unitNeedsConfirm(plan), unitConfirmText(plan, null, [])], [false, "1 台改回跟價目"]);
+  assert.deepEqual([unitNeedsConfirm(plan), unitConfirmText(plan, null, [])], [false, "跟價目 1 台"]);
   const many = Array.from({ length: 12 }, (_, i) => unit(i + 1, "B", 90, "", { is_listed: false }));
   plan = unitPlan(many, [], null, NO_UNIT_EDITS, true, 5);
   assert.deepEqual([unitNeedsConfirm(plan), unitConfirmText(plan, null, [])], [true, "上架 12 台"]);
@@ -316,4 +316,11 @@ test("全部型號那個入口:每一台只用它自己那個型號的價目(複
   assert.equal(unitPriceShown(theirs, edits, cells), "8000");               // 型號 6 的 A 級
   const plan = unitPlan([mine, theirs], [A, other], cellOf(NO_UNIT_FILTER), { ...edits, cellPrice: "7000" }, false);
   assert.deepEqual([plan.rows, plan.cell, plan.toFollow], [[{ serial: 1 }, { serial: 2 }], undefined, 2]);   // 全部型號不能改價目那一格
+});
+
+test("剛加的外部同行那一格:報價連結跟著清單上最新的(換新之後不會複製到舊的)", () => {
+  const issued = { id: 7, quote: { path: "/api/trade/quote/old/", on: true } };
+  assert.deepEqual(liveQuote(issued, [{ id: 7, quote: { path: "/api/trade/quote/new/", on: true } }]), { path: "/api/trade/quote/new/", on: true });
+  assert.deepEqual(liveQuote(issued, [{ id: 7, quote: { path: "/api/trade/quote/old/", on: false } }]).on, false);
+  assert.deepEqual(liveQuote(issued, []), issued.quote);                      // 清單還沒回來:先用建立當下的
 });

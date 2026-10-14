@@ -3,6 +3,8 @@ from django.contrib import admin
 from django.urls import include, path, re_path
 from django.views.generic import TemplateView
 
+from apps.trade.quote_views import page as trade_quote_page
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/v1/", include("apps.core.urls")),
@@ -27,6 +29,8 @@ urlpatterns = [
     path("api/v1/", include("apps.trade.urls")),
     # 對外的買家(不在這套 POS 上的系統)用金鑰來買:買賣串接規格 v2
     path("api/trade/v2/", include("apps.trade.public_urls")),
+    # 報價連結的那一頁(給沒用這套 POS 的同行,不用登入)
+    path("api/trade/quote/<str:token>/", trade_quote_page),
 ]
 
 # dev 模式:由 Django 直接 serve 上傳的原圖(進貨單照片);prod 由前面的靜態服務代理

@@ -23,7 +23,7 @@ from apps.inventory.models import ProductSerial, Warehouse
 from apps.tenants import abilities
 from apps.tenants.permissions import is_tenant_admin
 
-from . import keys, listing, orders, partners, payments, pricing, shipping
+from . import keys, listing, orders, partners, payments, pricing, quote, shipping
 from .base import TradeError, setting_of
 from .models import (
     TradeInvite, TradeOrder, TradeOrderLine, TradePartner, TradePayment, TradePriceChange, TradePriceChangeUnit, TradePriceRule, TradeProduct,
@@ -160,13 +160,15 @@ def _partner_data(partner: TradePartner, book=None) -> dict:
         "status_label": partner.get_status_display(), "percent": partner.percent, "terms": partner.terms, "note": partner.note,
         "owed": _money(book["owed"]), "received": _money(book["received"]), "due": _money(book["due"]),
         "credit": _money(book["credit"]),
+        # 報價連結(沒有就是 null)
+        "quote": quote.data_of(getattr(partner, "quote_link", None)),
     }
 
 
 @api_view(["GET"])
 def partner_list(request):
     _admin(request)
-    rows = TradePartner.objects.filter(tenant=request.tenant).select_related("key").order_by("status", "id")
+    rows = TradePartner.objects.filter(tenant=request.tenant).select_related("key", "quote_link").order_by("status", "id")
     invites = TradeInvite.objects.filter(tenant=request.tenant, used_at__isnull=True, expires_at__gt=timezone.now())
     return Response({
         "partners": [_partner_data(p) for p in rows],
@@ -194,10 +196,14 @@ def external_create(request):
     _admin(request)
     data = request.data if isinstance(request.data, dict) else {}
     try:
-        partner, raw = keys.create_external(request.tenant, request.user, name=data.get("name"), contact=data.get("contact"),
-                                            percent=data.get("percent"), terms=data.get("terms"))
+        with transaction.atomic():
+            partner, raw = keys.create_external(request.tenant, request.user, name=data.get("name"), contact=data.get("contact"),
+                                                percent=data.get("percent"), terms=data.get("terms"))
+            # 沒用這套 POS 的同行多半是看報價連結,不是接系統:建的時候就開一條
+            quote.change(partner, request.user, "on")
     except TradeError as exc:
         return _bad(exc)
+    partner = TradePartner.objects.select_related("key", "quote_link").get(pk=partner.pk)
     return Response({"partner": _partner_data(partner), "key": raw, "base": request.build_absolute_uri("/api/trade/v2")},
                     status=status.HTTP_201_CREATED)
 
@@ -215,6 +221,21 @@ def partner_key(request, pk: int):
         return _bad(exc)
     partner = TradePartner.objects.select_related("key").get(pk=partner.pk)
     return Response({"partner": _partner_data(partner), "key": raw, "base": request.build_absolute_uri("/api/trade/v2")})
+
+
+@api_view(["POST"])
+def partner_quote(request, pk: int):
+    """這個同行的報價連結:`do` = on(開;第一次開會建一條)/ off(關)/ new(換一條,舊的立刻不能看)。只有管理員。"""
+    _admin(request)
+    partner = TradePartner.objects.filter(tenant=request.tenant, pk=pk).first()
+    if partner is None:
+        return _bad("找不到這個同行", status.HTTP_404_NOT_FOUND)
+    try:
+        quote.change(partner, request.user, (request.data or {}).get("do") if isinstance(request.data, dict) else None)
+    except TradeError as exc:
+        return _bad(exc)
+    partner = TradePartner.objects.select_related("key", "quote_link").get(pk=partner.pk)
+    return Response({"partner": _partner_data(partner)})
 
 
 @api_view(["POST"])

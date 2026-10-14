@@ -424,19 +424,18 @@ export function unitNeedsConfirm(plan: UnitPlan): boolean {
   return plan.cell !== undefined || plan.rows.length >= UNIT_CONFIRM_FROM || plan.toOwn > 0;
 }
 
-/** 再按一次之前給人看的那一句。`followers` = 這一格現在全公司有幾台在用(新的一格不知道,講「符合的」) */
+/** 再按一次之前顯示的那一行:只有數字(哪一格、從多少到多少、幾台)。`followers` = 這一格現在全公司有幾台在用(新的一格是 null) */
 export function unitConfirmText(plan: UnitPlan, followers: number | null, retail: number[]): string {
   const parts: string[] = [];
   if (plan.cell !== undefined && plan.cell_price !== undefined) {
-    const who = followers === null ? "全公司符合的" : `全公司用這一格的 ${followers} 台`;
     const odd = retail.length > 0 && (plan.cell_price > Math.max(...retail) || plan.cell_price * 2 < Math.min(...retail));
-    parts.push(`價目「${cellText(plan.cell)}」${plan.cellFrom === null ? "" : `${plan.cellFrom} → `}${plan.cell_price}:${who}都用這個價,之後進貨的也是${odd ? "(跟門市價差很多)" : ""}`);
+    parts.push(`${cellText(plan.cell)} ${plan.cellFrom === null ? "" : `${plan.cellFrom} → `}${plan.cell_price}${followers === null ? "" : ` · ${followers} 台`}${odd ? " · 價差大" : ""}`);
   }
   if (plan.listed) parts.push(`上架 ${plan.listed} 台`);
-  if (plan.toOwn) parts.push(`${plan.toOwn} 台改成獨立定價(之後價目怎麼改都不動它)`);
-  if (plan.toFollow) parts.push(`${plan.toFollow} 台改回跟價目`);
-  if (plan.priced) parts.push(`${plan.priced} 台各自的價`);
-  return parts.join(";");
+  if (plan.toOwn) parts.push(`獨立 ${plan.toOwn} 台`);
+  if (plan.toFollow) parts.push(`跟價目 ${plan.toFollow} 台`);
+  if (plan.priced) parts.push(`自訂 ${plan.priced} 台`);
+  return parts.join(" · ");
 }
 
 /** 型號清單上當場改的價目:哪幾格真的變了(打錯的回 error) */
@@ -502,4 +501,9 @@ export function prepayNote(order: Pick<TradeOrder, "payment_method" | "credit">,
   const credit = order.credit ?? 0;
   if (credit >= shipping) return { text: `預收 ${credit.toLocaleString("en-US")}`, warn: false };
   return { text: `未收款 還差 ${(shipping - credit).toLocaleString("en-US")}`, warn: true };
+}
+
+/** 剛加的外部同行那一格要顯示的報價連結:用清單上最新的那一份(複審 P1:換新之後還拿著建立當下那一份,複製出去的是打不開的舊連結);關掉的不給複製 */
+export function liveQuote<T extends { id: number; quote: { path: string; on: boolean } | null }>(issued: T, rows: T[]): { path: string; on: boolean } | null {
+  return (rows.find((p) => p.id === issued.id) ?? issued).quote;
 }

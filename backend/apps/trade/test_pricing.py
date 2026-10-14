@@ -105,7 +105,7 @@ class PriceTableTests(_Table, TestCase):
         self.assertEqual((TradePriceRule.objects.count(), self.price(one)), (4, 11500))
         # 沒講是哪個型號、不是中古機的型號:不能有價目
         r = self.a.admin.post(T + "units/list/", {"rows": [], "cell": {"grade": "A"}, "cell_price": 9000}, format="json")
-        self.assertEqual((r.status_code, r.json()["detail"]), (400, "價目要先選一個中古機的型號"))
+        self.assertEqual((r.status_code, r.json()["detail"]), (400, "要先選型號"))
         r = self.a.admin.post(T + "units/list/", {"rows": [], "product": self.a.case.id, "cell": {"grade": "A"}, "cell_price": 9000}, format="json")
         self.assertEqual(r.status_code, 400)
 
@@ -234,7 +234,7 @@ class PriceTableTests(_Table, TestCase):
         self.cell(12000, grade="A")
         rule = TradePriceRule.objects.get()
         got = self.cell(9000, grade="A", client=self.a.clerk, expect=400)
-        self.assertEqual(got["detail"], "價目表只有不鎖門市的人能改")
+        self.assertEqual(got["detail"], "沒有改價目的權限")
         self.assertEqual(self.a.clerk.post(T + "units/rules/", {"cells": [{"id": rule.id, "price": 9000}]}, format="json").status_code, 400)
         self.assertEqual(self.a.clerk.post(f"{T}units/rules/{rule.id}/drop/", {}, format="json").status_code, 400)
         self.assertEqual(self.b.admin.post(T + "units/rules/", {"cells": [{"id": rule.id, "price": 9000}]}, format="json").status_code, 400)
