@@ -183,6 +183,8 @@ export function priceOf(text: string): number | undefined | null {
 /** 上架那一頁的一台(篩選與定價只用到這幾格) */
 export interface UnitLike {
   serial: number;
+  /** 哪個型號(價目是一個型號一張表) */
+  product: number;
   serial_no: string;
   imei: string;
   sn: string;
@@ -194,6 +196,10 @@ export interface UnitLike {
   is_listed: boolean;
   /** 上架中的價;下架過的是它上一次的價;沒上過架是 null */
   price: number | null;
+  /** 獨立定價:價目表怎麼改都不動它 */
+  own: boolean;
+  /** 價目表上符合它的最細的那一格(沒有獨立定價的話用的就是這一格的價);沒有符合的是 null */
+  rule: number | null;
 }
 
 /** 成色一次只看一個(跟狀態一樣點一個換一個;紅隊:可以複選的話換下一個成色時上一個還亮著,會把剛改好的蓋掉) */
@@ -203,8 +209,10 @@ export interface UnitFilter {
   batteryMax: string;
   noted: "" | "yes" | "no";
   q: string;
+  /** 只看獨立定價的那幾台(價目怎麼改都不動的,要人自己記得回來看) */
+  onlyOwn?: boolean;
 }
-export const NO_UNIT_FILTER: UnitFilter = { grade: null, batteryMin: "", batteryMax: "", noted: "", q: "" };
+export const NO_UNIT_FILTER: UnitFilter = { grade: null, batteryMin: "", batteryMax: "", noted: "", q: "", onlyOwn: false };
 
 const GRADE_ORDER = ["S", "A", "B", "C", "D", ""];
 const gradeRank = (grade: string) => {
@@ -248,6 +256,7 @@ export function filterUnits<T extends UnitLike>(rows: T[], f: UnitFilter): T[] {
     if (high !== undefined && (r.battery as number) > high) return false;
     if (f.noted === "yes" && r.note.trim() === "") return false;
     if (f.noted === "no" && r.note.trim() !== "") return false;
+    if (f.onlyOwn && !r.own) return false;
     return q === "" || [r.serial_no, r.imei, r.sn, r.note].some((text) => text.toLowerCase().includes(q));
   });
 }
@@ -262,57 +271,188 @@ export function unitFacets<T extends UnitLike>(rows: T[], f: UnitFilter) {
     grades: [...byGrade.entries()].map(([grade, count]) => ({ grade, count })).sort((a, b) => gradeRank(a.grade) - gradeRank(b.grade)),
     noted,
     plain: others.length - noted,
+    own: filterUnits(rows, { ...f, onlyOwn: false }).filter((r) => r.own).length,
   };
 }
 
-/** 這一列批發價那一格現在的字:自己打的優先 → 有勾而且上面有整群的價就是那個價 → 它原本的價(上架中的、或下架前的那個) → 空的(照規則) */
-export function unitPriceText(row: UnitLike, typed: Record<number, string>, group: string, picked: boolean): string {
-  if (typed[row.serial] !== undefined) return typed[row.serial];
-  if (picked && group.trim() !== "") return group;
-  return row.price !== null ? String(row.price) : "";
+// ── 價目表:一格 = 成色 + 電池區間 + 有沒有備註 → 一個價;符合的都用那個價,只有獨立定價的不跟(伺服器 `pricing.py`,這裡跟它同一套) ──
+export interface PriceCell {
+  grade: string;
+  battery_min: number;
+  battery_max: number;
+  noted: "" | "yes" | "no";
+}
+export interface PriceRule extends PriceCell {
+  id: number;
+  /** 哪個型號的價目 */
+  product: number;
+  price: number;
+  text: string;
+  /** 全公司現在用這一格的有幾台(「全部型號」那個入口不算,是 null) */
+  followers: number | null;
+}
+type PricedCell = PriceCell & { product: number; price: number };
+
+/** 篩選列上點的成色 / 電池 / 備註就是價目的那一格。電池打錯回 null(不能存) */
+export function cellOf(f: UnitFilter): PriceCell | null {
+  const low = percentOf(f.batteryMin);
+  const high = percentOf(f.batteryMax);
+  if (low === null || high === null || (low ?? 0) > (high ?? 100)) return null;
+  return { grade: f.grade ?? "", battery_min: low ?? 0, battery_max: high ?? 100, noted: f.noted };
 }
 
-export interface UnitBatch {
-  rows: { serial: number; price?: number }[];
-  /** 用上面那個整群的價的有幾台 */
-  grouped: number;
-}
+export const sameCell = (a: PriceCell, b: PriceCell) =>
+  a.grade === b.grade && a.battery_min === b.battery_min && a.battery_max === b.battery_max && a.noted === b.noted;
 
-/** 勾著的這幾台要送出去什麼;有一台的價不對(或算不出來又沒填)就回是哪一台 */
-export function unitBatch(chosen: UnitLike[], typed: Record<number, string>, group: string): UnitBatch | { error: string } {
-  if (priceOf(group) === null) return { error: "批發價要填正的整數" };
-  const rows: UnitBatch["rows"] = [];
-  let grouped = 0;
-  for (const r of chosen) {
-    const price = priceOf(unitPriceText(r, typed, group, true));
-    if (price === null || (price === undefined && r.auto_price === null)) return { error: `${r.serial_no} 的批發價要填正的整數` };
-    if (typed[r.serial] === undefined && group.trim() !== "") grouped += 1;
-    rows.push(price === undefined ? { serial: r.serial } : { serial: r.serial, price });
+const cellBounded = (c: PriceCell) => c.battery_min !== 0 || c.battery_max !== 100;
+
+/** 給人看的一格:「A 級 電池 85 以上 沒備註」「A 級」「全部」 */
+export function cellText(c: PriceCell): string {
+  const parts = c.grade ? [`${c.grade} 級`] : [];
+  if (cellBounded(c)) {
+    parts.push(c.battery_max === 100 ? `電池 ${c.battery_min} 以上` : c.battery_min === 0 ? `電池 ${c.battery_max} 以下` : `電池 ${c.battery_min}–${c.battery_max}`);
   }
-  return { rows, grouped };
+  if (c.noted) parts.push(c.noted === "yes" ? "有備註" : "沒備註");
+  return parts.join(" ") || "全部";
 }
 
-/** 一次動到很多台、或好幾台要變成同一個價:按下去之前先講清楚、再按一次才做(紅隊:這是同行馬上看得到的價,不能回頭) */
+export function fitsCell(c: PriceCell, r: Pick<UnitLike, "grade" | "battery" | "note">): boolean {
+  if (c.grade && r.grade !== c.grade) return false;
+  if (cellBounded(c) && (r.battery === null || r.battery < c.battery_min || r.battery > c.battery_max)) return false;
+  if (c.noted && (c.noted === "yes") !== (r.note.trim() !== "")) return false;
+  return true;
+}
+
+const cellRank = (c: PriceCell) => (c.grade ? 4 : 0) + (cellBounded(c) ? 2 : 0) + (c.noted ? 1 : 0);
+
+/** 符合這一台的格子裡最細的那一格(先比有沒有指定成色、再比有沒有限電池、再比有沒有指定備註) */
+export function bestCell<T extends PriceCell>(cells: T[], r: Pick<UnitLike, "grade" | "battery" | "note">): T | null {
+  let found: T | null = null;
+  for (const c of cells) if (fitsCell(c, r) && (found === null || cellRank(c) > cellRank(found))) found = c;
+  return found;
+}
+
+/** 這一頁上人動過的:哪幾台改成跟價目(true)/ 獨立(false)、哪幾台打了自己的價、價目那一格打了什麼 */
+export interface UnitEdits {
+  follow: Record<number, boolean>;
+  typed: Record<number, string>;
+  cellPrice: string;
+}
+export const NO_UNIT_EDITS: UnitEdits = { follow: {}, typed: {}, cellPrice: "" };
+
+/** 這一台現在算不算跟著價目(勾著的):自己打了價就是獨立;不然看人有沒有改過、沒改過照它原本的 */
+export function followsNow(r: UnitLike, edits: UnitEdits): boolean {
+  if (edits.typed[r.serial] !== undefined) return false;
+  return edits.follow[r.serial] ?? !r.own;
+}
+
+/** 價目表加上價目那一格還沒存的價(存了之後會是什麼樣子)。`product` = 那一格是哪個型號的 */
+export function pendingCells(rules: PriceRule[], cell: PriceCell | null, edits: UnitEdits, product?: number): PricedCell[] {
+  const price = priceOf(edits.cellPrice);
+  if (cell === null || product === undefined || typeof price !== "number") return rules;
+  return [...rules.filter((r) => r.product !== product || !sameCell(r, cell)), { ...cell, product, price }];
+}
+
+/** 這一台用哪一格:只看它自己那個型號的價目(「全部型號」那個入口一次有好幾個型號的價目;複審 P1) */
+export const cellFor = <T extends PricedCell>(cells: T[], r: UnitLike): T | null => bestCell(cells.filter((c) => c.product === r.product), r);
+
+/** 批發價那一格現在要顯示的字:獨立的是它自己的(打的優先);跟價目的是存了之後它會用的那一格的價,沒有符合的格子就是它現在的價 */
+export function unitPriceShown(r: UnitLike, edits: UnitEdits, cells: PricedCell[]): string {
+  if (edits.typed[r.serial] !== undefined) return edits.typed[r.serial];
+  if (!followsNow(r, edits)) return r.price !== null ? String(r.price) : "";
+  const cell = cellFor(cells, r);
+  return cell ? String(cell.price) : r.price !== null ? String(r.price) : "";
+}
+
+export interface UnitPlan {
+  rows: { serial: number; price?: number; own?: boolean }[];
+  cell?: PriceCell;
+  cell_price?: number;
+  /** 給「再按一次」那一句用的數字 */
+  cellFrom: number | null;
+  toOwn: number;
+  toFollow: number;
+  priced: number;
+  listed: number;
+}
+
+/**
+ * 按下去要送什麼。`listing` = 未上架那一頁按「上架」:畫面上列出來的每一台都上架;不然只送有變的那幾台。
+ * 有一台的價不對、或要上架卻沒有價,回是哪一台。
+ */
+export function unitPlan(shown: UnitLike[], rules: PriceRule[], cell: PriceCell | null, edits: UnitEdits, listing: boolean, product?: number): UnitPlan | { error: string } {
+  const plan: UnitPlan = { rows: [], cellFrom: null, toOwn: 0, toFollow: 0, priced: 0, listed: 0 };
+  const cellPrice = priceOf(edits.cellPrice);
+  if (cellPrice === null) return { error: "價目要填正的整數" };
+  if (product === undefined) cell = null;                                   // 價目那一格只有看一個型號的時候才有
+  const exact = cell ? rules.find((r) => r.product === product && sameCell(r, cell)) : undefined;
+  if (cell && typeof cellPrice === "number" && cellPrice !== exact?.price) {
+    plan.cell = cell;
+    plan.cell_price = cellPrice;
+    plan.cellFrom = exact?.price ?? null;
+  }
+  const cells = pendingCells(rules, cell, edits, product);
+  for (const r of shown) {
+    const typed = edits.typed[r.serial];
+    const follows = followsNow(r, edits);
+    if (typed !== undefined) {
+      const price = priceOf(typed);
+      if (typeof price !== "number") return { error: `${r.serial_no} 的批發價要填正的整數` };
+      if (listing || price !== r.price || !r.own) {
+        plan.rows.push({ serial: r.serial, price });
+        plan.priced += 1;
+      }
+    } else if (!follows) {
+      if (r.price === null) return { error: `${r.serial_no} 要獨立定價,請填價` };
+      if (listing || !r.own) plan.rows.push({ serial: r.serial, own: true });
+      if (!r.own) plan.toOwn += 1;
+    } else {
+      if (listing && cellFor(cells, r) === null && r.price === null && r.auto_price === null) return { error: `${r.serial_no} 的批發價要填正的整數` };
+      if (listing || r.own) plan.rows.push({ serial: r.serial });
+      if (r.own) plan.toFollow += 1;
+    }
+  }
+  plan.listed = listing ? shown.length : 0;
+  return plan;
+}
+
+export const planIsEmpty = (plan: UnitPlan) => plan.rows.length === 0 && plan.cell === undefined;
+
+/** 改到價目的一格(全公司符合的都會變)、或一次十台以上:按下去之前先講清楚、再按一次才做(紅隊:這是同行馬上看得到的價,不能回頭) */
 export const UNIT_CONFIRM_FROM = 10;
-export function unitNeedsConfirm(count: number, grouped: number): boolean {
-  return count >= UNIT_CONFIRM_FROM || grouped > 1;
+export function unitNeedsConfirm(plan: UnitPlan): boolean {
+  return plan.cell !== undefined || plan.rows.length >= UNIT_CONFIRM_FROM || plan.toOwn > 0;
 }
 
-/** 再按一次之前給人看的那一句:幾台、變成什麼價、原本是多少到多少;跟門市價差很多的另外提醒(只提醒) */
-export function unitConfirmText(verb: string, chosen: UnitLike[], batch: UnitBatch, group: string): string {
-  const price = priceOf(group);
-  if (!batch.grouped || typeof price !== "number") return `${verb} ${chosen.length} 台`;
-  const before = chosen.map((r) => r.price ?? r.auto_price).filter((n): n is number => n !== null);
-  const range = before.length ? (Math.min(...before) === Math.max(...before) ? `${Math.min(...before)}` : `${Math.min(...before)}–${Math.max(...before)}`) : "";
-  const retail = chosen.map((r) => r.retail_price).filter((n) => n > 0);
-  const odd = retail.length > 0 && (price > Math.max(...retail) || price * 2 < Math.min(...retail));
-  const rest = chosen.length - batch.grouped;
-  return [
-    `${batch.grouped} 台都${verb === "上架" ? "用" : "改成"} ${price}`,
-    range && `原本 ${range}`,
-    rest > 0 && `另外 ${rest} 台各自的價`,
-    odd && "跟門市價差很多",
-  ].filter(Boolean).join(",");
+/** 再按一次之前給人看的那一句。`followers` = 這一格現在全公司有幾台在用(新的一格不知道,講「符合的」) */
+export function unitConfirmText(plan: UnitPlan, followers: number | null, retail: number[]): string {
+  const parts: string[] = [];
+  if (plan.cell !== undefined && plan.cell_price !== undefined) {
+    const who = followers === null ? "全公司符合的" : `全公司用這一格的 ${followers} 台`;
+    const odd = retail.length > 0 && (plan.cell_price > Math.max(...retail) || plan.cell_price * 2 < Math.min(...retail));
+    parts.push(`價目「${cellText(plan.cell)}」${plan.cellFrom === null ? "" : `${plan.cellFrom} → `}${plan.cell_price}:${who}都用這個價,之後進貨的也是${odd ? "(跟門市價差很多)" : ""}`);
+  }
+  if (plan.listed) parts.push(`上架 ${plan.listed} 台`);
+  if (plan.toOwn) parts.push(`${plan.toOwn} 台改成獨立定價(之後價目怎麼改都不動它)`);
+  if (plan.toFollow) parts.push(`${plan.toFollow} 台改回跟價目`);
+  if (plan.priced) parts.push(`${plan.priced} 台各自的價`);
+  return parts.join(";");
+}
+
+/** 型號清單上當場改的價目:哪幾格真的變了(打錯的回 error) */
+export function cellEdits(rules: PriceRule[], typed: Record<number, string>): { cells: { id: number; price: number }[]; followers: number } | { error: string } {
+  const cells: { id: number; price: number }[] = [];
+  let followers = 0;
+  for (const rule of rules) {
+    const text = typed[rule.id];
+    if (text === undefined) continue;
+    const price = priceOf(text);
+    if (typeof price !== "number") return { error: `「${rule.text}」的價要填正的整數` };
+    if (price === rule.price) continue;
+    cells.push({ id: rule.id, price });
+    followers += rule.followers ?? 0;
+  }
+  return { cells, followers };
 }
 
 export type UnitRule = "price_minus" | "price_percent" | "cost_plus";

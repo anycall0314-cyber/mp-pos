@@ -2,7 +2,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "./client";
-import type { ScanFound, TradeOrder, UnitRule } from "@/lib/trade";
+import type { PriceCell, PriceRule, ScanFound, TradeOrder, UnitRule } from "@/lib/trade";
 
 export interface TradeSetting {
   is_open: boolean;
@@ -66,6 +66,10 @@ export interface TradeUnitRow {
   auto_price: number | null;
   is_listed: boolean;
   price: number | null;
+  /** 獨立定價(價目怎麼改都不動它) */
+  own: boolean;
+  /** 價目表上符合它的最細的那一格 */
+  rule: number | null;
   held_by: { order: number; order_no: string; partner: string } | null;
 }
 
@@ -158,7 +162,8 @@ export const scanTradeUnit = (code: string, warehouse: number | "") => post<Scan
 export const useTradeUnits = (state: string, q: string, warehouse: number | "", limit: number, product?: number) =>
   useQuery({
     queryKey: ["trade-units", state, q, warehouse, limit, product ?? 0],
-    queryFn: () => api<Page<TradeUnitRow>>(`/trade/units/?${query({ state, q, warehouse, limit, product })}`),
+    // 只看一個型號的時候另外帶它的價目表
+    queryFn: () => api<Page<TradeUnitRow> & { rules?: PriceRule[] }>(`/trade/units/?${query({ state, q, warehouse, limit, product })}`),
   });
 
 export interface TradeUnitModelRow {
@@ -169,7 +174,38 @@ export interface TradeUnitModelRow {
   unlisted: number;
   listed: number;
   held: number;
+  /** 上架中的那幾台賣多少到多少;其中獨立定價的幾台 */
+  price_low: number | null;
+  price_high: number | null;
+  own: number;
+  rules: PriceRule[];
 }
+
+export interface TradePriceChangeRow {
+  id: number;
+  at: string;
+  by: string;
+  product: number;
+  name: string;
+  what: "rule" | "price" | "list" | "unlist" | "drop";
+  what_label: string;
+  scope: string;
+  count: number;
+  old_low: number | null;
+  old_high: number | null;
+  new_low: number | null;
+  new_high: number | null;
+  /** 有打序號查的時候:那一台從多少變多少 */
+  units: { serial_no: string; old_price: number | null; new_price: number | null }[];
+}
+
+/** 改價紀錄(一個型號;`q` = 序號裡的字) */
+export const useTradePriceChanges = (product: number | undefined, q: string, enabled: boolean) =>
+  useQuery({
+    queryKey: ["trade-units", "changes", product ?? 0, q],
+    queryFn: () => api<Page<TradePriceChangeRow>>(`/trade/units/changes/?${query({ product, q, limit: 100 })}`),
+    enabled,
+  });
 
 /** 中古機照型號算:每個型號在庫幾台、沒上架 / 上架中 / 被訂走各幾台 */
 export const useTradeUnitModels = (warehouse: number | "") =>
@@ -179,15 +215,22 @@ export const useTradeUnitModels = (warehouse: number | "") =>
     placeholderData: keepPreviousData,
   });
 
+type UnitsDo =
+  | { list: { serial: number; price?: number; own?: boolean }[]; cell?: PriceCell; cell_price?: number; seen?: { product?: number; warehouse?: number } }
+  | { unlist: number[]; seen?: { product?: number; warehouse?: number } }
+  | { cells: { id: number; price: number }[] }
+  | { drop: number };
+
 export function useTradeUnitsDo() {
   const qc = useQueryClient();
   return useMutation({
     // `seen` = 畫面現在看的是哪個型號 / 哪一間門市:伺服器照它核對每一台,對不上整批不動
-    mutationFn: (vars: ({ list: { serial: number; price?: number }[] } | { unlist: number[] }) & { seen?: { product?: number; warehouse?: number } }):
-      Promise<{ listed?: number; unlisted?: number }> =>
-      "list" in vars
-        ? post("/trade/units/list/", { rows: vars.list, ...vars.seen })
-        : post("/trade/units/unlist/", { serials: vars.unlist, ...vars.seen }),
+    mutationFn: (vars: UnitsDo): Promise<{ listed?: number; unlisted?: number; changed?: number }> => {
+      if ("list" in vars) return post("/trade/units/list/", { rows: vars.list, cell: vars.cell, cell_price: vars.cell_price, ...vars.seen });
+      if ("unlist" in vars) return post("/trade/units/unlist/", { serials: vars.unlist, ...vars.seen });
+      if ("cells" in vars) return post("/trade/units/rules/", { cells: vars.cells });
+      return post(`/trade/units/rules/${vars.drop}/drop/`);
+    },
     // 沒成功也重新拿:多半是清單上有一台剛被賣掉,重新拿它就不在清單上了
     onSettled: () => qc.invalidateQueries({ queryKey: ["trade-units"] }),
   });

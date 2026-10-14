@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  NO_PICKS, NO_UNIT_FILTER, amountOf, autoPrice, currentRows, feeOf, filterUnits, heldUnits, lineProgress, percentOf, pickQty, placeScan, priceOf, setQty,
-  shipLines, shipTo, shipTotal, sortUnits, toggleUnit, unitBatch, unitConfirmText, unitFacets, unitNeedsConfirm, unitPriceText, unpick,
+  NO_PICKS, NO_UNIT_EDITS, NO_UNIT_FILTER, amountOf, autoPrice, bestCell, cellEdits, cellOf, cellText, currentRows, feeOf, filterUnits, fitsCell,
+  followsNow, heldUnits, lineProgress, pendingCells, percentOf, pickQty, placeScan, planIsEmpty, priceOf, sameCell, setQty, shipLines, shipTo,
+  shipTotal, sortUnits, toggleUnit, unitConfirmText, unitFacets, unitNeedsConfirm, unitPlan, unitPriceShown, unpick,
 } from "./trade.ts";
 
 const unitLine = {
@@ -126,8 +127,8 @@ test("出貨之前提醒收款:月結不提醒;預收夠了講預收多少;不�
 
 // ── 中古機上架:同型號幾百台,篩出一群、整群同價 ──────────────────────────────────────────
 const unit = (serial, grade, battery, note = "", extra = {}) => ({
-  serial, serial_no: `U${serial}`, imei: `35${serial}`, sn: `U${serial}`, grade, battery, note,
-  retail_price: 16000, auto_price: 15000, is_listed: true, price: 15000, ...extra,
+  serial, product: 5, serial_no: `U${serial}`, imei: `35${serial}`, sn: `U${serial}`, grade, battery, note,
+  retail_price: 16000, auto_price: 15000, is_listed: true, price: 15000, own: false, rule: null, ...extra,
 });
 const stock = [
   unit(1, "A", 92), unit(2, "A", 88, "螢幕小刮"), unit(3, "B", 85), unit(4, "A", 100), unit(5, "", null), unit(6, "C", 79, "無盒"),
@@ -160,7 +161,9 @@ test("篩選:成色一次一個、電池上下限、有沒有備註、序號或�
 test("每一顆上面的台數:別的條件照舊、只換這一顆會剩幾台", () => {
   let got = unitFacets(stock, NO_UNIT_FILTER);
   assert.deepEqual(got.grades, [{ grade: "S", count: 1 }, { grade: "A", count: 3 }, { grade: "B", count: 2 }, { grade: "C", count: 1 }, { grade: "", count: 1 }]);
-  assert.deepEqual([got.noted, got.plain], [3, 5]);
+  assert.deepEqual([got.noted, got.plain, got.own], [3, 5, 0]);
+  assert.equal(unitFacets([...stock, unit(9, "A", 90, "", { own: true })], { ...NO_UNIT_FILTER, onlyOwn: true }).own, 1);   // 那一顆不受自己影響
+  assert.deepEqual(filterUnits([...stock, unit(9, "A", 90, "", { own: true })], { ...NO_UNIT_FILTER, onlyOwn: true }).map((r) => r.serial), [9]);
   got = unitFacets(stock, { ...NO_UNIT_FILTER, grade: "A" });
   assert.deepEqual([got.noted, got.plain], [1, 2]);                        // A 級裡面有備註的
   assert.equal(got.grades.find((g) => g.grade === "B").count, 2);          // 成色那一排不受自己影響
@@ -168,52 +171,131 @@ test("每一顆上面的台數:別的條件照舊、只換這一顆會剩幾台"
   assert.deepEqual(got.grades.map((g) => [g.grade, g.count]), [["A", 1], ["B", 1], ["C", 1]]);
 });
 
-test("批發價那一格:自己打的 → 有勾才吃上面整群的價 → 原本的價 → 空的", () => {
-  const a = unit(1, "A", 92);
-  assert.equal(unitPriceText(a, {}, "", true), "15000");
-  assert.equal(unitPriceText(a, {}, "12000", true), "12000");
-  assert.equal(unitPriceText(a, {}, "12000", false), "15000");            // 沒勾的不會變
-  assert.equal(unitPriceText(a, { 1: "11000" }, "12000", true), "11000");
-  assert.equal(unitPriceText(a, { 1: "" }, "12000", true), "");            // 自己清空 = 照規則,不是吃整群的價
-  // 下架過的那一台:帶它上一次的價,不是悄悄換成照規則的價(紅隊)
-  assert.equal(unitPriceText(unit(9, "A", 90, "", { is_listed: false, price: 13800 }), {}, "", true), "13800");
-  assert.equal(unitPriceText(unit(9, "A", 90, "", { is_listed: false, price: null }), {}, "", true), "");
+// ── 價目表:一格 = 成色 + 電池區間 + 有沒有備註;符合的都用那個價,獨立定價的不跟 ──────────────────────
+const rule = (id, price, cell = {}, followers = 0) => {
+  const full = { grade: "", battery_min: 0, battery_max: 100, noted: "", ...cell };
+  return { id, product: 5, price, followers, text: cellText(full), ...full };
+};
+const A = rule(1, 12000, { grade: "A" }, 100);
+const A_LOW = rule(2, 11000, { grade: "A", battery_max: 84 }, 20);
+const A_PLAIN = rule(3, 12500, { grade: "A", noted: "no" }, 80);
+const ANY = rule(4, 10000, {}, 5);
+
+test("篩選列上點的就是價目的那一格;電池打錯不能存", () => {
+  assert.deepEqual(cellOf(NO_UNIT_FILTER), { grade: "", battery_min: 0, battery_max: 100, noted: "" });
+  assert.deepEqual(cellOf({ ...NO_UNIT_FILTER, grade: "A", batteryMin: "85", noted: "no", q: "無盒", onlyOwn: true }),
+    { grade: "A", battery_min: 85, battery_max: 100, noted: "no" });                // 搜尋、只看獨立不是價目的一部分
+  assert.equal(cellOf({ ...NO_UNIT_FILTER, batteryMin: "abc" }), null);
+  assert.equal(cellOf({ ...NO_UNIT_FILTER, batteryMin: "90", batteryMax: "80" }), null);
+  assert.deepEqual([cellText(ANY), cellText(A), cellText(A_LOW), cellText(A_PLAIN), cellText({ grade: "B", battery_min: 80, battery_max: 89, noted: "yes" }),
+    cellText({ grade: "", battery_min: 85, battery_max: 100, noted: "" })],
+    ["全部", "A 級", "A 級 電池 84 以下", "A 級 沒備註", "B 級 電池 80–89 有備註", "電池 85 以上"]);
+  assert.equal(sameCell(A, { grade: "A", battery_min: 0, battery_max: 100, noted: "" }), true);
+  assert.equal(sameCell(A, A_LOW), false);
 });
 
-test("送出去的那一批:整群的價、各自的價、照規則的分開算", () => {
-  const [a, b, c] = [unit(1, "A", 92), unit(2, "A", 88, "螢幕小刮"), unit(3, "A", 85, "", { is_listed: false, price: null })];
-  assert.deepEqual(unitBatch([a, b, c], { 2: "11500" }, "12000"),
-    { rows: [{ serial: 1, price: 12000 }, { serial: 2, price: 11500 }, { serial: 3, price: 12000 }], grouped: 2 });
-  // 上面空著:上架中的照原本的價送(不會變),沒上過架的照規則
-  assert.deepEqual(unitBatch([a, c], {}, ""), { rows: [{ serial: 1, price: 15000 }, { serial: 3 }], grouped: 0 });
-  assert.deepEqual(unitBatch([a], {}, "abc"), { error: "批發價要填正的整數" });
-  assert.deepEqual(unitBatch([a, b], { 2: "0" }, ""), { error: "U2 的批發價要填正的整數" });
-  assert.deepEqual(unitBatch([{ ...c, auto_price: null }], {}, ""), { error: "U3 的批發價要填正的整數" });   // 算不出來又沒填
-  assert.deepEqual(unitBatch([{ ...c, auto_price: null }], {}, "9000"), { rows: [{ serial: 3, price: 9000 }], grouped: 1 });
+test("兩格都符合的時候比較細的那一格算數(成色 → 電池 → 備註),跟伺服器同一套", () => {
+  const cells = [ANY, A, A_LOW, A_PLAIN];
+  assert.equal(bestCell(cells, unit(1, "A", 90)).id, 3);                    // 沒備註的 A
+  assert.equal(bestCell(cells, unit(2, "A", 90, "無盒")).id, 1);            // 有備註:不在「沒備註」那一格
+  assert.equal(bestCell(cells, unit(3, "A", 80)).id, 2);                    // 有限電池的贏過指定備註的
+  assert.equal(bestCell(cells, unit(4, "A", null)).id, 3);                  // 沒記電池的不算在有限電池的格子裡
+  assert.equal(bestCell(cells, unit(5, "B", 90)).id, 4);
+  assert.equal(bestCell([A, A_LOW], unit(6, "C", 90)), null);
+  assert.equal(fitsCell({ grade: "", battery_min: 0, battery_max: 100, noted: "yes" }, unit(7, "C", 90, "  ")), false);   // 只有空白不算有備註
 });
 
-test("要不要再按一次:好幾台同一個價、或一次動到很多台", () => {
-  assert.equal(unitNeedsConfirm(1, 1), false);                             // 一台打一個價
-  assert.equal(unitNeedsConfirm(3, 0), false);                             // 三台各自的價
-  assert.equal(unitNeedsConfirm(2, 2), true);
-  assert.equal(unitNeedsConfirm(10, 0), true);
-  assert.equal(unitNeedsConfirm(9, 0), false);
+test("每一台顯示的價:獨立的是它自己的;跟價目的是存了之後它會用的那一格", () => {
+  const follower = unit(1, "A", 90, "", { price: 12000 });
+  const special = unit(2, "A", 90, "無盒", { price: 9500, own: true });
+  const loose = unit(3, "B", 90, "", { price: 14000 });                      // 沒有符合的格子
+  const cell = { grade: "A", battery_min: 0, battery_max: 100, noted: "" };
+  const edits = { ...NO_UNIT_EDITS, cellPrice: "11500" };
+  const cells = pendingCells([A], cell, edits, 5);
+  assert.deepEqual(cells.map((c) => c.price), [11500]);                      // 同一格換成還沒存的價
+  assert.deepEqual(pendingCells([A], cell, NO_UNIT_EDITS, 5), [A]);
+  assert.deepEqual(pendingCells([A], cell, edits), [A]);                     // 沒講是哪個型號(全部型號):沒有價目那一格
+  assert.deepEqual([followsNow(follower, edits), followsNow(special, edits)], [true, false]);
+  assert.equal(unitPriceShown(follower, edits, cells), "11500");
+  assert.equal(unitPriceShown(special, edits, cells), "9500");               // 獨立的不動
+  assert.equal(unitPriceShown(loose, edits, cells), "14000");
+  // 把勾拿掉:變獨立、顯示它現在的價;勾回來:顯示價目的價;在自己那一列打字:就是獨立
+  assert.equal(unitPriceShown(follower, { ...edits, follow: { 1: false } }, cells), "12000");
+  assert.equal(unitPriceShown(special, { ...edits, follow: { 2: true } }, cells), "11500");
+  const typed = { ...edits, typed: { 1: "9000" } };
+  assert.deepEqual([followsNow(follower, typed), unitPriceShown(follower, typed, cells)], [false, "9000"]);
+  assert.equal(unitPriceShown(unit(4, "C", 90, "", { price: null }), NO_UNIT_EDITS, []), "");
 });
 
-test("再按一次之前的那一句:幾台、什麼價、原本多少;跟門市價差很多另外講", () => {
-  const group = [unit(1, "A", 92, "", { price: 11500 }), unit(2, "A", 88, "", { price: 13000 }), unit(3, "A", 85, "", { price: 12000 })];
-  let batch = unitBatch(group, {}, "12000");
-  assert.equal(unitConfirmText("改價", group, batch, "12000"), "3 台都改成 12000,原本 11500–13000");
-  batch = unitBatch(group, { 2: "9000" }, "12000");
-  assert.equal(unitConfirmText("改價", group, batch, "12000"), "2 台都改成 12000,原本 11500–13000,另外 1 台各自的價");
-  batch = unitBatch(group, {}, "1200");                                    // 少打一個 0
-  assert.equal(unitConfirmText("改價", group, batch, "1200"), "3 台都改成 1200,原本 11500–13000,跟門市價差很多");
-  batch = unitBatch(group, {}, "17000");                                   // 比門市價還貴
-  assert.match(unitConfirmText("改價", group, batch, "17000"), /跟門市價差很多$/);
-  const same = [unit(1, "A", 92), unit(2, "A", 88)];
-  assert.equal(unitConfirmText("上架", same, unitBatch(same, {}, "14000"), "14000"), "2 台都用 14000,原本 15000");
-  const many = Array.from({ length: 12 }, (_, i) => unit(i + 1, "A", 90));
-  assert.equal(unitConfirmText("上架", many, unitBatch(many, {}, ""), ""), "上架 12 台");
+test("改價:只送有變的;價目的價變了才送那一格", () => {
+  const follower = unit(1, "A", 90, "", { price: 12000 });
+  const second = unit(2, "A", 88, "", { price: 12000 });
+  const special = unit(3, "A", 90, "無盒", { price: 9500, own: true });
+  const shown = [follower, second, special];
+  const cell = { grade: "A", battery_min: 0, battery_max: 100, noted: "" };
+  let plan = unitPlan(shown, [A], cell, NO_UNIT_EDITS, false, 5);
+  assert.equal(planIsEmpty(plan), true);                                     // 什麼都沒動
+  plan = unitPlan(shown, [A], cell, { ...NO_UNIT_EDITS, cellPrice: "12000" }, false, 5);
+  assert.equal(planIsEmpty(plan), true);                                     // 打了一樣的價
+  plan = unitPlan(shown, [A], cell, { ...NO_UNIT_EDITS, cellPrice: "11500" }, false, 5);
+  assert.deepEqual([plan.rows, plan.cell, plan.cell_price, plan.cellFrom], [[], cell, 11500, 12000]);   // 跟著的那幾台不用一台一台送
+  // 取消一台的勾(獨立、價照舊)、把特殊的勾回來、另一台打自己的價
+  plan = unitPlan(shown, [A], cell, { follow: { 1: false, 3: true }, typed: { 2: "11000" }, cellPrice: "" }, false, 5);
+  assert.deepEqual(plan.rows, [{ serial: 1, own: true }, { serial: 2, price: 11000 }, { serial: 3 }]);
+  assert.deepEqual([plan.toOwn, plan.toFollow, plan.priced, plan.cell], [1, 1, 1, undefined]);
+  // 還沒有這一格:打了價就是新的一格
+  plan = unitPlan(shown, [], cell, { ...NO_UNIT_EDITS, cellPrice: "12000" }, false, 5);
+  assert.deepEqual([plan.cell, plan.cell_price, plan.cellFrom], [cell, 12000, null]);
+  assert.deepEqual(unitPlan(shown, [A], cell, { ...NO_UNIT_EDITS, cellPrice: "abc" }, false, 5), { error: "價目要填正的整數" });
+  assert.deepEqual(unitPlan(shown, [A], cell, { ...NO_UNIT_EDITS, typed: { 2: "0" } }, false, 5), { error: "U2 的批發價要填正的整數" });
+  // 改不了價目的人(鎖門市、全部型號):沒有那一格,打了也不送
+  plan = unitPlan(shown, [A], null, { ...NO_UNIT_EDITS, cellPrice: "11500" }, false, 5);
+  assert.equal(planIsEmpty(plan), true);
+});
+
+test("上架:畫面上列出來的每一台都送;沒有價的要擋", () => {
+  const cell = { grade: "A", battery_min: 0, battery_max: 100, noted: "" };
+  const fresh = unit(1, "A", 90, "", { is_listed: false, price: null });
+  const was = unit(2, "A", 90, "", { is_listed: false, price: 13800, own: true });       // 下架過的獨立定價
+  const noPrice = unit(3, "B", 90, "", { is_listed: false, price: null, auto_price: null });
+  let plan = unitPlan([fresh, was], [A], cell, NO_UNIT_EDITS, true, 5);
+  assert.deepEqual([plan.rows, plan.listed], [[{ serial: 1 }, { serial: 2, own: true }], 2]);
+  assert.deepEqual(unitPlan([noPrice], [A], cell, NO_UNIT_EDITS, true, 5), { error: "U3 的批發價要填正的整數" });
+  assert.deepEqual(unitPlan([noPrice], [A], cell, { ...NO_UNIT_EDITS, follow: { 3: false } }, true, 5), { error: "U3 要獨立定價,請填價" });
+  plan = unitPlan([noPrice], [A], cell, { ...NO_UNIT_EDITS, typed: { 3: "8000" } }, true, 5);
+  assert.deepEqual(plan.rows, [{ serial: 3, price: 8000 }]);
+  // 沒有符合的格子、但這一次順便定了「全部」那一格:有價了
+  plan = unitPlan([noPrice], [], { grade: "", battery_min: 0, battery_max: 100, noted: "" }, { ...NO_UNIT_EDITS, cellPrice: "9000" }, true, 5);
+  assert.deepEqual([plan.rows, plan.cell_price], [[{ serial: 3 }], 9000]);
+});
+
+test("要不要再按一次、按之前講什麼", () => {
+  const cell = { grade: "A", battery_min: 0, battery_max: 100, noted: "no" };
+  const shown = [unit(1, "A", 90, "", { price: 12000 }), unit(2, "A", 88, "", { price: 12000 })];
+  let plan = unitPlan(shown, [A_PLAIN], cell, { ...NO_UNIT_EDITS, cellPrice: "11500" }, false, 5);
+  assert.equal(unitNeedsConfirm(plan), true);                                // 改到價目:全公司符合的都會變
+  assert.equal(unitConfirmText(plan, 80, [16000, 16000]), "價目「A 級 沒備註」12500 → 11500:全公司用這一格的 80 台都用這個價,之後進貨的也是");
+  plan = unitPlan(shown, [], cell, { ...NO_UNIT_EDITS, cellPrice: "1150" }, false, 5);        // 新的一格、少打一個 0
+  assert.equal(unitConfirmText(plan, null, [16000, 16000]), "價目「A 級 沒備註」1150:全公司符合的都用這個價,之後進貨的也是(跟門市價差很多)");
+  plan = unitPlan(shown, [A_PLAIN], cell, { ...NO_UNIT_EDITS, follow: { 1: false } }, false, 5);
+  assert.equal(unitNeedsConfirm(plan), true);                                // 變成獨立:之後不跟著動,要講清楚(紅隊:店員以為只是這次跳過)
+  assert.equal(unitConfirmText(plan, null, []), "1 台改成獨立定價(之後價目怎麼改都不動它)");
+  plan = unitPlan(shown, [A_PLAIN], cell, { ...NO_UNIT_EDITS, typed: { 1: "9000" } }, false, 5);
+  assert.deepEqual([unitNeedsConfirm(plan), unitConfirmText(plan, null, [])], [false, "1 台各自的價"]);   // 一台打一個價:直接改
+  plan = unitPlan([unit(1, "A", 90, "", { own: true })], [A_PLAIN], cell, { ...NO_UNIT_EDITS, follow: { 1: true } }, false, 5);
+  assert.deepEqual([unitNeedsConfirm(plan), unitConfirmText(plan, null, [])], [false, "1 台改回跟價目"]);
+  const many = Array.from({ length: 12 }, (_, i) => unit(i + 1, "B", 90, "", { is_listed: false }));
+  plan = unitPlan(many, [], null, NO_UNIT_EDITS, true, 5);
+  assert.deepEqual([unitNeedsConfirm(plan), unitConfirmText(plan, null, [])], [true, "上架 12 台"]);
+});
+
+test("型號清單上當場改價目:只送真的變了的那幾格", () => {
+  const rules = [A, A_LOW, ANY];
+  assert.deepEqual(cellEdits(rules, {}), { cells: [], followers: 0 });
+  assert.deepEqual(cellEdits(rules, { 1: "12000", 2: "10800" }), { cells: [{ id: 2, price: 10800 }], followers: 20 });   // 打回原本的價不算
+  assert.deepEqual(cellEdits(rules, { 1: "11,500", 4: "9500" }), { cells: [{ id: 1, price: 11500 }, { id: 4, price: 9500 }], followers: 105 });
+  assert.deepEqual(cellEdits(rules, { 2: "" }), { error: "「A 級 電池 84 以下」的價要填正的整數" });
+  assert.deepEqual(cellEdits(rules, { 2: "abc" }), { error: "「A 級 電池 84 以下」的價要填正的整數" });
 });
 
 test("上一份清單一列都不算:換門市的那一下不會勾到上一間門市的", () => {
@@ -222,4 +304,16 @@ test("上一份清單一列都不算:換門市的那一下不會勾到上一間�
   assert.deepEqual(currentRows(undefined, false), []);
   // 上一份不算 → 篩出來是空的 → 在「同價」打字不會勾到任何一台、也送不出去
   assert.deepEqual(filterUnits(currentRows(stock, true), NO_UNIT_FILTER), []);
+});
+
+test("全部型號那個入口:每一台只用它自己那個型號的價目(複審 P1:勾回來顯示的價要跟存下去的一樣)", () => {
+  const other = { ...rule(9, 8000, { grade: "A" }), product: 6, followers: null };
+  const mine = unit(1, "A", 90, "", { price: 15000, own: true });           // 型號 5,獨立 15000
+  const theirs = unit(2, "A", 90, "", { product: 6, price: 9000, own: true });
+  const edits = { ...NO_UNIT_EDITS, follow: { 1: true, 2: true } };
+  const cells = pendingCells([A, other], cellOf(NO_UNIT_FILTER), edits);   // 沒有型號:不加價目那一格
+  assert.equal(unitPriceShown(mine, edits, cells), "12000");                 // 型號 5 的 A 級
+  assert.equal(unitPriceShown(theirs, edits, cells), "8000");               // 型號 6 的 A 級
+  const plan = unitPlan([mine, theirs], [A, other], cellOf(NO_UNIT_FILTER), { ...edits, cellPrice: "7000" }, false);
+  assert.deepEqual([plan.rows, plan.cell, plan.toFollow], [[{ serial: 1 }, { serial: 2 }], undefined, 2]);   // 全部型號不能改價目那一格
 });

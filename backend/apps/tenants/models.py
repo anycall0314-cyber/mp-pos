@@ -73,7 +73,7 @@ class Tenant(TimestampedModel):
     def issue_next_supplier_code(self) -> str:
         """原子地取下一個供應商代碼:`S-{6位流水}`。"""
         with transaction.atomic():
-            row = Tenant.objects.select_for_update().get(pk=self.pk)
+            row = Tenant.objects.select_for_update(no_key=True).get(pk=self.pk)       # 只改流水號:不擋別人新增指到這家公司的資料
             seq = row.next_supplier_seq
             row.next_supplier_seq = seq + 1
             row.save(update_fields=["next_supplier_seq"])
@@ -83,7 +83,7 @@ class Tenant(TimestampedModel):
     def issue_next_customer_code(self) -> str:
         """原子地取下一個客戶代碼:`C-{5位流水}`。"""
         with transaction.atomic():
-            row = Tenant.objects.select_for_update().get(pk=self.pk)
+            row = Tenant.objects.select_for_update(no_key=True).get(pk=self.pk)       # 只改流水號:不擋別人新增指到這家公司的資料
             seq = row.next_customer_seq
             row.next_customer_seq = seq + 1
             row.save(update_fields=["next_customer_seq"])
@@ -93,7 +93,7 @@ class Tenant(TimestampedModel):
     def issue_next_member_code(self) -> str:
         """原子地取下一個會員代碼:`M-{5位流水}`。"""
         with transaction.atomic():
-            row = Tenant.objects.select_for_update().get(pk=self.pk)
+            row = Tenant.objects.select_for_update(no_key=True).get(pk=self.pk)       # 只改流水號:不擋別人新增指到這家公司的資料
             seq = row.next_member_seq
             row.next_member_seq = seq + 1
             row.save(update_fields=["next_member_seq"])
@@ -122,7 +122,7 @@ class Tenant(TimestampedModel):
     def issue_next_expense_no(self) -> str:
         """原子地取下一張雜支單號:`EX-{5位流水}`。"""
         with transaction.atomic():
-            row = Tenant.objects.select_for_update().get(pk=self.pk)
+            row = Tenant.objects.select_for_update(no_key=True).get(pk=self.pk)       # 只改流水號:不擋別人新增指到這家公司的資料
             seq = row.next_expense_seq
             row.next_expense_seq = seq + 1
             row.save(update_fields=["next_expense_seq"])
@@ -132,7 +132,7 @@ class Tenant(TimestampedModel):
     def issue_next_cash_adj_no(self) -> str:
         """原子地取下一張現金調整單號:`CA-{5位流水}`。"""
         with transaction.atomic():
-            row = Tenant.objects.select_for_update().get(pk=self.pk)
+            row = Tenant.objects.select_for_update(no_key=True).get(pk=self.pk)       # 只改流水號:不擋別人新增指到這家公司的資料
             seq = row.next_cash_adj_seq
             row.next_cash_adj_seq = seq + 1
             row.save(update_fields=["next_cash_adj_seq"])
@@ -142,7 +142,7 @@ class Tenant(TimestampedModel):
     def issue_next_phone_bill_no(self) -> str:
         """原子地取下一張代收話費單號:`PB-{5位流水}`。"""
         with transaction.atomic():
-            row = Tenant.objects.select_for_update().get(pk=self.pk)
+            row = Tenant.objects.select_for_update(no_key=True).get(pk=self.pk)       # 只改流水號:不擋別人新增指到這家公司的資料
             seq = row.next_phone_bill_seq
             row.next_phone_bill_seq = seq + 1
             row.save(update_fields=["next_phone_bill_seq"])
@@ -152,7 +152,7 @@ class Tenant(TimestampedModel):
     def issue_next_repair_no(self) -> str:
         """原子地取下一張維修單號:`R-{6位流水}`。"""
         with transaction.atomic():
-            row = Tenant.objects.select_for_update().get(pk=self.pk)
+            row = Tenant.objects.select_for_update(no_key=True).get(pk=self.pk)       # 只改流水號:不擋別人新增指到這家公司的資料
             seq = row.next_repair_seq
             row.next_repair_seq = seq + 1
             row.save(update_fields=["next_repair_seq"])

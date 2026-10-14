@@ -92,6 +92,7 @@ REGISTRY: dict[str, Entry] = {
         "vendor_orders.VendorHandoff",
         # 批發(2026-10-14;賣家那一半):設定、往來的同行、上架、收到的單、出貨、收款。往來代碼只存雜湊、七天就過期,一起帶走無妨
         "trade.TradeSetting", "trade.TradePartner", "trade.TradeInvite", "trade.TradeUnit", "trade.TradeProduct",
+        "trade.TradePriceRule", "trade.TradePriceChange", "trade.TradePriceChangeUnit",
         "trade.TradeOrder", "trade.TradeOrderLine", "trade.TradeShipment", "trade.TradeShipmentLine",
         "trade.TradeShipmentSerial", "trade.TradePayment",
     ),

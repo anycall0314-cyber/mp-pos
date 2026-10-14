@@ -284,7 +284,8 @@ class ManyUnitsTests(_Trade):
         rows = {r["name"]: r for r in self.a.admin.get(T + "units/models/").json()["results"]}
         self.assertEqual(set(rows), {self.used.name, other.name})
         self.assertEqual(rows[self.used.name], {"product": self.used.id, "name": self.used.name, "sku": self.used.sku,
-                                                "total": 4, "unlisted": 2, "listed": 1, "held": 1})
+                                                "total": 4, "unlisted": 2, "listed": 1, "held": 1,
+                                                "price_low": 15000, "price_high": 15000, "own": 0, "rules": []})
         self.assertEqual((rows[other.name]["total"], rows[other.name]["unlisted"]), (1, 1))
         there = self.a.admin.get(f"{T}units/models/?warehouse={self.wh2.id}").json()["results"]
         self.assertEqual([(r["name"], r["total"]) for r in there], [(self.used.name, 1)])

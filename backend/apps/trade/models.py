@@ -7,6 +7,10 @@
 - `TradeKey`:對外的同行(不在這套 POS 上的系統)用的金鑰(只存雜湊)。**不進公司備份**:還原之後舊的金鑰不能自己活過來,要重發。
 - `TradeInvite`:給同行的一次性往來代碼(同行在叫貨頁輸入 → 變成核准的往來對象)。平台上的經銷商互相競爭,不提供「所有經銷商的名單」給人挑。
 - `TradeUnit`:中古機**一台一筆**的上架(批發價是這一台的)。在不在賣 = 有上架、而且那一台現在在庫、沒有被訂走。
+- `TradePriceRule`:中古機**價目表的一格**(型號 + 成色 + 電池區間 + 有沒有備註 → 一個價)。全公司符合那一格的每一台都用那個價,
+  那一格改了它們跟著變、新進貨的自動跟;只有被明講**獨立定價**的(`TradeUnit.own_price`)不跟。價錢還是存在 `TradeUnit.price`
+  (改一格的時候把跟著的一起改掉),下單、對外看到的都讀那一個,不用每次算。規則在 `pricing.py`。
+- `TradePriceChange` / `TradePriceChangeUnit`:改價紀錄(一次改價一筆、底下是動到的每一台從多少變多少)。
 - `TradeProduct`:按數量賣的商品(全新機、配件)有沒有開放批發、有沒有固定的批發價。
 - `TradeOrder` / `TradeOrderLine`:收到的訂單。`holding` = 這一行還訂著某一台中古機(一台同時只會被一行訂著,資料庫擋)。
 - `TradeShipment` / `TradeShipmentLine` / `TradeShipmentSerial`:一次出貨 = 一張銷貨單(庫存與成本的帳只有銷貨單那一份)。
@@ -143,12 +147,83 @@ class TradeUnit(TenantOwnedModel):
     is_listed = models.BooleanField("上架", default=True)
     listed_at = models.DateTimeField("上架時間", null=True, blank=True)
     listed_by = _by("上架的人")
+    # 獨立定價(owner:全選之後取消勾選的那幾台獨立定價):價目表怎麼改都不動它。要人明講才會是 True ——
+    # 沒有明講的,只要價目表上有符合它的一格就用那一格的價(同型號同機況不會有人以為同價、其實不同價)
+    own_price = models.BooleanField("獨立定價", default=False, db_default=False)
 
     class Meta:
         verbose_name = "中古機上架"
         verbose_name_plural = "中古機上架"
         ordering = ["-id"]
         indexes = [models.Index(fields=["tenant", "is_listed"])]
+
+
+class TradePriceRule(TenantOwnedModel):
+    """中古機價目表的一格:這個型號、這個成色(空的 = 不分)、電池在這個區間(0–100 = 不限)、有沒有備註(空的 = 不分)賣多少。"""
+
+    class Noted(models.TextChoices):
+        ANY = "", "不分"
+        NO = "no", "沒備註"
+        YES = "yes", "有備註"
+
+    product = models.ForeignKey("catalog.Product", on_delete=models.CASCADE, related_name="trade_price_rules", verbose_name="型號")
+    grade = models.CharField("成色", max_length=2, blank=True, default="", db_default="")
+    battery_min = models.PositiveSmallIntegerField("電池最低", default=0, db_default=0)
+    battery_max = models.PositiveSmallIntegerField("電池最高", default=100, db_default=100)
+    # 備註 = 特殊狀況(owner:特殊狀況特殊價):「沒備註的 A 級 12,000」是一格,有備註的不在這一格裡
+    noted = models.CharField("有沒有備註", max_length=3, choices=Noted.choices, blank=True, default="", db_default="")
+    price = models.DecimalField("批發價", max_digits=14, decimal_places=2)
+    updated_by = _by("改的人")
+
+    class Meta:
+        verbose_name = "中古機價目"
+        verbose_name_plural = "中古機價目"
+        ordering = ["product_id", "grade", "battery_min"]
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "product", "grade", "battery_min", "battery_max", "noted"], name="uniq_trade_price_rule_cell"),
+            models.CheckConstraint(condition=models.Q(battery_min__lte=models.F("battery_max"), battery_max__lte=100),
+                                   name="trade_price_rule_battery_range"),
+        ]
+
+
+class TradePriceChange(TenantOwnedModel):
+    """一次改價(一群一起改算一次):什麼時候、誰、哪一群、幾台、從多少改成多少。底下 `units` 是動到的每一台。"""
+
+    class What(models.TextChoices):
+        RULE = "rule", "改價目"
+        PRICE = "price", "改價"
+        LIST = "list", "上架"
+        UNLIST = "unlist", "下架"
+        DROP = "drop", "刪價目"
+
+    product = models.ForeignKey("catalog.Product", on_delete=models.CASCADE, related_name="+", verbose_name="型號")
+    what = models.CharField("做了什麼", max_length=10, choices=What.choices)
+    scope = models.CharField("哪一群", max_length=120, blank=True, default="")
+    count = models.PositiveIntegerField("幾台", default=0)
+    old_low = models.DecimalField("原本最低", max_digits=14, decimal_places=2, null=True, blank=True)
+    old_high = models.DecimalField("原本最高", max_digits=14, decimal_places=2, null=True, blank=True)
+    new_low = models.DecimalField("改成最低", max_digits=14, decimal_places=2, null=True, blank=True)
+    new_high = models.DecimalField("改成最高", max_digits=14, decimal_places=2, null=True, blank=True)
+    by = _by("誰")
+
+    class Meta:
+        verbose_name = "改價紀錄"
+        verbose_name_plural = "改價紀錄"
+        ordering = ["-id"]
+        indexes = [models.Index(fields=["tenant", "product", "-id"])]
+
+
+class TradePriceChangeUnit(TenantOwnedModel):
+    change = models.ForeignKey(TradePriceChange, on_delete=models.CASCADE, related_name="units", verbose_name="哪一次")
+    serial = models.ForeignKey("inventory.ProductSerial", on_delete=models.CASCADE, related_name="+", verbose_name="那一台")
+    # 空的 = 之前沒有價(沒上過架)/ 之後沒有價(下架)
+    old_price = models.DecimalField("原本", max_digits=14, decimal_places=2, null=True, blank=True)
+    new_price = models.DecimalField("改成", max_digits=14, decimal_places=2, null=True, blank=True)
+
+    class Meta:
+        verbose_name = "改價紀錄的一台"
+        verbose_name_plural = "改價紀錄的一台"
+        indexes = [models.Index(fields=["tenant", "serial"])]
 
 
 class TradeProduct(TenantOwnedModel):

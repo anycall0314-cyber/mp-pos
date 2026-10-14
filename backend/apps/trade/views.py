@@ -7,7 +7,8 @@
 """
 from datetime import date
 
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db import transaction
+from django.db.models import Count, Exists, Max, Min, OuterRef, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework import status
@@ -22,11 +23,11 @@ from apps.inventory.models import ProductSerial, Warehouse
 from apps.tenants import abilities
 from apps.tenants.permissions import is_tenant_admin
 
-from . import keys, listing, orders, partners, payments, shipping
+from . import keys, listing, orders, partners, payments, pricing, shipping
 from .base import TradeError, setting_of
 from .models import (
-    TradeInvite, TradeOrder, TradeOrderLine, TradePartner, TradePayment, TradeProduct, TradeSetting, TradeShipment,
-    TradeShipmentLine, TradeUnit,
+    TradeInvite, TradeOrder, TradeOrderLine, TradePartner, TradePayment, TradePriceChange, TradePriceChangeUnit, TradePriceRule, TradeProduct,
+    TradeSetting, TradeShipment, TradeShipmentLine, TradeUnit,
 )
 
 S = TradeOrder.Status
@@ -251,13 +252,31 @@ def _units_in_stock(request):
 def unit_models(request):
     """中古機照型號算:每一個型號在庫幾台、其中沒上架 / 上架中 / 被訂走各幾台。上架那一頁先看這個,再點進一個型號。"""
     _seller(request)
+    for_sale = Q(is_on=True, is_held=False)
     found = (_units_in_stock(request).values("product_id", "product__name", "product__sku")
-             .annotate(total=Count("id"), listed=Count("id", filter=Q(is_on=True, is_held=False)), held=Count("id", filter=Q(is_held=True)))
+             .annotate(total=Count("id"), listed=Count("id", filter=for_sale), held=Count("id", filter=Q(is_held=True)),
+                       low=Min("trade_unit__price", filter=for_sale), high=Max("trade_unit__price", filter=for_sale),
+                       own=Count("id", filter=for_sale & Q(trade_unit__own_price=True)))
              .order_by("product__name", "product_id"))
+    found = list(found)
+    rules = pricing.rules_of(request.tenant, [row["product_id"] for row in found])
     return Response({"results": [{
         "product": row["product_id"], "name": row["product__name"], "sku": row["product__sku"], "total": row["total"],
         "unlisted": row["total"] - row["listed"] - row["held"], "listed": row["listed"], "held": row["held"],
+        # 上架中的那幾台現在賣多少到多少;其中獨立定價的幾台(價目怎麼改都不動的那幾台,要人自己記得看)
+        "price_low": _money(row["low"]), "price_high": _money(row["high"]), "own": row["own"],
+        # 這個型號的價目表(行情變了在型號清單上就改得到)
+        "rules": _rules_data(request.tenant, row["product_id"], rules[row["product_id"]]) if rules[row["product_id"]] else [],
     } for row in found]})
+
+
+def _rules_data(tenant, product_id, rules=None) -> list[dict]:
+    """這個型號價目表的每一格,與現在用它的有幾台(全公司在庫的;不看畫面上的門市與狀態)。"""
+    rules = list(TradePriceRule.objects.filter(tenant=tenant, product_id=product_id)) if rules is None else rules
+    counts = pricing.followers(tenant, product_id, rules)
+    rules = sorted(rules, key=lambda r: (pricing.GRADE_ORDER.get(r.grade, 9), -r.battery_max, -r.battery_min, r.noted))
+    return [{"id": r.id, "product": product_id, "grade": r.grade, "battery_min": r.battery_min, "battery_max": r.battery_max, "noted": r.noted,
+             "price": _money(r.price), "text": pricing.text_of(r), "followers": counts[r.id]} for r in rules]
 
 
 @api_view(["GET"])
@@ -287,19 +306,33 @@ def unit_list(request):
     units = {u.serial_id: u for u in TradeUnit.objects.filter(serial__in=page)}
     holds = {line.unit_id: line for line in TradeOrderLine.objects.filter(unit__in=page, holding=True).select_related("order__partner")}
     setting = setting_of(tenant)
+    rules = pricing.rules_of(tenant, {serial.product_id for serial in page})
     out = []
     for serial in page:
         unit, hold = units.get(serial.id), holds.get(serial.id)
+        rule = pricing.best(rules.get(serial.product_id, []), serial)
         out.append({
             "serial": serial.id, "serial_no": serial.serial_no, **codes_of(serial),
             "product": serial.product_id, "name": serial.product.name, "sku": serial.product.sku,
             "warehouse": serial.warehouse_id, "warehouse_name": serial.warehouse.name if serial.warehouse_id else "",
             "grade": serial.condition_grade, "battery": serial.battery_health, "note": serial.condition_note,
-            "retail_price": _money(listing.retail_price(serial)), "auto_price": _money(listing.auto_price(setting, serial)),
+            # auto_price = 沒有人指定價的時候它會賣多少(價目表上符合它的那一格 → 沒有才是設定的通則)
+            "retail_price": _money(listing.retail_price(serial)),
+            "auto_price": _money(rule.price if rule is not None else listing.auto_price(setting, serial)),
             "is_listed": bool(unit and unit.is_listed), "price": _money(unit.price) if unit else None,
+            # own = 獨立定價(價目怎麼改都不動它);rule = 價目表上符合它的最細的那一格(沒有獨立定價的話用的就是這一格的價)
+            "own": bool(unit and unit.own_price), "rule": rule.id if rule is not None else None,
             "held_by": None if hold is None else {"order": hold.order_id, "order_no": hold.order.no, "partner": hold.order.partner.name},
         })
-    return Response({"total": total, "results": out})
+    data = {"total": total, "results": out}
+    if product:
+        data["rules"] = _rules_data(tenant, product)
+    else:
+        # 全部型號那個入口也要帶(複審 P1:不帶的話勾回「跟價目」那一台,畫面上還是舊的價,存下去卻是價目的價)。台數只在看一個型號時算
+        data["rules"] = [{"id": r.id, "product": pid, "grade": r.grade, "battery_min": r.battery_min, "battery_max": r.battery_max, "noted": r.noted,
+                          "price": _money(r.price), "text": pricing.text_of(r), "followers": None}
+                         for pid, found in rules.items() for r in found]
+    return Response(data)
 
 
 def _seen(request):
@@ -312,8 +345,9 @@ def _seen(request):
 def unit_put_on(request):
     _seller(request)
     try:
-        done = listing.put_on(request.tenant, request.user, request.data.get("rows") if isinstance(request.data, dict) else None,
-                              store=locked_warehouse_id(request.user), seen=_seen(request))
+        data = request.data if isinstance(request.data, dict) else {}
+        done = listing.put_on(request.tenant, request.user, data.get("rows"), store=locked_warehouse_id(request.user), seen=_seen(request),
+                              cell=data.get("cell"), cell_price=data.get("cell_price"))
     except TradeError as exc:
         return _bad(exc)
     return Response({"listed": len(done)})
@@ -323,11 +357,63 @@ def unit_put_on(request):
 def unit_take_off(request):
     _seller(request)
     try:
-        done = listing.take_off(request.tenant, request.data.get("serials") if isinstance(request.data, dict) else None,
+        done = listing.take_off(request.tenant, request.user, request.data.get("serials") if isinstance(request.data, dict) else None,
                                 store=locked_warehouse_id(request.user), seen=_seen(request))
     except TradeError as exc:
         return _bad(exc)
     return Response({"unlisted": done})
+
+
+@api_view(["POST"])
+def unit_rules(request):
+    """一次改好幾格價目的價(`cells` = [{id, price}])。符合那幾格、沒有獨立定價的在庫機器跟著變。"""
+    _seller(request)
+    try:
+        changed = listing.set_cells(request.tenant, request.user, request.data.get("cells") if isinstance(request.data, dict) else None,
+                                    store=locked_warehouse_id(request.user))
+    except TradeError as exc:
+        return _bad(exc)
+    return Response({"changed": changed})
+
+
+@api_view(["POST"])
+def unit_rule_drop(request, pk: int):
+    """刪掉價目表的一格。原本用它的改用下一格的價;沒有下一格的維持現在的價。"""
+    _seller(request)
+    try:
+        changed = listing.drop_cell(request.tenant, request.user, pk, store=locked_warehouse_id(request.user))
+    except TradeError as exc:
+        return _bad(exc, exc.status)
+    return Response({"changed": changed})
+
+
+@api_view(["GET"])
+def unit_changes(request):
+    """改價紀錄:一個型號每一次改價(新的在前)。`q` = 序號裡的字 → 只列動到那一台的,並帶出那一台從多少變多少。"""
+    _seller(request)
+    product = _int(request.query_params.get("product"))
+    found = TradePriceChange.objects.filter(tenant=request.tenant).select_related("by", "product")
+    if product:
+        found = found.filter(product_id=product)
+    q = (request.query_params.get("q") or "").strip()
+    if q:
+        found = found.filter(Q(units__serial__serial_no__icontains=q) | Q(units__serial__identifiers__value__icontains=q)).distinct()
+    total = found.count()
+    limit, offset = _page(request)
+    page = list(found.order_by("-id")[offset:offset + limit])
+    hits = {}
+    if q and page:
+        for row in (TradePriceChangeUnit.objects.filter(change__in=page)
+                    .filter(Q(serial__serial_no__icontains=q) | Q(serial__identifiers__value__icontains=q))
+                    .select_related("serial").distinct()):
+            hits.setdefault(row.change_id, []).append(
+                {"serial_no": row.serial.serial_no, "old_price": _money(row.old_price), "new_price": _money(row.new_price)})
+    return Response({"total": total, "results": [{
+        "id": c.id, "at": _when(c.created_at), "by": (c.by.get_full_name() or c.by.username) if c.by_id else "",
+        "product": c.product_id, "name": c.product.name, "what": c.what, "what_label": c.get_what_display(), "scope": c.scope, "count": c.count,
+        "old_low": _money(c.old_low), "old_high": _money(c.old_high), "new_low": _money(c.new_low), "new_high": _money(c.new_high),
+        "units": hits.get(c.id, []),
+    } for c in page]})
 
 
 # ── 按數量賣的商品 ──────────────────────────────────────────────────────────

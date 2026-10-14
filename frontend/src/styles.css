@@ -8076,6 +8076,12 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .tr-model { white-space: nowrap; }
 .tr-pct { width: 4.5rem; text-align: right; }
 .tr-page .report-grid tr.vo-picked td { background: rgba(120, 160, 255, 0.07); }
+/* 價目表:型號清單那一列上的每一格(當場改)、獨立定價的那幾列 */
+.tr-cells { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.tr-cell { display: inline-flex; align-items: center; gap: 6px; color: var(--text-dim); white-space: nowrap; }
+.tr-cell .tr-price { width: 6.5rem; }
+.tr-page .report-grid tr.tr-own td { background: rgba(255, 190, 80, 0.06); }
+.tr-own-tag { margin-right: 6px; font-size: var(--font-secondary); color: var(--warn-text); white-space: nowrap; }
 .tr-outside { justify-content: flex-start; background: var(--panel); border-bottom: 1px solid var(--border); }
 .tr-key {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 16px;
