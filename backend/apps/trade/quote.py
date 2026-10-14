@@ -132,13 +132,14 @@ body { margin:0; background:var(--bg); color:var(--text); font:17px/1.5 -apple-s
 header { padding:14px 16px; background:var(--card); border-bottom:1px solid var(--line); }
 h1 { margin:0 0 4px; font-size:21px; }
 .meta { color:var(--dim); font-size:15px; overflow-wrap:anywhere; }
-.bar { position:sticky; top:0; z-index:2; display:flex; flex-direction:column; gap:8px; padding:10px 16px; background:var(--bg); border-bottom:1px solid var(--line); }
+.bar { display:flex; flex-direction:column; gap:8px; padding:10px 16px; background:var(--bg); border-bottom:1px solid var(--line); }
 .bar input { min-height:44px; padding:0 12px; font:inherit; color:var(--text); background:var(--card); border:1px solid var(--line); border-radius:10px; min-width:0; }
 .row { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.row > button { min-width:44px; padding:0 8px; }
 .row .tag { color:var(--dim); font-size:15px; min-width:2.4em; }
 .price { display:flex; align-items:center; gap:6px; flex:1 1 14em; }
 .price input { flex:1 1 0; width:0; }
-button { min-height:40px; padding:0 14px; font:inherit; font-size:15px; color:var(--accent); background:var(--card); border:1px solid var(--accent); border-radius:999px; }
+button { min-height:40px; padding:0 12px; font:inherit; font-size:15px; color:var(--accent); background:var(--card); border:1px solid var(--accent); border-radius:999px; }
 button.on { background:var(--on); font-weight:700; }
 .sum { justify-content:space-between; color:var(--dim); font-size:15px; }
 main { padding:8px 16px 16px; }
@@ -150,8 +151,10 @@ section { margin:10px 0; background:var(--card); border:1px solid var(--line); b
 section.open .head .chev { transform:rotate(90deg); }
 .head .grades { flex:1 1 100%; color:var(--dim); font-size:15px; overflow-wrap:anywhere; }
 h2 { margin:0; padding:12px 14px 6px; font-size:18px; }
-.line { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; padding:10px 14px; border-top:1px solid var(--line); }
-.label { flex:1 1 12em; min-width:0; overflow-wrap:anywhere; }
+.line { display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:4px 10px; padding:10px 14px; border-top:1px solid var(--line); }
+.line .stock { grid-column:2; }
+.label { min-width:0; overflow-wrap:anywhere; }
+.code { display:block; }
 .code { color:var(--dim); font-size:14px; }
 .pr { font-weight:700; white-space:nowrap; }
 .stock { color:var(--dim); white-space:nowrap; }
