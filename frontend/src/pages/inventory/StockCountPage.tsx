@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { useStockCount, useStockCountDo } from "@/api/hooks";
@@ -8,6 +8,7 @@ import { Banner, errorMessageOf } from "@/components/Banner";
 import { ComboBox, type ComboOption } from "@/components/ComboBox";
 import { Toolbar } from "@/components/Toolbar";
 import { ArmButton } from "@/components/workbench/ArmButton";
+import { ScanBox, type ScanBoxApi, type ScanOption } from "@/components/workbench/ScanBox";
 import { isNegative } from "@/lib/fixedReports";
 import { money } from "@/lib/money";
 import {
@@ -21,7 +22,10 @@ import {
   newEditOf,
   newGroups,
   newResult,
+  pickProblem,
   progressText,
+  recordedQty,
+  sameCode,
   scopeText,
   signed,
   type LineEdit,
@@ -31,6 +35,7 @@ import {
 
 /**
  * 一張盤點單。盤點中:配件輸入數到的數量、手機逐台刷,送出。
+ * 配件那一格是工作台的掃碼框:條碼槍刷舊貼紙(舊品號 = 條碼)完全相同才直接選,選好游標跳到數量;刷了沒選到的記在「沒加入」,送出前要處理掉。
  * 待核准:管理員看差異(帳上、數到、差多少、金額),每一列可以改調整量或先不調,核准才動庫存。
  * 帳上數量、差異、金額只有管理員的回應裡有;盤的人的畫面沒有那幾欄(伺服器沒給)。
  * 系統不認得的碼(第一次盤點入庫):管理員照舊品名分組勾、指定品號,填成本(舊系統的先帶出來)才入庫;沒指定的不入。
@@ -40,7 +45,13 @@ export function StockCountPage() {
   const { data: detail, isLoading, isError, error } = useStockCount(id);
   const run = useStockCountDo(id);
   const [code, setCode] = useState("");
-  const [product, setProduct] = useState<{ id: number | ""; option: ComboOption<Product> | null }>({ id: "", option: null });
+  /** 配件那一格選到、還沒記下的商品。另外留一份當下的(`accessoryNow`):掃碼框排隊處理完、送出前要馬上讀,不能等畫面重畫(複審 P1) */
+  const [accessory, setAccessoryState] = useState<Product | null>(null);
+  const accessoryNow = useRef<Product | null>(null);
+  const setAccessory = (p: Product | null) => {
+    accessoryNow.current = p;
+    setAccessoryState(p);
+  };
   const [qty, setQty] = useState("");
   const [phonesDone, setPhonesDone] = useState(false);
   const [lineEdits, setLineEdits] = useState<Record<number, LineEdit | undefined>>({});
@@ -49,6 +60,15 @@ export function StockCountPage() {
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [assignTo, setAssignTo] = useState<{ id: number | ""; option: ComboOption<Product> | null }>({ id: "", option: null });
   const [note, setNote] = useState("");
+  const scanRef = useRef<HTMLInputElement>(null);
+  const qtyRef = useRef<HTMLInputElement>(null);
+  const scanApi = useRef<ScanBoxApi | null>(null);
+  // 選到配件:游標到數量、整格反白(這張單記過的話先放原本的數量,直接打就換掉)
+  useEffect(() => {
+    if (!accessory) return;
+    qtyRef.current?.focus();
+    qtyRef.current?.select();
+  }, [accessory]);
 
   if (isLoading) return <div className="page"><div className="md-empty">載入中…</div></div>;
   if (isError || !detail) return <div className="page"><Banner kind="error" message={errorMessageOf(error)} /></div>;
@@ -70,13 +90,49 @@ export function StockCountPage() {
   }
 
   async function saveLine() {
+    const item = accessoryNow.current;
+    if (!item) return;
     const n = countedQty(qty);
-    if (product.id === "" || n === null) return;
-    const done = await call("lines/", { product: product.id, counted_qty: n });
-    if (done) {
-      setProduct({ id: "", option: null });
-      setQty("");
+    if (n === null) {
+      // 沒打數量就刷了下一張貼紙:那一串字進了數量這一格,沒有刷進去
+      if (qty.trim()) {
+        setNote(`先打數量,「${qty.trim()}」要再刷一次`);
+        setQty("");
+      }
+      return;
     }
+    const done = await call("lines/", { product: item.id, counted_qty: n });
+    if (done) {
+      setAccessory(null);
+      setQty("");
+      scanRef.current?.focus();
+    }
+  }
+
+  async function searchAccessories(q: string): Promise<ScanOption<Product>[]> {
+    const found = await searchProducts(q, { activeOnly: true });
+    return found.flatMap((o) => (o.payload ? [{ key: o.id, code: o.payload.sku, label: o.label, payload: o.payload }] : []));
+  }
+
+  function pickAccessory(o: ScanOption<Product>): string | null {
+    const why = pickProblem(accessoryNow.current, o.payload);
+    if (why) return why;
+    setNote("");
+    setAccessory(o.payload);
+    setQty(detail ? recordedQty(detail.line_rows, o.payload.id) : "");
+    return null;
+  }
+
+  async function submit() {
+    // 等掃碼框排隊的碼處理完,再讀「現在」選著的(不是按下去那一刻畫面上的)
+    await scanApi.current?.idle();
+    const pending = accessoryNow.current;
+    const blocked = scanApi.current?.blocker() ?? (pending ? `「${pending.name}」還沒記下` : null);
+    if (blocked) {
+      setNote(blocked);
+      return;
+    }
+    await call("submit/", { phones_done: phonesDone });
   }
 
   async function approve() {
@@ -145,18 +201,36 @@ export function StockCountPage() {
             />
           </label>
           <label>
+            <input type="checkbox" checked={phonesDone} onChange={(e) => setPhonesDone(e.target.checked)} />
+            手機全部刷完
+          </label>
+        </div>
+      )}
+      {counting && (
+        <div className="list-filterbar sr-filter sc-scanrow">
+          <label className="sc-scan">
             配件
-            <ComboBox<Product>
-              value={product.id}
-              selectedOption={product.option}
-              onChange={(pid, opt) => setProduct({ id: pid, option: opt ?? null })}
-              fetchOptions={(q) => searchProducts(q, { activeOnly: true })}
+            <ScanBox<Product>
+              inputRef={scanRef}
+              apiRef={scanApi}
               placeholder="品名 / 條碼"
+              search={searchAccessories}
+              isExact={(o, q) => sameCode(o.payload, q)}
+              onPick={pickAccessory}
             />
           </label>
+          {accessory && (
+            <span className="sr-only-one">
+              {accessory.sku} {accessory.name}
+              <button type="button" aria-label="清掉" onClick={() => setAccessory(null)}>
+                ×
+              </button>
+            </span>
+          )}
           <label>
             數量
             <input
+              ref={qtyRef}
               type="text"
               inputMode="numeric"
               value={qty}
@@ -166,14 +240,12 @@ export function StockCountPage() {
               }}
             />
           </label>
-          <button className="btn" type="button" disabled={product.id === "" || countedQty(qty) === null || run.isPending} onClick={() => void saveLine()}>
+          <button className="btn" type="button" disabled={!accessory || countedQty(qty) === null || run.isPending} onClick={() => void saveLine()}>
             記下
           </button>
-          <label>
-            <input type="checkbox" checked={phonesDone} onChange={(e) => setPhonesDone(e.target.checked)} />
-            手機全部刷完
-          </label>
-          <ArmButton label="送出" className="btn primary" onConfirm={() => call("submit/", { phones_done: phonesDone })} />
+          <span className="sc-submit">
+            <ArmButton label="送出" className="btn primary" onConfirm={submit} />
+          </span>
         </div>
       )}
 

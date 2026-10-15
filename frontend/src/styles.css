@@ -7996,6 +7996,21 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 
 /* 盤點:管理員改調整量的那一格(窄一點,靠右) */
 .sc-adjust { width: 72px; text-align: right; }
+/* 盤點:配件那一排。配件那一格是工作台的掃碼框(外觀跟「手機」那一格一樣),「沒加入」在它底下往下長,
+   同一排的其他東西對齊第一行、不跟著往下掉;送出靠右 */
+.sc-scanrow { align-items: flex-start; }
+.list-filterbar label.sc-scan { align-items: flex-start; line-height: var(--control-height); }
+.sc-scan .wb-scan { flex: 0 1 360px; min-width: 200px; line-height: normal; white-space: normal; }
+.sr-filter .sc-scan .wb-scan-in > input {
+  width: 100%;
+  min-height: var(--control-height);
+  font-size: var(--font-body) !important;
+  padding: 0 10px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 6px !important;
+}
+.sc-scanrow > label:not(.sc-scan), .sc-scanrow > .sr-only-one { min-height: var(--control-height); }
+.sc-submit { margin-left: auto; }
 /* 第一次入庫:舊品名分組的那一列 */
 .sc-group td { font-weight: 600; color: var(--text-dim, inherit); }
 

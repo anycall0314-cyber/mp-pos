@@ -3,6 +3,7 @@
 //
 // owner 2026-10-12 定的三條:差異要管理員調整與核准(盤的人只記數到的,核准才動庫存)、帶序號的逐台刷、盤點中可以繼續開單。
 // 盲盤:帳上數量、差異、金額只有管理員的回應裡有(這裡拿不到就不會畫)。
+import { normalizeCode } from "./deviceCodes.ts";
 import { money } from "./money.ts";
 
 export type CountStatus = "counting" | "submitted" | "approved" | "void";
@@ -290,4 +291,40 @@ export function newResult(row: Pick<CountNew, "added" | "skipped">): string {
 export function countedQty(text: string): number | null {
   const t = text.trim();
   return /^\d{1,7}$/.test(t) ? Number(t) : null;
+}
+
+/**
+ * 配件那一格刷到 / 打完 Enter 的字,是不是這個商品的品號或條碼(完全相同)。
+ * 條碼槍打得比搜尋快:只有這種才直接選起來,其他的要人看著下拉挑(`ScanBox`)。舊貼紙印的是舊品號 = 商品的條碼。
+ */
+export function sameCode(p: { sku: string; barcode?: string | null }, text: string): boolean {
+  const key = normalizeCode(text);
+  return !!key && (normalizeCode(p.sku) === key || (!!p.barcode && normalizeCode(p.barcode) === key));
+}
+
+/** 這個商品可不可以在配件那一格打數量;不行回一句話(記在「沒加入」)。伺服器一樣會擋(`stockcount._countable`)。 */
+export function notCountable(p: { name: string; requires_serial: boolean; is_virtual: boolean }): string | null {
+  if (p.requires_serial) return `「${p.name}」是帶序號的,請在手機那一格刷`;
+  if (p.is_virtual) return `「${p.name}」沒有庫存,不用盤`;
+  return null;
+}
+
+/**
+ * 配件那一格又選到一個商品(刷的或挑的):可不可以換成它。不行回一句話 —— 那一個碼記在「沒加入」(複審 P1):
+ * 條碼槍連刷兩張、搜尋還沒回來時,第二張不能默默蓋掉還沒記下數量的第一張。同一個商品再選一次照收。
+ */
+export function pickProblem(
+  pending: { id: number; name: string } | null,
+  next: { id: number; name: string; requires_serial: boolean; is_virtual: boolean },
+): string | null {
+  const why = notCountable(next);
+  if (why) return why;
+  if (pending && pending.id !== next.id) return `「${pending.name}」還沒記下`;
+  return null;
+}
+
+/** 刷到的配件這張單已經記過:數量那一格先放原本記的(重新輸入 = 整個換掉,要讓人看見) */
+export function recordedQty(rows: Pick<CountLine, "product" | "counted_qty">[], productId: number): string {
+  const row = rows.find((r) => r.product.id === productId);
+  return row ? String(row.counted_qty) : "";
 }

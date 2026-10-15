@@ -5,7 +5,7 @@ import test from "node:test";
 
 import {
   amountCards, approveBody, assignProduct, countedQty, extraText, missingText, movedHint, newEditOf, newGroups, newResult,
-  oldStoresText, plainAmount, progressText, scopeText, signed,
+  notCountable, oldStoresText, pickProblem, plainAmount, progressText, recordedQty, sameCode, scopeText, signed,
 } from "./stockCount.ts";
 
 const line = { id: 5, product: { id: 9, sku: "LC-0001", name: "皮套" }, counted_qty: 8, counted_at: "", moved_out: 0, moved_in: 0 };
@@ -125,6 +125,52 @@ test("還沒入庫那一行:各家舊店幾台", () => {
 test("數量那一格:0 以上的整數才算", () => {
   assert.deepEqual([countedQty("8"), countedQty(" 0 "), countedQty("12")], [8, 0, 12]);
   for (const bad of ["", "-1", "1.5", "abc", "12345678"]) assert.equal(countedQty(bad), null, bad);
+});
+
+test("配件那一格:舊貼紙(舊品號 = 條碼)或品號完全相同才算;只是像的不算", () => {
+  const p = { sku: "LC-000123", barcode: "T12SAMNOTE502" };
+  for (const ok of ["T12SAMNOTE502", "t12samnote502", " T12SAMNOTE502 ", "LC-000123", "lc000123"]) assert.equal(sameCode(p, ok), true, ok);
+  for (const bad of ["T12SAMNOTE50", "T12SAMNOTE5021", "SAMNOTE502", "LC-00012", "000123", "", "  "]) assert.equal(sameCode(p, bad), false, bad);
+  assert.equal(sameCode({ sku: "LC-1", barcode: "" }, ""), false, "沒有條碼的商品不能被空字串對到");
+  assert.equal(sameCode({ sku: "", barcode: null }, " "), false, "空白不算對到任何商品");
+  assert.equal(sameCode({ sku: "LC-1", barcode: null }, "LC1"), true);
+});
+
+test("配件那一格:帶序號的、虛擬的不能打數量(講要去哪一格)", () => {
+  assert.equal(notCountable({ name: "皮套", requires_serial: false, is_virtual: false }), null);
+  assert.equal(notCountable({ name: "iPhone 17", requires_serial: true, is_virtual: false }), "「iPhone 17」是帶序號的,請在手機那一格刷");
+  assert.equal(notCountable({ name: "門號", requires_serial: false, is_virtual: true }), "「門號」沒有庫存,不用盤");
+});
+
+test("配件那一格:還沒記下的那一個不能被下一個蓋掉(連刷兩張,第二張記在沒加入);同一個再選照收", () => {
+  const case1 = { id: 9, name: "皮套", requires_serial: false, is_virtual: false };
+  const case2 = { id: 10, name: "背蓋", requires_serial: false, is_virtual: false };
+  assert.equal(pickProblem(null, case1), null);
+  assert.equal(pickProblem(case1, case1), null);
+  assert.equal(pickProblem(case1, case2), "「皮套」還沒記下");
+  assert.equal(pickProblem(null, { ...case2, requires_serial: true }), "「背蓋」是帶序號的,請在手機那一格刷");
+  assert.equal(pickProblem(case1, { ...case1, is_virtual: true }), "「皮套」沒有庫存,不用盤");
+});
+
+test("配件那一格:這張單記過的,數量先放原本記的;沒記過是空的", () => {
+  const rows = [line, { ...line, id: 6, product: { id: 10, sku: "LC-0002", name: "皮套2" }, counted_qty: 0 }];
+  assert.equal(recordedQty(rows, 9), "8");
+  assert.equal(recordedQty(rows, 10), "0");
+  assert.equal(recordedQty(rows, 11), "");
+  assert.equal(recordedQty([], 9), "");
+});
+
+test("頁面:配件那一格用掃碼框(完全相同才自動選)、選好跳到數量、送出前要沒有沒加入的碼", () => {
+  const page = readFileSync(new URL("../pages/inventory/StockCountPage.tsx", import.meta.url), "utf8");
+  assert.match(page, /<ScanBox<Product>[\s\S]*isExact=\{\(o, q\) => sameCode\(o\.payload, q\)\}[\s\S]*onPick=\{pickAccessory\}/);
+  assert.ok(!/fetchOptions=\{\(q\) => searchProducts\(q, \{ activeOnly: true \}\)\}/.test(page), "配件那一格不能再用一般的下拉(條碼槍會選到清單第一個)");
+  assert.ok(page.includes("qtyRef.current?.focus()"), "選好配件游標要到數量");
+  assert.ok(page.includes("scanApi.current?.blocker()"), "送出前要問掃碼框有沒有沒加入的碼");
+  // 送出:等掃碼框排隊的處理完,再讀「現在」選著的(不是按下去那一刻畫面上的)
+  assert.match(page, /await scanApi\.current\?\.idle\(\);[\s\S]{0,120}const pending = accessoryNow\.current;/);
+  assert.ok(page.includes("pickProblem(accessoryNow.current, o.payload)"), "選下一個之前要看還沒記下的那一個");
+  assert.ok(page.includes("const item = accessoryNow.current;"), "記下用當下選著的那一個");
+  assert.match(page, /<ArmButton label="送出" className="btn primary" onConfirm=\{submit\} \/>/);
 });
 
 test("頁面:帳上數量只照伺服器給的畫(沒給就沒有那幾欄)、核准要按兩下、要有這一項權限才進得來", () => {
