@@ -17,7 +17,7 @@ import {
 } from "@/lib/listAll";
 import { invoiceQuery, type InvoiceFilter, type InvoiceListing } from "@/lib/invoiceList";
 import { repairQuery, type RepairFilter, type RepairListing } from "@/lib/repairReport";
-import type { CountDetail, CountSummary, OldUnitsLeft } from "@/lib/stockCount";
+import { phonesLive, type CountDetail, type CountSummary, type OldUnitsLeft } from "@/lib/stockCount";
 import { purchaseLineQuery, type PurchaseLine, type PurchaseLineFilter } from "@/lib/purchaseLines";
 import { dailyQuery, type DailyFilter, type DailyReport } from "@/lib/salesDaily";
 import {
@@ -3110,6 +3110,8 @@ export const useStockCount = (id: number) =>
     enabled: id > 0,
     retry: false,
     gcTime: 0,
+    // 有手機在走動盤點(等掃 / 連著):每 4 秒重抓,手機刷進來的數量電腦上看得到
+    refetchInterval: (query) => (phonesLive(query.state.data) ? 4000 : false),
   });
 
 export function useOpenStockCount() {

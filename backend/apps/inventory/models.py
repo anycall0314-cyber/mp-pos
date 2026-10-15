@@ -433,6 +433,9 @@ class StockCountLine(TenantOwnedModel):
     counted_at = models.DateTimeField("輸入時間")
     counted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+", null=True, blank=True, verbose_name="盤的人")
+    # 電腦最後一次「打數到幾個、整格換掉」的時間(手機的 +1 不算):手機要收回 / 改「這一堆幾個」時,
+    # 那一下之後電腦整格換過就不動(換掉的數已經包含或不包含那一下,減了會錯);只有別的手機也在加不擋(加減不會互相蓋掉)
+    replaced_at = models.DateTimeField("電腦整格換掉的時間", null=True, blank=True)
     # 核准時定下來的:實際調了多少(可以跟「數到的 − 當時帳上的」不一樣)、這一列先不調、原因、當下的平均成本
     adjust_qty = models.IntegerField("調整的數量", null=True, blank=True)
     skipped = models.BooleanField("先不調", default=False)
@@ -502,3 +505,99 @@ class StockCountMissing(TenantOwnedModel):
         constraints = [models.UniqueConstraint(fields=["count", "serial"], name="uniq_stockcountmissing_serial")]
         verbose_name = "盤虧序號"
         verbose_name_plural = "盤虧序號"
+
+
+class StockCountPhone(TenantOwnedModel):
+    """手機走動盤點的一次配對(owner 2026-10-15「盤點要有手機可以配對掃，方便走動盤點」):電腦的盤點單按「手機盤點」產生 QR Code,
+    一個 QR Code 綁第一支掃到的手機;手機不登入,只認 QR Code 的憑證(跟商品照片同一套,`photos.services`)。
+    憑證只能對**這一張盤點單**刷碼。`label` = 發 QR Code 時寫的稱呼(紅隊:出事問得到人)。
+    不進公司備份(配對是當下的狀態);還原時先清掉(`backup.registry.CLEARED_ON_RESTORE`)。規則在 `stockcount_phone.py`。
+    """
+
+    count = models.ForeignKey(StockCount, on_delete=models.CASCADE, related_name="phones", verbose_name="盤點單")
+    label = models.CharField("稱呼", max_length=20)
+    pair_hash = models.CharField("配對憑證雜湊", max_length=64, db_index=True)
+    pair_expires_at = models.DateTimeField("QR Code 有效到")
+    device_hash = models.CharField("手機識別雜湊", max_length=64, blank=True)
+    paired_at = models.DateTimeField("手機連上時間", null=True, blank=True)
+    device_active_at = models.DateTimeField("手機最後動作時間", null=True, blank=True)
+    ended_at = models.DateTimeField("結束時間", null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, related_name="+", null=True, blank=True, verbose_name="發 QR Code 的人")
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "盤點手機"
+        verbose_name_plural = "盤點手機"
+
+
+class StockCountUnknown(TenantOwnedModel):
+    """手機在「配件」模式刷到、系統不認得的碼(紅隊:對不上的不能跳個原因就消失)。同一個碼刷幾次記幾次;
+    電腦上指定成某個配件(刷了幾次就加幾個)或「不入」(要寫原因)。**還有沒處理的不能送出。**"""
+
+    count = models.ForeignKey(StockCount, on_delete=models.CASCADE, related_name="unknowns", verbose_name="盤點單")
+    code = models.CharField("刷到的碼", max_length=80)
+    code_key = models.CharField("比對鍵", max_length=80)
+    times = models.PositiveIntegerField("刷了幾次", default=0)
+    last_label = models.CharField("最後刷的人", max_length=20, blank=True)
+    product = models.ForeignKey(
+        "catalog.Product", on_delete=models.PROTECT, related_name="+", null=True, blank=True, verbose_name="指定的配件")
+    skipped = models.BooleanField("不入", default=False)
+    reason = models.CharField("原因", max_length=100, blank=True)
+    resolved_at = models.DateTimeField("處理時間", null=True, blank=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+", null=True, blank=True, verbose_name="處理的人")
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [models.UniqueConstraint(fields=["count", "code_key"], name="uniq_stockcountunknown_code")]
+        verbose_name = "盤點沒對到的碼"
+        verbose_name_plural = "盤點沒對到的碼"
+
+
+class StockCountTap(TenantOwnedModel):
+    """手機刷的每一下:誰(稱呼)、什麼時候、刷了什麼、那一列從幾個變幾個(紅隊:出事問得到人;「收回這一下」照這一筆倒回去)。
+    記配對的編號不記外鍵:配對不進公司備份,這一筆要。"""
+
+    class Kind(models.TextChoices):
+        LINE = "line", "配件"
+        SCAN = "scan", "手機"
+        UNKNOWN = "unknown", "沒對到"
+
+    count = models.ForeignKey(StockCount, on_delete=models.CASCADE, related_name="taps", verbose_name="盤點單")
+    phone_ref = models.PositiveIntegerField("配對編號", null=True, blank=True)
+    label = models.CharField("稱呼", max_length=20)
+    kind = models.CharField("刷到的是", max_length=10, choices=Kind.choices)
+    code = models.CharField("刷到的碼", max_length=80)
+    product = models.ForeignKey(
+        "catalog.Product", on_delete=models.PROTECT, related_name="+", null=True, blank=True, verbose_name="配件")
+    scan = models.ForeignKey(
+        StockCountScan, on_delete=models.SET_NULL, related_name="+", null=True, blank=True, verbose_name="刷到的機器")
+    unknown = models.ForeignKey(
+        StockCountUnknown, on_delete=models.SET_NULL, related_name="+", null=True, blank=True, verbose_name="沒對到的碼")
+    # 配件:加在哪一列(明細的編號;複審 P0:那一列被移除、重建過,舊的這一下就不能拿來收回新的那一列)
+    line_ref = models.PositiveIntegerField("明細編號", null=True, blank=True)
+    # 配件:那一列改之前 / 改之後數到幾個(改之前 null = 原本沒有這一列);沒對到的碼:次數
+    before = models.PositiveIntegerField("改之前", null=True, blank=True)
+    after = models.PositiveIntegerField("改之後", null=True, blank=True)
+    undone = models.BooleanField("收回了", default=False)
+
+    class Meta:
+        ordering = ["id"]
+        indexes = [models.Index(fields=["count", "phone_ref"])]
+        verbose_name = "盤點手機刷的紀錄"
+        verbose_name_plural = "盤點手機刷的紀錄"
+
+
+class StockCountOp(TenantOwnedModel):
+    """手機每一個動作(刷、這一堆幾個、收回)帶的編號,做過就記下來(複審 P0:回應在路上斷線,手機用同一個編號重送,不能再做一次)。
+    只是防重複用的,不進公司備份、還原時清掉。"""
+
+    count = models.ForeignKey(StockCount, on_delete=models.CASCADE, related_name="+", verbose_name="盤點單")
+    phone_ref = models.PositiveIntegerField("配對編號")
+    op = models.CharField("動作編號", max_length=40)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["count", "phone_ref", "op"], name="uniq_stockcountop")]
+        verbose_name = "盤點手機動作編號"
+        verbose_name_plural = "盤點手機動作編號"

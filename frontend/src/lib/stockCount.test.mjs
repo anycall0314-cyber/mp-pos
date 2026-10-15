@@ -5,7 +5,8 @@ import test from "node:test";
 
 import {
   amountCards, approveBody, assignProduct, countedQty, extraText, missingText, movedHint, newEditOf, newGroups, newResult,
-  notCountable, oldStoresText, pickProblem, plainAmount, progressText, recordedQty, sameCode, scopeText, signed,
+  notCountable, oldStoresText, phoneCountUrl, phonesLive, phoneStatusText, pickProblem, plainAmount, progressText, recordedQty, sameCode,
+  scopeText, signed, unknownLeft,
 } from "./stockCount.ts";
 
 const line = { id: 5, product: { id: 9, sku: "LC-0001", name: "皮套" }, counted_qty: 8, counted_at: "", moved_out: 0, moved_in: 0 };
@@ -187,4 +188,28 @@ test("頁面:帳上數量只照伺服器給的畫(沒給就沒有那幾欄)、�
   const hooks = readFileSync(new URL("../api/hooks.ts", import.meta.url), "utf8");
   assert.ok(hooks.includes('api<{ results: CountSummary[] }>("/stock-counts/")'));
   assert.ok(hooks.includes("`/stock-counts/${id}/${path}`"));
+});
+
+test("手機走動盤點:有手機在等掃或連著才一直重抓;狀態寫成字;網址的憑證在 # 後面;沒處理的沒對到的碼", () => {
+  const phones = (...st) => st.map((status, i) => ({ id: i, label: "x", status }));
+  assert.equal(phonesLive({ status: "counting", phones: phones("waiting") }), true);
+  assert.equal(phonesLive({ status: "counting", phones: phones("connected", "ended") }), true);
+  assert.equal(phonesLive({ status: "counting", phones: phones("expired", "idle", "ended") }), false);
+  assert.equal(phonesLive({ status: "submitted", phones: phones("connected") }), false, "送出之後不用再抓");
+  assert.equal(phonesLive(undefined), false);
+  assert.deepEqual(["waiting", "expired", "connected", "idle", "ended"].map(phoneStatusText), ["等掃", "過期", "連著", "閒置", "結束"]);
+  assert.equal(phoneCountUrl("https://pos-test.example", "abc_123"), "https://pos-test.example/m/count#abc_123");
+  assert.equal(unknownLeft([{ resolved: false }, { resolved: true }, { resolved: false }]), 2);
+  assert.equal(unknownLeft(undefined), 0);
+});
+
+test("頁面:存數量帶選到那一刻看到的數字;沒存成照最新的重新帶;手機盤點與沒對到的碼的入口", () => {
+  const page = readFileSync(new URL("../pages/inventory/StockCountPage.tsx", import.meta.url), "utf8");
+  assert.ok(page.includes('call("lines/", { product: item.id, counted_qty: n, seen: seenQty.current })'));
+  assert.match(page, /seenQty\.current = detail\?\.line_rows\.find\(\(r\) => r\.product\.id === o\.payload\.id\)\?\.counted_qty \?\? null;/);
+  assert.ok(page.includes("const fresh = (await refetch()).data;"), "沒存成要照最新的數字重新帶");
+  assert.ok(page.includes('call("phones/", { label })'));
+  assert.ok(page.includes("call(`unknowns/${row.id}/`, skip ? { skip: true, reason } : { product: product!.id })"));
+  const hooks = readFileSync(new URL("../api/hooks.ts", import.meta.url), "utf8");
+  assert.ok(hooks.includes("refetchInterval: (query) => (phonesLive(query.state.data) ? 4000 : false)"));
 });

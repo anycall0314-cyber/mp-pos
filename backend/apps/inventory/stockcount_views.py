@@ -9,10 +9,15 @@
 from decimal import Decimal
 
 from django.db.models import Count
+from django.http import Http404
 from django.shortcuts import get_object_or_404
-from rest_framework.decorators import api_view
-from rest_framework.exceptions import PermissionDenied
+from django.views.decorators.cache import never_cache
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.exceptions import ParseError, PermissionDenied, UnsupportedMediaType
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+
+from apps.backup.models import TenantMaintenance
 
 from apps.catalog.models import Product
 from apps.core.warehouse_scoping import locked_warehouse_id
@@ -21,8 +26,8 @@ from apps.legacy.units import group_of
 from apps.tenants import abilities
 from apps.tenants.permissions import is_tenant_admin
 
-from . import stockcount
-from .models import ProductSerial, StockBalance, StockCount, Warehouse
+from . import stockcount, stockcount_phone
+from .models import ProductSerial, StockBalance, StockCount, StockCountPhone, Warehouse
 
 S = StockCount.Status
 _CENT = Decimal("0.01")
@@ -118,6 +123,15 @@ def _detail(count, user):
             total += Decimal(cost) * qty
         rows.append(row)
     out["line_rows"] = rows
+    # 手機走動盤點:發出去的 QR Code 與手機(還沒結束的),以及手機刷到、系統不認得的碼(要處理好才能送出)
+    now = stockcount_phone.timezone.now()
+    out["phones"] = [{"id": ph.id, "label": ph.label, "status": stockcount_phone.status_of(ph, now)}
+                     for ph in count.phones.filter(ended_at__isnull=True).select_related("count")]
+    out["unknown_rows"] = [{
+        "id": u.id, "code": u.code, "times": u.times, "label": u.last_label,
+        "product": {"id": u.product_id, "sku": u.product.sku, "name": u.product.name} if u.product_id else None,
+        "skipped": u.skipped, "reason": u.reason, "resolved": u.resolved_at is not None,
+    } for u in count.unknowns.select_related("product").order_by("id")]
     states = dict(ProductSerial.Status.choices)
     out["scan_rows"] = [{
         "id": s.id, "code": s.code, "known": s.serial_id is not None,
@@ -207,11 +221,117 @@ def stock_count_lines(request, pk):
     product = Product.objects.filter(tenant=request.tenant, pk=data.get("product")).first() if str(data.get("product") or "").isdigit() else None
     if product is None:
         return _bad("找不到這個商品")
+    # 畫面輸入前看到的數字(手機在加的時候,電腦按下去不能默默蓋掉手機剛加的);沒帶 = 不核對
+    seen = data["seen"] if "seen" in data else stockcount.NOT_SEEN
+    if seen is not stockcount.NOT_SEEN and seen is not None and (not isinstance(seen, int) or isinstance(seen, bool)):
+        return _bad("送來的內容格式不對")
     try:
-        stockcount.set_line(count, product, data.get("counted_qty"), request.user)
+        stockcount.set_line(count, product, data.get("counted_qty"), request.user, seen=seen)
     except stockcount.CountError as exc:
         return _bad(exc)
     return Response(_detail(count, request.user))
+
+
+@api_view(["POST"])
+def stock_count_phones(request, pk):
+    """手機盤點:產生一張 QR Code {label}。回憑證(只在這一刻看得到)與這張單的內容。"""
+    abilities.require(request.user, abilities.STOCK_COUNT)
+    count = _get(request, pk)
+    data = request.data if isinstance(request.data, dict) else {}
+    try:
+        phone, token = stockcount_phone.start(count, request.user, data.get("label"))
+    except stockcount_phone.PhoneError as exc:
+        return _bad(exc)
+    out = _detail(count, request.user)
+    out["pair"] = {"id": phone.id, "label": phone.label, "token": token, "expires_at": phone.pair_expires_at}
+    return Response(out, status=201)
+
+
+@api_view(["DELETE"])
+def stock_count_phone(request, pk, phone_id):
+    """電腦按「結束」:那支手機不能再刷。"""
+    abilities.require(request.user, abilities.STOCK_COUNT)
+    count = _get(request, pk)
+    stockcount_phone.end(count, phone_id)
+    return Response(_detail(count, request.user))
+
+
+@api_view(["POST"])
+def stock_count_unknown(request, pk, unknown_id):
+    """處理一個沒對到的碼:{product} 指定成這個配件(刷了幾次就加幾個),或 {skip: true, reason} 不入。"""
+    abilities.require(request.user, abilities.STOCK_COUNT)
+    count = _get(request, pk)
+    data = request.data if isinstance(request.data, dict) else {}
+    product = None
+    if data.get("skip") is not True:
+        product = Product.objects.filter(tenant=request.tenant, pk=data.get("product")).first() if str(data.get("product") or "").isdigit() else None
+        if product is None:
+            return _bad("找不到這個商品")
+    try:
+        stockcount.resolve_unknown(count, unknown_id, request.user, product=product, reason=data.get("reason") or "")
+    except stockcount.CountError as exc:
+        return _bad(exc)
+    return Response(_detail(count, request.user))
+
+
+# ── 手機:只認 QR Code 的憑證(不登入)───────────────────────
+def _refuse(exc):
+    code = getattr(exc, "code", "refused")
+    return Response({"detail": str(exc), "code": code}, status=410 if code in ("gone", "expired", "taken") else 400)
+
+
+def _target(data):
+    """手機按「收回 / 這一堆幾個」時看到的最後一下(編號);不是整數就當沒帶。"""
+    t = data.get("target")
+    return t if isinstance(t, int) and not isinstance(t, bool) else None
+
+
+def _phone_session(request, claim=False):
+    phone = stockcount_phone.session(request.headers.get("X-Pair-Token", ""), request.headers.get("X-Pair-Device", ""), claim=claim)
+    # 公司資料還原中:手機這條路也要擋(它不經過登入那一層的維護鎖)
+    if TenantMaintenance.objects.filter(tenant_id=phone.tenant_id, active=True).exists():
+        raise stockcount_phone.PhoneError("公司資料還原中,暫時不能刷,請稍後再試")
+    return phone
+
+
+@never_cache
+@api_view(["GET", "POST"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def count_phone(request, action):
+    """claim 掃碼連上 / state 看最近刷了什麼 / tap 刷一個碼 {code, mode} / pile 這一堆幾個 {n} / undo 收回這一下 / finish 結束。"""
+    device = request.headers.get("X-Pair-Device", "")
+    try:
+        data = request.data if isinstance(request.data, dict) else {}
+    except (ParseError, UnsupportedMediaType):
+        data = {}                        # 手機送來的「連上 / 收回 / 結束」本來就沒有內容
+    try:
+        if action == "claim" and request.method == "POST":
+            phone = _phone_session(request, claim=True)
+        elif action == "state" and request.method == "GET":
+            phone = _phone_session(request)
+        elif action == "tap" and request.method == "POST":
+            phone = _phone_session(request)
+            stockcount_phone.tap(phone, device, data.get("code"), str(data.get("mode") or ""), data.get("op"))
+        elif action == "pile" and request.method == "POST":
+            phone = _phone_session(request)
+            stockcount_phone.pile(phone, device, data.get("n"), data.get("op"), _target(data))
+        elif action == "undo" and request.method == "POST":
+            phone = _phone_session(request)
+            stockcount_phone.undo(phone, device, data.get("op"), _target(data))
+        elif action == "finish" and request.method == "POST":
+            phone = _phone_session(request)
+            stockcount_phone.finish(phone, device)
+            return Response({"detail": "已結束"})
+        else:
+            raise Http404
+        phone = StockCountPhone.objects.select_related("count", "count__warehouse").get(pk=phone.pk)
+        # 做事的這段時間電腦按了結束、單子送出了:這張單的內容不回給它
+        if phone.ended_at or phone.count.status != S.COUNTING:
+            raise stockcount_phone.PhoneError("這支手機的盤點已經結束", "gone")
+        return Response(stockcount_phone.phone_view(phone))
+    except stockcount_phone.PhoneError as exc:
+        return _refuse(exc)
 
 
 @api_view(["DELETE"])

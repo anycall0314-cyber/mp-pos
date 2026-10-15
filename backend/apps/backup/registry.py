@@ -52,6 +52,8 @@ REGISTRY: dict[str, Entry] = {
         # 盤點單(2026-10-12):盤到的數量、刷到的碼、核准時的決定都是紀錄,要跟著庫存異動一起備份
         "inventory.StockCount", "inventory.StockCountCategory", "inventory.StockCountLine",
         "inventory.StockCountScan", "inventory.StockCountMissing",
+        # 手機走動盤點(2026-10-15):沒對到的碼、手機刷的每一下(誰、什麼時候、從幾個變幾個)也是紀錄
+        "inventory.StockCountUnknown", "inventory.StockCountTap",
         # 單據
         "purchasing.PurchaseOrderCategory", "purchasing.PurchaseOrder",
         "purchasing.PurchaseOrderItem",
@@ -121,6 +123,8 @@ REGISTRY: dict[str, Entry] = {
     "vendor_orders.VendorCategory": Entry(EXCLUDED, "平台的叫貨類別,不屬於任何公司"),
     "vendor_orders.Vendor": Entry(EXCLUDED, "平台的廠商名單,不屬於任何公司;公司的資料只記廠商代碼"),
     "vendor_orders.VendorItem": Entry(EXCLUDED, "平台幫半自動廠商建的價目表,不屬於任何公司;公司的資料只記料號"),
+    "inventory.StockCountPhone": Entry(EXCLUDED, "盤點手機的配對(QR Code 憑證)是當下的狀態,不跟著備份;還原時清掉"),
+    "inventory.StockCountOp": Entry(EXCLUDED, "盤點手機動作的編號只用來擋重送,不跟著備份;還原時清掉"),
     "catalog.DeviceModel": Entry(EXCLUDED, "平台型號庫,不屬於任何公司;公司的機型只記型號庫編號(PhoneModel.device_uid)"),
     "catalog.DeviceCatalogRun": Entry(EXCLUDED, "平台型號庫的匯入紀錄,不屬於任何公司"),
     "catalog.DeviceCatalogChange": Entry(EXCLUDED, "平台型號庫的變動紀錄,不屬於任何公司"),
@@ -141,6 +145,8 @@ CLEARED_ON_RESTORE: dict[str, list[str]] = {
     "photos.PhotoUpload": ["image", "thumb"],
     "photos.PhotoDraft": [],
     "vendor_orders.VendorSecret": [],
+    "inventory.StockCountPhone": [],
+    "inventory.StockCountOp": [],
     "trade.TradeKey": [],
     "trade.TradeQuoteLink": [],
 }

@@ -4,9 +4,13 @@ from rest_framework.routers import DefaultRouter
 from .label_views import label_data
 from .report_views import serial_report, stock_flow_report, stock_movement_report
 from .stockcount_views import (
+    count_phone,
     stock_count,
     stock_count_action,
     stock_count_found,
+    stock_count_phone,
+    stock_count_phones,
+    stock_count_unknown,
     stock_count_line,
     stock_count_lines,
     stock_count_old_units,
@@ -56,5 +60,9 @@ urlpatterns = router.urls + [
     path("stock-counts/<int:pk>/scans/", stock_count_scans),
     path("stock-counts/<int:pk>/scans/<int:scan_id>/", stock_count_scan),
     path("stock-counts/<int:pk>/missing/<int:missing_id>/found/", stock_count_found),
+    path("stock-counts/<int:pk>/phones/", stock_count_phones),
+    path("stock-counts/<int:pk>/phones/<int:phone_id>/", stock_count_phone),
+    path("stock-counts/<int:pk>/unknowns/<int:unknown_id>/", stock_count_unknown),
+    path("count-phone/<str:action>/", count_phone),
     path("stock-counts/<int:pk>/<str:action>/", stock_count_action),
 ]

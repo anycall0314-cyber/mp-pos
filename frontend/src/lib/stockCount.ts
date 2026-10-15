@@ -94,12 +94,35 @@ export interface CountNew {
   added: boolean;
 }
 
+/** 手機走動盤點的一支手機:waiting 等手機掃 / expired QR 過期 / connected 連著 / idle 太久沒刷 / ended 結束了 */
+export interface CountPhone {
+  id: number;
+  label: string;
+  status: "waiting" | "expired" | "connected" | "idle" | "ended";
+}
+
+/** 手機在「配件」模式刷到、系統不認得的碼:要指定配件或寫原因不入,才能送出 */
+export interface CountUnknown {
+  id: number;
+  code: string;
+  times: number;
+  label: string;
+  product: { id: number; sku: string; name: string } | null;
+  skipped: boolean;
+  reason: string;
+  resolved: boolean;
+}
+
 export interface CountDetail extends CountSummary {
   manager: boolean;
   /** 帳上有數量、還沒輸入的配件有幾樣(只有數字) */
   left: number;
   line_rows: CountLine[];
   scan_rows: CountScan[];
+  phones?: CountPhone[];
+  unknown_rows?: CountUnknown[];
+  /** 剛按「手機盤點」那一次回來才有:QR Code 的憑證(只在這一刻看得到) */
+  pair?: { id: number; label: string; token: string; expires_at: string };
   missing_rows?: CountMissing[];
   extra_rows?: CountExtra[];
   new_rows?: CountNew[];
@@ -327,4 +350,25 @@ export function pickProblem(
 export function recordedQty(rows: Pick<CountLine, "product" | "counted_qty">[], productId: number): string {
   const row = rows.find((r) => r.product.id === productId);
   return row ? String(row.counted_qty) : "";
+}
+
+
+/** 有沒有手機在走動盤點(等掃 / 連著):有的話盤點單要一直重抓,手機刷進來的數量才看得到。 */
+export function phonesLive(detail: Pick<CountDetail, "phones" | "status"> | undefined): boolean {
+  return !!detail && detail.status === "counting" && (detail.phones ?? []).some((p) => p.status === "waiting" || p.status === "connected");
+}
+
+/** 一支手機的狀態寫成字。 */
+export function phoneStatusText(status: CountPhone["status"]): string {
+  return { waiting: "等掃", expired: "過期", connected: "連著", idle: "閒置", ended: "結束" }[status];
+}
+
+/** 手機掃的網址:憑證放在 # 後面(不會進伺服器的紀錄,也不會被帶到別的網站)。 */
+export function phoneCountUrl(origin: string, token: string): string {
+  return `${origin}/m/count#${token}`;
+}
+
+/** 還沒處理的沒對到的碼有幾個(有的話不能送出)。 */
+export function unknownLeft(rows: Pick<CountUnknown, "resolved">[] | undefined): number {
+  return (rows ?? []).filter((r) => !r.resolved).length;
 }

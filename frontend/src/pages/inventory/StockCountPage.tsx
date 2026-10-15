@@ -10,6 +10,7 @@ import { Toolbar } from "@/components/Toolbar";
 import { ArmButton } from "@/components/workbench/ArmButton";
 import { ScanBox, type ScanBoxApi, type ScanOption } from "@/components/workbench/ScanBox";
 import { isNegative } from "@/lib/fixedReports";
+import { qrMatrix, qrPath } from "@/lib/qr";
 import { money } from "@/lib/money";
 import {
   amountCards,
@@ -22,27 +23,44 @@ import {
   newEditOf,
   newGroups,
   newResult,
+  phoneCountUrl,
+  phoneStatusText,
   pickProblem,
   progressText,
   recordedQty,
   sameCode,
   scopeText,
   signed,
+  type CountUnknown,
   type LineEdit,
   type MissingEdit,
   type NewEdit,
 } from "@/lib/stockCount";
 
+/** 手機盤點的 QR Code(手機相機一掃就開 /m/count#憑證) */
+function PairQr({ text }: { text: string }) {
+  const m = qrMatrix(text);
+  return (
+    <svg className="ph-qr" viewBox={`0 0 ${m.length} ${m.length}`} role="img" aria-label="手機盤點 QR Code" shapeRendering="crispEdges">
+      <rect width={m.length} height={m.length} fill="#fff" />
+      <path d={qrPath(m)} fill="#000" />
+    </svg>
+  );
+}
+
 /**
  * 一張盤點單。盤點中:配件輸入數到的數量、手機逐台刷,送出。
  * 配件那一格是工作台的掃碼框:條碼槍刷舊貼紙(舊品號 = 條碼)完全相同才直接選,選好游標跳到數量;刷了沒選到的記在「沒加入」,送出前要處理掉。
+ * 手機走動盤點(2026-10-15):「手機盤點」寫稱呼、產生 QR Code(一支手機一個);手機刷進來的數量每 4 秒重抓。
+ * 打「數到幾個」存的時候一起送選到那一刻看到的數字,手機在那之後又加過就擋下來、照最新的重新帶(紅隊:不能默默蓋掉手機加的)。
+ * 手機刷到、系統不認得的碼列在「沒對到的碼」:指定配件(刷了幾次就加幾個)或寫原因不入,處理好才能送出。
  * 待核准:管理員看差異(帳上、數到、差多少、金額),每一列可以改調整量或先不調,核准才動庫存。
  * 帳上數量、差異、金額只有管理員的回應裡有;盤的人的畫面沒有那幾欄(伺服器沒給)。
  * 系統不認得的碼(第一次盤點入庫):管理員照舊品名分組勾、指定品號,填成本(舊系統的先帶出來)才入庫;沒指定的不入。
  */
 export function StockCountPage() {
   const id = Number(useParams().id);
-  const { data: detail, isLoading, isError, error } = useStockCount(id);
+  const { data: detail, isLoading, isError, error, refetch } = useStockCount(id);
   const run = useStockCountDo(id);
   const [code, setCode] = useState("");
   /** 配件那一格選到、還沒記下的商品。另外留一份當下的(`accessoryNow`):掃碼框排隊處理完、送出前要馬上讀,不能等畫面重畫(複審 P1) */
@@ -53,7 +71,16 @@ export function StockCountPage() {
     setAccessoryState(p);
   };
   const [qty, setQty] = useState("");
+  /** 選到配件那一刻,這張單上它數到幾個(null = 還沒有這一列):存的時候一起送,手機在那之後又加過就擋下來(紅隊) */
+  const seenQty = useRef<number | null>(null);
   const [phonesDone, setPhonesDone] = useState(false);
+  // 手機走動盤點:發 QR Code 的那一塊
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  const [phoneLabel, setPhoneLabel] = useState("");
+  const [pair, setPair] = useState<{ id: number; label: string; token: string } | null>(null);
+  // 沒對到的碼:每一筆要指定的配件、不入的原因
+  const [unknownPick, setUnknownPick] = useState<Record<number, ComboOption<Product> | undefined>>({});
+  const [unknownReason, setUnknownReason] = useState<Record<number, string>>({});
   const [lineEdits, setLineEdits] = useState<Record<number, LineEdit | undefined>>({});
   const [missingEdits, setMissingEdits] = useState<Record<number, MissingEdit | undefined>>({});
   const [newEdits, setNewEdits] = useState<Record<number, NewEdit | undefined>>({});
@@ -101,12 +128,43 @@ export function StockCountPage() {
       }
       return;
     }
-    const done = await call("lines/", { product: item.id, counted_qty: n });
+    const done = await call("lines/", { product: item.id, counted_qty: n, seen: seenQty.current });
     if (done) {
       setAccessory(null);
       setQty("");
       scanRef.current?.focus();
+      return;
     }
+    // 沒存成(多半是手機剛加過):照最新的數字重新帶,人看過再按一次
+    const fresh = (await refetch()).data;
+    if (fresh && accessoryNow.current?.id === item.id) {
+      seenQty.current = fresh.line_rows.find((r) => r.product.id === item.id)?.counted_qty ?? null;
+      setQty(recordedQty(fresh.line_rows, item.id));
+    }
+  }
+
+  async function newPhone() {
+    const label = phoneLabel.trim();
+    if (!label) {
+      setNote("請寫這支手機是誰在用");
+      return;
+    }
+    const done = await call("phones/", { label });
+    if (done?.pair) {
+      setPair({ id: done.pair.id, label: done.pair.label, token: done.pair.token });
+      setPhoneLabel("");
+    }
+  }
+
+  async function resolveUnknown(row: CountUnknown, skip: boolean) {
+    const product = unknownPick[row.id]?.payload;
+    const reason = (unknownReason[row.id] ?? "").trim();
+    if (!skip && !product) return;
+    if (skip && !reason) {
+      setNote("不入要寫原因");
+      return;
+    }
+    await call(`unknowns/${row.id}/`, skip ? { skip: true, reason } : { product: product!.id });
   }
 
   async function searchAccessories(q: string): Promise<ScanOption<Product>[]> {
@@ -119,6 +177,7 @@ export function StockCountPage() {
     if (why) return why;
     setNote("");
     setAccessory(o.payload);
+    seenQty.current = detail?.line_rows.find((r) => r.product.id === o.payload.id)?.counted_qty ?? null;
     setQty(detail ? recordedQty(detail.line_rows, o.payload.id) : "");
     return null;
   }
@@ -204,6 +263,37 @@ export function StockCountPage() {
             <input type="checkbox" checked={phonesDone} onChange={(e) => setPhonesDone(e.target.checked)} />
             手機全部刷完
           </label>
+          <button className="btn sc-phone-btn" type="button" aria-expanded={phoneOpen} onClick={() => setPhoneOpen((v) => !v)}>
+            手機盤點
+          </button>
+        </div>
+      )}
+      {counting && phoneOpen && (
+        <div className="list-filterbar sr-filter sc-phones">
+          <label>
+            稱呼
+            <input type="text" value={phoneLabel} maxLength={20} placeholder="小王、櫃2" onChange={(e) => setPhoneLabel(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.nativeEvent.isComposing) void newPhone();
+              }} />
+          </label>
+          <button className="btn" type="button" disabled={!phoneLabel.trim() || run.isPending} onClick={() => void newPhone()}>
+            產生 QR Code
+          </button>
+          {pair && (detail.phones ?? []).some((p) => p.id === pair.id && p.status === "waiting") && (
+            <div className="sc-qr">
+              <PairQr text={phoneCountUrl(window.location.origin, pair.token)} />
+              <span>{pair.label}</span>
+            </div>
+          )}
+          {(detail.phones ?? []).map((p) => (
+            <span key={p.id} className="sc-phone">
+              {p.label} {phoneStatusText(p.status)}
+              <button type="button" className="wb-link" onClick={() => void call(`phones/${p.id}/`, undefined, "DELETE")}>
+                結束
+              </button>
+            </span>
+          ))}
         </div>
       )}
       {counting && (
@@ -262,6 +352,50 @@ export function StockCountPage() {
 
       <div className="report-table sr-table">
         {detail.line_rows.length === 0 && detail.scan_rows.length === 0 && <div className="md-empty">還沒有盤任何東西</div>}
+        {(detail.unknown_rows ?? []).length > 0 && (
+          <table className="report-grid sc-unknowns">
+            <thead>
+              <tr>
+                <th>沒對到的碼</th>
+                <th className="num">次數</th>
+                <th>刷的人</th>
+                <th>處理</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(detail.unknown_rows ?? []).map((u) => (
+                <tr key={u.id} className="report-row">
+                  <td>{u.code}</td>
+                  <td className="num">{u.times}</td>
+                  <td>{u.label}</td>
+                  <td>
+                    {u.resolved ? (
+                      u.product ? `${u.product.sku} ${u.product.name}` : `不入:${u.reason}`
+                    ) : counting ? (
+                      <div className="sc-unknown-do">
+                        <ComboBox<Product>
+                          value={unknownPick[u.id]?.id ?? ""}
+                          selectedOption={unknownPick[u.id] ?? null}
+                          onChange={(_pid, opt) => setUnknownPick((all) => ({ ...all, [u.id]: opt ?? undefined }))}
+                          fetchOptions={async (q) => (await searchProducts(q, { activeOnly: true })).filter((o) => o.payload && !o.payload.requires_serial && !o.payload.is_virtual)}
+                          placeholder="品名 / 條碼"
+                        />
+                        <button className="btn" type="button" disabled={!unknownPick[u.id] || run.isPending} onClick={() => void resolveUnknown(u, false)}>
+                          指定
+                        </button>
+                        <input type="text" maxLength={100} placeholder="原因" value={unknownReason[u.id] ?? ""}
+                          onChange={(e) => setUnknownReason((all) => ({ ...all, [u.id]: e.target.value }))} />
+                        <button className="btn" type="button" disabled={!(unknownReason[u.id] ?? "").trim() || run.isPending} onClick={() => void resolveUnknown(u, true)}>
+                          不入
+                        </button>
+                      </div>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
         {detail.line_rows.length > 0 && (
           <table className="report-grid">
             <thead>

@@ -8109,3 +8109,48 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   .tr-two { grid-template-columns: 1fr; }
   .tr-money { margin-left: 0; }
 }
+
+/* ── 手機走動盤點(/m/count):一欄、手指好按(最小 48px)、字放大也不擠 ── */
+.pc-page { min-height: 100%; background: var(--bg); color: var(--text); padding-inline: 16px; padding-block: 12px 32px;
+  display: flex; flex-direction: column; gap: 12px; max-width: 560px; margin: 0 auto; font-size: 16px; }
+.pc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pc-title { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.pc-who { margin-left: 8px; color: var(--text-dim); font-weight: 400; }
+.pc-btn { min-height: 48px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2);
+  color: var(--text); font: inherit; cursor: pointer; }
+.pc-btn:disabled { opacity: 0.5; }
+.pc-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pc-mode { min-height: 48px; border-radius: 10px; border: 1.5px solid var(--border); background: var(--panel); color: var(--text); font: inherit; }
+.pc-mode.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.pc-cam { position: relative; border-radius: 12px; overflow: hidden; background: #000; aspect-ratio: 4 / 3; max-width: 100%; }
+.pc-cam video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pc-aim { position: absolute; left: 12%; right: 12%; top: 38%; bottom: 38%; border: 2px solid rgba(255, 255, 255, 0.85); border-radius: 8px; pointer-events: none; }
+.pc-cam-off { position: absolute; right: 8px; bottom: 8px; background: rgba(0, 0, 0, 0.55); color: #fff; border-color: transparent; }
+.pc-cam-on { min-height: 120px; font-size: 18px; font-weight: 600; border-style: dashed; }
+.pc-type { display: flex; gap: 8px; }
+.pc-type input, .pc-pile input { flex: 1; min-width: 0; min-height: 48px; padding: 0 12px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font: inherit; }
+.pc-note { padding: 12px 14px; border-radius: 10px; font-weight: 600; overflow-wrap: anywhere; }
+.pc-note.ok { background: var(--success-bg, rgba(34, 197, 94, 0.15)); color: var(--success-text, inherit); }
+.pc-note.bad { background: var(--danger-bg, rgba(239, 68, 68, 0.15)); color: var(--danger-text, inherit); }
+.pc-last { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pc-pile { display: flex; flex: 1 1 260px; gap: 8px; align-items: center; min-width: 0; }
+.pc-pile label { white-space: nowrap; color: var(--text-dim); }
+.pc-pile input { max-width: 110px; }
+.pc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--border); }
+.pc-list li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 10px 2px; border-bottom: 1px solid var(--border); }
+.pc-list li.undone { opacity: 0.5; text-decoration: line-through; }
+.pc-name { min-width: 0; overflow-wrap: anywhere; }
+.pc-qty { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-dim); }
+.pc-code { grid-column: 1 / -1; color: var(--text-dim); font-size: 13px; overflow-wrap: anywhere; }
+.pc-gone { margin-top: 30vh; text-align: center; line-height: 1.7; padding-inline: 8px; }
+/* 盤點:手機盤點那一排(稱呼、產生 QR Code、每一支手機)與沒對到的碼 */
+.sc-phone-btn { margin-left: auto; }
+.sc-phones { align-items: center; }
+.sc-qr { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
+.sc-phone { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; }
+.sc-unknowns { margin-bottom: 12px; }
+.sc-unknown-do { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sc-unknown-do .combobox { min-width: 220px; }
+.pc-pending { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: 10px;
+  border: 1.5px dashed var(--danger-text, #d33); }

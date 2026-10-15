@@ -40,6 +40,7 @@ from .models import (
     StockCountLine,
     StockCountMissing,
     StockCountScan,
+    StockCountUnknown,
     StockMovement,
 )
 
@@ -114,8 +115,13 @@ def _countable(count, product):
         raise CountError(f"「{product.name}」不在這張盤點單的類別裡")
 
 
-def set_line(count, product, counted_qty, user):
-    """配件:這個商品現場數到幾個(重新輸入 = 整個換掉,帳上數量也重新記)。"""
+NOT_SEEN = object()
+
+
+def set_line(count, product, counted_qty, user, seen=NOT_SEEN):
+    """配件:這個商品現場數到幾個(重新輸入 = 整個換掉,帳上數量也重新記)。
+    `seen` = 畫面輸入前看到的數字(None = 那時還沒有這一列):**跟現在的不一樣就不換**(手機走動盤點的紅隊:
+    手機一直往上加,電腦按下去會把手機剛加的默默蓋掉)。沒帶 = 不核對(舊的呼叫)。"""
     if not isinstance(counted_qty, int) or isinstance(counted_qty, bool) or not 0 <= counted_qty <= MAX_QTY:
         raise CountError("數量要是 0 以上的整數")
     with transaction.atomic():
@@ -124,13 +130,72 @@ def set_line(count, product, counted_qty, user):
         # create=True:這家門市還沒有這個商品的餘額列時先建一列 0 再鎖(複審 P0)。只「查查看有沒有」的話,
         # 同一瞬間有人正在存第一張進貨(那一列還沒存完、看不到)會被當成帳上 0,核准時就多加一次
         balance = locked_balance(count.tenant, product, count.warehouse, create=True)
+        if seen is not NOT_SEEN:
+            now = StockCountLine.objects.filter(count=count, product=product).values_list("counted_qty", flat=True).first()
+            if now != seen:
+                raise CountError(f"「{product.name}」剛剛有人改過,現在是 {now or 0} 個,再確認一次")
+        now = timezone.now()
         line, _ = StockCountLine.objects.update_or_create(
             count=count, product=product,
             defaults={
                 "tenant": count.tenant, "counted_qty": counted_qty, "book_qty": balance.qty,
-                "counted_at": timezone.now(), "counted_by": _by(user),
+                "counted_at": now, "counted_by": _by(user), "replaced_at": now,
             })
         return line
+
+
+def add_to_line(count, product, delta, user):
+    """配件加減幾個(手機走動盤點:每刷一個 +1,「這一堆幾個」、收回)。回 (那一列, 改之前, 改之後);改之前 None = 原本沒有這一列。
+    好幾支手機同時加同一個商品:鎖住那個商品在這家門市的餘額列(`locked_balance`)排隊,不會少算。帳上數量照 `set_line` 重新記。"""
+    if not isinstance(delta, int) or isinstance(delta, bool) or not -MAX_QTY <= delta <= MAX_QTY or delta == 0:
+        raise CountError("數量要是整數")
+    with transaction.atomic():
+        _locked(count, S.COUNTING)
+        _countable(count, product)
+        balance = locked_balance(count.tenant, product, count.warehouse, create=True)
+        line = StockCountLine.objects.select_for_update().filter(count=count, product=product).first()
+        before = line.counted_qty if line else None
+        after = (before or 0) + delta
+        if not 0 <= after <= MAX_QTY:
+            raise CountError(f"「{product.name}」不能少於 0 個")
+        if line is None:
+            line = StockCountLine.objects.create(
+                tenant=count.tenant, count=count, product=product, counted_qty=after, book_qty=balance.qty,
+                counted_at=timezone.now(), counted_by=_by(user))
+        else:
+            line.counted_qty, line.book_qty, line.counted_at, line.counted_by = after, balance.qty, timezone.now(), _by(user)
+            line.save(update_fields=["counted_qty", "book_qty", "counted_at", "counted_by", "updated_at"])
+        return line, before, after
+
+
+def take_back_line(count, product, delta, since, user, line_ref=None):
+    """手機收回 / 改「這一堆幾個」之前:那個配件可以減掉 `delta` 嗎。`since` = 手機那一下的時間:
+    **那之後電腦整格換過(`replaced_at`)就不動** —— 換掉的數字已經定了,再減會錯;只有別的手機也在加不擋(加減不會互相蓋掉)。
+    回 (那一列, 減完是幾個, 餘額列);呼叫的人要已經在交易裡。"""
+    _locked(count, S.COUNTING)
+    _countable(count, product)
+    balance = locked_balance(count.tenant, product, count.warehouse, create=True)
+    line = StockCountLine.objects.select_for_update().filter(count=count, product=product).first()
+    # 那一列被移除、重建過(編號不一樣了)也不動(複審 P0:舊的那一下會扣到別人重新盤的數)
+    if line is None or (line_ref is not None and line.pk != line_ref) or (line.replaced_at and line.replaced_at >= since):
+        raise CountError(f"「{product.name}」電腦之後改過數字,請到電腦上改")
+    after = line.counted_qty - delta
+    if not 0 <= after <= MAX_QTY:
+        raise CountError(f"「{product.name}」不能少於 0 個")
+    return line, after, balance
+
+
+def put_back_line(count, product, delta, since, user, line_ref=None):
+    """「收回這一下」:那個配件減 `delta`(見 `take_back_line`)。減到 0、而且電腦從來沒有整格打過數字(全是手機加減的)
+    → 整列拿掉(回到「沒盤」,不是「數到 0 個」);電腦打過的 0 是「數到 0 個」,留著。回減完是幾個(None = 整列拿掉了)。"""
+    with transaction.atomic():
+        line, after, balance = take_back_line(count, product, delta, since, user, line_ref)
+        if after == 0 and line.replaced_at is None:
+            line.delete()
+            return None
+        line.counted_qty, line.book_qty, line.counted_at, line.counted_by = after, balance.qty, timezone.now(), _by(user)
+        line.save(update_fields=["counted_qty", "book_qty", "counted_at", "counted_by", "updated_at"])
+        return after
 
 
 def remove_line(count, line_id):
@@ -218,11 +283,76 @@ def expected_serials(count):
     return serials.exclude(pk__in=arrived.values("serial_id"))
 
 
-def submit(count, user, phones_done=False):
-    """盤完送出。phones_done = 送出的人表明「這個範圍的手機全部刷完了」:這時才算手機少了哪幾台。
-    沒有表明的話,沒刷到的手機是「沒盤」(不進差異、不會變成盤虧)。"""
+def unknown_key(code: str) -> str:
+    return normalize_serial(code)
+
+
+def tally_unknown(count, code, label):
+    """手機在「配件」模式刷到系統不認得的碼:記一次(同一個碼刷幾次記幾次)。回 (那一筆, 改之前, 改之後)。"""
+    code = str(code or "").strip()
+    key = unknown_key(code)
+    if not key or len(code) > 80:
+        raise CountError("這不是有效的碼")
     with transaction.atomic():
         _locked(count, S.COUNTING)
+        row = StockCountUnknown.objects.select_for_update().filter(count=count, code_key=key).first()
+        if row is None:
+            row = StockCountUnknown.objects.create(tenant=count.tenant, count=count, code=code, code_key=key, times=0)
+        if row.resolved_at:
+            raise CountError(f"{code} 已經在電腦上處理過了")
+        before = row.times
+        row.times, row.last_label = before + 1, label[:20]
+        row.save(update_fields=["times", "last_label", "updated_at"])
+        return row, before, row.times
+
+
+def untally_unknown(count, unknown_id):
+    """收回手機的那一下(沒對到的碼):還沒處理的才減一(別支手機也在刷不擋);減到 0 整筆拿掉。"""
+    with transaction.atomic():
+        _locked(count, S.COUNTING)
+        row = StockCountUnknown.objects.select_for_update().filter(count=count, pk=unknown_id).first()
+        if row is None or row.resolved_at:
+            raise CountError("這個碼已經在電腦上處理過了,請到電腦上看")
+        if row.times <= 1:
+            row.delete()
+            return
+        row.times -= 1
+        row.save(update_fields=["times", "updated_at"])
+
+
+def resolve_unknown(count, unknown_id, user, product=None, reason=""):
+    """電腦處理一個沒對到的碼:指定成某個配件(刷了幾次就加幾個,`add_to_line`),或「不入」(要寫原因)。"""
+    with transaction.atomic():
+        _locked(count, S.COUNTING)
+        row = StockCountUnknown.objects.select_for_update().filter(count=count, pk=unknown_id).first()
+        if row is None:
+            raise CountError("這個碼不在這張盤點單上")
+        if row.resolved_at:
+            raise CountError(f"{row.code} 已經處理過了")
+        if product is not None:
+            if product.tenant_id != count.tenant_id:
+                raise CountError("商品不屬於這家公司")
+            add_to_line(count, product, row.times, user)
+            row.product = product
+        else:
+            reason = str(reason or "").strip()[:100]
+            if not reason:
+                raise CountError("不入要寫原因")
+            row.skipped, row.reason = True, reason
+        row.resolved_at, row.resolved_by = timezone.now(), _by(user)
+        row.save(update_fields=["product", "skipped", "reason", "resolved_at", "resolved_by", "updated_at"])
+        return row
+
+
+def submit(count, user, phones_done=False):
+    """盤完送出。phones_done = 送出的人表明「這個範圍的手機全部刷完了」:這時才算手機少了哪幾台。
+    沒有表明的話,沒刷到的手機是「沒盤」(不進差異、不會變成盤虧)。
+    手機刷到、還沒處理的「沒對到的碼」要先處理好(指定配件或不入)才能送出(紅隊:對不上的不能跟著單子消失)。"""
+    with transaction.atomic():
+        _locked(count, S.COUNTING)
+        left = count.unknowns.filter(resolved_at__isnull=True).count()
+        if left:
+            raise CountError(f"還有 {left} 個沒對到的碼,先指定配件或寫原因不入,才能送出")
         scanned = set(count.scans.exclude(serial=None).values_list("serial_id", flat=True))
         if not count.scans.exists() and not count.lines.exists() and not phones_done:
             raise CountError("還沒有盤任何東西")
@@ -234,6 +364,7 @@ def submit(count, user, phones_done=False):
             ])
         count.status, count.submitted_at, count.submitted_by = S.SUBMITTED, timezone.now(), _by(user)
         count.save(update_fields=["status", "phones_done", "submitted_at", "submitted_by", "updated_at"])
+        _end_phones(count)
         return count
 
 
@@ -258,7 +389,13 @@ def void(count, by_manager=False):
         _locked(count, S.COUNTING, *([S.SUBMITTED] if by_manager else []))
         count.status = S.VOID
         count.save(update_fields=["status", "updated_at"])
+        _end_phones(count)
         return count
+
+
+def _end_phones(count):
+    """送出 / 作廢:發出去的手機一律結束(複審 P1:退回重盤之後舊的 QR Code 不能自己活過來,要重新產生)。"""
+    count.phones.filter(ended_at__isnull=True).update(ended_at=timezone.now())
 
 
 def _decision(decisions, pk):
