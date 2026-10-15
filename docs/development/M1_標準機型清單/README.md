@@ -41,3 +41,13 @@ owner 2026-10-14:手機、平板、穿戴(手錶、手環、耳機)的型號由�
 舊機型(只有創宇有)441;POS 現有 168 個裡對上 139 個。
 
 **都還是草稿**:沒有進 `backend/apps/catalog/data/`、沒有寫進任何資料庫。
+
+## 2026-10-15 定稿(M1-A):Codex v4 為主
+
+owner「照你建議」:以 Codex 整理的 `taiwan-device-catalog-v4`(owner 的 `~/Documents/Codex/2026-10-14/new-chat/outputs/`,不進版本庫)為主,補草稿裡它沒有的舊機。
+
+- `build_catalog.py --v4 <資料夾>` → `backend/apps/catalog/data/device_catalog.json`(1,431 個:v4 1,400 + 草稿補 31)與 `pending_review.json`。
+- 草稿 996 個裡名稱(去空白、+ 當 plus)跟 v4 一樣的不用問;其餘 226 個由程式撈 v4 同品牌同類別最像的 5 個,**交給 Jev 選是哪一個或都不是**(Jev 判斷模式;先拿 14 題已知答案試過,14 題全對)。
+  結果在 `jev_draft_decisions.json`:有把握(信心 0.9 以上)的 125 題 —— 說「都不是」的 31 個補進來;沒把握的 101 題**不補**、列在 `pending_review.json` 給 owner 定(補了可能變成同一支兩個型號)。
+- 手機玩家(JB)現有的 115 個機型對型號庫:名稱一樣的 82 個 + Jev 有把握的 9 個寫進 `shop_jb_links.json` 的 `links`;沒把握的 23 個列在 `pending_shop_jb.json`,它們可能是的候選(Jev 給的機率 0.1 以上,28 支)放 `holds`,展開時先不展開。
+- 整理時踩到的:比對時把「+」拿掉會讓 S9 / S9+ 變成同一個(改成 plus);手機王常只列一個容量,容量要每個來源都收(顏色只取一個來源,不然同一個顏色兩種寫法);有一筆「21TB」是來源打錯(超過 4TB 的不收);品牌寫法「小米 / 紅米Redmi / 小米Xiaomi」= Xiaomi。

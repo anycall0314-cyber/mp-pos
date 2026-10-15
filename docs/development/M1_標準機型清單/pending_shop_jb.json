@@ -1,0 +1,301 @@
+[
+ {
+  "shop_model": "OPPO A 5 Pro",
+  "jev_answer": "OPPO A5 Pro 5G",
+  "confidence": 0.81,
+  "verdict": "待確認",
+  "candidates": [
+   "OPPO A5 Pro 5G",
+   "OPPO A3 Pro",
+   "OPPO A7 Pro",
+   "OPPO Find X5 Pro",
+   "OPPO Reno15 Pro"
+  ]
+ },
+ {
+  "shop_model": "realme realme 14 Pro+",
+  "jev_answer": "都不是",
+  "confidence": 0.88,
+  "verdict": "待確認",
+  "candidates": [
+   "realme 9 Pro+",
+   "realme 10 Pro+",
+   "realme 11 Pro+",
+   "realme 12 Pro+",
+   "realme 13 Pro+"
+  ]
+ },
+ {
+  "shop_model": "realme realme 14 C",
+  "jev_answer": "都不是",
+  "confidence": 0.7,
+  "verdict": "待確認",
+  "candidates": [
+   "realme 14",
+   "realme 14x 5G",
+   "realme 14 Pro 5G",
+   "realme 10 Pro",
+   "realme 10 Pro+"
+  ]
+ },
+ {
+  "shop_model": "Apple iPad 9",
+  "jev_answer": "Apple iPad (2021)",
+  "confidence": 0.63,
+  "verdict": "待確認",
+  "candidates": [
+   "Apple iPad (2020)",
+   "Apple iPad (2019)",
+   "Apple iPad (2021)",
+   "Apple iPad (2022)",
+   "Apple iPad (2025)"
+  ]
+ },
+ {
+  "shop_model": "Apple iPad 10",
+  "jev_answer": "Apple iPad (2022)",
+  "confidence": 0.38,
+  "verdict": "不採用",
+  "candidates": [
+   "Apple iPad (2020)",
+   "Apple iPad (2019)",
+   "Apple iPad (2021)",
+   "Apple iPad (2022)",
+   "Apple iPad (2025)"
+  ]
+ },
+ {
+  "shop_model": "Apple iPad 11 (A16)",
+  "jev_answer": "Apple iPad (2025)",
+  "confidence": 0.6,
+  "verdict": "待確認",
+  "candidates": [
+   "Apple iPad (2020)",
+   "Apple iPad (2019)",
+   "Apple iPad (2021)",
+   "Apple iPad (2022)",
+   "Apple iPad (2025)"
+  ]
+ },
+ {
+  "shop_model": "Apple iPad Air 13吋 (M2)",
+  "jev_answer": "Apple iPad Air (2024) 13 吋",
+  "confidence": 0.86,
+  "verdict": "待確認",
+  "candidates": [
+   "Apple iPad Air (2024) 13 吋",
+   "Apple iPad Air (2025) 13 吋",
+   "Apple iPad Air (2026) 13 吋",
+   "Apple iPad Air (2020)",
+   "Apple iPad Air (2019)"
+  ]
+ },
+ {
+  "shop_model": "Apple iPad Air 11吋 (M3)",
+  "jev_answer": "Apple iPad Air (2024) 11 吋",
+  "confidence": 0.4,
+  "verdict": "不採用",
+  "candidates": [
+   "Apple iPad Air (2024) 11 吋",
+   "Apple iPad Air (2025) 11 吋",
+   "Apple iPad Air (2026) 11 吋",
+   "Apple iPad Air (2020)",
+   "Apple iPad Air (2019)"
+  ]
+ },
+ {
+  "shop_model": "Apple iPad Air 13吋 (M3)",
+  "jev_answer": "Apple iPad Air (2024) 13 吋",
+  "confidence": 0.51,
+  "verdict": "待確認",
+  "candidates": [
+   "Apple iPad Air (2024) 13 吋",
+   "Apple iPad Air (2025) 13 吋",
+   "Apple iPad Air (2026) 13 吋",
+   "Apple iPad Air (2020)",
+   "Apple iPad Air (2019)"
+  ]
+ },
+ {
+  "shop_model": "Apple iPad Pro 13吋 (M4)",
+  "jev_answer": "Apple iPad Pro (2024) 13 吋",
+  "confidence": 0.86,
+  "verdict": "待確認",
+  "candidates": [
+   "Apple iPad Pro (2024) 13 吋",
+   "Apple iPad Pro (2025) 13 吋",
+   "Apple iPad Pro (2020) 11 吋",
+   "Apple iPad Pro (2021) 11 吋",
+   "Apple iPad Pro (2018) 11 吋"
+  ]
+ },
+ {
+  "shop_model": "Apple Apple Watch SE 第2代 44mm",
+  "jev_answer": "Apple Watch SE 2022 鋁金屬 44mm",
+  "confidence": 0.84,
+  "verdict": "待確認",
+  "candidates": [
+   "Apple Watch SE 3 鋁金屬 44mm",
+   "Apple Watch SE 鋁金屬 LTE 44mm",
+   "Apple Watch SE 2022 鋁金屬 44mm",
+   "Apple Watch Series 6 鋁金屬 44mm",
+   "Apple Watch SE 鋁金屬(編織單圈) Wi-Fi 44mm"
+  ]
+ },
+ {
+  "shop_model": "Apple Apple Watch 9 41mm",
+  "jev_answer": "都不是",
+  "confidence": 0.44,
+  "verdict": "不採用",
+  "candidates": [
+   "Apple Watch Series 7 鋁金屬 41mm",
+   "Apple Watch Series 8 不鏽鋼 41mm",
+   "Apple Watch Series 8 鋁金屬 41mm",
+   "Apple Watch Series 9 鋁金屬 Wi-Fi 41mm",
+   "Apple Watch SE 3 鋁金屬 40mm"
+  ]
+ },
+ {
+  "shop_model": "Apple Apple Watch 9 45mm",
+  "jev_answer": "都不是",
+  "confidence": 0.46,
+  "verdict": "不採用",
+  "candidates": [
+   "Apple Watch Series 7 鋁金屬 45mm",
+   "Apple Watch Series 8 不鏽鋼 45mm",
+   "Apple Watch Series 8 鋁金屬 45mm",
+   "Apple Watch Series 9 鋁金屬 Wi-Fi 45mm",
+   "Apple Watch SE 3 鋁金屬 40mm"
+  ]
+ },
+ {
+  "shop_model": "Apple Apple Watch 10 42mm",
+  "jev_answer": "都不是",
+  "confidence": 0.44,
+  "verdict": "不採用",
+  "candidates": [
+   "Apple Watch Series 10 鋁金屬 42mm",
+   "Apple Watch Series 10 鋁金屬 LTE 42mm",
+   "Apple Watch Series 11 鈦金屬 42mm",
+   "Apple Watch Series 11 鋁金屬 42mm",
+   "Apple Watch Series 12 鈦金屬 42mm"
+  ]
+ },
+ {
+  "shop_model": "Apple Apple Watch 10 46mm",
+  "jev_answer": "都不是",
+  "confidence": 0.4,
+  "verdict": "不採用",
+  "candidates": [
+   "Apple Watch Series 10 鋁金屬 46mm",
+   "Apple Watch Series 10 鋁金屬 LTE 46mm",
+   "Apple Watch Series 11 鈦金屬 46mm",
+   "Apple Watch Series 11 鋁金屬 46mm",
+   "Apple Watch Series 12 鈦金屬 46mm"
+  ]
+ },
+ {
+  "shop_model": "Apple iPhone 17 Air",
+  "jev_answer": "Apple iPhone Air",
+  "confidence": 0.75,
+  "verdict": "待確認",
+  "candidates": [
+   "Apple iPhone 17",
+   "Apple iPhone 17e",
+   "Apple iPhone Air",
+   "Apple iPhone 11",
+   "Apple iPhone 12"
+  ]
+ },
+ {
+  "shop_model": "紅米Redmi Redmi Note 13 Pro",
+  "jev_answer": "Xiaomi Redmi Note 13 Pro 5G",
+  "confidence": 0.89,
+  "verdict": "待確認",
+  "candidates": [
+   "Xiaomi Redmi Note 13 Pro 5G",
+   "Xiaomi Redmi Note 13",
+   "Xiaomi Redmi Note 10 Pro",
+   "Xiaomi Redmi Note 11 Pro",
+   "Xiaomi Redmi Note 13 Pro+ 5G"
+  ]
+ },
+ {
+  "shop_model": "紅米Redmi Redmi Note 14 Pro",
+  "jev_answer": "Xiaomi Redmi Note 14 Pro 5G",
+  "confidence": 0.8,
+  "verdict": "待確認",
+  "candidates": [
+   "Xiaomi Redmi Note 14 Pro 5G",
+   "Xiaomi Redmi Note 14",
+   "Xiaomi Redmi Note 10 Pro",
+   "Xiaomi Redmi Note 11 Pro",
+   "Xiaomi Redmi Note 14 Pro+ 5G"
+  ]
+ },
+ {
+  "shop_model": "小米Xiaomi 小米手環 9",
+  "jev_answer": "Xiaomi Xiaomi 手環 9",
+  "confidence": 0.88,
+  "verdict": "待確認",
+  "candidates": [
+   "Xiaomi Xiaomi 手環 9",
+   "Xiaomi Xiaomi 手環 9 NFC",
+   "Xiaomi Xiaomi 手環 9 Pro",
+   "Xiaomi Xiaomi 手環 9 Active",
+   "Xiaomi Xiaomi 手環 8"
+  ]
+ },
+ {
+  "shop_model": "Samsung Galaxy Tab S 9",
+  "jev_answer": "Samsung Galaxy Tab S9 Wi-Fi",
+  "confidence": 0.82,
+  "verdict": "待確認",
+  "candidates": [
+   "Samsung Galaxy Tab S7",
+   "Samsung Galaxy Tab S5e",
+   "Samsung Galaxy Tab S9 FE 5G",
+   "Samsung Galaxy Tab S9 Wi-Fi",
+   "Samsung Galaxy Tab S8 5G"
+  ]
+ },
+ {
+  "shop_model": "Samsung Galaxy Tab S 9 Ultra",
+  "jev_answer": "都不是",
+  "confidence": 0.5,
+  "verdict": "待確認",
+  "candidates": [
+   "Samsung Galaxy Tab S9 Ultra Wi-Fi",
+   "Samsung Galaxy Tab S12 Ultra",
+   "Samsung Galaxy Tab S9 Ultra 鍵盤套裝組 5G",
+   "Samsung Galaxy Tab S10 Ultra 5G",
+   "Samsung Galaxy Tab S11 Ultra 5G"
+  ]
+ },
+ {
+  "shop_model": "Samsung Galaxy Tab S 10 Ultra",
+  "jev_answer": "都不是",
+  "confidence": 0.52,
+  "verdict": "待確認",
+  "candidates": [
+   "Samsung Galaxy Tab S10 Ultra 5G",
+   "Samsung Galaxy Tab S10 Ultra Wi-Fi",
+   "Samsung Galaxy Tab S12 Ultra",
+   "Samsung Galaxy Tab S11 Ultra 5G",
+   "Samsung Galaxy Tab S10 Ultra 鍵盤套裝組 5G"
+  ]
+ },
+ {
+  "shop_model": "Samsung Galaxy Watch Ultra 47mm",
+  "jev_answer": "Samsung Galaxy Watch Ultra",
+  "confidence": 0.59,
+  "verdict": "待確認",
+  "candidates": [
+   "Samsung Galaxy Watch Ultra",
+   "Samsung Galaxy Watch Ultra2",
+   "Samsung Galaxy Watch LTE 42mm",
+   "Samsung Galaxy Watch LTE 46mm",
+   "Samsung Galaxy Watch4 44mm"
+  ]
+ }
+]

@@ -1,0 +1,1810 @@
+{
+ "50": {
+  "draft": "Apple iPhone 5",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "51": {
+  "draft": "Apple iPhone 5s",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "52": {
+  "draft": "Apple iPhone 6",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "53": {
+  "draft": "Apple iPhone 6 Plus",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.96,
+  "verdict": "採用"
+ },
+ "54": {
+  "draft": "Apple iPhone 6s",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.45,
+  "verdict": "不採用"
+ },
+ "55": {
+  "draft": "Apple iPhone 6s Plus",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.94,
+  "verdict": "採用"
+ },
+ "56": {
+  "draft": "Apple iPhone 7",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "57": {
+  "draft": "Apple iPhone 7 Plus",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "60": {
+  "draft": "Apple iPhone Duo",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.9,
+  "verdict": "採用"
+ },
+ "61": {
+  "draft": "Apple iPhone SE",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.83,
+  "verdict": "待確認"
+ },
+ "62": {
+  "draft": "Apple iPhone SE 2",
+  "answer": "c0",
+  "answer_uid": "e7f6eb69-360b-5875-937b-11532c73a696",
+  "answer_text": "Apple iPhone SE (2020)",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "63": {
+  "draft": "Apple iPhone SE 3",
+  "answer": "c1",
+  "answer_uid": "cb5ad789-34f7-50c7-b7fa-9b7e675a79b8",
+  "answer_text": "Apple iPhone SE (2022)",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "64": {
+  "draft": "Apple iPhone X",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.92,
+  "verdict": "採用"
+ },
+ "66": {
+  "draft": "Apple iPhone XS",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.95,
+  "verdict": "採用"
+ },
+ "67": {
+  "draft": "Apple iPhone XS Max",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.86,
+  "verdict": "待確認"
+ },
+ "68": {
+  "draft": "Apple iPad Air 11 M4",
+  "answer": "c3",
+  "answer_uid": "88a8ae62-f7b0-5aa1-8ca2-ab7eba937fad",
+  "answer_text": "Apple iPad Air (2026) 11 吋",
+  "confidence": 0.94,
+  "verdict": "採用"
+ },
+ "69": {
+  "draft": "Apple iPad Air 13 M4",
+  "answer": "c3",
+  "answer_uid": "65e26444-df18-5967-876c-a79fd1a8e9e7",
+  "answer_text": "Apple iPad Air (2026) 13 吋",
+  "confidence": 0.96,
+  "verdict": "採用"
+ },
+ "70": {
+  "draft": "Apple iPad Pro 11 M5",
+  "answer": "c0",
+  "answer_uid": "94153ac8-242a-52ca-8b55-d88d88728345",
+  "answer_text": "Apple iPad Pro (2025) 11 吋",
+  "confidence": 0.96,
+  "verdict": "採用"
+ },
+ "71": {
+  "draft": "Apple iPad Pro 13 M5",
+  "answer": "c1",
+  "answer_uid": "ea47c5bf-92b7-5c0e-9038-edfe56160884",
+  "answer_text": "Apple iPad Pro (2025) 13 吋",
+  "confidence": 0.98,
+  "verdict": "採用"
+ },
+ "72": {
+  "draft": "Apple iPad 11",
+  "answer": "c4",
+  "answer_uid": "648aa379-854e-51f1-ab48-2d9be15882bc",
+  "answer_text": "Apple iPad (2025)",
+  "confidence": 0.82,
+  "verdict": "待確認"
+ },
+ "73": {
+  "draft": "Apple iPad Air 11 M3",
+  "answer": "c2",
+  "answer_uid": "e211f3f9-0240-501e-81c5-b3dd0b11a603",
+  "answer_text": "Apple iPad Air (2025) 11 吋",
+  "confidence": 0.87,
+  "verdict": "待確認"
+ },
+ "74": {
+  "draft": "Apple iPad Air 13 M3",
+  "answer": "c2",
+  "answer_uid": "f4cd10ff-7730-597f-8d39-6d346ad00f2b",
+  "answer_text": "Apple iPad Air (2025) 13 吋",
+  "confidence": 0.9,
+  "verdict": "採用"
+ },
+ "75": {
+  "draft": "Apple iPad mini 7",
+  "answer": "c2",
+  "answer_uid": "6305d91b-f659-55cf-92d6-d0350266bcf4",
+  "answer_text": "Apple iPad mini (2024)",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "76": {
+  "draft": "Apple iPad Air 13 M2",
+  "answer": "c1",
+  "answer_uid": "91def02e-8db6-57d9-9101-2ef390ff275f",
+  "answer_text": "Apple iPad Air (2024) 13 吋",
+  "confidence": 0.94,
+  "verdict": "採用"
+ },
+ "77": {
+  "draft": "Apple iPad Pro 11 4",
+  "answer": "c3",
+  "answer_uid": "4596ef85-b386-501a-9dc9-93e91539363e",
+  "answer_text": "Apple iPad Pro (2022) 11 吋",
+  "confidence": 0.95,
+  "verdict": "採用"
+ },
+ "78": {
+  "draft": "Apple iPad Pro 12.9 6",
+  "answer": "c3",
+  "answer_uid": "acac81f5-ed07-5c50-b290-49543c3fb76f",
+  "answer_text": "Apple iPad Pro (2022) 12.9 吋",
+  "confidence": 0.96,
+  "verdict": "採用"
+ },
+ "79": {
+  "draft": "Apple iPad Air 5",
+  "answer": "c2",
+  "answer_uid": "468c6aae-fa19-5648-886a-480cba487445",
+  "answer_text": "Apple iPad Air (2022)",
+  "confidence": 0.98,
+  "verdict": "採用"
+ },
+ "80": {
+  "draft": "Apple iPad 10",
+  "answer": "c3",
+  "answer_uid": "2b0046f7-815e-5d7c-af9a-87ddee5cebf9",
+  "answer_text": "Apple iPad (2022)",
+  "confidence": 0.81,
+  "verdict": "待確認"
+ },
+ "81": {
+  "draft": "Apple iPad mini 6",
+  "answer": "c1",
+  "answer_uid": "d157679f-9594-5c9e-8f28-fbb6bd492b88",
+  "answer_text": "Apple iPad mini (2021)",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "82": {
+  "draft": "Apple iPad Pro 12.9 5",
+  "answer": "c2",
+  "answer_uid": "3ed32c90-45ba-546a-9af0-f8977af46a10",
+  "answer_text": "Apple iPad Pro (2021) 12.9 吋",
+  "confidence": 0.93,
+  "verdict": "採用"
+ },
+ "83": {
+  "draft": "Apple iPad Pro 11 2",
+  "answer": "c1",
+  "answer_uid": "07f0d9f2-369b-50d8-97aa-0a97f4b04a54",
+  "answer_text": "Apple iPad Pro (2020) 11 吋",
+  "confidence": 0.95,
+  "verdict": "採用"
+ },
+ "84": {
+  "draft": "Apple iPad Pro 12.9 64",
+  "answer": "c1",
+  "answer_uid": "14e153b6-7317-5e19-a7d8-e02f09c77fc1",
+  "answer_text": "Apple iPad Pro (2018) 12.9 吋",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "85": {
+  "draft": "Apple iPad 5",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.71,
+  "verdict": "待確認"
+ },
+ "86": {
+  "draft": "Apple iPad 6",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.44,
+  "verdict": "不採用"
+ },
+ "87": {
+  "draft": "Apple iPad 7",
+  "answer": "c1",
+  "answer_uid": "1ceb28dc-e62a-5219-811e-f31cbff3a930",
+  "answer_text": "Apple iPad (2019)",
+  "confidence": 0.53,
+  "verdict": "待確認"
+ },
+ "88": {
+  "draft": "Apple iPad 8",
+  "answer": "c0",
+  "answer_uid": "1404605f-125a-557f-8bb1-55846064117c",
+  "answer_text": "Apple iPad (2020)",
+  "confidence": 0.78,
+  "verdict": "待確認"
+ },
+ "89": {
+  "draft": "Apple iPad 9",
+  "answer": "c2",
+  "answer_uid": "52458520-eb8e-54ac-9e3f-5bfb4cc7d6f6",
+  "answer_text": "Apple iPad (2021)",
+  "confidence": 0.95,
+  "verdict": "採用"
+ },
+ "90": {
+  "draft": "Apple iPad Air 11 M2",
+  "answer": "c1",
+  "answer_uid": "86f0ea54-0802-5916-b8ea-d1bccf77d8ee",
+  "answer_text": "Apple iPad Air (2024) 11 吋",
+  "confidence": 0.96,
+  "verdict": "採用"
+ },
+ "91": {
+  "draft": "Apple iPad Air 2",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.98,
+  "verdict": "採用"
+ },
+ "92": {
+  "draft": "Apple iPad Air 3",
+  "answer": "c1",
+  "answer_uid": "99c7b48e-535a-50cf-a5ec-dda5830fbc2f",
+  "answer_text": "Apple iPad Air (2019)",
+  "confidence": 0.75,
+  "verdict": "待確認"
+ },
+ "93": {
+  "draft": "Apple iPad Air 4",
+  "answer": "c0",
+  "answer_uid": "bb18ee66-f346-5433-8701-62069df6d095",
+  "answer_text": "Apple iPad Air (2020)",
+  "confidence": 0.59,
+  "verdict": "待確認"
+ },
+ "94": {
+  "draft": "Apple iPad mini 4",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "95": {
+  "draft": "Apple iPad mini 5",
+  "answer": "c0",
+  "answer_uid": "40e4d485-12fe-5e55-954d-4c8f3c946b87",
+  "answer_text": "Apple iPad mini (2019)",
+  "confidence": 0.88,
+  "verdict": "待確認"
+ },
+ "96": {
+  "draft": "Apple iPad Pro 11 1",
+  "answer": "c2",
+  "answer_uid": "eda3ffc2-b497-5718-8c67-b89241086fdb",
+  "answer_text": "Apple iPad Pro (2018) 11 吋",
+  "confidence": 0.5,
+  "verdict": "待確認"
+ },
+ "97": {
+  "draft": "Apple iPad Pro 11 3",
+  "answer": "c1",
+  "answer_uid": "72397ec6-1b3d-51fa-950a-65acbd5e30e5",
+  "answer_text": "Apple iPad Pro (2021) 11 吋",
+  "confidence": 0.44,
+  "verdict": "不採用"
+ },
+ "98": {
+  "draft": "Apple iPad Pro 11 M4",
+  "answer": "c4",
+  "answer_uid": "556c6a6e-1020-50f8-8ac7-487826a1e312",
+  "answer_text": "Apple iPad Pro (2024) 11 吋",
+  "confidence": 0.87,
+  "verdict": "待確認"
+ },
+ "99": {
+  "draft": "Apple iPad Pro 12.9 1",
+  "answer": "c1",
+  "answer_uid": "14e153b6-7317-5e19-a7d8-e02f09c77fc1",
+  "answer_text": "Apple iPad Pro (2018) 12.9 吋",
+  "confidence": 0.23,
+  "verdict": "不採用"
+ },
+ "100": {
+  "draft": "Apple iPad Pro 12.9 2",
+  "answer": "c1",
+  "answer_uid": "14e153b6-7317-5e19-a7d8-e02f09c77fc1",
+  "answer_text": "Apple iPad Pro (2018) 12.9 吋",
+  "confidence": 0.51,
+  "verdict": "待確認"
+ },
+ "101": {
+  "draft": "Apple iPad Pro 12.9 4",
+  "answer": "c0",
+  "answer_uid": "2a65b3b4-8c3e-5067-8da7-0cd655fe8470",
+  "answer_text": "Apple iPad Pro (2020) 12.9 吋",
+  "confidence": 0.63,
+  "verdict": "待確認"
+ },
+ "102": {
+  "draft": "Apple iPad Pro 13 M4",
+  "answer": "c0",
+  "answer_uid": "3152612b-1ce3-5d74-9655-33fe764780a2",
+  "answer_text": "Apple iPad Pro (2024) 13 吋",
+  "confidence": 0.77,
+  "verdict": "待確認"
+ },
+ "129": {
+  "draft": "Apple Apple Watch SE 2 40mm",
+  "answer": "c0",
+  "answer_uid": "467a0bfe-45d1-535b-bc45-6e41dcf42fe7",
+  "answer_text": "Apple Watch SE 2022 鋁金屬 40mm",
+  "confidence": 0.84,
+  "verdict": "待確認"
+ },
+ "130": {
+  "draft": "Apple Apple Watch SE 2 44mm",
+  "answer": "c0",
+  "answer_uid": "2165ccea-2333-5ff9-99e1-665baa806191",
+  "answer_text": "Apple Watch SE 2022 鋁金屬 44mm",
+  "confidence": 0.57,
+  "verdict": "待確認"
+ },
+ "131": {
+  "draft": "Apple Apple Watch Series 10 42mm",
+  "answer": "c0",
+  "answer_uid": "9010780c-766c-5d02-a816-28cc68d2f7cd",
+  "answer_text": "Apple Watch Series 10 鋁金屬 42mm",
+  "confidence": 0.72,
+  "verdict": "待確認"
+ },
+ "132": {
+  "draft": "Apple Apple Watch Series 10 46mm",
+  "answer": "c0",
+  "answer_uid": "2dc4903b-a99e-5308-b089-c7b7adb92ffe",
+  "answer_text": "Apple Watch Series 10 鋁金屬 46mm",
+  "confidence": 0.74,
+  "verdict": "待確認"
+ },
+ "133": {
+  "draft": "Apple Apple Watch Series 9",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "134": {
+  "draft": "Apple Apple Watch Series 9 41mm",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.53,
+  "verdict": "待確認"
+ },
+ "135": {
+  "draft": "Apple Apple Watch Series 9 45mm",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.63,
+  "verdict": "待確認"
+ },
+ "136": {
+  "draft": "Apple Apple Watch Ultra 2 49mm",
+  "answer": "c0",
+  "answer_uid": "e78997fd-0104-53ce-b321-a24685aa07d6",
+  "answer_text": "Apple Watch Ultra 2 鈦金屬 49mm",
+  "confidence": 0.84,
+  "verdict": "待確認"
+ },
+ "145": {
+  "draft": "Apple AirPods 2",
+  "answer": "c2",
+  "answer_uid": "8438f1c1-80da-5fd6-9618-50aeeec2b8ec",
+  "answer_text": "Apple AirPods(2019)",
+  "confidence": 0.63,
+  "verdict": "待確認"
+ },
+ "152": {
+  "draft": "ASUS ROG Phone 5 Ultimate",
+  "answer": "c0",
+  "answer_uid": "ac6bd26c-5735-598e-98ce-7b257b789e4d",
+  "answer_text": "ASUS ROG Phone 5 Ultimate 版",
+  "confidence": 0.95,
+  "verdict": "採用"
+ },
+ "163": {
+  "draft": "ASUS ROG Phone 8 Pro Edition",
+  "answer": "c1",
+  "answer_uid": "918c80d5-fff8-5752-a977-947f173647b8",
+  "answer_text": "ASUS ROG Phone 8 Pro",
+  "confidence": 0.93,
+  "verdict": "採用"
+ },
+ "167": {
+  "draft": "ASUS Zenfone 6",
+  "answer": "c3",
+  "answer_uid": "ee3e97b6-f155-5f84-a81e-99de80802df6",
+  "answer_text": "ASUS ZenFone 6 (ZS630KL)",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "168": {
+  "draft": "ASUS Zenfone 7 5G",
+  "answer": "c3",
+  "answer_uid": "d285f8a2-03a6-5fcb-b8ee-ddcb847e24dc",
+  "answer_text": "ASUS ZenFone 7 (ZS670KS)",
+  "confidence": 0.65,
+  "verdict": "待確認"
+ },
+ "169": {
+  "draft": "ASUS Zenfone 7 Pro 5G",
+  "answer": "c0",
+  "answer_uid": "0d9af4f5-662d-5309-9032-46810af96d59",
+  "answer_text": "ASUS ZenFone 7 Pro (ZS671KS)",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "213": {
+  "draft": "Google Pixel 5 5G",
+  "answer": "c0",
+  "answer_uid": "7abcff34-0a9b-526e-89c0-1504acba5ede",
+  "answer_text": "Google Pixel 5",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "234": {
+  "draft": "HONOR HONOR Magic V6",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.95,
+  "verdict": "採用"
+ },
+ "241": {
+  "draft": "HONOR HONOR 600 Pro MOLLY 限量版",
+  "answer": "c0",
+  "answer_uid": "47b953bf-cac9-5a86-90c6-e9f0824f0b1c",
+  "answer_text": "HONOR 600 Pro",
+  "confidence": 0.96,
+  "verdict": "採用"
+ },
+ "252": {
+  "draft": "HTC HTC VIVE XR Elite",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "254": {
+  "draft": "HUAWEI HUAWEI P30 Pro",
+  "answer": "c0",
+  "answer_uid": "61f1a261-3c3d-53c9-a9dc-234064d764db",
+  "answer_text": "HUAWEI P30 Pro 頂配版",
+  "confidence": 0.26,
+  "verdict": "不採用"
+ },
+ "256": {
+  "draft": "HUAWEI HUAWEI MatePad 11",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.53,
+  "verdict": "待確認"
+ },
+ "257": {
+  "draft": "HUAWEI HUAWEI MatePad 2022",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.47,
+  "verdict": "不採用"
+ },
+ "258": {
+  "draft": "HUAWEI HUAWEI MatePad New",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.34,
+  "verdict": "不採用"
+ },
+ "260": {
+  "draft": "HUAWEI HUAWEI Watch GT2 Pro",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "285": {
+  "draft": "Motorola Moto G37 Power",
+  "answer": "c0",
+  "answer_uid": "dff5642f-4696-5e77-82ab-89f6b35b34e5",
+  "answer_text": "Motorola G37 Power",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "289": {
+  "draft": "Motorola Moto G57",
+  "answer": "c0",
+  "answer_uid": "896201c1-c849-5c44-abb3-f314152136d0",
+  "answer_text": "Motorola G57",
+  "confidence": 0.98,
+  "verdict": "採用"
+ },
+ "290": {
+  "draft": "Motorola Moto G86 Power 5G",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.84,
+  "verdict": "待確認"
+ },
+ "292": {
+  "draft": "Motorola Moto G06",
+  "answer": "c0",
+  "answer_uid": "4cb91542-9401-53a8-901d-67bb8125a937",
+  "answer_text": "Motorola G06",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "293": {
+  "draft": "Motorola Moto G56 5G",
+  "answer": "c0",
+  "answer_uid": "65b2d499-a24b-5336-a9a9-3c8615305060",
+  "answer_text": "Motorola G56 5G",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "296": {
+  "draft": "Motorola Moto G55 5G",
+  "answer": "c0",
+  "answer_uid": "1ec7585a-0443-53f1-916b-bdb61ff90486",
+  "answer_text": "Motorola G55 5G",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "299": {
+  "draft": "Motorola Moto G34 5G",
+  "answer": "c0",
+  "answer_uid": "e85bb4b4-d8d3-5312-8d29-0e95f514511d",
+  "answer_text": "Motorola G34 5G",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "303": {
+  "draft": "Motorola Moto E13",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.86,
+  "verdict": "待確認"
+ },
+ "304": {
+  "draft": "Motorola Moto E32",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.71,
+  "verdict": "待確認"
+ },
+ "305": {
+  "draft": "Motorola Moto E40",
+  "answer": "c0",
+  "answer_uid": "a20d035a-5d21-55f2-aed4-22eda0beee4e",
+  "answer_text": "Motorola E40",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "306": {
+  "draft": "Motorola Moto E6s",
+  "answer": "c0",
+  "answer_uid": "90588a78-acd6-5756-87a1-d43904f4017c",
+  "answer_text": "Motorola e6s",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "307": {
+  "draft": "Motorola Moto E7i Power",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.88,
+  "verdict": "待確認"
+ },
+ "308": {
+  "draft": "Motorola Moto G 5G Plus",
+  "answer": "c0",
+  "answer_uid": "0c730f14-cb43-5973-849b-d58e7a7e5f6f",
+  "answer_text": "Motorola G 5G Plus",
+  "confidence": 0.96,
+  "verdict": "採用"
+ },
+ "309": {
+  "draft": "Motorola Moto G Pure",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.92,
+  "verdict": "採用"
+ },
+ "310": {
+  "draft": "Motorola Moto G10",
+  "answer": "c0",
+  "answer_uid": "9fcbb606-1c6c-5cfb-99bc-19d33cc5d1ae",
+  "answer_text": "Motorola G10",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "311": {
+  "draft": "Motorola Moto G30",
+  "answer": "c0",
+  "answer_uid": "cde3a542-f927-54fc-b487-0daeb8e40468",
+  "answer_text": "Motorola G30",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "312": {
+  "draft": "Motorola Moto G31",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.51,
+  "verdict": "待確認"
+ },
+ "313": {
+  "draft": "Motorola Moto G50",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.8,
+  "verdict": "待確認"
+ },
+ "314": {
+  "draft": "Motorola Moto G51 5G",
+  "answer": "c0",
+  "answer_uid": "23df36c3-6678-57c5-80fa-7b98261e6c63",
+  "answer_text": "Motorola g51 5G",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "315": {
+  "draft": "Motorola Moto G62 5G",
+  "answer": "c0",
+  "answer_uid": "c7cd3bf7-59d1-5449-83de-a295136f1645",
+  "answer_text": "Motorola g62 5G",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "316": {
+  "draft": "Motorola Moto G8 Power Lite",
+  "answer": "c0",
+  "answer_uid": "26c4fdc4-19e5-53f4-9e98-0e8449913b04",
+  "answer_text": "Motorola G8 Power Lite",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "317": {
+  "draft": "Motorola Moto G82",
+  "answer": "c0",
+  "answer_uid": "20b5bed9-20ee-5ed1-9e4f-48311e8adfbc",
+  "answer_text": "Motorola G82 5G",
+  "confidence": 0.98,
+  "verdict": "採用"
+ },
+ "318": {
+  "draft": "Motorola Moto G85",
+  "answer": "c0",
+  "answer_uid": "ee7396c7-45ef-5872-8824-460dc0bfb362",
+  "answer_text": "Motorola G85",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "319": {
+  "draft": "Motorola Moto G9 Play",
+  "answer": "c0",
+  "answer_uid": "e48981c3-22c3-5a27-8064-c1a2b14fe8df",
+  "answer_text": "Motorola G9 Play",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "320": {
+  "draft": "Motorola Moto G9 Plus",
+  "answer": "c0",
+  "answer_uid": "a3b5c7c0-2fa9-5ea9-9b71-c84f73388db5",
+  "answer_text": "Motorola G9 Plus",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "328": {
+  "draft": "Motorola Motorola One Vision Plus(G8 PLUS)",
+  "answer": "c0",
+  "answer_uid": "f847d58d-35b1-535d-b404-b62c2d5a2dee",
+  "answer_text": "Motorola One Vision Plus",
+  "confidence": 0.95,
+  "verdict": "採用"
+ },
+ "329": {
+  "draft": "Motorola Motorola Razr",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.7,
+  "verdict": "待確認"
+ },
+ "332": {
+  "draft": "Motorola Moto Pad 60 Lite",
+  "answer": "c0",
+  "answer_uid": "8ddc4742-9543-5722-ad06-867a96eee621",
+  "answer_text": "Motorola Pad 60 Lite",
+  "confidence": 0.98,
+  "verdict": "採用"
+ },
+ "333": {
+  "draft": "Motorola Moto Pad 60 Neo",
+  "answer": "c0",
+  "answer_uid": "088f84f8-ffc5-5955-882c-cf1166e54c88",
+  "answer_text": "Motorola Pad 60 Neo",
+  "confidence": 0.97,
+  "verdict": "採用"
+ },
+ "343": {
+  "draft": "Nokia Nokia G60",
+  "answer": "c0",
+  "answer_uid": "126c335e-377f-55db-8666-d37a21a84792",
+  "answer_text": "Nokia G60 5G",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "353": {
+  "draft": "Nothing CMF Phone 1",
+  "answer": "c0",
+  "answer_uid": "033b432f-e17e-5ab4-90a2-8dd2926a2d66",
+  "answer_text": "Nothing Phone (1)",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "354": {
+  "draft": "Nothing CMF Phone 2 Pro",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.68,
+  "verdict": "待確認"
+ },
+ "381": {
+  "draft": "OPPO OPPO A3 Pro 5G",
+  "answer": "c0",
+  "answer_uid": "c85aee05-a5fc-54d7-8325-8c17a9ef877f",
+  "answer_text": "OPPO A3 Pro",
+  "confidence": 0.9,
+  "verdict": "採用"
+ },
+ "384": {
+  "draft": "OPPO OPPO A5 4G",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.62,
+  "verdict": "待確認"
+ },
+ "386": {
+  "draft": "OPPO OPPO A5 Pro",
+  "answer": "c0",
+  "answer_uid": "6a0715c5-461d-5185-ab8d-a25d9da2a037",
+  "answer_text": "OPPO A5 Pro 5G",
+  "confidence": 0.78,
+  "verdict": "待確認"
+ },
+ "397": {
+  "draft": "OPPO OPPO A9",
+  "answer": "c1",
+  "answer_uid": "8bf8b2a5-fb0f-59a4-b69e-0a015b87489f",
+  "answer_text": "OPPO A9 2020",
+  "confidence": 0.75,
+  "verdict": "待確認"
+ },
+ "399": {
+  "draft": "OPPO OPPO A98",
+  "answer": "c0",
+  "answer_uid": "62435e22-2af5-5e64-a8ce-d42340b2223f",
+  "answer_text": "OPPO A98 5G",
+  "confidence": 0.96,
+  "verdict": "採用"
+ },
+ "403": {
+  "draft": "OPPO OPPO Find X2 5G",
+  "answer": "c0",
+  "answer_uid": "21d68946-89b7-59bc-9978-3e3758d0f88c",
+  "answer_text": "OPPO Find X2",
+  "confidence": 0.84,
+  "verdict": "待確認"
+ },
+ "404": {
+  "draft": "OPPO OPPO Find X2 Pro 5G",
+  "answer": "c0",
+  "answer_uid": "04fd0049-7074-53a9-b62a-7d293fb7cf2e",
+  "answer_text": "OPPO Find X2 Pro",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "412": {
+  "draft": "OPPO OPPO Reno 十倍變焦版",
+  "answer": "c0",
+  "answer_uid": "dfcf8ce8-8694-551f-a899-d4d914bd20e2",
+  "answer_text": "OPPO Reno 10 倍變焦版",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "427": {
+  "draft": "OPPO OPPO Reno4 5G",
+  "answer": "c1",
+  "answer_uid": "b54b9547-3bb6-5f34-9387-32b715ece963",
+  "answer_text": "OPPO Reno 4",
+  "confidence": 0.48,
+  "verdict": "不採用"
+ },
+ "428": {
+  "draft": "OPPO OPPO Reno4 Pro 5G",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.95,
+  "verdict": "採用"
+ },
+ "429": {
+  "draft": "OPPO OPPO Reno4 Z 5G",
+  "answer": "c0",
+  "answer_uid": "a602971d-3d23-5b00-8f0e-7818e033ed89",
+  "answer_text": "OPPO Reno 4Z",
+  "confidence": 0.87,
+  "verdict": "待確認"
+ },
+ "432": {
+  "draft": "OPPO OPPO Reno5 Z 5G",
+  "answer": "c0",
+  "answer_uid": "8cf549b2-e74d-5e03-94af-1dabc4004946",
+  "answer_text": "OPPO Reno 5Z",
+  "confidence": 0.96,
+  "verdict": "採用"
+ },
+ "437": {
+  "draft": "OPPO OPPO Reno8",
+  "answer": "c2",
+  "answer_uid": "e3109889-0663-5b3e-bf27-3972f2e79528",
+  "answer_text": "OPPO Reno 8 5G",
+  "confidence": 0.83,
+  "verdict": "待確認"
+ },
+ "438": {
+  "draft": "OPPO OPPO Reno8 Pro",
+  "answer": "c0",
+  "answer_uid": "719dadbc-3908-5e86-b40e-0c785872a253",
+  "answer_text": "OPPO Reno 8 Pro 5G",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "473": {
+  "draft": "POCO POCO F3 5G",
+  "answer": "c0",
+  "answer_uid": "5898712c-9891-5fbe-bcbb-88bc964037d2",
+  "answer_text": "POCO F3",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "483": {
+  "draft": "POCO POCO M3 4G",
+  "answer": "c0",
+  "answer_uid": "74ce295b-3517-52ce-848f-a94b4903adf2",
+  "answer_text": "POCO M3",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "485": {
+  "draft": "POCO POCO M4 Pro 4G",
+  "answer": "c0",
+  "answer_uid": "1b3fdd71-176c-5620-b5c6-ac0330ad97b5",
+  "answer_text": "POCO M4 Pro",
+  "confidence": 0.77,
+  "verdict": "待確認"
+ },
+ "491": {
+  "draft": "POCO POCO X3 Pro 4G",
+  "answer": "c0",
+  "answer_uid": "9eeb5869-bf9c-58cc-9a31-891ca6cd6c9a",
+  "answer_text": "POCO X3 Pro",
+  "confidence": 0.98,
+  "verdict": "採用"
+ },
+ "496": {
+  "draft": "POCO POCO X6 5G",
+  "answer": "c0",
+  "answer_uid": "12dc883e-1bd7-5988-972e-4114213161ab",
+  "answer_text": "POCO X6",
+  "confidence": 0.96,
+  "verdict": "採用"
+ },
+ "497": {
+  "draft": "POCO POCO X6 Pro 5G",
+  "answer": "c0",
+  "answer_uid": "5586bdcc-8e37-5323-9db4-42ac865fa51f",
+  "answer_text": "POCO X6 Pro",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "500": {
+  "draft": "POCO POCO X8 Pro 鋼鐵人聯名款",
+  "answer": "c1",
+  "answer_uid": "f1a911a7-d608-58cf-a327-66b6e4998635",
+  "answer_text": "POCO X8 Pro",
+  "confidence": 0.8,
+  "verdict": "待確認"
+ },
+ "519": {
+  "draft": "realme realme 11",
+  "answer": "c0",
+  "answer_uid": "8879148a-848c-5c75-97b9-5ec627c31f3f",
+  "answer_text": "realme 11 5G",
+  "confidence": 0.82,
+  "verdict": "待確認"
+ },
+ "522": {
+  "draft": "realme realme 11x",
+  "answer": "c0",
+  "answer_uid": "b230a780-9af7-55c7-9f26-7f2c50081026",
+  "answer_text": "realme 11x 5G",
+  "confidence": 0.98,
+  "verdict": "採用"
+ },
+ "523": {
+  "draft": "realme realme 12",
+  "answer": "c0",
+  "answer_uid": "d53d00c8-3a6c-5ee0-ac2a-16582927fc75",
+  "answer_text": "realme 12 5G",
+  "confidence": 0.68,
+  "verdict": "待確認"
+ },
+ "525": {
+  "draft": "realme realme 12+",
+  "answer": "c0",
+  "answer_uid": "14011eab-ac5e-5d27-8680-ba4349b80bbd",
+  "answer_text": "realme 12+ 5G",
+  "confidence": 0.96,
+  "verdict": "採用"
+ },
+ "526": {
+  "draft": "realme realme 12x",
+  "answer": "c0",
+  "answer_uid": "560deb4b-15ce-5fb2-b1a4-b8b054d59f46",
+  "answer_text": "realme 12x 5G",
+  "confidence": 0.96,
+  "verdict": "採用"
+ },
+ "530": {
+  "draft": "realme realme 14 Pro+",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.86,
+  "verdict": "待確認"
+ },
+ "531": {
+  "draft": "realme realme 14C",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.46,
+  "verdict": "不採用"
+ },
+ "533": {
+  "draft": "realme realme 15 Pro 權力遊戲限量版",
+  "answer": "c0",
+  "answer_uid": "fd8a1e0b-cec2-57ac-84be-5220eed5238a",
+  "answer_text": "realme 15 Pro 5G",
+  "confidence": 0.47,
+  "verdict": "不採用"
+ },
+ "544": {
+  "draft": "realme realme C21 4G",
+  "answer": "c0",
+  "answer_uid": "13c7f283-3882-5e27-8346-19fbac5276fd",
+  "answer_text": "realme C21",
+  "confidence": 0.94,
+  "verdict": "採用"
+ },
+ "549": {
+  "draft": "realme realme GT 5G",
+  "answer": "c1",
+  "answer_uid": "d83363d3-5641-53ae-8e40-9d69052e49c8",
+  "answer_text": "realme GT",
+  "confidence": 0.94,
+  "verdict": "採用"
+ },
+ "554": {
+  "draft": "realme realme GT 8 Pro F1限量版",
+  "answer": "c0",
+  "answer_uid": "6d6a2af3-c61f-5c98-8d89-a034a3a1174d",
+  "answer_text": "realme GT 8 Pro",
+  "confidence": 0.93,
+  "verdict": "採用"
+ },
+ "562": {
+  "draft": "realme realme Narzo 50 Pro",
+  "answer": "c0",
+  "answer_uid": "7a71873d-3a43-5703-ac0f-14c0eb9fd3cc",
+  "answer_text": "realme narzo 50 Pro 5G",
+  "confidence": 0.94,
+  "verdict": "採用"
+ },
+ "568": {
+  "draft": "realme realme X7 Pro 5G",
+  "answer": "c0",
+  "answer_uid": "5eb84fb9-a297-52be-ab2b-3284d4b98c59",
+  "answer_text": "realme X7 Pro",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "605": {
+  "draft": "Samsung Galaxy A26",
+  "answer": "c0",
+  "answer_uid": "46c0bbde-2d90-5932-8982-824fd3da6a37",
+  "answer_text": "Samsung Galaxy A26 5G",
+  "confidence": 0.82,
+  "verdict": "待確認"
+ },
+ "607": {
+  "draft": "Samsung Galaxy A32",
+  "answer": "c0",
+  "answer_uid": "a6c1faf5-d803-5d3b-b4d3-fd1b0388f97c",
+  "answer_text": "Samsung Galaxy A32 5G",
+  "confidence": 0.64,
+  "verdict": "待確認"
+ },
+ "610": {
+  "draft": "Samsung Galaxy A36",
+  "answer": "c0",
+  "answer_uid": "a729858f-2d5b-5968-ba85-2ada0cfdd229",
+  "answer_text": "Samsung Galaxy A36 5G",
+  "confidence": 0.87,
+  "verdict": "待確認"
+ },
+ "623": {
+  "draft": "Samsung Galaxy M12 4G",
+  "answer": "c0",
+  "answer_uid": "97a7ccc8-8ff9-5bbb-9c89-67b2905e8af8",
+  "answer_text": "Samsung Galaxy M12",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "633": {
+  "draft": "Samsung Galaxy Note2",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.88,
+  "verdict": "待確認"
+ },
+ "636": {
+  "draft": "Samsung Galaxy Note3",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "637": {
+  "draft": "Samsung Galaxy Note4",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "638": {
+  "draft": "Samsung Galaxy Note8",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "642": {
+  "draft": "Samsung Galaxy S20",
+  "answer": "c0",
+  "answer_uid": "f44db6d5-2258-58fc-b03e-ebcad81b0ab5",
+  "answer_text": "Samsung Galaxy S20 5G",
+  "confidence": 0.78,
+  "verdict": "待確認"
+ },
+ "643": {
+  "draft": "Samsung Galaxy S20 FE",
+  "answer": "c0",
+  "answer_uid": "a73b8b38-4540-55b8-8ac0-8ce3fccf145c",
+  "answer_text": "Samsung Galaxy S20 FE 5G",
+  "confidence": 0.95,
+  "verdict": "採用"
+ },
+ "644": {
+  "draft": "Samsung Galaxy S20 Ultra",
+  "answer": "c0",
+  "answer_uid": "4fca667c-6e59-55c0-89b0-765a80c1824e",
+  "answer_text": "Samsung Galaxy S20 Ultra 5G",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "645": {
+  "draft": "Samsung Galaxy S20+",
+  "answer": "c0",
+  "answer_uid": "da6e8011-86e0-57df-813c-28dfb9621db0",
+  "answer_text": "Samsung Galaxy S20+ 5G",
+  "confidence": 0.98,
+  "verdict": "採用"
+ },
+ "647": {
+  "draft": "Samsung Galaxy S21 FE",
+  "answer": "c0",
+  "answer_uid": "cfc81aac-c0e5-5101-a215-ec89ab780735",
+  "answer_text": "Samsung Galaxy S21 FE 5G",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "659": {
+  "draft": "Samsung Galaxy S4",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "660": {
+  "draft": "Samsung Galaxy S4 mini",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "661": {
+  "draft": "Samsung Galaxy S5",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "662": {
+  "draft": "Samsung Galaxy S6",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "663": {
+  "draft": "Samsung Galaxy S8",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "664": {
+  "draft": "Samsung Galaxy S8+",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.98,
+  "verdict": "採用"
+ },
+ "665": {
+  "draft": "Samsung Galaxy S9",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.98,
+  "verdict": "採用"
+ },
+ "666": {
+  "draft": "Samsung Galaxy S9+",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "671": {
+  "draft": "Samsung Galaxy Z Flip4 5G",
+  "answer": "c0",
+  "answer_uid": "1f1f03fc-5ae3-5d72-bd88-ad45da2b8a61",
+  "answer_text": "Samsung Galaxy Z Flip4",
+  "confidence": 0.98,
+  "verdict": "採用"
+ },
+ "672": {
+  "draft": "Samsung Galaxy Z Flip5 5G",
+  "answer": "c1",
+  "answer_uid": "7aae71ca-e24a-514f-a9bc-c165c5460a3c",
+  "answer_text": "Samsung Galaxy Z Flip5",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "673": {
+  "draft": "Samsung Galaxy Z Flip6 5G",
+  "answer": "c0",
+  "answer_uid": "098a10e8-531d-5011-97b7-b281f03c5e7e",
+  "answer_text": "Samsung Galaxy Z Flip6",
+  "confidence": 0.89,
+  "verdict": "待確認"
+ },
+ "674": {
+  "draft": "Samsung Galaxy Z Flip7 5G",
+  "answer": "c0",
+  "answer_uid": "fef4fd6e-f828-54ed-8ded-0bec039525f5",
+  "answer_text": "Samsung Galaxy Z Flip7",
+  "confidence": 0.71,
+  "verdict": "待確認"
+ },
+ "675": {
+  "draft": "Samsung Galaxy Z Fold2 5G",
+  "answer": "c0",
+  "answer_uid": "97f2c7ce-6798-50c1-a228-a72d81d7315c",
+  "answer_text": "Samsung Galaxy Z Fold2",
+  "confidence": 0.93,
+  "verdict": "採用"
+ },
+ "677": {
+  "draft": "Samsung Galaxy Z Fold4 5G",
+  "answer": "c0",
+  "answer_uid": "8f7aa709-f500-537e-9a33-34627f953ca9",
+  "answer_text": "Samsung Galaxy Z Fold4",
+  "confidence": 0.98,
+  "verdict": "採用"
+ },
+ "680": {
+  "draft": "Samsung Galaxy Tab A11+",
+  "answer": "c1",
+  "answer_uid": "712ca543-48f9-564e-85bd-4aa22ce79681",
+  "answer_text": "Samsung Galaxy Tab A11+ Wi-Fi",
+  "confidence": 0.74,
+  "verdict": "待確認"
+ },
+ "682": {
+  "draft": "Samsung Galaxy Tab S10 Lite",
+  "answer": "c1",
+  "answer_uid": "1933d284-3f28-57d1-a82c-a20f39f725f0",
+  "answer_text": "Samsung Galaxy Tab S10 Lite Wi-Fi",
+  "confidence": 0.72,
+  "verdict": "待確認"
+ },
+ "683": {
+  "draft": "Samsung Galaxy Tab S11",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.47,
+  "verdict": "不採用"
+ },
+ "684": {
+  "draft": "Samsung Galaxy Tab S11 Ultra",
+  "answer": "c4",
+  "answer_uid": "0a7326bd-3a1a-5242-afd9-06c7a4b16a8b",
+  "answer_text": "Samsung Galaxy Tab S11 Ultra (5G, 鍵盤套裝組)",
+  "confidence": 0.5,
+  "verdict": "待確認"
+ },
+ "685": {
+  "draft": "Samsung Galaxy Tab S10 FE",
+  "answer": "c1",
+  "answer_uid": "d240a153-d680-5d42-b8ef-f3486fbe137b",
+  "answer_text": "Samsung Galaxy Tab S10 FE Wi-Fi",
+  "confidence": 0.53,
+  "verdict": "待確認"
+ },
+ "686": {
+  "draft": "Samsung Galaxy Tab S10 FE+",
+  "answer": "c1",
+  "answer_uid": "8339fd11-b47f-5c64-be92-3ce99360811d",
+  "answer_text": "Samsung Galaxy Tab S10 FE+ Wi-Fi",
+  "confidence": 0.68,
+  "verdict": "待確認"
+ },
+ "687": {
+  "draft": "Samsung Galaxy Tab S10 Ultra",
+  "answer": "c0",
+  "answer_uid": "f736d243-ff19-5726-b636-00920a658093",
+  "answer_text": "Samsung Galaxy Tab S10 Ultra 5G",
+  "confidence": 0.34,
+  "verdict": "不採用"
+ },
+ "688": {
+  "draft": "Samsung Galaxy Tab S10+",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.51,
+  "verdict": "待確認"
+ },
+ "690": {
+  "draft": "Samsung Galaxy Tab A7",
+  "answer": "c4",
+  "answer_uid": "8ee62b14-7798-53f8-8251-ef7cedf2fb3b",
+  "answer_text": "Samsung Galaxy Tab A7 Wi-Fi",
+  "confidence": 0.95,
+  "verdict": "採用"
+ },
+ "691": {
+  "draft": "Samsung Galaxy Tab A7 Lite",
+  "answer": "c0",
+  "answer_uid": "4bd2848e-149b-5f36-b186-f668cd997984",
+  "answer_text": "Samsung Galaxy Tab A7 Lite LTE",
+  "confidence": 0.57,
+  "verdict": "待確認"
+ },
+ "693": {
+  "draft": "Samsung Galaxy Tab A9+",
+  "answer": "c1",
+  "answer_uid": "a69d42de-79a0-5bac-bd86-06507b93937c",
+  "answer_text": "Samsung Galaxy Tab A9+ Wi-Fi",
+  "confidence": 0.87,
+  "verdict": "待確認"
+ },
+ "694": {
+  "draft": "Samsung Galaxy Tab S6 Lite",
+  "answer": "c2",
+  "answer_uid": "84fa3ea0-e61e-574d-8af9-68aa35e1614a",
+  "answer_text": "Samsung Galaxy Tab S6 Lite Wi-Fi",
+  "confidence": 0.87,
+  "verdict": "待確認"
+ },
+ "696": {
+  "draft": "Samsung Galaxy Tab S7 FE",
+  "answer": "c2",
+  "answer_uid": "30d1dd1c-7d54-5568-88a6-40757764f49e",
+  "answer_text": "Samsung Galaxy Tab S7 FE Wi-Fi",
+  "confidence": 0.8,
+  "verdict": "待確認"
+ },
+ "697": {
+  "draft": "Samsung Galaxy Tab S7+",
+  "answer": "c1",
+  "answer_uid": "66a2c84b-2bd1-5340-87f8-fbbe09516006",
+  "answer_text": "Samsung Galaxy Tab S7+ Wi-Fi",
+  "confidence": 0.52,
+  "verdict": "待確認"
+ },
+ "698": {
+  "draft": "Samsung Galaxy Tab S8",
+  "answer": "c3",
+  "answer_uid": "83682808-a118-5872-9fbf-614d791cf67f",
+  "answer_text": "Samsung Galaxy Tab S8 Wi-Fi",
+  "confidence": 0.78,
+  "verdict": "待確認"
+ },
+ "699": {
+  "draft": "Samsung Galaxy Tab S8+",
+  "answer": "c1",
+  "answer_uid": "944ebe88-5ba2-5f1c-af1b-30cb062b7012",
+  "answer_text": "Samsung Galaxy Tab S8+ Wi-Fi",
+  "confidence": 0.6,
+  "verdict": "待確認"
+ },
+ "700": {
+  "draft": "Samsung Galaxy Tab S9",
+  "answer": "c3",
+  "answer_uid": "b6d8a2ad-93ca-5dfb-bb4c-7cef412f323a",
+  "answer_text": "Samsung Galaxy Tab S9 Wi-Fi",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "701": {
+  "draft": "Samsung Galaxy Tab S9 Ultra",
+  "answer": "c0",
+  "answer_uid": "9c5c90f8-a6d9-5d7a-8e46-a908ef3120e4",
+  "answer_text": "Samsung Galaxy Tab S9 Ultra Wi-Fi",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "702": {
+  "draft": "Samsung Galaxy Tab S9+",
+  "answer": "c0",
+  "answer_uid": "d0283337-9569-592c-b052-7d2e445d169b",
+  "answer_text": "Samsung Galaxy Tab S9+ Wi-Fi",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "717": {
+  "draft": "Samsung Galaxy Watch 4 Classic",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.87,
+  "verdict": "待確認"
+ },
+ "718": {
+  "draft": "Samsung Galaxy Watch Ultra 47mm",
+  "answer": "c0",
+  "answer_uid": "e0777f9d-de2f-5b0b-baa4-3591cd4294a7",
+  "answer_text": "Samsung Galaxy Watch Ultra",
+  "confidence": 0.63,
+  "verdict": "待確認"
+ },
+ "730": {
+  "draft": "Samsung Galaxy Ring",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "766": {
+  "draft": "Sony Xperia 10 VIII x Hello Kitty 限量特仕版",
+  "answer": "c1",
+  "answer_uid": "0c4dd8e4-1cf8-5ece-85fa-2a3c8a94f431",
+  "answer_text": "Sony Xperia 10 VIII",
+  "confidence": 0.96,
+  "verdict": "採用"
+ },
+ "777": {
+  "draft": "Sony INZONE H3",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.88,
+  "verdict": "待確認"
+ },
+ "780": {
+  "draft": "Sony SRS-NB10",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "811": {
+  "draft": "vivo vivo V21s",
+  "answer": "c0",
+  "answer_uid": "f9420510-82a8-5ec8-a46f-0cab33441545",
+  "answer_text": "vivo V21s 5G",
+  "confidence": 0.88,
+  "verdict": "待確認"
+ },
+ "814": {
+  "draft": "vivo vivo V25",
+  "answer": "c0",
+  "answer_uid": "d887bfa4-4ae5-5719-9aa5-75a20ef3ef34",
+  "answer_text": "vivo V25 5G",
+  "confidence": 0.89,
+  "verdict": "待確認"
+ },
+ "815": {
+  "draft": "vivo vivo V25 Pro",
+  "answer": "c0",
+  "answer_uid": "58862622-0ab1-50e3-a2c3-32cbdb91b0b6",
+  "answer_text": "vivo V25 Pro 5G",
+  "confidence": 0.99,
+  "verdict": "採用"
+ },
+ "817": {
+  "draft": "vivo vivo V29",
+  "answer": "c0",
+  "answer_uid": "11baa51b-f857-5937-81d9-3d32d264b431",
+  "answer_text": "vivo V29 5G",
+  "confidence": 0.95,
+  "verdict": "採用"
+ },
+ "818": {
+  "draft": "vivo vivo V29e",
+  "answer": "c0",
+  "answer_uid": "773b15ba-f041-5a37-96ac-483cc826c150",
+  "answer_text": "vivo V29e 5G",
+  "confidence": 0.98,
+  "verdict": "採用"
+ },
+ "829": {
+  "draft": "vivo vivo X50 5G",
+  "answer": "c0",
+  "answer_uid": "03f814f2-7081-545d-ac0c-534bd8187a5d",
+  "answer_text": "vivo X50",
+  "confidence": 0.78,
+  "verdict": "待確認"
+ },
+ "830": {
+  "draft": "vivo vivo X50 Pro 5G",
+  "answer": "c0",
+  "answer_uid": "a00ef93a-725e-5ee2-ac38-5404a65180fb",
+  "answer_text": "vivo X50 Pro",
+  "confidence": 0.94,
+  "verdict": "採用"
+ },
+ "831": {
+  "draft": "vivo vivo X50e 5G",
+  "answer": "c0",
+  "answer_uid": "4a053615-05b3-5e69-a695-08333fd72484",
+  "answer_text": "vivo X50e",
+  "confidence": 0.8,
+  "verdict": "待確認"
+ },
+ "839": {
+  "draft": "vivo vivo Y100",
+  "answer": "c0",
+  "answer_uid": "51bca881-105c-5c1a-9385-3634b17ec3f2",
+  "answer_text": "vivo Y100 5G",
+  "confidence": 0.88,
+  "verdict": "待確認"
+ },
+ "840": {
+  "draft": "vivo vivo Y15",
+  "answer": "c0",
+  "answer_uid": "0b4470c8-900b-5da7-affb-dcd4751cc12c",
+  "answer_text": "vivo Y15 2020",
+  "confidence": 0.89,
+  "verdict": "待確認"
+ },
+ "844": {
+  "draft": "vivo vivo Y21 5G",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.45,
+  "verdict": "不採用"
+ },
+ "846": {
+  "draft": "vivo vivo Y27",
+  "answer": "c0",
+  "answer_uid": "46e8ef6e-27d8-50d7-af0c-7cba79f8f497",
+  "answer_text": "vivo Y27 5G",
+  "confidence": 0.9,
+  "verdict": "採用"
+ },
+ "847": {
+  "draft": "vivo vivo Y36",
+  "answer": "c0",
+  "answer_uid": "15cfcac5-bd51-569f-9371-3cc038ae05b8",
+  "answer_text": "vivo Y36 5G",
+  "confidence": 0.89,
+  "verdict": "待確認"
+ },
+ "848": {
+  "draft": "vivo vivo Y38",
+  "answer": "c0",
+  "answer_uid": "74afe079-74ec-50eb-8a57-45adf429f557",
+  "answer_text": "vivo Y38 5G",
+  "confidence": 0.94,
+  "verdict": "採用"
+ },
+ "851": {
+  "draft": "vivo vivo Y52 5G (2021)",
+  "answer": "c2",
+  "answer_uid": "43bb9cea-bfeb-5d8c-8310-3877e2f90a0b",
+  "answer_text": "vivo Y52 5G",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "852": {
+  "draft": "vivo vivo Y52 5G (2022)",
+  "answer": "c0",
+  "answer_uid": "1495b742-7edb-5954-8fc2-1b4940772856",
+  "answer_text": "vivo Y52 (2022) 5G",
+  "confidence": 0.89,
+  "verdict": "待確認"
+ },
+ "855": {
+  "draft": "vivo vivo Y76",
+  "answer": "c0",
+  "answer_uid": "bcfc43b3-5de8-5e92-b03c-ee55e0a43cdc",
+  "answer_text": "vivo Y76 5G",
+  "confidence": 0.81,
+  "verdict": "待確認"
+ },
+ "856": {
+  "draft": "vivo vivo Y78",
+  "answer": "c0",
+  "answer_uid": "66bdd146-c76f-5d87-acbe-a4dab68afa93",
+  "answer_text": "vivo Y78 5G",
+  "confidence": 0.98,
+  "verdict": "採用"
+ },
+ "897": {
+  "draft": "小米 Redmi 12",
+  "answer": "c1",
+  "answer_uid": "2f07a600-8914-52c6-8aca-3ab040ba1626",
+  "answer_text": "Xiaomi Redmi 12 5G",
+  "confidence": 0.66,
+  "verdict": "待確認"
+ },
+ "899": {
+  "draft": "小米 Redmi A1+",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.69,
+  "verdict": "待確認"
+ },
+ "902": {
+  "draft": "小米 Redmi Note 10S",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.74,
+  "verdict": "待確認"
+ },
+ "908": {
+  "draft": "小米 Redmi Note 12",
+  "answer": "c1",
+  "answer_uid": "1e3b0e43-1200-50c2-89e5-32844c64a23c",
+  "answer_text": "Xiaomi Redmi Note 12 5G",
+  "confidence": 0.82,
+  "verdict": "待確認"
+ },
+ "909": {
+  "draft": "小米 Redmi Note 12 Pro",
+  "answer": "c0",
+  "answer_uid": "d3ca68e8-1c09-5fa0-b48e-5b95bc67c6a6",
+  "answer_text": "Xiaomi Redmi Note 12 Pro 5G",
+  "confidence": 0.96,
+  "verdict": "採用"
+ },
+ "910": {
+  "draft": "小米 Redmi Note 12 Pro+",
+  "answer": "c0",
+  "answer_uid": "59892558-7592-5f8b-97f4-1025c3c90454",
+  "answer_text": "Xiaomi Redmi Note 12 Pro+ 5G",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "911": {
+  "draft": "小米 Redmi Note 13 4G",
+  "answer": "c0",
+  "answer_uid": "15060a73-1ac6-5004-889a-48efcd2dda2b",
+  "answer_text": "Xiaomi Redmi Note 13",
+  "confidence": 0.63,
+  "verdict": "待確認"
+ },
+ "913": {
+  "draft": "小米 Redmi Note 13 Pro",
+  "answer": "c0",
+  "answer_uid": "3a3260e7-195c-5b31-b059-38c94e1df661",
+  "answer_text": "Xiaomi Redmi Note 13 Pro 5G",
+  "confidence": 0.96,
+  "verdict": "採用"
+ },
+ "914": {
+  "draft": "小米 Redmi Note 15 4G",
+  "answer": "c0",
+  "answer_uid": "c49196fc-0fb4-5549-b0e0-d100c2a8c97d",
+  "answer_text": "Xiaomi Redmi Note 15",
+  "confidence": 0.59,
+  "verdict": "待確認"
+ },
+ "916": {
+  "draft": "小米 Redmi Note 9 Pro",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.7,
+  "verdict": "待確認"
+ },
+ "921": {
+  "draft": "小米 Xiaomi 10T Pro 5G",
+  "answer": "c0",
+  "answer_uid": "07d52697-fb68-5608-805f-13af3c4fe880",
+  "answer_text": "Xiaomi Xiaomi 10T Pro",
+  "confidence": 0.84,
+  "verdict": "待確認"
+ },
+ "925": {
+  "draft": "小米 Xiaomi 11T",
+  "answer": "c1",
+  "answer_uid": "206f19a1-1b9f-5a39-ad88-d66cae43ec56",
+  "answer_text": "Xiaomi Xiaomi 11T 5G",
+  "confidence": 0.98,
+  "verdict": "採用"
+ },
+ "926": {
+  "draft": "小米 Xiaomi 11T Pro",
+  "answer": "c0",
+  "answer_uid": "4277ee1e-e8e1-5327-bec3-6c51c9e86c0d",
+  "answer_text": "Xiaomi Xiaomi 11T Pro 5G",
+  "confidence": 1,
+  "verdict": "採用"
+ },
+ "992": {
+  "draft": "黑鯊 黑鯊 3",
+  "answer": "c3",
+  "answer_uid": "63c1e8d6-e13f-5185-870c-4d0fa469fcd1",
+  "answer_text": "黑鯊 Blackshark 遊戲手機 3",
+  "confidence": 0.89,
+  "verdict": "待確認"
+ },
+ "993": {
+  "draft": "黑鯊 黑鯊 4",
+  "answer": "none",
+  "answer_uid": null,
+  "answer_text": "都不是",
+  "confidence": 0.66,
+  "verdict": "待確認"
+ },
+ "994": {
+  "draft": "黑鯊 黑鯊 5",
+  "answer": "c0",
+  "answer_uid": "34c3f39c-41f2-567e-89d3-d08a5fe43466",
+  "answer_text": "黑鯊 Blackshark 5 Pro",
+  "confidence": 0.54,
+  "verdict": "待確認"
+ },
+ "995": {
+  "draft": "黑鯊 黑鯊 5 Pro",
+  "answer": "c0",
+  "answer_uid": "34c3f39c-41f2-567e-89d3-d08a5fe43466",
+  "answer_text": "黑鯊 Blackshark 5 Pro",
+  "confidence": 0.94,
+  "verdict": "採用"
+ }
+}

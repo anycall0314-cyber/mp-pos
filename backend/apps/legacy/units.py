@@ -139,6 +139,14 @@ def group_of(name: str) -> str:
     return "/".join(part.strip() for part in (name or "").split("/")[:3])
 
 
+def is_used_name(name: str) -> bool | None:
+    """舊品名看得出是不是中古機:第一段是種類(`中古/IP13P/256G/80%/黑/R`、`手機/三星-A17…`)。沒有舊品名 = None(不知道)。"""
+    first = (name or "").split("/")[0].strip()
+    if not first:
+        return None
+    return "中古" in first
+
+
 _BATTERY = re.compile(r"(?<!\d)(\d{2,3})\s*%")
 
 

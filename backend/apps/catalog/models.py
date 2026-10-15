@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.db import models, transaction
 
-from apps.core.models import TenantOwnedModel
+from apps.core.models import TenantOwnedModel, TimestampedModel
 from apps.core.staff_cost import PRODUCT_MODES
 
 
@@ -1011,6 +1011,9 @@ class PhoneModel(TenantOwnedModel):
     generation = models.PositiveIntegerField("世代", null=True, blank=True)
     model_suffix = models.CharField("型號後綴", max_length=30, blank=True, default="")
     is_active = models.BooleanField("啟用", default=True)
+    # 對到平台型號庫的哪一支(`DeviceModel.uid`;空的 = 還沒對)。記編號字串不記外鍵:
+    # 型號庫是平台一份、不進公司備份,還原到別的環境時外鍵會指到不存在的列(跟叫貨的廠商代碼同一個做法)
+    device_uid = models.CharField("型號庫編號", max_length=64, blank=True, default="", db_default="", db_index=True)
 
     class Meta:
         constraints = [
@@ -1020,6 +1023,12 @@ class PhoneModel(TenantOwnedModel):
             models.UniqueConstraint(
                 fields=["tenant", "match_key"],
                 name="uniq_phone_model_tenant_match_key",
+            ),
+            # 一支手機在一家公司只有一個機型(複審 P1:分兩次對照把兩個機型對到同一支)
+            models.UniqueConstraint(
+                fields=["tenant", "device_uid"],
+                condition=~models.Q(device_uid=""),
+                name="uniq_phone_model_tenant_device",
             ),
         ]
         indexes = [models.Index(fields=["tenant", "is_active"])]
@@ -1109,3 +1118,74 @@ class ProductRelation(TenantOwnedModel):
             elif self.host_product_id:
                 self.host_model_key = self.host_product.phone_model_key
         super().save(*args, **kwargs)
+
+
+class DeviceModel(TimestampedModel):
+    """平台型號庫(M1,owner 2026-10-14 / 10-15):手機、平板、手錶、手環、耳機,**平台一份、每一家讀同一份**,不屬於任何公司。
+
+    `uid` 是穩定的身分(Codex 整理的 model_id;草稿補的另外算),名稱照一般的寫法(`Galaxy S25 Ultra`)。
+    `data` 放容量、連線、尺寸、顏色、有寫明種類的台幣價格(**只是參考,不是門市售價**)、來源網址、別名、舊編號。
+    寫法只有 `device_catalog.py`(匯入可以重跑、重跑不改;每一次改了什麼記在 `DeviceCatalogChange`)。
+    公司那邊用 `PhoneModel.device_uid` 記對到哪一支;不進公司備份。
+    """
+
+    class Category(models.TextChoices):
+        PHONE = "phone", "手機"
+        TABLET = "tablet", "平板"
+        WATCH = "watch", "手錶"
+        BAND = "band", "手環"
+        HEADPHONES = "headphones", "耳機"
+        OTHER = "other", "其他穿戴"
+
+    uid = models.CharField("編號", max_length=64, unique=True)
+    category = models.CharField("類別", max_length=20, choices=Category.choices)
+    brand = models.CharField("品牌", max_length=80)
+    name = models.CharField("型號", max_length=160)
+    launched = models.CharField("上市", max_length=10, blank=True, default="")
+    data = models.JSONField("規格與來源", default=dict, blank=True)
+    content_hash = models.CharField("內容雜湊", max_length=64)
+    is_active = models.BooleanField("啟用", default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["category", "brand", "name"], name="uniq_device_model_name"),
+        ]
+        ordering = ["category", "brand", "name"]
+        verbose_name = "型號庫"
+        verbose_name_plural = "型號庫"
+
+    def __str__(self) -> str:
+        return f"{self.brand} {self.name}"
+
+
+class DeviceCatalogRun(TimestampedModel):
+    """型號庫的一次匯入(或之後的自動更新):從哪裡來、改了幾筆。收回(`undo`)照這一次記的 `DeviceCatalogChange` 倒回去。"""
+
+    source = models.CharField("來源", max_length=200)
+    counts = models.JSONField("筆數", default=dict, blank=True)
+    undone_at = models.DateTimeField("收回時間", null=True, blank=True)
+
+    class Meta:
+        ordering = ["-id"]
+        verbose_name = "型號庫匯入"
+        verbose_name_plural = "型號庫匯入"
+
+
+class DeviceCatalogChange(models.Model):
+    """型號庫的一筆變動:哪一次、哪一支、新增還是修改、改之前與改之後的內容(收回用)。"""
+
+    class Action(models.TextChoices):
+        CREATED = "created", "新增"
+        UPDATED = "updated", "修改"
+
+    run = models.ForeignKey(DeviceCatalogRun, on_delete=models.CASCADE, related_name="changes")
+    uid = models.CharField("編號", max_length=64, db_index=True)
+    action = models.CharField("動作", max_length=10, choices=Action.choices)
+    before = models.JSONField("改之前", null=True, blank=True)
+    after = models.JSONField("改之後", default=dict)
+    created_at = models.DateTimeField("時間", auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "型號庫變動"
+        verbose_name_plural = "型號庫變動"

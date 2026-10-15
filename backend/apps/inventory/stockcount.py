@@ -433,6 +433,12 @@ def _add_units(count, plans, targets, user):
             raise CountError(f"{row.code}:「{product.name}」已停用")
         if scope and product.category_id not in scope:
             raise CountError(f"{row.code}:「{product.name}」不在這張盤點單的類別裡")
+        # 舊系統是中古機的只能指定中古機的品號、新機只能指定不是中古機的(紅隊:店員習慣點全新的品號,中古就混進全新)
+        used = units.is_used_name(row.old_name)
+        if used is not None and used != product.is_secondhand:
+            if used:
+                raise CountError(f"{row.code}:舊系統是中古機,「{product.name}」不是中古機的品號")
+            raise CountError(f"{row.code}:舊系統是新機,「{product.name}」是中古機的品號")
         extra = {}
         if product.tracks_unit_condition:
             if price:

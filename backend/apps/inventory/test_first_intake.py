@@ -234,6 +234,22 @@ class ApproveTests(_Intake):
         r = self.act(count, "approve", extras={row["id"]: {"product": self.used.id, "unit_cost": "1"}})
         self.assertEqual((r.status_code, r.json()["detail"]), (400, f"{USED_IMEI}:「中古 iPhone 13 Pro 256GB」不在這張盤點單的類別裡"))
 
+    def test_a_used_phone_only_goes_into_a_used_product_and_a_new_one_never_does(self):
+        # 紅隊(M1 展開):店員習慣點全新的品號,中古機就混進全新、庫存與報表都是假的 → 舊系統看得出是不是中古的,品況要對
+        count, rows = self.submitted(NEW_IMEI, USED_IMEI, "ZZ00000001")
+        used, new, unknown = rows[USED_IMEI]["id"], rows[NEW_IMEI]["id"], rows["ZZ00000001"]["id"]
+        r = self.act(count, "approve", extras={used: {"product": self.a17.id, "unit_cost": "1"}})
+        self.assertEqual((r.status_code, r.json()["detail"]), (400, f"{USED_IMEI}:舊系統是中古機,「Galaxy A17 6/128 黑」不是中古機的品號"))
+        r = self.act(count, "approve", extras={new: {"product": self.used.id, "unit_cost": "1"}})
+        self.assertEqual((r.status_code, r.json()["detail"]), (400, f"{NEW_IMEI}:舊系統是新機,「中古 iPhone 13 Pro 256GB」是中古機的品號"))
+        self.assertFalse(ProductSerial.objects.filter(tenant=self.c.tenant, serial_no__in=[NEW_IMEI, USED_IMEI]).exists())
+        # 舊系統沒有的那一台看不出來:哪一種都可以
+        self.ok(self.act(count, "approve", extras={used: {"product": self.used.id, "unit_cost": "1"},
+                                                    new: {"product": self.a17.id, "unit_cost": "1"},
+                                                    unknown: {"product": self.used.id, "unit_cost": "1"}}))
+        got = dict(ProductSerial.objects.filter(tenant=self.c.tenant).values_list("serial_no", "product_id"))
+        self.assertEqual((got[USED_IMEI], got[NEW_IMEI], got["ZZ00000001"]), (self.used.id, self.a17.id, self.used.id))
+
     def test_only_a_manager_approves(self):
         count, rows = self.submitted(NEW_IMEI)
         r = self.act(count, "approve", self.c.clerk, extras={rows[NEW_IMEI]["id"]: {"product": self.a17.id, "unit_cost": "1"}})
@@ -258,6 +274,8 @@ class OldListTests(TestCase):
         self.assertEqual([units.battery_of(x) for x in ("中古/IP16/128G/80%/黑/R", "中古/SE2/64G/白/100%/R", "9H/120%", "皮套/A")],
                          [80, 100, None, None])
         self.assertEqual(units.group_of("中古/IP13P/256G/銀/保內"), "中古/IP13P/256G")
+        self.assertEqual([units.is_used_name(x) for x in ("中古/IP13P/256G/78%/白/W", " 中古機 /IP8", "手機/三星-A17 6/128逆襲黑", "福利機/IP15", "", "/IP13")],
+                         [True, True, False, False, None, None])
 
 
 class TwoPeopleTests(_Concurrent):
