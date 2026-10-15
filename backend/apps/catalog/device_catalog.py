@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 
 from django.db import transaction
 from django.utils import timezone
@@ -55,7 +56,8 @@ def _snapshot(d: DeviceModel) -> dict:
 
 
 def _name_key(row) -> tuple:
-    return (row["category"], row["brand"].casefold(), row["name"].casefold())
+    """同一個類別 + 品牌,型號名稱只差空白 / 大小寫的算同一支(展開到公司時也這樣認)。"""
+    return (row["category"], row["brand"].casefold(), re.sub(r"\s+", "", row["name"]).casefold())
 
 
 def plan(payload: dict) -> dict:
@@ -79,7 +81,7 @@ def plan(payload: dict) -> dict:
     if old_uids & seen_uid:
         raise CatalogError("舊編號跟另一支的編號一樣:" + "、".join(sorted(old_uids & seen_uid)[:5]))
     existing = {d.uid: d for d in DeviceModel.objects.all()}
-    taken = {(d.category, d.brand.casefold(), d.name.casefold()): d.uid for d in existing.values()}
+    taken = {_name_key({"category": d.category, "brand": d.brand, "name": d.name}): d.uid for d in existing.values()}
     clashes = [f"{r['brand']} {r['name']}" for r in rows if taken.get(_name_key(r), r["uid"]) != r["uid"]]
     if clashes:
         raise CatalogError("跟型號庫裡另一個編號撞名:" + "、".join(clashes[:5]) + (f" 等 {len(clashes)} 支" if len(clashes) > 5 else ""))

@@ -76,6 +76,7 @@ class SyncTests(TestCase):
             (catalog(dict(S25U, category="pager")), "Samsung Galaxy S25 Ultra:類別「pager」不認得"),
             (catalog(dict(S25U, name="")), "有一筆沒有編號 / 品牌 / 型號:u-s25u"),
             (catalog(dict(S25U, old_uids=["u-a57"]), NEW26), "舊編號跟另一支的編號一樣:u-a57"),
+            (catalog(S25U, dict(S25U, uid="u-space", name="Galaxy S25  ultra")), "同一個型號出現兩次:Samsung Galaxy S25  ultra"),
             ({"models": []}, "檔案裡沒有型號(要有 models)"),
         ]
         for payload, says in cases:
@@ -197,6 +198,36 @@ class ExpandTests(TestCase):
         self.assertEqual(pm.device_uid, "u-a57")
         self.assertEqual(PhoneModel.objects.filter(tenant=c.tenant, name__istartswith="galaxy a57").count(), 1)
         self.assertEqual(self.names(phone_model=pm), sorted(f"Galaxy A57 5G 128GB 冰川藍 台版 {x}" for x in ("全新", "已拆封", "中古機")))
+
+    def test_names_that_differ_only_in_spaces_are_the_same_model(self):
+        # 公司的舊機型是「系列 世代 後綴」接空白組的:「Galaxy Tab S 10 Ultra」就是型號庫的「Galaxy Tab S10 Ultra」
+        c = self.c
+        device_catalog.sync(catalog(S25U, NEW26, WATCH, OLD, device("u-tab", "Galaxy Tab S10 Ultra", category="tablet", caps=("256GB",), colors=("灰",))), source="more")
+        pm = PhoneModel.objects.create(tenant=c.tenant, code="tab", name="Galaxy Tab S 10 Ultra", match_key="galaxy tab s 10 ultra")
+        report = device_expand.expand(c.tenant, confirm=True)
+        pm.refresh_from_db()
+        self.assertEqual((pm.device_uid, report.problems), ("u-tab", []))
+        self.assertEqual(PhoneModel.objects.filter(tenant=c.tenant, name__icontains="tab").count(), 1)
+        self.assertEqual(self.names(phone_model=pm), ["Galaxy Tab S 10 Ultra 256GB 灰 台版 中古機", "Galaxy Tab S 10 Ultra 256GB 灰 台版 全新"])
+
+    def test_a_new_model_whose_name_only_differs_in_spaces_from_a_linked_one_is_not_built(self):
+        c = self.c
+        device_catalog.sync(catalog(S25U, NEW26, WATCH, OLD, device("u-dup", "Galaxy S 25 Ultra 5G", caps=("256GB",))), source="more")
+        mine = PhoneModel.objects.create(tenant=c.tenant, code="m", name="Galaxy S25 Ultra 5G", match_key="galaxy s25 ultra 5g", device_uid="u-s25u")
+        report = device_expand.expand(c.tenant, confirm=True)
+        self.assertIn("Samsung Galaxy S 25 Ultra 5G:名稱跟公司的「Galaxy S25 Ultra 5G」只差空白,它已經對到型號庫另一支", report.problems)
+        self.assertEqual(PhoneModel.objects.filter(tenant=c.tenant, device_uid="u-dup").count(), 0)
+        self.assertFalse(Product.objects.filter(tenant=c.tenant, name__startswith="Galaxy S 25 Ultra 5G").exists())
+        mine.refresh_from_db()
+        self.assertEqual(mine.device_uid, "u-s25u")
+
+    def test_two_shop_models_that_differ_only_in_spaces_are_not_guessed(self):
+        c = self.c
+        PhoneModel.objects.create(tenant=c.tenant, code="a", name="Galaxy A57 5G", match_key="galaxy a57 5g")
+        PhoneModel.objects.create(tenant=c.tenant, code="b", name="Galaxy A 57 5G", match_key="galaxy a 57 5g")
+        report = device_expand.expand(c.tenant, confirm=True)
+        self.assertIn("Samsung Galaxy A57 5G:公司有兩個只差空白的機型,看不出是哪一個,先不展開", report.problems)
+        self.assertFalse(PhoneModel.objects.filter(tenant=c.tenant, device_uid="u-a57").exists())
 
     def test_a_trial_counts_the_links_but_writes_nothing(self):
         c = self.c

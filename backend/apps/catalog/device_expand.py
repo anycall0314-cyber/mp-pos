@@ -130,6 +130,11 @@ def _series(tenant, brand: Brand, sname: str) -> PhoneSeries:
     return PhoneSeries.objects.create(tenant=tenant, brand=brand, name=sname.strip(), code=code)
 
 
+def name_key(name: str) -> str:
+    """機型名稱只差空白 / 大小寫的算同一個(「Galaxy Tab S 10 Ultra」=「Galaxy Tab S10 Ultra」;公司的舊機型是系列 + 世代 + 後綴接空白組的)。"""
+    return re.sub(r"\s+", "", name or "").casefold()
+
+
 def _model_name(series_name: str, generation, suffix) -> str:
     """跟 `phone_model.compute_phone_model_name` 有系列時的組法一樣(試算時系列還沒存,不能用那一支)。"""
     return _smart_join([series_name, str(generation) if generation else "", suffix or ""]).strip()
@@ -182,10 +187,18 @@ def expand(tenant, *, categories=("phone", "tablet", "watch"), links=None, holds
     conds, cats = _lookups(tenant)
     held = set(holds)
     devices = list(DeviceModel.objects.filter(is_active=True, category__in=categories).order_by("category", "brand", "name"))
-    by_uid = {pm.device_uid: pm for pm in PhoneModel.objects.for_tenant(tenant).exclude(device_uid="")}
-    by_name = {pm.name.casefold(): pm for pm in PhoneModel.objects.for_tenant(tenant).filter(device_uid="")}
+    models = list(PhoneModel.objects.for_tenant(tenant))
+    by_uid = {pm.device_uid: pm for pm in models if pm.device_uid}
+    # 還沒對的機型照「只差空白也算同一個」查;公司自己有兩個只差空白的 → 那個名稱不自動對(看不出是哪一個)
+    by_name, twins = {}, set()
+    for pm in models:
+        if not pm.device_uid:
+            key = name_key(pm.name)
+            twins.update([key] if key in by_name else [])
+            by_name[key] = pm
+    names = {name_key(pm.name): pm for pm in models}   # 全部機型(含已經對到別支的):新建之前要看會不會撞
     for name, uid in (links or {}).items():
-        pm = by_name.pop(name.casefold(), None)
+        pm = by_name.pop(name_key(name), None)
         if pm is not None and uid not in by_uid:
             by_uid[uid] = pm
     existing_names = set(Product.objects.for_tenant(tenant).values_list("name", flat=True))
@@ -199,7 +212,7 @@ def expand(tenant, *, categories=("phone", "tablet", "watch"), links=None, holds
             report.problems.append(f"這家公司沒有「{CATEGORY_OF[d.category]}」類別:{d}")
             continue
         report.devices += 1
-        one = _One(tenant, d, category, conds, by_uid, by_name, existing_names, new_for_old, confirm)
+        one = _One(tenant, d, category, conds, by_uid, by_name, existing_names, new_for_old, confirm, twins, names)
         try:
             if confirm:
                 with transaction.atomic():
@@ -216,9 +229,10 @@ def expand(tenant, *, categories=("phone", "tablet", "watch"), links=None, holds
 class _One:
     """一支型號展開到這家公司。結果先記在自己身上,整支成功才併進報告、才更新查表(失敗的那一支整個收回)。"""
 
-    def __init__(self, tenant, d, category, conds, by_uid, by_name, existing_names, new_for_old, confirm):
+    def __init__(self, tenant, d, category, conds, by_uid, by_name, existing_names, new_for_old, confirm, twins=(), names=None):
         self.tenant, self.d, self.category, self.conds = tenant, d, category, conds
         self.by_uid, self.by_name, self.existing_names = by_uid, by_name, existing_names
+        self.twins, self.names_all = set(twins), names if names is not None else {}
         self.new_for_old, self.confirm = new_for_old, confirm
         self.created: dict = {}
         self.names: list = []
@@ -234,10 +248,18 @@ class _One:
             model_name = _model_name(sname, generation, suffix)
             if not model_name:
                 raise ExpandError("型號名稱是空的")
-            # 名稱完全一樣(大小寫不算)的舊機型 = 同一支:對上去
-            pm = self.by_name.get(d.name.casefold()) or self.by_name.get(model_name.casefold())
+            # 名稱一樣(只差空白 / 大小寫)的舊機型 = 同一支:對上去
+            keys = {name_key(d.name), name_key(model_name)}
+            if keys & self.twins:
+                raise ExpandError("公司有兩個只差空白的機型,看不出是哪一個,先不展開")
+            pm = next((self.by_name[k] for k in keys if k in self.by_name), None)
             if pm is not None:
                 self.linked = True
+            else:
+                clash = next((self.names_all[k] for k in keys if k in self.names_all), None)
+                if clash is not None:
+                    # 已經對到別支、名稱卻只差空白:建下去就是同一個名字兩個機型,先不建
+                    raise ExpandError(f"名稱跟公司的「{clash.name}」只差空白,它已經對到型號庫另一支")
         if pm is not None:
             brand, series, generation, suffix, model_name = pm.brand, pm.series, pm.generation, pm.model_suffix, pm.name
             have = list(Product.objects.for_tenant(tenant).filter(phone_model=pm, requires_serial=True)
@@ -299,4 +321,5 @@ class _One:
         self.existing_names.update(self.names)
         if self.pm is not None and self.pm.pk:
             self.by_uid[self.d.uid] = self.pm
-            self.by_name.pop(self.pm.name.casefold(), None)
+            self.by_name.pop(name_key(self.pm.name), None)
+            self.names_all[name_key(self.pm.name)] = self.pm

@@ -1,6 +1,6 @@
 {
  "_why": "平台型號庫(M1);產生方式見 docs/development/M1_標準機型清單/build_catalog.py。價格只是參考,不是門市售價。",
- "version": "e17b9415c2ad",
+ "version": "13a248d08328",
  "models": [
   {
    "uid": "58849321-ea2b-5984-81b3-cf68e22ac061",
@@ -4892,6 +4892,26 @@
    ],
    "aliases": [
     "Sony INZONE Buds"
+   ],
+   "needs_review": []
+  },
+  {
+   "uid": "d2117f3a-ef6d-515c-9fcb-40f1a906774a",
+   "origin": "m1-draft",
+   "category": "headphones",
+   "brand": "Sony",
+   "name": "INZONE H3",
+   "launched": "2022-07",
+   "capacities": [],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [
+    "白"
+   ],
+   "prices": [],
+   "sources": [],
+   "aliases": [
+    "Sony INZONE H3"
    ],
    "needs_review": []
   },
@@ -9856,6 +9876,22 @@
    "needs_review": []
   },
   {
+   "uid": "6030f13f-2d77-541e-b10a-180a9aa25e55",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "Apple",
+   "name": "iPhone 6s",
+   "launched": "",
+   "capacities": [],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
    "uid": "e004978e-d8e0-54ee-9169-5063faeb15fa",
    "origin": "codex-v4",
    "category": "phone",
@@ -10128,6 +10164,22 @@
    "needs_review": []
   },
   {
+   "uid": "c5293255-7f5e-5798-9dec-3f64361b19ae",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "Apple",
+   "name": "iPhone SE",
+   "launched": "",
+   "capacities": [],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
    "uid": "e7f6eb69-360b-5875-937b-11532c73a696",
    "origin": "codex-v4",
    "category": "phone",
@@ -10353,6 +10405,26 @@
    "category": "phone",
    "brand": "Apple",
    "name": "iPhone XS",
+   "launched": "",
+   "capacities": [
+    "64GB",
+    "256GB",
+    "512GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
+   "uid": "7b7d7f37-406d-571e-8ca0-d40f97f3d4d3",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "Apple",
+   "name": "iPhone XS Max",
    "launched": "",
    "capacities": [
     "64GB",
@@ -17984,6 +18056,60 @@
    "needs_review": []
   },
   {
+   "uid": "c522ee13-7cac-59f6-80d5-b0e6ea0fedbf",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "Motorola",
+   "name": "Moto E13",
+   "launched": "",
+   "capacities": [
+    "64GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
+   "uid": "809e475e-e5cc-5d1f-aa79-772a8017d56e",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "Motorola",
+   "name": "Moto E32",
+   "launched": "",
+   "capacities": [
+    "64GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
+   "uid": "1a754257-8c50-5093-8151-9b910b7083c0",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "Motorola",
+   "name": "Moto E7i Power",
+   "launched": "",
+   "capacities": [
+    "32GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
    "uid": "f41d6446-059e-50d8-a912-d437f4e876a5",
    "origin": "m1-draft",
    "category": "phone",
@@ -17992,6 +18118,83 @@
    "launched": "",
    "capacities": [
     "32GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
+   "uid": "77e288a8-ef9b-535e-a00e-933d75663a9f",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "Motorola",
+   "name": "Moto G31",
+   "launched": "",
+   "capacities": [
+    "128GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
+   "uid": "10591013-70d0-58e2-aebe-680ffdbac8d1",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "Motorola",
+   "name": "Moto G50",
+   "launched": "",
+   "capacities": [
+    "128GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
+   "uid": "80a71bf7-15ba-53d7-badf-787507d5809f",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "Motorola",
+   "name": "Moto G86 Power 5G",
+   "launched": "2026-01",
+   "capacities": [
+    "256GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [
+    "天藍",
+    "魅藍"
+   ],
+   "prices": [],
+   "sources": [],
+   "aliases": [
+    "Motorola g86 Power 5G"
+   ],
+   "needs_review": []
+  },
+  {
+   "uid": "59b2835d-7d30-5126-9809-319ea236664d",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "Motorola",
+   "name": "Motorola Razr",
+   "launched": "",
+   "capacities": [
+    "256GB"
    ],
    "connectivity": [],
    "sizes_mm": [],
@@ -19214,6 +19417,24 @@
    "aliases": [
     "Nokia X71"
    ],
+   "needs_review": []
+  },
+  {
+   "uid": "9a0503c8-35ef-5695-bd02-d3d6653eae0c",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "Nothing",
+   "name": "CMF Phone 2 Pro",
+   "launched": "",
+   "capacities": [
+    "256GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
    "needs_review": []
   },
   {
@@ -21358,6 +21579,24 @@
    "aliases": [
     "OPPO Find X9s"
    ],
+   "needs_review": []
+  },
+  {
+   "uid": "8d61a099-7fea-5db8-84e5-b7d5cabfd9d8",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "OPPO",
+   "name": "OPPO A5 4G",
+   "launched": "",
+   "capacities": [
+    "64GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
    "needs_review": []
   },
   {
@@ -28563,6 +28802,50 @@
    ]
   },
   {
+   "uid": "10247f78-3363-5d17-b12e-72f28721087f",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "realme",
+   "name": "realme 14 Pro+",
+   "launched": "",
+   "capacities": [
+    "256GB",
+    "512GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [
+    "競速紫",
+    "極光白"
+   ],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
+   "uid": "685aec68-3e3d-5a0d-bfa0-48ab95241ac9",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "realme",
+   "name": "realme 14C",
+   "launched": "",
+   "capacities": [
+    "128GB",
+    "256GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [
+    "曜石黑",
+    "海洋綠"
+   ],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
    "uid": "9fe8f1a2-fd58-5bb5-a411-5cb2831b9b87",
    "origin": "codex-v4",
    "category": "phone",
@@ -31801,6 +32084,22 @@
     "SAMSUNG Galaxy Note 20 Ultra 512GB",
     "Samsung Galaxy Note 20 Ultra"
    ],
+   "needs_review": []
+  },
+  {
+   "uid": "afa301ea-c877-5cbe-b417-83d50a4f0acc",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "Samsung",
+   "name": "Galaxy Note2",
+   "launched": "",
+   "capacities": [],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
    "needs_review": []
   },
   {
@@ -43524,6 +43823,24 @@
    "needs_review": []
   },
   {
+   "uid": "3d20fcca-a1ec-5355-a0e7-915e0f04f163",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "Xiaomi",
+   "name": "Redmi A1+",
+   "launched": "",
+   "capacities": [
+    "32GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
    "uid": "4c3aa98c-45ca-59d1-8e2f-93609a7cb224",
    "origin": "codex-v4",
    "category": "phone",
@@ -43641,6 +43958,24 @@
    "aliases": [
     "小米 紅米 Note 10 Pro"
    ],
+   "needs_review": []
+  },
+  {
+   "uid": "bac764de-eb63-54cc-ac03-6c032f1c8aca",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "Xiaomi",
+   "name": "Redmi Note 10S",
+   "launched": "",
+   "capacities": [
+    "128GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
    "needs_review": []
   },
   {
@@ -45531,6 +45866,24 @@
    "aliases": [
     "小米 紅米 Note 9"
    ],
+   "needs_review": []
+  },
+  {
+   "uid": "1920a602-9b62-51fe-b7a6-bb7f20c061b1",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "Xiaomi",
+   "name": "Redmi Note 9 Pro",
+   "launched": "",
+   "capacities": [
+    "128GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
    "needs_review": []
   },
   {
@@ -47773,6 +48126,25 @@
    "needs_review": []
   },
   {
+   "uid": "9bc6d7f5-a0a4-5b6e-9e27-e44052496fb5",
+   "origin": "m1-draft",
+   "category": "phone",
+   "brand": "黑鯊",
+   "name": "黑鯊 4",
+   "launched": "",
+   "capacities": [
+    "128GB",
+    "256GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
    "uid": "a6792ae4-138f-5767-a294-4370dbfede9d",
    "origin": "codex-v4",
    "category": "tablet",
@@ -48334,6 +48706,50 @@
     "launch_date_disagreement_or_variant_launch_difference",
     "same_variant_label_msrp_disagreement"
    ]
+  },
+  {
+   "uid": "3ed219c2-6b16-5cf5-9b99-7d5d0066177a",
+   "origin": "m1-draft",
+   "category": "tablet",
+   "brand": "Apple",
+   "name": "iPad 5",
+   "launched": "",
+   "capacities": [
+    "32GB",
+    "128GB"
+   ],
+   "connectivity": [
+    "WiFi",
+    "LTE"
+   ],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
+   "uid": "4aea8d14-577a-5564-aeb4-a4a8d4e0c412",
+   "origin": "m1-draft",
+   "category": "tablet",
+   "brand": "Apple",
+   "name": "iPad 6",
+   "launched": "",
+   "capacities": [
+    "32GB",
+    "128GB"
+   ],
+   "connectivity": [
+    "WiFi",
+    "LTE"
+   ],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
   },
   {
    "uid": "99c7b48e-535a-50cf-a5ec-dda5830fbc2f",
@@ -51317,6 +51733,61 @@
    "needs_review": []
   },
   {
+   "uid": "9301e299-b01d-549e-a673-7c2402b38b11",
+   "origin": "m1-draft",
+   "category": "tablet",
+   "brand": "HUAWEI",
+   "name": "HUAWEI MatePad 11",
+   "launched": "",
+   "capacities": [
+    "128GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
+   "uid": "7608eab2-2472-5405-a29b-4c41b4208d4c",
+   "origin": "m1-draft",
+   "category": "tablet",
+   "brand": "HUAWEI",
+   "name": "HUAWEI MatePad 2022",
+   "launched": "",
+   "capacities": [
+    "64GB",
+    "128GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
+   "uid": "98797bd6-0ab0-536a-a916-9ad8d0495a42",
+   "origin": "m1-draft",
+   "category": "tablet",
+   "brand": "HUAWEI",
+   "name": "HUAWEI MatePad New",
+   "launched": "",
+   "capacities": [
+    "128GB"
+   ],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
    "uid": "04d63f48-cd91-5513-9340-e62a3a1e0ef0",
    "origin": "codex-v4",
    "category": "tablet",
@@ -54281,6 +54752,37 @@
    "needs_review": []
   },
   {
+   "uid": "aeece902-70bc-53f2-81bb-90e86afb3c19",
+   "origin": "m1-draft",
+   "category": "tablet",
+   "brand": "Samsung",
+   "name": "Galaxy Tab S10 FE+",
+   "launched": "2025-04",
+   "capacities": [
+    "128GB",
+    "256GB"
+   ],
+   "connectivity": [
+    "WiFi",
+    "LTE"
+   ],
+   "sizes_mm": [],
+   "colors": [
+    "天幕藍",
+    "流星銀",
+    "營火灰"
+   ],
+   "prices": [],
+   "sources": [],
+   "aliases": [
+    "SAMSUNG Galaxy Tab S10 FE+ 5G",
+    "SAMSUNG Galaxy Tab S10 FE+ Wi-Fi",
+    "Samsung Galaxy Tab S10 FE+ (5G)",
+    "Samsung Galaxy Tab S10 FE+ (Wi-Fi)"
+   ],
+   "needs_review": []
+  },
+  {
    "uid": "83d8c5f9-808f-5d61-90bc-8759c6c7d21b",
    "origin": "codex-v4",
    "category": "tablet",
@@ -54398,6 +54900,37 @@
    "needs_review": []
   },
   {
+   "uid": "bb24418e-c9ea-5d4d-bc4a-467983612038",
+   "origin": "m1-draft",
+   "category": "tablet",
+   "brand": "Samsung",
+   "name": "Galaxy Tab S10 Lite",
+   "launched": "2025-09",
+   "capacities": [
+    "128GB",
+    "256GB"
+   ],
+   "connectivity": [
+    "LTE",
+    "WiFi"
+   ],
+   "sizes_mm": [],
+   "colors": [
+    "出色紅",
+    "潮炫銀",
+    "酷玩灰"
+   ],
+   "prices": [],
+   "sources": [],
+   "aliases": [
+    "SAMSUNG Galaxy Tab S10 Lite 5G",
+    "SAMSUNG Galaxy Tab S10 Lite Wi-Fi",
+    "Samsung Galaxy Tab S10 Lite (5G)",
+    "Samsung Galaxy Tab S10 Lite (Wi-Fi)"
+   ],
+   "needs_review": []
+  },
+  {
    "uid": "5c1afdd5-1dc1-5952-8481-f5d286e6a869",
    "origin": "codex-v4",
    "category": "tablet",
@@ -54511,6 +55044,32 @@
    "aliases": [
     "SAMSUNG Galaxy Tab S10 Lite Wi-Fi",
     "Samsung Galaxy Tab S10 Lite (Wi-Fi)"
+   ],
+   "needs_review": []
+  },
+  {
+   "uid": "570b8cc5-ed55-519a-8fc3-dabf6f027a7d",
+   "origin": "m1-draft",
+   "category": "tablet",
+   "brand": "Samsung",
+   "name": "Galaxy Tab S10 Ultra",
+   "launched": "2024-10",
+   "capacities": [
+    "256GB"
+   ],
+   "connectivity": [
+    "LTE",
+    "WiFi"
+   ],
+   "sizes_mm": [],
+   "colors": [
+    "月石灰",
+    "鉑金銀"
+   ],
+   "prices": [],
+   "sources": [],
+   "aliases": [
+    "SAMSUNG Galaxy Tab S10 Ultra 5G 256GB"
    ],
    "needs_review": []
   },
@@ -54744,6 +55303,38 @@
    "needs_review": []
   },
   {
+   "uid": "f1bd1e24-af36-50a9-acc2-e87e4fa01f66",
+   "origin": "m1-draft",
+   "category": "tablet",
+   "brand": "Samsung",
+   "name": "Galaxy Tab S10+",
+   "launched": "2024-10",
+   "capacities": [
+    "256GB",
+    "512GB"
+   ],
+   "connectivity": [
+    "WiFi",
+    "LTE"
+   ],
+   "sizes_mm": [],
+   "colors": [
+    "月石灰",
+    "鉑金銀"
+   ],
+   "prices": [],
+   "sources": [],
+   "aliases": [
+    "SAMSUNG Galaxy Tab S10+ 5G 256GB",
+    "SAMSUNG Galaxy Tab S10+ 5G 512GB",
+    "SAMSUNG Galaxy Tab S10+ Wi-Fi 256GB",
+    "SAMSUNG Galaxy Tab S10+ Wi-Fi 512GB",
+    "Samsung Galaxy Tab S10+ (5G)",
+    "Samsung Galaxy Tab S10+ (Wi-Fi)"
+   ],
+   "needs_review": []
+  },
+  {
    "uid": "640fe5eb-2647-56c7-8628-c4e82194b588",
    "origin": "codex-v4",
    "category": "tablet",
@@ -54882,6 +55473,36 @@
    "needs_review": []
   },
   {
+   "uid": "655d7963-1834-539c-ba02-5c5a86d41ca5",
+   "origin": "m1-draft",
+   "category": "tablet",
+   "brand": "Samsung",
+   "name": "Galaxy Tab S11",
+   "launched": "2025-09",
+   "capacities": [
+    "128GB",
+    "256GB"
+   ],
+   "connectivity": [
+    "WiFi",
+    "LTE"
+   ],
+   "sizes_mm": [],
+   "colors": [
+    "薄岩銀",
+    "薄霧灰"
+   ],
+   "prices": [],
+   "sources": [],
+   "aliases": [
+    "SAMSUNG Galaxy Tab S11 5G",
+    "SAMSUNG Galaxy Tab S11 Wi-Fi",
+    "Samsung Galaxy Tab S11 (5G)",
+    "Samsung Galaxy Tab S11 (Wi-Fi)"
+   ],
+   "needs_review": []
+  },
+  {
    "uid": "ac65c79b-791c-5b40-b895-74e4cacc5918",
    "origin": "codex-v4",
    "category": "tablet",
@@ -54945,6 +55566,37 @@
    "aliases": [
     "SAMSUNG Galaxy Tab S11 5G",
     "Samsung Galaxy Tab S11 (5G)"
+   ],
+   "needs_review": []
+  },
+  {
+   "uid": "77d30083-1c2d-5b84-87c3-09d2063c78a1",
+   "origin": "m1-draft",
+   "category": "tablet",
+   "brand": "Samsung",
+   "name": "Galaxy Tab S11 Ultra",
+   "launched": "2025-09",
+   "capacities": [
+    "256GB",
+    "512GB",
+    "1TB"
+   ],
+   "connectivity": [
+    "WiFi",
+    "LTE"
+   ],
+   "sizes_mm": [],
+   "colors": [
+    "薄岩銀",
+    "薄霧灰"
+   ],
+   "prices": [],
+   "sources": [],
+   "aliases": [
+    "SAMSUNG Galaxy Tab S11 Ultra 5G",
+    "SAMSUNG Galaxy Tab S11 Ultra Wi-Fi",
+    "Samsung Galaxy Tab S11 Ultra (5G)",
+    "Samsung Galaxy Tab S11 Ultra (Wi-Fi)"
    ],
    "needs_review": []
   },
@@ -55675,6 +56327,28 @@
    "needs_review": []
   },
   {
+   "uid": "fe549775-67f5-5f4d-a086-e3e0d4b04a36",
+   "origin": "m1-draft",
+   "category": "tablet",
+   "brand": "Samsung",
+   "name": "Galaxy Tab S6 Lite",
+   "launched": "",
+   "capacities": [
+    "64GB",
+    "128GB"
+   ],
+   "connectivity": [
+    "WiFi",
+    "LTE"
+   ],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
    "uid": "82841235-a2eb-540e-89cc-f8dec63cfbb6",
    "origin": "codex-v4",
    "category": "tablet",
@@ -56099,6 +56773,27 @@
    "needs_review": []
   },
   {
+   "uid": "864e9445-8b76-5e61-a9c1-37e13a473185",
+   "origin": "m1-draft",
+   "category": "tablet",
+   "brand": "Samsung",
+   "name": "Galaxy Tab S7 FE",
+   "launched": "",
+   "capacities": [
+    "64GB"
+   ],
+   "connectivity": [
+    "WiFi",
+    "LTE"
+   ],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
    "uid": "dfcee1f3-eaf0-5a58-b255-5b6d6f4eac0d",
    "origin": "codex-v4",
    "category": "tablet",
@@ -56260,6 +56955,27 @@
    ]
   },
   {
+   "uid": "036722c5-e26f-5ccd-aef1-5868f3b385ab",
+   "origin": "m1-draft",
+   "category": "tablet",
+   "brand": "Samsung",
+   "name": "Galaxy Tab S7+",
+   "launched": "",
+   "capacities": [
+    "128GB"
+   ],
+   "connectivity": [
+    "WiFi",
+    "LTE"
+   ],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
+   "needs_review": []
+  },
+  {
    "uid": "e72ce27d-6ed8-516b-a255-8af194e9a5f6",
    "origin": "codex-v4",
    "category": "tablet",
@@ -56345,6 +57061,27 @@
     "SAMSUNG Galaxy Tab S7+ Wi-Fi",
     "Samsung Galaxy Tab S7+ Wi-Fi"
    ],
+   "needs_review": []
+  },
+  {
+   "uid": "87dce0f5-e949-57e9-bf43-59fae1b58d4c",
+   "origin": "m1-draft",
+   "category": "tablet",
+   "brand": "Samsung",
+   "name": "Galaxy Tab S8",
+   "launched": "",
+   "capacities": [
+    "128GB"
+   ],
+   "connectivity": [
+    "WiFi",
+    "LTE"
+   ],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
    "needs_review": []
   },
   {
@@ -56531,6 +57268,27 @@
     "SAMSUNG Galaxy Tab S8 Wi-Fi",
     "Samsung Galaxy Tab S8 (WiFi,8GB/128GB) - X700"
    ],
+   "needs_review": []
+  },
+  {
+   "uid": "10c77bbc-56ce-5368-b1e4-9c26f1f48403",
+   "origin": "m1-draft",
+   "category": "tablet",
+   "brand": "Samsung",
+   "name": "Galaxy Tab S8+",
+   "launched": "",
+   "capacities": [
+    "128GB"
+   ],
+   "connectivity": [
+    "WiFi",
+    "LTE"
+   ],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [],
    "needs_review": []
   },
   {
@@ -65421,6 +66179,24 @@
    "aliases": [
     "SAMSUNG Galaxy Watch 3 鈦金屬 45mm",
     "Samsung Galaxy Watch 3 鈦金屬 45mm"
+   ],
+   "needs_review": []
+  },
+  {
+   "uid": "ea43af44-29d3-59fd-9b95-9bb08ef677d0",
+   "origin": "m1-draft",
+   "category": "watch",
+   "brand": "Samsung",
+   "name": "Galaxy Watch 4 Classic",
+   "launched": "",
+   "capacities": [],
+   "connectivity": [],
+   "sizes_mm": [],
+   "colors": [],
+   "prices": [],
+   "sources": [],
+   "aliases": [
+    "SAMSUNG Galaxy Watch 4 Classic"
    ],
    "needs_review": []
   },

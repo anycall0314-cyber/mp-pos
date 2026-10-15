@@ -2,8 +2,9 @@
 
 來源:
 - Codex 整理的 `taiwan-device-catalog-v4`(owner 的 ~/Documents/Codex/2026-10-14/new-chat/outputs/;不進版本庫,路徑用 --v4 給)。1,400 個,2018-10-14 以後上市。
-- 這個資料夾的 `standard_draft.json`(第二版草稿)。草稿裡 v4 沒有的,**只補 Jev 有把握說「都不是」的**(`jev_draft_decisions.json`);
-  Jev 說是同一支的不補(v4 已經有);沒把握的不補、列在 `pending_review.json` 給 owner 定(補了會變成同一支兩個型號,庫存拆兩半)。
+- 這個資料夾的 `standard_draft.json`(第二版草稿)。草稿裡 v4 沒有的,**補 Jev 有把握說「都不是」的**(`jev_draft_decisions.json`)
+  **與 owner 在確認頁說「都不是」的**(`owner_review_answers.json`,Jev 沒把握的那幾題);是同一支的不補(v4 已經有);
+  還沒人定的不補、列在 `pending_review.json`(補了會變成同一支兩個型號,庫存拆兩半)。
 
 每個型號留:穩定編號 `uid`(v4 的 model_id;草稿補的用品牌 + 名稱算一個)、類別、品牌、名稱(一般寫法,照 v4)、上市年月、容量、連線、尺寸、顏色、
 有寫明種類的台幣價格(只是參考,不是門市售價)、來源網址、別名(來源上的寫法、v4 的舊編號)。
@@ -156,6 +157,8 @@ def main():
     aliases = json.loads((args.v4 / "review/identity-reconciliation.json").read_text())
     draft = json.loads((HERE / "standard_draft.json").read_text())
     decisions = json.loads((HERE / "jev_draft_decisions.json").read_text())
+    owner_path = HERE / "owner_review_answers.json"
+    owner = json.loads(owner_path.read_text()) if owner_path.exists() else {}
 
     prices = price_rows(facts)
     models = [from_v4(m, prices) for m in v4]
@@ -171,8 +174,13 @@ def main():
     added, pending = [], []
     for d_id, dec in decisions.items():
         d = draft[int(d_id)]
+        mine = owner.get(f"d{d_id}")
         if dec["verdict"] == "採用" and dec["answer"] == "none":
             added.append(from_draft(d))
+        elif dec["verdict"] != "採用" and mine is not None:
+            # Jev 沒把握、owner 在確認頁定了(2026-10-15):「都不是」= 補進來;選了一支 = v4 已經有,不補
+            if mine["pick"] == "都不是":
+                added.append(from_draft(d))
         elif dec["verdict"] != "採用":
             pending.append({"draft": f"{d['brand']} {d['name']}", "jev_answer": dec["answer_text"],
                             "confidence": dec["confidence"], "verdict": dec["verdict"]})
