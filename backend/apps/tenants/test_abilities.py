@@ -346,7 +346,7 @@ class SecondBatchTests(_Shop):
         self.turn_off(*[k for k in ALL if k != "edit_products"])
         r = self.c.clerk.patch(case, {"spec": "改規格"}, format="json")
         self.assertEqual(r.status_code, 200, r.content.decode())
-        self.assertEqual(self.c.clerk.post("/api/v1/categories/", {"code": "ZZ", "name": "新類別"}, format="json").status_code, 201)
+        self.assertEqual(self.c.clerk.post("/api/v1/categories/", {"code": "ZZ", "name": "新類別", "kind": "general"}, format="json").status_code, 201)
 
     def sell(self):
         return self.c.clerk.post("/api/v1/sales-orders/", {

@@ -8170,12 +8170,18 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .dw-runs li.bad { color: var(--danger-text); }
 .dw-table td { vertical-align: top; }
 
-/* 商品頁「機型分類」:大分類 → 品牌 → 型號 */
+/* 商品頁「分類瀏覽」:類別 → 品牌 → 型號 → 商品 */
 .mb-groups { padding: 6px 12px; border-bottom: 1px solid var(--border); }
-.mb-brand-head {
-  display: flex; align-items: center; gap: 8px; padding: 6px 12px;
-  font-weight: 600; background: var(--panel-2); border-bottom: 1px solid var(--border);
-}
+.cb-crumbs { padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: var(--font-body); }
+.cb-crumb { background: none; border: none; padding: 0; color: var(--accent-text, var(--accent-fill)); cursor: pointer; font: inherit; }
+.cb-dim { color: var(--text-dim); font-size: 14px; }
+.cb-note { padding: 6px 12px; }
+.cb-editor { margin-top: 24px; }
+.cb-editor h4 { margin: 0 0 8px; }
+.cb-add { display: flex; gap: 8px; margin-bottom: 8px; }
+.cb-add input { flex: 1; min-width: 0; }
+.cb-row-btns { width: 1%; white-space: nowrap; text-align: right; }
+.cb-row-btns .btn { margin-left: 4px; }
 .mb-brand-label {
   padding: 6px 12px; font-size: 14px; font-weight: 600; color: var(--text-dim);
   background: var(--panel-2); border-bottom: 1px solid var(--border);

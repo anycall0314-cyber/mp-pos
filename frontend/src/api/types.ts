@@ -25,9 +25,51 @@ export interface Category {
   is_secondhand_default: boolean;
   /** 這類商品要不要掛相容機型;主機本身與線材 / 吊飾 / 家電這種跟機型無關的關掉 */
   needs_host_model: boolean;
+  /** 主機類別(手機 / 平板 / 穿戴):底下是品牌 → 型號 */
+  holds_devices: boolean;
+  /** 三種走法:主機(品牌 → 型號)/ 配件(依手機 / 依廠牌)/ 一般(廠牌 → 商品)。新增類別一定要選 */
+  kind: CategoryKind;
+  /** 類別底下的品牌(中項),照排序 */
+  brands: { id: number; name: string }[];
   next_sku_seq: number;
   created_at: string;
   updated_at: string;
+}
+
+export type CategoryKind = "device" | "accessory" | "general";
+
+/** 商品頁「分類瀏覽」一層的內容(backend/apps/catalog/tree.py) */
+export type TreeLevel =
+  | { level: "categories"; items: { id: number; name: string; kind: CategoryKind; count: number }[] }
+  | { level: "brands"; mode?: "phone" | "maker"; items: TreeBrand[] }
+  | { level: "models"; mode?: "phone"; items: TreeModel[] }
+  | { level: "products"; grouped: true; total: number; items: { maker: string; products: TreeProduct[] }[] }
+  | { level: "products"; grouped: false; total: number; items: TreeProduct[] };
+
+export interface TreeBrand {
+  id: number | "none";
+  name: string;
+  count: number;
+}
+
+/** 主機:key = 機型 key(右邊用 by-phone-model 列容量顏色);沒有機型的單一商品帶 product_id。配件依手機:id = 機型 */
+export interface TreeModel {
+  key?: string;
+  id?: number | string;
+  name: string;
+  sku_count?: number;
+  stock_qty?: number;
+  count?: number;
+  product_id?: number | null;
+}
+
+export interface TreeProduct {
+  id: number;
+  sku: string;
+  name: string;
+  stock_qty: number;
+  maker: string;
+  fits: string[];
 }
 
 export interface Product {

@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { ApiHttpError, asDuplicate } from "@/api/client";
 import {
   useBrands,
+  useCategories,
+  useCategoryBrands,
   usePhoneSeriesList,
   useSaveBrand,
   useSaveCategory,
@@ -17,6 +19,7 @@ import type {
   AccessoryType,
   Brand,
   Category,
+  CategoryKind,
   DuplicateBody,
   DuplicateCandidate,
   LifecycleStatus,
@@ -35,6 +38,7 @@ import type { PeekTarget } from "@/components/photos/ProductPhotoPanel";
 import { type PhotoStored, usePhotoDraft } from "@/components/photos/usePhotoDraft";
 
 import { DuplicatePanel } from "./DuplicatePanel";
+import { KindPicker } from "./KindPicker";
 import { useModalDraft } from "@/hooks/useModalDraft";
 import { MoneyInput } from "@/components/MoneyInput";
 import { toast } from "@/components/workbench/toast";
@@ -287,10 +291,11 @@ export function ProductForm({
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [showNewCategory, setShowNewCategory] = useState(false);
-  const [newCategory, setNewCategory] = useState({
+  const [newCategory, setNewCategory] = useState<{ code: string; name: string; sort_order: string; kind: CategoryKind | "" }>({
     code: "",
     name: "",
     sort_order: "",
+    kind: "",
   });
   const [closePromptOpen, setClosePromptOpen] = useState(false);
   const baselineRef = useRef<FormState>(toState(initial));
@@ -345,6 +350,7 @@ export function ProductForm({
 
   const saveProduct = useSaveProduct();
   const saveCategory = useSaveCategory();
+  const allCategories = useCategories();
   // Phase 1: Brand / Series master
   const brands = useBrands();
   const phoneSeries = usePhoneSeriesList(
@@ -406,7 +412,7 @@ export function ProductForm({
       setDistinctReason("");
       setRememberName(false);
       setShowNewCategory(false);
-      setNewCategory({ code: "", name: "", sort_order: "" });
+      setNewCategory({ code: "", name: "", sort_order: "", kind: "" });
       setClosePromptOpen(false);
       genTouchedRef.current = !!initial?.generation;
     }
@@ -488,10 +494,15 @@ export function ProductForm({
 
   async function handleCreateCategory() {
     if (!newCategory.code || !newCategory.name) return;
+    if (!newCategory.kind) {
+      setError("新類別要選主機、配件或一般");
+      return;
+    }
     try {
       const payload: Partial<Category> = {
         code: newCategory.code,
         name: newCategory.name,
+        kind: newCategory.kind,
       };
       const sortOrderNum = Number(newCategory.sort_order);
       if (Number.isFinite(sortOrderNum) && sortOrderNum > 0) {
@@ -501,7 +512,7 @@ export function ProductForm({
       patch("category", c.id);
       setCategoryOption({ id: c.id, label: c.name, secondary: c.code });
       setShowNewCategory(false);
-      setNewCategory({ code: "", name: "", sort_order: "" });
+      setNewCategory({ code: "", name: "", sort_order: "", kind: "" });
     } catch (e) {
       if (e instanceof ApiHttpError) {
         const body = e.body as Record<string, string[]>;
@@ -1282,6 +1293,9 @@ export function ProductForm({
                   placeholder="自動"
                 />
               </Field>
+              <Field label="類型" required>
+                <KindPicker value={newCategory.kind} onChange={(kind) => setNewCategory((s) => ({ ...s, kind }))} />
+              </Field>
             </div>
             <button
               type="button"
@@ -1292,6 +1306,14 @@ export function ProductForm({
               建立並選用
             </button>
           </div>
+        )}
+
+        {state.accessory_type !== "none" && state.category && (
+          <MakerField
+            category={(allCategories.data ?? []).find((c) => c.id === state.category) ?? null}
+            value={state.brand}
+            onChange={(id) => patch("brand", id)}
+          />
         )}
 
         {state.warehouse_type === "product" &&
@@ -1514,5 +1536,73 @@ export function ProductForm({
         </details>
       </form>
     </Drawer>
+  );
+}
+
+
+/** 配件 / 一般商品的廠牌(太空盾、DAP):只列這個類別底下的廠牌,可以就地加一個(加到這個類別底下)。
+ *  owner 2026-10-16「類別下再建立中項填寫品牌」 */
+function MakerField({
+  category,
+  value,
+  onChange,
+}: {
+  category: Category | null;
+  value: number | "";
+  onChange: (id: number | "") => void;
+}) {
+  const all = useBrands();
+  const ops = useCategoryBrands();
+  const [text, setText] = useState("");
+  const [error, setError] = useState("");
+  const options = category?.brands ?? [];
+  // 已經填了、卻不在這個類別底下的(舊資料或換過類別):還是要顯示出來,不然看起來像沒填
+  const current = value && !options.some((b) => b.id === value) ? (all.data ?? []).find((b) => b.id === value) : undefined;
+
+  async function add() {
+    const name = text.trim();
+    if (!category || !name) return;
+    setError("");
+    try {
+      const hit = (all.data ?? []).find((b) => b.name.trim().toLowerCase() === name.toLowerCase());
+      const saved = await ops.add.mutateAsync(hit ? { category: category.id, brand: hit.id } : { category: category.id, name });
+      const made = saved.brands.find((b) => b.name.trim().toLowerCase() === name.toLowerCase());
+      if (made) onChange(made.id);
+      setText("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "沒有加到");
+    }
+  }
+
+  return (
+    <Field label="廠牌" error={error ? [error] : undefined}>
+      <div style={{ display: "flex", gap: 6 }}>
+        <select style={{ flex: 1 }} value={value} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : "")}>
+          <option value="">不填</option>
+          {current && <option value={current.id}>{current.name}</option>}
+          {options.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void add();
+            }
+          }}
+          placeholder="新廠牌"
+          style={{ width: 120 }}
+          disabled={!category || ops.add.isPending}
+        />
+        <button type="button" className="btn" onClick={() => void add()} disabled={!category || !text.trim() || ops.add.isPending}>
+          加入
+        </button>
+      </div>
+    </Field>
   );
 }

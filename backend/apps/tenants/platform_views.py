@@ -72,8 +72,12 @@ class PlatformTenantViewSet(viewsets.ModelViewSet):
     filterset_fields = ["is_active"]
 
     def perform_create(self, serializer):
+        from apps.catalog import category_template
+
         tenant = serializer.save()
         seed_tenant_defaults(tenant)
+        # 類別範本只給新公司(紅隊:已經在用的公司自動補會多出近義類別);seed_tenant_defaults 會對現有公司重跑,不放那裡
+        category_template.apply(tenant)
 
 
 # ────────────────────────────────────────────────────────────

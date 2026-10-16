@@ -4,14 +4,16 @@ import { useNavigate } from "react-router-dom";
 
 import {
   useCategories,
-  usePhoneModels,
   useProducts,
   useProductsByPhoneModel,
   useSaveCategory,
+  useBrands,
+  useCategoryBrands,
+  useCategoryTree,
+  useProduct,
 } from "@/api/hooks";
 import { api } from "@/api/client";
-import type { PhoneModelRow } from "@/api/hooks";
-import type { Product } from "@/api/types";
+import type { Category, CategoryKind, Product, TreeProduct } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { MoreMenu } from "@/components/workbench/MoreMenu";
@@ -22,6 +24,7 @@ import { purchaseLinkFor } from "@/lib/purchasePrefill";
 import { canSetStaffCost, ruleText, staffCostApplies } from "@/lib/staffCost";
 
 import { BulkAddProductsModal } from "./BulkAddProductsModal";
+import { KindPicker } from "./KindPicker";
 import { BulkCreatePartsModal } from "./BulkCreatePartsModal";
 import { BulkEditProductsModal } from "./BulkEditProductsModal";
 import { FindFirstPanel } from "./FindFirstPanel";
@@ -57,7 +60,7 @@ interface CategoryEditState {
   name: string;
   is_active: boolean;
   is_secondhand_default: boolean;
-  needs_host_model: boolean;
+  kind: CategoryKind | "";
 }
 
 interface CategoryNewState {
@@ -66,7 +69,7 @@ interface CategoryNewState {
   sort_order: string;
   is_active: boolean;
   is_secondhand_default: boolean;
-  needs_host_model: boolean;
+  kind: CategoryKind | "";
 }
 
 const EMPTY_NEW_CAT: CategoryNewState = {
@@ -75,7 +78,7 @@ const EMPTY_NEW_CAT: CategoryNewState = {
   sort_order: "",
   is_active: true,
   is_secondhand_default: false,
-  needs_host_model: true,
+  kind: "",
 };
 
 type BatchTool = "expander" | "parts" | "paste" | "import" | "accessory" | "phone";
@@ -132,12 +135,15 @@ export function ProductsPage() {
   // 右側商品詳情頁籤:基本 vs 別名
   const [detailTab, setDetailTab] = useState<"basic" | "aliases">("basic");
 
-  const selectedProduct = useMemo(() => {
+  const listedProduct = useMemo(() => {
     if (selection?.kind !== "product") return null;
     return (
       (productsResult.data ?? []).find((p) => p.id === selection.id) ?? null
     );
   }, [selection, productsResult.data]);
+  // 分類瀏覽點到的商品不在商品列表那一頁裡:另外讀那一個
+  const pickedProduct = useProduct(selection?.kind === "product" && !listedProduct ? selection.id : null);
+  const selectedProduct = listedProduct ?? (selection?.kind === "product" ? pickedProduct.data ?? null : null);
 
   const selectedCategory = useMemo(() => {
     if (selection?.kind !== "category") return null;
@@ -178,7 +184,7 @@ export function ProductsPage() {
     name: "",
     is_active: true,
     is_secondhand_default: false,
-    needs_host_model: true,
+    kind: "",
   });
   const [catError, setCatError] = useState<string | null>(null);
   const [catSavedFlash, setCatSavedFlash] = useState(false);
@@ -195,7 +201,7 @@ export function ProductsPage() {
       name: selectedCategory.name,
       is_active: selectedCategory.is_active,
       is_secondhand_default: selectedCategory.is_secondhand_default,
-      needs_host_model: selectedCategory.needs_host_model,
+      kind: selectedCategory.kind,
     });
     setCatError(null);
     setCatSavedFlash(false);
@@ -210,7 +216,7 @@ export function ProductsPage() {
         name: catEdit.name.trim(),
         is_active: catEdit.is_active,
         is_secondhand_default: catEdit.is_secondhand_default,
-        needs_host_model: catEdit.needs_host_model,
+        ...(catEdit.kind ? { kind: catEdit.kind } : {}),
       });
       setCatError(null);
       setCatSavedFlash(true);
@@ -233,6 +239,10 @@ export function ProductsPage() {
       setCatNewError("代碼與名稱必填");
       return;
     }
+    if (!catNew.kind) {
+      setCatNewError("要選主機、配件或一般");
+      return;
+    }
     if (!confirm(`確定新增類別「${code} ${name}」?`)) return;
     const explicit = Number(catNew.sort_order);
     const sort_order =
@@ -248,7 +258,7 @@ export function ProductsPage() {
         sort_order,
         is_active: catNew.is_active,
         is_secondhand_default: catNew.is_secondhand_default,
-        needs_host_model: catNew.needs_host_model,
+        kind: catNew.kind,
       });
       // 留在新增畫面、清空輸入,方便連續新增
       setCatNew(EMPTY_NEW_CAT);
@@ -394,7 +404,7 @@ export function ProductsPage() {
               setSelection(null);
             }}
           >
-            機型分類
+            分類瀏覽
           </button>
           <button
             type="button"
@@ -564,9 +574,14 @@ export function ProductsPage() {
 
           {/* ─── 機型區(一機型一列,右側展開看底下全新/中古 SKU) ─── */}
           {leftTab === "models" && (
-            <ModelBrowser
+            <CategoryBrowser
               selectedKey={selection?.kind === "model" ? selection.key : null}
-              onPick={(key, name) => setSelection({ kind: "model", key, name })}
+              selectedProductId={selection?.kind === "product" ? selection.id : null}
+              onPickModel={(key, name) => setSelection({ kind: "model", key, name })}
+              onPickProduct={(id) => {
+                setDetailTab("basic");
+                setSelection({ kind: "product", id });
+              }}
             />
           )}
 
@@ -679,7 +694,7 @@ export function ProductsPage() {
           {!selection && (
             <div className="md-empty" style={{ marginTop: 60 }}>
               {leftTab === "models"
-                ? "從左側選擇機型,看底下全新 / 中古各有哪些"
+                ? "從左側選類別、品牌、型號"
                 : "從左側選擇商品或類別以檢視 / 編輯"}
             </div>
           )}
@@ -913,29 +928,11 @@ export function ProductsPage() {
                     </span>
                   </label>
                 </dd>
-                <dt>需要掛相容機型</dt>
+                <dt>
+                  類型 <span style={{ color: "var(--danger-text)" }}>*</span>
+                </dt>
                 <dd>
-                  <label
-                    style={{
-                      display: "inline-flex",
-                      gap: 6,
-                      alignItems: "center",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={catNew.needs_host_model}
-                      onChange={(e) =>
-                        setCatNew((s) => ({
-                          ...s,
-                          needs_host_model: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span style={{ color: "var(--text-dim)", fontSize: 14 }}>
-                      關掉代表這類商品跟機型無關(線材 / 吊飾 / 家電),不列入待補相容機型
-                    </span>
-                  </label>
+                  <KindPicker value={catNew.kind} onChange={(kind) => setCatNew((s) => ({ ...s, kind }))} />
                 </dd>
               </dl>
               <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
@@ -1040,29 +1037,9 @@ export function ProductsPage() {
                     </span>
                   </label>
                 </dd>
-                <dt>需要掛相容機型</dt>
+                <dt>類型</dt>
                 <dd>
-                  <label
-                    style={{
-                      display: "inline-flex",
-                      gap: 6,
-                      alignItems: "center",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={catEdit.needs_host_model}
-                      onChange={(e) =>
-                        setCatEdit((s) => ({
-                          ...s,
-                          needs_host_model: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span style={{ color: "var(--text-dim)", fontSize: 14 }}>
-                      關掉代表這類商品跟機型無關(線材 / 吊飾 / 家電),不列入待補相容機型
-                    </span>
-                  </label>
+                  <KindPicker value={catEdit.kind} onChange={(kind) => setCatEdit((s) => ({ ...s, kind }))} />
                 </dd>
               </dl>
               <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
@@ -1074,6 +1051,7 @@ export function ProductsPage() {
                   儲存
                 </button>
               </div>
+              <CategoryBrandsEditor category={selectedCategory} />
             </div>
           )}
         </main>
@@ -1188,166 +1166,280 @@ export function ProductsPage() {
 }
 
 // ─── 機型瀏覽:左側一機型一列(品牌分組),點選右側展開 ───
-// 機型分類:先大分類,再品牌,再型號(owner 2026-10-16)。「其他」= 沒對到型號庫、類別也看不出來的,有才出現
-const MODEL_GROUPS = [
-  { key: "phone", label: "手機" },
-  { key: "tablet", label: "平板" },
-  { key: "wear", label: "穿戴" },
-  { key: "other", label: "其他" },
-] as const;
+/** 類別底下的品牌(中項):加(選現有的或打新名字)、拿掉、上下移。拿掉不動任何商品 */
+function CategoryBrandsEditor({ category }: { category: Category }) {
+  const brands = useBrands();
+  const ops = useCategoryBrands();
+  const [text, setText] = useState("");
+  const [error, setError] = useState("");
+  const list = category.brands ?? [];
+  const busy = ops.add.isPending || ops.remove.isPending || ops.order.isPending;
+  const title = category.kind === "device" ? "品牌" : "廠牌";
 
-/** 品牌 → 機型,型號多的品牌排前面 */
-function groupByBrand(rows: PhoneModelRow[]): [string, PhoneModelRow[]][] {
-  const m = new Map<string, PhoneModelRow[]>();
-  for (const r of rows) {
-    const b = r.brand_name || "其他";
-    if (!m.has(b)) m.set(b, []);
-    m.get(b)!.push(r);
+  async function run(job: () => Promise<unknown>) {
+    setError("");
+    try {
+      await job();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "沒有存到");
+    }
   }
-  return Array.from(m.entries()).sort(
-    (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]),
+  function add() {
+    const name = text.trim();
+    if (!name) return;
+    const hit = (brands.data ?? []).find((b) => b.name.trim().toLowerCase() === name.toLowerCase());
+    void run(async () => {
+      await ops.add.mutateAsync(hit ? { category: category.id, brand: hit.id } : { category: category.id, name });
+      setText("");
+    });
+  }
+  function move(i: number, d: number) {
+    const ids = list.map((b) => b.id);
+    const j = i + d;
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    void run(() => ops.order.mutateAsync({ category: category.id, brands: ids }));
+  }
+
+  return (
+    <div className="cb-editor">
+      <h4>
+        {title} {list.length}
+      </h4>
+      {error && <Banner kind="error" message={error} />}
+      <div className="cb-add">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") add();
+          }}
+          list={`cb-brands-${category.id}`}
+          placeholder={`${title}名稱`}
+          disabled={busy}
+        />
+        <datalist id={`cb-brands-${category.id}`}>
+          {(brands.data ?? []).map((b) => (
+            <option key={b.id} value={b.name} />
+          ))}
+        </datalist>
+        <button type="button" className="btn" onClick={add} disabled={busy || !text.trim()}>
+          加入
+        </button>
+      </div>
+      {list.length === 0 ? (
+        <div className="md-empty">還沒有{title}</div>
+      ) : (
+        <table className="pc-list-table">
+          <tbody>
+            {list.map((b, i) => (
+              <tr key={b.id}>
+                <td>{b.name}</td>
+                <td className="cb-row-btns">
+                  <button type="button" className="btn" disabled={busy || i === 0} onClick={() => move(i, -1)} aria-label="往上">
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={busy || i === list.length - 1}
+                    onClick={() => move(i, 1)}
+                    aria-label="往下"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={busy}
+                    onClick={() => void run(() => ops.remove.mutateAsync({ category: category.id, brand: b.id }))}
+                  >
+                    拿掉
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
   );
 }
 
-function ModelBrowser({
+interface TreeAt {
+  category?: { id: number; name: string; kind: CategoryKind };
+  mode: "phone" | "maker";
+  brand?: { id: string; name: string };
+  model?: { id: string; name: string };
+}
+
+/** 分類瀏覽:類別 → 品牌(中項)→ 型號 → 商品(owner 2026-10-16;規則在 backend/apps/catalog/tree.py)。
+ *  主機的型號點下去右邊列容量顏色品況;配件可切「依手機」(手機品牌 → 機型 → 照配件廠牌分組)/「依廠牌」 */
+function CategoryBrowser({
   selectedKey,
-  onPick,
+  selectedProductId,
+  onPickModel,
+  onPickProduct,
 }: {
   selectedKey: string | null;
-  onPick: (key: string, name: string) => void;
+  selectedProductId: number | null;
+  onPickModel: (key: string, name: string) => void;
+  onPickProduct: (id: number) => void;
 }) {
-  const [q, setQ] = useState("");
-  const [applied, setApplied] = useState("");
-  const [group, setGroup] = useState<string>("phone");
-  const [brand, setBrand] = useState<string | null>(null);
-  const models = usePhoneModels(applied || undefined);
-  const rows = useMemo(() => models.data ?? [], [models.data]);
-  const tabs = MODEL_GROUPS.filter(
-    (g) => g.key !== "other" || rows.some((r) => r.group === "other"),
+  const [at, setAt] = useState<TreeAt>({ mode: "phone" });
+  const cat = at.category;
+  const mode = cat?.kind === "accessory" ? at.mode : cat?.kind === "general" ? "maker" : undefined;
+  const level = useCategoryTree({
+    category: cat?.id,
+    mode,
+    brand: at.brand?.id,
+    model: at.model?.id,
+  });
+  const data = level.data;
+  const crumbs: { label: string; go: TreeAt }[] = [{ label: "全部類別", go: { mode: at.mode } }];
+  if (cat) crumbs.push({ label: cat.name, go: { mode: at.mode, category: cat } });
+  if (cat && at.brand) crumbs.push({ label: at.brand.name, go: { mode: at.mode, category: cat, brand: at.brand } });
+  if (cat && at.brand && at.model) crumbs.push({ label: at.model.name, go: at });
+  const unit = cat?.kind === "device" ? "型號" : "個";
+
+  const productRow = (p: TreeProduct, showMaker: boolean) => (
+    <tr key={p.id} onClick={() => onPickProduct(p.id)} className={selectedProductId === p.id ? "selected" : ""}>
+      <td>
+        <div>{p.name}</div>
+        <div className="cb-dim">
+          {[showMaker ? p.maker : "", p.fits.length ? `適用 ${p.fits.slice(0, 3).join("、")}${p.fits.length > 3 ? "…" : ""}` : ""]
+            .filter(Boolean)
+            .join(" · ")}
+        </div>
+      </td>
+      <td className="num" style={{ width: 50 }}>
+        {p.stock_qty}
+      </td>
+    </tr>
   );
-  // 搜尋時跨大分類列出(照品牌分組);沒搜尋時只看選的大分類
-  const byBrand = useMemo(
-    () => groupByBrand(applied ? rows : rows.filter((r) => (r.group || "other") === group)),
-    [rows, applied, group],
-  );
-  const brandRows = !applied && brand ? byBrand.find(([b]) => b === brand)?.[1] ?? [] : null;
 
   return (
     <section className="pc-section">
-      <div className="pc-section-header">機型</div>
-      <div className="pc-section-search">
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") setApplied(q.trim());
-          }}
-          placeholder="搜尋機型 / 系列,按 Enter"
-        />
-        <button className="btn primary" onClick={() => setApplied(q.trim())}>
-          搜尋
-        </button>
-        {applied && (
-          <button
-            className="btn"
-            onClick={() => {
-              setQ("");
-              setApplied("");
-            }}
-          >
-            清除
-          </button>
-        )}
+      <div className="pc-section-header">分類</div>
+      <div className="cb-crumbs">
+        {crumbs.map((c, i) => (
+          <span key={i}>
+            {i > 0 && " › "}
+            {i < crumbs.length - 1 ? (
+              <button type="button" className="cb-crumb" onClick={() => setAt(c.go)}>
+                {c.label}
+              </button>
+            ) : (
+              <b>{c.label}</b>
+            )}
+          </span>
+        ))}
       </div>
-      {!applied && (
+      {cat?.kind === "accessory" && (
         <div className="mb-groups">
           <div className="tab-switcher">
-            {tabs.map((g) => (
+            {(["phone", "maker"] as const).map((m) => (
               <button
-                key={g.key}
+                key={m}
                 type="button"
-                className={group === g.key ? "tab-switcher-item active" : "tab-switcher-item"}
-                onClick={() => {
-                  setGroup(g.key);
-                  setBrand(null);
-                }}
+                className={at.mode === m ? "tab-switcher-item active" : "tab-switcher-item"}
+                onClick={() => setAt({ mode: m, category: cat })}
               >
-                {g.label}
+                {m === "phone" ? "依手機" : "依廠牌"}
               </button>
             ))}
           </div>
         </div>
       )}
       <div className="pc-section-body">
-        {models.isLoading && <div className="md-empty">載入中…</div>}
-        {!models.isLoading && byBrand.length === 0 && (
-          <div className="md-empty">尚無機型</div>
-        )}
-        {brandRows ? (
-          <>
-            <div className="mb-brand-head">
-              <button type="button" className="btn" onClick={() => setBrand(null)}>
-                返回
-              </button>
-              <span>{brand}</span>
-            </div>
-            <ModelRows rows={brandRows} selectedKey={selectedKey} onPick={onPick} />
-          </>
-        ) : applied ? (
-          byBrand.map(([b, list]) => (
-            <div key={b}>
-              <div className="mb-brand-label">{b}</div>
-              <ModelRows rows={list} selectedKey={selectedKey} onPick={onPick} />
-            </div>
-          ))
-        ) : (
+        {level.isLoading && <div className="md-empty">載入中…</div>}
+        {level.isError && <Banner kind="error" message={level.error instanceof Error ? level.error.message : "讀不到"} />}
+        {data?.level === "categories" && (
           <table className="pc-list-table">
             <tbody>
-              {byBrand.map(([b, list]) => (
-                <tr key={b} onClick={() => setBrand(b)}>
-                  <td>{b}</td>
+              {data.items.map((c) => (
+                <tr key={c.id} onClick={() => setAt({ mode: "phone", category: { id: c.id, name: c.name, kind: c.kind } })}>
+                  <td>{c.name}</td>
                   <td className="num" style={{ width: 80 }}>
-                    {list.length} 型號
+                    {c.count} 個
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
+        {data?.level === "brands" &&
+          (data.items.length === 0 ? (
+            <div className="md-empty">這個類別還沒有商品</div>
+          ) : (
+            <table className="pc-list-table">
+              <tbody>
+                {data.items.map((b) => (
+                  <tr key={String(b.id)} onClick={() => setAt({ ...at, brand: { id: String(b.id), name: b.name }, model: undefined })}>
+                    <td>{b.name}</td>
+                    <td className="num" style={{ width: 80 }}>
+                      {b.count} {data.mode === "phone" ? "個" : unit}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ))}
+        {data?.level === "models" &&
+          (data.items.length === 0 ? (
+            <div className="md-empty">沒有型號</div>
+          ) : (
+            <table className="pc-list-table">
+              <tbody>
+                {data.items.map((m) =>
+                  data.mode === "phone" ? (
+                    <tr key={String(m.id)} onClick={() => setAt({ ...at, model: { id: String(m.id), name: m.name } })}>
+                      <td>{m.name}</td>
+                      <td className="num" style={{ width: 80 }}>
+                        {m.count} 個
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr
+                      key={m.key || `p${m.product_id}`}
+                      onClick={() => (m.key ? onPickModel(m.key, m.name) : m.product_id && onPickProduct(m.product_id))}
+                      className={(m.key && selectedKey === m.key) || (m.product_id && selectedProductId === m.product_id) ? "selected" : ""}
+                    >
+                      <td>{m.name}</td>
+                      <td className="num" style={{ width: 60 }}>
+                        {m.sku_count} 款
+                      </td>
+                      <td className="num" style={{ width: 50 }}>
+                        {m.stock_qty}
+                      </td>
+                    </tr>
+                  ),
+                )}
+              </tbody>
+            </table>
+          ))}
+        {data?.level === "products" && (
+          <>
+            {data.total > 500 && <div className="cb-dim cb-note">只列前 500 個,其他請用搜尋</div>}
+            {data.total === 0 && <div className="md-empty">沒有商品</div>}
+            {data.grouped
+              ? data.items.map((g) => (
+                  <div key={g.maker}>
+                    <div className="mb-brand-label">{g.maker}</div>
+                    <table className="pc-list-table">
+                      <tbody>{g.products.map((p) => productRow(p, false))}</tbody>
+                    </table>
+                  </div>
+                ))
+              : (
+                <table className="pc-list-table">
+                  <tbody>{data.items.map((p) => productRow(p, false))}</tbody>
+                </table>
+              )}
+          </>
+        )}
       </div>
     </section>
-  );
-}
-
-function ModelRows({
-  rows,
-  selectedKey,
-  onPick,
-}: {
-  rows: PhoneModelRow[];
-  selectedKey: string | null;
-  onPick: (key: string, name: string) => void;
-}) {
-  return (
-    <table className="pc-list-table">
-      <tbody>
-        {rows.map((r) => (
-          <tr
-            key={r.model_key}
-            onClick={() => onPick(r.model_key, r.model_name)}
-            className={selectedKey === r.model_key ? "selected" : ""}
-          >
-            <td>{r.model_name}</td>
-            <td className="num" style={{ width: 60 }}>
-              {r.sku_count} 款
-            </td>
-            <td className="num" style={{ width: 50 }}>
-              {r.total_stock}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }
 

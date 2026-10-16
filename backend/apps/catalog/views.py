@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta
 
 from django.contrib.postgres.search import TrigramWordSimilarity
@@ -14,7 +15,7 @@ from django.db.models import (
     Value,
     When,
 )
-from django.db.models.functions import Coalesce, Greatest
+from django.db.models.functions import Coalesce, Greatest, Lower, Replace
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -51,9 +52,11 @@ from .import_service import import_products_from_file
 from .models import (
     Brand,
     Category,
+    CategoryBrand,
     Condition,
     DeviceModel,
     PartTemplate,
+    PhoneModel,
     PhoneSeries,
     Product,
     ProductRelation,
@@ -97,17 +100,72 @@ class CategoryViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
     filterset_fields = ["is_active"]
 
     def get_queryset(self):
-        return Category.objects.for_tenant(self.request.tenant)
+        return Category.objects.for_tenant(self.request.tenant).prefetch_related("brand_links__brand")
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.tenant)
+
+    # ─── 類別底下的品牌(中項;owner 2026-10-16)。拿掉只是不列在這個類別底下,商品與品牌主檔都不動 ───
+    @action(detail=True, methods=["post"], url_path="brands")
+    def add_brand(self, request, pk=None):
+        """掛一個品牌到這個類別:{"brand": 品牌編號} 或 {"name": "新品牌名"}(沒有就建)。"""
+        from .category_template import link_brand
+        from .device_expand import _brand
+
+        category = self.get_object()
+        brand_id = request.data.get("brand")
+        name = str(request.data.get("name") or "").strip()
+        if brand_id:
+            brand = Brand.objects.for_tenant(request.tenant).filter(pk=brand_id).first()
+            if brand is None:
+                return Response({"detail": "沒有這個品牌"}, status=status.HTTP_400_BAD_REQUEST)
+        elif name:
+            if len(name) > Brand._meta.get_field("name").max_length:
+                return Response({"detail": "品牌名稱太長"}, status=status.HTTP_400_BAD_REQUEST)
+            with transaction.atomic():
+                brand = _brand(request.tenant, name)
+        else:
+            return Response({"detail": "要選品牌或填名稱"}, status=status.HTTP_400_BAD_REQUEST)
+        link_brand(category, brand)
+        return Response(self.get_serializer(self.get_queryset().get(pk=category.pk)).data)
+
+    @action(detail=True, methods=["delete"], url_path=r"brands/(?P<brand_id>\d+)")
+    def remove_brand(self, request, pk=None, brand_id=None):
+        category = self.get_object()
+        CategoryBrand.objects.filter(category=category, brand_id=brand_id).delete()
+        return Response(self.get_serializer(self.get_queryset().get(pk=category.pk)).data)
+
+    @action(detail=True, methods=["post"], url_path="brands/order")
+    def order_brands(self, request, pk=None):
+        """{"brands": [品牌編號…]} → 照這個順序排;沒列到的排在後面、照原本的順序。"""
+        category = self.get_object()
+        wanted = [int(x) for x in request.data.get("brands") or [] if str(x).isdigit()]
+        links = list(CategoryBrand.objects.filter(category=category).order_by("sort_order", "id"))
+        rank = {b: i for i, b in enumerate(wanted)}
+        links.sort(key=lambda link: (rank.get(link.brand_id, len(rank)), link.sort_order, link.id))
+        with transaction.atomic():
+            for i, link in enumerate(links):
+                if link.sort_order != i:
+                    CategoryBrand.objects.filter(pk=link.pk).update(sort_order=i)
+        return Response(self.get_serializer(self.get_queryset().get(pk=category.pk)).data)
+
+
+def _fitting_accessory_ids(tenant, q: str) -> list[int]:
+    """名稱跟查詢字一樣(不算空白、大小寫)的機型 → 掛了它當適用機型的配件。"""
+    key = re.sub(r"\s+", "", q).casefold()
+    if len(key) < 3:
+        return []
+    models = (PhoneModel.objects.for_tenant(tenant)
+              .annotate(_k=Lower(Replace("name", Value(" "), Value("")))).filter(_k=key).values("pk"))
+    return list(ProductRelation.objects.filter(tenant=tenant, host_model__in=models)
+                .values_list("accessory_product_id", flat=True).distinct()[:200])
 
 
 # 機型清單的大分類(手機 / 平板 / 穿戴):型號庫的類別 → 大分類;沒對到型號庫的看商品的類別名稱
 DEVICE_GROUP = {DeviceModel.Category.PHONE: "phone", DeviceModel.Category.TABLET: "tablet",
                 DeviceModel.Category.WATCH: "wear", DeviceModel.Category.BAND: "wear",
                 DeviceModel.Category.HEADPHONES: "wear", DeviceModel.Category.OTHER: "wear"}
-CATEGORY_GROUP = {"手機": "phone", "平板": "tablet", "手錶": "wear", "耳機/音訊": "wear", "穿戴/周邊": "wear"}
+CATEGORY_GROUP = {"手機": "phone", "平板": "tablet", "穿戴": "wear", "手錶": "wear", "耳機/音訊": "wear", "穿戴/周邊": "wear"}
 
 
 class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
@@ -174,7 +232,10 @@ class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
                  .values_list("product_id", flat=True))
             if q else []
         )
+        # 打的是一支機型的名稱(「iPhone 17」):掛了這支適用機型的配件也要出現(紅隊:櫃檯是打字找配件,不是一層一層點)
+        fit_ids = _fitting_accessory_ids(self.request.tenant, q) if q else []
         extra_ids = [*code_ids, *[i for i in extra_ids if i not in set(code_ids)]]
+        extra_ids += [i for i in fit_ids if i not in set(extra_ids)]
         qs = queryset
         for backend in list(self.filter_backends):
             if extra_ids and issubclass(backend, SearchFilter):
@@ -611,6 +672,22 @@ class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
                 g["any_lifecycle_status_label"] = p.get_lifecycle_status_display()
 
         return Response(sorted(groups.values(), key=lambda g: g["model_name"]))
+
+    @action(detail=False, methods=["get"], url_path="tree")
+    def tree(self, request):
+        """分類瀏覽(類別 → 品牌 → 型號 → 商品;規則在 `catalog/tree.py`)。
+        沒帶 category = 列類別;category + mode(配件:phone / maker)+ brand + model 一層一層往下。"""
+        from . import tree
+
+        cid = request.query_params.get("category", "")
+        if not cid:
+            return Response(tree.categories(request.tenant))
+        category = Category.objects.for_tenant(request.tenant).filter(pk=cid if cid.isdigit() else None).first()
+        if category is None:
+            return Response({"detail": "沒有這個類別"}, status=status.HTTP_404_NOT_FOUND)
+        q = request.query_params
+        return Response(tree.browse(self.get_queryset(), category, mode=q.get("mode", ""), brand=q.get("brand", ""),
+                                    model=q.get("model", "")))
 
     @action(detail=False, methods=["get"], url_path="by-phone-model")
     def by_phone_model(self, request):

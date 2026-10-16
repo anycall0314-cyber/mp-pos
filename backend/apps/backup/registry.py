@@ -41,7 +41,7 @@ REGISTRY: dict[str, Entry] = {
         "parties.SalesPerson", "parties.Carrier", "parties.TelecomPlan",
         "parties.SimCard",
         # 商品
-        "catalog.Category", "catalog.Brand", "catalog.ProductType",
+        "catalog.Category", "catalog.Brand", "catalog.CategoryBrand", "catalog.ProductType",
         "catalog.PhoneSeries", "catalog.PhoneModel", "catalog.Condition",
         "catalog.Product", "catalog.ProductRelation", "catalog.SupplierProduct",
         "catalog.PartTemplate", "catalog.PartTemplateItem",

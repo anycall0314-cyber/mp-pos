@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 
 import { useCategories, useSaveCategory } from "@/api/hooks";
-import type { Category } from "@/api/types";
+import type { Category, CategoryKind } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { KindPicker } from "@/pages/products/KindPicker";
 
 interface EditState {
   code: string;
@@ -15,9 +16,10 @@ interface NewCatState {
   code: string;
   name: string;
   sort_order: string; // 字串以便顯示空白為「自動」
+  kind: CategoryKind | "";
 }
 
-const EMPTY_NEW: NewCatState = { code: "", name: "", sort_order: "" };
+const EMPTY_NEW: NewCatState = { code: "", name: "", sort_order: "", kind: "" };
 
 export function CategoriesPage() {
   const { data } = useCategories();
@@ -136,6 +138,10 @@ export function CategoriesPage() {
       setError("代碼與名稱必填");
       return;
     }
+    if (!newCat.kind) {
+      setError("要選主機、配件或一般");
+      return;
+    }
     const explicit = Number(newCat.sort_order);
     const sort_order =
       Number.isFinite(explicit) && explicit > 0
@@ -148,6 +154,7 @@ export function CategoriesPage() {
         code: newCat.code.trim().toUpperCase(),
         name: newCat.name.trim(),
         sort_order,
+        kind: newCat.kind,
       });
       setNewCat(EMPTY_NEW);
       setShowNew(false);
@@ -212,6 +219,10 @@ export function CategoriesPage() {
               placeholder="自動"
               style={{ width: 100 }}
             />
+          </label>
+          <label>
+            類型
+            <KindPicker value={newCat.kind} onChange={(kind) => setNewCat((s) => ({ ...s, kind }))} />
           </label>
           <button
             className="btn primary"

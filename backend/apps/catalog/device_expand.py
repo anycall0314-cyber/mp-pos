@@ -3,7 +3,7 @@
 owner 定的:品況 = 全新、中古機(**中古機也分顏色**、**不展開「中古機(保固內)」**);**2026 年以後上市的手機再加「已拆封」**
 (2026-10-16 改:「2026以後出的手機都要建立已拆封，後續新機上市都要，僅手機就好，其他類別不需要」;平板、手錶不建)。
 **耳機、手環、其他穿戴**(2026-10-16 owner 選「只建全新、按數量」):只建全新、分顏色、**不記序號**(進貨、盤點照數量),
-品名「型號 顏色 台版 全新」(沒有容量那一格);放公司的「耳機/音訊」「穿戴/周邊」類別。公司本來就在賣的那幾款放 `holds` 不建。
+品名「型號 顏色 台版 全新」(沒有容量那一格);放「穿戴」(還沒改的公司放「耳機/音訊」「穿戴/周邊」)。公司本來就在賣的那幾款放 `holds` 不建。
 品名跟「新增手機型號」一樣:「型號 容量 顏色 台版 品況」。只建主機的品號,不建配件 / 維修零件的佔位商品。
 
 - **一支手機在一家公司只有一個機型**:先用 `PhoneModel.device_uid` 對;沒對的照 `links`(人 / Jev 對好的:公司機型名稱 → 型號庫編號)寫上;
@@ -23,14 +23,17 @@ from django.db import IntegrityError, transaction
 from django.utils.text import slugify
 
 from .models import Brand, Category, Condition, DeviceModel, PhoneModel, PhoneSeries, Product
+from .category_template import link_brand
 from .phone_model import _smart_join
 from .services_model_bundle import _get_or_create_phone_model
 
 REGION = "台版"
 NEW, USED, OPENED = "全新", "中古機", "已拆封"
-CATEGORY_OF = {DeviceModel.Category.PHONE: "手機", DeviceModel.Category.TABLET: "平板", DeviceModel.Category.WATCH: "手錶",
-               DeviceModel.Category.HEADPHONES: "耳機/音訊", DeviceModel.Category.BAND: "穿戴/周邊",
-               DeviceModel.Category.OTHER: "穿戴/周邊"}
+# 型號庫的類別 → 公司的類別(照順序找第一個有的):手錶、手環、耳機都進「穿戴」(owner 2026-10-16「都進穿戴」);
+# 還沒改成穿戴的公司照舊放「手錶」「耳機/音訊」「穿戴/周邊」
+CATEGORY_OF = {DeviceModel.Category.PHONE: ("手機",), DeviceModel.Category.TABLET: ("平板",),
+               DeviceModel.Category.WATCH: ("穿戴", "手錶"), DeviceModel.Category.HEADPHONES: ("穿戴", "耳機/音訊"),
+               DeviceModel.Category.BAND: ("穿戴", "穿戴/周邊"), DeviceModel.Category.OTHER: ("穿戴", "穿戴/周邊")}
 # 只建全新、按數量(不記序號、沒有容量那一格)
 BY_QTY = (DeviceModel.Category.HEADPHONES, DeviceModel.Category.BAND, DeviceModel.Category.OTHER)
 ALL_CATEGORIES = tuple(CATEGORY_OF)
@@ -159,7 +162,7 @@ def _lookups(tenant):
     missing = [n for n in (NEW, USED, OPENED) if n not in conds]
     if missing:
         raise ExpandError("這家公司沒有這幾種品況:" + "、".join(missing))
-    cats = {c.name: c for c in Category.objects.for_tenant(tenant).filter(name__in=CATEGORY_OF.values())}
+    cats = {c.name: c for c in Category.objects.for_tenant(tenant).filter(name__in={n for names in CATEGORY_OF.values() for n in names})}
     return conds, cats
 
 
@@ -226,9 +229,9 @@ def expand(tenant, *, categories=ALL_CATEGORIES, links=None, holds=(), new_for_o
         if d.uid in held:
             report.held += 1
             continue
-        category = cats.get(CATEGORY_OF[d.category])
+        category = next((cats[n] for n in CATEGORY_OF[d.category] if n in cats), None)
         if category is None:
-            report.problems.append(f"這家公司沒有「{CATEGORY_OF[d.category]}」類別:{d}")
+            report.problems.append(f"這家公司沒有「{CATEGORY_OF[d.category][0]}」類別:{d}")
             continue
         report.devices += 1
         one = _One(tenant, d, category, conds, by_uid, by_name, existing_names, new_for_old, confirm, twins, names,
@@ -324,6 +327,8 @@ class _One:
         elif pm is None:
             self.new_model = True
         self.pm = pm
+        if confirm and todo and brand is not None:
+            link_brand(self.category, brand)   # 品牌掛到類別底下(類別 → 品牌 → 型號)
         for cond, cap, col, name in todo:
             if confirm:
                 Product.objects.create(

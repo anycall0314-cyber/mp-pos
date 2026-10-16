@@ -217,6 +217,11 @@ class _TenantUniqueMixin:
 
 
 class CategorySerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
+    # 三種走法(主機 / 配件 / 一般);寫的時候換成 holds_devices + needs_host_model。新增類別一定要選(紅隊第 3 條)
+    kind = serializers.ChoiceField(choices=Category.Kind.choices, required=False)
+    # 類別底下的品牌(中項),照排序
+    brands = serializers.SerializerMethodField()
+
     class Meta:
         model = Category
         fields = [
@@ -227,11 +232,28 @@ class CategorySerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, ser
             "is_active",
             "is_secondhand_default",
             "needs_host_model",
+            "holds_devices",
+            "kind",
+            "brands",
             "next_sku_seq",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "next_sku_seq", "created_at", "updated_at"]
+        read_only_fields = ["id", "needs_host_model", "holds_devices", "next_sku_seq", "created_at", "updated_at"]
+
+    def get_brands(self, obj) -> list:
+        return [{"id": link.brand_id, "name": link.brand.name}
+                for link in obj.brand_links.select_related("brand").order_by("sort_order", "id")]
+
+    def validate(self, attrs):
+        from .category_template import flags_of
+
+        kind = attrs.pop("kind", None)
+        if kind:
+            attrs.update(flags_of(kind))
+        elif self.instance is None:
+            raise serializers.ValidationError({"detail": "要選這個類別是主機、配件還是一般"})
+        return super().validate(attrs)
 
     def validate_code(self, value):
         return self._tenant_unique(Category.objects, "code", value)

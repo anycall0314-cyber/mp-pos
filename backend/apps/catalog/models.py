@@ -37,6 +37,23 @@ class Category(TenantOwnedModel):
         editable=False,
         help_text="下一個要發出的流水號;每次發 SKU 後 +1",
     )
+    # 類別的三種走法(owner 2026-10-16「類別下再建立中項填寫品牌 品牌後才是型號」):
+    # 主機 = holds_devices(品牌 → 型號);配件 = needs_host_model(依手機 / 依廠牌);一般 = 兩個都沒有(廠牌 → 商品)
+    holds_devices = models.BooleanField(
+        "主機類別", default=False, db_default=False,
+        help_text="手機 / 平板 / 穿戴這種主機本身:底下是品牌 → 型號 → 容量顏色品況",
+    )
+
+    class Kind(models.TextChoices):
+        DEVICE = "device", "主機"
+        ACCESSORY = "accessory", "配件"
+        GENERAL = "general", "一般"
+
+    @property
+    def kind(self) -> str:
+        if self.holds_devices:
+            return self.Kind.DEVICE
+        return self.Kind.ACCESSORY if self.needs_host_model else self.Kind.GENERAL
 
     class Meta:
         constraints = [
@@ -583,6 +600,26 @@ class Brand(TenantOwnedModel):
 
     def __str__(self) -> str:
         return self.name
+
+
+class CategoryBrand(TenantOwnedModel):
+    """類別底下的品牌(中項;owner 2026-10-16)。主機類別 = 裝置品牌,配件 / 一般類別 = 配件廠牌。
+    店家自己加 / 刪 / 排;新公司由平台範本帶(`category_template.py`)。拿掉這一列不動任何商品。"""
+
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="brand_links")
+    brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name="category_links")
+    sort_order = models.PositiveIntegerField("排序", default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["category", "brand"], name="uniq_category_brand"),
+        ]
+        ordering = ["sort_order", "id"]
+        verbose_name = "類別的品牌"
+        verbose_name_plural = "類別的品牌"
+
+    def __str__(self) -> str:
+        return f"{self.category.name} / {self.brand.name}"
 
 
 class ProductType(TenantOwnedModel):

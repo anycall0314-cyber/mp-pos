@@ -41,6 +41,7 @@ import type { ReceivePlan, ReceiveSend } from "@/lib/vendorReceive";
 import {
   Carrier,
   Category,
+  TreeLevel,
   ClearancePressureResponse,
   CompatibilityResponse,
   Customer,
@@ -1037,6 +1038,44 @@ export function useSaveCategory() {
       qc.invalidateQueries({ queryKey: ["products"] });
     },
   });
+}
+
+/** 分類瀏覽的一層。params 空 = 列類別 */
+export const useCategoryTree = (params: { category?: number; mode?: string; brand?: string; model?: string }) =>
+  useQuery({
+    queryKey: ["category-tree", params],
+    queryFn: () => {
+      const p = new URLSearchParams();
+      for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") p.set(k, String(v));
+      return api<TreeLevel>(`/products/tree/?${p}`);
+    },
+  });
+
+/** 類別底下的品牌:加(選現有的或打新名字)、拿掉、排順序 */
+export function useCategoryBrands() {
+  const qc = useQueryClient();
+  const done = () => {
+    qc.invalidateQueries({ queryKey: ["categories"] });
+    qc.invalidateQueries({ queryKey: ["brands"] });
+    qc.invalidateQueries({ queryKey: ["category-tree"] });
+  };
+  return {
+    add: useMutation({
+      mutationFn: ({ category, brand, name }: { category: number; brand?: number; name?: string }) =>
+        api<Category>(`/categories/${category}/brands/`, { method: "POST", body: JSON.stringify(brand ? { brand } : { name }) }),
+      onSuccess: done,
+    }),
+    remove: useMutation({
+      mutationFn: ({ category, brand }: { category: number; brand: number }) =>
+        api<Category>(`/categories/${category}/brands/${brand}/`, { method: "DELETE" }),
+      onSuccess: done,
+    }),
+    order: useMutation({
+      mutationFn: ({ category, brands }: { category: number; brands: number[] }) =>
+        api<Category>(`/categories/${category}/brands/order/`, { method: "POST", body: JSON.stringify({ brands }) }),
+      onSuccess: done,
+    }),
+  };
 }
 
 export function useSaveWarehouse() {
