@@ -16,7 +16,7 @@ from apps.tenants.models import Tenant
 
 
 class Command(BaseCommand):
-    help = "平台型號庫 → 一家公司的品號(全新、中古機;2026 年上市的加已拆封)"
+    help = "平台型號庫 → 一家公司的品號(全新、中古機;2026 年以後上市的手機加已拆封)"
 
     def add_arguments(self, parser):
         parser.add_argument("--tenant", required=True, help="公司代碼(例:JB)")
