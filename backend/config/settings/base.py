@@ -158,6 +158,8 @@ BACKUP_MAX_ROWS = int(os.environ.get("MPPOS_BACKUP_MAX_ROWS", "2000000"))
 
 # 每日庫存快照 + 對帳:過了這個時間(台灣時間 HH:MM)由備份背景程式自動做(apps/ledger/daily.py)
 LEDGER_DAILY_AT = os.environ.get("MPPOS_LEDGER_DAILY_AT", "23:30")
+# 型號庫自動更新(讀手機王、加新機;apps/catalog/device_watch.py)每天幾點做;設成空的 = 不自動做
+DEVICE_WATCH_AT = os.environ.get("MPPOS_DEVICE_WATCH_AT", "05:30")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

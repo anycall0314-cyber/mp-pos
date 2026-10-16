@@ -39,6 +39,7 @@ class PlatformTenantSerializer(serializers.ModelSerializer):
             "code",
             "name",
             "is_active",
+            "auto_device_models",
             "user_count",
             "warehouse_count",
             "created_at",

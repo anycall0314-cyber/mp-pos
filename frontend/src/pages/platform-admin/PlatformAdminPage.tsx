@@ -4,12 +4,13 @@ import { Navigate } from "react-router-dom";
 import { useCurrentUser } from "@/auth/AuthContext";
 import { Toolbar } from "@/components/Toolbar";
 
+import { PlatformDevicesTab } from "./PlatformDevicesTab";
 import { PlatformTenantsTab } from "./PlatformTenantsTab";
 import { PlatformUsersTab } from "./PlatformUsersTab";
 import { PlatformVendorsTab } from "./PlatformVendorsTab";
 import { PlatformWarehousesTab } from "./PlatformWarehousesTab";
 
-type Tab = "tenants" | "users" | "warehouses" | "vendors";
+type Tab = "tenants" | "users" | "warehouses" | "vendors" | "devices";
 
 export function PlatformAdminPage() {
   const user = useCurrentUser();
@@ -28,6 +29,7 @@ export function PlatformAdminPage() {
               { key: "users", label: "用戶" },
               { key: "warehouses", label: "倉別" },
               { key: "vendors", label: "廠商" },
+              { key: "devices", label: "型號" },
             ] as const
           ).map((t) => (
             <button
@@ -46,6 +48,7 @@ export function PlatformAdminPage() {
         {tab === "users" && <PlatformUsersTab />}
         {tab === "warehouses" && <PlatformWarehousesTab />}
         {tab === "vendors" && <PlatformVendorsTab />}
+        {tab === "devices" && <PlatformDevicesTab />}
       </div>
     </div>
   );

@@ -8154,3 +8154,18 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .sc-unknown-do .combobox { min-width: 220px; }
 .pc-pending { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: 10px;
   border: 1.5px dashed var(--danger-text, #d33); }
+
+/* 平台管理 → 型號庫(PlatformDevicesTab) */
+.dw-page { display: grid; gap: 4px; }
+.dw-last { padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; display: grid; gap: 4px; }
+.dw-last.bad { border-color: var(--danger-text); color: var(--danger-text); }
+.dw-dim { color: var(--text-dim); font-size: var(--font-secondary); }
+.dw-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dw-name { display: flex; gap: 6px; align-items: center; flex: 1 1 220px; min-width: 0; }
+.dw-name input { flex: 1; min-width: 0; height: var(--control-height); padding: 0 10px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--panel-2); color: var(--text); font-size: var(--font-body); }
+.dw-nowrap { white-space: nowrap; }
+.dw-error { color: var(--danger-text); margin-top: 4px; }
+.dw-runs { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.dw-runs li.bad { color: var(--danger-text); }
+.dw-table td { vertical-align: top; }

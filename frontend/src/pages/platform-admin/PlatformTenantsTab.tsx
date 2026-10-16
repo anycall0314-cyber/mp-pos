@@ -80,6 +80,9 @@ export function PlatformTenantsTab() {
                 倉別數
               </th>
               <th style={{ width: 80, textAlign: "center" }}>啟用</th>
+              <th style={{ width: 120, textAlign: "center" }} title="型號庫自動加了新機,就建成這家的品號">
+                新機建品號
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -107,11 +110,22 @@ export function PlatformTenantsTab() {
                     }
                   />
                 </td>
+                <td style={{ textAlign: "center" }}>
+                  <input
+                    type="checkbox"
+                    aria-label={`${t.name} 新機自動建品號`}
+                    checked={t.auto_device_models}
+                    disabled={save.isPending}
+                    onChange={(e) =>
+                      save.mutate({ id: t.id, auto_device_models: e.target.checked })
+                    }
+                  />
+                </td>
               </tr>
             ))}
             {(list.data ?? []).length === 0 && (
               <tr>
-                <td colSpan={6} className="md-empty">
+                <td colSpan={7} className="md-empty">
                   尚無經銷商
                 </td>
               </tr>

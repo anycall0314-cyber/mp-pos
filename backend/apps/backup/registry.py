@@ -128,6 +128,8 @@ REGISTRY: dict[str, Entry] = {
     "catalog.DeviceModel": Entry(EXCLUDED, "平台型號庫,不屬於任何公司;公司的機型只記型號庫編號(PhoneModel.device_uid)"),
     "catalog.DeviceCatalogRun": Entry(EXCLUDED, "平台型號庫的匯入紀錄,不屬於任何公司"),
     "catalog.DeviceCatalogChange": Entry(EXCLUDED, "平台型號庫的變動紀錄,不屬於任何公司"),
+    "catalog.DeviceCandidate": Entry(EXCLUDED, "型號庫自動更新看過的手機王商品頁,平台的,不屬於任何公司"),
+    "catalog.DeviceWatchRun": Entry(EXCLUDED, "型號庫自動更新每天的檢查紀錄,平台的,不屬於任何公司"),
 }
 
 # 帶檔案的欄位:{表: [欄位]}。只存路徑不算備份,檔案本體要一起打包。

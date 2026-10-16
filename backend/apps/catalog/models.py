@@ -1189,3 +1189,58 @@ class DeviceCatalogChange(models.Model):
         ordering = ["id"]
         verbose_name = "型號庫變動"
         verbose_name_plural = "型號庫變動"
+
+
+class DeviceCandidate(TimestampedModel):
+    """自動更新(M1-D)在手機王清單上看到的一個商品頁:型號庫有沒有、要不要加。一個商品頁一筆,看過的不再問。
+
+    規則在 `device_watch.py`。`data` = 讀那一頁讀到的(名稱、上市、容量、顏色、原廠售價…),人看得懂的原因在 `reason`。
+    """
+
+    class Status(models.TextChoices):
+        KNOWN = "known", "型號庫已經有"
+        ADDED = "added", "自動加進型號庫"
+        WAITING = "waiting", "等資料"
+        REVIEW = "review", "待確認"
+        LINKED = "linked", "平台說是型號庫的某一支"
+        DISMISSED = "dismissed", "不收"
+
+    source = models.CharField("來源", max_length=20, default="sogi")
+    source_id = models.CharField("來源編號", max_length=40)
+    kind = models.CharField("來源分類", max_length=20)
+    url = models.CharField("網址", max_length=300)
+    list_name = models.CharField("清單上的名稱", max_length=200)
+    status = models.CharField("狀態", max_length=10, choices=Status.choices)
+    reason = models.CharField("原因", max_length=300, blank=True, default="")
+    data = models.JSONField("讀到的內容", default=dict, blank=True)
+    uid = models.CharField("對到型號庫哪一支", max_length=64, blank=True, default="", db_index=True)
+    checked_at = models.DateTimeField("上次讀商品頁", null=True, blank=True)
+    decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name="+", verbose_name="誰決定的")
+    decided_at = models.DateTimeField("決定時間", null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["source", "source_id"], name="uniq_device_candidate_source"),
+        ]
+        ordering = ["-id"]
+        verbose_name = "型號庫自動更新的候選"
+        verbose_name_plural = "型號庫自動更新的候選"
+
+    def __str__(self) -> str:
+        return f"{self.list_name}({self.get_status_display()})"
+
+
+class DeviceWatchRun(TimestampedModel):
+    """型號庫自動更新的一次檢查(一天一次):讀到幾支、加了幾支、讀不到的原因。平台頁看「上一次檢查成功沒有」看這張。"""
+
+    day = models.DateField("哪一天", unique=True)
+    finished_at = models.DateTimeField("做完的時間", null=True, blank=True)
+    ok = models.BooleanField("成功", default=False)
+    counts = models.JSONField("筆數", default=dict, blank=True)
+    notes = models.JSONField("要講的事", default=list, blank=True)
+
+    class Meta:
+        ordering = ["-day"]
+        verbose_name = "型號庫自動更新"
+        verbose_name_plural = "型號庫自動更新"

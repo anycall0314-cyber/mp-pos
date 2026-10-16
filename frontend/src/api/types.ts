@@ -843,6 +843,8 @@ export interface PlatformTenant {
   code: string;
   name: string;
   is_active: boolean;
+  /** 型號庫自動加了新機,就照展開的規則建成這家的品號(平台的設定) */
+  auto_device_models: boolean;
   user_count: number;
   warehouse_count: number;
   created_at: string;
@@ -2089,4 +2091,57 @@ export interface VendorItemImport {
   counts: { new: number; update: number; same: number; error: number };
   applied: boolean;
   detail?: string;
+}
+
+/** 平台管理 → 型號庫:每天自動讀手機王的那一次(backend/apps/catalog/device_watch.py) */
+export interface DeviceWatchRun {
+  day: string;
+  finished_at: string | null;
+  ok: boolean;
+  counts: Record<string, number>;
+  notes: string[];
+}
+
+export interface DeviceCandidateRow {
+  id: number;
+  status: "waiting" | "review";
+  status_label: string;
+  reason: string;
+  list_name: string;
+  url: string;
+  checked_at: string | null;
+  created_at: string;
+  category: string;
+  category_label: string;
+  brand: string;
+  name: string;
+  launched: string;
+  capacities: string[];
+  colors: string[];
+  connectivity: string[];
+  near: { uid: string; name: string }[];
+  can_add: boolean;
+}
+
+export interface DeviceAddedRow {
+  uid: string;
+  category: string;
+  category_label: string;
+  brand: string;
+  name: string;
+  launched: string;
+  created_at: string;
+  colors: string[];
+  capacities: string[];
+  sources: string[];
+}
+
+export interface DeviceWatch {
+  at: string;
+  last: DeviceWatchRun | null;
+  runs: DeviceWatchRun[];
+  candidates: DeviceCandidateRow[];
+  added: DeviceAddedRow[];
+  auto_tenants: string[];
+  catalog_count: number;
 }

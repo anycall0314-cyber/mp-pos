@@ -5,7 +5,8 @@
 
 工作狀態都在資料庫,這支可以隨時停掉重啟:做到一半的工作租約到期後會被重新接手。
 
-順便每分鐘看一次要不要做「每日庫存快照 + 對帳」(apps/ledger/daily.py,過了收店時間才做)。
+順便每分鐘看一次要不要做「每日庫存快照 + 對帳」(apps/ledger/daily.py,過了收店時間才做),
+以及「型號庫自動更新」(apps/catalog/device_watch.py,過了 DEVICE_WATCH_AT 才做,一天一次)。
 """
 import time
 
@@ -23,6 +24,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **opts):
         from apps.backup import restore
+        from apps.catalog import device_watch
         from apps.ledger import daily
 
         next_daily = 0.0
@@ -33,6 +35,10 @@ class Command(BaseCommand):
                     daily.run_due(log=self.stdout.write)
                 except Exception as exc:  # 每日對帳出錯不能讓備份 / 還原停擺
                     self.stdout.write(f"每日對帳失敗 {type(exc).__name__}: {exc}")
+                try:
+                    device_watch.run_due(log=self.stdout.write)
+                except Exception as exc:  # 型號庫自動更新出錯也一樣
+                    self.stdout.write(f"型號庫自動更新失敗 {type(exc).__name__}: {exc}")
             worked = False
             job = jobs.claim_next()
             if job is not None:

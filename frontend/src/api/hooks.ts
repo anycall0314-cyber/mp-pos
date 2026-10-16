@@ -70,6 +70,7 @@ import {
   PettyExpense,
   PhoneBillCollection,
   PlatformTenant,
+  DeviceWatch,
   PlatformUser,
   PlatformWarehouse,
   Product,
@@ -1580,6 +1581,25 @@ export function useSavePlatformTenant() {
       qc.invalidateQueries({ queryKey: ["platform-users"] });
       qc.invalidateQueries({ queryKey: ["platform-warehouses"] });
     },
+  });
+}
+
+/** 平台管理 → 型號庫:自動更新的狀況與等人按的那幾支 */
+export const useDeviceWatch = () =>
+  useQuery({
+    queryKey: ["platform-device-watch"],
+    queryFn: () => api<DeviceWatch>("/platform/device-watch/"),
+  });
+
+export function useDecideDeviceCandidate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; action: "add" | "same" | "dismiss"; name?: string; uid?: string }) =>
+      api<{ status: string; count: number; notes?: string[] }>(`/platform/device-candidates/${id}/`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["platform-device-watch"] }),
   });
 }
 

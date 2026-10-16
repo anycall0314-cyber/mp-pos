@@ -182,11 +182,16 @@ def apply_links(tenant, links: dict[str, str], *, confirm: bool) -> list[str]:
 
 
 def expand(tenant, *, categories=("phone", "tablet", "watch"), links=None, holds=(), new_for_old=True,
-           confirm=False) -> Report:
-    """展開。confirm=False 只算(不寫任何東西)。寫之前先跑 `apply_links`;試算時 `links` 照算(還沒寫進去)。"""
+           confirm=False, uids=None, add_variants=()) -> Report:
+    """展開。confirm=False 只算(不寫任何東西)。寫之前先跑 `apply_links`;試算時 `links` 照算(還沒寫進去)。
+    `uids` = 只展開這幾支(自動更新加進來的);`add_variants` = 這幾支型號庫多出來的容量 / 顏色也建
+    (自動更新盯新機時用:那幾個品號原本就是照型號庫的寫法建的,不會跟公司自己的寫法撞)。"""
     conds, cats = _lookups(tenant)
     held = set(holds)
-    devices = list(DeviceModel.objects.filter(is_active=True, category__in=categories).order_by("category", "brand", "name"))
+    devices = DeviceModel.objects.filter(is_active=True, category__in=categories)
+    if uids is not None:
+        devices = devices.filter(uid__in=list(uids))
+    devices = list(devices.order_by("category", "brand", "name"))
     models = list(PhoneModel.objects.for_tenant(tenant))
     by_uid = {pm.device_uid: pm for pm in models if pm.device_uid}
     # 還沒對的機型照「只差空白也算同一個」查;公司自己有兩個只差空白的 → 那個名稱不自動對(看不出是哪一個)
@@ -212,7 +217,8 @@ def expand(tenant, *, categories=("phone", "tablet", "watch"), links=None, holds
             report.problems.append(f"這家公司沒有「{CATEGORY_OF[d.category]}」類別:{d}")
             continue
         report.devices += 1
-        one = _One(tenant, d, category, conds, by_uid, by_name, existing_names, new_for_old, confirm, twins, names)
+        one = _One(tenant, d, category, conds, by_uid, by_name, existing_names, new_for_old, confirm, twins, names,
+                   grow=d.uid in set(add_variants))
         try:
             if confirm:
                 with transaction.atomic():
@@ -229,11 +235,12 @@ def expand(tenant, *, categories=("phone", "tablet", "watch"), links=None, holds
 class _One:
     """一支型號展開到這家公司。結果先記在自己身上,整支成功才併進報告、才更新查表(失敗的那一支整個收回)。"""
 
-    def __init__(self, tenant, d, category, conds, by_uid, by_name, existing_names, new_for_old, confirm, twins=(), names=None):
+    def __init__(self, tenant, d, category, conds, by_uid, by_name, existing_names, new_for_old, confirm, twins=(), names=None,
+                 grow=False):
         self.tenant, self.d, self.category, self.conds = tenant, d, category, conds
         self.by_uid, self.by_name, self.existing_names = by_uid, by_name, existing_names
         self.twins, self.names_all = set(twins), names if names is not None else {}
-        self.new_for_old, self.confirm = new_for_old, confirm
+        self.new_for_old, self.confirm, self.grow = new_for_old, confirm, grow
         self.created: dict = {}
         self.names: list = []
         self.linked = self.new_model = False
@@ -272,7 +279,11 @@ class _One:
             caps = list(dict.fromkeys(c for c, _ in have))
             cols = list(dict.fromkeys(c for _, c in have if c)) or [NO_COLOR]
             extra = [c for c in capacities_for(d) if c not in caps] + [c for c in colors_for(d) if c not in cols]
-            if extra:
+            if self.grow:
+                caps += [c for c in capacities_for(d) if c not in caps]
+                cols += [c for c in colors_for(d) if c not in cols and c != NO_COLOR]
+                cols = [c for c in cols if c != NO_COLOR] or [NO_COLOR]
+            elif extra:
                 self.extra = (model_name, extra)
         else:
             caps, cols = capacities_for(d), colors_for(d)

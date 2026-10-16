@@ -61,6 +61,8 @@ class Tenant(TimestampedModel):
         "業務員成本加多少", max_digits=14, decimal_places=2, default=0,
         help_text="加固定額 = 每一件加幾元;加百分比 = 加幾 %",
     )
+    # 平台的設定(平台管理員在「經銷商」勾;不跟著公司備份):型號庫自動加了新機,就照展開的規則建成這家的品號(catalog/device_watch.py)
+    auto_device_models = models.BooleanField("新機自動建品號", default=False, db_default=False)
 
     class Meta:
         ordering = ["id"]
