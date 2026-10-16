@@ -158,3 +158,15 @@ class TidyTests(TestCase):
         r = shop_tidy.tidy(other, {}, kinds_from=self.t, confirm=True)
         c.refresh_from_db()
         self.assertEqual((c.kind, c.name, r.kinds), ("general", "傳輸線", ["充電/線材:accessory → general"]))
+
+    def test_kinds_still_follow_after_the_other_company_was_tidied_first(self):
+        shop_tidy.tidy(self.t, self.answers, confirm=True)          # 手機玩家先跑:它的「充電/線材」已經是「傳輸線」
+        other = Tenant.objects.create(name="測試", code="TEST")
+        c = Category.objects.create(tenant=other, code="CH", name="充電/線材", needs_host_model=True)
+        cable = Product.objects.create(tenant=other, category=c, name="IP5/副廠/2M", requires_serial=False)
+        apple = Brand.objects.create(tenant=other, code="apple", name="Apple")
+        PhoneModel.objects.create(tenant=other, code="ip5", name="iPhone 5", match_key="iphone 5", brand=apple)
+        shop_tidy.tidy(other, {}, kinds_from=self.t, confirm=True)
+        c.refresh_from_db()
+        self.assertEqual((c.kind, c.name), ("general", "傳輸線"))
+        self.assertFalse(ProductRelation.objects.filter(accessory_product=cable).exists(), "一般類別不掛適用機型")

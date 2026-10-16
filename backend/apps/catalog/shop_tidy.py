@@ -100,8 +100,10 @@ def tidy(tenant, answers: dict, *, kinds_from=None, confirm: bool = False) -> Re
         # 1. 類別的種類照另一家
         if kinds_from is not None:
             src = {c.name.strip(): c for c in Category.objects.for_tenant(kinds_from)}
+            renamed = dict(RENAMES)
             for name, c in cats().items():
-                s = src.get(name)
+                # 另一家可能已經整理過、改了名(手機玩家先跑,它的「充電/線材」已經是「傳輸線」)
+                s = src.get(name) or src.get(renamed.get(name, ""))
                 if s and (c.holds_devices, c.needs_host_model) != (s.holds_devices, s.needs_host_model):
                     Category.objects.filter(pk=c.pk).update(holds_devices=s.holds_devices, needs_host_model=s.needs_host_model)
                     report.kinds.append(f"{name}:{c.kind} → {s.kind}")
