@@ -2,6 +2,8 @@
 
 owner 定的:品況 = 全新、中古機(**中古機也分顏色**、**不展開「中古機(保固內)」**);**2026 年以後上市的手機再加「已拆封」**
 (2026-10-16 改:「2026以後出的手機都要建立已拆封，後續新機上市都要，僅手機就好，其他類別不需要」;平板、手錶不建)。
+**耳機、手環、其他穿戴**(2026-10-16 owner 選「只建全新、按數量」):只建全新、分顏色、**不記序號**(進貨、盤點照數量),
+品名「型號 顏色 台版 全新」(沒有容量那一格);放公司的「耳機/音訊」「穿戴/周邊」類別。公司本來就在賣的那幾款放 `holds` 不建。
 品名跟「新增手機型號」一樣:「型號 容量 顏色 台版 品況」。只建主機的品號,不建配件 / 維修零件的佔位商品。
 
 - **一支手機在一家公司只有一個機型**:先用 `PhoneModel.device_uid` 對;沒對的照 `links`(人 / Jev 對好的:公司機型名稱 → 型號庫編號)寫上;
@@ -26,7 +28,12 @@ from .services_model_bundle import _get_or_create_phone_model
 
 REGION = "台版"
 NEW, USED, OPENED = "全新", "中古機", "已拆封"
-CATEGORY_OF = {DeviceModel.Category.PHONE: "手機", DeviceModel.Category.TABLET: "平板", DeviceModel.Category.WATCH: "手錶"}
+CATEGORY_OF = {DeviceModel.Category.PHONE: "手機", DeviceModel.Category.TABLET: "平板", DeviceModel.Category.WATCH: "手錶",
+               DeviceModel.Category.HEADPHONES: "耳機/音訊", DeviceModel.Category.BAND: "穿戴/周邊",
+               DeviceModel.Category.OTHER: "穿戴/周邊"}
+# 只建全新、按數量(不記序號、沒有容量那一格)
+BY_QTY = (DeviceModel.Category.HEADPHONES, DeviceModel.Category.BAND, DeviceModel.Category.OTHER)
+ALL_CATEGORIES = tuple(CATEGORY_OF)
 # 寫明是原廠 / 官網定價的才帶進全新的售價(紅隊第 2 條);順序 = 同一個容量好幾筆時先用哪一種
 MSRP_KINDS = ("source_stated_manufacturer_msrp", "official_regular_catalog_price",
               "official_regular_catalog_price_not_verified_original_msrp")
@@ -56,6 +63,8 @@ class Report:
 
 def conditions_for(device: DeviceModel, *, new_for_old: bool = True) -> list[str]:
     """這一支要展開哪幾種品況。`new_for_old=False`:草稿補進來的舊機(2018 以前)不建全新。"""
+    if device.category in BY_QTY:
+        return [NEW]
     out = [NEW, USED]
     if not new_for_old and (device.data or {}).get("origin") == "m1-draft":
         out = [USED]
@@ -67,6 +76,8 @@ def conditions_for(device: DeviceModel, *, new_for_old: bool = True) -> list[str
 
 def capacities_for(device: DeviceModel) -> list[str]:
     data = device.data or {}
+    if device.category in BY_QTY:
+        return [""]
     if device.category == DeviceModel.Category.WATCH:
         base = "GPS" if device.brand.casefold() == "apple" else "藍牙"
         lte = "GPS+行動網路" if base == "GPS" else "LTE"
@@ -80,7 +91,7 @@ def colors_for(device: DeviceModel) -> list[str]:
 
 def msrp(device: DeviceModel, capacity: str) -> Decimal:
     rows = [p for p in (device.data or {}).get("prices") or [] if p.get("kind") in MSRP_KINDS
-            and (p.get("storage") == capacity or (p.get("storage") is None and capacity in (NO_CAPACITY, "GPS", "藍牙")))]
+            and (p.get("storage") == capacity or (p.get("storage") is None and capacity in ("", NO_CAPACITY, "GPS", "藍牙")))]
     rows.sort(key=lambda p: MSRP_KINDS.index(p["kind"]))
     return Decimal(int(rows[0]["amount"])) if rows else Decimal(0)
 
@@ -184,7 +195,7 @@ def apply_links(tenant, links: dict[str, str], *, confirm: bool) -> list[str]:
     return []
 
 
-def expand(tenant, *, categories=("phone", "tablet", "watch"), links=None, holds=(), new_for_old=True,
+def expand(tenant, *, categories=ALL_CATEGORIES, links=None, holds=(), new_for_old=True,
            confirm=False, uids=None, add_variants=()) -> Report:
     """展開。confirm=False 只算(不寫任何東西)。寫之前先跑 `apply_links`;試算時 `links` 照算(還沒寫進去)。
     `uids` = 只展開這幾支(自動更新加進來的);`add_variants` = 這幾支型號庫多出來的容量 / 顏色也建
@@ -252,6 +263,7 @@ class _One:
 
     def run(self):
         d, tenant, confirm = self.d, self.tenant, self.confirm
+        qty = d.category in BY_QTY
         pm = self.by_uid.get(d.uid)
         if pm is None:
             sname, generation, suffix = split_name(d.brand, d.name)
@@ -272,8 +284,8 @@ class _One:
                     raise ExpandError(f"名稱跟公司的「{clash.name}」只差空白,它已經對到型號庫另一支")
         if pm is not None:
             brand, series, generation, suffix, model_name = pm.brand, pm.series, pm.generation, pm.model_suffix, pm.name
-            have = list(Product.objects.for_tenant(tenant).filter(phone_model=pm, requires_serial=True)
-                        .exclude(capacity="").values_list("capacity", "color"))
+            have = Product.objects.for_tenant(tenant).filter(phone_model=pm, requires_serial=not qty)
+            have = list((have if qty else have.exclude(capacity="")).values_list("capacity", "color"))
         else:
             brand = _brand(tenant, d.brand) if confirm else None
             series = _series(tenant, brand, sname) if confirm else None
@@ -295,7 +307,7 @@ class _One:
             cond = self.conds[cname]
             for cap in caps:
                 for col in cols:
-                    name = f"{model_name} {cap} {col} {REGION} {cond.name}"
+                    name = " ".join(x for x in (model_name, cap, col, REGION, cond.name) if x)
                     if name not in self.existing_names:
                         todo.append((cond, cap, col, name))
         if pm is None and not todo:
@@ -315,10 +327,11 @@ class _One:
         for cond, cap, col, name in todo:
             if confirm:
                 Product.objects.create(
-                    tenant=tenant, category=self.category, name=name, spec=f"{cap} {col} {REGION} {cond.name}",
+                    tenant=tenant, category=self.category, name=name,
+                    spec=" ".join(x for x in (cap, col, REGION, cond.name) if x),
                     capacity=cap, color=col, region_version=REGION, phone_model=pm, brand=brand, series=series,
                     generation=generation or None, model_suffix=suffix or "", condition=cond,
-                    is_secondhand=cond.is_secondhand, requires_serial=True,
+                    is_secondhand=cond.is_secondhand, requires_serial=not qty,
                     list_price=Decimal(0) if cond.is_secondhand else msrp(d, cap),
                     accessory_type=Product.AccessoryType.NONE, warehouse_type=Product.WarehouseType.PRODUCT,
                 )

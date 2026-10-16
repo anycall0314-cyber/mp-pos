@@ -50,7 +50,9 @@ BRAND_ALIASES = {"小米": "Xiaomi", "紅米": "Xiaomi", "榮耀": "HONOR", "華
 WEARABLE = {"智慧手錶": DeviceModel.Category.WATCH, "智慧手環": DeviceModel.Category.BAND,
             "藍牙耳機": DeviceModel.Category.HEADPHONES}
 CONN = {"wifi": "WiFi", "wi-fi": "WiFi", "5g": "5G", "lte": "LTE", "4g": "LTE", "(lte)": "LTE"}
-EXPANDED = (DeviceModel.Category.PHONE, DeviceModel.Category.TABLET, DeviceModel.Category.WATCH)
+# 展開時分顏色的(沒顏色就等資料);耳機、手環 2026-10-16 起也展開(只建全新、按數量)
+EXPANDED = (DeviceModel.Category.PHONE, DeviceModel.Category.TABLET, DeviceModel.Category.WATCH,
+            DeviceModel.Category.BAND, DeviceModel.Category.HEADPHONES)
 
 
 class DecideError(Exception):

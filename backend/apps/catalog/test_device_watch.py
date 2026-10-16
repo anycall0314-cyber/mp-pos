@@ -218,6 +218,19 @@ class CheckTests(TestCase):
                          {"330": "新的品牌「Nokia」", "331": "看不出是手錶、手環還是耳機"})
         self.assertEqual(DeviceModel.objects.count(), 4)
 
+    def test_new_headphones_go_in_new_only_counted_by_quantity_and_wait_without_colours(self):
+        Category.objects.create(tenant=self.c.tenant, code="EP", name="耳機/音訊")
+        site = FakeSite({**lists(wearables=[("Apple AirPods Pro 3", "apple-airpods-pro-3", "350"), ("Apple AirPods 5", "apple-airpods-5", "351")]),
+                         "/products/apple-airpods-pro-3/350": product_page("Apple AirPods Pro 3", cls="藍牙耳機", variants=(("標準版", 7490),), colors=("白",)),
+                         "/products/apple-airpods-5/351": product_page("Apple AirPods 5", cls="藍牙耳機", variants=(("標準版", 4490),), colors=())})
+        report = self.check(site)
+        self.assertTrue(report.ok, report.notes)
+        self.assertEqual(DeviceModel.objects.get(name="AirPods Pro 3").category, "headphones")
+        self.assertEqual(list(Product.objects.for_tenant(self.c.tenant).filter(name__startswith="AirPods Pro 3")
+                              .values_list("name", "requires_serial", "category__name")), [("AirPods Pro 3 白 台版 全新", False, "耳機/音訊")])
+        c = DeviceCandidate.objects.get(source_id="351")
+        self.assertEqual((c.status, c.reason), (DeviceCandidate.Status.WAITING, "還沒有顏色"))
+
     def test_missing_colours_wait_and_go_in_the_day_they_show_up(self):
         path = "/products/apple-iphone-18/340"
         site = FakeSite({**lists(phones=[("Apple iPhone 18", "apple-iphone-18", "340")]), path: product_page("Apple iPhone 18", colors=())})

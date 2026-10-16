@@ -10,6 +10,7 @@ import {
   useSaveCategory,
 } from "@/api/hooks";
 import { api } from "@/api/client";
+import type { PhoneModelRow } from "@/api/hooks";
 import type { Product } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
@@ -393,7 +394,7 @@ export function ProductsPage() {
               setSelection(null);
             }}
           >
-            機型
+            機型分類
           </button>
           <button
             type="button"
@@ -1187,6 +1188,27 @@ export function ProductsPage() {
 }
 
 // ─── 機型瀏覽:左側一機型一列(品牌分組),點選右側展開 ───
+// 機型分類:先大分類,再品牌,再型號(owner 2026-10-16)。「其他」= 沒對到型號庫、類別也看不出來的,有才出現
+const MODEL_GROUPS = [
+  { key: "phone", label: "手機" },
+  { key: "tablet", label: "平板" },
+  { key: "wear", label: "穿戴" },
+  { key: "other", label: "其他" },
+] as const;
+
+/** 品牌 → 機型,型號多的品牌排前面 */
+function groupByBrand(rows: PhoneModelRow[]): [string, PhoneModelRow[]][] {
+  const m = new Map<string, PhoneModelRow[]>();
+  for (const r of rows) {
+    const b = r.brand_name || "其他";
+    if (!m.has(b)) m.set(b, []);
+    m.get(b)!.push(r);
+  }
+  return Array.from(m.entries()).sort(
+    (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]),
+  );
+}
+
 function ModelBrowser({
   selectedKey,
   onPick,
@@ -1196,19 +1218,19 @@ function ModelBrowser({
 }) {
   const [q, setQ] = useState("");
   const [applied, setApplied] = useState("");
+  const [group, setGroup] = useState<string>("phone");
+  const [brand, setBrand] = useState<string | null>(null);
   const models = usePhoneModels(applied || undefined);
-  const rows = models.data ?? [];
-
-  // 依品牌分組(品牌名 → 機型清單)
-  const byBrand = useMemo(() => {
-    const m = new Map<string, typeof rows>();
-    for (const r of rows) {
-      const b = r.brand_name || "其他";
-      if (!m.has(b)) m.set(b, []);
-      m.get(b)!.push(r);
-    }
-    return Array.from(m.entries());
-  }, [rows]);
+  const rows = useMemo(() => models.data ?? [], [models.data]);
+  const tabs = MODEL_GROUPS.filter(
+    (g) => g.key !== "other" || rows.some((r) => r.group === "other"),
+  );
+  // 搜尋時跨大分類列出(照品牌分組);沒搜尋時只看選的大分類
+  const byBrand = useMemo(
+    () => groupByBrand(applied ? rows : rows.filter((r) => (r.group || "other") === group)),
+    [rows, applied, group],
+  );
+  const brandRows = !applied && brand ? byBrand.find(([b]) => b === brand)?.[1] ?? [] : null;
 
   return (
     <section className="pc-section">
@@ -1237,48 +1259,95 @@ function ModelBrowser({
           </button>
         )}
       </div>
+      {!applied && (
+        <div className="mb-groups">
+          <div className="tab-switcher">
+            {tabs.map((g) => (
+              <button
+                key={g.key}
+                type="button"
+                className={group === g.key ? "tab-switcher-item active" : "tab-switcher-item"}
+                onClick={() => {
+                  setGroup(g.key);
+                  setBrand(null);
+                }}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="pc-section-body">
         {models.isLoading && <div className="md-empty">載入中…</div>}
-        {!models.isLoading && rows.length === 0 && (
+        {!models.isLoading && byBrand.length === 0 && (
           <div className="md-empty">尚無機型</div>
         )}
-        {byBrand.map(([brand, list]) => (
-          <div key={brand}>
-            <div
-              style={{
-                padding: "6px 12px",
-                fontSize: 14,
-                fontWeight: 600,
-                color: "var(--text-dim)",
-                background: "var(--panel-2)",
-                borderBottom: "1px solid var(--border)",
-              }}
-            >
-              {brand}
+        {brandRows ? (
+          <>
+            <div className="mb-brand-head">
+              <button type="button" className="btn" onClick={() => setBrand(null)}>
+                返回
+              </button>
+              <span>{brand}</span>
             </div>
-            <table className="pc-list-table">
-              <tbody>
-                {list.map((r) => (
-                  <tr
-                    key={r.model_key}
-                    onClick={() => onPick(r.model_key, r.model_name)}
-                    className={selectedKey === r.model_key ? "selected" : ""}
-                  >
-                    <td>{r.model_name}</td>
-                    <td className="num" style={{ width: 60 }}>
-                      {r.sku_count} 款
-                    </td>
-                    <td className="num" style={{ width: 50 }}>
-                      {r.total_stock}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
+            <ModelRows rows={brandRows} selectedKey={selectedKey} onPick={onPick} />
+          </>
+        ) : applied ? (
+          byBrand.map(([b, list]) => (
+            <div key={b}>
+              <div className="mb-brand-label">{b}</div>
+              <ModelRows rows={list} selectedKey={selectedKey} onPick={onPick} />
+            </div>
+          ))
+        ) : (
+          <table className="pc-list-table">
+            <tbody>
+              {byBrand.map(([b, list]) => (
+                <tr key={b} onClick={() => setBrand(b)}>
+                  <td>{b}</td>
+                  <td className="num" style={{ width: 80 }}>
+                    {list.length} 型號
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </section>
+  );
+}
+
+function ModelRows({
+  rows,
+  selectedKey,
+  onPick,
+}: {
+  rows: PhoneModelRow[];
+  selectedKey: string | null;
+  onPick: (key: string, name: string) => void;
+}) {
+  return (
+    <table className="pc-list-table">
+      <tbody>
+        {rows.map((r) => (
+          <tr
+            key={r.model_key}
+            onClick={() => onPick(r.model_key, r.model_name)}
+            className={selectedKey === r.model_key ? "selected" : ""}
+          >
+            <td>{r.model_name}</td>
+            <td className="num" style={{ width: 60 }}>
+              {r.sku_count} 款
+            </td>
+            <td className="num" style={{ width: 50 }}>
+              {r.total_stock}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

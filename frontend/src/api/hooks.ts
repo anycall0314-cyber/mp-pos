@@ -2194,6 +2194,8 @@ export interface PhoneModelRow {
   brand_code: string;
   brand_name: string;
   series: string;
+  /** 大分類:手機 / 平板 / 穿戴(手錶、手環、耳機)/ 其他 */
+  group: "phone" | "tablet" | "wear" | "other";
 }
 
 export const usePhoneModels = (search?: string) =>

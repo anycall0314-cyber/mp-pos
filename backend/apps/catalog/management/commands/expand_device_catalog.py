@@ -16,12 +16,12 @@ from apps.tenants.models import Tenant
 
 
 class Command(BaseCommand):
-    help = "平台型號庫 → 一家公司的品號(全新、中古機;2026 年以後上市的手機加已拆封)"
+    help = "平台型號庫 → 一家公司的品號(全新、中古機;2026 年以後上市的手機加已拆封;耳機、手環只建全新、按數量)"
 
     def add_arguments(self, parser):
         parser.add_argument("--tenant", required=True, help="公司代碼(例:JB)")
         parser.add_argument("--links", help="公司機型 ↔ 型號庫的對照與先不展開的(JSON)")
-        parser.add_argument("--categories", default="phone,tablet,watch")
+        parser.add_argument("--categories", default=",".join(device_expand.ALL_CATEGORIES))
         parser.add_argument("--no-new-for-old", action="store_true")
         parser.add_argument("--confirm", action="store_true", help="真的寫進去(沒有這個只試算)")
 

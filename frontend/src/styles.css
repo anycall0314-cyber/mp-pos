@@ -8169,3 +8169,14 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .dw-runs { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
 .dw-runs li.bad { color: var(--danger-text); }
 .dw-table td { vertical-align: top; }
+
+/* 商品頁「機型分類」:大分類 → 品牌 → 型號 */
+.mb-groups { padding: 6px 12px; border-bottom: 1px solid var(--border); }
+.mb-brand-head {
+  display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+  font-weight: 600; background: var(--panel-2); border-bottom: 1px solid var(--border);
+}
+.mb-brand-label {
+  padding: 6px 12px; font-size: 14px; font-weight: 600; color: var(--text-dim);
+  background: var(--panel-2); border-bottom: 1px solid var(--border);
+}

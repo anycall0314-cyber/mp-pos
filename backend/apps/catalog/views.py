@@ -52,6 +52,7 @@ from .models import (
     Brand,
     Category,
     Condition,
+    DeviceModel,
     PartTemplate,
     PhoneSeries,
     Product,
@@ -100,6 +101,13 @@ class CategoryViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.tenant)
+
+
+# 機型清單的大分類(手機 / 平板 / 穿戴):型號庫的類別 → 大分類;沒對到型號庫的看商品的類別名稱
+DEVICE_GROUP = {DeviceModel.Category.PHONE: "phone", DeviceModel.Category.TABLET: "tablet",
+                DeviceModel.Category.WATCH: "wear", DeviceModel.Category.BAND: "wear",
+                DeviceModel.Category.HEADPHONES: "wear", DeviceModel.Category.OTHER: "wear"}
+CATEGORY_GROUP = {"手機": "phone", "平板": "tablet", "手錶": "wear", "耳機/音訊": "wear", "穿戴/周邊": "wear"}
 
 
 class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
@@ -509,6 +517,8 @@ class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
         - any_lifecycle_status:採用任一支 active 的狀態,沒有則用第一支
         - sample_sku:代表 SKU(顯示用)
         - brand / series:任一支提供(用於後續 filter)
+        - group:大分類 phone / tablet / wear / other(owner 2026-10-16:先大分類,再品牌,再型號)。
+          對到型號庫的照型號庫的類別(手錶、手環、耳機都算穿戴);沒對到的照商品的類別名稱,都不是 = other。
         """
         tenant = request.tenant
         # 主機 SKU(accessory_type=none),含跨倉庫存 annotation
@@ -531,12 +541,14 @@ class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
             .annotate(t=Sum("qty"))
             .values("t")[:1]
         )
-        # 只列「需要序號」的主機:配件 / 耗材即使 accessory_type 漏填,也不應出現在機型清單
+        # 只列「需要序號」的主機:配件 / 耗材即使 accessory_type 漏填,也不應出現在機型清單。
+        # 例外:從型號庫建的耳機、手環按數量(不記序號),機型對到型號庫的也列
+        from_catalog = Q(phone_model__device_uid__gt="")
         qs = (
             Product.objects.for_tenant(tenant)
             .filter(
+                Q(requires_serial=True) | from_catalog,
                 accessory_type=Product.AccessoryType.NONE,
-                requires_serial=True,
                 is_active=True,
                 is_virtual=False,
             )
@@ -558,8 +570,12 @@ class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
 
         # group by model_key — 優先用 Product.brand FK 的 code;沒設就退回從品名推斷
         from .phone_model import infer_brand_from_name
+        rows = list(qs.select_related("brand", "series", "phone_model", "category"))
+        uids = {p.phone_model.device_uid for p in rows if p.phone_model_id and p.phone_model.device_uid}
+        device_group = {uid: DEVICE_GROUP.get(cat, "other")
+                        for uid, cat in DeviceModel.objects.filter(uid__in=uids).values_list("uid", "category")}
         groups: dict[str, dict] = {}
-        for p in qs.select_related("brand", "series", "phone_model"):
+        for p in rows:
             key = p.phone_model_key
             if not key:
                 continue
@@ -583,6 +599,8 @@ class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
                     "brand_name": brand_name,
                     "series_id": p.series_id,
                     "series_name": p.series.name if p.series_id else "",
+                    "group": device_group.get(p.phone_model.device_uid if p.phone_model_id else "")
+                    or CATEGORY_GROUP.get(p.category.name if p.category_id else "", "other"),
                 }
                 groups[key] = g
             g["sku_count"] += 1

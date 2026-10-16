@@ -160,6 +160,42 @@ class ExpandTests(TestCase):
         self.assertEqual(self.names(name__startswith="Galaxy Tab S11"), sorted(f"Galaxy Tab S11 128GB 灰 台版 {c}" for c in ("全新", "中古機")))
         self.assertEqual(self.names(name__startswith="Galaxy Watch8"), sorted(f"Galaxy Watch8 44mm 藍牙 銀 台版 {c}" for c in ("全新", "中古機")))
 
+    def test_headphones_and_bands_are_new_only_counted_by_quantity(self):
+        """owner 2026-10-16 選「只建全新、按數量」:分顏色、不記序號、沒有容量那一格;公司本來就在賣的(holds)不建。"""
+        from apps.catalog.models import Category
+        ear = Category.objects.create(tenant=self.c.tenant, code="EP", name="耳機/音訊")
+        wear = Category.objects.create(tenant=self.c.tenant, code="WB", name="穿戴/周邊")
+        device_catalog.sync(catalog(S25U, NEW26, WATCH, OLD,
+                                    device("u-ap", "AirPods Pro 3", brand="Apple", category="headphones", launched="2026-09", caps=(),
+                                           colors=("白",), prices=[{"storage": None, "amount": 7490, "kind": MSRP, "version": "",
+                                                                    "connectivity": None, "size_mm": None, "url": ""}]),
+                                    device("u-band", "Xiaomi 手環 10", brand="Xiaomi", category="band", launched="2025-06", caps=(),
+                                           colors=("午夜黑", "冰川銀")),
+                                    device("u-bud", "Galaxy Buds4", category="headphones", caps=(), colors=("黑",))),
+                            source="more")
+        report = device_expand.expand(self.c.tenant, holds=["u-bud"], confirm=True)
+        self.assertEqual(report.problems, [])
+        rows = Product.objects.filter(tenant=self.c.tenant, phone_model__device_uid__in=["u-ap", "u-band", "u-bud"])
+        self.assertEqual(sorted(rows.values_list("name", "category", "requires_serial", "capacity", "condition__name", "list_price")), sorted([
+            ("AirPods Pro 3 白 台版 全新", ear.pk, False, "", "全新", Decimal("7490")),
+            ("Xiaomi 手環 10 午夜黑 台版 全新", wear.pk, False, "", "全新", Decimal("0")),
+            ("Xiaomi 手環 10 冰川銀 台版 全新", wear.pk, False, "", "全新", Decimal("0")),
+        ]))
+        self.assertEqual(Product.objects.get(tenant=self.c.tenant, name="AirPods Pro 3 白 台版 全新").spec, "白 台版 全新")
+        self.assertEqual(sum(device_expand.expand(self.c.tenant, holds=["u-bud"], confirm=True).created.values()), 0, "重跑不再建")
+
+        # 商品頁的機型清單:先大分類(手機 / 平板 / 穿戴)再品牌(owner 2026-10-16);按數量的耳機、手環也列
+        Product.objects.create(tenant=self.c.tenant, category=wear, name="穿戴/小米智慧兒童手錶/粉", requires_serial=False)
+        Product.objects.create(tenant=self.c.tenant, category=self.c.cat_phone, name="iPhone 8 64GB 黑", requires_serial=True,
+                               brand=Brand.objects.for_tenant(self.c.tenant).get(name="Apple"))
+        rows = {r["model_name"]: (r["group"], r["brand_name"]) for r in self.c.admin.get("/api/v1/products/phone-models/").json()}
+        self.assertEqual(rows["Galaxy S25 Ultra"], ("phone", "Samsung"))
+        self.assertEqual(rows["Apple Watch Series 10 鋁金屬 46mm"], ("wear", "Apple"))
+        self.assertEqual(rows["AirPods Pro 3"], ("wear", "Apple"))
+        self.assertEqual(rows["Xiaomi 手環 10"], ("wear", "Xiaomi"))
+        self.assertEqual(rows["iPhone 8"][0], "phone", "沒對到型號庫的看商品的類別")
+        self.assertNotIn("穿戴/小米智慧兒童手錶/粉", "".join(rows), "店裡自己的配件型商品不列")
+
     def test_only_a_stated_original_price_becomes_the_new_price(self):
         device_expand.expand(self.c.tenant, confirm=True)
         price = dict(Product.objects.filter(tenant=self.c.tenant, name__startswith="Galaxy S25 Ultra").values_list("name", "list_price"))
