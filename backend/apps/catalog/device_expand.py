@@ -1,6 +1,7 @@
 """平台型號庫 → 一家公司的品號(M1-C;owner 2026-10-15「然後你幫我展開含中古機，2026出產的才有拆封機」)。
 
-owner 定的:品況 = 全新、中古機(**中古機也分顏色**、**不展開「中古機(保固內)」**);**2026 年上市的再加「已拆封」**。
+owner 定的:品況 = 全新、中古機(**中古機也分顏色**、**不展開「中古機(保固內)」**);**2026 年以後上市的手機再加「已拆封」**
+(2026-10-16 改:「2026以後出的手機都要建立已拆封，後續新機上市都要，僅手機就好，其他類別不需要」;平板、手錶不建)。
 品名跟「新增手機型號」一樣:「型號 容量 顏色 台版 品況」。只建主機的品號,不建配件 / 維修零件的佔位商品。
 
 - **一支手機在一家公司只有一個機型**:先用 `PhoneModel.device_uid` 對;沒對的照 `links`(人 / Jev 對好的:公司機型名稱 → 型號庫編號)寫上;
@@ -29,6 +30,7 @@ CATEGORY_OF = {DeviceModel.Category.PHONE: "手機", DeviceModel.Category.TABLET
 # 寫明是原廠 / 官網定價的才帶進全新的售價(紅隊第 2 條);順序 = 同一個容量好幾筆時先用哪一種
 MSRP_KINDS = ("source_stated_manufacturer_msrp", "official_regular_catalog_price",
               "official_regular_catalog_price_not_verified_original_msrp")
+OPENED_FROM = 2026   # 這一年以後上市的手機才建已拆封(owner 2026-10-16;平板、手錶不建)
 NO_COLOR = "不分色"
 NO_CAPACITY = "標準版"
 SUFFIX_MAX = 30
@@ -57,7 +59,8 @@ def conditions_for(device: DeviceModel, *, new_for_old: bool = True) -> list[str
     out = [NEW, USED]
     if not new_for_old and (device.data or {}).get("origin") == "m1-draft":
         out = [USED]
-    if device.launched.startswith("2026"):
+    year = device.launched[:4]
+    if device.category == DeviceModel.Category.PHONE and year.isdigit() and int(year) >= OPENED_FROM:
         out.insert(1, OPENED)
     return out
 

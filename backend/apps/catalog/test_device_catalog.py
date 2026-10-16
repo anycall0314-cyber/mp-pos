@@ -1,4 +1,4 @@
-"""平台型號庫(M1;owner 2026-10-15):匯入可以重跑、收回,展開成一家公司的品號(全新、中古機;2026 年上市的加已拆封)。
+"""平台型號庫(M1;owner 2026-10-15):匯入可以重跑、收回,展開成一家公司的品號(全新、中古機;2026 年以後上市的手機加已拆封)。
 規則在 `device_catalog.py` 與 `device_expand.py`。全部是假資料。"""
 import copy
 import io
@@ -147,6 +147,18 @@ class ExpandTests(TestCase):
         p = Product.objects.get(tenant=self.c.tenant, name="Galaxy S25 Ultra 256GB 鈦黑 台版 中古機")
         self.assertEqual((p.phone_model, p.capacity, p.color, p.region_version, p.is_secondhand, p.category, p.list_price),
                          (pm, "256GB", "鈦黑", "台版", True, self.c.cat_phone, Decimal("0")))
+
+    def test_opened_is_only_for_phones_from_2026_on(self):
+        """owner 2026-10-16:「2026以後出的手機都要建立已拆封，後續新機上市都要，僅手機就好，其他類別不需要」。"""
+        device_catalog.sync(catalog(S25U, NEW26, WATCH, OLD,
+                                    device("u-p27", "Galaxy S27", launched="2027-02", caps=("256GB",), colors=("黑",)),
+                                    device("u-t26", "Galaxy Tab S11", category="tablet", launched="2026-09", caps=("128GB",), colors=("灰",)),
+                                    device("u-w26", "Galaxy Watch8 44mm", category="watch", launched="2026-07", caps=(), colors=("銀",))),
+                            source="more")
+        device_expand.expand(self.c.tenant, confirm=True)
+        self.assertEqual(self.names(name__startswith="Galaxy S27"), sorted(f"Galaxy S27 256GB 黑 台版 {c}" for c in ("全新", "已拆封", "中古機")))
+        self.assertEqual(self.names(name__startswith="Galaxy Tab S11"), sorted(f"Galaxy Tab S11 128GB 灰 台版 {c}" for c in ("全新", "中古機")))
+        self.assertEqual(self.names(name__startswith="Galaxy Watch8"), sorted(f"Galaxy Watch8 44mm 藍牙 銀 台版 {c}" for c in ("全新", "中古機")))
 
     def test_only_a_stated_original_price_becomes_the_new_price(self):
         device_expand.expand(self.c.tenant, confirm=True)
