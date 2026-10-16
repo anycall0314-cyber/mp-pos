@@ -31,6 +31,7 @@ import { FindFirstPanel } from "./FindFirstPanel";
 import { ProductAliasesPanel } from "./ProductAliasesPanel";
 import { ProductExpanderModal } from "./ProductExpanderModal";
 import { MiniThumb, ProductPhotoStrip, usePhotoPeek } from "@/components/photos/PhotoName";
+import { fitsLine } from "@/lib/fits";
 
 import { ProductForm } from "./ProductForm";
 import { ProductImportModal } from "./ProductImportModal";
@@ -552,6 +553,7 @@ export function ProductsPage() {
                               onClick={() => peek.open({ id: p.id, name: p.name, sku: p.sku })}
                             />
                             {p.name}
+                            {fitsLine(p.related_hosts) && <div className="pl-fits">{fitsLine(p.related_hosts)}</div>}
                           </td>
                           <td>{p.category_name}</td>
                           <td className="num">{p.stock_qty}</td>
@@ -737,6 +739,12 @@ export function ProductsPage() {
                     <dd>{selectedProduct.name}</dd>
                     <dt>規格</dt>
                     <dd>{selectedProduct.spec || "—"}</dd>
+                    {(selectedProduct.related_hosts ?? []).length > 0 && (
+                      <>
+                        <dt>適用機型</dt>
+                        <dd>{fitsLine(selectedProduct.related_hosts, 99).replace(/^適用 /, "")}</dd>
+                      </>
+                    )}
                     <dt>條碼</dt>
                     <dd>{selectedProduct.barcode || "—"}</dd>
                     <dt>容量 / 顏色 / 版本</dt>

@@ -8174,7 +8174,8 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .mb-groups { padding: 6px 12px; border-bottom: 1px solid var(--border); }
 .cb-crumbs { padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: var(--font-body); }
 .cb-crumb { background: none; border: none; padding: 0; color: var(--accent-text, var(--accent-fill)); cursor: pointer; font: inherit; }
-.cb-dim { color: var(--text-dim); font-size: 14px; }
+.cb-dim { color: var(--text-dim); font-size: var(--font-secondary); }
+.pl-fits { color: var(--text-dim); font-size: var(--font-secondary); margin-top: 2px; }
 .cb-note { padding: 6px 12px; }
 .cb-editor { margin-top: 24px; }
 .cb-editor h4 { margin: 0 0 8px; }

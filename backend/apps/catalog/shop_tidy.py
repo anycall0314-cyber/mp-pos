@@ -10,7 +10,8 @@ owner 定的:「充電/線材」跟傳輸線「同一類,改名傳輸線」;手�
    加上 `answers["wear"]` 列的舊品名(Jev 判的、有把握的);品牌掛到穿戴底下,舊類別底下沒有商品的那幾個品牌拿掉。
 4. 廠牌:還沒有品牌的,照品名機型前面的片段 —— 在 `answers["makers"]` 裡的(Jev 判的、有把握的);
    一般類別(與搬進穿戴的舊品名)的手機品牌字(`SAM`、`三星`)也算(原廠的線材、耳機)。已經有品牌的不動。
-5. 適用機型:配件類別、還沒有適用機型的,照 `accessory_names` 的查表(只有規則,不猜)。
+5. 適用機型:配件類別、還沒有適用機型的,照 `accessory_names` 的查表(只有規則,不猜);
+   `answers["fits"]`(`{品名: [機型名稱]}`)= owner 指定的,照指定的掛(查表沒把握的那幾個 iPad 之類)。
 
 可以重跑:改過的、有品牌的、有適用機型的都跳過。
 """
@@ -41,6 +42,10 @@ GROUP_NAMES = {
 }
 
 
+class TidyError(Exception):
+    pass
+
+
 @dataclass
 class Report:
     kinds: list[str] = field(default_factory=list)
@@ -50,6 +55,7 @@ class Report:
     fit_products: int = 0
     fit_links: int = 0
     no_fit: int = 0                                        # 配件類別裡對不到機型的
+    unsure: list[tuple[str, str, str]] = field(default_factory=list)   # (類別, 品名, 寫得不夠清楚的那一段)
     rows: list[tuple[str, str, str, str]] = field(default_factory=list)   # (類別, 品名, 做了什麼, 內容)
 
 
@@ -153,6 +159,14 @@ def tidy(tenant, answers: dict, *, kinds_from=None, confirm: bool = False) -> Re
         idx = an.build_index([(m.pk, m.name, m.brand.name if m.brand_id else "", kind_of.get(m.device_uid, ""))
                               for m in models])
         key_of = {m.pk: m.match_key for m in models}
+        by_name = {an.norm(m.name): m.pk for m in models}
+        fixed, missing = {}, []
+        for pname, names in (answers.get("fits") or {}).items():
+            ids = [by_name.get(an.norm(n)) for n in names]
+            missing += [n for n, i in zip(names, ids) if i is None]
+            fixed[str(pname).strip()] = set(i for i in ids if i)
+        if missing:
+            raise TidyError("指定的適用機型找不到:" + "、".join(sorted(set(missing))))
         group_names = _group_brand_names(tenant)
         has_fit = set(ProductRelation.objects.for_tenant(tenant).values_list("accessory_product_id", flat=True))
         per_cat = defaultdict(lambda: defaultdict(list))   # 類別 → 廠牌名稱 → 商品
@@ -173,14 +187,18 @@ def tidy(tenant, answers: dict, *, kinds_from=None, confirm: bool = False) -> Re
                         name = (group_names.get(maker) or GROUP_NAMES.get(maker, maker)) if is_group else maker
                         per_cat[c][name].append(p)
                 if kind == Category.Kind.ACCESSORY and p.pk not in has_fit:
-                    if parsed.models:
+                    fits = fixed.get(p.name.strip()) or parsed.models
+                    if fits:
                         report.fit_products += 1
-                        for mid in sorted(parsed.models):
+                        for mid in sorted(fits):
                             new_rel.append(ProductRelation(tenant=tenant, host_model_id=mid, host_model_key=key_of[mid],
                                                            accessory_product=p))
-                        report.rows.append((c.name, p.name, "適用機型", "、".join(sorted(idx.names[m] for m in parsed.models))))
+                        how = "適用機型(指定)" if p.name.strip() in fixed else "適用機型"
+                        report.rows.append((c.name, p.name, how, "、".join(sorted(idx.names[m] for m in fits))))
                     else:
                         report.no_fit += 1
+                        if parsed.unsure:
+                            report.unsure.append((c.name, p.name, "、".join(parsed.unsure)))
         for c, by_name in per_cat.items():
             for name, products in sorted(by_name.items(), key=lambda kv: (-len(kv[1]), kv[0])):
                 brand = _brand(tenant, name)

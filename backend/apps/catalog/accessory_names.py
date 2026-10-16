@@ -116,6 +116,7 @@ class ModelIndex:
     names: dict[int, str] = field(default_factory=dict)
     groups: dict[int, str] = field(default_factory=dict)
     tablets: set[int] = field(default_factory=set)
+    ipads: dict[int, tuple] = field(default_factory=dict)   # 機型 id → (系列, 第幾代, 尺寸, 年份)
 
     def add(self, group: str, key: str, mid: int, exact: bool):
         key = norm(key)
@@ -154,6 +155,135 @@ def _alt_names(name: str) -> set[str]:
     return {o for o in out if o}
 
 
+# 型號庫的 iPad → (系列, 第幾代, 尺寸, 年份)。Apple 的代數 / 尺寸 / 年份是查表;型號庫多了新的 iPad 要加在這裡。
+# 店內寫法是「代數」(IPAD7、AIR4、MINI6、10代)、「尺寸」(10.2、11吋)或「尺寸 + 年份」(PRO/11吋(2024)),
+# Pro 沒有代數。owner 2026-10-16:「iPad皮套是我最頭痛的，很常找不到，也看不懂」。
+_IPAD_SPECS = {norm(k): v for k, v in {
+    "iPad 5": ("", 5, "9.7", 2017), "iPad 6": ("", 6, "9.7", 2018), "iPad (2019)": ("", 7, "10.2", 2019),
+    "iPad (2020)": ("", 8, "10.2", 2020), "iPad 9": ("", 9, "10.2", 2021), "iPad 10": ("", 10, "10.9", 2022),
+    "iPad 11 (A16)": ("", 11, "11", 2025),
+    "iPad Air 2": ("AIR", 2, "9.7", 2014), "iPad Air (2019)": ("AIR", 3, "10.5", 2019),
+    "iPad Air (2020)": ("AIR", 4, "10.9", 2020), "iPad Air 5 (M1)": ("AIR", 5, "10.9", 2022),
+    "iPad Air 11吋 (M2)": ("AIR", 6, "11", 2024), "iPad Air 13吋 (M2)": ("AIR", 6, "13", 2024),
+    "iPad Air 11吋 (M3)": ("AIR", 7, "11", 2025), "iPad Air 13吋 (M3)": ("AIR", 7, "13", 2025),
+    "iPad Air (2026) 11 吋": ("AIR", 8, "11", 2026), "iPad Air (2026) 13 吋": ("AIR", 8, "13", 2026),
+    "iPad mini 4": ("MINI", 4, "7.9", 2015), "iPad mini (2019)": ("MINI", 5, "7.9", 2019),
+    "iPad mini 6": ("MINI", 6, "8.3", 2021), "iPad mini 7 (A17 Pro)": ("MINI", 7, "8.3", 2024),
+    "iPad Pro (2018) 11 吋": ("PRO", 0, "11", 2018), "iPad Pro (2018) 12.9 吋": ("PRO", 0, "12.9", 2018),
+    "iPad Pro (2020) 11 吋": ("PRO", 0, "11", 2020), "iPad Pro (2020) 12.9 吋": ("PRO", 0, "12.9", 2020),
+    "iPad Pro (2021) 11 吋": ("PRO", 0, "11", 2021), "iPad Pro (2021) 12.9 吋": ("PRO", 0, "12.9", 2021),
+    "iPad Pro (2022) 11 吋": ("PRO", 0, "11", 2022), "iPad Pro (2022) 12.9 吋": ("PRO", 0, "12.9", 2022),
+    "iPad Pro 11吋 (M4)": ("PRO", 0, "11", 2024), "iPad Pro 13吋 (M4)": ("PRO", 0, "13", 2024),
+    "iPad Pro (2025) 11 吋": ("PRO", 0, "11", 2025), "iPad Pro (2025) 13 吋": ("PRO", 0, "13", 2025),
+}.items()}
+_IPAD_SIZES = {"7.9", "8.3", "9.7", "10.2", "10.5", "10.9", "11", "12.9", "13"}
+
+
+def _size_class(s: str) -> str:
+    return "11" if s in ("10.9", "11") else s   # 店內「11吋」包含 10.9 吋的(`AIR4-8/11吋` 從 Air 4 算起)
+
+
+def _ipad(segs: list[str], idx: "ModelIndex", loose: bool = False) -> tuple[set[int], list[str], list[str]]:
+    """`IPAD/AIR4/5/PRO11`、`IPAD7/8/10.2`、`IPAD/PRO/11吋(2024)` → 型號庫的 iPad。回 (機型, 寫得不夠清楚的那一段)。
+
+    一段一段讀成好幾組「系列 + 代數 / 尺寸 / 年份」;代數、尺寸、年份接在最近的那一組後面。
+    寫得夠清楚才掛(有代數、有年份、一般 iPad 寫了尺寸);Pro 只寫尺寸沒寫年份、只寫 Air / mini 的不猜,交回去。
+    `loose`(搜尋用):寫得不夠清楚的也全部算(打「ipad pro 11」列出每一代 Pro 11 吋的配件)。
+    回 (機型, 寫得不夠清楚的那一段, 不是 iPad 寫法的字);最後那一份給搜尋拿去比品名(`ipad air 5 皮套` 的「皮套」)。"""
+    clauses: list[dict] = []
+    rest: list[str] = []
+
+    def start(fam, text, pro_too=False):
+        if clauses and clauses[-1]["fam"] == "" and not (clauses[-1]["gens"] or clauses[-1]["sizes"] or clauses[-1]["years"]):
+            clauses.pop()   # `IPAD/AIR4`:前面那個空的 IPAD 只是開頭
+        c = {"fam": fam, "gens": set(), "sizes": set(), "years": set(), "text": [text], "pro_too": pro_too}
+        clauses.append(c)
+        return c
+
+    cur = None
+    for seg in segs:
+        for raw in re.split(r"(?<!\d)-|-(?!\d)", seg.upper()):
+            t = raw.strip()
+            if not t:
+                continue
+            years = {int(y) for y in re.findall(r"20\d\d", t)}
+            if mo := re.fullmatch(r"IPAD(\(PRO\))?(\d+)?(專用)?", t):
+                cur = start("", t, pro_too=bool(mo.group(1)))
+                if mo.group(2):
+                    cur["gens"].add(int(mo.group(2)))
+                continue
+            if mo := re.fullmatch(r"(AIR|PRO|MINI)(\d+(?:\.\d+)*)?(?:-(\d+))?(吋)?", t):
+                fam, num, to = mo.group(1), mo.group(2), mo.group(3)
+                cur = start(fam, t)
+                if num and fam == "PRO":
+                    cur["sizes"].add(num)
+                elif num:
+                    first = [int(x) for x in num.split(".")]
+                    cur["gens"].update(range(first[0], int(to) + 1) if to else first)
+                continue
+            if cur is None:
+                rest.append(t)
+                continue
+            cur["text"].append(t)
+            if mo := re.fullmatch(r"(\d+)代", t):
+                cur["gens"].add(int(mo.group(1)))
+            elif re.fullmatch(r"\d+(\.\d+){2,}", t):          # `7.8.9` = 第 7、8、9 代
+                cur["gens"].update(int(x) for x in t.split("."))
+            elif re.fullmatch(r"\(?20\d\d\)?", t):              # `(2024/2025)` 被斜線拆成兩段
+                cur["years"] |= years
+            elif mo := re.fullmatch(r"(\d+(?:\.\d+)?)\s*(吋)?\s*(\([\d/]+\)?)?", t):
+                num, inch = mo.group(1), mo.group(2)
+                if inch or "." in num or cur["fam"] == "PRO":
+                    if num in _IPAD_SIZES:
+                        cur["sizes"].add(num)
+                    elif "." in num and not inch:
+                        cur["gens"].update(int(x) for x in num.split("."))   # `MINI2.3`
+                else:
+                    cur["gens"].add(int(num))
+                cur["years"] |= years
+            else:
+                cur["text"].pop()                              # 款式、顏色:不算機型
+                rest.append(t)
+    for c in list(clauses):
+        if c["pro_too"]:                                     # `IPAD(PRO)/9.7`:一般 iPad 跟 Pro 都算
+            clauses.append({**c, "fam": "PRO", "pro_too": False})
+    all_sizes = {_size_class(s) for c in clauses for s in c["sizes"]}
+    hits: set[int] = set()
+    unsure: list[str] = []
+    for c in clauses:
+        def pick(fam):
+            out = [(m, sp) for m, sp in idx.ipads.items() if sp[0] == fam]
+            if c["gens"]:
+                out = [x for x in out if x[1][1] in c["gens"]]
+            if c["sizes"]:
+                out = [x for x in out if any(s == x[1][2] or (s == "11" and x[1][2] == "10.9") for s in c["sizes"])]
+            if c["years"]:
+                out = [x for x in out if x[1][3] in c["years"]]
+            return out
+        found = pick(c["fam"])
+        if not found and c["fam"] == "" and not c["gens"] and c["sizes"]:   # `IPAD/12.9(2020)`:12.9 吋只有 Pro
+            fams = {f: r for f in ("AIR", "PRO", "MINI") if (r := pick(f))}
+            if len(fams) == 1:
+                found = next(iter(fams.values()))
+        if not c["sizes"] and len({_size_class(sp[2]) for _, sp in found}) > 1 and all_sizes:
+            found = [x for x in found if _size_class(x[1][2]) in all_sizes]   # `AIR4-7/PRO11`:Air 6、7 只要 11 吋
+        clear = {
+            "": bool(c["gens"] or c["sizes"]),
+            "AIR": bool(c["gens"] or c["years"]),
+            "MINI": bool(c["gens"]),
+            "PRO": bool(c["years"]),
+        }[c["fam"]]   # 型號庫剛好只有一台也不算清楚:舊的 Pro 11 皮套不能掛到唯一的那台 M4(複審 P1)
+        if not found:
+            if not (c["gens"] or c["sizes"] or c["years"]):
+                unsure.append("/".join(c["text"]))   # 只寫 `IPAD-MINI`:不知道是哪一台
+            continue                                 # 寫清楚了、型號庫沒有這一台(`MINI2`、`PRO/10.5`):不掛
+        if loose or (clear and len({_size_class(sp[2]) for _, sp in found}) <= max(1, len(c["sizes"]), len(all_sizes))):
+            hits |= {m for m, _ in found}
+        else:
+            unsure.append("/".join(c["text"]))
+    return hits, unsure, rest
+
+
 _TABLET_NAME = re.compile(r"tab|pad|平板|surface|nxtpaper|iconia", re.I)
 
 
@@ -166,6 +296,9 @@ def build_index(models) -> ModelIndex:
     for mid, name, _, kind in rows:
         if kind == "tablet" or (not kind and _TABLET_NAME.search(name)):
             idx.tablets.add(mid)
+        spec = _IPAD_SPECS.get(norm(name))
+        if spec:
+            idx.ipads[mid] = spec
     for mid, name, brand in models:
         group = model_group(name, brand)
         idx.names[mid] = name
@@ -219,6 +352,7 @@ class Parsed:
     unmatched: list[str]              # 像機型、但對不到的片段(有數字)
     others: list[tuple[int, str]]     # 其他片段(位置, 原字);廠牌、種類、款式都在這裡
     first_model_at: int | None        # 第一個對到機型的片段位置
+    unsure: list[str] = field(default_factory=list)   # 寫得不夠清楚、對不下去的 iPad 寫法(`PRO/11吋` 沒寫年份)
 
 
 def _split_brand(seg: str):
@@ -291,7 +425,7 @@ def _by_size(idx: ModelIndex, hit: set[int], nxt: str) -> set[int]:
     return sized or hit
 
 
-def parse(name: str, idx: ModelIndex) -> Parsed:
+def parse(name: str, idx: ModelIndex, loose: bool = False) -> Parsed:
     # 舊系統匯入時同名的加了 `_1`、`_2`,不是品名的一部分
     segs = [re.sub(r"_\d+$", "", s.strip()) for s in SPLIT.split(name or "") if s.strip()]
     groups: list[str] = []
@@ -301,8 +435,18 @@ def parse(name: str, idx: ModelIndex) -> Parsed:
     context: str | None = None
     first = None
     tablet = any(s == "平板" for s in segs)   # `皮套/平板/SAM/S10FE` 是 Galaxy Tab S10 FE,不是手機
+    unsure: list[str] = []
     for i, seg in enumerate(segs):
         up = seg.upper()
+        if up.startswith("IPAD") or (tablet and context in (None, "APPLE") and re.match(r"(AIR|PRO|MINI)(\d|$|/|-)", up)):
+            hit, unsure, rest = _ipad(segs[i:], idx, loose)   # iPad 的寫法自成一套,後面整段交給它
+            others += [(len(segs), w) for w in rest]          # 排在最後:不是廠牌的位置,只給搜尋比品名
+            if hit:
+                models |= hit
+                first = i if first is None else first
+                if "APPLE" not in groups:
+                    groups.append("APPLE")
+            break
         g = BRAND_ALIASES.get(up)
         if g:
             context = g
@@ -345,4 +489,4 @@ def parse(name: str, idx: ModelIndex) -> Parsed:
             unmatched.append(seg)
             continue
         others.append((i, seg))
-    return Parsed(segs, groups, models, unmatched, others, first)
+    return Parsed(segs, groups, models, unmatched, others, first, unsure)

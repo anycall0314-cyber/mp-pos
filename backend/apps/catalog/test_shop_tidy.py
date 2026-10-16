@@ -4,13 +4,18 @@ from django.test import SimpleTestCase, TestCase
 from apps.backup.tests.factory import Company
 from apps.catalog import accessory_names as an
 from apps.catalog import shop_tidy
+from apps.catalog.views import _fitting_accessory_ids
 from apps.catalog.models import Brand, Category, CategoryBrand, DeviceModel, PhoneModel, Product, ProductRelation
 from apps.tenants.models import Tenant
 
 MODELS = [
     ("Apple", n) for n in ("iPhone 5", "iPhone 5s", "iPhone SE", "iPhone 6", "iPhone 6 Plus", "iPhone 7 Plus", "iPhone 11",
                            "iPhone 11 Pro", "iPhone 11 Pro Max", "iPhone 15 Pro Max", "iPhone 16e", "iPhone 17e", "iPhone 17",
-                           "iPhone XR", "iPad (2019)", "iPad (2020)")
+                           "iPhone XR", "iPad (2019)", "iPad (2020)", "iPad 9", "iPad 10", "iPad 11 (A16)", "iPad 5", "iPad 6",
+                           "iPad Air 2", "iPad Air (2020)", "iPad Air 5 (M1)", "iPad Air 11吋 (M2)", "iPad Air 13吋 (M2)",
+                           "iPad Air 11吋 (M3)", "iPad Air 13吋 (M3)", "iPad mini 4", "iPad mini (2019)",
+                           "iPad Pro (2018) 11 吋", "iPad Pro (2020) 11 吋", "iPad Pro (2020) 12.9 吋",
+                           "iPad Pro 11吋 (M4)", "iPad Pro 13吋 (M4)")
 ] + [
     ("Samsung", n) for n in ("Galaxy S 25 Ultra", "Galaxy S6", "Galaxy S8", "Galaxy Tab S6 Lite", "Galaxy Tab S10 FE 5G",
                              "Galaxy Tab S10 FE Wi-Fi", "Galaxy A51", "Galaxy A51 5G", "Galaxy M53 5G", "Galaxy A 53 5G",
@@ -64,14 +69,44 @@ class ParseTests(SimpleTestCase):
         self.assertEqual(self.fits("9H/平板/紅米-PAD2/9.7吋"), ["Redmi Pad 2 9.7"], "後面的尺寸挑對那一支")
         self.assertEqual(self.fits("9H/平板/紅米-PAD2/11吋"), ["Redmi Pad 2"])
 
+    def test_ipad_shorthand(self):
+        """owner 2026-10-16:「iPad皮套是我最頭痛的，很常找不到，也看不懂」。代數 / 尺寸 / 年份照 Apple 的查表。"""
+        f = self.fits
+        self.assertEqual(f("皮套/平板/DAP/IPAD7/8/10.2/立架黑"), ["iPad (2019)", "iPad (2020)"], "IPAD7/8 = 第 7、8 代")
+        self.assertEqual(f("皮套/IPAD/10.2/旋轉支架/黑"), ["iPad (2019)", "iPad (2020)", "iPad 9"], "只寫尺寸:10.2 吋的都算")
+        self.assertEqual(f("9H/平板/IMOS/低藍光/IPAD/7.8.9/10.2吋"), ["iPad (2019)", "iPad (2020)", "iPad 9"])
+        self.assertEqual(f("皮套/平板/DAP/IPAD/10/11代/筆槽/黑"), ["iPad 10", "iPad 11 (A16)"])
+        self.assertEqual(f("9H/平板/IPAD/AIR2/IPAD5/6/9.7"), ["iPad 5", "iPad 6", "iPad Air 2"])
+        self.assertEqual(f("皮套/平板/IPAD/AIR4-8/11吋/筆槽/黑"),
+                         ["iPad Air (2020)", "iPad Air 11吋 (M2)", "iPad Air 11吋 (M3)", "iPad Air 5 (M1)"], "4-8 是範圍、11 吋含 10.9")
+        self.assertEqual(f("皮套/平板/IPAD/AIR6/7/13吋/筆槽/黑"), ["iPad Air 13吋 (M2)", "iPad Air 13吋 (M3)"])
+        self.assertEqual(f("9H/平板/IPAD/AIR/11吋(2024/2025)"), ["iPad Air 11吋 (M2)", "iPad Air 11吋 (M3)"], "年份被斜線拆開也認")
+        self.assertEqual(f("皮套/平板/IPAD/PRO/11吋(2024)/筆槽/黑"), ["iPad Pro 11吋 (M4)"])
+        self.assertEqual(f("皮套/平板/DAP/IPAD/PRO11吋/2020/粉"), ["iPad Pro (2020) 11 吋"])
+        self.assertEqual(f("皮套/平板/IPAD/12.9(2020)/三折綠"), ["iPad Pro (2020) 12.9 吋"], "12.9 吋只有 Pro")
+        self.assertEqual(f("9H/平板/ANANK/PRO/11吋(2024)/類紙膜"), ["iPad Pro 11吋 (M4)"], "寫了平板、沒寫 IPAD 也認")
+        self.assertEqual(f("保貼/平板/IPAD-MINI4/MINI5-亮"), ["iPad mini (2019)", "iPad mini 4"])
+        r = an.parse("皮套/IPAD/AIR4-7/PRO11/旋轉支架/黑", self.idx)
+        self.assertEqual(sorted(self.idx.names[m] for m in r.models),
+                         ["iPad Air (2020)", "iPad Air 11吋 (M2)", "iPad Air 11吋 (M3)", "iPad Air 5 (M1)"], "Air 6、7 只要 11 吋")
+        self.assertEqual(r.unsure, ["PRO11"], "Pro 11 吋沒寫年份:好幾代機身不一樣,交給 owner")
+        self.assertEqual(an.parse("皮套/平板/DAP/IPAD/PRO/11/三折金", self.idx).unsure, ["PRO/11"])
+        self.assertEqual(an.parse("保貼/平板/IPAD-MINI-亮", self.idx).unsure, ["MINI"])
+        self.assertEqual(an.parse("9H/平板/IPAD/PRO/10.5吋", self.idx).unsure, [], "寫清楚了、型號庫沒有:不問")
+        only_m4 = an.build_index([(1, "iPad Pro 11吋 (M4)", "Apple", "tablet"), (2, "iPad mini 6", "Apple", "tablet")])
+        r = an.parse("皮套/平板/DAP/IPAD/PRO/11/三折金", only_m4)
+        self.assertEqual((r.models, r.unsure), (set(), ["PRO/11"]), "型號庫只有一台 Pro 11 吋也不掛(複審 P1)")
+        self.assertEqual(an.parse("保貼/平板/IPAD-MINI-亮", only_m4).models, set())
+        loose = an.parse("ipad/pro/11", self.idx, loose=True)
+        self.assertEqual(len(loose.models), 3, "搜尋時沒寫年份的也全部算")
+
     def test_does_not_guess(self):
         self.assertEqual(self.fits("背蓋/T21/IP15PM/全透磁吸"), ["iPhone 15 Pro Max"], "沒寫品牌的 T21 不是 Nokia T21")
         self.assertEqual(self.fits("保貼/SE-NEO/亮"), [], "SE-NEO 是 Sony Ericsson,不是 iPhone SE")
         self.assertEqual(self.fits("保貼/SE暢動系列"), [], "沒寫品牌的 SE 不猜")
         self.assertEqual(self.fits("皮套/SAM/S6-LITE/桃"), [], "S6-LITE 是平板 Tab S6 Lite,不拆成 S6")
-        self.assertEqual(self.fits("皮套/IPAD/10.2/旋轉支架/黑"), [], "只寫 IPAD 不知道是哪一台")
-        self.assertEqual(self.fits("9H/APPLE/IPAD/10.2吋"), [], "前面寫了 APPLE 也一樣:不是 iPad (2019) / (2020)")
         self.assertEqual(self.fits("皮套/ASUS/6吋"), [], "6吋是尺寸")
+        self.assertEqual(self.fits("觸控筆/STYLUS/防誤觸/IPAD專用"), [], "只寫 IPAD 不知道是哪一台")
         self.assertEqual(self.fits("背蓋/太空盾/MATTO/A16/磁吸"), [], "沒寫品牌的 A16 不猜")
 
 
@@ -152,6 +187,23 @@ class TidyTests(TestCase):
         again = shop_tidy.tidy(self.t, self.answers, confirm=True)
         self.assertEqual((again.renamed, sum(again.moved.values()), sum(again.makers.values()), again.fit_links), ([], 0, 0, 0))
 
+    def test_owner_picked_fits_and_unclear_ipads(self):
+        apple = Brand.objects.get(tenant=self.t, name="Apple")
+        PhoneModel.objects.create(tenant=self.t, code="pro11", name="iPad Pro (2020) 11 吋", match_key="ipad pro 2020 11",
+                                  brand=apple)
+        PhoneModel.objects.create(tenant=self.t, code="pro11m4", name="iPad Pro 11吋 (M4)", match_key="ipad pro 11 m4",
+                                  brand=apple)
+        unclear = Product.objects.create(tenant=self.t, category=self.back, name="皮套/平板/DAP/IPAD/PRO/11/三折金",
+                                         requires_serial=False)
+        r = shop_tidy.tidy(self.t, self.answers)
+        self.assertIn(("背蓋", unclear.name, "PRO/11"), r.unsure, "沒寫年份的 Pro 11 吋不掛、列出來")
+        with self.assertRaisesMessage(shop_tidy.TidyError, "iPad Pro 9"):
+            shop_tidy.tidy(self.t, {**self.answers, "fits": {unclear.name: ["iPad Pro 9"]}}, confirm=True)
+        self.assertFalse(ProductRelation.objects.filter(accessory_product=unclear).exists(), "名稱打錯整批不做")
+        shop_tidy.tidy(self.t, {**self.answers, "fits": {unclear.name: ["iPad Pro (2020) 11 吋"]}}, confirm=True)
+        self.assertEqual(list(ProductRelation.objects.filter(accessory_product=unclear).values_list("host_model__name", flat=True)),
+                         ["iPad Pro (2020) 11 吋"])
+
     def test_kinds_can_follow_another_company(self):
         other = Tenant.objects.create(name="測試", code="TEST")
         c = Category.objects.create(tenant=other, code="CH", name="充電/線材", needs_host_model=True)
@@ -170,3 +222,38 @@ class TidyTests(TestCase):
         c.refresh_from_db()
         self.assertEqual((c.kind, c.name), ("general", "傳輸線"))
         self.assertFalse(ProductRelation.objects.filter(accessory_product=cable).exists(), "一般類別不掛適用機型")
+
+
+class SearchByShopWordsTests(TestCase):
+    """商品搜尋:打店內寫法(`皮套 ipad air 5`、`ip17pm`)也找得到掛了那支適用機型的配件;機型以外的字要對得上。"""
+
+    def setUp(self):
+        self.c = Company("JB", "甲通訊行", "甲")
+        t = self.c.tenant
+        apple = Brand.objects.create(tenant=t, code="apple", name="Apple")
+        dap = Brand.objects.create(tenant=t, code="dap", name="DAP")
+        pm = lambda name, key: PhoneModel.objects.create(tenant=t, code=key, name=name, match_key=key, brand=apple)  # noqa: E731
+        air5, ip17pm = pm("iPad Air 5 (M1)", "ipad air 5 m1"), pm("iPhone 17 Pro Max", "iphone 17 pro max")
+        glass_cat = Category.objects.create(tenant=t, code="PP", name="玻璃貼")
+        mk = lambda c, n, m, b=None: (p := Product.objects.create(tenant=t, category=c, name=n, requires_serial=False, brand=b),  # noqa: E731
+                                      ProductRelation.objects.create(tenant=t, host_model=m, accessory_product=p))[0]
+        self.case = mk(self.c.cat_case, "皮套/平板/DAP/IPAD/AIR4/5/立架玫金", air5, dap)
+        self.glass = mk(glass_cat, "9H/平板/DAP/IPAD/AIR4/5/10.9", air5)
+        self.ip_case = mk(self.c.cat_case, "背蓋/IMOS/IP17PM/透", ip17pm)
+
+    def names(self, q):
+        return {p["name"] for p in self.c.admin.get("/api/v1/products/", {"search": q}).json()["results"]}
+
+    def test_shop_words_and_the_other_words_must_match(self):
+        self.assertTrue({self.case.name, self.glass.name} <= self.names("ipad air 5"))
+        self.assertIn(self.case.name, self.names("皮套 ipad air 5"))
+        self.assertIn(self.ip_case.name, self.names("ip17pm"))
+        # 這一條規則自己帶出來的(會排在最前面):機型以外的字也要對得上
+        fit = lambda q: set(Product.objects.filter(pk__in=_fitting_accessory_ids(self.c.tenant, q)).values_list("name", flat=True))  # noqa: E731
+        self.assertEqual(fit("皮套 ipad air 5"), {self.case.name}, "「皮套」也要對得上:玻璃貼不帶")
+        self.assertEqual(fit("ipad air 5"), {self.case.name, self.glass.name})
+        self.assertEqual(fit("立架 ipad air 5"), {self.case.name}, "品名裡的字")
+        self.assertEqual(fit("ipad air 5 皮套"), {self.case.name}, "寫在 iPad 後面的字也要對得上(複審 P1)")
+        self.assertEqual(fit("ipad air 5 立架"), {self.case.name})
+        self.assertEqual(fit("DAP ip17pm"), set(), "IP17PM 那一個是 IMOS 的")
+        self.assertEqual(fit("ipad air 9"), set(), "對不到的機型不猜")

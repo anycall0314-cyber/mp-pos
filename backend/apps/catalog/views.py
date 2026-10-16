@@ -150,15 +150,40 @@ class CategoryViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
         return Response(self.get_serializer(self.get_queryset().get(pk=category.pk)).data)
 
 
+def _models_in_query(tenant, q: str) -> tuple[set[int], list[str]]:
+    """查詢字照店內寫法讀(`ip17pm`、`ipad air 5`、`皮套 ipad 10.2`)→ (對到的機型, 機型以外的字)。
+    有看起來像機型、卻對不到的字就整個不算(不猜)。"""
+    from . import accessory_names as an
+
+    rows = list(PhoneModel.objects.for_tenant(tenant).filter(is_active=True)
+                .values_list("pk", "name", "brand__name", "device_uid"))
+    kinds = dict(DeviceModel.objects.filter(uid__in=[r[3] for r in rows if r[3]]).values_list("uid", "category"))
+    idx = an.build_index([(pk, name, brand or "", kinds.get(uid, "")) for pk, name, brand, uid in rows])
+    parsed = an.parse("/".join(q.split()), idx, loose=True)
+    if not parsed.models or parsed.unmatched:
+        return set(), []
+    return parsed.models, [w for _, w in parsed.others]
+
+
 def _fitting_accessory_ids(tenant, q: str) -> list[int]:
-    """名稱跟查詢字一樣(不算空白、大小寫)的機型 → 掛了它當適用機型的配件。"""
+    """查詢的是一支機型 → 掛了它當適用機型的配件。
+    名稱跟查詢字一樣(不算空白、大小寫)的機型;或照店內寫法讀得出機型(`ipad air 5`),
+    這時候機型以外的字(`皮套`、`DAP`、`黑`)也要對得上品名、類別或廠牌 —— 這些配件會排在最前面,不能把整支機型的都倒進來。"""
     key = re.sub(r"\s+", "", q).casefold()
     if len(key) < 3:
         return []
-    models = (PhoneModel.objects.for_tenant(tenant)
-              .annotate(_k=Lower(Replace("name", Value(" "), Value("")))).filter(_k=key).values("pk"))
-    return list(ProductRelation.objects.filter(tenant=tenant, host_model__in=models)
-                .values_list("accessory_product_id", flat=True).distinct()[:200])
+    models = set(PhoneModel.objects.for_tenant(tenant)
+                 .annotate(_k=Lower(Replace("name", Value(" "), Value("")))).filter(_k=key).values_list("pk", flat=True))
+    words: list[str] = []
+    if not models:
+        models, words = _models_in_query(tenant, q)
+        if not models:
+            return []
+    accessories = Product.objects.for_tenant(tenant).filter(
+        pk__in=ProductRelation.objects.filter(tenant=tenant, host_model__in=models).values("accessory_product_id"))
+    for w in words:
+        accessories = accessories.filter(Q(name__icontains=w) | Q(category__name__icontains=w) | Q(brand__name__icontains=w))
+    return list(accessories.values_list("pk", flat=True)[:200])
 
 
 # 機型清單的大分類(手機 / 平板 / 穿戴):型號庫的類別 → 大分類;沒對到型號庫的看商品的類別名稱
