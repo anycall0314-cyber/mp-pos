@@ -11,9 +11,10 @@ owner 定的:「充電/線材」跟傳輸線「同一類,改名傳輸線」;手�
 4. 廠牌:還沒有品牌的,照品名機型前面的片段 —— 在 `answers["makers"]` 裡的(Jev 判的、有把握的);
    一般類別(與搬進穿戴的舊品名)的手機品牌字(`SAM`、`三星`)也算(原廠的線材、耳機)。已經有品牌的不動。
 5. 適用機型:配件類別、還沒有適用機型的,照 `accessory_names` 的查表(只有規則,不猜);
-   `answers["fits"]`(`{品名: [機型名稱]}`)= owner 指定的,照指定的掛(查表沒把握的那幾個 iPad 之類)。
+   `answers["fits"]`(`{品名: [機型名稱]}`)= owner 指定的,照指定的掛(查表沒把握的那幾個 iPad 之類);
+   已經掛了一部分的也補上缺的那幾台,已經掛的不拿掉。
 
-可以重跑:改過的、有品牌的、有適用機型的都跳過。
+可以重跑:改過的、有品牌的、有適用機型的都跳過(owner 指定的只補還沒掛的)。
 """
 from __future__ import annotations
 
@@ -168,7 +169,9 @@ def tidy(tenant, answers: dict, *, kinds_from=None, confirm: bool = False) -> Re
         if missing:
             raise TidyError("指定的適用機型找不到:" + "、".join(sorted(set(missing))))
         group_names = _group_brand_names(tenant)
-        has_fit = set(ProductRelation.objects.for_tenant(tenant).values_list("accessory_product_id", flat=True))
+        have = defaultdict(set)   # 配件 → 已經掛的機型
+        for a, h in ProductRelation.objects.for_tenant(tenant).values_list("accessory_product_id", "host_model_id"):
+            have[a].add(h)
         per_cat = defaultdict(lambda: defaultdict(list))   # 類別 → 廠牌名稱 → 商品
         new_rel = []
         for c in Category.objects.for_tenant(tenant):
@@ -186,16 +189,18 @@ def tidy(tenant, answers: dict, *, kinds_from=None, confirm: bool = False) -> Re
                     if maker:
                         name = (group_names.get(maker) or GROUP_NAMES.get(maker, maker)) if is_group else maker
                         per_cat[c][name].append(p)
-                if kind == Category.Kind.ACCESSORY and p.pk not in has_fit:
-                    fits = fixed.get(p.name.strip()) or parsed.models
+                pinned = fixed.get(p.name.strip())
+                if kind == Category.Kind.ACCESSORY and (pinned or p.pk not in have):
+                    # owner 指定的:已經掛了一部分的也補上缺的(`AIR4-7/PRO11` 的 Air 掛了、Pro 11 那一半沒掛);不拿掉已經掛的
+                    fits = pinned - have[p.pk] if pinned else parsed.models
                     if fits:
                         report.fit_products += 1
                         for mid in sorted(fits):
                             new_rel.append(ProductRelation(tenant=tenant, host_model_id=mid, host_model_key=key_of[mid],
                                                            accessory_product=p))
-                        how = "適用機型(指定)" if p.name.strip() in fixed else "適用機型"
+                        how = "適用機型(指定)" if pinned else "適用機型"
                         report.rows.append((c.name, p.name, how, "、".join(sorted(idx.names[m] for m in fits))))
-                    else:
+                    elif not pinned:
                         report.no_fit += 1
                         if parsed.unsure:
                             report.unsure.append((c.name, p.name, "、".join(parsed.unsure)))

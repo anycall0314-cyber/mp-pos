@@ -204,6 +204,22 @@ class TidyTests(TestCase):
         self.assertEqual(list(ProductRelation.objects.filter(accessory_product=unclear).values_list("host_model__name", flat=True)),
                          ["iPad Pro (2020) 11 吋"])
 
+    def test_owner_picked_fits_fill_in_what_a_half_linked_product_is_missing(self):
+        apple = Brand.objects.get(tenant=self.t, name="Apple")
+        mk = lambda code, name: PhoneModel.objects.create(tenant=self.t, code=code, name=name, match_key=name.lower(),  # noqa: E731
+                                                          brand=apple)
+        air4, air5, pro = mk("air4", "iPad Air (2020)"), mk("air5", "iPad Air 5 (M1)"), mk("pro11", "iPad Pro (2018) 11 吋")
+        half = Product.objects.create(tenant=self.t, category=self.back, name="9H/平板/IMOS/低藍光/IPAD/AIR4/5/PRO11",
+                                      requires_serial=False)
+        shop_tidy.tidy(self.t, self.answers, confirm=True)
+        fits = lambda: sorted(ProductRelation.objects.filter(accessory_product=half).values_list("host_model__name", flat=True))  # noqa: E731
+        self.assertEqual(fits(), ["iPad Air (2020)", "iPad Air 5 (M1)"], "Air 那一半先掛上,Pro 11 沒寫年份不掛")
+        pick = {**self.answers, "fits": {half.name: [air4.name, air5.name, pro.name]}}
+        r = shop_tidy.tidy(self.t, pick, confirm=True)
+        self.assertEqual(fits(), ["iPad Air (2020)", "iPad Air 5 (M1)", "iPad Pro (2018) 11 吋"], "owner 指定的補上 Pro 11")
+        self.assertEqual(r.fit_links, 1, "已經掛的不重掛")
+        self.assertEqual(shop_tidy.tidy(self.t, pick, confirm=True).fit_links, 0, "再跑一次什麼都不變")
+
     def test_kinds_can_follow_another_company(self):
         other = Tenant.objects.create(name="測試", code="TEST")
         c = Category.objects.create(tenant=other, code="CH", name="充電/線材", needs_host_model=True)
