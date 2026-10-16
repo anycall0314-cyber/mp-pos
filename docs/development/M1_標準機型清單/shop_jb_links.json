@@ -1,5 +1,5 @@
 {
- "_why": "手機玩家(JB)現有機型 ↔ 平台型號庫。links = 名稱一樣(去空白)的 82 個 + Jev 有把握的;holds = Jev 沒把握的那幾個、它可能是的候選(機率 0.1 以上),先不展開。 2026-10-15 owner 在確認頁把沒把握的 23 個都定了(owner_review_answers.json):選了的寫進 links,holds 清空。 | holds(2026-10-16):耳機、手環開始展開(只建全新、按數量),手機玩家本來就在賣的這幾款不建、用店裡原本的商品(Jev 判斷:AirPods 4 主動降噪款 ← 耳機/AIRPODS4/降噪版、AirPods 4 ← 耳機/AIRPODS4/一般版、AirPods 5 ← 耳機/AIRPODS5/一般版、無線充電版、Galaxy Buds4 ← 藍芽/SAM/BUDS4、Galaxy Fit3 ← 穿戴/SAM/健康手錶/FIT3、Redmi Buds 4 ← 藍芽/紅米/BUDS4 LITE(Jev 0.63 沒把握,等 owner))。",
+ "_why": "手機玩家(JB)現有機型 ↔ 平台型號庫。links = 名稱一樣(去空白)的 82 個 + Jev 有把握的;holds = Jev 沒把握的那幾個、它可能是的候選(機率 0.1 以上),先不展開。 2026-10-15 owner 在確認頁把沒把握的 23 個都定了(owner_review_answers.json):選了的寫進 links,holds 清空。 | holds(2026-10-16):耳機、手環開始展開(只建全新、按數量),手機玩家本來就在賣的這幾款不建、用店裡原本的商品(Jev 判斷:AirPods 4 主動降噪款 ← 耳機/AIRPODS4/降噪版、AirPods 4 ← 耳機/AIRPODS4/一般版、AirPods 5 ← 耳機/AIRPODS5/一般版、無線充電版、Galaxy Buds4 ← 藍芽/SAM/BUDS4、Galaxy Fit3 ← 穿戴/SAM/健康手錶/FIT3)。 Redmi Buds 4 跟店裡的「藍芽/紅米/BUDS4 LITE」owner 2026-10-16 說「不同款」→ 照建。",
  "links": {
   "A 5 Pro": "6a0715c5-461d-5185-ab8d-a25d9da2a037",
   "Apple Watch 10 42mm": "9010780c-766c-5d02-a816-28cc68d2f7cd",
@@ -117,7 +117,6 @@
   "3bed05f0-2a1c-5b8b-820e-79ec9f8242d8",
   "6bfde186-c429-59c1-8262-e2412e138a19",
   "3b4df050-efea-5c92-9c62-6782d92f4384",
-  "d370e8f7-0334-5ca0-81f1-b628d2601330",
-  "2b92e96d-7c56-509f-9a67-fab79652390b"
+  "d370e8f7-0334-5ca0-81f1-b628d2601330"
  ]
 }
