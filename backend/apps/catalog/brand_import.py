@@ -27,6 +27,7 @@ from typing import Any
 from django.db import transaction
 from openpyxl import load_workbook
 
+from . import brand_names
 from .models import Brand, PhoneSeries, ProductType
 
 
@@ -299,7 +300,7 @@ def import_brands_series(
             obj, _created = Brand.objects.update_or_create(
                 tenant=tenant,
                 code=code,
-                defaults={"name": data["name"], "sort_order": data["sort"]},
+                defaults={"name": data["name"], **brand_names.slots(data["name"]), "sort_order": data["sort"]},
             )
             brand_obj_by_code[code] = obj
         # Series upsert

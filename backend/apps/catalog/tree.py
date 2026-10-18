@@ -3,7 +3,7 @@
 - 主機類別(手機 / 平板 / 穿戴):品牌 = 商品的品牌 → 型號 = 機型 → 右邊照品況列容量顏色(沿用 by-phone-model)。
 - 配件類別:**依手機** = 適用機型的品牌 → 適用機型 → 這支能用的配件照配件廠牌分組;**依廠牌** = 商品的品牌(配件廠牌)→ 商品(旁邊寫適用機型)。
 - 一般類別:只有依廠牌。
-- 沒填品牌 / 沒掛適用機型的放「未分」(id = "none");類別底下掛了、還沒有商品的品牌也列(數量 0),照類別的排序在前。
+- 沒填品牌的放「無品牌」(owner 2026-10-17:「如果不填品牌視同無品牌」)、沒掛適用機型的放「未分」(id 都是 "none");類別底下掛了、還沒有商品的品牌也列(數量 0),照類別的排序在前。
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from collections import defaultdict
 from .models import Category, CategoryBrand, Product, ProductRelation
 
 NONE = "none"
+NO_BRAND = "無品牌"
 LIMIT = 500   # 一層最多列幾個商品(未分的舊資料可能上千個;多的請用搜尋)
 
 
@@ -34,14 +35,14 @@ def _fits(product_ids) -> dict[int, list[tuple[int | None, str, int | None, str]
 
 
 def _brand_rows(category, counts: dict, names: dict) -> list[dict]:
-    """類別底下掛的品牌照排序在前(沒有商品的也列),其他有商品的品牌照數量排在後面,未分最後。"""
+    """類別底下掛的品牌照排序在前(沒有商品的也列),其他有商品的品牌照數量排在後面,無品牌最後。"""
     linked = list(CategoryBrand.objects.filter(category=category).select_related("brand").order_by("sort_order", "id"))
     rows = [{"id": link.brand_id, "name": link.brand.name, "count": counts.get(link.brand_id, 0)} for link in linked]
     seen = {link.brand_id for link in linked}
     rest = sorted((b for b in counts if b not in seen and b != NONE), key=lambda b: (-counts[b], names.get(b, "")))
     rows += [{"id": b, "name": names.get(b, ""), "count": counts[b]} for b in rest]
     if counts.get(NONE):
-        rows.append({"id": NONE, "name": "未分", "count": counts[NONE]})
+        rows.append({"id": NONE, "name": NO_BRAND, "count": counts[NONE]})
     return rows
 
 
@@ -124,11 +125,11 @@ def _by_phone(qs, category, brand, model):
 
 
 def _grouped(products, fits) -> dict:
-    """依手機最後一層:照配件廠牌分組(未分廠牌最後)。"""
+    """依手機最後一層:照配件廠牌分組(無品牌最後)。"""
     groups = defaultdict(list)
     for p in products[:LIMIT]:
         groups[p.brand.name if p.brand_id else ""].append(_product_row(p, fits))
-    items = [{"maker": m or "未分廠牌", "products": sorted(v, key=lambda r: r["name"])}
+    items = [{"maker": m or NO_BRAND, "products": sorted(v, key=lambda r: r["name"])}
              for m, v in sorted(groups.items(), key=lambda kv: (kv[0] == "", kv[0]))]
     return {"level": "products", "grouped": True, "total": len(products), "items": items}
 

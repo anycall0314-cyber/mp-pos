@@ -20,7 +20,47 @@ from .models import (
 
 
 class BrandSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
+    """中文 / 英文兩格選填、至少一格(owner 2026-10-17);只送 `name` 的(舊的呼叫端)照 `brand_names.split` 拆。
+    跟別的品牌的中文、英文、顯示名稱撞到的不給存(同一個廠牌請用合併)。代碼沒給就自動產。"""
+
     series_count = serializers.IntegerField(read_only=True)
+    name = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    code = serializers.SlugField(max_length=20, required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        from . import brand_names
+
+        attrs = super().validate(attrs)
+        inst = self.instance
+        if "name_zh" in attrs or "name_en" in attrs:
+            zh = brand_names.tidy(attrs.get("name_zh", inst.name_zh if inst else ""))
+            en = brand_names.tidy(attrs.get("name_en", inst.name_en if inst else ""))
+        elif "name" in attrs:
+            zh, en = brand_names.split(attrs["name"])
+        elif inst is not None:
+            return attrs                          # 只改排序 / 啟用:名字不動,不重新檢查
+        else:
+            zh = en = ""
+        if not (zh or en):
+            raise serializers.ValidationError({"name_zh": "中文、英文至少填一個"})
+        if inst is not None and (zh, en) == (inst.name_zh, inst.name_en):
+            attrs.pop("name_zh", None), attrs.pop("name_en", None), attrs.pop("name", None)
+            return attrs                          # 畫面連沒改的名字一起送(只改排序 / 啟用):不重新檢查(複審 P2)
+        if len(brand_names.join(zh, en)) > Brand._meta.get_field("name").max_length:
+            raise serializers.ValidationError({"name_en": "中文加英文太長"})
+        if inst is not None and inst.name_en and not en and (inst.series.exists() or inst.phone_models.exists()):
+            # 型號庫(每天自動新增新機)照英文找這家店的品牌;拿掉英文會多建一個,同一支手機拆兩邊
+            raise serializers.ValidationError({"name_en": "手機品牌要留英文名稱"})
+        tenant = self.context["request"].tenant
+        for text in (brand_names.join(zh, en), zh, en):
+            other = brand_names.find_brand(tenant, text, exclude_id=inst.pk if inst else None) if text else None
+            if other is not None:
+                raise serializers.ValidationError(
+                    {"name_zh" if text == zh else "name_en": f"「{text}」已經是品牌「{other.name}」,同一個廠牌請用合併"})
+        attrs["name_zh"], attrs["name_en"], attrs["name"] = zh, en, brand_names.join(zh, en)
+        if inst is None and not (attrs.get("code") or "").strip():
+            attrs["code"] = brand_names.unique_code(tenant, en or zh)
+        return attrs
 
     class Meta:
         model = Brand
@@ -28,6 +68,8 @@ class BrandSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerialize
             "id",
             "code",
             "name",
+            "name_zh",
+            "name_en",
             "sort_order",
             "is_active",
             "series_count",

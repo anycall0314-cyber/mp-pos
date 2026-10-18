@@ -1166,7 +1166,10 @@ export interface HomeSummary {
 export interface Brand {
   id: number;
   code: string;
+  /** 顯示名稱 = 中文 + 英文(後端組好) */
   name: string;
+  name_zh: string;
+  name_en: string;
   sort_order: number;
   is_active: boolean;
   series_count?: number;

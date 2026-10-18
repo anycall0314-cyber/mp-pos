@@ -24,6 +24,7 @@ from decimal import Decimal
 from django.db import IntegrityError, transaction
 from django.utils.text import slugify
 
+from . import brand_names
 from .models import Brand, Category, Condition, DeviceModel, PhoneModel, PhoneSeries, Product
 from .category_template import link_brand
 from .phone_model import _smart_join
@@ -127,17 +128,11 @@ def split_name(brand: str, name: str) -> tuple[str, int | None, str]:
 
 
 def _brand(tenant, name: str) -> Brand:
-    key = name.strip().casefold()
-    for b in Brand.objects.for_tenant(tenant):
-        if (b.name or "").strip().casefold() == key:
-            return b
-    maxlen = Brand._meta.get_field("code").max_length or 20
-    base = (slugify(name) or "brand")[:maxlen]
-    code, n = base, 1
-    while Brand.objects.for_tenant(tenant).filter(code=code).exists():
-        n += 1
-        code = base[: maxlen - len(f"-{n}")] + f"-{n}"
-    return Brand.objects.create(tenant=tenant, code=code, name=name.strip())
+    """照名字找這家公司的品牌(中文 / 英文 / 顯示名稱任一個一樣都算,`brand_names.find_brand`);沒有就建。"""
+    found = brand_names.find_brand(tenant, name)
+    if found is not None:
+        return found
+    return Brand.objects.create(tenant=tenant, code=brand_names.unique_code(tenant, name), name=name.strip())
 
 
 def _series(tenant, brand: Brand, sname: str) -> PhoneSeries:

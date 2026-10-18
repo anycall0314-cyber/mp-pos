@@ -146,7 +146,7 @@ class TreeTests(TestCase):
         brands = self.get(category=self.c.cat_phone.pk)["items"]
         self.assertEqual([(b["name"], b["count"]) for b in brands if b["name"] in ("Samsung", "Apple")], [("Apple", 1), ("Samsung", 2)],
                          "建品號時掛到類別底下的照掛的順序")
-        self.assertIn("未分", [b["name"] for b in brands], "工廠建的那一支手機沒有品牌")
+        self.assertIn("無品牌", [b["name"] for b in brands], "工廠建的那一支手機沒有品牌(owner 10-17:不填 = 無品牌)")
         models = self.get(category=self.c.cat_phone.pk, brand=self.apple.pk)
         self.assertEqual((models["level"], [(m["name"], m["key"], m["sku_count"]) for m in models["items"]]),
                          ("models", [("iPhone 17", self.ip17.match_key, 2)]))
@@ -183,7 +183,7 @@ class TreeTests(TestCase):
     def test_an_accessory_by_maker_lists_products_with_what_they_fit(self):
         CategoryBrand.objects.create(tenant=self.c.tenant, category=self.case, brand=self.ki, sort_order=0)
         brands = self.get(category=self.case.pk, mode="maker")["items"]
-        self.assertEqual([(b["name"], b["count"]) for b in brands], [("太空盾", 1), ("DAP", 1), ("未分", 2)], "類別底下掛的排前面")
+        self.assertEqual([(b["name"], b["count"]) for b in brands], [("太空盾", 1), ("DAP", 1), ("無品牌", 2)], "類別底下掛的排前面;沒填廠牌的叫無品牌")
         got = self.get(category=self.case.pk, mode="maker", brand=self.ki.pk)
         self.assertEqual([(p["name"], p["fits"]) for p in got["items"]], [("太空盾 磁吸殼 iPhone 17 灰", ["iPhone 17", "Galaxy S25"])])
 

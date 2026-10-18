@@ -1062,7 +1062,10 @@ export function useCategoryBrands() {
   return {
     add: useMutation({
       mutationFn: ({ category, brand, name }: { category: number; brand?: number; name?: string }) =>
-        api<Category>(`/categories/${category}/brands/`, { method: "POST", body: JSON.stringify(brand ? { brand } : { name }) }),
+        api<Category & { linked_brand?: number }>(`/categories/${category}/brands/`, {
+          method: "POST",
+          body: JSON.stringify(brand ? { brand } : { name }),
+        }),
       onSuccess: done,
     }),
     remove: useMutation({
@@ -2074,6 +2077,19 @@ export function useSavePhoneSeries() {
       return api<PhoneSeries>(url, { method, body: JSON.stringify(body) });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["phone-series"] }),
+  });
+}
+
+/** 把一個品牌併到另一個:商品、類別底下的掛法跟著搬,原本那個刪掉(手機品牌不行) */
+export function useMergeBrand() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, into }: { id: number; into: number }) =>
+      api<{ brand: Brand; moved: number }>(`/brands/${id}/merge/`, {
+        method: "POST",
+        body: JSON.stringify({ into }),
+      }),
+    onSuccess: () => qc.invalidateQueries(),
   });
 }
 

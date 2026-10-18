@@ -582,8 +582,24 @@ class Brand(TenantOwnedModel):
 
     code = models.SlugField("代碼", max_length=20)
     name = models.CharField("顯示名稱", max_length=80)
+    # owner 2026-10-17:中文、英文各一格,都選填、至少一格;顯示名稱照這兩格組(`brand_names`)
+    name_zh = models.CharField("中文名稱", max_length=80, blank=True, default="", db_default="")
+    name_en = models.CharField("英文名稱", max_length=80, blank=True, default="", db_default="")
     sort_order = models.PositiveIntegerField("排序", default=0)
     is_active = models.BooleanField("啟用", default=True)
+
+    def save(self, *args, **kwargs):
+        """顯示名稱照中文 / 英文組;只給了顯示名稱的(舊的寫法、型號庫的品牌)拆成兩格。"""
+        from . import brand_names
+
+        self.name_zh, self.name_en = brand_names.tidy(self.name_zh), brand_names.tidy(self.name_en)
+        if not (self.name_zh or self.name_en):
+            self.name_zh, self.name_en = brand_names.split(self.name)
+        self.name = brand_names.join(self.name_zh, self.name_en)
+        fields = kwargs.get("update_fields")
+        if fields is not None and {"name", "name_zh", "name_en"} & set(fields):
+            kwargs["update_fields"] = list(set(fields) | {"name", "name_zh", "name_en"})
+        super().save(*args, **kwargs)
 
     class Meta:
         constraints = [

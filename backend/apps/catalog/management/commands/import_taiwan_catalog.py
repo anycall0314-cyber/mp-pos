@@ -30,6 +30,7 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 from django.db import IntegrityError
 
+from apps.catalog import brand_names
 from apps.catalog.models import Brand, Category, Condition, PhoneModel, PhoneSeries, Product
 from apps.catalog.services_model_bundle import (
     _format_phone_model_name,
@@ -202,7 +203,7 @@ class Command(BaseCommand):
             if b is not None:
                 brands[code] = b
                 continue
-            clash = Brand.objects.for_tenant(tenant).filter(name=name).first()
+            clash = brand_names.find_brand(tenant, name)   # 中文 / 英文 / 顯示名稱任一個一樣都算
             if clash is not None:
                 blocked[code] = f"已有同名品牌 code={clash.code!r},請先合併再匯入"
                 continue

@@ -4,6 +4,7 @@ import {
   useBrands,
   useDeleteBrand,
   useDeletePhoneSeries,
+  useMergeBrand,
   usePhoneSeriesList,
   useProductTypes,
   useSaveBrand,
@@ -18,7 +19,8 @@ import { BrandSeriesImportModal } from "./BrandSeriesImportModal";
 interface EditingBrand {
   id?: number;
   code: string;
-  name: string;
+  name_zh: string;
+  name_en: string;
   sort_order: number;
   is_active: boolean;
 }
@@ -51,6 +53,9 @@ export function BrandSeriesPage() {
   const productTypes = useProductTypes();
   const saveBrand = useSaveBrand();
   const delBrand = useDeleteBrand();
+  const mergeBrand = useMergeBrand();
+  // 合併:選了要併到哪一個才按得下去(紅隊:同一個廠牌中英文各建一次、「太空盾 / 真太空盾」要能併回來)
+  const [mergeInto, setMergeInto] = useState<number | "" | null>(null);
 
   const [selectedBrandId, setSelectedBrandId] = useState<number | null>(null);
   const series = usePhoneSeriesList(selectedBrandId);
@@ -74,7 +79,8 @@ export function BrandSeriesPage() {
   function startNewBrand() {
     setEditingBrand({
       code: "",
-      name: "",
+      name_zh: "",
+      name_en: "",
       sort_order: (brands.data?.length ?? 0) + 1,
       is_active: true,
     });
@@ -85,7 +91,8 @@ export function BrandSeriesPage() {
     setEditingBrand({
       id: b.id,
       code: b.code,
-      name: b.name,
+      name_zh: b.name_zh,
+      name_en: b.name_en,
       sort_order: b.sort_order,
       is_active: b.is_active,
     });
@@ -94,13 +101,14 @@ export function BrandSeriesPage() {
 
   async function submitBrand() {
     if (!editingBrand) return;
-    if (!editingBrand.name.trim()) {
-      setError("請填品牌名稱");
+    if (!editingBrand.name_zh.trim() && !editingBrand.name_en.trim()) {
+      setError("中文、英文至少填一個");
       return;
     }
-    const code = editingBrand.code.trim() || slugify(editingBrand.name);
+    // 代碼沒填:新品牌後端自動產;編輯時沿用原本的
+    const { code, ...rest } = editingBrand;
     try {
-      await saveBrand.mutateAsync({ ...editingBrand, code });
+      await saveBrand.mutateAsync(code.trim() ? { ...rest, code: code.trim() } : rest);
       setEditingBrand(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -176,6 +184,19 @@ export function BrandSeriesPage() {
     (b) => b.id === selectedBrandId,
   );
 
+  async function submitMerge() {
+    if (!selectedBrand || !mergeInto) return;
+    setError(null);
+    try {
+      const r = await mergeBrand.mutateAsync({ id: selectedBrand.id, into: mergeInto });
+      setImportSuccess(`已併到「${r.brand.name}」,商品 ${r.moved} 個`);
+      setSelectedBrandId(r.brand.id);
+      setMergeInto(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   return (
     <div className="page">
       <Toolbar
@@ -242,7 +263,10 @@ export function BrandSeriesPage() {
               className={
                 "pt-list-item" + (b.id === selectedBrandId ? " selected" : "")
               }
-              onClick={() => setSelectedBrandId(b.id)}
+              onClick={() => {
+                setSelectedBrandId(b.id);
+                setMergeInto(null);
+              }}
             >
               <div className="pt-list-name">
                 {b.name}
@@ -281,12 +305,20 @@ export function BrandSeriesPage() {
                 style={{ flexWrap: "wrap", gap: 8 }}
               >
                 <input
-                  placeholder="名稱(例:Apple / 三星)"
-                  value={editingBrand.name}
+                  placeholder="中文名稱(例:三星)"
+                  value={editingBrand.name_zh}
                   onChange={(e) =>
-                    setEditingBrand({ ...editingBrand, name: e.target.value })
+                    setEditingBrand({ ...editingBrand, name_zh: e.target.value })
                   }
-                  style={{ flex: "1 1 200px" }}
+                  style={{ flex: "1 1 160px" }}
+                />
+                <input
+                  placeholder="英文名稱(例:Samsung)"
+                  value={editingBrand.name_en}
+                  onChange={(e) =>
+                    setEditingBrand({ ...editingBrand, name_en: e.target.value })
+                  }
+                  style={{ flex: "1 1 160px" }}
                 />
                 <input
                   placeholder="代碼(留空自動產)"
@@ -379,6 +411,18 @@ export function BrandSeriesPage() {
                 >
                   編輯品牌
                 </button>
+                {(selectedBrand.series_count ?? 0) === 0 && (
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      setMergeInto("");
+                      setError(null);
+                    }}
+                  >
+                    合併品牌
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn danger"
@@ -394,6 +438,42 @@ export function BrandSeriesPage() {
                   + 新增系列
                 </button>
               </div>
+
+              {mergeInto !== null && (
+                <div className="pf-inline-modal" style={{ marginBottom: 16 }}>
+                  <div className="pf-inline-modal-title">
+                    「{selectedBrand.name}」併到
+                  </div>
+                  <div className="pf-inline-modal-body" style={{ flexWrap: "wrap", gap: 8 }}>
+                    <select
+                      value={mergeInto}
+                      onChange={(e) => setMergeInto(e.target.value ? Number(e.target.value) : "")}
+                      style={{ flex: "1 1 200px" }}
+                    >
+                      <option value="">選品牌</option>
+                      {(brands.data ?? [])
+                        .filter((b) => b.id !== selectedBrand.id)
+                        .map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name}
+                          </option>
+                        ))}
+                    </select>
+                    <span style={{ color: "var(--warn-text-orange)", fontSize: 14 }}>合併後不能復原</span>
+                    <button type="button" className="btn" onClick={() => setMergeInto(null)}>
+                      取消
+                    </button>
+                    <button
+                      type="button"
+                      className="btn primary"
+                      onClick={() => void submitMerge()}
+                      disabled={!mergeInto || mergeBrand.isPending}
+                    >
+                      合併
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* 系列編輯 inline */}
               {editingSeries && (

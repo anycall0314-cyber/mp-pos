@@ -1564,10 +1564,9 @@ function MakerField({
     if (!category || !name) return;
     setError("");
     try {
-      const hit = (all.data ?? []).find((b) => b.name.trim().toLowerCase() === name.toLowerCase());
-      const saved = await ops.add.mutateAsync(hit ? { category: category.id, brand: hit.id } : { category: category.id, name });
-      const made = saved.brands.find((b) => b.name.trim().toLowerCase() === name.toLowerCase());
-      if (made) onChange(made.id);
+      // 後端照中文 / 英文 / 顯示名稱找既有品牌(打 MOCEO 對到「膜總裁 MOCEO」),沒有才建;回來的 linked_brand 就是那一個
+      const saved = await ops.add.mutateAsync({ category: category.id, name });
+      if (saved.linked_brand) onChange(saved.linked_brand);
       setText("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "沒有加到");
@@ -1578,7 +1577,7 @@ function MakerField({
     <Field label="廠牌" error={error ? [error] : undefined}>
       <div style={{ display: "flex", gap: 6 }}>
         <select style={{ flex: 1 }} value={value} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : "")}>
-          <option value="">不填</option>
+          <option value="">無品牌</option>
           {current && <option value={current.id}>{current.name}</option>}
           {options.map((b) => (
             <option key={b.id} value={b.id}>

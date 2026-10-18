@@ -210,6 +210,7 @@ class Command(BaseCommand):
         tenant.save(update_fields=["next_repair_seq"])
 
     def _seed(self, tenant):
+        from apps.catalog import brand_names
         from apps.catalog.models import Brand, PhoneSeries
 
         self.stdout.write("\n── Seed 品牌 + 系列主檔 ──")
@@ -219,6 +220,7 @@ class Command(BaseCommand):
                 code=b["code"],
                 defaults={
                     "name": b["name"],
+                    **brand_names.slots(b["name"]),
                     "sort_order": b["sort"],
                     "is_active": True,
                 },

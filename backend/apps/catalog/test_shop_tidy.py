@@ -204,6 +204,17 @@ class TidyTests(TestCase):
         self.assertEqual(list(ProductRelation.objects.filter(accessory_product=unclear).values_list("host_model__name", flat=True)),
                          ["iPad Pro (2020) 11 吋"])
 
+    def test_a_brand_with_a_chinese_name_added_still_reads_the_same(self):
+        """品牌補了中文名(「三星 Samsung」,owner 10-17)之後,查表照英文:機型、手機品牌字都照樣認得,不多建品牌。"""
+        self.samsung.name_zh = "三星"
+        self.samsung.save()
+        shop_tidy.tidy(self.t, self.answers, confirm=True)
+        fits = lambda p: sorted(ProductRelation.objects.filter(accessory_product=p).values_list("host_model__name", flat=True))  # noqa: E731
+        self.assertEqual(fits(self.s25), ["Galaxy S 25 Ultra"])
+        self.assertEqual((self.fresh(self.charger).brand_id, self.fresh(self.wired).brand_id), (self.samsung.pk, self.samsung.pk),
+                         "旅充/三星、原耳/SAM:原廠的一般類別認得是同一個三星")
+        self.assertEqual(Brand.objects.filter(tenant=self.t, name_en__iexact="samsung").count(), 1, "不多建一個 Samsung")
+
     def test_owner_picked_fits_fill_in_what_a_half_linked_product_is_missing(self):
         apple = Brand.objects.get(tenant=self.t, name="Apple")
         mk = lambda code, name: PhoneModel.objects.create(tenant=self.t, code=code, name=name, match_key=name.lower(),  # noqa: E731

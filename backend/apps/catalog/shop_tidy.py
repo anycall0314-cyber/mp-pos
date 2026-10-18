@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from django.db import transaction
 
 from . import accessory_names as an
+from . import brand_names
 from .category_template import link_brand
 from .models import Brand, Category, CategoryBrand, DeviceModel, PhoneModel, Product, ProductRelation
 
@@ -84,7 +85,8 @@ def _group_brand_names(tenant) -> dict[str, str]:
     """公司裡已經有的品牌 → 群組(`Samsung` → SAMSUNG);同一群組有好幾個,取商品最多的。"""
     out, best = {}, {}
     for b in Brand.objects.for_tenant(tenant):
-        g = an.CATALOG_BRAND_GROUP.get(b.name.strip().casefold())
+        keys = [k.strip().casefold() for k in (b.name_en, b.name, b.name_zh)]   # 補了中文名(「三星 Samsung」)也認得
+        g = next((an.CATALOG_BRAND_GROUP[k] for k in keys if k in an.CATALOG_BRAND_GROUP), None)
         if not g:
             continue
         n = b.products.count()
@@ -157,7 +159,8 @@ def tidy(tenant, answers: dict, *, kinds_from=None, confirm: bool = False) -> Re
         # 4. 廠牌 + 5. 適用機型
         models = list(PhoneModel.objects.for_tenant(tenant).filter(is_active=True).select_related("brand"))
         kind_of = dict(DeviceModel.objects.values_list("uid", "category"))
-        idx = an.build_index([(m.pk, m.name, m.brand.name if m.brand_id else "", kind_of.get(m.device_uid, ""))
+        idx = an.build_index([(m.pk, m.name, brand_names.catalog_name(m.brand.name, m.brand.name_zh, m.brand.name_en)
+                               if m.brand_id else "", kind_of.get(m.device_uid, ""))
                               for m in models])
         key_of = {m.pk: m.match_key for m in models}
         by_name = {an.norm(m.name): m.pk for m in models}

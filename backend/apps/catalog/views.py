@@ -127,7 +127,8 @@ class CategoryViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
         else:
             return Response({"detail": "要選品牌或填名稱"}, status=status.HTTP_400_BAD_REQUEST)
         link_brand(category, brand)
-        return Response(self.get_serializer(self.get_queryset().get(pk=category.pk)).data)
+        # 打的字對到既有品牌的中文 / 英文時,畫面要選到那一個(顯示名稱可能跟打的不一樣)
+        return Response({**self.get_serializer(self.get_queryset().get(pk=category.pk)).data, "linked_brand": brand.pk})
 
     @action(detail=True, methods=["delete"], url_path=r"brands/(?P<brand_id>\d+)")
     def remove_brand(self, request, pk=None, brand_id=None):
@@ -154,11 +155,13 @@ def _models_in_query(tenant, q: str) -> tuple[set[int], list[str]]:
     """查詢字照店內寫法讀(`ip17pm`、`ipad air 5`、`皮套 ipad 10.2`)→ (對到的機型, 機型以外的字)。
     有看起來像機型、卻對不到的字就整個不算(不猜)。"""
     from . import accessory_names as an
+    from .brand_names import catalog_name
 
     rows = list(PhoneModel.objects.for_tenant(tenant).filter(is_active=True)
-                .values_list("pk", "name", "brand__name", "device_uid"))
-    kinds = dict(DeviceModel.objects.filter(uid__in=[r[3] for r in rows if r[3]]).values_list("uid", "category"))
-    idx = an.build_index([(pk, name, brand or "", kinds.get(uid, "")) for pk, name, brand, uid in rows])
+                .values_list("pk", "name", "brand__name", "brand__name_zh", "brand__name_en", "device_uid"))
+    kinds = dict(DeviceModel.objects.filter(uid__in=[r[5] for r in rows if r[5]]).values_list("uid", "category"))
+    idx = an.build_index([(pk, name, catalog_name(b or "", zh or "", en or ""), kinds.get(uid, ""))
+                          for pk, name, b, zh, en, uid in rows])
     parsed = an.parse("/".join(q.split()), idx, loose=True)
     if not parsed.models or parsed.unmatched:
         return set(), []
@@ -1527,7 +1530,7 @@ class BrandViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
     """
 
     serializer_class = BrandSerializer
-    search_fields = ["code", "name"]
+    search_fields = ["code", "name", "name_zh", "name_en"]
     ordering_fields = ["sort_order", "code", "name"]
     ordering = ["sort_order", "code"]
     filterset_fields = ["is_active"]
@@ -1546,6 +1549,21 @@ class BrandViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.tenant)
+
+    @action(detail=True, methods=["post"], url_path="merge")
+    def merge(self, request, pk=None):
+        """{"into": 品牌編號}:這個品牌併到那一個(商品、類別底下的掛法跟著搬,這個刪掉)。"""
+        from .brand_names import MergeError, merge
+
+        into = request.data.get("into")
+        if not str(into or "").isdigit():
+            return Response({"detail": "要選併到哪一個品牌"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            target, moved = merge(request.tenant, int(pk), int(into))
+        except MergeError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        data = self.get_serializer(self.get_queryset().get(pk=target.pk)).data
+        return Response({"brand": data, "moved": moved})
 
     @action(
         detail=False,
