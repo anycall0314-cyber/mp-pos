@@ -14,7 +14,7 @@ import {
   useRememberPhrase,
   useSaveProduct,
 } from "@/api/hooks";
-import { searchCategories } from "@/api/search";
+import { searchCategories, suggestFits } from "@/api/search";
 import type {
   AccessoryType,
   Brand,
@@ -44,6 +44,7 @@ import { useModalDraft } from "@/hooks/useModalDraft";
 import { MoneyInput } from "@/components/MoneyInput";
 import { toast } from "@/components/workbench/toast";
 import { rememberNote, rememberTone } from "@/lib/findFirst";
+import { manualKeys, withPicked, withRemoved, withSuggested, type FitModel } from "@/lib/fitSuggest";
 import { isManager } from "@/lib/roles";
 import {
   PRODUCT_MODES,
@@ -172,6 +173,12 @@ interface FormState {
    * 放在這裡是為了跟著草稿走(載入草稿時靠它知道當時有沒有按,不用拿別的欄位去猜)。
    */
   phone_here: boolean;
+  /**
+   * 相容機型裡哪幾個是照品名 / 配件共用自動放的、哪幾個是人拿掉過的(規則在 lib/fitSuggest)。
+   * 表單自己記的,跟著草稿走、不送出去
+   */
+  fits_auto: string[];
+  fits_removed: string[];
 }
 
 const EMPTY: FormState = {
@@ -208,6 +215,8 @@ const EMPTY: FormState = {
   serial_touched: false,
   serial_before_pin: null,
   phone_here: false,
+  fits_auto: [],
+  fits_removed: [],
 };
 
 function withPrefill(
@@ -262,6 +271,8 @@ function toState(p: Product | null | undefined): FormState {
     serial_touched: false,
     serial_before_pin: null,
     phone_here: false,
+    fits_auto: [],
+    fits_removed: [],
   };
 }
 
@@ -460,6 +471,41 @@ export function ProductForm({
       setState((s) => ({ ...s, generation: m[1] }));
     }
   }, [state.name, state.accessory_type, state.warehouse_type, state.phone_here, isEdit]);
+
+  // 新增配件:照品名先勾好相容機型,型號庫設了配件共用的新機一起帶(規則在 lib/fitSuggest、backend/apps/catalog/fit_suggest.py)。
+  // 只在新增時:編輯既有商品的適用機型是店裡整理過的,打開表單不能替他加回拿掉的那幾支
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+  const fitSeq = useRef(0);
+  const fitManual = manualKeys(state);
+  const fitsOn = open && !isEdit && state.accessory_type === "phone_specific" && state.warehouse_type === "product";
+  useEffect(() => {
+    if (!fitsOn) return;
+    const name = state.name.trim();
+    const seq = ++fitSeq.current;
+    const apply = (suggested: FitModel[]) => {
+      if (seq !== fitSeq.current || busyRef.current) return;
+      // 什麼都還沒改(例:從「先找有沒有建過」帶品名進來)時自動放的也算「一開始就有的」:直接關掉不問要不要存草稿
+      if (!isDirtyAgainst(stateRef.current, baselineRef.current)) {
+        baselineRef.current = withSuggested(baselineRef.current, suggested);
+      }
+      setState((s) => withSuggested(s, suggested));
+    };
+    if (!name && !fitManual) {
+      apply([]);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      suggestFits({ name, category: state.category || undefined, keys: fitManual })
+        .then((r) => apply([...r.models, ...r.shared]))
+        .catch(() => {
+          /* 建議拿不到就不帶:人照樣可以自己挑 */
+        });
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [fitsOn, state.name, state.category, fitManual]);
 
   // 草稿系統的 debounce / beforeunload / unmount 都由 useModalDraft 處理
 
@@ -1346,21 +1392,15 @@ export function ProductForm({
                   ? "搜尋機型名稱…"
                   : "繼續加機型…"
               }
-              onPick={(m) => {
-                if (
-                  state.related_models.some((x) => x.model_key === m.model_key)
-                )
-                  return;
-                patch("related_models", [
-                  ...state.related_models,
-                  {
+              onPick={(m) =>
+                setState((s) =>
+                  withPicked(s, {
                     model_key: m.model_key,
                     model_name: m.model_name,
-                    lifecycle_status:
-                      m.any_lifecycle_status as LifecycleStatus,
-                  },
-                ]);
-              }}
+                    lifecycle_status: m.any_lifecycle_status as LifecycleStatus,
+                  }),
+                )
+              }
             />
             {state.related_models.length > 0 && (
               <div
@@ -1376,14 +1416,7 @@ export function ProductForm({
                     key={m.model_key}
                     type="button"
                     className="inv-chip"
-                    onClick={() =>
-                      patch(
-                        "related_models",
-                        state.related_models.filter(
-                          (x) => x.model_key !== m.model_key,
-                        ),
-                      )
-                    }
+                    onClick={() => setState((s) => withRemoved(s, m.model_key))}
                     title="點擊移除"
                   >
                     <span>

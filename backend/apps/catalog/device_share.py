@@ -129,6 +129,26 @@ def apply_for(tenant, uid: str) -> int:
     return len(out.products)
 
 
+def followers(tenant_id, model_ids, part: str) -> set[int]:
+    """這幾個機型(這家公司的 `PhoneModel` 編號)在 `part` 那一格被設成「新機跟它一樣」的新機,一路往下(Air 7 → 8 → 9)。
+    給新增配件的表單用:挑了 Air 7 的玻璃貼,一起帶上 Air 8。只回這家公司有的機型;不含原本那幾個。"""
+    if part not in (SCREEN, BODY):
+        return set()
+    flag = {SCREEN: "screen", BODY: "body"}[part]
+    start = set(model_ids)
+    uid_of = dict(PhoneModel.objects.filter(tenant_id=tenant_id, pk__in=list(start)).exclude(device_uid="")
+                  .values_list("pk", "device_uid"))
+    todo, seen_uids, out = set(uid_of.values()), set(uid_of.values()), set()
+    while todo:
+        nxt = set(DeviceShare.objects.filter(same_as_uid__in=list(todo), **{flag: True})
+                  .values_list("device_uid", flat=True)) - seen_uids
+        seen_uids |= nxt
+        found = dict(PhoneModel.objects.filter(tenant_id=tenant_id, device_uid__in=list(nxt)).values_list("device_uid", "pk"))
+        out |= set(found.values())
+        todo = set(found)          # 這家沒有的那一支就斷在那裡(之後有了,展開時會照規則補上)
+    return out - start
+
+
 def _device(uid: str) -> DeviceModel:
     d = DeviceModel.objects.filter(uid=uid).first() if uid else None
     if d is None:

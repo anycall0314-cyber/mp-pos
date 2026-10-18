@@ -24,8 +24,8 @@ from dataclasses import dataclass, field
 from django.db import transaction
 
 from . import accessory_names as an
-from . import brand_names
 from .category_template import link_brand
+from .fit_suggest import tenant_index
 from .models import Brand, Category, CategoryBrand, DeviceModel, PhoneModel, Product, ProductRelation
 
 RENAMES = (("充電/線材", "傳輸線"), ("手錶", "穿戴"))
@@ -158,10 +158,7 @@ def tidy(tenant, answers: dict, *, kinds_from=None, confirm: bool = False) -> Re
 
         # 4. 廠牌 + 5. 適用機型
         models = list(PhoneModel.objects.for_tenant(tenant).filter(is_active=True).select_related("brand"))
-        kind_of = dict(DeviceModel.objects.values_list("uid", "category"))
-        idx = an.build_index([(m.pk, m.name, brand_names.catalog_name(m.brand.name, m.brand.name_zh, m.brand.name_en)
-                               if m.brand_id else "", kind_of.get(m.device_uid, ""))
-                              for m in models])
+        idx = tenant_index(tenant)   # 同一批機型(這家公司啟用中的);型號庫的種類與上市年份一起給(新 iPad 算第幾代)
         key_of = {m.pk: m.match_key for m in models}
         by_name = {an.norm(m.name): m.pk for m in models}
         fixed, missing = {}, []

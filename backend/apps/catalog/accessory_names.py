@@ -155,7 +155,8 @@ def _alt_names(name: str) -> set[str]:
     return {o for o in out if o}
 
 
-# 型號庫的 iPad → (系列, 第幾代, 尺寸, 年份)。Apple 的代數 / 尺寸 / 年份是查表;型號庫多了新的 iPad 要加在這裡。
+# 型號庫的 iPad → (系列, 第幾代, 尺寸, 年份)。這張表是已經上市的那幾代(Apple 的代數 / 尺寸 / 年份),也是往後算的基準;
+# **表上沒有的新 iPad 照名稱與上市年份自己算**(`_ipad_specs`;V3,2026-10-18:型號庫每天自動加新機,不能等人來加表)。
 # 店內寫法是「代數」(IPAD7、AIR4、MINI6、10代)、「尺寸」(10.2、11吋)或「尺寸 + 年份」(PRO/11吋(2024)),
 # Pro 沒有代數。owner 2026-10-16:「iPad皮套是我最頭痛的，很常找不到，也看不懂」。
 _IPAD_SPECS = {norm(k): v for k, v in {
@@ -177,6 +178,51 @@ _IPAD_SPECS = {norm(k): v for k, v in {
     "iPad Pro (2025) 11 吋": ("PRO", 0, "11", 2025), "iPad Pro (2025) 13 吋": ("PRO", 0, "13", 2025),
 }.items()}
 _IPAD_SIZES = {"7.9", "8.3", "9.7", "10.2", "10.5", "10.9", "11", "12.9", "13"}
+
+
+_IPAD_NAME = re.compile(r"^iPad(?:\s+(Air|mini|Pro))?(?=[\s(（]|$)(.*)$", re.I)
+
+
+def _read_ipad(name: str, launched: str):
+    """表上沒有的 iPad 名稱 → (系列, 名稱寫明的代數(沒寫 0), 尺寸(沒寫 ""), 年份(名稱的括號,沒有看上市;都沒有 0));不是 iPad 回 None。
+    `iPad Air 5 (M1)`、`iPad 12 (A18)` 的數字是代數;`iPad Air 11吋 (M5)` 的 11 是尺寸。"""
+    mo = _IPAD_NAME.match((name or "").strip())
+    if not mo:
+        return None
+    fam, rest = (mo.group(1) or "").upper(), mo.group(2)
+    size = next((x for x in re.findall(r"(\d{1,2}(?:\.\d)?)\s*吋", rest) if x in _IPAD_SIZES), "")
+    years = re.findall(r"[(（](20\d\d)[)）]", rest)
+    year = int(years[0]) if years else (int(launched[:4]) if (launched or "")[:4].isdigit() else 0)
+    gen = 0
+    if fam != "PRO" and (g := re.match(r"\s*(\d{1,2})(?!\s*(?:\.\d|吋|\d))", rest)):
+        gen = int(g.group(1))
+    return fam, gen, size, year
+
+
+def _ipad_specs(rows) -> dict:
+    """`rows` = [(機型 id, 名稱, 上市)] → {機型 id: (系列, 第幾代, 尺寸, 年份)}。
+    表上有的照表;沒有的:代數照名稱寫的,沒寫的照同一系列的上市年份排在已知的後面(同一年同一代、之後每多一年 +1);
+    尺寸沒寫的照同一系列那一年(或之前最近一代)的尺寸;Pro 沒有代數、要有年份。年份看不出來的不算(對不到就不掛,不猜)。"""
+    out: dict = {}
+    pending = []
+    for mid, name, launched in rows:
+        spec = _IPAD_SPECS.get(norm(name))
+        if spec:
+            out[mid] = spec
+        elif (r := _read_ipad(name, launched)) and r[3]:
+            pending.append((mid, *r))
+    history = list(_IPAD_SPECS.values()) + [(f, g, sz, y) for _, f, g, sz, y in pending if g]
+    for mid, fam, gen, size, year in sorted(pending, key=lambda x: x[4]):
+        same = [h for h in history if h[0] == fam]
+        if fam != "PRO" and not gen:
+            this_year = [h[1] for h in same if h[3] == year and h[1]]
+            gen = max(this_year) if this_year else max([h[1] for h in same if h[3] < year] or [0]) + 1
+        if not size:
+            near = sorted((h for h in same if h[3] <= year and h[2]), key=lambda h: h[3])
+            size = near[-1][2] if near and fam != "PRO" else ""
+        out[mid] = (fam, gen, size, year)
+        history.append((fam, gen, size, year))
+    return out
 
 
 def _size_class(s: str) -> str:
@@ -288,17 +334,16 @@ _TABLET_NAME = re.compile(r"tab|pad|平板|surface|nxtpaper|iconia", re.I)
 
 
 def build_index(models) -> ModelIndex:
-    """`models` = [(id, 名稱, 品牌名稱)] 或 [(id, 名稱, 品牌名稱, 型號庫的種類)];沒給種類的照名稱看是不是平板。"""
+    """`models` = [(id, 名稱, 品牌名稱)]、[(id, 名稱, 品牌名稱, 型號庫的種類)] 或再加型號庫的上市(`2026-03`);
+    沒給種類的照名稱看是不是平板。"""
     idx = ModelIndex()
-    rows = [(m[0], (m[1] or "").strip(), m[2], m[3] if len(m) > 3 else "") for m in models]
-    models = [(mid, name, brand) for mid, name, brand, _ in rows]
+    rows = [(m[0], (m[1] or "").strip(), m[2], m[3] if len(m) > 3 else "", m[4] if len(m) > 4 else "") for m in models]
+    models = [(mid, name, brand) for mid, name, brand, _, _ in rows]
     names = {name.lower() for _, name, _ in models}
-    for mid, name, _, kind in rows:
+    for mid, name, _, kind, _ in rows:
         if kind == "tablet" or (not kind and _TABLET_NAME.search(name)):
             idx.tablets.add(mid)
-        spec = _IPAD_SPECS.get(norm(name))
-        if spec:
-            idx.ipads[mid] = spec
+    idx.ipads = _ipad_specs([(mid, name, launched or "") for mid, name, _, _, launched in rows])
     for mid, name, brand in models:
         group = model_group(name, brand)
         idx.names[mid] = name

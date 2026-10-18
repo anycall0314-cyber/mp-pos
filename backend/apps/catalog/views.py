@@ -155,14 +155,9 @@ def _models_in_query(tenant, q: str) -> tuple[set[int], list[str]]:
     """查詢字照店內寫法讀(`ip17pm`、`ipad air 5`、`皮套 ipad 10.2`)→ (對到的機型, 機型以外的字)。
     有看起來像機型、卻對不到的字就整個不算(不猜)。"""
     from . import accessory_names as an
-    from .brand_names import catalog_name
+    from .fit_suggest import tenant_index
 
-    rows = list(PhoneModel.objects.for_tenant(tenant).filter(is_active=True)
-                .values_list("pk", "name", "brand__name", "brand__name_zh", "brand__name_en", "device_uid"))
-    kinds = dict(DeviceModel.objects.filter(uid__in=[r[5] for r in rows if r[5]]).values_list("uid", "category"))
-    idx = an.build_index([(pk, name, catalog_name(b or "", zh or "", en or ""), kinds.get(uid, ""))
-                          for pk, name, b, zh, en, uid in rows])
-    parsed = an.parse("/".join(q.split()), idx, loose=True)
+    parsed = an.parse("/".join(q.split()), tenant_index(tenant), loose=True)
     if not parsed.models or parsed.unmatched:
         return set(), []
     return parsed.models, [w for _, w in parsed.others]
@@ -593,6 +588,19 @@ class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
                 {"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST
             )
         return Response(report)
+
+    @action(detail=False, methods=["get"], url_path="fit-suggest")
+    def fit_suggest(self, request):
+        """新增配件時照品名建議適用機型(`?name=&category=&keys=機型key,…`):品名讀到的、與型號庫設了共用的新機。只讀。
+        規則在 `fit_suggest.py`。"""
+        from .fit_suggest import suggest
+
+        cat = request.query_params.get("category", "")
+        category = (Category.objects.for_tenant(request.tenant).filter(pk=int(cat)).first()
+                    if cat.isdigit() else None)
+        keys = [k for k in request.query_params.get("keys", "").split(",") if k.strip()][:50]
+        name = request.query_params.get("name", "")[:200]
+        return Response(suggest(request.tenant, name=name, category=category, keys=keys))
 
     @action(detail=False, methods=["get"], url_path="phone-models")
     def phone_models(self, request):

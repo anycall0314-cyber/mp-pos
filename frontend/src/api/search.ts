@@ -246,6 +246,15 @@ export interface PhoneModelSearchResult {
   any_lifecycle_status: string;
 }
 
+/** 新增配件時照品名建議相容機型(backend/apps/catalog/fit_suggest.py):品名讀到的、型號庫設了配件共用的新機 */
+export function suggestFits(p: { name: string; category?: number; keys: string }) {
+  return api<{
+    models: { model_key: string; model_name: string }[];
+    shared: { model_key: string; model_name: string }[];
+    unsure: string[];
+  }>(`/products/fit-suggest/?${qs({ name: p.name, category: p.category, keys: p.keys })}`);
+}
+
 /** 機型清單搜尋(配件挑相容機型用)。
  * 不走 ComboOption 因為 id 需是 string(model_key);PhoneModelPicker 直接吃這個陣列。
  */
