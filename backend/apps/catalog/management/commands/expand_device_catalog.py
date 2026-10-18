@@ -45,6 +45,8 @@ class Command(BaseCommand):
             f"{tenant.code}:{'寫好了' if confirm else '試算(沒有寫入)'} —— 型號 {report.devices} 支(先不展開 {report.held};"
             f"新機型 {report.new_models}、名稱一樣直接對上 {report.linked};對照寫上 {len(links)}),"
             f"品號 {total} 個 {report.created}")
+        if report.shared:
+            self.stdout.write(f"型號庫設了配件共用:{report.shared} 個配件加上了新機")
         if report.extra_variants:
             self.stdout.write(f"已有品號的機型、型號庫多的容量 / 顏色(沒建)共 {len(report.extra_variants)} 個機型,例:")
             for name, extra in report.extra_variants[:10]:

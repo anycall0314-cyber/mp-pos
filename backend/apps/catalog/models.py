@@ -49,6 +49,14 @@ class Category(TenantOwnedModel):
         ACCESSORY = "accessory", "配件"
         GENERAL = "general", "一般"
 
+    class SharesBy(models.TextChoices):
+        SCREEN = "screen", "螢幕"
+        BODY = "body", "機身"
+        NONE = "none", "不共用"
+
+    # 配件跨型號共用(owner 2026-10-18;規則在 device_share.py):這一類的配件跟著新機的螢幕還是機身一樣。空的 = 照類別名稱判斷
+    shares_by = models.CharField("配件共用", max_length=10, choices=SharesBy.choices, blank=True, default="", db_default="")
+
     @property
     def kind(self) -> str:
         if self.holds_devices:
@@ -1209,6 +1217,30 @@ class DeviceModel(TimestampedModel):
 
     def __str__(self) -> str:
         return f"{self.brand} {self.name}"
+
+
+class DeviceShare(TimestampedModel):
+    """平台型號庫的「這支新機的配件跟那一支一樣」(owner 2026-10-18;規則在 `device_share.py`)。平台一份、不進公司備份。
+
+    只有新機沿用舊機(`same_as_uid` 的配件也算 `device_uid` 能用),不反過來;螢幕 / 機身分開勾。
+    取消這一條只是之後不再加,已經加到各家店的適用機型不收回(紅隊)。
+    """
+
+    device_uid = models.CharField("新機(型號庫編號)", max_length=64, db_index=True)
+    same_as_uid = models.CharField("配件跟哪一支一樣", max_length=64, db_index=True)
+    screen = models.BooleanField("螢幕一樣", default=False)
+    body = models.BooleanField("機身一樣", default=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name="+", verbose_name="誰設的")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["device_uid", "same_as_uid"], name="uniq_device_share_pair"),
+            models.CheckConstraint(check=~models.Q(device_uid=models.F("same_as_uid")), name="device_share_not_self"),
+        ]
+        ordering = ["-id"]
+        verbose_name = "型號庫配件共用"
+        verbose_name_plural = "型號庫配件共用"
 
 
 class DeviceCatalogRun(TimestampedModel):

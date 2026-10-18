@@ -71,6 +71,8 @@ import {
   PettyExpense,
   PhoneBillCollection,
   PlatformTenant,
+  DeviceRow,
+  DeviceShareRule,
   DeviceWatch,
   PlatformUser,
   PlatformWarehouse,
@@ -1643,6 +1645,35 @@ export function useDecideDeviceCandidate() {
         body: JSON.stringify(body),
       }),
     onSettled: () => qc.invalidateQueries({ queryKey: ["platform-device-watch"] }),
+  });
+}
+
+export const searchDevices = (q: string) =>
+  api<{ devices: DeviceRow[] }>(`/platform/devices/?q=${encodeURIComponent(q)}`).then((r) => r.devices);
+
+export const useDeviceShares = () =>
+  useQuery({
+    queryKey: ["platform-device-shares"],
+    queryFn: () => api<{ rules: DeviceShareRule[] }>("/platform/device-shares/").then((r) => r.rules),
+  });
+
+export function useSetDeviceShare() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { device: string; same_as: string; screen: boolean; body: boolean }) =>
+      api<{ rule: DeviceShareRule; tenants: number; products: number }>("/platform/device-shares/", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["platform-device-shares"] }),
+  });
+}
+
+export function useRemoveDeviceShare() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api<void>(`/platform/device-shares/${id}/`, { method: "DELETE" }),
+    onSettled: () => qc.invalidateQueries({ queryKey: ["platform-device-shares"] }),
   });
 }
 

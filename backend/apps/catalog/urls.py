@@ -25,5 +25,8 @@ router.register(r"part-templates", PartTemplateViewSet, basename="part-template"
 urlpatterns = [
     path("platform/device-watch/", platform_views.watch),
     path("platform/device-candidates/<int:pk>/", platform_views.candidate),
+    path("platform/devices/", platform_views.devices),
+    path("platform/device-shares/", platform_views.shares),
+    path("platform/device-shares/<int:pk>/", platform_views.share),
     *router.urls,
 ]

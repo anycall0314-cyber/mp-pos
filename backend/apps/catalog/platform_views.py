@@ -3,6 +3,9 @@
 - `GET  platform/device-watch/`:上一次檢查(什麼時候、成功沒有、讀不到的原因)、最近 7 次、待確認 / 等資料的清單、最近 30 天自動加的、
   幾點檢查、哪幾家公司勾了「新機自動建品號」。
 - `POST platform/device-candidates/<編號>/` `{action: add | same | dismiss, name?, uid?}`:加入(可以改型號名稱)/ 就是那一支 / 不收。
+- `GET  platform/devices/?q=`:找型號庫的型號(最多 20 支)。
+- `GET  platform/device-shares/`:配件共用的每一條;`POST` `{device, same_as, screen, body}` 設 / 改一條(新勾的格當下套到每一家,
+  回加到幾家、幾個配件);`DELETE platform/device-shares/<編號>/` 取消(之後不再加,已經加上的不收回)。規則在 `device_share.py`。
 """
 from datetime import timedelta
 
@@ -15,8 +18,10 @@ from rest_framework.response import Response
 from apps.tenants.models import Tenant
 from apps.tenants.permissions import IsPlatformAdmin
 
-from . import device_watch
-from .models import DeviceCandidate, DeviceModel, DeviceWatchRun
+from django.db.models import Q
+
+from . import device_share, device_watch
+from .models import DeviceCandidate, DeviceModel, DeviceShare, DeviceWatchRun
 
 PLATFORM_ONLY = [IsAuthenticated, IsPlatformAdmin]
 RECENT_DAYS = 30
@@ -73,3 +78,61 @@ def candidate(request, pk):
     except device_watch.DecideError as exc:
         return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     return Response(result)
+
+
+def _device_row(d: DeviceModel | None, uid: str = "") -> dict:
+    if d is None:
+        return {"uid": uid, "brand": "", "name": uid, "category": "", "category_label": "", "launched": ""}
+    return {"uid": d.uid, "brand": d.brand, "name": d.name, "category": d.category,
+            "category_label": CATEGORY_LABELS.get(d.category, ""), "launched": d.launched}
+
+
+@api_view(["GET"])
+@permission_classes(PLATFORM_ONLY)
+def devices(request):
+    q = (request.query_params.get("q") or "").strip()
+    rows = DeviceModel.objects.filter(is_active=True)
+    for word in q.split()[:6]:
+        rows = rows.filter(Q(name__icontains=word) | Q(brand__icontains=word))
+    rows = rows.order_by("category", "brand", "-launched", "name")[:20] if q else []
+    return Response({"devices": [_device_row(d) for d in rows]})
+
+
+def _share_row(rule: DeviceShare, by_uid: dict) -> dict:
+    return {"id": rule.id, "device": _device_row(by_uid.get(rule.device_uid), rule.device_uid),
+            "same_as": _device_row(by_uid.get(rule.same_as_uid), rule.same_as_uid),
+            "screen": rule.screen, "body": rule.body, "created_at": rule.created_at,
+            "created_by": rule.created_by.get_username() if rule.created_by_id else ""}
+
+
+def _share_rows(rules) -> list[dict]:
+    rules = list(rules)
+    uids = {u for r in rules for u in (r.device_uid, r.same_as_uid)}
+    by_uid = {d.uid: d for d in DeviceModel.objects.filter(uid__in=uids)}
+    return [_share_row(r, by_uid) for r in rules]
+
+
+@api_view(["GET", "POST"])
+@permission_classes(PLATFORM_ONLY)
+def shares(request):
+    if request.method == "GET":
+        return Response({"rules": _share_rows(DeviceShare.objects.select_related("created_by").order_by("-id")[:500])})
+    data = request.data if isinstance(request.data, dict) else {}
+    text = lambda k: data.get(k) if isinstance(data.get(k), str) else ""  # noqa: E731
+    try:
+        result = device_share.set_rule(text("device"), text("same_as"), screen=data.get("screen") is True,
+                                       body=data.get("body") is True, user=request.user)
+    except device_share.ShareError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    [row] = _share_rows([result["rule"]])
+    return Response({"rule": row, "tenants": result["tenants"], "products": result["products"]})
+
+
+@api_view(["DELETE"])
+@permission_classes(PLATFORM_ONLY)
+def share(request, pk):
+    try:
+        device_share.remove_rule(pk)
+    except device_share.ShareError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+    return Response(status=status.HTTP_204_NO_CONTENT)

@@ -8169,6 +8169,9 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .dw-runs { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
 .dw-runs li.bad { color: var(--danger-text); }
 .dw-table td { vertical-align: top; }
+.ds-form { margin-bottom: 8px; }
+.ds-pick { flex: 1 1 220px; min-width: 0; }
+.ds-check { display: inline-flex; gap: 4px; align-items: center; white-space: nowrap; }
 
 /* 商品頁「分類瀏覽」:類別 → 品牌 → 型號 → 商品 */
 .mb-groups { padding: 6px 12px; border-bottom: 1px solid var(--border); }

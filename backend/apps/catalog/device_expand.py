@@ -24,7 +24,7 @@ from decimal import Decimal
 from django.db import IntegrityError, transaction
 from django.utils.text import slugify
 
-from . import brand_names
+from . import brand_names, device_share
 from .models import Brand, Category, Condition, DeviceModel, PhoneModel, PhoneSeries, Product
 from .category_template import link_brand
 from .phone_model import _smart_join
@@ -67,6 +67,7 @@ class Report:
     created: dict = field(default_factory=dict)      # {品況: 幾個}
     extra_variants: list = field(default_factory=list)  # (機型, 型號庫多的容量 / 顏色)
     problems: list = field(default_factory=list)
+    shared: int = 0     # 型號庫設了配件共用:這幾支剛對上,適用舊機的配件加上了新機(device_share.apply_for)
 
     def add(self, cond, n=1):
         self.created[cond] = self.created.get(cond, 0) + n
@@ -195,8 +196,10 @@ def apply_links(tenant, links: dict[str, str], *, confirm: bool) -> list[str]:
     for name, uid in links.items():
         pm = models[name.casefold()]
         if pm.device_uid != uid:
-            pm.device_uid = uid
-            pm.save(update_fields=["device_uid", "updated_at"])
+            with transaction.atomic():
+                pm.device_uid = uid
+                pm.save(update_fields=["device_uid", "updated_at"])
+                device_share.apply_for(tenant, uid)   # 型號庫設了配件共用的,剛對上就套
     return []
 
 
@@ -263,6 +266,7 @@ class _One:
         self.created: dict = {}
         self.names: list = []
         self.linked = self.new_model = False
+        self.shared = 0
         self.extra = None
         self.pm = None
 
@@ -326,6 +330,7 @@ class _One:
             if pm.device_uid != d.uid:
                 pm.device_uid = d.uid
                 pm.save(update_fields=["device_uid", "updated_at"])
+                self.shared = device_share.apply_for(tenant, d.uid)   # 型號庫設了配件共用的,剛對上就套
         elif pm is None:
             self.new_model = True
         self.pm = pm
@@ -350,6 +355,7 @@ class _One:
             report.add(k, v)
         report.linked += self.linked
         report.new_models += self.new_model
+        report.shared += self.shared
         if self.extra:
             report.extra_variants.append(self.extra)
         self.existing_names.update(bare_name(n) for n in self.names)

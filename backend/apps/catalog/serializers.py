@@ -263,6 +263,8 @@ class CategorySerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, ser
     kind = serializers.ChoiceField(choices=Category.Kind.choices, required=False)
     # 類別底下的品牌(中項),照排序
     brands = serializers.SerializerMethodField()
+    # 配件共用實際跟著哪一個("screen" / "body" / "";shares_by 空的時候照名稱判斷,規則在 device_share.part_of)
+    shares_part = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
@@ -277,11 +279,18 @@ class CategorySerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, ser
             "holds_devices",
             "kind",
             "brands",
+            "shares_by",
+            "shares_part",
             "next_sku_seq",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "needs_host_model", "holds_devices", "next_sku_seq", "created_at", "updated_at"]
+
+    def get_shares_part(self, obj) -> str:
+        from .device_share import part_of
+
+        return part_of(obj)
 
     def get_brands(self, obj) -> list:
         return [{"id": link.brand_id, "name": link.brand.name}

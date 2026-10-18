@@ -13,7 +13,7 @@ import {
   useProduct,
 } from "@/api/hooks";
 import { api } from "@/api/client";
-import type { Category, CategoryKind, Product, TreeProduct } from "@/api/types";
+import type { Category, CategoryKind, Product, SharePart, TreeProduct } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { MoreMenu } from "@/components/workbench/MoreMenu";
@@ -61,7 +61,15 @@ interface CategoryEditState {
   is_active: boolean;
   is_secondhand_default: boolean;
   kind: CategoryKind | "";
+  /** 配件共用:現在實際跟著哪一個(沒改就不送,類別名稱判斷的照舊) */
+  shares: SharePart | "none";
 }
+
+const SHARE_OPTIONS: { key: SharePart | "none"; label: string }[] = [
+  { key: "screen", label: "跟螢幕" },
+  { key: "body", label: "跟機身" },
+  { key: "none", label: "不共用" },
+];
 
 interface CategoryNewState {
   code: string;
@@ -179,6 +187,7 @@ export function ProductsPage() {
     is_active: true,
     is_secondhand_default: false,
     kind: "",
+    shares: "none",
   });
   const [catError, setCatError] = useState<string | null>(null);
   const [catSavedFlash, setCatSavedFlash] = useState(false);
@@ -196,6 +205,7 @@ export function ProductsPage() {
       is_active: selectedCategory.is_active,
       is_secondhand_default: selectedCategory.is_secondhand_default,
       kind: selectedCategory.kind,
+      shares: selectedCategory.shares_part || "none",
     });
     setCatError(null);
     setCatSavedFlash(false);
@@ -211,6 +221,7 @@ export function ProductsPage() {
         is_active: catEdit.is_active,
         is_secondhand_default: catEdit.is_secondhand_default,
         ...(catEdit.kind ? { kind: catEdit.kind } : {}),
+        ...(catEdit.shares !== (selectedCategory.shares_part || "none") ? { shares_by: catEdit.shares } : {}),
       });
       setCatError(null);
       setCatSavedFlash(true);
@@ -1046,6 +1057,25 @@ export function ProductsPage() {
                 <dd>
                   <KindPicker value={catEdit.kind} onChange={(kind) => setCatEdit((s) => ({ ...s, kind }))} />
                 </dd>
+                {catEdit.kind === "accessory" && (
+                  <>
+                    <dt>配件共用</dt>
+                    <dd>
+                      <div className="tab-switcher">
+                        {SHARE_OPTIONS.map((o) => (
+                          <button
+                            key={o.key}
+                            type="button"
+                            className={catEdit.shares === o.key ? "tab-switcher-item active" : "tab-switcher-item"}
+                            onClick={() => setCatEdit((s) => ({ ...s, shares: o.key }))}
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                    </dd>
+                  </>
+                )}
               </dl>
               <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
                 <button

@@ -31,12 +31,19 @@ export interface Category {
   kind: CategoryKind;
   /** 類別底下的品牌(中項),照排序 */
   brands: { id: number; name: string }[];
+  /** 配件共用:店家選的(空的 = 照類別名稱判斷) */
+  shares_by: "" | SharePart | "none";
+  /** 實際跟著哪一個(空的 = 不共用) */
+  shares_part: "" | SharePart;
   next_sku_seq: number;
   created_at: string;
   updated_at: string;
 }
 
 export type CategoryKind = "device" | "accessory" | "general";
+
+/** 配件跨型號共用跟著新機的螢幕還是機身(backend/apps/catalog/device_share.py) */
+export type SharePart = "screen" | "body";
 
 /** 商品頁「分類瀏覽」一層的內容(backend/apps/catalog/tree.py) */
 export type TreeLevel =
@@ -2189,4 +2196,25 @@ export interface DeviceWatch {
   added: DeviceAddedRow[];
   auto_tenants: string[];
   catalog_count: number;
+}
+
+/** 平台型號庫的一支(找型號、配件共用用) */
+export interface DeviceRow {
+  uid: string;
+  brand: string;
+  name: string;
+  category: string;
+  category_label: string;
+  launched: string;
+}
+
+/** 型號庫的配件共用:新機的配件跟哪一支一樣(螢幕 / 機身分開) */
+export interface DeviceShareRule {
+  id: number;
+  device: DeviceRow;
+  same_as: DeviceRow;
+  screen: boolean;
+  body: boolean;
+  created_at: string;
+  created_by: string;
 }
