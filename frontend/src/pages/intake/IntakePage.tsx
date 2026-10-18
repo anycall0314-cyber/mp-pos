@@ -545,7 +545,6 @@ function ItemDetail({ item }: { item: IntakeItem }) {
     category: "" as number | "",
     capacity: "",
     color: "",
-    region_version: "",
     requires_serial: true,
   });
   const [npError, setNpError] = useState("");
@@ -568,7 +567,6 @@ function ItemDetail({ item }: { item: IntakeItem }) {
       category: "",
       capacity: "",
       color: "",
-      region_version: "",
       requires_serial: true,
     });
     setNpError("");
@@ -596,7 +594,6 @@ function ItemDetail({ item }: { item: IntakeItem }) {
         category: np.category,
         capacity: np.capacity.trim(),
         color: np.color.trim(),
-        region_version: np.region_version.trim(),
         requires_serial: np.requires_serial,
         ...(npDup && npReason.trim() ? { distinct_reason: npReason.trim() } : {}),
       });
@@ -887,15 +884,6 @@ function ItemDetail({ item }: { item: IntakeItem }) {
             value={np.color}
             onChange={(e) => setNp((s) => ({ ...s, color: e.target.value }))}
             placeholder="例:黑"
-          />
-        </Field>
-        <Field label="地區版本">
-          <input
-            value={np.region_version}
-            onChange={(e) =>
-              setNp((s) => ({ ...s, region_version: e.target.value }))
-            }
-            placeholder="例:台版"
           />
         </Field>
         <label className="checkbox" style={{ marginTop: 8 }}>

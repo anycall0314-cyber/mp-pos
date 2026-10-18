@@ -2155,8 +2155,6 @@ export interface PhoneModelBundlePayload {
   condition_ids: number[];
   capacities: string[];
   colors: string[];
-  /** 地區版本(台版 / 港版 …);整批一個值,不是維度 */
-  region_version: string;
   /** 預覽列出可能重複時,每一筆各自寫哪裡不同:{品名: 理由} */
   distinct_reasons?: Record<string, string>;
   accessory_categories: string[];

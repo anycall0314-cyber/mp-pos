@@ -747,12 +747,11 @@ export function ProductsPage() {
                     )}
                     <dt>條碼</dt>
                     <dd>{selectedProduct.barcode || "—"}</dd>
-                    <dt>容量 / 顏色 / 版本</dt>
+                    <dt>容量 / 顏色</dt>
                     <dd>
                       {[
                         selectedProduct.capacity,
                         selectedProduct.color,
-                        selectedProduct.region_version,
                       ]
                         .filter(Boolean)
                         .join(" / ") || "—"}
@@ -1487,7 +1486,6 @@ function ModelSkuPanel({
             <thead>
               <tr>
                 <th>容量 / 顏色</th>
-                <th style={{ width: 80 }}>地區</th>
                 <th className="num" style={{ width: 80 }}>
                   售價
                 </th>
@@ -1501,9 +1499,6 @@ function ModelSkuPanel({
                 <tr key={s.id}>
                   <td>
                     {s.capacity} {s.color}
-                  </td>
-                  <td style={{ color: "var(--text-dim)" }}>
-                    {s.region_version || "—"}
                   </td>
                   <td className="num">
                     {money(s.list_price)}

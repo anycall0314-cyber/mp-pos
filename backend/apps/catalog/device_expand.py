@@ -3,8 +3,10 @@
 owner 定的:品況 = 全新、中古機(**中古機也分顏色**、**不展開「中古機(保固內)」**);**2026 年以後上市的手機再加「已拆封」**
 (2026-10-16 改:「2026以後出的手機都要建立已拆封，後續新機上市都要，僅手機就好，其他類別不需要」;平板、手錶不建)。
 **耳機、手環、其他穿戴**(2026-10-16 owner 選「只建全新、按數量」):只建全新、分顏色、**不記序號**(進貨、盤點照數量),
-品名「型號 顏色 台版 全新」(沒有容量那一格);放「穿戴」(還沒改的公司放「耳機/音訊」「穿戴/周邊」)。公司本來就在賣的那幾款放 `holds` 不建。
-品名跟「新增手機型號」一樣:「型號 容量 顏色 台版 品況」。只建主機的品號,不建配件 / 維修零件的佔位商品。
+品名「型號 顏色 全新」(沒有容量那一格);放「穿戴」(還沒改的公司放「耳機/音訊」「穿戴/周邊」)。公司本來就在賣的那幾款放 `holds` 不建。
+品名「型號 容量 顏色 品況」。只建主機的品號,不建配件 / 維修零件的佔位商品。
+**不寫台版**(owner 2026-10-17:「手機平板穿戴幾乎百分之99以上一定是台版，不需要去特別多個欄位去填他是哪個國家版本，品名也不需要」);
+以前建的品名有「台版」,比對有沒有建過時當成同一個(`bare_name`)。
 
 - **一支手機在一家公司只有一個機型**:先用 `PhoneModel.device_uid` 對;沒對的照 `links`(人 / Jev 對好的:公司機型名稱 → 型號庫編號)寫上;
   名稱完全一樣(大小寫不算)的直接對。`holds` = 還沒對清楚、可能是公司某個舊機型的那幾支,**先不展開**(展開了會多一個同一支的機型,庫存拆兩半)。
@@ -27,8 +29,13 @@ from .category_template import link_brand
 from .phone_model import _smart_join
 from .services_model_bundle import _get_or_create_phone_model
 
-REGION = "台版"
+_REGION_WORD = re.compile(r"(?<!\S)(台版|臺版|台灣版)(?!\S)")
 NEW, USED, OPENED = "全新", "中古機", "已拆封"
+
+
+def bare_name(name: str) -> str:
+    """比對品名有沒有建過用:拿掉「台版」(以前建的品名有寫)、空白併成一個。"""
+    return " ".join(_REGION_WORD.sub(" ", name or "").split())
 # 型號庫的類別 → 公司的類別(照順序找第一個有的):手錶、手環、耳機都進「穿戴」(owner 2026-10-16「都進穿戴」);
 # 還沒改成穿戴的公司照舊放「手錶」「耳機/音訊」「穿戴/周邊」
 CATEGORY_OF = {DeviceModel.Category.PHONE: ("手機",), DeviceModel.Category.TABLET: ("平板",),
@@ -223,7 +230,7 @@ def expand(tenant, *, categories=ALL_CATEGORIES, links=None, holds=(), new_for_o
         pm = by_name.pop(name_key(name), None)
         if pm is not None and uid not in by_uid:
             by_uid[uid] = pm
-    existing_names = set(Product.objects.for_tenant(tenant).values_list("name", flat=True))
+    existing_names = {bare_name(n) for n in Product.objects.for_tenant(tenant).values_list("name", flat=True)}
     report = Report()
     for d in devices:
         if d.uid in held:
@@ -310,8 +317,8 @@ class _One:
             cond = self.conds[cname]
             for cap in caps:
                 for col in cols:
-                    name = " ".join(x for x in (model_name, cap, col, REGION, cond.name) if x)
-                    if name not in self.existing_names:
+                    name = " ".join(x for x in (model_name, cap, col, cond.name) if x)
+                    if bare_name(name) not in self.existing_names:
                         todo.append((cond, cap, col, name))
         if pm is None and not todo:
             return
@@ -333,8 +340,8 @@ class _One:
             if confirm:
                 Product.objects.create(
                     tenant=tenant, category=self.category, name=name,
-                    spec=" ".join(x for x in (cap, col, REGION, cond.name) if x),
-                    capacity=cap, color=col, region_version=REGION, phone_model=pm, brand=brand, series=series,
+                    spec=" ".join(x for x in (cap, col, cond.name) if x),
+                    capacity=cap, color=col, phone_model=pm, brand=brand, series=series,
                     generation=generation or None, model_suffix=suffix or "", condition=cond,
                     is_secondhand=cond.is_secondhand, requires_serial=not qty,
                     list_price=Decimal(0) if cond.is_secondhand else msrp(d, cap),
@@ -350,7 +357,7 @@ class _One:
         report.new_models += self.new_model
         if self.extra:
             report.extra_variants.append(self.extra)
-        self.existing_names.update(self.names)
+        self.existing_names.update(bare_name(n) for n in self.names)
         if self.pm is not None and self.pm.pk:
             self.by_uid[self.d.uid] = self.pm
             self.by_name.pop(name_key(self.pm.name), None)

@@ -148,6 +148,16 @@ class CompareTests(SimpleTestCase):
             self.assertTrue(is_broad_phrase(text), text)
         self.assertFalse(is_broad_phrase("reno16 側翻皮套 藍"))
 
+    def test_taiwan_version_is_not_a_difference(self):
+        """品名不寫台版(owner 2026-10-17);報價單 / 以前的品名寫了照樣是同一個,港版還是不一樣。"""
+        new, old = "iPhone 17 256GB 黑色 全新", "iPhone 17 256GB 黑色 台版 全新"
+        self.assertEqual(compare(parse_features(old), parse_features(new)).level, EXACT)
+        self.assertEqual(compare(parse_features(new), parse_features(old)).level, EXACT)
+        self.assertEqual(compare(parse_features("iPhone 17 256GB 黑色 臺版 全新"), parse_features(new)).level, EXACT)
+        hk = compare(parse_features("iPhone 17 256GB 黑色 港版 全新"), parse_features(new))
+        self.assertNotEqual(hk.level, EXACT)
+        self.assertTrue(any("港版" in d for d in hk.differences))
+
 
 class _Base(TestCase):
     def setUp(self):

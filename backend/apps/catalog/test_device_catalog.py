@@ -137,16 +137,16 @@ class ExpandTests(TestCase):
         report = device_expand.expand(self.c.tenant, confirm=True)
         self.assertEqual(report.problems, [])
         s25 = [n for n in self.names() if n.startswith("Galaxy S25 Ultra")]
-        self.assertEqual(s25, sorted(f"Galaxy S25 Ultra {cap} {col} 台版 {cond}" for cond in ("全新", "中古機")
+        self.assertEqual(s25, sorted(f"Galaxy S25 Ultra {cap} {col} {cond}" for cond in ("全新", "中古機")
                                      for cap in ("256GB", "512GB") for col in ("鈦黑", "鈦銀")))
         a57 = [n for n in self.names() if n.startswith("Galaxy A57")]
-        self.assertEqual(a57, sorted(f"Galaxy A57 5G 128GB 冰藍 台版 {c}" for c in ("全新", "已拆封", "中古機")))
+        self.assertEqual(a57, sorted(f"Galaxy A57 5G 128GB 冰藍 {c}" for c in ("全新", "已拆封", "中古機")))
         self.assertFalse(Product.objects.filter(condition=self.cond["中古機(保固內)"]).exists(), "保固內不展開(owner)")
         pm = PhoneModel.objects.get(tenant=self.c.tenant, device_uid="u-s25u")
         self.assertEqual((pm.name, pm.brand.name, pm.series.name, pm.generation, pm.model_suffix), ("Galaxy S25 Ultra", "Samsung", "Galaxy", None, "S25 Ultra"))
-        p = Product.objects.get(tenant=self.c.tenant, name="Galaxy S25 Ultra 256GB 鈦黑 台版 中古機")
+        p = Product.objects.get(tenant=self.c.tenant, name="Galaxy S25 Ultra 256GB 鈦黑 中古機")
         self.assertEqual((p.phone_model, p.capacity, p.color, p.region_version, p.is_secondhand, p.category, p.list_price),
-                         (pm, "256GB", "鈦黑", "台版", True, self.c.cat_phone, Decimal("0")))
+                         (pm, "256GB", "鈦黑", "", True, self.c.cat_phone, Decimal("0")))
 
     def test_opened_is_only_for_phones_from_2026_on(self):
         """owner 2026-10-16:「2026以後出的手機都要建立已拆封，後續新機上市都要，僅手機就好，其他類別不需要」。"""
@@ -156,9 +156,9 @@ class ExpandTests(TestCase):
                                     device("u-w26", "Galaxy Watch8 44mm", category="watch", launched="2026-07", caps=(), colors=("銀",))),
                             source="more")
         device_expand.expand(self.c.tenant, confirm=True)
-        self.assertEqual(self.names(name__startswith="Galaxy S27"), sorted(f"Galaxy S27 256GB 黑 台版 {c}" for c in ("全新", "已拆封", "中古機")))
-        self.assertEqual(self.names(name__startswith="Galaxy Tab S11"), sorted(f"Galaxy Tab S11 128GB 灰 台版 {c}" for c in ("全新", "中古機")))
-        self.assertEqual(self.names(name__startswith="Galaxy Watch8"), sorted(f"Galaxy Watch8 44mm 藍牙 銀 台版 {c}" for c in ("全新", "中古機")))
+        self.assertEqual(self.names(name__startswith="Galaxy S27"), sorted(f"Galaxy S27 256GB 黑 {c}" for c in ("全新", "已拆封", "中古機")))
+        self.assertEqual(self.names(name__startswith="Galaxy Tab S11"), sorted(f"Galaxy Tab S11 128GB 灰 {c}" for c in ("全新", "中古機")))
+        self.assertEqual(self.names(name__startswith="Galaxy Watch8"), sorted(f"Galaxy Watch8 44mm 藍牙 銀 {c}" for c in ("全新", "中古機")))
 
     def test_headphones_and_bands_are_new_only_counted_by_quantity(self):
         """owner 2026-10-16 選「只建全新、按數量」:分顏色、不記序號、沒有容量那一格;公司本來就在賣的(holds)不建。"""
@@ -177,11 +177,11 @@ class ExpandTests(TestCase):
         self.assertEqual(report.problems, [])
         rows = Product.objects.filter(tenant=self.c.tenant, phone_model__device_uid__in=["u-ap", "u-band", "u-bud"])
         self.assertEqual(sorted(rows.values_list("name", "category", "requires_serial", "capacity", "condition__name", "list_price")), sorted([
-            ("AirPods Pro 3 白 台版 全新", ear.pk, False, "", "全新", Decimal("7490")),
-            ("Xiaomi 手環 10 午夜黑 台版 全新", wear.pk, False, "", "全新", Decimal("0")),
-            ("Xiaomi 手環 10 冰川銀 台版 全新", wear.pk, False, "", "全新", Decimal("0")),
+            ("AirPods Pro 3 白 全新", ear.pk, False, "", "全新", Decimal("7490")),
+            ("Xiaomi 手環 10 午夜黑 全新", wear.pk, False, "", "全新", Decimal("0")),
+            ("Xiaomi 手環 10 冰川銀 全新", wear.pk, False, "", "全新", Decimal("0")),
         ]))
-        self.assertEqual(Product.objects.get(tenant=self.c.tenant, name="AirPods Pro 3 白 台版 全新").spec, "白 台版 全新")
+        self.assertEqual(Product.objects.get(tenant=self.c.tenant, name="AirPods Pro 3 白 全新").spec, "白 全新")
         self.assertEqual(sum(device_expand.expand(self.c.tenant, holds=["u-bud"], confirm=True).created.values()), 0, "重跑不再建")
 
         # 商品頁的機型清單:先大分類(手機 / 平板 / 穿戴)再品牌(owner 2026-10-16);按數量的耳機、手環也列
@@ -199,22 +199,22 @@ class ExpandTests(TestCase):
     def test_only_a_stated_original_price_becomes_the_new_price(self):
         device_expand.expand(self.c.tenant, confirm=True)
         price = dict(Product.objects.filter(tenant=self.c.tenant, name__startswith="Galaxy S25 Ultra").values_list("name", "list_price"))
-        self.assertEqual(price["Galaxy S25 Ultra 256GB 鈦黑 台版 全新"], Decimal("43900"))
-        self.assertEqual(price["Galaxy S25 Ultra 512GB 鈦黑 台版 全新"], Decimal("0"), "參考價不帶(紅隊)")
-        self.assertEqual(price["Galaxy S25 Ultra 256GB 鈦黑 台版 中古機"], Decimal("0"))
+        self.assertEqual(price["Galaxy S25 Ultra 256GB 鈦黑 全新"], Decimal("43900"))
+        self.assertEqual(price["Galaxy S25 Ultra 512GB 鈦黑 全新"], Decimal("0"), "參考價不帶(紅隊)")
+        self.assertEqual(price["Galaxy S25 Ultra 256GB 鈦黑 中古機"], Decimal("0"))
 
     def test_watches_use_gps_or_bluetooth_and_missing_colours_or_sizes_still_work(self):
         device_expand.expand(self.c.tenant, confirm=True)
         self.assertEqual(self.names(name__startswith="Apple Watch"),
-                         sorted(f"Apple Watch Series 10 鋁金屬 46mm {cap} 曜石黑 台版 {c}" for cap in ("GPS", "GPS+行動網路") for c in ("全新", "中古機")))
+                         sorted(f"Apple Watch Series 10 鋁金屬 46mm {cap} 曜石黑 {c}" for cap in ("GPS", "GPS+行動網路") for c in ("全新", "中古機")))
         self.assertEqual(Product.objects.get(tenant=self.c.tenant, name__startswith="Apple Watch", capacity="GPS", condition=self.cond["全新"]).category, self.watch)
         self.assertEqual(self.names(name__startswith="iPhone X"),
-                         sorted(f"iPhone X {cap} 不分色 台版 {c}" for cap in ("64GB", "256GB") for c in ("全新", "中古機")))
+                         sorted(f"iPhone X {cap} 不分色 {c}" for cap in ("64GB", "256GB") for c in ("全新", "中古機")))
 
     def test_old_models_can_be_used_only(self):
         device_expand.expand(self.c.tenant, new_for_old=False, confirm=True)
-        self.assertEqual(self.names(name__startswith="iPhone X"), ["iPhone X 256GB 不分色 台版 中古機", "iPhone X 64GB 不分色 台版 中古機"])
-        self.assertIn("Galaxy S25 Ultra 256GB 鈦黑 台版 全新", self.names(), "Codex 那份的照舊有全新")
+        self.assertEqual(self.names(name__startswith="iPhone X"), ["iPhone X 256GB 不分色 中古機", "iPhone X 64GB 不分色 中古機"])
+        self.assertIn("Galaxy S25 Ultra 256GB 鈦黑 全新", self.names(), "Codex 那份的照舊有全新")
 
     def test_a_model_the_shop_already_has_keeps_its_own_spelling_and_only_gets_what_is_missing(self):
         c = self.c
@@ -229,7 +229,7 @@ class ExpandTests(TestCase):
         problems = device_expand.apply_links(c.tenant, {"Galaxy S 25 Ultra": "u-s25u"}, confirm=True)
         self.assertEqual(problems, [])
         report = device_expand.expand(c.tenant, confirm=True)
-        self.assertEqual(self.names(phone_model=pm), ["Galaxy S 25 Ultra 256GB 鈦黑色 台版 中古機", "Galaxy S 25 Ultra 256GB 鈦黑色 台版 全新"])
+        self.assertEqual(self.names(phone_model=pm), ["Galaxy S 25 Ultra 256GB 鈦黑色 中古機", "Galaxy S 25 Ultra 256GB 鈦黑色 台版 全新"])
         self.assertIn(("Galaxy S 25 Ultra", ["512GB", "鈦黑", "鈦銀"]), report.extra_variants)
         self.assertFalse(Product.objects.filter(tenant=c.tenant, name__startswith="Galaxy S25 Ultra").exists(), "同一支不會多一個機型")
         mine.refresh_from_db()
@@ -245,7 +245,8 @@ class ExpandTests(TestCase):
         pm.refresh_from_db()
         self.assertEqual(pm.device_uid, "u-a57")
         self.assertEqual(PhoneModel.objects.filter(tenant=c.tenant, name__istartswith="galaxy a57").count(), 1)
-        self.assertEqual(self.names(phone_model=pm), sorted(f"Galaxy A57 5G 128GB 冰川藍 台版 {x}" for x in ("全新", "已拆封", "中古機")))
+        self.assertEqual(self.names(phone_model=pm), sorted(["Galaxy A57 5G 128GB 冰川藍 台版 全新", "Galaxy A57 5G 128GB 冰川藍 已拆封", "Galaxy A57 5G 128GB 冰川藍 中古機"]),
+                         "以前建的「台版 全新」是同一個,不再建一個「全新」(owner 10-17:品名不寫台版)")
 
     def test_names_that_differ_only_in_spaces_are_the_same_model(self):
         # 公司的舊機型是「系列 世代 後綴」接空白組的:「Galaxy Tab S 10 Ultra」就是型號庫的「Galaxy Tab S10 Ultra」
@@ -256,7 +257,7 @@ class ExpandTests(TestCase):
         pm.refresh_from_db()
         self.assertEqual((pm.device_uid, report.problems), ("u-tab", []))
         self.assertEqual(PhoneModel.objects.filter(tenant=c.tenant, name__icontains="tab").count(), 1)
-        self.assertEqual(self.names(phone_model=pm), ["Galaxy Tab S 10 Ultra 256GB 灰 台版 中古機", "Galaxy Tab S 10 Ultra 256GB 灰 台版 全新"])
+        self.assertEqual(self.names(phone_model=pm), ["Galaxy Tab S 10 Ultra 256GB 灰 中古機", "Galaxy Tab S 10 Ultra 256GB 灰 全新"])
 
     def test_a_new_model_whose_name_only_differs_in_spaces_from_a_linked_one_is_not_built(self):
         c = self.c

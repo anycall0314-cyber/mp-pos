@@ -54,7 +54,6 @@ export function ProductPhotoPanel({ target, onClose }: Props) {
     ["適用機型", p?.related_hosts?.map((h) => h.model_name).join("、")],
     ["容量", p?.capacity],
     ["顏色", p?.color],
-    ["版本", p?.region_version],
     ["品況", p?.condition_name],
     ["條碼", p?.barcode],
     ["建議售價", p && p.warehouse_type !== "parts" ? money(p.list_price) : undefined],

@@ -119,6 +119,9 @@ _BARE_HEAD_RE = re.compile(r"^\d{1,3}(?:%s)?$" % "|".join(sorted(_SUFFIX_WORDS))
 _MODEL_HEAD_RE = re.compile(r"^[A-Z]+\d")
 _ALPHA_RE = re.compile(r"^[A-Z]+$")
 _CJK_RE = re.compile(r"^[一-鿿]+$")
+# 「台版」不算特徵:手機、平板、穿戴幾乎都是台版,品名不寫(owner 2026-10-17:「品名也不需要」),
+# 報價單 / 以前的品名有寫的照樣對得上;港版、美版…還是算(寫了就是不一樣的貨)
+_TW_WORD = re.compile(r"(?<!\S)(台版|臺版|台灣版)(?!\S)")
 
 
 @dataclass(frozen=True)
@@ -337,6 +340,7 @@ def _split_cjk(run: str, terms: frozenset) -> tuple[list[str], list[str]]:
 @lru_cache(maxsize=50000)
 def _parse(text: str, terms: frozenset, bare_capacity: bool = True) -> Features:
     s = unicodedata.normalize("NFKC", text or "").upper()
+    s = _TW_WORD.sub(" ", s)
     s = _CAP_RE.sub(_norm_capacity, s)
     s = _join_hyphens(s)
     if bare_capacity:

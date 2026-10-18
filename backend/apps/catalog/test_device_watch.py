@@ -165,7 +165,7 @@ class CheckTests(TestCase):
         self.assertEqual({p["kind"] for p in d.data["prices"]}, {device_watch.PRICE_KIND})
         self.assertEqual(DeviceCandidate.objects.get(source_id="300").status, DeviceCandidate.Status.ADDED)
         names = self.products(self.c, "Galaxy Z Fold8")
-        self.assertEqual(names, sorted(f"Galaxy Z Fold8 {cap} {col} 台版 {cond}" for cond in ("全新", "已拆封", "中古機")
+        self.assertEqual(names, sorted(f"Galaxy Z Fold8 {cap} {col} {cond}" for cond in ("全新", "已拆封", "中古機")
                                        for cap in ("256GB", "512GB") for col in ("曜石黑", "冰川藍")))
         self.assertEqual(set(Product.objects.for_tenant(self.c.tenant).filter(name__startswith="Galaxy Z Fold8").values_list("list_price", flat=True)),
                          {0}, "手機王的原廠售價不算原廠明示的建議價,不帶進售價")
@@ -227,7 +227,7 @@ class CheckTests(TestCase):
         self.assertTrue(report.ok, report.notes)
         self.assertEqual(DeviceModel.objects.get(name="AirPods Pro 3").category, "headphones")
         self.assertEqual(list(Product.objects.for_tenant(self.c.tenant).filter(name__startswith="AirPods Pro 3")
-                              .values_list("name", "requires_serial", "category__name")), [("AirPods Pro 3 白 台版 全新", False, "耳機/音訊")])
+                              .values_list("name", "requires_serial", "category__name")), [("AirPods Pro 3 白 全新", False, "耳機/音訊")])
         c = DeviceCandidate.objects.get(source_id="351")
         self.assertEqual((c.status, c.reason), (DeviceCandidate.Status.WAITING, "還沒有顏色"))
 
@@ -325,7 +325,7 @@ class CheckTests(TestCase):
         site = FakeSite({**lists(phones=[("SAMSUNG Galaxy Z Fold8", "samsung-galaxy-z-fold8", "300")]), path: product_page("SAMSUNG Galaxy Z Fold8")})
         self.check(site)
         before = dict(Product.objects.for_tenant(self.c.tenant).filter(name__startswith="Galaxy Z Fold8").values_list("name", "id"))
-        Product.objects.filter(id=before["Galaxy Z Fold8 256GB 曜石黑 台版 全新"]).update(list_price=55990)
+        Product.objects.filter(id=before["Galaxy Z Fold8 256GB 曜石黑 全新"]).update(list_price=55990)
         site.pages[path] = product_page("SAMSUNG Galaxy Z Fold8", colors=("曜石黑", "冰川藍", "珊瑚粉"),
                                         variants=(("(8GB/256GB)", 19990), ("(12GB/512GB)", 23990), ("(16GB/1TB)", 29990)))
         report = self.check(site)
@@ -336,7 +336,7 @@ class CheckTests(TestCase):
         now = dict(Product.objects.for_tenant(self.c.tenant).filter(name__startswith="Galaxy Z Fold8").values_list("name", "id"))
         self.assertEqual(len(now), 3 * 3 * 3)
         self.assertEqual({k: now[k] for k in before}, before, "原本的品號一個都沒換")
-        self.assertEqual(Product.objects.get(id=before["Galaxy Z Fold8 256GB 曜石黑 台版 全新"]).list_price, 55990, "店家填的售價不動")
+        self.assertEqual(Product.objects.get(id=before["Galaxy Z Fold8 256GB 曜石黑 全新"]).list_price, 55990, "店家填的售價不動")
 
     def test_a_company_that_already_made_the_model_by_hand_is_linked_not_doubled(self):
         from apps.catalog.services_model_bundle import _get_or_create_phone_model
