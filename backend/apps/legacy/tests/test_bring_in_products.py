@@ -122,6 +122,35 @@ class ReadReportTests(TestCase):
         self.assertEqual(m["__excluded__"], {"庫存", "遠傳"})
         self.assertNotIn("庫存", m)
 
+    def test_skip_list_reads_the_old_codes_on_the_delete_sheet(self):
+        wb = Workbook()
+        keep = wb.active
+        keep.title = "舊品號"
+        keep.append(["舊品號", "品名"])
+        keep.append(["T12KEEP", "皮套/留著"])
+        drop = wb.create_sheet("未來會刪除")
+        drop.append(["舊品號", "品名", "類別"])
+        drop.append(["  T12A ", "皮套/A", "皮套"])
+        drop.append([None, "", ""])
+        drop.append(["T20B", "9H/B", "玻璃貼"])
+        buf = BytesIO()
+        wb.save(buf)
+        self.assertEqual(products.load_skip_list(buf.getvalue()), {"T12A", "T20B"})   # 只讀刪除那一頁;空白列不算
+        other = Workbook()
+        other.active.append(["品號"])
+        other.active.append(["X1"])
+        buf = BytesIO()
+        other.save(buf)
+        self.assertEqual(products.load_skip_list(buf.getvalue()), {"X1"})            # 沒有那一頁:讀第一頁、「品號」也認
+        bad = Workbook()
+        bad.active.append(["品名"])
+        buf = BytesIO()
+        bad.save(buf)
+        with self.assertRaises(products.ReportError):
+            products.load_skip_list(buf.getvalue())
+        with self.assertRaises(products.ReportError):
+            products.load_skip_list(b"<table></table>")
+
 
 class BringInTests(TestCase):
     def setUp(self):
@@ -275,6 +304,17 @@ class BringInTests(TestCase):
                          (MapStatus.CONFIRMED, "皮套/A", "皮套/A(舊名)"))
         self.assertEqual(LegacyProductMap.objects.filter(tenant=self.a).count(), 1)
 
+    def test_old_codes_the_owner_picked_are_not_created_or_linked(self):
+        mine = Product.objects.create(tenant=self.a, category=self.case_cat, name="皮套 S7", barcode="T12S7")
+        r = products.bring_in_products(self.a, [
+            self.item("T12A", "皮套/A", 100), self.item("T12B", "皮套/B", 100),
+            self.item("T12S7", "皮套/S7", 100), self.item("T12Z", "皮套/Z", 100, qty=0),
+        ], MAPPING, write=True, skip={"T12A", "T12S7", "T12Z"})
+        self.assertEqual((r.created, r.skipped, r.linked, r.zero_stock), (1, 3, 0, 0))
+        self.assertEqual(set(Product.objects.filter(tenant=self.a).values_list("barcode", flat=True)), {"T12B", "T12S7"})
+        self.assertEqual(list(LegacyProductMap.objects.filter(tenant=self.a).values_list("product_code_raw", flat=True)), ["T12B"])
+        self.assertTrue(Product.objects.filter(pk=mine.pk).exists())                      # 原本就有的商品不動
+
     def test_a_category_code_already_taken_gets_another(self):
         Category.objects.create(tenant=self.a, code="PP", name="包膜")
         self.run_it([self.item("G1", "9H/IP15", 100)])
@@ -359,6 +399,20 @@ class CommandTests(TestCase):
         p = Product.objects.get(barcode="T12A")
         self.assertEqual((p.name, p.weighted_avg_cost), ("皮套/A", Decimal("120")))
         self.assertIn("刪掉品號 1", self.call("--undo", "--confirm"))
+        self.assertFalse(Product.objects.exists())
+
+    def test_skip_list_leaves_those_old_codes_out(self):
+        wb = Workbook()
+        wb.active.title = "舊品號"
+        drop = wb.create_sheet("未來會刪除")
+        drop.append(["舊品號", "品名"])
+        drop.append(["T12A", "皮套/A"])
+        drop.append(["T99GONE", "皮套/早就沒了"])
+        skip = self.tmp / "舊品號整理.xlsx"
+        wb.save(skip)
+        out = self.call("--report", str(self.report), "--mapping", str(self.mapping), "--skip", str(skip), "--confirm")
+        self.assertIn("新建品號 0", out)
+        self.assertIn("清單挑掉的 1(清單 2 個,這份報表沒有的 1)", out)
         self.assertFalse(Product.objects.exists())
 
     def test_needs_both_files_and_a_real_company(self):

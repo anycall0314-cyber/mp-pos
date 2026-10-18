@@ -9,6 +9,7 @@
 - 已經對照過的舊品號不動;系統裡已經有這個條碼的商品 → 對照過去、不另外建;同名但條碼不同 → 不建、列出來。
 - 每一筆都記在舊品號對照(`LegacyProductMap`,跟十年歷史共用同一張);收回只刪整批建的、還沒用過的。
 - 有庫存 = 任何一家店數量大於 0(哪一家舊店對到哪一家新門市是盤點那一步的事,這裡不管)。
+- owner 挑掉不建的舊品號(報廢品、多年沒賣的;2026-10-18 交的「未來會刪除」分頁,`load_skip_list`)照舊品號跳過,最先看。
 """
 from __future__ import annotations
 
@@ -195,6 +196,7 @@ class Outcome:
     no_cost: int = 0            # 新建的裡面沒有成本(成本表沒有這個品號,或是 0)的
     aliases: int = 0            # 另外記了原廠條碼(T + 13 碼的那 13 碼)
     zero_stock: int = 0         # 沒有庫存,不建
+    skipped: int = 0            # owner 挑掉的舊品號(`skip`),不建
     serial: int = 0             # 手機 / 中古機,盤點時刷序號
     excluded: dict = field(default_factory=dict)   # 對照表填「排除」的:{舊品名第一段: 幾個}
     unmapped: dict = field(default_factory=dict)   # 對照表沒有的
@@ -254,8 +256,10 @@ def _confirm(tenant, item, product, method, user):
          method, None, product.pk, f"{product.sku} {product.name}", user, BULK_NOTE)
 
 
-def bring_in_products(tenant, items: list[LegacyItem], mapping: dict[str, str], user=None, *, write=False) -> Outcome:
+def bring_in_products(tenant, items: list[LegacyItem], mapping: dict[str, str], user=None, *, write=False,
+                      skip=frozenset()) -> Outcome:
     """有庫存的舊品項建成品號。`mapping` = 類別對照表(舊品名第一段 → 類別,排除的不在裡面;見 `load_category_mapping`)。
+    `skip` = owner 挑掉的舊品號(`load_skip_list`):不建、也不對照到系統裡同條碼的商品;已經建過的不動(要收回用 `take_back_products`)。
 
     `write=False` 是試算:整段照做一次再全部退回,回的數字跟真的跑一樣。可以重跑(對照過的不動)。
     """
@@ -271,6 +275,9 @@ def bring_in_products(tenant, items: list[LegacyItem], mapping: dict[str, str], 
         names = set(Product.objects.filter(tenant=tenant).values_list("name", flat=True))
         cats: dict = {}
         for item in sorted(items, key=lambda i: i.code):
+            if item.code in skip:
+                out.skipped += 1
+                continue
             if not item.in_stock:
                 out.zero_stock += 1
                 continue
@@ -369,6 +376,27 @@ def take_back_products(tenant, user=None, *, write=False) -> dict:
         if not write:
             transaction.set_rollback(True)
     return out
+
+
+SKIP_SHEET = "未來會刪除"
+
+
+def load_skip_list(raw: bytes) -> set[str]:
+    """owner 挑掉不建的舊品號(xlsx;有「未來會刪除」分頁就讀它,沒有讀第一頁):「舊品號」那一欄(沒有就「品號」),頭尾空白不算。"""
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+
+    if raw[:2] != b"PK":
+        raise ReportError("要刪的清單要是 xlsx")
+    wb = load_workbook(BytesIO(raw), read_only=True, data_only=True)
+    ws = wb[SKIP_SHEET] if SKIP_SHEET in wb.sheetnames else wb.active
+    rows = ws.iter_rows(values_only=True)
+    header = [str(h or "").strip() for h in next(rows, ())]
+    i = next((header.index(h) for h in ("舊品號", "品號") if h in header), None)
+    if i is None:
+        raise ReportError("要刪的清單要有「舊品號」那一欄")
+    return {str(row[i]).strip() for row in rows if i < len(row) and row[i] is not None and str(row[i]).strip()}
 
 
 def load_category_mapping(raw: bytes) -> dict:
