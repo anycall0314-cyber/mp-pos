@@ -1,6 +1,6 @@
 import { useCan } from "@/auth/AuthContext";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   useCategories,
@@ -18,8 +18,8 @@ import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { MoreMenu } from "@/components/workbench/MoreMenu";
 import { useReorder } from "@/hooks/useReorder";
-import { toast } from "@/components/workbench/toast";
 import { money } from "@/lib/money";
+import { newProductUrl } from "@/lib/productFormUrl";
 import { purchaseLinkFor } from "@/lib/purchasePrefill";
 import { canSetStaffCost, ruleText, staffCostApplies } from "@/lib/staffCost";
 
@@ -33,7 +33,6 @@ import { ProductExpanderModal } from "./ProductExpanderModal";
 import { MiniThumb, ProductPhotoStrip, usePhotoPeek } from "@/components/photos/PhotoName";
 import { fitsLine } from "@/lib/fits";
 
-import { ProductForm } from "./ProductForm";
 import { ProductImportModal } from "./ProductImportModal";
 
 function formatMoney(value: string | number) {
@@ -105,6 +104,8 @@ export function ProductsPage() {
     isSearching
       ? `search=${encodeURIComponent(appliedProductQuery)}&page_size=100`
       : `ordering=-created_at&page_size=10`,
+    // 新增 / 編輯在另一個分頁做(SPEC-005):切回這一頁時重新抓,剛建的那一筆看得到
+    { refetchOnWindowFocus: true },
   );
 
   // ─── 類別搜尋(類別本來就少,一次撈完前端過濾)
@@ -153,14 +154,6 @@ export function ProductsPage() {
     );
   }, [selection, categoriesResult.data]);
 
-  // ─── 商品 Drawer(編輯 / 新增)
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerInitial, setDrawerInitial] = useState<Product | null>(null);
-  /** 新增時先帶進表單的字(「先找有沒有建過」找的那一句) */
-  const [drawerPrefill, setDrawerPrefill] = useState<{
-    name: string;
-    barcode: string;
-  } | null>(null);
   // ─── 按「新增商品」先找一次:有就用那一款,確定沒有才建
   const [findOpen, setFindOpen] = useState(false);
 
@@ -298,6 +291,16 @@ export function ProductsPage() {
     setDetailTab("basic");
     setSelection({ kind: "product", id: p.id });
   }
+
+  // 整頁新增 / 編輯存好回來帶著 `?selected=商品編號`(SPEC-005):選到那一筆,網址清掉(重新整理不會一直跳回去)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedParam = searchParams.get("selected");
+  useEffect(() => {
+    if (!selectedParam || !/^\d+$/.test(selectedParam)) return;
+    setSearchParams({}, { replace: true });
+    api<Product>(`/products/${selectedParam}/`).then(showProduct).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedParam]);
 
   function runProductSearch() {
     setAppliedProductQuery(productQuery.trim());
@@ -790,15 +793,10 @@ export function ProductsPage() {
                   </dl>
                   <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
                     {canEdit && (
-                      <button
-                        className="btn primary"
-                        onClick={() => {
-                          setDrawerInitial(selectedProduct);
-                          setDrawerOpen(true);
-                        }}
-                      >
+                      // 整頁編輯(SPEC-005):同一個分頁打開;要另開分頁的人按住 Cmd 點
+                      <Link className="btn primary" to={`/products/${selectedProduct.id}/edit`}>
                         編輯
-                      </button>
+                      </Link>
                     )}
                     {/* 建好品號的下一步多半是進貨:帶著這個商品去進貨開單頁(中古機去中古收購;虛擬、停用的沒有這顆) */}
                     {(() => {
@@ -1079,39 +1077,8 @@ export function ProductsPage() {
             nav("/products/new-phone-model");
             return;
           }
-          setDrawerInitial(null);
-          setDrawerPrefill(prefill);
-          setDrawerOpen(true);
-        }}
-      />
-      <ProductForm
-        open={drawerOpen}
-        initial={drawerInitial}
-        prefill={drawerPrefill}
-        onPeek={peek.open}
-        peeking={peek.isOpen}
-        onClose={() => setDrawerOpen(false)}
-        onSaved={(p) => {
-          // 新建的:選到那一筆(右邊看得到「進貨」),並且跳一句可以直接按的
-          if (drawerInitial?.id) return;
-          // 正在搜尋別的東西時,新的那一筆不在結果裡、右邊就看不到:回到「近期新增」(它在最上面)
-          setProductQuery("");
-          setAppliedProductQuery("");
-          setLeftTab("products");
-          setDetailTab("basic");
-          setSelection({ kind: "product", id: p.id });
-          const to = purchaseLinkFor([p]);
-          toast(
-            `已建立 ${p.sku} ${p.name}`,
-            "ok",
-            to ? { ms: 9000, action: { label: "進貨", fn: () => nav(to) } } : undefined,
-          );
-        }}
-        onUseExisting={(id, note) => {
-          // 記住叫法的結果用訊息條講(沒記住是紅的;以前放在上面那條綠色的成功列,看起來像成功)
-          if (note) toast(note.text, note.tone, { ms: 6000 });
-          // 用品號把那筆找出來並選起來,讓人直接看到既有的那一筆
-          api<Product>(`/products/${id}/`).then(showProduct);
+          // 另開一個分頁建(SPEC-005):這一頁照樣能查庫存、看別的商品
+          window.open(newProductUrl(prefill), "_blank");
         }}
       />
       {/* 看照片與規格的面板放在「先找有沒有建過」與商品表單後面:從那兩個地方點開時要疊在上面 */}

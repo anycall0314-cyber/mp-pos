@@ -326,7 +326,7 @@ export function BrandSeriesPage() {
                   onChange={(e) =>
                     setEditingBrand({ ...editingBrand, code: e.target.value })
                   }
-                  style={{ width: 160 }}
+                  style={{ flex: "0 0 160px" }}
                 />
                 <input
                   type="number"
@@ -338,7 +338,7 @@ export function BrandSeriesPage() {
                       sort_order: Number(e.target.value) || 0,
                     })
                   }
-                  style={{ width: 80 }}
+                  style={{ flex: "0 0 80px" }}
                   title="排序"
                 />
                 <label

@@ -28,6 +28,7 @@ import { ConditionsPage } from "@/pages/products/ConditionsPage";
 import { NewPhoneModelWizardPage } from "@/pages/products/NewPhoneModelWizardPage";
 import { PartTemplatesPage } from "@/pages/products/PartTemplatesPage";
 import { ProductTypesPage } from "@/pages/products/ProductTypesPage";
+import { ProductFormPage } from "@/pages/products/ProductFormPage";
 import { ProductsPage } from "@/pages/products/ProductsPage";
 import { PurchaseListPage } from "@/pages/purchases/PurchaseListPage";
 import { PurchaseWorkbenchPage } from "@/pages/purchases/PurchaseWorkbenchPage";
@@ -254,6 +255,23 @@ export function App() {
           <Route
             path="/products/new-phone-model"
             element={<NewPhoneModelWizardPage />}
+          />
+          {/* 商品建檔整頁,可以另開分頁(SPEC-005) */}
+          <Route
+            path="/products/new"
+            element={
+              <NeedsAbility ability="edit_products" doing="商品建檔">
+                <ProductFormPage />
+              </NeedsAbility>
+            }
+          />
+          <Route
+            path="/products/:id/edit"
+            element={
+              <NeedsAbility ability="edit_products" doing="商品建檔">
+                <ProductFormPage />
+              </NeedsAbility>
+            }
           />
           <Route path="/telecom-plans" element={<TelecomPlansPage />} />
           <Route path="/sim-cards" element={<SimCardsPage />} />

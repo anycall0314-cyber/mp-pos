@@ -8187,3 +8187,12 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   padding: 6px 12px; font-size: 14px; font-weight: 600; color: var(--text-dim);
   background: var(--panel-2); border-bottom: 1px solid var(--border);
 }
+
+/* 商品建檔整頁(SPEC-005,owner 2026-10-18):寬螢幕分兩欄(欄位順序不變:左欄排完接右欄);窄的照舊一欄 */
+@media (min-width: 1100px) {
+  .pf-page > form.pf-compact { column-count: 2; column-gap: 32px; }
+  .pf-page > form.pf-compact > * { break-inside: avoid; }
+}
+.pf-saved { padding: 24px 0; display: flex; flex-direction: column; gap: 12px; }
+.pf-saved-title { font-size: var(--font-section); font-weight: 700; }
+.pf-saved-actions { display: flex; gap: 8px; flex-wrap: wrap; }

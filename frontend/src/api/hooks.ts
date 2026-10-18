@@ -142,12 +142,13 @@ function listSome<T>(whole: boolean, path: string) {
 
 export const useProducts = (
   params?: string,
-  opts?: { enabled?: boolean },
+  opts?: { enabled?: boolean; refetchOnWindowFocus?: boolean },
 ) =>
   useQuery({
     queryKey: ["products", params ?? ""],
     queryFn: () => firstPage<Product>(`/products/${params ? "?" + params : ""}`),
     enabled: opts?.enabled ?? true,
+    refetchOnWindowFocus: opts?.refetchOnWindowFocus ?? false,
   });
 
 export const useProduct = (id: number | null) =>

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ApiHttpError, asDuplicate } from "@/api/client";
@@ -31,6 +31,7 @@ import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
+import { Toolbar } from "@/components/Toolbar";
 import { Checkbox, Field } from "@/components/Field";
 
 import { PhotoSection } from "@/components/photos/PhotoSection";
@@ -96,7 +97,12 @@ interface ProductFormProps {
   /** 新增時發現已經建過,使用者選了「就是這個」。note = 有勾「記住這個叫法」時,記成了什麼 */
   onUseExisting?: (productId: number, note?: RememberResult) => void;
   /** 新增時先帶進來的字(「先找有沒有建過」找的那一句):有的才帶,編輯時不看 */
-  prefill?: { name?: string; barcode?: string } | null;
+  prefill?: {
+    name?: string;
+    barcode?: string;
+    /** 整頁「再建一個」:沿用上一筆的類別 */
+    category?: { id: number; label: string; secondary?: string };
+  } | null;
   /** 「可能已經建過」的候選點了看照片與規格(面板由頁面放,要疊在這張表單上面) */
   onPeek?: (t: PeekTarget) => void;
   /** 那個面板現在開著:這張表單整個不能動(不然可以用 Tab 繞回來,看著 A 的照片卻按到 B 的「就是這個」) */
@@ -106,6 +112,9 @@ interface ProductFormProps {
    * 共用的話,在那一頁打幾個字就把商品管理沒存完的草稿蓋掉,存好又把它清掉。
    */
   draftKey?: string;
+  /** 整頁(`/products/new`、`/products/:id/edit`):不包在抽屜裡,可以另開分頁(SPEC-005;owner 2026-10-18
+   *  「目前卡在一個小小的 modal 視窗裡，卡著變成當下只能做一件事」)。進貨工作台、叫貨對照照舊用抽屜 */
+  asPage?: boolean;
   /** 人按了「載入草稿」:表單現在的內容是另一次留下來的(從單據裡開表單的頁面要知道:它不是這一次刷的那一個) */
   onDraftLoaded?: () => void;
   /**
@@ -201,6 +210,20 @@ const EMPTY: FormState = {
   phone_here: false,
 };
 
+function withPrefill(
+  base: FormState,
+  initial: Product | null | undefined,
+  given: ProductFormProps["prefill"],
+): FormState {
+  if (initial || !given) return base;
+  return {
+    ...base,
+    ...(given.name ? { name: given.name } : {}),
+    ...(given.barcode ? { barcode: given.barcode } : {}),
+    ...(given.category ? { category: given.category.id } : {}),
+  };
+}
+
 function toState(p: Product | null | undefined): FormState {
   if (!p) return { ...EMPTY };
   return {
@@ -278,6 +301,7 @@ export function ProductForm({
   draftKey = DRAFT_KEY,
   onDraftLoaded,
   onPhoneWizard,
+  asPage = false,
 }: ProductFormProps) {
   // 防重複:後端說「可能已經建過」時的候選,以及使用者寫的差異
   const [dup, setDup] = useState<DuplicateBody | null>(null);
@@ -285,7 +309,9 @@ export function ProductForm({
   // 「記住這個叫法」要人自己勾:記下去之後這句話會直接對到那個商品,不替人決定
   const [rememberName, setRememberName] = useState(false);
   const rememberPhrase = useRememberPhrase();
-  const [state, setState] = useState<FormState>(toState(initial));
+  // 一開始就照帶進來的字填(整頁一打開就是 open):跟下面「打開那一刻」算的一樣,
+  // 不然第一次畫面的空白內容會被當成「改過」寫成草稿,下次打開跳出一個空的草稿
+  const [state, setState] = useState<FormState>(() => withPrefill(toState(initial), initial, prefill));
   const [categoryOption, setCategoryOption] =
     useState<ComboOption<Category> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -298,7 +324,7 @@ export function ProductForm({
     kind: "",
   });
   const [closePromptOpen, setClosePromptOpen] = useState(false);
-  const baselineRef = useRef<FormState>(toState(initial));
+  const baselineRef = useRef<FormState>(withPrefill(toState(initial), initial, prefill));
 
   const isEdit = !!initial?.id;
   // 業務員成本怎麼算是績效的基準:只有管理員的表單有這一段(伺服器也只收管理員送的)
@@ -360,6 +386,7 @@ export function ProductForm({
   const savePhoneSeries = useSavePhoneSeries();
   const [showNewBrand, setShowNewBrand] = useState(false);
   const [newBrandName, setNewBrandName] = useState("");
+  const [newBrandError, setNewBrandError] = useState("");
   const [showNewSeries, setShowNewSeries] = useState(false);
   const [newSeriesName, setNewSeriesName] = useState("");
   // 紀錄使用者是否手動改過世代序號;改過就不再從品名自動帶
@@ -388,13 +415,8 @@ export function ProductForm({
 
   useEffect(() => {
     if (open) {
-      const base = toState(initial);
-      if (!initial) {
-        // 帶進來的字算在「一開始就有的」裡:什麼都沒再改就關掉,不用問要不要存草稿
-        const given = prefillRef.current;
-        if (given?.name) base.name = given.name;
-        if (given?.barcode) base.barcode = given.barcode;
-      }
+      // 帶進來的字算在「一開始就有的」裡:什麼都沒再改就關掉,不用問要不要存草稿
+      const base = withPrefill(toState(initial), initial, prefillRef.current);
       setState(base);
       baselineRef.current = base;
       setCategoryOption(
@@ -404,7 +426,7 @@ export function ProductForm({
               label: initial.category_name,
               secondary: initial.category_code,
             }
-          : null,
+          : (!initial && prefillRef.current?.category) || null,
       );
       setError(null);
       setFieldErrors({});
@@ -735,8 +757,9 @@ export function ProductForm({
     draftHelper.discardDraft();
   }
 
+  const Shell = asPage ? PageShell : Drawer;
   return (
-    <Drawer
+    <Shell
       open={open}
       title={isEdit ? `編輯商品 ${initial?.name}` : "新增商品"}
       onClose={handleClose}
@@ -1140,31 +1163,26 @@ export function ProductForm({
                     disabled={!newBrandName.trim() || saveBrand.isPending}
                     onClick={async () => {
                       const name = newBrandName.trim();
-                      const code = name
-                        .toLowerCase()
-                        .replace(/\s+/g, "-")
-                        .replace(/[^a-z0-9\-]/g, "")
-                        .slice(0, 20) || `brand-${Date.now()}`;
+                      setNewBrandError("");
+                      // 已經有(中文 / 英文 / 顯示名稱一樣)就選那一個,不另外建
+                      const fold = (s: string) => s.replace(/\s+/g, "").toLowerCase();
+                      const hit = (brands.data ?? []).find((b) =>
+                        [b.name, b.name_zh, b.name_en].some((s) => s && fold(s) === fold(name)),
+                      );
                       try {
-                        const b = await saveBrand.mutateAsync({
-                          code,
-                          name,
-                          sort_order: 99,
-                          is_active: true,
-                        });
+                        const b = hit ?? (await saveBrand.mutateAsync({ name, sort_order: 99, is_active: true }));
                         patch("brand", b.id);
                         patch("series", "");
                         setShowNewBrand(false);
                       } catch (e) {
-                        alert(
-                          e instanceof Error ? e.message : String(e),
-                        );
+                        setNewBrandError(e instanceof Error ? e.message : String(e));
                       }
                     }}
                   >
                     {saveBrand.isPending ? "建立中…" : "建立"}
                   </button>
                 </div>
+                {newBrandError && <div className="field-error-msg">{newBrandError}</div>}
               </div>
             )}
             {showNewSeries && state.brand && (
@@ -1535,7 +1553,33 @@ export function ProductForm({
           </div>
         </details>
       </form>
-    </Drawer>
+    </Shell>
+  );
+}
+
+/** 整頁版的外殼:跟抽屜同一組 props(標題、頁尾的取消 / 儲存、凍住),內容放在錄入頁的版面裡 */
+function PageShell({
+  open,
+  title,
+  footer,
+  children,
+  frozen = false,
+}: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  footer?: ReactNode;
+  children: ReactNode;
+  lockBackdrop?: boolean;
+  frozen?: boolean;
+}) {
+  if (!open) return null;
+  return (
+    <div className="page" {...(frozen ? { inert: "" } : {})}>
+      <Toolbar title={title} />
+      <div className="entry-body pf-page">{children}</div>
+      {footer && <div className="entry-footer">{footer}</div>}
+    </div>
   );
 }
 
