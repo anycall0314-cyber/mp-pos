@@ -304,15 +304,15 @@ class PlatformUserViewSet(viewsets.ModelViewSet):
         """平台管理員幫使用者重設密碼。
         body: { "password": "新密碼" }
         """
+        from .auth_views import password_problem, set_password_and_sign_out
+
         user = self.get_object()
         new = request.data.get("password", "")
-        if not new or len(new) < 4:
-            return Response(
-                {"detail": "新密碼至少 4 碼"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        user.set_password(new)
-        user.save(update_fields=["password"])
+        problem = password_problem(new)
+        if problem:
+            return Response({"detail": problem}, status=status.HTTP_400_BAD_REQUEST)
+        # 那個帳號每一台都要重新登入(以前不會:離職的人原本開著的畫面還能繼續用)
+        set_password_and_sign_out(user, new)
         return Response({"detail": "已重設"})
 
 

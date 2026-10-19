@@ -35,6 +35,15 @@ export function setToken(token: string | null) {
   }
 }
 
+/** 同一個人換了一把新 token(自己改密碼之後):不算換登入狀態,還在排隊的背景工作照送 */
+export function swapToken(token: string) {
+  try {
+    sessionStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    // storage 不可用就靜默
+  }
+}
+
 export class ApiHttpError extends Error {
   status: number;
   body: unknown;

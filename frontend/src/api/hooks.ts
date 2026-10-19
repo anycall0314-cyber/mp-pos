@@ -1920,6 +1920,30 @@ export function useSaveStaffAbilities() {
   });
 }
 
+/** 員工帳號:幫店員重設密碼(`password`)或停用 / 啟用(`is_active`)。兩種都會讓那個店員每一台重新登入 */
+export function useStaffAccountAccess() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; password?: string; is_active?: boolean }) =>
+      api<StaffAccount>(`/staff-accounts/${id}/access/`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff-accounts"] }),
+  });
+}
+
+/** 自己改密碼;回一把新 token(別台都要重新登入,這一台換上它繼續用) */
+export function useChangeMyPassword() {
+  return useMutation({
+    mutationFn: (body: { current_password: string; new_password: string }) =>
+      api<{ token: string }>("/account/password/", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+  });
+}
+
 export interface TenantSettings {
   id: number;
   name?: string;

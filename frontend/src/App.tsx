@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { useAuth } from "@/auth/AuthContext";
 import { LoginPage } from "@/pages/login/LoginPage";
+import { PasswordPage } from "@/pages/account/PasswordPage";
 import { PhonePhotoPage } from "@/pages/photos/PhonePhotoPage";
 import { PhoneCountPage } from "@/pages/inventory/PhoneCountPage";
 import { PlatformAdminPage } from "@/pages/platform-admin/PlatformAdminPage";
@@ -186,6 +187,9 @@ export function App() {
                           : ""}
                       </span>
                     </div>
+                    <Link to="/account/password" className="btn user-pill-logout" title="改密碼">
+                      密碼
+                    </Link>
                     <button
                       type="button"
                       className="btn user-pill-logout"
@@ -273,6 +277,7 @@ export function App() {
               </NeedsAbility>
             }
           />
+          <Route path="/account/password" element={<PasswordPage />} />
           <Route path="/telecom-plans" element={<TelecomPlansPage />} />
           <Route path="/sim-cards" element={<SimCardsPage />} />
           <Route path="/purchases" element={<PurchaseListPage />} />

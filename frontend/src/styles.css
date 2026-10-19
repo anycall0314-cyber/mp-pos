@@ -1986,7 +1986,7 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   color: var(--text-dim);
 }
 .user-pill-text { display: flex; flex-direction: column; line-height: 1.5; flex: 1; min-width: 0; }
-.user-pill-name { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.user-pill-name { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .user-pill-meta { color: var(--text-dim); }
 .user-pill-logout { min-height: 36px; padding: 0 10px; font-size: var(--font-secondary); }
 .sidebar-footer .user-pill { margin-left: 0; padding-left: 0; border-left: 0; }
@@ -7648,6 +7648,13 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .staff-table th.staff-item .staff-note { white-space: normal; max-width: 11em; margin: 0 auto; }
 .staff-scroll { overflow-x: auto; }
 .staff-table td.staff-check input { width: 22px; height: 22px; }
+.staff-acts { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
+.staff-acts .btn { min-height: 32px; padding: 0 10px; font-size: var(--fs-sub); }
+.staff-acts .staff-pw { width: 11em; }
+/* 自己改密碼那一頁 */
+.pw-form { max-width: 360px; display: grid; gap: 12px; }
+.pw-form input { width: 100%; box-sizing: border-box; }
+.pw-actions { display: flex; justify-content: flex-end; }
 .staff-note { color: var(--text-dim); font-size: var(--fs-sub); font-weight: 400; }
 .staff-table tr.staff-off td { opacity: 0.55; }
 

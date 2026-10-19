@@ -1,13 +1,13 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from .auth_views import login, logout, me
+from .auth_views import change_password, login, logout, me
 from .platform_views import (
     PlatformTenantViewSet,
     PlatformUserViewSet,
     PlatformWarehouseViewSet,
 )
-from .staff_views import staff_account, staff_accounts
+from .staff_views import staff_account, staff_account_access, staff_accounts
 from .views import (
     InvoiceTrackViewSet,
     InvoiceTypeViewSet,
@@ -35,7 +35,9 @@ urlpatterns = router.urls + [
     path("auth/login/", login, name="auth-login"),
     path("auth/me/", me, name="auth-me"),
     path("auth/logout/", logout, name="auth-logout"),
+    path("account/password/", change_password, name="account-password"),
     path("tenant-settings/", tenant_settings, name="tenant-settings"),
     path("staff-accounts/", staff_accounts, name="staff-accounts"),
     path("staff-accounts/<int:pk>/", staff_account, name="staff-account"),
+    path("staff-accounts/<int:pk>/access/", staff_account_access, name="staff-account-access"),
 ]

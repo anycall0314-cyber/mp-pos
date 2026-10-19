@@ -4,11 +4,14 @@
 - /auth/login/  POST username + password → 回 token + user 基本資料
 - /auth/me/     GET 帶 Authorization: Token xxx → 回當前 user + profile + tenant + warehouse
 - /auth/logout/ POST 銷毀當前 token
+- /account/password/ POST 自己改密碼(要打對目前的密碼)→ 換一把新 token 回去
+  (不放在 /auth/ 底下:/auth/ 不受公司維護鎖管,還原到一半不該改帳號)
 
 token 走 DRF authtoken。一帳號一 token,登出即作廢。
 """
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.db import transaction
 from rest_framework import serializers, status
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import (
@@ -100,3 +103,48 @@ def me(request):
 def logout(request):
     Token.objects.filter(user=request.user).delete()
     return Response({"detail": "已登出"})
+
+
+# 平台重設、老闆重設、自己改都用同一條(平台管理一開始就是 4 碼)
+MIN_PASSWORD_LENGTH = 4
+
+
+def password_problem(new) -> str:
+    """新密碼哪裡不行;可以就回空字串。"""
+    if not isinstance(new, str) or len(new) < MIN_PASSWORD_LENGTH:
+        return f"新密碼至少 {MIN_PASSWORD_LENGTH} 碼"
+    # 登入那一格會把前後的空白去掉(LoginSerializer 的 CharField),存了就登不進去
+    if new != new.strip():
+        return "密碼前後不能有空白"
+    return ""
+
+
+def set_password_and_sign_out(user: User, new: str) -> None:
+    """換密碼並作廢這個帳號手上的 token(每一台都要重新登入;離職的人原本開著的畫面也一起失效)。"""
+    with transaction.atomic():
+        user.set_password(new)
+        user.save(update_fields=["password"])
+        Token.objects.filter(user=user).delete()
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def change_password(request):
+    """自己改自己的密碼(owner 2026-10-19:「登入後沒有修改密碼的選項」)。
+
+    目前的密碼打錯回 400(不是 401:401 會讓畫面直接登出)。改好之後別台都要重新登入,
+    這一台拿回傳的新 token 繼續用。
+    """
+    data = request.data if isinstance(request.data, dict) else {}
+    current, new = data.get("current_password"), data.get("new_password")
+    if not isinstance(current, str) or not request.user.check_password(current):
+        return Response({"detail": "目前的密碼不對"}, status=status.HTTP_400_BAD_REQUEST)
+    problem = password_problem(new)
+    if problem:
+        return Response({"detail": problem}, status=status.HTTP_400_BAD_REQUEST)
+    if new == current:
+        return Response({"detail": "新密碼跟目前的一樣"}, status=status.HTTP_400_BAD_REQUEST)
+    with transaction.atomic():
+        set_password_and_sign_out(request.user, new)
+        token = Token.objects.create(user=request.user)
+    return Response({"token": token.key})
