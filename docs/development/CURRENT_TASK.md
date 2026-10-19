@@ -1280,7 +1280,11 @@ owner 改了早上的決定(見 `docs/decisions.md` 最後一則):舊會員要�
 - [x] 現在 21 個測試(舊系統這一組 59 個)、「改壞會紅」30 條
 - [x] ~~owner 2026-10-09 選「先不提交」「資料先都不放」~~ → **owner 2026-10-19「你幫我把會員紀錄先匯到JB去」**:程式提交、上測試站(後端整套 1,937 個測試過);對象是測試站的 JB,正式站不動。
   - 資料用最新的完整一包 `ten-years-updated-20161003-20261011`(26,939 位、到 10/11;Codex 10/19 那一包還在抓,沒用)。
-  - [ ] 把那一包複製到 mini 被權限擋下(個資),要 owner 自己貼指令複製;複製好之後:備份測試庫 → `import_legacy_history --tenant JB --period 2016-10-03:2026-10-11 --reconciled-only` → `bring_in_legacy_members --tenant JB`(先試算)
+  - [x] 複製到 mini 被權限擋下(個資),owner 自己貼指令複製到 `~/mppos-test/data/ored-history/`(只有本人讀得到;資料庫核對碼跟封存一致)。
+  - [x] 測試庫先備份 `~/mppos-test/backup_store/manual/before-JB-members-20261019.dump`。
+  - [x] `import_legacy_history --tenant JB --period 2016-10-03:2026-10-11 --reconciled-only --confirm`:舊會員 26,939、單據 54,206、明細 110,214,合計與封存核對值一致;1 位金額對不上(差 1,110 元)照規則待核。
+  - [x] owner 選「全部都建」→ `bring_in_legacy_members --tenant JB --confirm`:26,939 位各建一位(沒電話 1,233 位),約 1 分鐘;重跑試算 0 位;沒有一位新會員連到兩個舊會員;TEST 公司會員沒動。
+  - [x] 用 JB001 打真的端點抽 20 位(只看筆數):用電話都找得到、舊消費張數都對;最慢 0.23 秒。正式站不動。
 
 ---
 
