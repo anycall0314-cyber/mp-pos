@@ -2247,7 +2247,7 @@ export function SalesWorkbenchPage() {
                                   }}
                                   onEnterAfterValue={() => afterPlan(l.key, plan)}
                                   fetchOptions={(q) =>
-                                    searchTelecomPlans(q, { activeOnly: true })
+                                    searchTelecomPlans(q, { activeOnly: true, carrier: p.telecom_carrier })
                                   }
                                   disabled={locked}
                                   placeholder="方案"

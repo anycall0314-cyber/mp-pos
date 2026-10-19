@@ -189,6 +189,17 @@ class Product(TenantOwnedModel):
         default=False,
         help_text="銷貨時是否露出 SIM 卡 / 門號 / 促銷方案 / 上線日 欄位",
     )
+    # 門號商品是哪一家電信(owner 2026-10-19:「TCC ,CHM,FET 這三個品號不管是誰，選的資費只能是設定好的該電信所屬資費」)。
+    # 門號商品(虛擬 + 可綁門號)一定要有;開單只能選這一家的方案,伺服器也擋(sales/services.py)。
+    # 帶實體的可綁門號商品(手機綁約)不用設,設了一樣照它擋
+    telecom_carrier = models.ForeignKey(
+        "parties.Carrier",
+        verbose_name="電信商",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="telecom_products",
+    )
     allows_commission = models.BooleanField(
         "可有業務員佣金",
         default=False,

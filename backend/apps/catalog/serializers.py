@@ -338,6 +338,7 @@ class ProductSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, 
     series_name = serializers.CharField(source="series.name", read_only=True, default="")
     phone_model_name = serializers.CharField(read_only=True)
     phone_model_key = serializers.CharField(read_only=True)
+    telecom_carrier_name = serializers.CharField(source="telecom_carrier.name", read_only=True, default="")
     # 品況(全新 / 已拆封 / 中古機 …)。is_secondhand 只是非黑即白,
     # 分不出「全新」跟「已拆封」,前端要靠 condition 才認得出來。
     condition_name = serializers.CharField(
@@ -380,6 +381,7 @@ class ProductSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, 
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        self._check_telecom_carrier(attrs)
         if "staff_cost_mode" in attrs or "staff_cost_value" in attrs:
             # 帶序號的商品先不做業務員成本(owner 2026-10-10):送來的設定不留(批次修改勾到手機時不擋、也不存)
             # 「存檔之後帶不帶序號」跟 Product.save 用同一份算法(放進中古機類別的商品會被連帶改成帶序號)
@@ -410,6 +412,23 @@ class ProductSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, 
             if not mode:
                 attrs["staff_cost_value"] = 0          # 照全公司:自己的數值不留
         return attrs
+
+    def _check_telecom_carrier(self, attrs):
+        """門號商品(虛擬 + 可綁門號)一定要選電信商;不能綁門號的不留電信商。
+        改既有商品時只在動到這三格才檢查(以前建的門號商品還沒設,改別的欄位不擋;開單時另外擋)。"""
+        keys = ("allows_telecom_line", "is_virtual", "telecom_carrier")
+        if self.instance is not None and not any(k in attrs for k in keys):
+            return
+
+        def after(name, default):
+            return attrs.get(name, getattr(self.instance, name, default) if self.instance else default)
+
+        if not after("allows_telecom_line", False):
+            if after("telecom_carrier", None) is not None:
+                attrs["telecom_carrier"] = None
+            return
+        if after("is_virtual", False) and after("telecom_carrier", None) is None:
+            raise serializers.ValidationError({"telecom_carrier": "門號商品要選電信商"})
 
     def get_photo_count(self, obj) -> int:
         # 清單查詢已經算好(photo_count_n);單筆(剛建好那一筆)才另外查
@@ -449,6 +468,8 @@ class ProductSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, 
             "last_purchase_price",
             "requires_serial",
             "allows_telecom_line",
+            "telecom_carrier",
+            "telecom_carrier_name",
             "allows_commission",
             "is_virtual",
             "is_secondhand",

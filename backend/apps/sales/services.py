@@ -145,6 +145,16 @@ def _validate_items(so: SalesOrder, items):
             raise SalesOrderError(f"第 {it.line_no} 行門號商品 {product.sku} 要選方案")
         if plan and not (it.msisdn or "").strip():
             raise SalesOrderError(f"第 {it.line_no} 行有門號方案,門號要填")
+        # 門號商品只能選自己那家電信的方案(owner 2026-10-19:「不管是誰…不能打台哥大跳出遠傳讓你選」;管理員也一樣)
+        if plan and product.is_virtual and product.allows_telecom_line and not product.telecom_carrier_id:
+            raise SalesOrderError(
+                f"第 {it.line_no} 行門號商品 {product.sku} 還沒設定電信商,請先到商品管理設定"
+            )
+        if plan and product.telecom_carrier_id and plan.carrier_id != product.telecom_carrier_id:
+            raise SalesOrderError(
+                f"第 {it.line_no} 行方案 {plan.name} 是 {plan.carrier.name} 的,"
+                f"{product.name} 只能選 {product.telecom_carrier.name} 的方案"
+            )
         if plan:
             requires_card = plan.kind in (
                 TelecomPlan.Kind.NEW,

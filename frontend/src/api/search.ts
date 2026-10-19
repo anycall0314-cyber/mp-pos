@@ -563,13 +563,15 @@ export async function searchCategories(
 
 export async function searchTelecomPlans(
   query: string,
-  opts?: { activeOnly?: boolean },
+  opts?: { activeOnly?: boolean; carrier?: number | null },
 ): Promise<ComboOption<TelecomPlan>[]> {
   const data = await fetchPaginated<TelecomPlan>(
     `/telecom-plans/?${qs({
       search: query,
       page_size: LIMIT,
       is_active: opts?.activeOnly ? "true" : undefined,
+      // 門號商品只列它那一家電信的方案(伺服器存單時也擋)
+      carrier: opts?.carrier ?? undefined,
     })}`,
   );
   return data.map((p) => ({

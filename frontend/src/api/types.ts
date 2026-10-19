@@ -98,6 +98,9 @@ export interface Product {
   last_purchase_price: string | null;
   requires_serial: boolean;
   allows_telecom_line: boolean;
+  /** 門號商品是哪一家電信(開單只列這一家的方案) */
+  telecom_carrier?: number | null;
+  telecom_carrier_name?: string;
   allows_commission: boolean;
   is_virtual: boolean;
   is_secondhand: boolean;

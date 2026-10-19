@@ -160,9 +160,11 @@ class ContractDateTests(TestCase):
 
     def test_the_phone_line_product_cannot_be_sold_without_a_plan(self):
         # 門號商品 = 虛擬、可以填門號。這一行就是在記一份合約:沒有方案不收
+        # 門號商品一定要有電信商(2026-10-19 起;開單只能選那一家的方案)
         line = Product.objects.create(
             tenant=self.c.tenant, category=self.c.cat_case, name="門號方案",
-            is_virtual=True, allows_telecom_line=True, allows_commission=True)
+            is_virtual=True, allows_telecom_line=True, allows_commission=True,
+            telecom_carrier=self.plans["renewal"].carrier)
 
         def sell(expect, **item):
             resp = self.c.admin.post("/api/v1/sales-orders/", {

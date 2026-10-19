@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { ApiHttpError, asDuplicate } from "@/api/client";
 import {
   useBrands,
+  useCarriers,
   useCategories,
   useCategoryBrands,
   usePhoneSeriesList,
@@ -134,6 +135,8 @@ interface FormState {
   list_price: string;
   requires_serial: boolean;
   allows_telecom_line: boolean;
+  /** 門號商品是哪一家電信(門號商品一定要選;開單只列這一家的方案) */
+  telecom_carrier?: number | "";
   allows_commission: boolean;
   is_virtual: boolean;
   is_secondhand: boolean;
@@ -190,6 +193,7 @@ const EMPTY: FormState = {
   // 預設的商品性質是機型配件:按數量記庫存(規則在 lib/productDefaults,各個新增入口共用)
   requires_serial: defaultRequiresSerial("phone_specific"),
   allows_telecom_line: false,
+  telecom_carrier: "",
   allows_commission: false,
   is_virtual: false,
   is_secondhand: false,
@@ -243,6 +247,7 @@ function toState(p: Product | null | undefined): FormState {
     list_price: p.list_price,
     requires_serial: p.requires_serial,
     allows_telecom_line: p.allows_telecom_line,
+    telecom_carrier: p.telecom_carrier ?? "",
     allows_commission: p.allows_commission,
     is_virtual: p.is_virtual,
     is_secondhand: p.is_secondhand,
@@ -388,6 +393,8 @@ export function ProductForm({
   const saveProduct = useSaveProduct();
   const saveCategory = useSaveCategory();
   const allCategories = useCategories();
+  // 門號商品選電信商用
+  const carriers = useCarriers();
   // Phase 1: Brand / Series master
   const brands = useBrands();
   const phoneSeries = usePhoneSeriesList(
@@ -654,6 +661,10 @@ export function ProductForm({
       setFieldErrors({ name: ["請填品名"] });
       return;
     }
+    if (state.allows_telecom_line && state.is_virtual && !state.telecom_carrier) {
+      setFieldErrors({ telecom_carrier: ["門號商品要選電信商"] });
+      return;
+    }
     // 帶序號的商品(與虛擬商品)先不做業務員成本:表單沒有那一段,送出去的是「沒有設定」
     const staffShown = canSetStaff && staffCostApplies(state);
     const staffProblem = staffShown ? ruleProblem(state.staff_cost_mode, state.staff_cost_value) : null;
@@ -681,6 +692,7 @@ export function ProductForm({
         list_price: state.list_price,
         requires_serial: state.requires_serial,
         allows_telecom_line: state.allows_telecom_line,
+        telecom_carrier: state.allows_telecom_line && state.telecom_carrier ? state.telecom_carrier : null,
         allows_commission: state.allows_commission,
         is_virtual: state.is_virtual,
         is_secondhand: state.is_secondhand,
@@ -1550,6 +1562,22 @@ export function ProductForm({
               onChange={(v) => patch("allows_telecom_line", v)}
               label="可綁門號合約"
             />
+            {state.allows_telecom_line && (
+              <Field label="電信商" required={state.is_virtual} error={fieldErrors.telecom_carrier}>
+                <select
+                  aria-label="電信商"
+                  value={state.telecom_carrier ?? ""}
+                  onChange={(e) => patch("telecom_carrier", e.target.value ? Number(e.target.value) : "")}
+                >
+                  <option value="">請選</option>
+                  {(carriers.data ?? []).filter((c) => c.is_active || c.id === state.telecom_carrier).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
             <Checkbox
               checked={state.allows_commission}
               onChange={(v) => patch("allows_commission", v)}
