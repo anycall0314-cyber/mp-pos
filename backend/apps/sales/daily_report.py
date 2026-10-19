@@ -61,6 +61,8 @@ def _item(row, serials, matched, sign=1):
         "product_sku": row["product__sku"],
         "product_name": row["product__name"],
         "product_counts_margin": row["product__counts_margin"],
+        # 客人要不要付(手機回補不用付:不算金額,只算毛利)
+        "counts_cash": row["counts_cash"],
         "product_warehouse_type": row["product__warehouse_type"],
         "serials": serials.get(row["id"], []),
         "qty": row["qty"] * sign,
@@ -77,7 +79,7 @@ def _item(row, serials, matched, sign=1):
 _ITEM_FIELDS = (
     "id", "line_no", "product_id", "product__sku", "product__name", "product__counts_margin",
     "product__warehouse_type", "qty", "unit_price", "amount", "untaxed_amount", "cost_at_post",
-    "line_staff_cost",
+    "line_staff_cost", "counts_cash",
 )
 
 

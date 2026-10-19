@@ -296,7 +296,10 @@ export function SalesListPage() {
                 </td>
                 <td className="num">×{it.qty}</td>
                 <td className="num">{money(it.unit_price)}</td>
-                <td className="num">{money(it.amount)}</td>
+                <td className="num">
+                  {money(it.amount)}
+                  {it.counts_cash === false && <div className="wb-unpaid">不收錢</div>}
+                </td>
                 <td className="wb-mono wb-small wb-dim">
                   {it.serials.map((s) => s.serial_no).join("  ")}
                 </td>

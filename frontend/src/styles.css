@@ -4105,6 +4105,7 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   gap: 14px;
   align-items: flex-start;
 }
+.wb-unpaid { font-size: var(--font-meta); color: var(--text-dim); }
 .re-grid-intake { grid-template-columns: minmax(0, 1fr); max-width: 880px; }
 .re-serial-none { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--text-dim); font-size: var(--font-secondary); }
 .re-col-main {

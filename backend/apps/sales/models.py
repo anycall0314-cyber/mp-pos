@@ -196,6 +196,10 @@ class SalesOrderItem(TenantOwnedModel):
         related_name="sales_items",
         verbose_name="商品",
     )
+    # 這一行客人要不要付(存檔當下照商品的「計入現金」抄下來,之後改商品設定不影響已開的單)。
+    # 不用付的(手機回補;owner 2026-10-19:「計毛利目前用在手機回補」):不算進單的總額 / 稅 / 付款 / 收據、
+    # 不算銷售額,只算毛利與業務員毛利(analytics/catalog.py)
+    counts_cash = models.BooleanField("客人要付", default=True, db_default=True)
     qty = models.PositiveIntegerField("數量", default=1)
     unit_price = models.DecimalField("單價", max_digits=14, decimal_places=2)
     amount = models.DecimalField(
@@ -577,6 +581,8 @@ class SalesReturnItem(TenantOwnedModel):
         decimal_places=2,
         help_text="鎖定為原銷貨單的單價,不可改",
     )
+    # 照原銷貨單那一行抄(手機回補那種客人不用付的,退的時候也不算進退款)
+    counts_cash = models.BooleanField("客人要付", default=True, db_default=True)
     amount = models.DecimalField(
         "小計",
         max_digits=14,

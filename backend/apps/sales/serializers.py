@@ -136,6 +136,7 @@ class SalesOrderItemSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFields
             "product_counts_cash",
             "product_counts_margin",
             "product_warehouse_type",
+            "counts_cash",
             "qty",
             "unit_price",
             "amount",
@@ -163,6 +164,7 @@ class SalesOrderItemSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFields
         ]
         read_only_fields = [
             "id",
+            "counts_cash",
             "contract_months",
             "contract_end",
             "company_commission",

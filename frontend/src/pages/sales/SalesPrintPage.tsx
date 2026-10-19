@@ -79,7 +79,8 @@ export function SalesPrintPage() {
           </tr>
         </thead>
         <tbody>
-          {so.items.map((it) => (
+          {/* 客人不用付的那幾行(手機回補)不印在客人的收據上 */}
+          {so.items.filter((it) => it.counts_cash !== false).map((it) => (
             <tr key={it.id}>
               <td>
                 <div className="print-item-name">{it.product_name}</div>

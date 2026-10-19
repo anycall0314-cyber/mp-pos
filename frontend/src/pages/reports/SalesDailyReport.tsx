@@ -26,6 +26,7 @@ import {
   itemStaffProfit,
   narrowedBy,
   netTotals,
+  orderPaidAmount,
   serialList,
   shownOrders,
   splitOrders,
@@ -456,10 +457,8 @@ function SalesReportMobileList({ orders, voided, returned }: ReportTableProps) {
           (s, it) => s + itemGrossProfit(it),
           0,
         );
-        const orderAmount = o.items.reduce(
-          (s, it) => s + Number(it.amount),
-          0,
-        );
+        // 客人付的(手機回補那一行不算;複審抓到這裡原本直接加總全部明細)
+        const orderAmount = orderPaidAmount(o);
         return (
           <div
             key={o.id}

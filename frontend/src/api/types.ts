@@ -702,6 +702,8 @@ export interface SalesOrderItem {
   product_allows_commission: boolean;
   product_is_virtual: boolean;
   product_counts_cash: boolean;
+  /** 這一行客人要不要付(存檔當下抄的;手機回補不用付、只算毛利)。舊的資料沒有這一欄 = 要付 */
+  counts_cash?: boolean;
   product_counts_margin: boolean;
   product_warehouse_type?: WarehouseType;
   qty: number;

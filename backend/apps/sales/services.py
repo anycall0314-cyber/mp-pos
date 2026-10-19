@@ -133,6 +133,11 @@ def _validate_items(so: SalesOrder, items):
                 f"第 {it.line_no} 行商品 {product.sku} 不可填寫電信欄位"
                 f"(SIM 卡 / 門號 / 方案 / 上線日)"
             )
+        # 客人不用付的(手機回補):只能是虛擬商品,不然會不收錢就把貨扣掉
+        if not product.counts_cash and not product.is_virtual:
+            raise SalesOrderError(
+                f"第 {it.line_no} 行 {product.name} 不計現金,只能是虛擬商品(請到商品管理改)"
+            )
         if it.commission and it.commission > 0 and not product.allows_commission:
             raise SalesOrderError(
                 f"第 {it.line_no} 行商品 {product.sku} 不可填寫佣金"
@@ -425,6 +430,8 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
             ).only("weighted_avg_cost", "staff_cost_mode", "staff_cost_value",
                    "is_virtual", "is_secondhand", "requires_serial")
         }
+        # 客人要付的那幾行才算進總額 / 稅 / 付款;不用付的(手機回補)另外放,存成未稅、沒有稅
+        paid_items, unpaid_items = [], []
 
         for it in items:
             product = it.product
@@ -461,11 +468,17 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
             )
             # 直接寫進資料庫,不走 save():save() 把金額 0 當成「沒填」會重算一次,
             # 四捨五入成 0 的金額(0.40)就又被改回去了
+            it.counts_cash = product.counts_cash
             SalesOrderItem.objects.filter(pk=it.pk).update(
                 amount=it.amount, cost_at_post=it.cost_at_post,
                 staff_cost=it.staff_cost, staff_cost_rule=it.staff_cost_rule,
+                counts_cash=it.counts_cash,
             )
-            subtotal_raw += it.amount
+            if it.counts_cash:
+                subtotal_raw += it.amount
+                paid_items.append(it)
+            else:
+                unpaid_items.append(it)
 
             # 序號狀態 → sold + 寫 StockMovement
             for sos in it.serials.select_related("serial").all():
@@ -549,7 +562,10 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
         so.subtotal = subtotal
         so.tax_amount = tax_amount
         so.total = total
-        _store_line_tax(items, so.tax_method, subtotal, tax_amount, SalesOrderItem)
+        _store_line_tax(paid_items, so.tax_method, subtotal, tax_amount, SalesOrderItem)
+        for it in unpaid_items:
+            it.untaxed_amount, it.tax_amount = it.amount, Decimal("0")
+        SalesOrderItem.objects.bulk_update(unpaid_items, ["untaxed_amount", "tax_amount"])
         _store_contract_end(so, items)
 
         # 驗證付款金額 sum == 含稅總額
@@ -976,7 +992,9 @@ def commit_sales_return(sr: SalesReturn) -> SalesReturn:
             it.amount, it.untaxed_amount, it.tax_amount = oi.amount, oi.untaxed_amount, oi.tax_amount
             it.cost_at_post = oi.cost_at_post
             it.staff_cost = oi.staff_cost          # 業務員成本也照抄(原行沒有記的這裡也空著)
-            it.save(update_fields=["amount", "untaxed_amount", "tax_amount", "cost_at_post", "staff_cost"])
+            it.counts_cash = oi.counts_cash        # 手機回補那種客人沒付的,退的時候也不算進退款
+            it.save(update_fields=["amount", "untaxed_amount", "tax_amount", "cost_at_post", "staff_cost",
+                                   "counts_cash"])
 
             # 序號狀態 → returned,warehouse 回到銷退倉
             for sos in it.serials.select_related("serial").all():

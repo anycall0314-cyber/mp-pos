@@ -353,9 +353,11 @@ FACTS = {f.key: f for f in [
 # 銷退明細被退的那一行當初有填上線日
 _HAS_START = {"original_item__activation_date__isnull": False}
 
-# 「銷售」只算計入毛利的明細:收購二手那一類(只算現金、不算毛利)不是營收,另外一欄看。
-# 這樣 銷售額 − 成本 = 毛利,三個數字是同一批明細。
-COUNTED = Q(product__counts_margin=True)
+# 「銷售」只算計入毛利、而且客人有付的明細:收購二手那一類(只算現金、不算毛利)不是營收,另外一欄看;
+# 手機回補(客人不用付、只算毛利;owner 2026-10-19 選「只進毛利」)不算銷售額,另外一個數字(backfill)加進毛利。
+# 這樣 銷售額 − 成本 + 回補 = 毛利。
+COUNTED = Q(product__counts_margin=True, counts_cash=True)
+BACKFILL = Q(product__counts_margin=True, counts_cash=False)
 BASES = [
     Base("sales_untaxed", "銷售額(未稅)", "sales", lambda: Sum("untaxed_amount", filter=COUNTED)),
     Base("sales_gross", "銷售額(含稅)", "sales",
@@ -369,7 +371,9 @@ BASES = [
     Base("sales_orders", "銷貨單數", "sales",
          lambda: Count("so_id", distinct=True, filter=COUNTED), "int"),
     Base("non_margin_amount", "不計毛利金額(收購等)", "sales",
-         lambda: Sum("untaxed_amount", filter=~COUNTED), group="毛利"),
+         lambda: Sum("untaxed_amount", filter=Q(product__counts_margin=False)), group="毛利"),
+    # 手機回補:客人不用付、不算銷售額,只加進毛利與業務員毛利(owner 選「也算進獎金」)
+    Base("backfill", "手機回補(只算毛利)", "sales", lambda: Sum("untaxed_amount", filter=BACKFILL), group="毛利"),
     # 門號的兩個佣金(owner 2026-10-09):成交當下記在明細上的數字,不是方案現在的設定。
     # 公司佣金只有管理員選得到;開單當時方案沒設定的那幾筆是空的,不算進合計(不當成 0 元的佣金,但加總看不出差別)
     Base("staff_commission", "門號業務員佣金", "sales", lambda: Sum("commission"), group="佣金"),
@@ -396,6 +400,7 @@ BASES = [
     # 退掉的門號數:跟沖回佣金同一批(退的那一行原本是門號),算在退的那一天
     Base("return_activations", "退掉的門號數", "returns",
          lambda: Count("id", filter=Q(original_item__telecom_plan__isnull=False)), "int", group="門號合約"),
+    Base("return_backfill", "沖回手機回補", "returns", lambda: Sum("untaxed_amount", filter=BACKFILL), group="毛利"),
     Base("return_orders", "銷退單數", "returns",
          lambda: Count("sr_id", distinct=True, filter=COUNTED), "int"),
 
@@ -449,25 +454,26 @@ DERIVED = [
             lambda v: v["sales_untaxed"] - v["return_untaxed"]),
     Derived("net_qty", "淨銷量", ("sales_qty", "return_qty"),
             lambda v: v["sales_qty"] - v["return_qty"], "int"),
-    Derived("sales_profit", "銷貨毛利(未扣銷退)", ("sales_untaxed", "sales_cost"),
-            lambda v: v["sales_untaxed"] - v["sales_cost"], group="毛利"),
+    Derived("sales_profit", "銷貨毛利(未扣銷退)", ("sales_untaxed", "sales_cost", "backfill"),
+            lambda v: v["sales_untaxed"] - v["sales_cost"] + v["backfill"], group="毛利"),
     Derived("gross_profit", "毛利(扣銷退)",
-            ("sales_untaxed", "sales_cost", "return_untaxed", "return_cost"),
-            lambda v: (v["sales_untaxed"] - v["sales_cost"])
-            - (v["return_untaxed"] - v["return_cost"]), group="毛利"),
+            ("sales_untaxed", "sales_cost", "return_untaxed", "return_cost", "backfill", "return_backfill"),
+            lambda v: (v["sales_untaxed"] - v["sales_cost"] + v["backfill"])
+            - (v["return_untaxed"] - v["return_cost"] + v["return_backfill"]), group="毛利"),
     Derived("margin_rate", "毛利率",
-            ("sales_untaxed", "sales_cost", "return_untaxed", "return_cost"),
+            ("sales_untaxed", "sales_cost", "return_untaxed", "return_cost", "backfill", "return_backfill"),
             lambda v: _ratio(
-                (v["sales_untaxed"] - v["sales_cost"]) - (v["return_untaxed"] - v["return_cost"]),
+                (v["sales_untaxed"] - v["sales_cost"] + v["backfill"])
+                - (v["return_untaxed"] - v["return_cost"] + v["return_backfill"]),
                 v["sales_untaxed"] - v["return_untaxed"],
             ), "pct", group="毛利"),
     # 業務員毛利 = 未稅金額 − 業務員成本(跟上面的毛利同一批明細,只是成本換成加權過的那一個)
-    Derived("staff_profit", "業務員毛利(未扣銷退)", ("sales_untaxed", "sales_staff_cost"),
-            lambda v: v["sales_untaxed"] - v["sales_staff_cost"], group="毛利"),
+    Derived("staff_profit", "業務員毛利(未扣銷退)", ("sales_untaxed", "sales_staff_cost", "backfill"),
+            lambda v: v["sales_untaxed"] - v["sales_staff_cost"] + v["backfill"], group="毛利"),
     Derived("staff_gross_profit", "業務員毛利(扣銷退)",
-            ("sales_untaxed", "sales_staff_cost", "return_untaxed", "return_staff_cost"),
-            lambda v: (v["sales_untaxed"] - v["sales_staff_cost"])
-            - (v["return_untaxed"] - v["return_staff_cost"]), group="毛利"),
+            ("sales_untaxed", "sales_staff_cost", "return_untaxed", "return_staff_cost", "backfill", "return_backfill"),
+            lambda v: (v["sales_untaxed"] - v["sales_staff_cost"] + v["backfill"])
+            - (v["return_untaxed"] - v["return_staff_cost"] + v["return_backfill"]), group="毛利"),
     Derived("net_staff_commission", "門號業務員佣金(扣銷退)", ("staff_commission", "return_staff_commission"),
             lambda v: v["staff_commission"] - v["return_staff_commission"], group="佣金"),
     Derived("net_company_commission", "門號公司佣金(扣銷退)", ("company_commission", "return_company_commission"),
@@ -488,9 +494,9 @@ DERIVED = [
     # 銷貨單清單與開單頁上的「業務員毛利」是含佣金的(每張單:業務員毛利 + 業務員佣金);這個數字就是它們加起來、再扣掉銷退
     Derived("staff_total", "業務員毛利加佣金(扣銷退)",
             ("sales_untaxed", "sales_staff_cost", "return_untaxed", "return_staff_cost",
-             "staff_commission", "return_staff_commission"),
-            lambda v: (v["sales_untaxed"] - v["sales_staff_cost"])
-            - (v["return_untaxed"] - v["return_staff_cost"])
+             "staff_commission", "return_staff_commission", "backfill", "return_backfill"),
+            lambda v: (v["sales_untaxed"] - v["sales_staff_cost"] + v["backfill"])
+            - (v["return_untaxed"] - v["return_staff_cost"] + v["return_backfill"])
             + (v["staff_commission"] - v["return_staff_commission"]), group="毛利"),
     Derived("avg_ticket", "客單價", ("sales_gross", "sales_orders"),
             lambda v: _ratio(v["sales_gross"], v["sales_orders"])),

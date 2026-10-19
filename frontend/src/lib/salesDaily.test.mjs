@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
-  DAILY_CSV_HEAD, customerText, dailyQuery, dailyTable, dailyTotals, daysAgo, itemGrossProfit, itemStaffProfit,
+  DAILY_CSV_HEAD, customerText, dailyQuery, dailyTable, dailyTotals, daysAgo, itemGrossProfit, itemStaffProfit, orderPaidAmount,
   narrowedBy, netTotals, serialList, shownOrders, splitOrders, truncatedText,
 } from "./salesDaily.ts";
 import { toCsv } from "./stockReports.ts";
@@ -93,6 +93,16 @@ test("合計跟改之前同一個算法:商品與零件分開,不計毛利的行
     lines: 0, amountIncl: 0, cost: 0, profit: 0, staffProfit: 0,
     partsLines: 0, partsAmount: 0, partsCost: 0, partsProfit: 0, partsStaffProfit: 0,
   });
+});
+
+test("手機回補:客人不用付,金額合計不含它;毛利與業務員毛利含它", () => {
+  const backfill = line({ id: 5, counts_cash: false, amount: "1000.00", untaxed_amount: "1000.00", cost_at_post: "0", staff_cost: "0" });
+  const t = dailyTotals([order({ items: [line(), backfill] })]);
+  assert.equal(t.amountIncl, 25000);                                    // 收到的錢對得上
+  assert.equal(Math.round(t.profit * 100) / 100, 3809.52 + 1000);
+  assert.equal(Math.round(t.staffProfit * 100) / 100, 2809.52 + 1000);
+  assert.equal(orderPaidAmount(order({ items: [line(), backfill] })), 25000);   // 手機寬度那張卡片的含稅金額
+  assert.equal(orderPaidAmount(order({ items: [line(), backfill].map(back) })), -25000);
 });
 
 test("銷退:每一行是負的,剛好把原單那一行沖掉;扣掉銷退的那一組是相加", () => {

@@ -214,6 +214,10 @@ function qtyOf(l: Line): number {
 function amountOf(l: Line): number {
   return lineTotal(qtyOf(l), l.unitPrice);
 }
+/** 客人要付的金額:手機回補那種「不計現金」的商品客人不用付(只算毛利),不算進總額、稅、付款(伺服器同一條) */
+function paidAmountOf(l: Line): number {
+  return l.product.counts_cash === false ? 0 : amountOf(l);
+}
 /** 商品的預設單價:零件倉對外賣用對外售價,其餘用建議售價 */
 function listPriceOf(p: Product): string {
   const external =
@@ -1153,7 +1157,7 @@ export function SalesWorkbenchPage() {
 
   // ── 金額 ─────────────────────────────────────────────
   // 試算跟伺服器存檔用同一套算法(整數元、四捨五入)
-  const amounts = lines.map(amountOf);
+  const amounts = lines.map(paidAmountOf);
   const [estSubtotal, estTax, estTotal] = splitTax(amounts, taxMethod);
   // 預估的業務員毛利 = 計毛利那幾行的(未稅金額 − 業務員成本 + 佣金)。
   // 業務員成本是伺服器照公司 / 商品的設定算好的(沒有設定 = 平均成本,跟以前的估法一樣);
@@ -1163,13 +1167,15 @@ export function SalesWorkbenchPage() {
     return lines.reduce((sum, l, i) => {
       const p = l.product;
       if (p.counts_margin === false) return sum;
+      // 手機回補:客人不用付,整筆當成未稅、沒有稅,加進毛利
+      const lineUntaxed = p.counts_cash === false ? amountOf(l) : untaxed[i];
       const picked = (l.units ?? []).filter((u) => l.picked.includes(u.id));
       const cost = estimateStaffCost(
         p,
         qtyOf(l),
         picked.length === l.picked.length ? picked.map((u) => u.staffCost) : [],
       );
-      return sum + untaxed[i] - cost + roundInt(l.commission);
+      return sum + lineUntaxed - cost + roundInt(l.commission);
     }, 0);
   })();
 
@@ -1268,7 +1274,7 @@ export function SalesWorkbenchPage() {
       out.push({ text: "付款金額不能是負的", at: "pay" });
     } else if (ls.length > 0) {
       // 用明細現在的樣子重算(不用畫面上那個數字:送出前才刷進來的那一行畫面還沒算到)
-      const total = splitTax(ls.map(amountOf), taxMethod)[2];
+      const total = splitTax(ls.map(paidAmountOf), taxMethod)[2];
       const diff = total - paymentsFor(total).reduce((sum, x) => sum + x.amount, 0);
       if (diff !== 0) {
         out.push({
@@ -1410,7 +1416,7 @@ export function SalesWorkbenchPage() {
         const ordered = [...linesRef.current].reverse();
         sent = new Set(ordered.map((l) => l.key));
         const docDate = today();
-        const total = splitTax(ordered.map(amountOf), taxMethod)[2];
+        const total = splitTax(ordered.map(paidAmountOf), taxMethod)[2];
         const payments = paymentsFor(total).map((x) => ({
           ...x,
           amount: String(x.amount),
@@ -2173,7 +2179,12 @@ export function SalesWorkbenchPage() {
                         </span>
                       )}
                     </td>
-                    <td className="num">{money(amountOf(l))}</td>
+                    <td className="num">
+                      {money(amountOf(l))}
+                      {l.product.counts_cash === false && (
+                        <div className="wb-unpaid" title="客人不用付,只算毛利">不收錢</div>
+                      )}
+                    </td>
                     <td className="x">
                       <button
                         type="button"

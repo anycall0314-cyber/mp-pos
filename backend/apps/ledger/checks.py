@@ -66,7 +66,8 @@ def check_sales_orders(tenant):
     orders = SalesOrder.objects.filter(tenant=tenant, is_void=False).values_list(
         "id", "no", "tax_method", "subtotal", "tax_amount", "total"
     ).iterator(chunk_size=5000)
-    sums = _line_sums(SalesOrderItem, "so_id", so__tenant=tenant, so__is_void=False)
+    # 客人不用付的那幾行(手機回補)本來就不在單頭的總額裡
+    sums = _line_sums(SalesOrderItem, "so_id", so__tenant=tenant, so__is_void=False, counts_cash=True)
     paid = dict(
         SalesOrderPayment.objects.filter(so__tenant=tenant, so__is_void=False)
         .values_list("so_id").annotate(s=Sum("amount")).values_list("so_id", "s")
@@ -91,7 +92,7 @@ def check_sales_returns(tenant):
     rows = SalesReturn.objects.filter(tenant=tenant, is_void=False).values_list(
         "id", "no", "original_so__tax_method", "subtotal", "tax_amount", "total"
     ).iterator(chunk_size=5000)
-    sums = _line_sums(SalesReturnItem, "sr_id", sr__tenant=tenant, sr__is_void=False)
+    sums = _line_sums(SalesReturnItem, "sr_id", sr__tenant=tenant, sr__is_void=False, counts_cash=True)
     header, lines = [], []
     for pk, no, method, subtotal, tax, total in rows:
         amount, untaxed, line_tax = sums.get(pk, (ZERO, ZERO, ZERO))

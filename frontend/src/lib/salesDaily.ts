@@ -12,6 +12,8 @@ export interface DailyItem {
   product_sku: string;
   product_name: string;
   product_counts_margin: boolean;
+  /** 客人要不要付(手機回補不用付:不算金額,只算毛利)。舊資料沒有 = 要付 */
+  counts_cash?: boolean;
   product_warehouse_type: string;
   serials: { serial_no: string }[];
   qty: number;
@@ -113,6 +115,16 @@ export function itemCountsMargin(it: Pick<DailyItem, "product_counts_margin">): 
   return it.product_counts_margin !== false;
 }
 
+/** 這一行客人付的金額:手機回補那種客人不用付的是 0(金額合計跟收到的錢對得上;毛利照樣算它) */
+export function paidAmount(it: Pick<DailyItem, "amount" | "counts_cash">): number {
+  return it.counts_cash === false ? 0 : Number(it.amount);
+}
+
+/** 一張單客人付的含稅金額(手機寬度那張卡片底下的「含稅金額」;回補不算) */
+export function orderPaidAmount(o: Pick<DailyOrder, "items">): number {
+  return o.items.reduce((s, it) => s + paidAmount(it), 0);
+}
+
 /** 毛利 = 未稅金額 − 成本(未稅金額是存檔當下存死的,報表不自己回推稅別)。 */
 export function itemGrossProfit(it: DailyItem): number {
   if (!itemCountsMargin(it)) return 0;
@@ -160,7 +172,7 @@ export function dailyTotals(orders: DailyOrder[]): DailyTotals {
       const isParts = it.product_warehouse_type === "parts";
       if (isParts) {
         partsLines += 1;
-        partsAmount += Number(it.amount);
+        partsAmount += paidAmount(it);
         if (itemCountsMargin(it)) {
           partsCost += Number(it.cost_at_post);
           partsProfit += itemGrossProfit(it);
@@ -168,7 +180,7 @@ export function dailyTotals(orders: DailyOrder[]): DailyTotals {
         }
       } else {
         lines += 1;
-        amountIncl += Number(it.amount);
+        amountIncl += paidAmount(it);
         if (itemCountsMargin(it)) {
           cost += Number(it.cost_at_post);
           profit += itemGrossProfit(it);
