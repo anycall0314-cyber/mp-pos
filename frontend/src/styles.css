@@ -6345,9 +6345,6 @@ tr.selected .intake-badge { filter: none; }
   padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
 }
 .legacy-pager { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin-top: 8px; }
-.legacy-doc-modal { width: min(960px, calc(100vw - 32px)); max-width: none; }
-.legacy-doc-modal th { white-space: nowrap; }
-.legacy-doc-modal td.num, .legacy-doc-modal th.num { text-align: right; white-space: nowrap; }
 .legacy-doc-modal td:nth-child(6) { white-space: nowrap; }
 .legacy-doc-modal .modal-body { overflow-x: auto; }
 .legacy-page { max-width: 1100px; }
@@ -6366,6 +6363,10 @@ tr.selected .intake-badge { filter: none; }
 .legacy-table-wrap table { min-width: 560px; }
 .legacy-table-wrap th, .legacy-table-wrap td { padding: 6px 8px; }
 .legacy-table-wrap th.num, .legacy-table-wrap td.num { text-align: right; }
+/* 舊 POS 紀錄:照日期分段、每張單一小段,品項直接列出來 */
+.legacy-table-wrap tr.legacy-date td { background: var(--panel-2); font-weight: 600; color: var(--text); }
+.legacy-table-wrap tr.legacy-doc td { color: var(--text-dim); font-size: var(--font-secondary); padding-top: 4px; padding-bottom: 2px; }
+.legacy-table-wrap tr.legacy-neg td { color: var(--danger-text-soft); }
 
 /* ─────────────────────────────────────────────────────────
  * 報表 → 自由組合

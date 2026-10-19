@@ -1694,7 +1694,8 @@ export interface LegacyHistoryDocDetail extends LegacyHistoryDoc {
   items: LegacyHistoryItem[];
 }
 
-export interface LegacyHistoryPage extends Paginated<LegacyHistoryDoc> {
+/** 會員頁的清單:每一張單直接帶品項(有「品名」條件時只帶對得上的) */
+export interface LegacyHistoryPage extends Paginated<LegacyHistoryDocDetail> {
   summary: {
     documents: number;
     items: number;

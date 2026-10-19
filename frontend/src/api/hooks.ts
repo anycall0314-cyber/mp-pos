@@ -95,7 +95,6 @@ import {
   Warehouse,
   LegacyCandidate,
   LegacyException,
-  LegacyHistoryDocDetail,
   LegacyHistoryPage,
   LegacyMapKind,
   LegacyMapsPage,
@@ -2667,6 +2666,8 @@ export interface LegacyHistoryFilters {
   store?: string;
   doc_type?: string;
   doc_no?: string;
+  /** 品名 / 品號有這幾個字(舊品名的文字比對) */
+  item?: string;
 }
 
 function legacyQuery(params: Record<string, string | number | undefined>) {
@@ -2690,14 +2691,6 @@ export const useLegacyHistory = (
         `/legacy/history/?${legacyQuery({ member: memberId ?? "", page, page_size: 20, ...filters })}`,
       ),
     enabled: memberId != null,
-  });
-
-export const useLegacyDocument = (id: number | null, memberId: number) =>
-  useQuery({
-    queryKey: ["legacy-document", id, memberId],
-    queryFn: () =>
-      api<LegacyHistoryDocDetail>(`/legacy/history/${id}/?member=${memberId}`),
-    enabled: id != null,
   });
 
 /** 這位會員可能對應的舊 POS 會員(管理員) */

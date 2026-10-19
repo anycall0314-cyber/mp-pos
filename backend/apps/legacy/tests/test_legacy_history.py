@@ -805,6 +805,36 @@ class ApiTests(_Base):
         self.assertEqual(r.status_code, 200)
         self.assertTrue(r.json()["snapshots"][0]["raw_sha256"])
 
+    def test_every_document_comes_with_its_items(self):
+        """owner 2026-10-19:「直接顯示所有消費品項…不要折疊」—— 清單的每一張單直接帶品項,不用一張一張點開。"""
+        mapping.link_member(self.big, self.member, self.boss)
+        body = self.staff.get(f"/api/v1/legacy/history/?member={self.member.pk}&page_size=20").json()   # 會員頁一頁 20 張
+        self.assertEqual(len(body["results"]), 20)
+        for row in body["results"]:
+            doc = LegacyDocument.objects.get(pk=row["id"])
+            self.assertEqual(len(row["items"]), doc.item_count)
+            self.assertEqual(sum(i["net_amount"]["minor"] for i in row["items"]), doc.net_amount_minor)
+            self.assertNotIn("source_row", row["items"][0])          # 原文只在單張明細給管理員
+
+    def test_item_word_lists_only_matching_items_and_totals_follow(self):
+        mapping.link_member(self.big, self.member, self.boss)
+        picked = list(LegacyDocument.objects.filter(legacy_member=self.big).order_by("pk")[:3])
+        LegacyItem.objects.filter(document__in=picked).update(product_name_raw="玻璃貼 iPhone 15 Pro Max")
+        url = f"/api/v1/legacy/history/?member={self.member.pk}&item="
+        body = self.staff.get(url + "玻璃貼").json()
+        self.assertEqual(body["count"], 3)
+        self.assertEqual(sorted(r["id"] for r in body["results"]), sorted(d.pk for d in picked))
+        self.assertTrue(all(i["product_name"].startswith("玻璃貼") for r in body["results"] for i in r["items"]))
+        net = sum(i.amount_minor * i.net_sign for i in LegacyItem.objects.filter(document__in=picked))
+        self.assertEqual((body["summary"]["documents"], body["summary"]["items"]), (3, 3))
+        self.assertEqual(body["summary"]["net_amount"]["minor"], net)
+        self.assertEqual(self.staff.get(url + "z1").json()["count"], 250)   # 品號也找、不分大小寫
+        # 別的會員(沒對照)用同一個字找不到這位的舊單
+        someone = Member(tenant=self.a, name="別人", phone="")
+        someone.save()
+        self.assertEqual(self.staff.get(
+            f"/api/v1/legacy/history/?member={someone.pk}&item=玻璃貼").json()["count"], 0)
+
     def test_other_company_sees_nothing(self):
         mapping.link_member(self.big, self.member, self.boss)
         other = self.client_for(self.b_boss)

@@ -7,7 +7,7 @@
 """
 from datetime import date
 
-from django.db.models import Count, F, Max, OuterRef, Q, Subquery, Sum
+from django.db.models import Count, F, Max, OuterRef, Prefetch, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
 from rest_framework import permissions, status
 from rest_framework.decorators import api_view, permission_classes
@@ -111,10 +111,33 @@ def _doc_row(d):
     }
 
 
+def _item_row(i):
+    """一筆舊明細(會員頁的清單與單張明細共用)。原始列原文不在這裡,只有單張明細給管理員。"""
+    return {
+        "ordinal": i.item_ordinal,
+        "product_code": i.product_code_raw.strip(),
+        "product_name": i.product_name_raw,
+        "quantity": i.quantity_decimal,
+        "unit_price": _money(i.unit_price_minor),
+        "amount": _money(i.amount_minor),
+        "net_amount": _money(i.amount_minor * i.net_sign),
+        "salesperson": i.salesperson_raw.strip(),
+        "customer_name": i.customer_name_raw.strip(),
+        "remarks": i.remarks_raw.strip(),
+        "promotion": i.promotion_raw.strip(),
+        "points": i.points_raw.strip(),
+    }
+
+
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def history(request):
-    """某位會員的舊 POS 單據(分頁)+ 完整篩選範圍的合計 + 待核提示。"""
+    """某位會員的舊 POS 單據(分頁)+ 完整篩選範圍的合計 + 待核提示。
+
+    每一張單直接帶它的品項(owner 2026-10-19:「直接顯示所有消費品項…不要折疊」,不用一張一張點開)。
+    `item` = 品名 / 品號有這幾個字:只列有這種品項的單,而且每張單只帶對得上的品項、合計也只算那些品項
+    (這是舊品名的文字比對,不是「同一樣商品」——舊系統的品名十年來寫法不一)。
+    """
     member = _member(request, request.query_params.get("member"))
     if member is None:
         return _bad("找不到這位會員", status.HTTP_404_NOT_FOUND)
@@ -138,12 +161,25 @@ def history(request):
         docs = docs.filter(document_type_raw=p["doc_type"].strip())
     if p.get("doc_no"):
         docs = docs.filter(document_number_raw__contains=p["doc_no"].strip())
+    word = (p.get("item") or "").strip()
+    items = LegacyItem.objects.filter(tenant=_tenant(request))
+    if word:
+        items = items.filter(Q(product_name_raw__icontains=word) | Q(product_code_raw__icontains=word))
+        docs = docs.filter(pk__in=items.values("document_id"))
     docs = docs.order_by("-document_date", "-id")
 
-    totals = docs.aggregate(
-        documents=Count("id"), items=Coalesce(Sum("item_count"), 0),
-        raw=Coalesce(Sum("report_amount_minor"), 0), net=Coalesce(Sum("net_amount_minor"), 0),
-    )
+    if word:
+        # 只算對得上的品項(整張單的合計裡有別的東西)
+        totals = items.filter(document__in=docs).aggregate(
+            items=Count("id"), raw=Coalesce(Sum("amount_minor"), 0),
+            net=Coalesce(Sum(F("amount_minor") * F("net_sign")), 0),
+        )
+        totals["documents"] = docs.count()
+    else:
+        totals = docs.aggregate(
+            documents=Count("id"), items=Coalesce(Sum("item_count"), 0),
+            raw=Coalesce(Sum("report_amount_minor"), 0), net=Coalesce(Sum("net_amount_minor"), 0),
+        )
     # 待核是以「人」為單位的提示(那位會員有來源差異),不跟著日期 / 店別篩選變
     pending = LegacySourceException.objects.filter(
         tenant=_tenant(request), legacy_member__in=linked,
@@ -153,8 +189,13 @@ def history(request):
         items=Coalesce(Sum("line_count"), 0),
     )
     pager = Paging()
-    page = pager.paginate_queryset(docs, request)
-    response = pager.get_paginated_response([_doc_row(d) for d in page])
+    page = pager.paginate_queryset(
+        docs.prefetch_related(Prefetch("items", queryset=items.order_by("item_ordinal"), to_attr="shown")),
+        request,
+    )
+    response = pager.get_paginated_response(
+        [{**_doc_row(d), "items": [_item_row(i) for i in d.shown]} for d in page]
+    )
     response.data["summary"] = {
         # 已核對的舊紀錄;待核的另外列,不併進這裡
         "documents": totals["documents"], "items": totals["items"],
@@ -187,20 +228,7 @@ def history_document(request, pk):
         return _bad("找不到這張單", status.HTTP_404_NOT_FOUND)
     items = []
     for i in doc.items.order_by("item_ordinal"):
-        row = {
-            "ordinal": i.item_ordinal,
-            "product_code": i.product_code_raw.strip(),
-            "product_name": i.product_name_raw,
-            "quantity": i.quantity_decimal,
-            "unit_price": _money(i.unit_price_minor),
-            "amount": _money(i.amount_minor),
-            "net_amount": _money(i.amount_minor * i.net_sign),
-            "salesperson": i.salesperson_raw.strip(),
-            "customer_name": i.customer_name_raw.strip(),
-            "remarks": i.remarks_raw.strip(),
-            "promotion": i.promotion_raw.strip(),
-            "points": i.points_raw.strip(),
-        }
+        row = _item_row(i)
         if admin:
             row["source_row"] = i.source_row_json
         items.append(row)

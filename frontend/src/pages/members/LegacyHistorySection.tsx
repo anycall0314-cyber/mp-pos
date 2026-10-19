@@ -1,16 +1,16 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 import { api } from "@/api/client";
 import {
   type LegacyHistoryFilters,
   useLegacyCandidates,
-  useLegacyDocument,
   useLegacyHistory,
 } from "@/api/hooks";
 import type { LegacyMemberRow } from "@/api/types";
 import { useCurrentUser } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
+import { byDate } from "@/lib/legacyHistory";
 
 /**
  * 會員頁:舊 POS(歐睿)紀錄。
@@ -19,6 +19,9 @@ import { Banner } from "@/components/Banner";
  * 合計由後端照完整篩選範圍計算(不是加總畫面上這一頁)。
  * 待核的舊紀錄不併入合計,另外提示。
  * 管理員另外看得到「可能是同一人」的舊會員,可以確認或取消對照。
+ * 品項直接列出來、不折疊(owner 2026-10-19:「直接顯示所有消費品項，你可以用日期幫我分族群組，但不要折疊」):
+ * 照日期分段,同一天裡每張單一小段(店別、單別、單號),底下是那張單的品項。負數(退貨 / 折讓)那一行另外標。
+ * 「品名」是舊品名 / 品號的文字比對(舊品名十年來寫法不一),不是「同一樣商品」。
  */
 
 const DOC_TYPES = ["E01", "E11", "E12", "E13", "F01", "F11", "F13", "FS11"];
@@ -29,7 +32,6 @@ export function LegacyHistorySection({ memberId }: { memberId: number }) {
   const qc = useQueryClient();
   const [filters, setFilters] = useState<LegacyHistoryFilters>({});
   const [page, setPage] = useState(1);
-  const [openDoc, setOpenDoc] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -135,40 +137,67 @@ export function LegacyHistorySection({ memberId }: { memberId: number }) {
           value={filters.doc_no ?? ""}
           onChange={(e) => patch("doc_no", e.target.value)}
         />
+        <input
+          placeholder="舊品名或品號"
+          value={filters.item ?? ""}
+          onChange={(e) => patch("item", e.target.value)}
+        />
       </div>
 
       <div className="md-table legacy-table-wrap" style={{ height: "auto" }}>
         <table>
           <thead>
             <tr>
-              <th style={{ width: 96 }}>日期</th>
-              <th style={{ width: 76 }}>店別</th>
-              <th style={{ width: 52 }}>單別</th>
-              <th>單號</th>
-              <th className="num" style={{ width: 44 }}>筆數</th>
-              <th className="num" style={{ width: 88 }}>原始額</th>
-              <th className="num" style={{ width: 88 }}>淨額</th>
+              <th>品名 / 品號</th>
+              <th className="num" style={{ width: 52 }}>數量</th>
+              <th className="num" style={{ width: 80 }}>單價</th>
+              <th className="num" style={{ width: 80 }}>原始額</th>
+              <th className="num" style={{ width: 80 }}>淨額</th>
+              <th style={{ width: 80 }}>業務員</th>
+              <th>備註 / 方案</th>
             </tr>
           </thead>
           <tbody>
-            {(data?.results ?? []).map((d) => (
-              <tr key={d.id} onClick={() => setOpenDoc(d.id)} style={{ cursor: "pointer" }}>
-                <td>{d.document_date}</td>
-                <td>{d.store}</td>
-                <td>{d.document_type}</td>
-                <td>
-                  {d.document_number}
-                  <span className="legacy-tag">舊 POS</span>
-                </td>
-                <td className="num">{d.item_count}</td>
-                <td className="num">{d.amount.display}</td>
-                <td className="num">{d.net_amount.display}</td>
-              </tr>
+            {byDate(data?.results ?? []).map((g) => (
+              <Fragment key={g.date}>
+                <tr className="legacy-date">
+                  <td colSpan={7}>{g.date}</td>
+                </tr>
+                {g.docs.map((d) => (
+                  <Fragment key={d.id}>
+                    <tr className="legacy-doc">
+                      <td colSpan={7}>
+                        {d.store} · {d.document_type} {d.document_number}
+                        <span className="legacy-tag">舊 POS</span>
+                      </td>
+                    </tr>
+                    {d.items.map((i) => (
+                      <tr key={i.ordinal} className={i.net_amount.minor < 0 ? "legacy-neg" : ""}>
+                        <td>
+                          <div style={{ whiteSpace: "pre-wrap" }}>
+                            {i.product_name}
+                            {i.net_amount.minor < 0 && <span className="legacy-tag">退貨 / 折讓</span>}
+                          </div>
+                          <div className="legacy-sub">{i.product_code}</div>
+                        </td>
+                        <td className="num">{i.quantity}</td>
+                        <td className="num">{i.unit_price ? i.unit_price.display : "—"}</td>
+                        <td className="num">{i.amount.display}</td>
+                        <td className="num">{i.net_amount.display}</td>
+                        <td>{i.salesperson}</td>
+                        <td style={{ whiteSpace: "pre-wrap" }}>
+                          {[i.remarks, i.promotion].filter(Boolean).join("\n")}
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                ))}
+              </Fragment>
             ))}
             {data && data.results.length === 0 && (
               <tr>
                 <td colSpan={7} className="md-empty">
-                  尚無舊 POS 紀錄
+                  {filters.item ? "找不到這個品名" : "尚無舊 POS 紀錄"}
                 </td>
               </tr>
             )}
@@ -199,78 +228,6 @@ export function LegacyHistorySection({ memberId }: { memberId: number }) {
           </button>
         </div>
       )}
-      {openDoc != null && (
-        <LegacyDocumentModal id={openDoc} memberId={memberId} onClose={() => setOpenDoc(null)} />
-      )}
-    </div>
-  );
-}
-
-function LegacyDocumentModal({
-  id,
-  memberId,
-  onClose,
-}: {
-  id: number;
-  memberId: number;
-  onClose: () => void;
-}) {
-  const doc = useLegacyDocument(id, memberId);
-  const d = doc.data;
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-card legacy-doc-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="modal-title">
-          {d ? `${d.document_date} ${d.store} ${d.document_type} ${d.document_number}` : "舊 POS 單據"}
-        </div>
-        <div className="modal-body">
-          {doc.isLoading && <div className="md-empty">載入中…</div>}
-          {doc.error && <Banner kind="error" message={String(doc.error)} />}
-          {d && (
-            <table className="line-table">
-              <thead>
-                <tr>
-                  <th>品號 / 品名</th>
-                  <th className="num">數量</th>
-                  <th className="num">單價</th>
-                  <th className="num">原始額</th>
-                  <th className="num">淨額</th>
-                  <th>業務員</th>
-                  <th>備註 / 方案</th>
-                </tr>
-              </thead>
-              <tbody>
-                {d.items.map((i) => (
-                  <tr key={i.ordinal}>
-                    <td>
-                      <div style={{ whiteSpace: "pre-wrap" }}>{i.product_name}</div>
-                      <div className="legacy-sub">{i.product_code}</div>
-                    </td>
-                    <td className="num">{i.quantity}</td>
-                    <td className="num">{i.unit_price ? i.unit_price.display : "—"}</td>
-                    <td className="num">{i.amount.display}</td>
-                    <td className="num">{i.net_amount.display}</td>
-                    <td>{i.salesperson}</td>
-                    <td style={{ whiteSpace: "pre-wrap" }}>
-                      {[i.remarks, i.promotion].filter(Boolean).join("\n")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          <div style={{ marginTop: 12, textAlign: "right" }}>
-            <button className="btn" onClick={onClose}>
-              關閉
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
