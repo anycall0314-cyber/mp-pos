@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 
 from django.db import connection, transaction
 from django.db.models import Q
@@ -26,6 +27,7 @@ from .models import (
 )
 
 MIN_PHONE_DIGITS = 8
+_PLAIN_PHONE = re.compile(r"[\d\-\s()]+")
 
 
 class MappingError(Exception):
@@ -142,11 +144,142 @@ def create_member_from_legacy(legacy_member, user):
             "已經有同電話的會員:" + "、".join(f"{m.code} {m.name}" for m in same_phone[:5])
             + ",請改用對照"
         )
-    name = lm.name_raw.strip() or lm.display_id
-    member = Member(tenant=lm.tenant, name=name[:120], phone=lm.phone_raw.strip()[:40],
-                    note=f"由舊 POS 會員 {lm.display_id} 建立"[:200])
-    member.save()
+    member = _member_from(lm)
     return link_member(lm, member, user, method=MapMethod.CREATED), member
+
+
+def _member_from(lm, how="", tidy_phone=False):
+    """用舊會員的姓名、電話建一位 MP 會員(還沒對照)。
+
+    `tidy_phone`:電話只是多了連字號 / 空白 / 括號的話,存成只有數字的(`0912-345-678` → `0912345678`)——
+    會員是用電話找的,店員打的是數字;裡面還有別的字(`0912345678 太太`)就照原文,不猜。舊資料那一邊的原文不動。
+    """
+    from apps.parties.models import Member
+
+    name = lm.name_raw.strip() or lm.display_id
+    note = f"由舊 POS 會員 {lm.display_id} 建立" + (f"({how})" if how else "")
+    phone = lm.phone_raw.strip()
+    if tidy_phone and _PLAIN_PHONE.fullmatch(phone):
+        phone = lm.phone_digits
+    member = Member(tenant=lm.tenant, name=name[:120], phone=phone[:40], note=note[:200])
+    member.save()
+    return member
+
+
+# ─────────────────────────── 會員:整批帶進來 ───────────────────────────
+# owner 2026-10-09:「會員電話與消費記錄一起進去…新的消費記錄開始做,舊的看快照,統一都可以用會員電話查詢」。
+# 不帶的話每個客人進來都要重問電話、重建會員。上面那些「一位一位、由人確認」的規則照舊,這裡是另一條路。
+BULK_NOTE = "整批帶入"
+
+
+def bring_in_members(tenant, user=None, *, since=None, require_phone=False, write=False, chunk=500):
+    """還沒對照的舊會員,**一位建一位 MP 會員並對照**(一對一,不靠電話猜誰跟誰是同一個人、不合併)。
+
+    例外只有一種:MP 裡已經有一位會員**電話與姓名都一樣**、只有一位、而且還沒對照到任何舊會員 → 對照到那一位,不另外建
+    (已經在新系統建過的客人不要變成兩位)。同一支電話的好幾個舊會員各建各的。
+
+    `since` = 只帶那一天之後還有消費的;`require_phone` = 只帶有電話的。`write=False` 是試算:不寫任何東西,
+    回的數字跟真的跑一樣。可以重跑(已經對照的不動)。回 {created, linked, no_phone, left}。
+    """
+    from apps.parties.models import Member
+
+    unmapped = LegacyMember.objects.filter(tenant=tenant, status=MapStatus.UNMAPPED)
+    todo = unmapped
+    if since is not None:
+        from .models import LegacyDocument
+
+        todo = todo.filter(pk__in=LegacyDocument.objects.filter(
+            tenant=tenant, document_date__gte=since).values("legacy_member_id"))
+    if require_phone:
+        todo = todo.exclude(phone_digits="")
+    ids = list(todo.order_by("pk").values_list("pk", flat=True))
+    # MP 裡每一組(電話數字, 姓名)有哪幾位會員;已經對照到舊會員的那幾位
+    taken = set(LegacyMember.objects.filter(tenant=tenant, member__isnull=False)
+                .values_list("member_id", flat=True))
+    same_key: dict = {}
+    for m in Member.objects.filter(tenant=tenant).exclude(phone="").order_by("pk"):
+        digits = phone_digits(m.phone)
+        if digits:
+            same_key.setdefault((digits, m.name.strip()), []).append(m.pk)
+    out = {"created": 0, "linked": 0, "no_phone": 0, "left": unmapped.count() - len(ids)}
+    for start in range(0, len(ids), chunk):
+        with transaction.atomic():
+            rows = (LegacyMember.objects.select_for_update()
+                    .filter(pk__in=ids[start:start + chunk], status=MapStatus.UNMAPPED).order_by("pk"))
+            for lm in rows:
+                same = same_key.get((lm.phone_digits, lm.name_raw.strip()), []) if lm.phone_digits else []
+                # 全公司同電話同姓名的**只有一位**、而且那一位還沒對照過,才連過去。
+                # 有兩位以上就不猜 —— 就算其中一位已經對照到別的舊會員、看起來「只剩一位」也一樣
+                if len(same) == 1 and same[0] not in taken:
+                    target = same[0]
+                    # 用掉這一位(試算也要記,數字才跟真的跑一樣);下一個同電話同姓名的舊會員另外建
+                    taken.add(target)
+                    out["linked"] += 1
+                    if write:
+                        link_member(lm, Member.objects.get(pk=target), user,
+                                    method=MapMethod.PHONE, note=BULK_NOTE)
+                    continue
+                out["created"] += 1
+                out["no_phone"] += 0 if lm.phone_digits else 1
+                if write:
+                    link_member(lm, _member_from(lm, BULK_NOTE, tidy_phone=True), user,
+                                method=MapMethod.CREATED, note=BULK_NOTE)
+    return out
+
+
+def _member_is_used(member, legacy_member) -> bool:
+    """這位會員有沒有被用過:任何一張表指到他就算。`legacy_member` 自己那一筆對照不算
+    (那就是正要解除的);**別的**舊會員也對照到他的話算(人事後另外連的,刪了他那一筆會斷掉)。"""
+    for rel in member._meta.related_objects:
+        rows = rel.related_model._base_manager.filter(**{rel.field.name: member})
+        if rel.related_model is LegacyMember:
+            rows = rows.exclude(pk=legacy_member.pk)
+        if rows.exists():
+            return True
+    return False
+
+
+def take_back_members(tenant, user=None, *, write=False, chunk=500):
+    """把整批帶入的收回去。只動「最新的一筆對照紀錄是整批帶入、而且現在還對照著那一位」的舊會員
+    (人事後解除、改連、或解除之後又自己連回同一位的,都是人做的對照,不收):
+
+    - 那位會員是整批帶入時**新建**的,而且在新系統沒有被用過 → 解除對照、刪掉那位會員;
+    - 新建的但**已經被用過**(開過單、收過話費…,或人事後又把別的舊會員連到他)→ 不動(留著對照,舊紀錄還看得到);
+    - 當時是連到**原本就有**的會員 → 只解除對照,不刪人。
+    回 {removed, unlinked, kept}。
+    """
+    from apps.parties.models import Member
+
+    # 每個舊會員**最新的**那一筆對照紀錄。要最新的:整批帶入之後人解除、又自己連回同一位,
+    # 現在這個對照是人做的,不能因為以前有過一筆「整批帶入」就收掉
+    latest = {}
+    for system, key, action, note, target in LegacyMappingLog.objects.filter(
+        tenant=tenant, kind=LegacyMappingLog.Kind.MEMBER,
+    ).order_by("pk").values_list("source_system", "key_raw", "action", "note", "new_target_id"):
+        latest[(system, key)] = (action, note, target)
+    ids = [
+        pk for pk, system, key, member_id in LegacyMember.objects.filter(
+            tenant=tenant, status=MapStatus.CONFIRMED,
+        ).order_by("pk").values_list("pk", "source_system", "source_member_id", "member_id")
+        if latest.get((system, key)) == (LegacyMappingLog.Action.CONFIRM, BULK_NOTE, member_id)
+    ]
+    out = {"removed": 0, "unlinked": 0, "kept": 0}
+    for start in range(0, len(ids), chunk):
+        with transaction.atomic():
+            rows = (LegacyMember.objects.select_for_update()
+                    .filter(pk__in=ids[start:start + chunk], status=MapStatus.CONFIRMED).order_by("pk"))
+            for lm in rows:
+                member = Member.objects.select_for_update().get(pk=lm.member_id)
+                created_here = lm.method == MapMethod.CREATED
+                if created_here and _member_is_used(member, lm):
+                    out["kept"] += 1
+                    continue
+                out["removed" if created_here else "unlinked"] += 1
+                if write:
+                    unlink_member(lm, user, note=f"收回{BULK_NOTE}")
+                    if created_here:
+                        member.delete()
+    return out
 
 
 # ─────────────────────────── 店別 / 品號 / 業務員 ───────────────────────────
