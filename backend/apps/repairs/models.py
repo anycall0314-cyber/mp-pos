@@ -126,6 +126,14 @@ class RepairOrder(TenantOwnedModel):
     device_serial = models.CharField(
         "機身序號 / IMEI", max_length=64, blank=True,
     )
+    # 收件快速開單(owner 2026-10-19:「門市只是負責收件…要檢測才會有細項」)。
+    # 開不了機取不到序號的明確勾起來,跟「忘了填」分開;新開的單序號跟這一格至少要一個(serializers 擋)
+    serial_unavailable = models.BooleanField("序號取不到", default=False, db_default=False)
+    # 收件時口頭先講的價錢,印在收件單上並註明以檢測後報價為準(不是報價、不進毛利)
+    intake_estimate = models.DecimalField(
+        "收件預估費用", max_digits=14, decimal_places=2, default=Decimal("0"), db_default=Decimal("0"),
+    )
+    accessories = models.CharField("隨機配件", max_length=200, blank=True, default="", db_default="")
     defect_description = models.TextField("故障描述", blank=True)
     unlock_method = models.CharField(
         "手機解鎖方式",

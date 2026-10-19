@@ -1357,6 +1357,12 @@ export interface RepairOrder {
   host_model_key: string;
   host_model_name: string;
   device_serial: string;
+  /** 開不了機取不到序號(收件時勾的) */
+  serial_unavailable: boolean;
+  /** 收件時口頭講的預估費用(印在收件單上,以檢測後報價為準) */
+  intake_estimate: string;
+  /** 客人一起留下的東西 */
+  accessories: string;
   defect_description: string;
   unlock_method: RepairUnlockMethod;
   unlock_password: string;

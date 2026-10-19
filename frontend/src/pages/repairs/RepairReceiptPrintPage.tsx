@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 
 import { useRepairOrder } from "@/api/hooks";
 import { money, roundInt } from "@/lib/money";
+import { receiptQuote } from "@/lib/repairIntake";
 
 const TERMS = [
   "因摔機、浸水、受潮、或未經原廠授權之拆解等人為因素所造成之損壞,不在原廠保固範圍內。如客戶要求嘗試維修,本中心將依正常維修程序處理,但不保證能將裝置恢復至送修前狀態,亦不承擔因此喪失原廠保固之相關責任。",
@@ -49,11 +50,10 @@ export function RepairReceiptPrintPage() {
   }
   const titleSuffix = typeLabels.join(" · ");
   const quote = o.mode === "in_house" ? o.final_quote : o.external_quote_estimated;
-  const quoteNum = roundInt(quote);
-  const quoteDisplay =
-    quoteNum > 0
-      ? `NT$ ${money(quoteNum)}`
-      : "待評估後通知";
+  // 檢測後的報價優先;還沒有就印收件時講的預估並註明(lib/repairIntake)
+  const shown = receiptQuote(roundInt(quote), roundInt(o.intake_estimate ?? "0"));
+  const quoteDisplay = shown.amount != null ? `NT$ ${money(shown.amount)}` : shown.note;
+  const quoteNote = shown.amount != null ? shown.note : "";
   const repairItemDisplay =
     o.repair_item_name || o.defect_description.slice(0, 30) || "待評估";
 
@@ -110,8 +110,14 @@ export function RepairReceiptPrintPage() {
           </div>
           <div>
             <div className="rr-info-label">序號 / IMEI</div>
-            <div className="rr-info-val">{o.device_serial || "—"}</div>
+            <div className="rr-info-val">{o.device_serial || (o.serial_unavailable ? "取不到(開不了機)" : "—")}</div>
           </div>
+          {o.accessories && (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <div className="rr-info-label">隨機配件</div>
+              <div className="rr-info-val">{o.accessories}</div>
+            </div>
+          )}
           <div style={{ gridColumn: "1 / -1" }}>
             <div className="rr-info-label">故障描述</div>
             <div className="rr-info-val rr-info-multiline">
@@ -132,6 +138,7 @@ export function RepairReceiptPrintPage() {
             <div>
               <div className="rr-info-label">預估報價</div>
               <div className="rr-info-val rr-quote">{quoteDisplay}</div>
+              {quoteNote && <div className="rr-info-label">{quoteNote}</div>}
             </div>
           </div>
         </div>

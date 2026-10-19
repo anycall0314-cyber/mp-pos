@@ -1,3 +1,5 @@
+from decimal import ROUND_HALF_UP, Decimal
+
 from rest_framework import serializers
 
 from apps.catalog.models import Product
@@ -232,6 +234,9 @@ class RepairOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSer
             "host_model_key",
             "host_model_name",
             "device_serial",
+            "serial_unavailable",
+            "intake_estimate",
+            "accessories",
             "defect_description",
             "unlock_method",
             "unlock_password",
@@ -319,6 +324,13 @@ class RepairOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSer
             raise serializers.ValidationError({"member": "會員已停用"})
         if member is None and customer is None:
             raise serializers.ValidationError({"member": "請選送修會員"})
+        # 序號 / IMEI 必填(開不了機勾「取不到」)擋在收件畫面(RepairEntryPage),伺服器不擋:
+        # 其他建維修單的地方與既有的單照舊
+        estimate = attrs.get("intake_estimate")
+        if estimate is not None and estimate < 0:
+            raise serializers.ValidationError({"intake_estimate": "預估費用不能是負的"})
+        if estimate is not None:
+            attrs["intake_estimate"] = estimate.quantize(Decimal("1"), rounding=ROUND_HALF_UP)   # 全站金額整數
         return attrs
 
     def create(self, validated_data):

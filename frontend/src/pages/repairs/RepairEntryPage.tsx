@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { api } from "@/api/client";
@@ -40,6 +40,8 @@ import { Field } from "@/components/Field";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { Toolbar } from "@/components/Toolbar";
 import { MoneyInput } from "@/components/MoneyInput";
+import { localDay } from "@/lib/fixedReports";
+import { intakeProblem, makeSubmitGate, phoneForNewMember } from "@/lib/repairIntake";
 import { intStr, money } from "@/lib/money";
 import { marginFormula, personalSplit, repairMargin } from "@/lib/repairMargin";
 import { RepairHistoryModal } from "./RepairHistoryModal";
@@ -53,7 +55,8 @@ interface PartLine {
   unit_cost: string;
 }
 
-const TODAY = () => new Date().toISOString().slice(0, 10);
+// 台灣的今天(toISOString 是世界標準時間:凌晨 0~8 點會變成前一天;收件日自動帶、畫面上不給改,更要對)
+const TODAY = () => localDay();
 
 // 狀態流程(自修):待評估 → 報價中 → 維修中 → 待取件 → 完成
 const STEPS_IN_HOUSE: { value: RepairStatus; label: string }[] = [
@@ -130,6 +133,11 @@ function RepairEntryForm() {
   const [modelKey, setModelKey] = useState("");
   const [modelName, setModelName] = useState("");
   const [deviceSerial, setDeviceSerial] = useState("");
+  // 開不了機取不到序號:明確勾起來,跟忘了填分開(紅隊之後 owner 選「必填可註記」)
+  const [serialUnavailable, setSerialUnavailable] = useState(false);
+  // 收件時口頭講的預估費用(印在收件單上、註明以檢測後報價為準)與隨機配件
+  const [intakeEstimate, setIntakeEstimate] = useState("0");
+  const [accessories, setAccessories] = useState("");
   const [defect, setDefect] = useState("");
   const [internalNote, setInternalNote] = useState("");
   const [receivedDate, setReceivedDate] = useState(TODAY());
@@ -173,6 +181,12 @@ function RepairEntryForm() {
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
+  // 新開的單只做收件(owner 2026-10-19:「門市只是負責收件…要檢測才會有細項」):
+  // 自修 / 委外、維修人員、項目、零件、費用、狀態都等檢測之後打開這張單再填
+  const intake = !isEdit;
+  // 存檔一次只跑一個(建會員到存單整段):連按兩下不會建出兩位會員、兩張單
+  const submitGate = useRef(makeSubmitGate());
+  const [submitting, setSubmitting] = useState(false);
 
   const itemsByModel = useRepairItemsByModel(modelKey);
 
@@ -200,6 +214,9 @@ function RepairEntryForm() {
     setModelKey(o.host_model_key);
     setModelName(o.host_model_name);
     setDeviceSerial(o.device_serial);
+    setSerialUnavailable(!!o.serial_unavailable);
+    setIntakeEstimate(o.intake_estimate ?? "0");
+    setAccessories(o.accessories ?? "");
     setDefect(o.defect_description);
     setInternalNote(o.internal_note ?? "");
     setReceivedDate(o.received_date);
@@ -361,15 +378,30 @@ function RepairEntryForm() {
     finally { setCreating(false); }
   }
 
-  async function submit(opts?: { printAfter?: boolean }) {
+  function submit(opts?: { printAfter?: boolean }) {
+    return submitGate.current(async () => {
+      setSubmitting(true);
+      try {
+        await submitNow(opts);
+      } finally {
+        setSubmitting(false);
+      }
+    });
+  }
+
+  async function submitNow(opts?: { printAfter?: boolean }) {
     if (notLoaded) return;
     setError(null);
-    // 收件必填最小集合(per spec):電話/姓名/門市/經手人/機型/序號/收件日/故障描述/解鎖方式
-    if (!customerPhone.trim()) {
-      setError("請輸入聯絡電話");
+    // 收件要填的只有 lib/repairIntake 那幾格;門市、收件人、收件日沒有預設才要人選
+    const problem = intakeProblem({
+      phone: customerPhone, name: customerName, modelKey, serial: deviceSerial, serialUnavailable,
+      defect, unlockMethod, unlockPassword, unlockPattern,
+    });
+    if (problem) {
+      setError(problem);
       return;
     }
-    if (!customer && !member) {
+    if (!intake && !customer && !member) {
       setError("請選或建立送修會員");
       return;
     }
@@ -378,35 +410,11 @@ function RepairEntryForm() {
       return;
     }
     if (!salesPerson) {
-      setError("請選擇經手人");
-      return;
-    }
-    if (!modelKey) {
-      setError("請選擇機型(找不到可現場新增)");
-      return;
-    }
-    if (!deviceSerial.trim()) {
-      setError("請輸入機身序號 / IMEI");
+      setError("請選擇收件人");
       return;
     }
     if (!receivedDate) {
       setError("請選擇收件日期");
-      return;
-    }
-    if (!defect.trim()) {
-      setError("請輸入故障描述(客戶描述即可,不需精確)");
-      return;
-    }
-    if (!unlockMethod) {
-      setError("請選擇手機解鎖方式");
-      return;
-    }
-    if (unlockMethod === "password" && !unlockPassword.trim()) {
-      setError("已選擇『密碼』,請輸入密碼;若無密碼請改選『無』");
-      return;
-    }
-    if (unlockMethod === "pattern" && !unlockPattern.trim()) {
-      setError("已選擇『圖形鎖』,請完成九宮格繪製;若無圖形鎖請改選『無』");
       return;
     }
     if (isReturnVisit && !previousId) {
@@ -415,14 +423,29 @@ function RepairEntryForm() {
     }
     // 維修項目 / 零件 / 報價屬於評估後再填,收件當下允許留空
     try {
+      // 電話查不到會員:存檔時用這個姓名建一位(owner 選「存檔自動建」;畫面上電話那一格先講會建)
+      let sender = member;
+      if (intake && !sender && !customer) {
+        const bad = phoneForNewMember(customerPhone);
+        if (bad) {
+          setError(bad);
+          return;
+        }
+        sender = await saveMember.mutateAsync({ name: customerName.trim(), phone: customerPhone.trim() });
+        setMember(sender);
+        setLookupStatus("found");
+      }
       const body: Record<string, unknown> = {
         id: id ?? undefined,
         mode,
-        customer: member && !isEdit ? undefined : customer || null,
-        member: member?.id ?? null,
+        customer: sender && !isEdit ? undefined : customer || null,
+        member: sender?.id ?? null,
         host_model_key: modelKey,
         host_model_name: modelName,
-        device_serial: deviceSerial,
+        device_serial: serialUnavailable ? "" : deviceSerial,
+        serial_unavailable: serialUnavailable,
+        intake_estimate: String(Math.max(0, Math.round(Number(intakeEstimate) || 0))),
+        accessories: accessories.trim(),
         defect_description: defect,
         unlock_method: unlockMethod,
         unlock_password: unlockMethod === "password" ? unlockPassword : "",
@@ -584,7 +607,7 @@ function RepairEntryForm() {
                 <button
                   className="btn"
                   onClick={() => submit()}
-                  disabled={save.isPending || notLoaded}
+                  disabled={save.isPending || submitting || notLoaded}
                   title="只儲存,不開啟列印"
                 >
                   {save.isPending ? "儲存中…" : "儲存"}
@@ -592,7 +615,7 @@ function RepairEntryForm() {
                 <button
                   className="btn primary"
                   onClick={() => submit({ printAfter: true })}
-                  disabled={save.isPending || notLoaded}
+                  disabled={save.isPending || submitting || notLoaded}
                 >
                   {save.isPending ? "儲存中…" : "儲存並列印收據"}
                 </button>
@@ -644,22 +667,26 @@ function RepairEntryForm() {
 
         {/* 頂部:維修方式 segmented + 返修勾選 */}
         <div className="re-mode-bar">
-          <button
-            type="button"
-            className={`pf-tab${mode === "in_house" ? " active" : ""}`}
-            onClick={() => tryChangeMode("in_house")}
-          >
-            自修
-            <span className="pf-tab-sub">店內處理</span>
-          </button>
-          <button
-            type="button"
-            className={`pf-tab${mode === "external" ? " active" : ""}`}
-            onClick={() => tryChangeMode("external")}
-          >
-            委外
-            <span className="pf-tab-sub">送外廠</span>
-          </button>
+          {!intake && (
+            <>
+              <button
+                type="button"
+                className={`pf-tab${mode === "in_house" ? " active" : ""}`}
+                onClick={() => tryChangeMode("in_house")}
+              >
+                自修
+                <span className="pf-tab-sub">店內處理</span>
+              </button>
+              <button
+                type="button"
+                className={`pf-tab${mode === "external" ? " active" : ""}`}
+                onClick={() => tryChangeMode("external")}
+              >
+                委外
+                <span className="pf-tab-sub">送外廠</span>
+              </button>
+            </>
+          )}
           <label className="re-return-toggle">
             <input
               type="checkbox"
@@ -702,14 +729,16 @@ function RepairEntryForm() {
         </div>
 
         {/* 左右兩欄 */}
-        <div className="re-grid">
+        <div className={intake ? "re-grid re-grid-intake" : "re-grid"}>
           {/* ─── 左欄 60% ─── */}
           <div className="re-col-main">
             {/* 第一區:基本資料 */}
             <section className="re-section">
               <div className="re-section-title">基本資料</div>
               <div className="re-section-body">
-                <Field label="送修會員"><ComboBox<Member> value={member?.id ?? ""} selectedOption={member ? {id: member.id, label: member.name, secondary: member.phone, payload: member} : null} fetchOptions={searchMembers} disabled={isLocked || notLoaded} placeholder="電話／姓名／公司／統編" onChange={(_, opt) => { const m = opt?.payload ?? null; setMember(m); if (m) { setCustomerName(m.name); setCustomerPhone(m.phone); setLookupStatus("found"); setShowQuickCreate(false); } }} /></Field>
+                {!intake && (
+                  <Field label="送修會員"><ComboBox<Member> value={member?.id ?? ""} selectedOption={member ? {id: member.id, label: member.name, secondary: member.phone, payload: member} : null} fetchOptions={searchMembers} disabled={isLocked || notLoaded} placeholder="電話／姓名／公司／統編" onChange={(_, opt) => { const m = opt?.payload ?? null; setMember(m); if (m) { setCustomerName(m.name); setCustomerPhone(m.phone); setLookupStatus("found"); setShowQuickCreate(false); } }} /></Field>
+                )}
                 <div className="re-2col">
                   <Field
                     label="聯絡電話"
@@ -720,7 +749,9 @@ function RepairEntryForm() {
                         : lookupStatus === "found" && (customer || member)
                           ? "已對應送修對象"
                           : lookupStatus === "not_found"
-                            ? "查無此電話,可下方建立"
+                            ? intake
+                              ? "查無此電話,存檔時會用這個姓名建一位新會員"
+                              : "查無此電話,可下方建立"
                             : "輸入電話會查詢會員"
                     }
                   >
@@ -747,7 +778,7 @@ function RepairEntryForm() {
                   </Field>
                 </div>
                 {(member || (customer && lookupStatus === "found") ||
-                  showQuickCreate) && (
+                  (showQuickCreate && !intake)) && (
                   <div className="re-customer-status">
                     {customer && lookupStatus === "found" && (
                       <span className="re-customer-badge ok">
@@ -759,7 +790,7 @@ function RepairEntryForm() {
                         會員 {member.code} {member.name}
                       </span>
                     )}
-                    {showQuickCreate && !customer && (
+                    {showQuickCreate && !customer && !intake && (
                       <div className="re-quick-create">
                         <span style={{ color: "var(--text-dim)", fontSize: 14 }}>
                           查無此電話的會員，
@@ -782,6 +813,7 @@ function RepairEntryForm() {
                   </div>
                 )}
                 <div className="re-2col">
+                  {(!intake || !defaultWh.id) && (
                   <Field label="收件門市" required>
                     <select
                       value={warehouseId}
@@ -800,6 +832,8 @@ function RepairEntryForm() {
                       ))}
                     </select>
                   </Field>
+                  )}
+                  {(!intake || !defaultHandledBy.id) && (
                   <Field
                     label="收件人"
                     required
@@ -815,6 +849,8 @@ function RepairEntryForm() {
                       fetchOptions={(q) => searchSalesPersons(q)}
                     />
                   </Field>
+                  )}
+                  {!intake && (
                   <Field
                     label="維修人員"
                     hint={
@@ -835,6 +871,8 @@ function RepairEntryForm() {
                       fetchOptions={(q) => searchSalesPersons(q)}
                     />
                   </Field>
+                  )}
+                  {!intake && (
                   <Field label="收件日期" required>
                     <input
                       type="date"
@@ -842,6 +880,7 @@ function RepairEntryForm() {
                       onChange={(e) => setReceivedDate(e.target.value)}
                     />
                   </Field>
+                  )}
                   <Field
                     label="機型"
                     required
@@ -860,13 +899,23 @@ function RepairEntryForm() {
                       }}
                     />
                   </Field>
-                  <Field label="機身序號 / IMEI">
+                  <Field label="機身序號 / IMEI" required>
                     <input
-                      value={deviceSerial}
+                      value={serialUnavailable ? "" : deviceSerial}
                       onChange={(e) => setDeviceSerial(e.target.value)}
-                      placeholder="客戶這台機的 IMEI"
+                      placeholder={serialUnavailable ? "取不到" : "客戶這台機的 IMEI"}
+                      disabled={serialUnavailable}
                     />
+                    <label className="re-serial-none">
+                      <input
+                        type="checkbox"
+                        checked={serialUnavailable}
+                        onChange={(e) => setSerialUnavailable(e.target.checked)}
+                      />
+                      取不到(開不了機)
+                    </label>
                   </Field>
+                  {!intake && (
                   <Field label="預計完修日期">
                     <input
                       type="date"
@@ -874,8 +923,24 @@ function RepairEntryForm() {
                       onChange={(e) => setExpectedDate(e.target.value)}
                     />
                   </Field>
+                  )}
+                  <Field label="預估費用" hint="印在收件單上,註明以檢測後報價為準">
+                    <input
+                      inputMode="numeric"
+                      value={intStr(intakeEstimate)}
+                      onChange={(e) => setIntakeEstimate(e.target.value.replace(/[^0-9]/g, "") || "0")}
+                    />
+                  </Field>
+                  <Field label="隨機配件">
+                    <input
+                      value={accessories}
+                      onChange={(e) => setAccessories(e.target.value)}
+                      placeholder="保護殼、充電線、SIM 卡"
+                      maxLength={200}
+                    />
+                  </Field>
                 </div>
-                <Field label="故障描述">
+                <Field label="故障描述" required>
                   <textarea
                     rows={3}
                     value={defect}
@@ -936,7 +1001,7 @@ function RepairEntryForm() {
             </section>
 
             {/* 第二區:維修內容(自修) */}
-            {mode === "in_house" && (
+            {mode === "in_house" && !intake && (
               <section className="re-section">
                 <div className="re-section-title">維修內容</div>
                 <div className="re-section-body">
@@ -1091,7 +1156,7 @@ function RepairEntryForm() {
             )}
 
             {/* 第三區:委外資訊 */}
-            {mode === "external" && (
+            {mode === "external" && !intake && (
               <section className="re-section">
                 <div className="re-section-title">委外資訊</div>
                 <div className="re-section-body">
@@ -1154,7 +1219,8 @@ function RepairEntryForm() {
             )}
           </div>
 
-          {/* ─── 右欄 40% sticky ─── */}
+          {/* ─── 右欄 40% sticky(收件時沒有:費用、狀態都是檢測之後的事) ─── */}
+          {!intake && (
           <aside className="re-col-side">
             {/* 費用摘要卡 */}
             <section className="re-card re-summary">
@@ -1331,6 +1397,7 @@ function RepairEntryForm() {
               />
             </section>
           </aside>
+          )}
         </div>
       </div>
 

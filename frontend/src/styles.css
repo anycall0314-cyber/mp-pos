@@ -4105,6 +4105,8 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   gap: 14px;
   align-items: flex-start;
 }
+.re-grid-intake { grid-template-columns: minmax(0, 1fr); max-width: 880px; }
+.re-serial-none { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--text-dim); font-size: var(--font-secondary); }
 .re-col-main {
   display: flex;
   flex-direction: column;
