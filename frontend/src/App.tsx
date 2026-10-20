@@ -321,6 +321,7 @@ export function App() {
             element={<CashAdjustmentsPage />}
           />
           <Route path="/members" element={<MembersPage />} />
+          <Route path="/members/:id" element={<MembersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/backup" element={<BackupPage />} />
           <Route path="/settings/legacy" element={<LegacyMappingPage />} />

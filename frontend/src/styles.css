@@ -1728,6 +1728,10 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   flex: 1;
   min-height: 0;
 }
+/* 會員自己一頁(新分頁):沒有左邊名單 */
+.pc-layout.solo {
+  grid-template-columns: 1fr;
+}
 .pc-master {
   border-right: 1px solid var(--border);
   background: var(--panel);

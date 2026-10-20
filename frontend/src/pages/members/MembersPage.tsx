@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { ApiHttpError } from "@/api/client";
 import {
@@ -15,6 +15,7 @@ import { Banner } from "@/components/Banner";
 import { SourcePicker } from "@/components/SourcePicker";
 import { Toolbar } from "@/components/Toolbar";
 import { byId, cutNote, latestDay } from "@/lib/listAll";
+import { memberIdFromRoute, memberTabTitle, memberUrl } from "@/lib/memberUrl";
 import { money } from "@/lib/money";
 
 import { LegacyHistorySection } from "./LegacyHistorySection";
@@ -63,6 +64,9 @@ function toForm(m: Member): FormState {
 export function MembersPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  // `/members/編號` = 這一位自己一頁(名單點一位開的新分頁):沒有左邊名單、整頁寬
+  const soloId = memberIdFromRoute(useParams().id);
+  const solo = soloId != null;
   const save = useSaveMember();
 
   const [query, setQuery] = useState("");
@@ -76,12 +80,14 @@ export function MembersPage() {
   // 選到的那一位:點名單時記下來,名單之後換了(打字搜尋)也還是他
   const [picked, setPicked] = useState<Member | null>(null);
   const [selection, setSelection] = useState<Selection>(() => {
+    if (soloId != null) return { kind: "member", id: soloId };
     const sel = searchParams.get("selected");
     const n = sel ? Number(sel) : NaN;
     return Number.isFinite(n) ? { kind: "member", id: n } : null;
   });
 
   useEffect(() => {
+    if (solo) return;
     const sel = searchParams.get("selected");
     if (!sel) return;
     const n = Number(sel);
@@ -91,6 +97,7 @@ export function MembersPage() {
   }, [searchParams]);
 
   useEffect(() => {
+    if (solo) return;
     if (selection?.kind === "member") {
       if (searchParams.get("selected") !== String(selection.id)) {
         const next = new URLSearchParams(searchParams);
@@ -264,21 +271,45 @@ export function MembersPage() {
   const isEditing = selection?.kind === "member";
   const isNew = selection?.kind === "new";
 
+  // 新分頁的標題寫會員名字(開好幾位分得出來);離開這一頁還原
+  const soloName = solo ? selected?.name : null;
+  useEffect(() => {
+    if (!solo) return;
+    const before = document.title;
+    document.title = memberTabTitle(soloName);
+    return () => {
+      document.title = before;
+    };
+  }, [solo, soloName]);
+
+  function cancel() {
+    if (!solo) {
+      setSelection(null);
+      return;
+    }
+    // 名單開的分頁 → 關掉回到名單;直接打網址開的關不掉 → 回名單頁
+    if (window.opener) window.close();
+    else navigate("/members");
+  }
+
   return (
     <div className="page">
       <Toolbar
-        title="會員管理"
+        title={solo ? "會員資料" : "會員管理"}
         actions={
-          <button
-            className="btn primary"
-            onClick={() => setSelection({ kind: "new" })}
-          >
-            + 新增會員
-          </button>
+          solo ? undefined : (
+            <button
+              className="btn primary"
+              onClick={() => setSelection({ kind: "new" })}
+            >
+              + 新增會員
+            </button>
+          )
         }
       />
 
-      <div className="pc-layout">
+      <div className={solo ? "pc-layout solo" : "pc-layout"}>
+        {!solo && (
         <aside className="pc-master" style={{ gridTemplateRows: "1fr" }}>
           <section className="pc-section">
             <div className="pc-section-header">
@@ -315,10 +346,7 @@ export function MembersPage() {
                     {members.map((m) => (
                       <tr
                         key={m.id}
-                        onClick={() => {
-                          setPicked(m);
-                          setSelection({ kind: "member", id: m.id });
-                        }}
+                        onClick={() => window.open(memberUrl(m.id), "_blank")}
                         className={
                           selection?.kind === "member" && selection.id === m.id
                             ? "selected"
@@ -352,11 +380,12 @@ export function MembersPage() {
             </div>
           </section>
         </aside>
+        )}
 
         <div className="pc-detail">
           {!isEditing && !isNew && (
             <div className="md-empty" style={{ marginTop: 40 }}>
-              從左側選擇會員以檢視 / 編輯,或按右上角「新增會員」
+              點會員在新分頁打開,或按右上角「新增會員」
             </div>
           )}
 
@@ -462,7 +491,7 @@ export function MembersPage() {
                 </button>
                 <button
                   className="btn"
-                  onClick={() => setSelection(null)}
+                  onClick={cancel}
                   disabled={save.isPending}
                 >
                   取消
