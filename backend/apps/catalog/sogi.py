@@ -22,6 +22,8 @@ MAX_BYTES = 5_000_000
 
 _ITEM = re.compile(r'event-element-target="([^"]{1,200})"\s+href="(/products/[A-Za-z0-9_.\-]{1,120}/(\d{1,9}))"')
 _VARIANT = re.compile(r'event-page-element="版本空機"[^>]*>\s*([^<]{1,60})</a>')
+# 還沒上市的版本格子:沒有連結,版本寫在 <span>,下一格寫「未上市」
+_UNRELEASED_VARIANT = re.compile(r'btn-price[^"]*"[^>]*>\s*<div[^>]*>\s*<span>\s*([^<]{1,60})</span>(?=[\s\S]{0,200}?未上市)')
 _MONEY = re.compile(r"\$\s*([\d,]{1,9})")
 
 
@@ -94,13 +96,22 @@ def _storage(label: str) -> str:
     return f"{int(n)}{unit.upper()}"
 
 
+def product_path(pid: str | int) -> str:
+    """只知道編號時讀商品頁的路徑(對方會轉到正式的網址)。"""
+    return f"/products/x/{int(pid)}"
+
+
 def parse_product(page: str) -> dict:
-    """商品頁 → {"name", "launch"(YYYY-MM 或空的), "variants": [{"label", "storage", "msrp"}], "colors", "class", "rom"}。"""
+    """商品頁 → {"name", "launch"(YYYY-MM 或空的), "unreleased", "variants": [{"label", "storage", "msrp"}], "colors", "class", "rom",
+    "screen"(吋,沒寫是 None), "volte", "path"(正式的網址,沒寫是空的)}。
+
+    還沒上市的頁:「上市日期：2026/10(未上市)」或「上市日期：------(未上市)」(沒公布日期);版本格子沒有連結、價錢那一格寫「未上市」,原廠售價照寫。"""
     name = _text((re.search(r"<h1[^>]*>([\s\S]{0,400}?)</h1>", page) or [None, ""])[1])
     m = re.search(r"上市日期：\s*(\d{4})\s*/\s*(\d{1,2})", page)
     launch = f"{m.group(1)}-{int(m.group(2)):02d}" if m and 1 <= int(m.group(2)) <= 12 else ""
+    unreleased = bool(re.search(r"上市日期：[^<]{0,30}\(未上市\)", page))
     variants = []
-    hits = list(_VARIANT.finditer(page))
+    hits = list(_VARIANT.finditer(page)) or list(_UNRELEASED_VARIANT.finditer(page) if unreleased else [])
     for i, v in enumerate(hits):
         block = page[v.end(): hits[i + 1].start() if i + 1 < len(hits) else v.end() + 3000]
         label = _text(v.group(1)).strip("() ")
@@ -115,5 +126,9 @@ def parse_product(page: str) -> dict:
     for s in re.finditer(r'<th[^>]*>([^<]{1,40})</th>\s*<td[^>]*>([\s\S]{0,2000}?)</td>', page):
         specs.setdefault(_text(s.group(1)), _text(s.group(2)))
     colors = [c.strip() for c in re.split(r"[,、，]", specs.get("機身顏色", "")) if c.strip()]
-    return {"name": name, "launch": launch, "variants": variants, "colors": list(dict.fromkeys(colors)),
-            "class": specs.get("裝置分類", ""), "rom": specs.get("ROM儲存空間", "")}
+    inch = re.search(r"(\d{1,2}(?:\.\d{1,2})?)\s*inch", specs.get("主螢幕尺寸", ""), re.I)
+    canon = re.search(r'<link rel="canonical" href="https://www\.sogi\.com\.tw(/products/[A-Za-z0-9_.\-]{1,120}/\d{1,9})"', page)
+    return {"name": name, "launch": launch, "unreleased": unreleased, "variants": variants, "colors": list(dict.fromkeys(colors)),
+            "class": specs.get("裝置分類", ""), "rom": specs.get("ROM儲存空間", ""),
+            "screen": float(inch.group(1)) if inch else None, "volte": specs.get("VoLTE", "").strip().casefold() == "yes",
+            "path": canon.group(1) if canon else ""}

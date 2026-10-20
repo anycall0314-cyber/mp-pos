@@ -14,6 +14,14 @@
 5. **自動加進來的新機盯 `WATCH_DAYS` 天**(紅隊第 3 條:上市時顏色常常還沒公布齊):每天再讀它的商品頁,多出來的容量 / 顏色 / 連線補進型號庫,
    有勾的公司補建那幾個品號。**只加不減**;已經有的品號、售價、庫存、序號、單據一個都不改;本來就在型號庫的那 1,468 支不盯。
 6. 售價:手機王的「原廠售價」記成來源報的建議價(跟 Codex 整理的同一種),**不寫進任何一家的售價**(展開只帶寫明是原廠明示的,其他 0)。
+7. **還沒上市的也先加**(owner 2026-10-20「手機只要上市，甚至上市前，皆會自動把品名與品號新增進去」):
+   手機王的清單只列上市的,還沒上市的只有商品頁(編號照建立順序往上加)→ 讀完清單,**最近 `SCAN_BACK` 號裡沒看過的再讀一次(一天最多 `SCAN_GAPS` 頁),
+   再從看過的最大編號往後一頁一頁讀,連續 `SCAN_MISSES` 頁不存在就停**(第一次補讀用 `scan_from`)。
+   清單上沒有的頁照規格分(`guess_kind`);分不出來的「等資料」,等它上清單。
+   - 寫了上市月份、是這個月或之後 → 跟上市的一樣(齊了直接加、建品號);
+   - 沒寫日期(只在國外發表)、日期過了還寫未上市(延期、不在台灣賣)→「等資料」,不給人看;
+     等資料等了 `STALE_DAYS` 天的改成每 `STALE_EVERY` 天讀一次。
+   - 上市前就加的盯到上市月份之後 `WATCH_DAYS` 天。
 
 被擋(401 / 403 / 429)就整個停、這一次不再讀;讀不到的那幾頁下一次再試。任何一步出錯都不動型號庫以外的東西。
 """
@@ -26,6 +34,7 @@ from datetime import time, timedelta
 
 from django.conf import settings
 from django.db import connection, transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.tenants.models import Tenant
@@ -37,8 +46,15 @@ ORIGIN = "sogi-auto"
 WATCH_DAYS = 60
 MAX_AUTO = 10
 MAX_DETAIL = 40          # 一次最多讀幾個商品頁(一頁隔 2.5 秒 ≈ 100 秒)
+FOLLOW_RESERVE = 10      # 等資料的再讀不能用掉的頁數(留給盯新機補顏色容量;複審 P2)
 SHRINK = 0.6             # 清單少於上一次成功的六成 = 當成讀失敗
 MIN_LIST = 10
+SCAN_BACK = 30           # 最近幾號裡沒看過的再讀一次(晚發布的頁)
+SCAN_GAPS = 10           # 那幾號一天最多讀幾頁(從新的讀起;對方刪了很多頁也不會把每天的頁數用光)
+SCAN_MISSES = 5          # 往後讀,連續幾頁不存在就停
+STALE_DAYS = 90          # 沒公布日期掛這麼久的
+STALE_EVERY = 7          # 改成幾天讀一次
+PHONE_MAX_INCH = 8.2     # 摺疊機打開約 8 吋;最小的平板 8.3 吋
 LOCK_KEY = 0x4D31_4400   # pg advisory lock:同一時間只有一個在檢查
 PRICE_KIND = "source_reported_suggested_price_not_verified_original_msrp"
 DEFAULT_AT = time(5, 30)
@@ -162,16 +178,35 @@ def _cap_order(c: str) -> int:
     return int(m.group(1)) * (1024 if m.group(2) == "TB" else 1) if m else 0
 
 
+def _classes(page: dict) -> list[str]:
+    return [c.strip() for c in re.split(r"[,、，]", page.get("class") or "") if c.strip()]
+
+
+def guess_kind(page: dict) -> str:
+    """清單上沒有的頁(還沒上市)是哪一類:分類寫手錶 / 手環 / 耳機 = 穿戴;螢幕小於 `PHONE_MAX_INCH` 吋而且有 VoLTE = 手機;
+    名稱有 Tab / Pad / 平板、或螢幕夠大,而且沒有 VoLTE = 平板;其他分不出來(空字串)。"""
+    if any(c in WEARABLE for c in _classes(page)):
+        return "wearable"
+    screen, volte = page.get("screen"), bool(page.get("volte"))
+    tabletish = bool(re.search(r"tab\b|pad\b|平板", (page.get("name") or "").casefold()))
+    if screen is None:
+        return ""
+    if tabletish or screen >= PHONE_MAX_INCH:
+        return "" if volte else "tablet"
+    return "cellphone" if volte else ""
+
+
 def info_of(kind: str, item: dict, page: dict, brands: dict) -> dict:
-    """清單的一項 + 讀到的商品頁 → 型號庫一支要的東西(還沒判斷齊不齊)。"""
+    """清單的一項 + 讀到的商品頁 → 型號庫一支要的東西(還沒判斷齊不齊)。`kind` 空的 = 清單上沒有、分不出是哪一類。"""
     brand, raw_brand, name, conn = split_list_name(kind, item["name"], brands)
     if kind == "cellphone":
         category = DeviceModel.Category.PHONE
     elif kind == "tablet":
         category = DeviceModel.Category.TABLET
+    elif not kind:
+        category = ""
     else:
-        classes = [c.strip() for c in re.split(r"[,、，]", page.get("class") or "") if c.strip()]
-        found = [WEARABLE[c] for c in classes if c in WEARABLE]
+        found = [WEARABLE[c] for c in _classes(page) if c in WEARABLE]
         category = found[0] if len(set(found)) == 1 else ""
     url = sogi.BASE + item["path"]
     plain = [v for v in page.get("variants") or [] if not v.get("bundle")]
@@ -184,8 +219,8 @@ def info_of(kind: str, item: dict, page: dict, brands: dict) -> dict:
     prices = [{"version": v["label"], "storage": v.get("storage") or None, "connectivity": conn[0] if len(conn) == 1 else None,
                "size_mm": None, "amount": v["msrp"], "kind": PRICE_KIND, "url": url}
               for v in plain if v.get("msrp")]
-    return {"category": category, "brand": brand, "raw_brand": raw_brand, "name": name, "launched": page.get("launch") or "",
-            "capacities": caps, "colors": list(page.get("colors") or []), "connectivity": conn, "prices": prices,
+    return {"kind": kind, "category": category, "brand": brand, "raw_brand": raw_brand, "name": name, "launched": page.get("launch") or "",
+            "unreleased": bool(page.get("unreleased")), "capacities": caps, "colors": list(page.get("colors") or []), "connectivity": conn, "prices": prices,
             "sources": [url], "aliases": [item["name"]]}
 
 
@@ -201,14 +236,30 @@ def merge(a: dict, b: dict) -> dict:
     launches = [x for x in (a.get("launched"), b.get("launched")) if x]
     out["launched"] = min(launches) if launches else ""
     out["category"] = a.get("category") or b.get("category") or ""
+    out["unreleased"] = bool(a.get("unreleased") and b.get("unreleased"))   # 有一頁上市了就算上市(上市取早的那一頁)
     return out
 
 
+def hold(info: dict, today) -> str:
+    """先等、不給人看的原因(空字串 = 不用等):分不出是哪一類(等它上清單)、還沒上市而且沒寫日期 / 日期過了。"""
+    if info.get("kind") == "":
+        return "看不出是手機還是平板,等它上清單"
+    if info.get("unreleased"):
+        if not info.get("launched"):
+            return "還沒公布上市日期"
+        if info["launched"] < today.strftime("%Y-%m"):
+            return f"過了預計上市({info['launched']})還沒上市"
+    return ""
+
+
 def missing(info: dict, today) -> str:
-    """資料不齊的原因(空字串 = 齊了)。"""
+    """資料不齊的原因(空字串 = 齊了)。還沒上市但寫了這個月或之後的上市月份 = 齊了(owner 2026-10-20 要上市前就建)。"""
+    wait = hold(info, today)
+    if wait:
+        return wait
     if not info.get("launched"):
         return "還沒寫上市日期"
-    if info["launched"] > today.strftime("%Y-%m"):
+    if not info.get("unreleased") and info["launched"] > today.strftime("%Y-%m"):
         return f"還沒上市({info['launched']})"
     if info.get("category") in (DeviceModel.Category.PHONE, DeviceModel.Category.TABLET) and not info.get("capacities"):
         return "還沒有容量"
@@ -318,17 +369,32 @@ def _claim(members, data):
 
 
 def _watched(today) -> dict[str, list[DeviceCandidate]]:
-    """要盯的:自動加進來、還沒滿 WATCH_DAYS 天的那幾支 → 它們的商品頁。"""
+    """要盯的:自動加進來、還沒滿 WATCH_DAYS 天的那幾支(上市前就加的,算到上市月份之後 WATCH_DAYS 天)→ 它們的商品頁。"""
     since = timezone.now() - timedelta(days=WATCH_DAYS)
-    uids = set(DeviceModel.objects.filter(data__origin=ORIGIN, created_at__gte=since, is_active=True).values_list("uid", flat=True))
+    month = (today - timedelta(days=WATCH_DAYS)).strftime("%Y-%m")
+    uids = set(DeviceModel.objects.filter(data__origin=ORIGIN, is_active=True)
+               .filter(Q(created_at__gte=since) | Q(launched__gt=month)).values_list("uid", flat=True))
     out = {}
     for c in DeviceCandidate.objects.filter(uid__in=uids, status__in=SEEN).order_by("id"):
         out.setdefault(c.uid, []).append(c)
     return out
 
 
-def check(fetcher: sogi.Fetcher | None = None, *, today=None, write=True, log=lambda m: None) -> Report:
-    """檢查一次。`write=False` 只算(什麼都不寫,商品頁照樣讀)。回報告(筆數、要講的事)。"""
+def _scan_ids(ix: Index, seen: dict, listed: set, scan_from: int | None) -> tuple[list[int], int]:
+    """清單上沒有的頁要讀哪幾號:最近 SCAN_BACK 號裡型號庫、候選、清單都沒有的,從新的讀起、最多 SCAN_GAPS 頁
+    (給了 `scan_from` = 從那一號起全部);回 (那幾號, 看過的最大編號)。最大編號往後由呼叫的人一頁一頁讀。"""
+    known = {int(x) for x in (*ix.sogi_ids, *seen, *listed) if str(x).isdigit()}
+    if not known:
+        return [], 0
+    top = max(known)
+    start = top - SCAN_BACK if scan_from is None else scan_from
+    gaps = [i for i in range(top - 1, max(1, start) - 1, -1) if i not in known]
+    return (gaps if scan_from is not None else gaps[:SCAN_GAPS]), top
+
+
+def check(fetcher: sogi.Fetcher | None = None, *, today=None, write=True, log=lambda m: None, scan_from: int | None = None) -> Report:
+    """檢查一次。`write=False` 只算(什麼都不寫,商品頁照樣讀)。`scan_from` = 這一次從這一號起補讀清單上沒有的頁(第一次用)。
+    回報告(筆數、要講的事)。"""
     fetcher = fetcher or sogi.Fetcher()
     today = today or timezone.localdate()
     report = Report()
@@ -377,47 +443,112 @@ def check(fetcher: sogi.Fetcher | None = None, *, today=None, write=True, log=la
                         _save_candidate(item, kind, DeviceCandidate.Status.KNOWN, uid=sorted(hit)[0])
                     continue
             todo.append((kind, item, c))
-    # 等資料的也每天再讀一次(清單上這次沒有它的,照原本的網址讀)
     listed = {item["id"] for items in lists.values() for item in items}
-    for c in seen.values():
-        if c.status == DeviceCandidate.Status.WAITING and c.source_id not in listed:
-            todo.append((c.kind, {"id": c.source_id, "name": c.list_name, "path": c.url.replace(sogi.BASE, "", 1)}, c))
+    # 等資料的也每天再讀一次(清單上這次沒有它的,照原本的網址讀;最久沒讀的先讀)。
+    # 等了 STALE_DAYS 天還在等的(只在國外發表、分不出類別的舊頁)改成每 STALE_EVERY 天一次,不佔每天的頁數
+    now = timezone.now()
+    again = []
+    for c in sorted(seen.values(), key=lambda c: (c.checked_at or c.created_at, c.id)):
+        if c.status != DeviceCandidate.Status.WAITING or c.source_id in listed:
+            continue
+        if c.created_at < now - timedelta(days=STALE_DAYS) and c.checked_at and c.checked_at > now - timedelta(days=STALE_EVERY):
+            continue
+        again.append((c.kind, {"id": c.source_id, "name": c.list_name, "path": c.url.replace(sogi.BASE, "", 1)}, c))
 
+    gaps, top = _scan_ids(ix, seen, listed, scan_from) if lists else ([], 0)
+    limit = MAX_DETAIL + (len(gaps) if scan_from is not None else 0)
     pages = 0
     fetched = set()   # 這一次讀過的商品頁(盯新機那一步不再讀一次)
     groups = {}   # (品牌, 鍵) → [info, [(kind, item, c)]]
-    for kind, item, c in todo:
-        if c is not None and c.status == DeviceCandidate.Status.REVIEW:
-            continue   # 等人按,不重讀
-        if pages >= MAX_DETAIL:
-            report.notes.append(f"商品頁一次最多讀 {MAX_DETAIL} 頁,剩下的下一次再讀")
-            break
-        try:
-            page = sogi.parse_product(fetcher.get(item["path"]))
-            pages += 1
-            fetched.add(item["id"])
-        except sogi.Blocked as exc:
-            # 讀到一半被擋(複審 P1):前面讀到的也不加,這一次什麼都不改
-            report.ok = False
-            report.notes.append(f"{exc},這一次什麼都不改")
-            report.counts["pages"] = pages
-            return report
-        except OSError as exc:
-            report.notes.append(f"{item['name']} 的商品頁讀不到:{exc}")
-            continue
+
+    def take(kind, item, c, page):
         info = info_of(kind, item, page, ix.brands)
         key = group_key(info)
+        if hold(info, today):
+            # 還在等的頁自己一組(複審 P0):上市的 Wi-Fi 版 + 沒公布日期的 5G 版,5G 版的容量 / 連線不跟著建
+            key = (*key, "先等", item["id"])
         if key in groups:
             groups[key][0] = merge(groups[key][0], info)
             groups[key][1].append((kind, item, c))
         else:
             groups[key] = [info, [(kind, item, c)]]
+
+    def full(reserve=0):
+        if pages >= limit - reserve:
+            report.notes.append(f"商品頁一次最多讀 {limit} 頁,剩下的下一次再讀")
+            return True
+        return False
+
+    try:
+        # 1. 清單上新的
+        for kind, item, c in todo:
+            if c is not None and c.status == DeviceCandidate.Status.REVIEW:
+                continue   # 等人按,不重讀
+            if full():
+                break
+            try:
+                page = sogi.parse_product(fetcher.get(item["path"]))
+                pages += 1
+                fetched.add(item["id"])
+            except OSError as exc:
+                report.notes.append(f"{item['name']} 的商品頁讀不到:{exc}")
+                continue
+            take(kind, item, c, page)
+        # 2. 清單上沒有的頁(還沒上市的只有商品頁):最近沒看過的幾號,再從最大編號往後讀到連續幾頁不存在
+        scanned = found = 0
+        if top and pages < limit:
+            misses, nxt, queue = 0, top + 1, list(gaps)
+            while not full():
+                if queue:
+                    pid = queue.pop(0)
+                elif misses < SCAN_MISSES:
+                    pid, nxt = nxt, nxt + 1
+                else:
+                    break
+                scanned += 1
+                try:
+                    page = sogi.parse_product(fetcher.get(sogi.product_path(pid)))
+                    pages += 1
+                except OSError:
+                    pages += 1
+                    if pid > top:
+                        misses += 1
+                    continue
+                if pid > top:
+                    misses = 0
+                found += 1
+                fetched.add(str(pid))
+                # 型號庫已經有同名的,後面記成「已經有」(跟清單上的一樣)
+                item = {"id": str(pid), "name": page.get("name") or f"手機王 {pid}", "path": page.get("path") or sogi.product_path(pid)}
+                take(guess_kind(page), item, None, page)
+        if scanned:
+            report.counts["scanned"], report.counts["found"] = scanned, found
+        # 3. 等資料的再讀一次
+        for kind, item, c in again:
+            if full(FOLLOW_RESERVE):
+                break
+            try:
+                page = sogi.parse_product(fetcher.get(item["path"]))
+                pages += 1
+                fetched.add(item["id"])
+            except OSError as exc:
+                report.notes.append(f"{item['name']} 的商品頁讀不到:{exc}")
+                continue
+            take(kind if kind in sogi.LISTS else guess_kind(page), item, c, page)
+    except sogi.Blocked as exc:
+        # 讀到一半被擋(複審 P1):前面讀到的也不加,這一次什麼都不改
+        report.ok = False
+        report.notes.append(f"{exc},這一次什麼都不改")
+        report.counts["pages"] = pages
+        return report
     report.counts["pages"] = pages
 
     plans = []
     for key, (info, members) in groups.items():
         why, near = doubt(info, ix)
-        if why:
+        if hold(info, today):
+            plans.append(("waiting", info, members, hold(info, today), []))
+        elif why:
             plans.append(("review", info, members, why, near))
         elif missing(info, today):
             plans.append(("waiting", info, members, missing(info, today), []))
@@ -466,15 +597,17 @@ def check(fetcher: sogi.Fetcher | None = None, *, today=None, write=True, log=la
                 _save_candidate(item, kind, status, reason=why, data=data, checked=True)
 
     if report.ok and write:
-        _follow_up(fetcher, report, ix, budget=MAX_DETAIL - pages, log=log, skip=fetched)
+        _follow_up(fetcher, report, ix, budget=MAX_DETAIL - pages, log=log, skip=fetched, today=today)
     return report
 
 
-def _follow_up(fetcher, report, ix, *, budget, log, skip=frozenset()):
-    """自動加進來的新機,多出來的容量 / 顏色 / 連線補進型號庫、補建品號(只加不減)。這一次已經讀過的頁(`skip`)不再讀。
+def _follow_up(fetcher, report, ix, *, budget, log, skip=frozenset(), today=None):
+    """自動加進來的新機,多出來的容量 / 顏色 / 連線補進型號庫、補建品號(只加不減)。這一次已經讀過的頁(`skip`)不再讀;
+    還在等的頁(沒公布日期、日期過了還沒上市)不算(複審 P0)。
     **先把要讀的頁全部讀完才改**:讀到一半被擋就一支都不補(跟新增同一條規則)。"""
     read = []   # (DeviceModel, 讀到的)
-    for uid, cands in _watched(timezone.localdate()).items():
+    today = today or timezone.localdate()
+    for uid, cands in _watched(today).items():
         d = DeviceModel.objects.filter(uid=uid).first()
         if d is None or any(c.source_id in skip for c in cands):
             continue
@@ -493,6 +626,8 @@ def _follow_up(fetcher, report, ix, *, budget, log, skip=frozenset()):
                 continue
             item = {"id": c.source_id, "name": c.list_name, "path": c.url.replace(sogi.BASE, "", 1)}
             info = info_of(c.kind, item, page, ix.brands)
+            if hold(info, today):
+                continue
             fresh = info if fresh is None else merge(fresh, info)
         if fresh is not None:
             read.append((d, fresh))
@@ -530,8 +665,8 @@ def _grow(d, fresh, report, log):
 
 # ───────────────────────── 每天一次 ─────────────────────────
 
-def run_today(*, again=False, fetcher=None, log=lambda m: None) -> DeviceWatchRun | None:
-    """今天還沒做就做(`again` = 做過也再做一次)。另一個程序正在做 → 回 None。"""
+def run_today(*, again=False, fetcher=None, log=lambda m: None, scan_from: int | None = None) -> DeviceWatchRun | None:
+    """今天還沒做就做(`again` = 做過也再做一次;`scan_from` 見 `check`)。另一個程序正在做 → 回 None。"""
     today = timezone.localdate()
     if not again and DeviceWatchRun.objects.filter(day=today, finished_at__isnull=False).exists():
         return None
@@ -544,7 +679,7 @@ def run_today(*, again=False, fetcher=None, log=lambda m: None) -> DeviceWatchRu
             return None
         run, _ = DeviceWatchRun.objects.get_or_create(day=today)
         try:
-            report = check(fetcher, today=today, log=log)
+            report = check(fetcher, today=today, log=log, scan_from=scan_from)
         except Exception as exc:  # noqa: BLE001 — 記下來、明天再試,不讓背景程式掛掉
             report = Report(ok=False, notes=[f"檢查失敗 {type(exc).__name__}: {exc}"[:300]])
         run.ok, run.counts, run.notes, run.finished_at = report.ok, report.counts, report.notes[:100], timezone.now()
@@ -595,6 +730,8 @@ def decide(candidate_id: int, action: str, user, *, name: str = "", uid: str = "
             return {"status": "linked", "count": len(group)}
         if action != "add":
             raise DecideError("不認得要做什麼")
+        # 還在等的頁(沒公布日期的 5G 版)不跟著加,留著等資料(複審第二輪 P0)
+        group = [c] + [m for m in group[1:] if not hold(m.data or {}, timezone.localdate())]
         info = dict(c.data or {})
         for m in group[1:]:
             info = merge(info, m.data or {})

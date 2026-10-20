@@ -41,6 +41,28 @@ def product_page(name, *, launch="2026/09", variants=(("(8GB/256GB)", 19990), ("
             f'<tr><th class="active">裝置分類</th><td>{cls}</td></tr></table>')
 
 
+def prelaunch_page(name, slug, pid, *, launch="2026/11", variants=(("256GB", 32900), ("512GB", 39900)), colors=("夜空", "星光白"),
+                   cls="雙卡雙待機", screen=6.3, volte=True):
+    """還沒上市的頁:上市日期後面寫(未上市)、沒寫日期是「------」;版本格子沒有連結、價錢那格寫「未上市」。"""
+    boxes = "".join('<div class="col-auto px-1"> <div class="d-block h-100 btn-price rounded border p-2"> '
+                    f'<div class="d-flex justify-content-between align-items-center"> <span>{label}</span> </div> '
+                    '<div class="lead text-primary font-weight-bold m-0"> 未上市 </div> '
+                    f'<small class="d-block text-muted"> 原廠售價：${price:,} </small> </div> </div>' for label, price in variants)
+    spec = f'<tr><th class="active">主螢幕尺寸</th><td>{screen} inch</td></tr>' if screen is not None else ""
+    spec += f'<tr><th class="active">VoLTE</th><td>{"Yes" if volte else "No"}</td></tr>'
+    return (f'<link rel="canonical" href="https://www.sogi.com.tw/products/{slug}/{pid}"><h1 class="h2">{name}</h1>'
+            f'<small class="text-muted"> 上市日期：{launch or "------"}(未上市) </small>'
+            f'<div class="mb-1"> 門市空機價 (最低) </div>{boxes}<table>'
+            f'<tr><th class="active">機身顏色</th><td>{"、".join(colors)}</td></tr>'
+            f'<tr><th class="active">裝置分類</th><td>{cls}</td></tr>{spec}</table>')
+
+
+def unlisted(name, slug, pid, **kw):
+    """清單上沒有、只能照編號找到的頁:照編號讀(對方轉到正式網址)與照正式網址讀都是同一頁。"""
+    page = prelaunch_page(name, slug, pid, **kw)
+    return {f"/products/x/{pid}": page, f"/products/{slug}/{pid}": page}
+
+
 class FakeSite:
     """假的手機王:path → 網頁內容(或丟的錯)。記下讀了哪幾頁。"""
 
@@ -104,6 +126,28 @@ class SogiParseTests(TestCase):
                          ("tablet", "Galaxy Tab S12 Ultra", ["256GB"], ["WiFi"]))
         self.assertEqual([p["amount"] for p in info["prices"]], [46490])
 
+    def test_an_unreleased_page_gives_its_month_storage_prices_screen_and_address(self):
+        got = sogi.parse_product(prelaunch_page("Apple iPhone Duo", "apple-iphone-duo", 17436, launch="2026/10", screen=7.6))
+        self.assertEqual((got["launch"], got["unreleased"], got["screen"], got["volte"], got["path"]),
+                         ("2026-10", True, 7.6, True, "/products/apple-iphone-duo/17436"))
+        self.assertEqual([(v["storage"], v["msrp"]) for v in got["variants"]], [("256GB", 32900), ("512GB", 39900)])
+        undated = sogi.parse_product(prelaunch_page("OPPO Find X10", "oppo-find-x10", 17451, launch=None))
+        self.assertEqual((undated["launch"], undated["unreleased"]), ("", True))
+        released = sogi.parse_product(product_page("SAMSUNG Galaxy S26"))
+        self.assertEqual((released["unreleased"], released["screen"], released["volte"], released["path"]), (False, None, False, ""))
+
+    def test_a_page_off_the_lists_is_sorted_by_its_specs(self):
+        def kind(name="X", cls="雙卡雙待機", screen=6.5, volte=True):
+            return device_watch.guess_kind(sogi.parse_product(prelaunch_page(name, "x", 1, cls=cls, screen=screen, volte=volte)))
+        self.assertEqual(kind(), "cellphone")
+        self.assertEqual(kind(cls="摺疊螢幕手機, 雙螢幕手機", screen=8.0), "cellphone", "摺疊機打開約 8 吋還是手機")
+        self.assertEqual(kind(screen=11.0, volte=False), "tablet")
+        self.assertEqual(kind(cls="智慧手錶", screen=None, volte=False), "wearable")
+        self.assertEqual(kind(screen=7.0, volte=False), "", "小螢幕沒有 VoLTE:分不出來")
+        self.assertEqual(kind(name="SAMSUNG Galaxy Tab A11 5G", screen=8.0), "", "名稱是平板、卻有 VoLTE:分不出來")
+        self.assertEqual(kind(name="SAMSUNG Galaxy Tab A11", screen=8.0, volte=False), "tablet", "8 吋小平板看名稱")
+        self.assertEqual(kind(screen=None), "", "沒寫螢幕:分不出來")
+
     def test_a_list_page_gives_each_product_once(self):
         page = list_page(("SAMSUNG Galaxy S26", "samsung-galaxy-s26", "200"), ("SAMSUNG Galaxy S26", "samsung-galaxy-s26", "200"),
                          ("Apple iPhone 18 Pro", "apple-iphone-18-pro", "201"))
@@ -129,7 +173,9 @@ class SogiParseTests(TestCase):
                             "同名不同年是不同的機器,不要每一代都要人按")
 
 
-class CheckTests(TestCase):
+class _Watch(TestCase):
+    """兩家公司(甲勾了「新機自動建品號」、乙沒勾)+ 型號庫四支。"""
+
     def setUp(self):
         patch = mock.patch.object(device_watch, "MIN_LIST", 1)   # 假網頁的清單只有幾支
         patch.start()
@@ -153,6 +199,8 @@ class CheckTests(TestCase):
     def products(self, company, prefix):
         return sorted(Product.objects.for_tenant(company.tenant).filter(name__startswith=prefix).values_list("name", flat=True))
 
+
+class CheckTests(_Watch):
     def test_a_new_phone_with_full_data_goes_straight_in_and_the_ticked_company_gets_its_products(self):
         site = FakeSite({**lists(phones=[("SAMSUNG Galaxy Z Fold8", "samsung-galaxy-z-fold8", "300")]),
                          "/products/samsung-galaxy-z-fold8/300": product_page("SAMSUNG Galaxy Z Fold8")})
@@ -181,7 +229,8 @@ class CheckTests(TestCase):
         report = self.check(site)
         self.assertEqual(report.counts.get("known"), 2)
         self.assertEqual(dict(DeviceCandidate.objects.values_list("source_id", "uid")), {"301": "u-honor", "302": "u-pad"})
-        self.assertEqual(site.read, ["/search/cellphone", "/search/tablet", "/search/wearable"])
+        self.assertEqual([p for p in site.read if not p.startswith("/products/x/")], ["/search/cellphone", "/search/tablet", "/search/wearable"],
+                         "清單上的名稱型號庫有了就不讀商品頁(/products/x/ 是往後找還沒上市的頁)")
         self.assertEqual(DeviceModel.objects.count(), 4)
 
     def test_a_page_on_two_lists_is_handled_once(self):
@@ -356,6 +405,162 @@ class CheckTests(TestCase):
         report = self.check(site, write=False)
         self.assertEqual((report.counts.get("added"), report.counts.get("known")), (1, 1))
         self.assertEqual((DeviceCandidate.objects.count(), DeviceModel.objects.count(), Product.objects.filter(name__startswith="Galaxy Z Fold8").count()), (0, 4, 0))
+
+
+class PrelaunchTests(_Watch):
+    """還沒上市的(owner 2026-10-20「手機只要上市，甚至上市前，皆會自動把品名與品號新增進去」):清單上沒有、照編號往後找。"""
+
+    LISTED = ("SAMSUNG Galaxy Z Fold8", "samsung-galaxy-z-fold8", "300")
+
+    def site(self, *pages, phones=None, **lists_kw):
+        return FakeSite({**lists(phones=[self.LISTED] if phones is None else phones, **lists_kw),
+                         "/products/samsung-galaxy-z-fold8/300": product_page("SAMSUNG Galaxy Z Fold8"),
+                         **{k: v for p in pages for k, v in p.items()}})
+
+    def test_an_unreleased_phone_with_a_taiwan_month_is_found_past_the_list_and_its_products_are_built(self):
+        site = self.site(unlisted("Apple iPhone Duo", "apple-iphone-duo", 301, launch="2026/11"))
+        report = self.check(site)
+        self.assertTrue(report.ok, report.notes)
+        d = DeviceModel.objects.get(name="iPhone Duo")
+        self.assertEqual((d.brand, d.category, d.launched, d.data["capacities"], d.data["colors"]),
+                         ("Apple", "phone", "2026-11", ["256GB", "512GB"], ["夜空", "星光白"]))
+        self.assertEqual([p["amount"] for p in d.data["prices"]], [32900, 39900], "還沒上市的原廠售價照記")
+        c = DeviceCandidate.objects.get(source_id="301")
+        self.assertEqual((c.status, c.kind, c.url), (DeviceCandidate.Status.ADDED, "cellphone", "https://www.sogi.com.tw/products/apple-iphone-duo/301"))
+        self.assertEqual(len(self.products(self.c, "iPhone Duo ")), 2 * 2 * 3, "上市前就建好品號(全新 / 已拆封 / 中古機)")
+        self.assertEqual(self.products(self.off, "iPhone Duo"), [], "沒勾的公司不建")
+        self.assertEqual([p for p in site.read if p.startswith("/products/x/")], [f"/products/x/{i}" for i in range(299, 289, -1)]
+                         + [f"/products/x/{i}" for i in range(301, 307)], "最近 30 號裡沒看過的從新的讀 10 頁;往後讀到連續 5 頁不存在就停")
+        self.assertEqual((report.counts["found"], report.counts.get("added")), (1, 2))
+
+    def test_no_date_or_a_date_already_past_waits_without_asking_anyone_and_goes_in_when_the_month_shows_up(self):
+        site = self.site(unlisted("SAMSUNG Galaxy S27 Edge", "samsung-galaxy-s27-edge", 301, launch=None),
+                         unlisted("SHARP AQUOS wish6", "sharp-aquos-wish6", 302, launch="2026/09"))
+        self.check(site)
+        self.assertEqual(dict(DeviceCandidate.objects.filter(source_id__in=["301", "302"]).values_list("source_id", "status", "reason")
+                              .values_list("source_id", "reason")), {"301": "還沒公布上市日期", "302": "過了預計上市(2026-09)還沒上市"})
+        self.assertEqual(set(DeviceCandidate.objects.filter(source_id__in=["301", "302"]).values_list("status", flat=True)),
+                         {DeviceCandidate.Status.WAITING}, "不放進待確認")
+        self.assertFalse(DeviceModel.objects.filter(name__in=["Galaxy S27 Edge", "AQUOS wish6"]).exists())
+        site.pages.update(unlisted("SAMSUNG Galaxy S27 Edge", "samsung-galaxy-s27-edge", 301, launch="2026/12"))
+        self.check(site)
+        self.assertEqual(DeviceCandidate.objects.get(source_id="301").status, DeviceCandidate.Status.ADDED)
+        self.assertIn("/products/samsung-galaxy-s27-edge/301", site.read, "再讀照正式網址")
+        self.assertEqual(DeviceModel.objects.get(name="Galaxy S27 Edge").launched, "2026-12")
+
+    def test_a_page_published_late_below_the_newest_number_is_found(self):
+        site = self.site(unlisted("Apple iPhone 18e", "apple-iphone-18e", 290, launch="2026/10"))
+        self.check(site)
+        self.assertEqual(DeviceCandidate.objects.get(source_id="290").status, DeviceCandidate.Status.ADDED)
+        self.assertTrue(DeviceModel.objects.filter(brand="Apple", name="iPhone 18e").exists())
+
+    def test_the_first_run_reads_back_from_the_given_number_and_a_normal_day_does_not(self):
+        page = unlisted("Apple iPhone 18e", "apple-iphone-18e", 250, launch="2026/10")
+        site = self.site(page)
+        self.check(site)
+        self.assertNotIn("/products/x/250", site.read, "平常只回頭看最近 30 號")
+        site = self.site(page)
+        report = self.check(site, scan_from=240)
+        self.assertEqual(DeviceCandidate.objects.get(source_id="250").status, DeviceCandidate.Status.ADDED)
+        self.assertNotIn(f"商品頁一次最多讀 {device_watch.MAX_DETAIL} 頁,剩下的下一次再讀", report.notes, "補讀那一次不被每天的頁數卡住")
+
+    def test_an_unclear_kind_waits_for_the_list_and_goes_in_as_what_the_list_says(self):
+        site = self.site(unlisted("SAMSUNG Galaxy Tab A11", "samsung-galaxy-tab-a11", 301, launch="2026/11", cls="", screen=8.0, volte=True,
+                                  variants=(("128GB", 7990),)))
+        self.check(site)
+        c = DeviceCandidate.objects.get(source_id="301")
+        self.assertEqual((c.status, c.reason), (DeviceCandidate.Status.WAITING, "看不出是手機還是平板,等它上清單"))
+        site.pages["/search/tablet"] = list_page(KNOWN, ("SAMSUNG Galaxy Tab A11", "samsung-galaxy-tab-a11", "301"))
+        self.check(site)
+        self.assertEqual(DeviceModel.objects.get(name="Galaxy Tab A11").category, "tablet")
+
+    def test_an_unclear_kind_is_sorted_again_the_day_its_specs_show_up(self):
+        site = self.site(unlisted("Apple iPhone 18e", "apple-iphone-18e", 301, launch="2026/11", screen=None))
+        self.check(site)
+        self.assertEqual(DeviceCandidate.objects.get(source_id="301").reason, "看不出是手機還是平板,等它上清單")
+        site.pages.update(unlisted("Apple iPhone 18e", "apple-iphone-18e", 301, launch="2026/11", screen=6.1))
+        self.check(site)
+        c = DeviceCandidate.objects.get(source_id="301")
+        self.assertEqual((c.status, c.kind, DeviceModel.objects.get(name="iPhone 18e").category), (DeviceCandidate.Status.ADDED, "cellphone", "phone"))
+
+    def test_a_twin_page_still_waiting_does_not_add_its_storage_until_its_month_shows_up(self):
+        twin = dict(cls="", screen=11.0, volte=False, variants=(("512GB", 45990),))
+        site = self.site(unlisted("SAMSUNG Galaxy Tab S13 5G", "samsung-galaxy-tab-s13-5g", 301, launch=None, **twin),
+                         {"/products/samsung-galaxy-tab-s13-wifi/300": product_page("SAMSUNG Galaxy Tab S13 Wi-Fi", cls="", variants=(("128GB", 25990),))},
+                         phones=[], tablets=[("SAMSUNG Galaxy Tab S13 Wi-Fi", "samsung-galaxy-tab-s13-wifi", "300")])
+        self.check(site)
+        d = DeviceModel.objects.get(name="Galaxy Tab S13")
+        self.assertEqual((d.data["capacities"], d.data["connectivity"]), (["128GB"], ["WiFi"]), "沒公布日期的 5G 版不跟著建")
+        self.assertEqual(DeviceCandidate.objects.get(source_id="301").uid, d.uid)
+        self.check(site)
+        d.refresh_from_db()
+        self.assertEqual(d.data["capacities"], ["128GB"], "盯新機時也不算還在等的那一頁")
+        site.pages.update(unlisted("SAMSUNG Galaxy Tab S13 5G", "samsung-galaxy-tab-s13-5g", 301, launch="2026/11", **twin))
+        self.check(site)
+        d.refresh_from_db()
+        self.assertEqual((d.data["capacities"], d.data["connectivity"]), (["128GB", "512GB"], ["WiFi", "5G"]), "寫了上市月份就補上")
+
+    def test_pressing_add_on_the_launched_twin_leaves_the_waiting_page_waiting(self):
+        self.enterContext(mock.patch.object(device_watch, "MAX_AUTO", 0))   # 一次太多 → 上市的那一頁也改成待確認
+        twin = dict(cls="", screen=11.0, volte=False, variants=(("512GB", 45990),))
+        site = self.site(unlisted("SAMSUNG Galaxy Tab S13 5G", "samsung-galaxy-tab-s13-5g", 301, launch=None, **twin),
+                         {"/products/samsung-galaxy-tab-s13-wifi/300": product_page("SAMSUNG Galaxy Tab S13 Wi-Fi", cls="", variants=(("128GB", 25990),))},
+                         phones=[], tablets=[("SAMSUNG Galaxy Tab S13 Wi-Fi", "samsung-galaxy-tab-s13-wifi", "300")])
+        self.check(site)
+        wifi = DeviceCandidate.objects.get(source_id="300")
+        self.assertEqual(wifi.status, DeviceCandidate.Status.REVIEW)
+        got = device_watch.decide(wifi.id, "add", None)
+        self.assertEqual(got["count"], 1)
+        d = DeviceModel.objects.get(name="Galaxy Tab S13")
+        self.assertEqual((d.data["capacities"], d.data["connectivity"]), (["128GB"], ["WiFi"]))
+        self.assertEqual(DeviceCandidate.objects.get(source_id="301").status, DeviceCandidate.Status.WAITING)
+
+    def test_waiting_pages_leave_room_for_growing_the_new_ones(self):
+        self.enterContext(mock.patch.object(device_watch, "MAX_DETAIL", 20))
+        self.enterContext(mock.patch.object(device_watch, "SCAN_BACK", 0))
+        site = self.site()
+        self.check(site)
+        for i in range(20):   # 比每天的頁數還多
+            path = f"/products/samsung-galaxy-w{i}/{200 + i}"
+            site.pages[path] = product_page(f"SAMSUNG Galaxy W{i}", colors=())
+            DeviceCandidate.objects.create(source="sogi", source_id=str(200 + i), kind="cellphone", url=sogi.BASE + path,
+                                           list_name=f"SAMSUNG Galaxy W{i}", status=DeviceCandidate.Status.WAITING, reason="還沒有顏色")
+        site.pages["/products/samsung-galaxy-z-fold8/300"] = product_page("SAMSUNG Galaxy Z Fold8", colors=("曜石黑", "冰川藍", "珊瑚粉"))
+        report = self.check(site)
+        self.assertIn("珊瑚粉", DeviceModel.objects.get(name="Galaxy Z Fold8").data["colors"], report.notes)
+
+    def test_a_name_the_catalog_has_is_known_and_not_added(self):
+        site = self.site(unlisted("榮耀 Magic V5", "honor-magic-v5", 301, launch="2026/11"))
+        report = self.check(site)
+        self.assertEqual(DeviceCandidate.objects.get(source_id="301").uid, "u-honor")
+        self.assertEqual((DeviceModel.objects.filter(name__contains="Magic V5").count(), report.counts.get("known")), (1, 1))
+
+    def test_being_blocked_while_looking_past_the_list_changes_nothing(self):
+        site = self.site({"/products/x/301": urllib.error.HTTPError("x", 429, "slow down", {}, None)})
+        report = self.check(site)
+        self.assertFalse(report.ok)
+        self.assertIn("手機王不讓讀(HTTP 429),這一次什麼都不改", report.notes)
+        self.assertFalse(DeviceModel.objects.filter(name="Galaxy Z Fold8").exists(), "清單上讀到的也不加")
+
+    def test_pages_that_waited_three_months_are_read_once_a_week(self):
+        site = self.site(unlisted("SAMSUNG Galaxy S27 Edge", "samsung-galaxy-s27-edge", 301, launch=None))
+        self.check(site)
+        old = timezone.now() - timezone.timedelta(days=device_watch.STALE_DAYS + 1)
+        DeviceCandidate.objects.filter(source_id="301").update(created_at=old, checked_at=timezone.now() - timezone.timedelta(days=2))
+        site.read.clear()
+        self.check(site)
+        self.assertNotIn("/products/samsung-galaxy-s27-edge/301", site.read)
+        DeviceCandidate.objects.filter(source_id="301").update(checked_at=timezone.now() - timezone.timedelta(days=device_watch.STALE_EVERY + 1))
+        self.check(site)
+        self.assertIn("/products/samsung-galaxy-s27-edge/301", site.read)
+
+    def test_one_added_before_launch_is_watched_until_sixty_days_after_its_month(self):
+        site = self.site(unlisted("Apple iPhone Duo", "apple-iphone-duo", 301, launch="2026/11"))
+        self.check(site)
+        uid = DeviceModel.objects.get(name="iPhone Duo").uid
+        DeviceModel.objects.filter(uid=uid).update(created_at=timezone.now() - timezone.timedelta(days=device_watch.WATCH_DAYS + 5))
+        self.assertIn(uid, device_watch._watched(date(2026, 12, 20)), "上市月份過了 60 天以內照樣盯")
+        self.assertNotIn(uid, device_watch._watched(date(2027, 2, 1)))
 
 
 class DecideTests(TestCase):

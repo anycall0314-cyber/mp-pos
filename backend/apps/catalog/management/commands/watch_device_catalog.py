@@ -3,6 +3,7 @@
     python manage.py watch_device_catalog              # 今天還沒做就做(測試站的排程每天跑這個)
     python manage.py watch_device_catalog --again      # 今天做過也再做一次
     python manage.py watch_device_catalog --dry-run    # 只讀、只算,什麼都不寫
+    python manage.py watch_device_catalog --again --scan-from 17200   # 清單上沒有的頁(還沒上市)從這一號起補讀(第一次用)
 """
 from django.core.management.base import BaseCommand
 
@@ -15,15 +16,16 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--again", action="store_true", help="今天做過也再做一次")
         parser.add_argument("--dry-run", action="store_true", help="只算,什麼都不寫")
+        parser.add_argument("--scan-from", type=int, default=None, help="清單上沒有的頁從這一號起補讀(第一次用)")
 
     def handle(self, *args, **opts):
         if opts["dry_run"]:
-            report = device_watch.check(write=False, log=self.stdout.write)
+            report = device_watch.check(write=False, log=self.stdout.write, scan_from=opts["scan_from"])
             self.stdout.write(f"{'成功' if report.ok else '沒有成功'} {report.counts}")
             for n in report.notes:
                 self.stdout.write(f"  {n}")
             return
-        run = device_watch.run_today(again=opts["again"], log=self.stdout.write)
+        run = device_watch.run_today(again=opts["again"], log=self.stdout.write, scan_from=opts["scan_from"])
         if run is None:
             self.stdout.write("今天已經做過了(或另一個程序正在做);要再做一次加 --again")
             return
