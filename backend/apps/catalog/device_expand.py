@@ -13,6 +13,7 @@ owner 定的:品況 = 全新、中古機(**中古機也分顏色**、**不展開
 - **公司已經有品號的機型**:容量 / 顏色照公司自己的(型號庫的寫法可能不一樣:「黑色」/「黑色鈦金屬」),只補缺的品況;型號庫多出來的容量 / 顏色列出來、不建。
 - 新的機型:品牌照名稱找(沒有就建),系列 / 世代 / 後綴從型號名稱拆(組回來就是型號庫的名稱;開頭是數字的接品牌字)。
 - **售價**(紅隊第 2 條):全新 / 已拆封只帶型號庫裡寫明是「原廠建議價 / 官網定價」、同一個容量的那一筆;其他都是 0。中古機 0(收購時一台一台定)。
+  例外:每天從手機王自動加的新機,手機王的「原廠售價」也帶(owner 2026-10-21;同一個容量列了不一樣的價就不帶)。
 - 一支一個交易:中途停掉,做好的留著,重跑接著做(品名已經有的不再建)。
 """
 from __future__ import annotations
@@ -48,6 +49,11 @@ ALL_CATEGORIES = tuple(CATEGORY_OF)
 # 寫明是原廠 / 官網定價的才帶進全新的售價(紅隊第 2 條);順序 = 同一個容量好幾筆時先用哪一種
 MSRP_KINDS = ("source_stated_manufacturer_msrp", "official_regular_catalog_price",
               "official_regular_catalog_price_not_verified_original_msrp")
+# 每天從手機王自動加的新機(`device_watch.ORIGIN`):手機王的「原廠售價」(`device_watch.PRICE_KIND`)也帶進全新 / 已拆封
+# (owner 2026-10-21「新機售價自動帶原廠建議價」)。只限手機王自動加的那幾支,Codex 整理的那一批照舊不帶(紅隊第 2 條)。
+# 同一個容量手機王列了不一樣的價(平板 Wi-Fi 版與 5G 版併成一支)→ 不猜、0。兩個字跟 device_watch 那邊要一樣(有測試)。
+WATCH_ORIGIN = "sogi-auto"
+WATCH_PRICE_KIND = "source_reported_suggested_price_not_verified_original_msrp"
 OPENED_FROM = 2026   # 這一年以後上市的手機才建已拆封(owner 2026-10-16;平板、手錶不建)
 NO_COLOR = "不分色"
 NO_CAPACITY = "標準版"
@@ -102,10 +108,18 @@ def colors_for(device: DeviceModel) -> list[str]:
 
 
 def msrp(device: DeviceModel, capacity: str) -> Decimal:
-    rows = [p for p in (device.data or {}).get("prices") or [] if p.get("kind") in MSRP_KINDS
-            and (p.get("storage") == capacity or (p.get("storage") is None and capacity in ("", NO_CAPACITY, "GPS", "藍牙")))]
+    data = device.data or {}
+    fits = [p for p in data.get("prices") or []
+            if p.get("storage") == capacity or (p.get("storage") is None and capacity in ("", NO_CAPACITY, "GPS", "藍牙"))]
+    rows = [p for p in fits if p.get("kind") in MSRP_KINDS]
     rows.sort(key=lambda p: MSRP_KINDS.index(p["kind"]))
-    return Decimal(int(rows[0]["amount"])) if rows else Decimal(0)
+    if rows:
+        return Decimal(int(rows[0]["amount"]))
+    if data.get("origin") == WATCH_ORIGIN:
+        amounts = {int(p["amount"]) for p in fits if p.get("kind") == WATCH_PRICE_KIND and p.get("amount")}
+        if len(amounts) == 1:
+            return Decimal(amounts.pop())
+    return Decimal(0)
 
 
 def split_name(brand: str, name: str) -> tuple[str, int | None, str]:

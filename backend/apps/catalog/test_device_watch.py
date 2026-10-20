@@ -1,6 +1,7 @@
 """型號庫自動更新(M1-D;owner 2026-10-16「對，做自動新增手機型號」):讀手機王、新機直接加、不齊的等、很像的給人按、
 有勾的公司自動建品號、新機盯 60 天補顏色。規則在 `device_watch.py` / `sogi.py`。**全部是假網頁,不連外。**"""
 from datetime import date, datetime
+from decimal import Decimal
 from unittest import mock
 import urllib.error
 
@@ -8,7 +9,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.backup.tests.factory import Company
-from apps.catalog import device_catalog, device_watch, sogi
+from apps.catalog import device_catalog, device_expand, device_watch, sogi
 from apps.catalog.models import (
     Category,
     Condition,
@@ -215,8 +216,12 @@ class CheckTests(_Watch):
         names = self.products(self.c, "Galaxy Z Fold8")
         self.assertEqual(names, sorted(f"Galaxy Z Fold8 {cap} {col} {cond}" for cond in ("全新", "已拆封", "中古機")
                                        for cap in ("256GB", "512GB") for col in ("曜石黑", "冰川藍")))
-        self.assertEqual(set(Product.objects.for_tenant(self.c.tenant).filter(name__startswith="Galaxy Z Fold8").values_list("list_price", flat=True)),
-                         {0}, "手機王的原廠售價不算原廠明示的建議價,不帶進售價")
+        price = dict(Product.objects.for_tenant(self.c.tenant).filter(name__startswith="Galaxy Z Fold8").values_list("name", "list_price"))
+        self.assertEqual({k: v for k, v in price.items() if not k.endswith("中古機")},
+                         {f"Galaxy Z Fold8 {cap} {col} {cond}": amount for cond in ("全新", "已拆封")
+                          for cap, amount in (("256GB", 19990), ("512GB", 23990)) for col in ("曜石黑", "冰川藍")},
+                         "自動加的新機:全新、已拆封帶手機王的原廠售價(owner 2026-10-21)")
+        self.assertEqual({v for k, v in price.items() if k.endswith("中古機")}, {0}, "中古機照舊 0")
         self.assertEqual(PhoneModel.objects.for_tenant(self.c.tenant).get(device_uid=d.uid).name, "Galaxy Z Fold8")
         self.assertEqual(self.products(self.off, "Galaxy Z Fold8"), [], "沒勾的公司一個品號都不多")
         again = self.check(site)
@@ -386,6 +391,8 @@ class CheckTests(_Watch):
         self.assertEqual(len(now), 3 * 3 * 3)
         self.assertEqual({k: now[k] for k in before}, before, "原本的品號一個都沒換")
         self.assertEqual(Product.objects.get(id=before["Galaxy Z Fold8 256GB 曜石黑 全新"]).list_price, 55990, "店家填的售價不動")
+        self.assertEqual(Product.objects.get(id=now["Galaxy Z Fold8 1TB 珊瑚粉 全新"]).list_price, 29990, "後來補的容量也帶原廠售價")
+        self.assertEqual(Product.objects.get(id=now["Galaxy Z Fold8 1TB 珊瑚粉 中古機"]).list_price, 0)
 
     def test_a_company_that_already_made_the_model_by_hand_is_linked_not_doubled(self):
         from apps.catalog.services_model_bundle import _get_or_create_phone_model
@@ -676,3 +683,30 @@ class DailyTests(TestCase):
         with mock.patch.object(device_watch, "check", side_effect=RuntimeError("壞了")):
             run = device_watch.run_today(fetcher=self.site.fetcher())
         self.assertEqual((run.ok, run.notes), (False, ["檢查失敗 RuntimeError: 壞了"]))
+
+
+class WatchPriceTests(TestCase):
+    """自動加的新機帶手機王的原廠售價(owner 2026-10-21「新機售價自動帶原廠建議價」),只限手機王自動加的那幾支。"""
+
+    def device(self, origin, prices):
+        return DeviceModel(uid="x", brand="Samsung", name="Galaxy X", category="phone",
+                           data={"origin": origin, "prices": [{"storage": s, "amount": a, "kind": k} for s, a, k in prices]})
+
+    def test_the_two_names_match_the_watch(self):
+        self.assertEqual((device_expand.WATCH_ORIGIN, device_expand.WATCH_PRICE_KIND), (device_watch.ORIGIN, device_watch.PRICE_KIND))
+
+    def test_only_phones_the_watch_added_take_its_price(self):
+        rows = [("256GB", 19990, device_watch.PRICE_KIND)]
+        self.assertEqual(device_expand.msrp(self.device(device_watch.ORIGIN, rows), "256GB"), Decimal(19990))
+        self.assertEqual(device_expand.msrp(self.device("codex-v4", rows), "256GB"), Decimal(0), "Codex 整理的那一批照舊不帶")
+        self.assertEqual(device_expand.msrp(self.device(device_watch.ORIGIN, rows), "512GB"), Decimal(0), "別的容量不帶")
+
+    def test_two_different_prices_for_one_capacity_are_not_guessed(self):
+        rows = [("128GB", 15900, device_watch.PRICE_KIND), ("128GB", 19900, device_watch.PRICE_KIND)]
+        self.assertEqual(device_expand.msrp(self.device(device_watch.ORIGIN, rows), "128GB"), Decimal(0))
+        same = [("128GB", 15900, device_watch.PRICE_KIND), ("128GB", 15900, device_watch.PRICE_KIND)]
+        self.assertEqual(device_expand.msrp(self.device(device_watch.ORIGIN, same), "128GB"), Decimal(15900))
+
+    def test_a_stated_original_price_still_comes_first(self):
+        rows = [("256GB", 19990, device_watch.PRICE_KIND), ("256GB", 20990, device_expand.MSRP_KINDS[0])]
+        self.assertEqual(device_expand.msrp(self.device(device_watch.ORIGIN, rows), "256GB"), Decimal(20990))
