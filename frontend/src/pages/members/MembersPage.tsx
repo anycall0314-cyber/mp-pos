@@ -12,7 +12,7 @@ import { Banner } from "@/components/Banner";
 import { SourcePicker } from "@/components/SourcePicker";
 import { Toolbar } from "@/components/Toolbar";
 import { byId, cutNote } from "@/lib/listAll";
-import { memberUrl } from "@/lib/memberUrl";
+import { showMemberHistory } from "@/lib/memberUrl";
 
 type Selection = { kind: "member"; id: number } | { kind: "new" } | null;
 
@@ -223,10 +223,10 @@ export function MembersPage() {
                       <tr
                         key={m.id}
                         onClick={() => {
-                          // 右邊編輯這一位,消費紀錄在新分頁(owner 2026-10-20)
+                          // 右邊編輯這一位,消費紀錄在另一個分頁、留在這一頁(owner 2026-10-20)
                           setPicked(m);
                           setSelection({ kind: "member", id: m.id });
-                          window.open(memberUrl(m.id), "_blank");
+                          showMemberHistory(m.id);
                         }}
                         className={
                           selection?.kind === "member" && selection.id === m.id
