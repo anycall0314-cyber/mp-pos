@@ -15,6 +15,8 @@
    有勾的公司補建那幾個品號。**只加不減**;已經有的品號、售價、庫存、序號、單據一個都不改;本來就在型號庫的那 1,468 支不盯。
 6. 售價:手機王的「原廠售價」記成來源報的建議價(跟 Codex 整理的同一種);**這裡自動加的新機,展開時帶進全新 / 已拆封的售價**
    (owner 2026-10-21「新機售價自動帶原廠建議價」;`device_expand.msrp`,同一個容量列了不一樣的價就不帶;中古機 0;Codex 整理的那一批照舊不帶)。
+6b. **同一個容量有兩種以上記憶體 → 拆成「8GB/256GB」「12GB/256GB」兩個容量、各自帶價**(owner 2026-10-21 選「同容量有兩種才拆」;`variant_caps`);
+   只有一種記憶體的照舊只寫容量。盯新機時同一個容量換了寫法(後來才多一種記憶體)不自動補,寫一句給人處理(不然同一台會有兩個品號)。
 7. **還沒上市的也先加**(owner 2026-10-20「手機只要上市，甚至上市前，皆會自動把品名與品號新增進去」):
    手機王的清單只列上市的,還沒上市的只有商品頁(編號照建立順序往上加)→ 讀完清單,**最近 `SCAN_BACK` 號裡沒看過的再讀一次(一天最多 `SCAN_GAPS` 頁),
    再從看過的最大編號往後一頁一頁讀,連續 `SCAN_MISSES` 頁不存在就停**(第一次補讀用 `scan_from`)。
@@ -175,8 +177,46 @@ class Index:
 # ───────────────────────── 一個商品頁 → 一支 ─────────────────────────
 
 def _cap_order(c: str) -> int:
-    m = re.fullmatch(r"(\d+)(GB|TB)", c)
+    """容量 → GB 數(過濾、排序用);「8GB/256GB」看後面的儲存容量。認不出來回 0。"""
+    m = re.fullmatch(r"(?:\d{1,2}GB/)?(\d+)(GB|TB)", c)
     return int(m.group(1)) * (1024 if m.group(2) == "TB" else 1) if m else 0
+
+
+def _cap_key(c: str) -> tuple[int, int]:
+    """排序:先照儲存容量,同容量照記憶體(8GB/256GB 在 12GB/256GB 前面)。"""
+    m = re.match(r"(\d{1,2})GB/", c)
+    return _cap_order(c), int(m.group(1)) if m else 0
+
+
+def _storage_of(c: str) -> str:
+    """「8GB/256GB」→ 256GB;本來就只寫容量的照回。"""
+    return c.split("/")[-1]
+
+
+def _ram(label: str) -> str | None:
+    """版本寫法裡的記憶體:「8GB/256GB」「12GB+512GB」→ 8GB / 12GB;沒寫回 None。"""
+    m = re.search(r"(\d{1,2})\s*GB\s*[/+]\s*\d{1,4}\s*(?:GB|TB)", label, re.I)
+    return f"{int(m.group(1))}GB" if m else None
+
+
+def variant_caps(variants: list[dict]) -> list[str]:
+    """每個版本的容量那一格(跟 `variants` 一一對應;認不出容量是空字串)。
+    **同一個儲存容量有兩種以上記憶體 → 那幾個版本寫「記憶體/容量」**(owner 2026-10-21「兩個都要填，都是個別規格」,
+    選「同容量有兩種才拆」:8GB/256GB 與 12GB/256GB 是兩個品號、各自帶價);只有一種記憶體的照舊只寫容量(跟店裡原本的品名一樣)。
+    同一個容量有的版本沒寫記憶體 → 分不出來,照舊只寫容量。"""
+    rams: dict[str, set] = {}
+    for v in variants:
+        if v.get("storage"):
+            rams.setdefault(v["storage"], set()).add(_ram(v.get("label") or ""))
+    split = {st for st, rs in rams.items() if len(rs) > 1 and None not in rs}
+    return [f"{_ram(v.get('label') or '')}/{v['storage']}" if v.get("storage") in split else (v.get("storage") or "")
+            for v in variants]
+
+
+def _tidy_caps(caps: list[str]) -> list[str]:
+    """同一個容量同時有「256GB」與「8GB/256GB」(兩頁併成一支時)→ 留分開寫的那幾個;排好。"""
+    split = {_storage_of(c) for c in caps if "/" in c}
+    return sorted(dict.fromkeys(c for c in caps if "/" in c or c not in split), key=_cap_key)
 
 
 def _classes(page: dict) -> list[str]:
@@ -211,17 +251,19 @@ def info_of(kind: str, item: dict, page: dict, brands: dict) -> dict:
         category = found[0] if len(set(found)) == 1 else ""
     url = sogi.BASE + item["path"]
     plain = [v for v in page.get("variants") or [] if not v.get("bundle")]
-    caps = [v["storage"] for v in plain if v.get("storage")]
+    labels = variant_caps(plain)
+    caps = [c for c in labels if c]
     if not caps and category in (DeviceModel.Category.PHONE, DeviceModel.Category.TABLET):
         caps = [f"{int(n)}{u.upper()}" for n, u in re.findall(r"(\d{1,4})\s*(GB|TB)", page.get("rom") or "", re.I)]
-    caps = sorted({c for c in caps if 0 < _cap_order(c) <= 4096}, key=_cap_order)
+    caps = sorted({c for c in caps if 0 < _cap_order(c) <= 4096}, key=_cap_key)
     if category not in (DeviceModel.Category.PHONE, DeviceModel.Category.TABLET):
         caps = []
-    prices = [{"version": v["label"], "storage": v.get("storage") or None, "connectivity": conn[0] if len(conn) == 1 else None,
+    prices = [{"version": v["label"], "storage": cap or None, "connectivity": conn[0] if len(conn) == 1 else None,
                "size_mm": None, "amount": v["msrp"], "kind": PRICE_KIND, "url": url}
-              for v in plain if v.get("msrp")]
+              for v, cap in zip(plain, labels) if v.get("msrp")]
     return {"kind": kind, "category": category, "brand": brand, "raw_brand": raw_brand, "name": name, "launched": page.get("launch") or "",
             "unreleased": bool(page.get("unreleased")), "capacities": caps, "colors": list(page.get("colors") or []), "connectivity": conn, "prices": prices,
+            "variants": [{"label": v["label"], "storage": v.get("storage") or ""} for v in plain],   # 兩頁合併時重算容量用(不進型號庫)
             "sources": [url], "aliases": [item["name"]]}
 
 
@@ -230,10 +272,25 @@ def merge(a: dict, b: dict) -> dict:
     out = dict(a)
     for k in ("capacities", "colors", "connectivity", "sources", "aliases"):
         out[k] = list(dict.fromkeys([*(a.get(k) or []), *(b.get(k) or [])]))
-    out["capacities"] = sorted(out["capacities"], key=_cap_order)
+    out["capacities"] = _tidy_caps(out["capacities"])
     seen = {(p.get("version"), p.get("storage"), p.get("amount"), p.get("url")) for p in a.get("prices") or []}
     out["prices"] = list(a.get("prices") or []) + [p for p in b.get("prices") or []
                                                    if (p.get("version"), p.get("storage"), p.get("amount"), p.get("url")) not in seen]
+    va, vb = a.get("variants"), b.get("variants")
+    if va is not None and vb is not None:
+        # 兩頁的版本合起來重算哪幾個容量要拆(複審 P1:Wi-Fi 頁只有 8GB/256GB、5G 頁有 8GB 與 12GB → 拆開;
+        # Wi-Fi 那一列價錢也要跟著寫 8GB/256GB,不然它不算數,同一個規格兩個價會被當成只有一個價)
+        union = list({(v["label"], v["storage"]): v for v in [*va, *vb]}.values())
+        cap_of = dict(zip(((v["label"], v["storage"]) for v in union), variant_caps(union)))
+        caps = [c for c in cap_of.values() if c and 0 < _cap_order(c) <= 4096]
+        # 版本裡讀不到的容量(那一頁沒有版本、或版本只寫「Wi-Fi」「5G」→ 容量是從規格讀的)照樣留著(複審第二輪 P1)
+        covered = {_storage_of(c) for c in caps}
+        caps += [c for side in (a, b) for c in side.get("capacities") or [] if _storage_of(c) not in covered]
+        if out["capacities"]:   # 兩頁都沒有容量(穿戴)就維持沒有
+            out["capacities"] = _tidy_caps(caps)
+        out["prices"] = [{**p, "storage": cap_of.get((p.get("version"), sogi._storage(p.get("version") or "")), p.get("storage")) or None}
+                         for p in out["prices"]]
+        out["variants"] = union
     launches = [x for x in (a.get("launched"), b.get("launched")) if x]
     out["launched"] = min(launches) if launches else ""
     out["category"] = a.get("category") or b.get("category") or ""
@@ -644,6 +701,13 @@ def _grow(d, fresh, report, log):
     grew = {k: [x for x in now_info[k] if x not in old[k]] for k in ("capacities", "colors", "connectivity")}
     if d.category not in (DeviceModel.Category.PHONE, DeviceModel.Category.TABLET):
         grew["capacities"] = []
+    # 同一個容量換了寫法(原本 256GB、現在多了 12GB 版本變成 8GB/256GB + 12GB/256GB,或反過來)→ 不自動補:
+    # 原本那個品號已經在了,再建會變成同一台有兩個品號。講出來給人處理。
+    had = {_storage_of(c) for c in old["capacities"]}
+    odd = [c for c in fresh.get("capacities") or [] if c not in old["capacities"] and _storage_of(c) in had]
+    if odd and d.category in (DeviceModel.Category.PHONE, DeviceModel.Category.TABLET):
+        report.notes.append(f"{d}:{'、'.join(odd)} 跟型號庫原本的容量寫法不一樣(原本 {'、'.join(old['capacities'])}),沒有自動補,請人處理")
+    grew["capacities"] = [c for c in grew["capacities"] if c not in odd and _storage_of(c) not in had]
     if not any(grew.values()):
         return
     row = {"uid": d.uid, "category": d.category, "brand": d.brand, "name": d.name, "launched": d.launched,
@@ -651,7 +715,7 @@ def _grow(d, fresh, report, log):
     for k in ("colors", "connectivity", "sources", "aliases", "prices"):
         row[k] = now_info[k]
     if d.category in (DeviceModel.Category.PHONE, DeviceModel.Category.TABLET):
-        row["capacities"] = now_info["capacities"]
+        row["capacities"] = sorted([*old["capacities"], *grew["capacities"]], key=_cap_key)
     what = "、".join(x for k in ("capacities", "colors", "connectivity") for x in grew[k])
     try:
         with transaction.atomic():

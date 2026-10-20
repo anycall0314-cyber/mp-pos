@@ -710,3 +710,73 @@ class WatchPriceTests(TestCase):
     def test_a_stated_original_price_still_comes_first(self):
         rows = [("256GB", 19990, device_watch.PRICE_KIND), ("256GB", 20990, device_expand.MSRP_KINDS[0])]
         self.assertEqual(device_expand.msrp(self.device(device_watch.ORIGIN, rows), "256GB"), Decimal(20990))
+
+
+class RamVariantTests(_Watch):
+    """同一個容量有兩種以上記憶體 → 拆成兩個容量、各自帶價(owner 2026-10-21「兩個都要填，都是個別規格」,選「同容量有兩種才拆」)。"""
+
+    PAGE = dict(variants=(("(8GB/256GB)", 12990), ("(12GB/256GB)", 13990), ("(12GB/512GB)", 15990)), colors=("絢彩藍",))
+
+    def test_labels_split_only_where_one_storage_has_two_memories(self):
+        v = lambda label: {"label": label, "storage": sogi._storage(label)}
+        self.assertEqual(device_watch.variant_caps([v("8GB/256GB"), v("12GB/256GB"), v("12GB/512GB")]), ["8GB/256GB", "12GB/256GB", "512GB"])
+        self.assertEqual(device_watch.variant_caps([v("8GB/256GB"), v("12GB/512GB")]), ["256GB", "512GB"], "一個容量一種記憶體照舊")
+        self.assertEqual(device_watch.variant_caps([v("256GB"), v("12GB/256GB")]), ["256GB", "256GB"], "有一個沒寫記憶體 → 分不出來,照舊")
+        self.assertEqual(device_watch.variant_caps([v("8GB/256GB"), v("8GB+256GB")]), ["256GB", "256GB"], "同一種記憶體寫兩次不算兩種")
+
+    def test_a_new_phone_with_two_memories_gets_two_products_each_with_its_price(self):
+        site = FakeSite({**lists(phones=[("SAMSUNG Galaxy A99", "samsung-galaxy-a99", "310")]),
+                         "/products/samsung-galaxy-a99/310": product_page("SAMSUNG Galaxy A99", **self.PAGE)})
+        report = self.check(site)
+        self.assertTrue(report.ok, report.notes)
+        d = DeviceModel.objects.get(name="Galaxy A99")
+        self.assertEqual(d.data["capacities"], ["8GB/256GB", "12GB/256GB", "512GB"])
+        price = dict(Product.objects.for_tenant(self.c.tenant).filter(name__startswith="Galaxy A99").values_list("name", "list_price"))
+        self.assertEqual({k: v for k, v in price.items() if k.endswith("全新")},
+                         {"Galaxy A99 8GB/256GB 絢彩藍 全新": 12990, "Galaxy A99 12GB/256GB 絢彩藍 全新": 13990, "Galaxy A99 512GB 絢彩藍 全新": 15990})
+        self.assertEqual({v for k, v in price.items() if k.endswith("中古機")}, {0})
+
+    def test_a_memory_added_later_to_a_storage_is_not_built_again(self):
+        path = "/products/samsung-galaxy-a99/310"
+        site = FakeSite({**lists(phones=[("SAMSUNG Galaxy A99", "samsung-galaxy-a99", "310")]),
+                         path: product_page("SAMSUNG Galaxy A99", variants=(("(8GB/256GB)", 12990),), colors=("絢彩藍",))})
+        self.check(site)
+        before = self.products(self.c, "Galaxy A99")
+        self.assertIn("Galaxy A99 256GB 絢彩藍 全新", before)
+        site.pages[path] = product_page("SAMSUNG Galaxy A99", variants=(("(8GB/256GB)", 12990), ("(12GB/256GB)", 13990)), colors=("絢彩藍",))
+        report = self.check(site)
+        self.assertEqual(self.products(self.c, "Galaxy A99"), before, "同一台不會多出 8GB/256GB、12GB/256GB 兩個品號")
+        self.assertEqual(DeviceModel.objects.get(name="Galaxy A99").data["capacities"], ["256GB"])
+        self.assertTrue(any("跟型號庫原本的容量寫法不一樣" in n for n in report.notes), report.notes)
+
+    def test_two_pages_split_together_and_each_price_follows_its_own_memory(self):
+        """複審 P1:Wi-Fi 頁只有 8GB/256GB、5G 頁有 8GB 與 12GB → 合起來拆開;Wi-Fi 那一列價錢也算 8GB/256GB 的,
+        8GB/256GB 兩頁價錢不一樣 → 不帶(不能只看 5G 那一筆)。"""
+        def info(path, variants):
+            page = {"variants": [{"label": label, "storage": sogi._storage(label), "msrp": price} for label, price in variants], "colors": ["黑"]}
+            return device_watch.info_of("tablet", {"name": "SAMSUNG Galaxy Tab X", "path": path}, page, {})
+        m = device_watch.merge(info("/products/tab-x-wifi/1", [("8GB/256GB", 30990)]),
+                               info("/products/tab-x-5g/2", [("8GB/256GB", 34990), ("12GB/256GB", 39990)]))
+        self.assertEqual(m["capacities"], ["8GB/256GB", "12GB/256GB"])
+        self.assertEqual(sorted((p["storage"], p["amount"]) for p in m["prices"]),
+                         [("12GB/256GB", 39990), ("8GB/256GB", 30990), ("8GB/256GB", 34990)])
+        d = DeviceModel(uid="x", brand="Samsung", name="Galaxy Tab X", category="tablet", data={**m, "origin": device_watch.ORIGIN})
+        self.assertEqual((device_expand.msrp(d, "8GB/256GB"), device_expand.msrp(d, "12GB/256GB")), (Decimal(0), Decimal(39990)))
+
+        # 複審第二輪 P1:版本只寫「Wi-Fi」「5G」(沒寫容量)、容量從規格讀 → 合併後容量還在
+        def spec_only(path, label):
+            page = {"variants": [{"label": label, "storage": "", "msrp": 19990}], "colors": ["黑"], "rom": "256GB"}
+            return device_watch.info_of("tablet", {"name": "SAMSUNG Galaxy Tab X", "path": path}, page, {})
+        both = device_watch.merge(spec_only("/products/tab-x-wifi/1", "Wi-Fi"), spec_only("/products/tab-x-5g/2", "5G"))
+        self.assertEqual(both["capacities"], ["256GB"])
+
+        plain = device_watch.merge(info("/products/tab-x-wifi/1", [("256GB", 30990)]),
+                                   info("/products/tab-x-5g/2", [("8GB/256GB", 34990), ("12GB/256GB", 39990)]))
+        self.assertEqual(plain["capacities"], ["256GB"], "有一頁沒寫記憶體 → 分不出來、不拆")
+        d = DeviceModel(uid="x", brand="Samsung", name="Galaxy Tab X", category="tablet", data={**plain, "origin": device_watch.ORIGIN})
+        self.assertEqual(device_expand.msrp(d, "256GB"), Decimal(0), "三個價 → 不帶")
+
+    def test_two_pages_one_plain_one_split_keep_the_split_ones(self):
+        a = {"capacities": ["128GB"], "prices": []}
+        b = {"capacities": ["8GB/128GB", "12GB/128GB", "256GB"], "prices": []}
+        self.assertEqual(device_watch.merge(a, b)["capacities"], ["8GB/128GB", "12GB/128GB", "256GB"])
