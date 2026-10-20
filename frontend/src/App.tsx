@@ -54,6 +54,7 @@ import { SalesWorkbenchPage } from "@/pages/sales/SalesWorkbenchPage";
 import { SalesPrintPage } from "@/pages/sales/SalesPrintPage";
 import { SalesReturnEntryPage } from "@/pages/sales/SalesReturnEntryPage";
 import { CustomersPage } from "@/pages/customers/CustomersPage";
+import { MemberHistoryPage } from "@/pages/members/MemberHistoryPage";
 import { MembersPage } from "@/pages/members/MembersPage";
 import { SalesPersonsPage } from "@/pages/sales-persons/SalesPersonsPage";
 import { BackupPage } from "@/pages/backup/BackupPage";
@@ -321,7 +322,7 @@ export function App() {
             element={<CashAdjustmentsPage />}
           />
           <Route path="/members" element={<MembersPage />} />
-          <Route path="/members/:id" element={<MembersPage />} />
+          <Route path="/members/:id" element={<MemberHistoryPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/backup" element={<BackupPage />} />
           <Route path="/settings/legacy" element={<LegacyMappingPage />} />

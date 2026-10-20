@@ -1,24 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
 import { ApiHttpError } from "@/api/client";
 import {
-  useLegacyPurchases,
   useMember,
   useMemberList,
-  useOrdersOf,
-  useOrderSummary,
   useSaveMember,
 } from "@/api/hooks";
 import type { Customer, Member } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { SourcePicker } from "@/components/SourcePicker";
 import { Toolbar } from "@/components/Toolbar";
-import { byId, cutNote, latestDay } from "@/lib/listAll";
-import { memberIdFromRoute, memberTabTitle, memberUrl } from "@/lib/memberUrl";
-import { money } from "@/lib/money";
-
-import { LegacyHistorySection } from "./LegacyHistorySection";
+import { byId, cutNote } from "@/lib/listAll";
+import { memberUrl } from "@/lib/memberUrl";
 
 type Selection = { kind: "member"; id: number } | { kind: "new" } | null;
 
@@ -62,11 +56,7 @@ function toForm(m: Member): FormState {
 }
 
 export function MembersPage() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  // `/members/編號` = 這一位自己一頁(名單點一位開的新分頁):沒有左邊名單、整頁寬
-  const soloId = memberIdFromRoute(useParams().id);
-  const solo = soloId != null;
   const save = useSaveMember();
 
   const [query, setQuery] = useState("");
@@ -80,14 +70,12 @@ export function MembersPage() {
   // 選到的那一位:點名單時記下來,名單之後換了(打字搜尋)也還是他
   const [picked, setPicked] = useState<Member | null>(null);
   const [selection, setSelection] = useState<Selection>(() => {
-    if (soloId != null) return { kind: "member", id: soloId };
     const sel = searchParams.get("selected");
     const n = sel ? Number(sel) : NaN;
     return Number.isFinite(n) ? { kind: "member", id: n } : null;
   });
 
   useEffect(() => {
-    if (solo) return;
     const sel = searchParams.get("selected");
     if (!sel) return;
     const n = Number(sel);
@@ -97,7 +85,6 @@ export function MembersPage() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (solo) return;
     if (selection?.kind === "member") {
       if (searchParams.get("selected") !== String(selection.id)) {
         const next = new URLSearchParams(searchParams);
@@ -133,93 +120,6 @@ export function MembersPage() {
       setSavedFlash(false);
     }
   }, [selection, selected]);
-
-  const memberId = selection?.kind === "member" ? selection.id : null;
-  const who = memberId ? { member: memberId } : undefined;
-  const orders = useOrdersOf(who);            // 最近的 100 張(底下那張表)
-  const summary = useOrderSummary(who);       // 幾張、累計、最近:伺服器算全部
-  const legacy = useLegacyPurchases(memberId);
-
-  // 把現役銷貨單明細 + 舊系統紀錄整成單一時間軸,每列一個商品 row。
-  type Row = {
-    key: string;
-    source: "current" | "legacy";
-    doc_date: string;
-    is_void: boolean;
-    product_name: string;
-    product_sku: string;
-    qty: number;
-    unit_price: string;
-    amount: string;
-    serial_or_msisdn: string;
-    sales_person_label: string;
-    customer_name: string;
-    doc_no: string;
-    so_id: number | null;
-  };
-
-  const rows = useMemo<Row[]>(() => {
-    const fromCurrent: Row[] = (orders.data?.rows ?? []).flatMap((so) =>
-      so.items.map((it) => ({
-        key: `c-${so.id}-${it.id}`,
-        source: "current" as const,
-        doc_date: so.doc_date,
-        is_void: so.is_void,
-        product_name: it.product_name,
-        product_sku: it.product_sku,
-        qty: it.qty,
-        unit_price: it.unit_price,
-        amount: it.amount,
-        serial_or_msisdn:
-          it.msisdn ||
-          (it.serials ?? []).map((s) => s.serial_no).join(", ") ||
-          "—",
-        sales_person_label: so.sales_person_name
-          ? `${so.sales_person_code ?? ""} ${so.sales_person_name}`
-          : "—",
-        customer_name: so.source_name || so.customer_name || "—",
-        doc_no: so.no,
-        so_id: so.id,
-      })),
-    );
-    const fromLegacy: Row[] = (legacy.data ?? []).map((lp) => ({
-      key: `l-${lp.id}`,
-      source: "legacy" as const,
-      doc_date: lp.doc_date,
-      is_void: false,
-      product_name: lp.product_name,
-      product_sku: lp.product_sku,
-      qty: lp.qty,
-      unit_price: lp.unit_price,
-      amount: lp.amount,
-      serial_or_msisdn: lp.serial_no || "—",
-      sales_person_label: "—",
-      customer_name: "—",
-      doc_no: lp.source_no || "(舊系統)",
-      so_id: null,
-    }));
-    return [...fromCurrent, ...fromLegacy].sort((a, b) =>
-      a.doc_date < b.doc_date ? 1 : a.doc_date > b.doc_date ? -1 : 0,
-    );
-  }, [orders.data, legacy.data]);
-
-  const orderStats = useMemo(() => {
-    const legacyList = legacy.data ?? [];
-    const legacyTotal = legacyList.reduce(
-      (s, lp) => s + Number(lp.amount || 0),
-      0,
-    );
-    return {
-      count: summary.data?.count ?? 0,
-      total: Number(summary.data?.total ?? 0),
-      legacyCount: legacyList.length,
-      legacyTotal,
-      lastVisit: latestDay(summary.data?.last_date, ...legacyList.map((lp) => lp.doc_date)),
-    };
-  }, [summary.data, legacy.data]);
-  const ordersLoading = orders.isLoading || summary.isLoading || legacy.isLoading;
-  const ordersFailed = orders.isError || summary.isError || legacy.isError;
-  const ordersCut = cutNote(orders.data, "只列最近", "張");
 
   function patch<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -271,45 +171,21 @@ export function MembersPage() {
   const isEditing = selection?.kind === "member";
   const isNew = selection?.kind === "new";
 
-  // 新分頁的標題寫會員名字(開好幾位分得出來);離開這一頁還原
-  const soloName = solo ? selected?.name : null;
-  useEffect(() => {
-    if (!solo) return;
-    const before = document.title;
-    document.title = memberTabTitle(soloName);
-    return () => {
-      document.title = before;
-    };
-  }, [solo, soloName]);
-
-  function cancel() {
-    if (!solo) {
-      setSelection(null);
-      return;
-    }
-    // 名單開的分頁 → 關掉回到名單;直接打網址開的關不掉 → 回名單頁
-    if (window.opener) window.close();
-    else navigate("/members");
-  }
-
   return (
     <div className="page">
       <Toolbar
-        title={solo ? "會員資料" : "會員管理"}
+        title="會員管理"
         actions={
-          solo ? undefined : (
-            <button
-              className="btn primary"
-              onClick={() => setSelection({ kind: "new" })}
-            >
-              + 新增會員
-            </button>
-          )
+          <button
+            className="btn primary"
+            onClick={() => setSelection({ kind: "new" })}
+          >
+            + 新增會員
+          </button>
         }
       />
 
-      <div className={solo ? "pc-layout solo" : "pc-layout"}>
-        {!solo && (
+      <div className="pc-layout">
         <aside className="pc-master" style={{ gridTemplateRows: "1fr" }}>
           <section className="pc-section">
             <div className="pc-section-header">
@@ -346,7 +222,12 @@ export function MembersPage() {
                     {members.map((m) => (
                       <tr
                         key={m.id}
-                        onClick={() => window.open(memberUrl(m.id), "_blank")}
+                        onClick={() => {
+                          // 右邊編輯這一位,消費紀錄在新分頁(owner 2026-10-20)
+                          setPicked(m);
+                          setSelection({ kind: "member", id: m.id });
+                          window.open(memberUrl(m.id), "_blank");
+                        }}
                         className={
                           selection?.kind === "member" && selection.id === m.id
                             ? "selected"
@@ -380,12 +261,11 @@ export function MembersPage() {
             </div>
           </section>
         </aside>
-        )}
 
         <div className="pc-detail">
           {!isEditing && !isNew && (
             <div className="md-empty" style={{ marginTop: 40 }}>
-              點會員在新分頁打開,或按右上角「新增會員」
+              從左側選擇會員,或按右上角「新增會員」
             </div>
           )}
 
@@ -491,119 +371,12 @@ export function MembersPage() {
                 </button>
                 <button
                   className="btn"
-                  onClick={cancel}
+                  onClick={() => setSelection(null)}
                   disabled={save.isPending}
                 >
                   取消
                 </button>
               </div>
-
-              {isEditing && selected && (
-                <div style={{ marginTop: 24 }}>
-                  <h4 className="pc-detail-title">
-                    購買明細
-                    {ordersLoading
-                      ? " 載入中…"
-                      : ordersFailed
-                        ? " 載入失敗"
-                        : ` (${orderStats.count} 筆銷貨 · 累計 $${money(orderStats.total)}${
-                          orderStats.legacyCount > 0
-                            ? ` · 舊系統 ${orderStats.legacyCount} 筆 / $${money(orderStats.legacyTotal)}`
-                            : ""
-                        }${
-                          orderStats.lastVisit
-                            ? ` · 最近 ${orderStats.lastVisit}`
-                            : ""
-                        })`}
-                  </h4>
-                  <div className="md-table" style={{ height: "auto" }}>
-                    <table>
-                      <thead>
-                        <tr>
-                          <th style={{ width: 100 }}>日期</th>
-                          <th>商品</th>
-                          <th style={{ width: 160 }}>序號 / 門號</th>
-                          <th className="num" style={{ width: 50 }}>數量</th>
-                          <th className="num" style={{ width: 90 }}>單價</th>
-                          <th className="num" style={{ width: 100 }}>小計</th>
-                          <th style={{ width: 100 }}>業務員</th>
-                          <th style={{ width: 100 }}>來源／舊客戶</th>
-                          <th style={{ width: 120 }}>單號</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.map((r) => (
-                          <tr
-                            key={r.key}
-                            onClick={() =>
-                              r.so_id != null && navigate(`/sales/${r.so_id}`)
-                            }
-                            className={r.is_void ? "row-void" : undefined}
-                            title={
-                              r.source === "legacy"
-                                ? "舊系統匯入紀錄"
-                                : "點擊檢視銷貨單"
-                            }
-                            style={{
-                              cursor: r.so_id != null ? "pointer" : "default",
-                              opacity: r.source === "legacy" ? 0.85 : 1,
-                            }}
-                          >
-                            <td>{r.doc_date}</td>
-                            <td>
-                              <div>{r.product_name}</div>
-                              <div style={{ fontSize: 14, color: "var(--text-dim)" }}>
-                                {r.product_sku}
-                              </div>
-                            </td>
-                            <td style={{ fontSize: 14 }}>{r.serial_or_msisdn}</td>
-                            <td className="num">{r.qty}</td>
-                            <td className="num">
-                              {money(r.unit_price)}
-                            </td>
-                            <td className="num">
-                              {money(r.amount)}
-                            </td>
-                            <td>{r.sales_person_label}</td>
-                            <td>{r.customer_name}</td>
-                            <td style={{ fontSize: 14, color: "var(--text-dim)" }}>
-                              {r.doc_no}
-                              {r.source === "legacy" && (
-                                <span
-                                  style={{
-                                    marginLeft: 4,
-                                    fontSize: 12,
-                                    padding: "1px 4px",
-                                    border: "1px solid var(--text-dim)",
-                                    borderRadius: 3,
-                                  }}
-                                >
-                                  舊
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                        {!ordersLoading && !ordersFailed && rows.length === 0 && (
-                          <tr>
-                            <td colSpan={9} className="md-empty">
-                              此會員尚無銷售紀錄
-                            </td>
-                          </tr>
-                        )}
-                        {ordersCut && (
-                          <tr>
-                            <td colSpan={9} className="md-empty">
-                              {ordersCut}
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-              {isEditing && selected && <LegacyHistorySection memberId={selected.id} />}
             </div>
           )}
         </div>

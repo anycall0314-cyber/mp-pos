@@ -226,7 +226,8 @@ test("會員名單問伺服器:照姓名、一次 100 位、打的字交給伺�
 
 test("會員 / 客戶的幾張、累計、最近:問伺服器算全部的那一支", () => {
   assert.match(hooks, /api<OrderSummary>\(`\/sales-orders\/summary\/\$\{buildQS\(\{ member: who\?\.member, customer: who\?\.customer \}\)\}`\)/);
-  for (const page of ["../pages/members/MembersPage.tsx", "../pages/customers/CustomersPage.tsx"]) {
+  // 會員的消費紀錄 2026-10-20 搬到新分頁那一頁(MemberHistoryPage)
+  for (const page of ["../pages/members/MemberHistoryPage.tsx", "../pages/customers/CustomersPage.tsx"]) {
     const source = readFileSync(new URL(page, import.meta.url), "utf8");
     assert.match(source, /count: summary\.data\?\.count \?\? 0,/, page);
     assert.match(source, /total: Number\(summary\.data\?\.total \?\? 0\),/, page);
@@ -259,5 +260,6 @@ test("會員頁:右邊顯示誰、還沒讀到不給表單、存檔後換成存�
   assert.doesNotMatch(source, /\{\(isEditing \|\| isNew\) && \(/);
   assert.match(source, /setPicked\(saved\);\s*setSelection\(\{ kind: "member", id: saved\.id \}\);/);
   assert.match(source, /const result = useMemberList\(search\);/);
-  assert.match(source, /lastVisit: latestDay\(summary\.data\?\.last_date, \.\.\.legacyList\.map\(\(lp\) => lp\.doc_date\)\),/);
+  const history = readFileSync(new URL("../pages/members/MemberHistoryPage.tsx", import.meta.url), "utf8");
+  assert.match(history, /lastVisit: latestDay\(summary\.data\?\.last_date, \.\.\.legacyList\.map\(\(lp\) => lp\.doc_date\)\),/);
 });
