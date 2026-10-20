@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import { fetchInvoiceListExport, useInvoiceList, useInvoiceTypes } from "@/api/hooks";
+import { fetchInvoiceListExport, fetchInvoiceSummary, useInvoiceList, useInvoiceTypes } from "@/api/hooks";
 import type { Warehouse } from "@/api/types";
 import { Banner, errorMessageOf } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
@@ -9,8 +9,11 @@ import { localDay, monthStart, rangeReady } from "@/lib/fixedReports";
 import {
   choiceLabel,
   invoiceTable,
+  lastPeriod,
+  madeAtText,
   returnedText,
   summaryCards,
+  summaryTable,
   type InvoiceFilter,
 } from "@/lib/invoiceList";
 import { money } from "@/lib/money";
@@ -48,7 +51,7 @@ export function InvoiceListPage() {
   const [state, setState] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<"" | "list" | "summary">("");
   const [exportNote, setExportNote] = useState("");
   const [appliedStore, setAppliedStore] = useState<Picked<Warehouse>>(NOT_PICKED);
   const storeName = useStoreName(appliedStore);
@@ -68,7 +71,7 @@ export function InvoiceListPage() {
   }
 
   async function exportAll() {
-    setExporting(true);
+    setExporting("list");
     setExportNote("");
     try {
       const all = await fetchInvoiceListExport(applied);
@@ -78,7 +81,24 @@ export function InvoiceListPage() {
     } catch (e) {
       setExportNote(errorMessageOf(e));
     } finally {
-      setExporting(false);
+      setExporting("");
+    }
+  }
+
+  /** 開立發票彙總表(給會計師):照已經查出來的期間、門市、發票類型。 */
+  async function exportSummary() {
+    setExporting("summary");
+    setExportNote("");
+    try {
+      const got = await fetchInvoiceSummary(applied);
+      const rows = got.issued.length + got.reversed.length;
+      setExportNote(
+        exportIfComplete({ count: rows }, exportFileName("開立發票彙總表", { store: storeName, from: got.from, to: got.to }), () => summaryTable(got, storeName, madeAtText()), downloadCsv),
+      );
+    } catch (e) {
+      setExportNote(errorMessageOf(e));
+    } finally {
+      setExporting("");
     }
   }
 
@@ -87,14 +107,19 @@ export function InvoiceListPage() {
       <Toolbar
         title="發票明細"
         actions={
-          <button
-            className="btn"
-            type="button"
-            disabled={!data || data.count === 0 || exporting}
-            onClick={exportAll}
-          >
-            匯出
-          </button>
+          <>
+            <button
+              className="btn"
+              type="button"
+              disabled={!data || data.count === 0 || exporting !== ""}
+              onClick={exportAll}
+            >
+              匯出明細
+            </button>
+            <button className="btn" type="button" disabled={!data || exporting !== ""} onClick={exportSummary}>
+              匯出彙總
+            </button>
+          </>
         }
       />
       <div className="list-filterbar sr-filter">
@@ -166,6 +191,17 @@ export function InvoiceListPage() {
           }}
         >
           本月
+        </button>
+        <button
+          className="btn"
+          type="button"
+          onClick={() => {
+            const period = lastPeriod();
+            setFrom(period.from);
+            setTo(period.to);
+          }}
+        >
+          上期
         </button>
         <button className="btn primary" type="button" disabled={!ready} onClick={apply}>
           查詢

@@ -406,3 +406,150 @@ class InvoiceAccessTests(_Invoices):
         for method in ("post", "put", "patch", "delete"):
             self.assertEqual(getattr(self.c.admin, method)(URL, {}, format="json").status_code, 405, method)
         self.assertEqual(self.c.admin.__class__().get(URL, SEP).status_code, 401)
+
+
+SUMMARY = "/api/v1/sales-invoice-summary/"
+TWO_MONTHS = {"from": "2026-09-01", "to": "2026-10-31"}
+
+
+class InvoiceSummaryTests(_Invoices):
+    """開立發票彙總表(owner 2026-10-20:每個單數月傳給會計師;照舊歐睿 FI012 彙總的格式)。"""
+
+    def summary(self, client=None, period=SEP, **params):
+        r = (client or self.c.admin).get(SUMMARY, {**period, **params})
+        self.assertEqual(r.status_code, 200, r.content.decode())
+        return r.json()
+
+    @staticmethod
+    def ranges(data):
+        return [(r["date"], r["first"], r["last"], r["total"]) for r in data["issued"]]
+
+    @staticmethod
+    def taken_back(data):
+        return [(r["date"], r["invoice_no"], r["kind"], r["total"]) for r in data["reversed"]]
+
+    def test_layout_like_the_old_one(self):
+        data = self.summary()
+        self.assertEqual(data["issued"][0], {
+            "date": "2026-09-05", "store": self.w1.name, "form": "電子發票", "first": "QA10000001", "last": "QA10000001",
+            "count": 1, "subtotal": "780.00", "tax": "0.00", "total": "780.00"})
+        # 一天一列;作廢的(QA…03)、後來退掉的(QA…04、06)也算在開的那一天
+        self.assertEqual(self.ranges(data), [
+            ("2026-09-05", "QA10000001", "QA10000001", "780.00"),
+            ("2026-09-06", "QA10000002", "QA10000002", "390.00"),
+            ("2026-09-08", "ZZ12345678", "ZZ12345678", "1170.00"),
+            ("2026-09-09", "QA10000003", "QA10000003", "390.00"),
+            ("2026-09-10", "QA10000004", "QA10000004", "780.00"),
+            ("2026-09-11", "QA10000005", "QA10000005", "390.00"),
+            ("2026-09-12", "QA10000006", "QA10000006", "1560.00"),
+        ])
+        # 八月開、九月退(沒有作廢原發票):九月的下段,退的那一天、原本的號碼、負數
+        self.assertEqual(data["reversed"], [{
+            "date": "2026-09-15", "store": self.w1.name, "form": "電子發票", "invoice_no": "QA10000007",
+            "kind": "return_keep", "subtotal": "-390.00", "tax": "0.00", "total": "-390.00"}])
+        self.assertEqual(data["totals"], {
+            "issued": {"subtotal": "5404.00", "tax": "56.00", "total": "5460.00"},
+            "reversed": {"subtotal": "-390.00", "tax": "0.00", "total": "-390.00"},
+            "net": {"subtotal": "5014.00", "tax": "56.00", "total": "5070.00"},
+        })
+        self.assertEqual(data["choices"], {"kind": [
+            {"key": "sale_void", "label": "銷貨作廢"}, {"key": "return_void", "label": "退貨作廢"},
+            {"key": "return_keep", "label": "退貨折讓"}]})
+        self.assertEqual((data["from"], data["to"]), ("2026-09-01", "2026-09-30"))
+
+    def test_october_takes_back_what_was_voided_or_returned_then(self):
+        data = self.summary(period=OCT)
+        self.assertEqual(data["issued"], [])
+        self.assertEqual(self.taken_back(data), [
+            ("2026-10-02", "QA10000004", "return_void", "-780.00"),      # 退貨、作廢原發票
+            ("2026-10-03", "QA10000006", "return_keep", "-1560.00"),     # 退貨、發票沒作廢
+            ("2026-10-05", "QA10000003", "sale_void", "-390.00"),        # 銷貨單作廢(台灣 10/05 凌晨)
+        ])
+
+    def test_the_two_month_total_is_what_actually_stands(self):
+        data = self.summary(period=TWO_MONTHS)
+        # 真的成立的:a 780 + b 390 + d 1,170 + g 390(退了又把銷退作廢,貨沒退)= 2,730;
+        # 八月開的那一張這一期退了 390 → 2,340。作廢的 e、退掉的 f、h 都扣回去了
+        self.assertEqual(data["totals"]["net"], {"subtotal": "2284.00", "tax": "56.00", "total": "2340.00"})
+        stands = SalesOrder.objects.filter(pk__in=[self.a["id"], self.b["id"], self.d["id"], self.g["id"]])
+        self.assertEqual(Decimal(data["totals"]["net"]["total"]),
+                         sum(s.total for s in stands) - SalesReturn.objects.get(pk=self.ri["id"]).total)
+        # 每一個用掉的號碼都在上段的起訖裡(這裡一天一張,就是那幾張)
+        self.assertEqual(sorted(r["first"] for r in data["issued"]), [
+            "QA10000001", "QA10000002", "QA10000003", "QA10000004", "QA10000005", "QA10000006", "ZZ12345678"])
+
+    def test_an_invoice_is_never_taken_back_twice(self):
+        # 紅隊第 1 條:有效銷退的單不能作廢 → 同一張發票不會一列銷退、一列作廢
+        self.assertEqual(self.c.admin.post(f"/api/v1/sales-orders/{self.h['id']}/void/", {}, format="json").status_code, 400)
+        # 先作廢銷退、再作廢銷貨單:只剩「銷貨作廢」那一列
+        self.post(f"/api/v1/sales-returns/{self.rh['id']}/void/", {"reason": "改成作廢"})
+        self.post(f"/api/v1/sales-orders/{self.h['id']}/void/", {})
+        SalesOrder.objects.filter(pk=self.h["id"]).update(voided_at=VOIDED_E)
+        h = [row for row in self.taken_back(self.summary(period=TWO_MONTHS)) if row[1] == "QA10000006"]
+        self.assertEqual(h, [("2026-10-05", "QA10000006", "sale_void", "-1560.00")])
+        # 退了又把銷退作廢的那一張(QA…05):一列都沒有,銷售照算
+        data = self.summary(period=TWO_MONTHS)
+        self.assertNotIn("QA10000005", [r["invoice_no"] for r in data["reversed"]])
+        numbers = [r["invoice_no"] for r in data["reversed"]]
+        self.assertEqual(len(numbers), len(set(numbers)))
+
+    def test_one_row_per_day_store_type_and_track(self):
+        same_day = date(2026, 9, 9)
+        for so in (self.e, self.f, self.g):
+            SalesOrder.objects.filter(pk=so["id"]).update(invoice_date=same_day)
+        SalesOrder.objects.filter(pk=self.b["id"]).update(invoice_date=same_day)                   # 第二家門市
+        SalesOrder.objects.filter(pk=self.d["id"]).update(invoice_date=same_day)                   # 手開三聯
+        nine = [r for r in self.summary()["issued"] if r["date"] == "2026-09-09"]
+        # 同一天:照門市(第一家在前)、發票類型、號碼
+        self.assertEqual([(r["store"], r["form"], r["first"], r["last"], r["count"], r["total"]) for r in nine], [
+            (self.w1.name, "手開三聯", "ZZ12345678", "ZZ12345678", 1, "1170.00"),
+            (self.w1.name, "電子發票", "QA10000003", "QA10000005", 3, "1560.00"),
+            (self.w2.name, "電子發票", "QA10000002", "QA10000002", 1, "390.00"),
+        ])
+        # 同一天換了一捲(另一個字軌)分開列,不寫成 QA… ~ QB…
+        SalesOrder.objects.filter(pk=self.g["id"]).update(invoice_no="qb20000001")
+        nine = [r for r in self.summary()["issued"] if r["date"] == "2026-09-09" and r["form"] == "電子發票"
+                and r["store"] == self.w1.name]
+        self.assertEqual([(r["first"], r["last"], r["count"]) for r in nine],
+                         [("QA10000003", "QA10000004", 2), ("QB20000001", "QB20000001", 1)])
+
+    def test_an_old_void_without_a_time_is_taken_back_on_its_invoice_day(self):
+        SalesOrder.objects.filter(pk=self.e["id"]).update(voided_at=None)
+        data = self.summary()
+        self.assertIn(("2026-09-09", "QA10000003", "sale_void", "-390.00"), self.taken_back(data))
+        self.assertNotIn("QA10000003", [r["invoice_no"] for r in self.summary(period=OCT)["reversed"]])
+
+    def test_filters_and_who_sees_what(self):
+        only = self.summary(period=TWO_MONTHS, form="hand_tri")
+        self.assertEqual((self.ranges(only), only["reversed"]),
+                         ([("2026-09-08", "ZZ12345678", "ZZ12345678", "1170.00")], []))
+        w2 = self.summary(warehouse=self.w2.id)
+        self.assertEqual([r["first"] for r in w2["issued"]], ["QA10000002"])
+        # 鎖在門市的店員:網址帶別家的編號沒有用
+        mine = self.summary(client=self.c.clerk, warehouse=self.w2.id)
+        self.assertNotIn("QA10000002", [r["first"] for r in mine["issued"]])
+        self.assertEqual(len(mine["issued"]), 6)
+        # 免用發票的不在任何一段
+        self.assertNotIn(self.c_none["no"], str(self.summary(period=TWO_MONTHS)))
+
+    def test_needs_the_invoice_report_item_and_only_reads(self):
+        UserProfile.objects.filter(user=self.c.clerk_user).update(denied_abilities=["report_invoices"])
+        clerk = Company.client(get_user_model().objects.get(pk=self.c.clerk_user.pk))
+        self.assertEqual(clerk.get(SUMMARY, SEP).status_code, 403)
+        for method in ("post", "put", "patch", "delete"):
+            self.assertEqual(getattr(self.c.admin, method)(SUMMARY, {}, format="json").status_code, 405, method)
+        r = self.c.admin.get(SUMMARY, {"from": "2026-09-30", "to": "2026-09-01"})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("起日", r.json()["detail"])
+
+    def test_another_company_is_never_mixed_in(self):
+        other = Company("b", "乙通訊行", "乙")
+        other.purchase(case_qty=5)
+        so = other._post("/api/v1/sales-orders/", {
+            "customer": other.customer.id, "warehouse": other.wh.id, "tax_method": "untaxed",
+            "invoice_form": "hand_tri", "invoice_no": "QA10000099",
+            "items": [{"product": other.case.id, "qty": 1, "unit_price": "390"}],
+            "payments": [{"method": "cash", "amount": "390"}]})
+        SalesOrder.objects.filter(pk=so["id"]).update(doc_date=date(2026, 9, 5), invoice_date=date(2026, 9, 5))
+        self.assertNotIn("QA10000099", str(self.summary()))
+        self.assertEqual(self.summary()["totals"]["issued"]["total"], "5460.00")

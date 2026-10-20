@@ -15,7 +15,13 @@ import {
   listAll as walkAll,
   topPage as onlyTopPage,
 } from "@/lib/listAll";
-import { invoiceQuery, type InvoiceFilter, type InvoiceListing } from "@/lib/invoiceList";
+import {
+  invoiceQuery,
+  summaryQuery,
+  type InvoiceFilter,
+  type InvoiceListing,
+  type InvoiceSummary,
+} from "@/lib/invoiceList";
 import { repairQuery, type RepairFilter, type RepairListing } from "@/lib/repairReport";
 import { phonesLive, type CountDetail, type CountSummary, type OldUnitsLeft } from "@/lib/stockCount";
 import { purchaseLineQuery, type PurchaseLine, type PurchaseLineFilter } from "@/lib/purchaseLines";
@@ -3195,6 +3201,10 @@ export const useInvoiceList = (filter: InvoiceFilter, page: number) =>
 
 export const fetchInvoiceListExport = (filter: InvoiceFilter) =>
   api<InvoiceListing>(`/sales-invoice-report/?${invoiceQuery(filter, "export")}`);
+
+// 開立發票彙總表(給會計師):只看期間、門市、發票類型
+export const fetchInvoiceSummary = (filter: InvoiceFilter) =>
+  api<InvoiceSummary>(`/sales-invoice-summary/?${summaryQuery(filter)}`);
 
 // 維修月報:期間內完工的維修單(合計、每個人分到多少、逐筆都是伺服器算的)
 export const useRepairMonthly = (filter: RepairFilter, page: number) =>

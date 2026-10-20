@@ -133,3 +133,103 @@ export function invoiceTable(rows: InvoiceRow[], states: Choice[] | undefined): 
     ]),
   ];
 }
+
+// ---- 開立發票彙總表(給會計師;照舊歐睿那一份的格式;怎麼分列、扣什麼都由伺服器決定) ----
+
+export interface SummaryAmounts {
+  subtotal: string;
+  tax: string;
+  total: string;
+}
+
+/** 上段:同一天 × 門市 × 發票類型 × 字軌一列;號碼是當天第一張 ~ 最後一張。 */
+export interface SummaryIssued extends SummaryAmounts {
+  date: string;
+  store: string;
+  form: string;
+  first: string;
+  last: string;
+  count: number;
+}
+
+/** 下段:作廢與退回一張一列,金額是負的。 */
+export interface SummaryReversed extends SummaryAmounts {
+  date: string;
+  store: string;
+  form: string;
+  invoice_no: string;
+  kind: string;
+}
+
+export interface InvoiceSummary {
+  from: string;
+  to: string;
+  issued: SummaryIssued[];
+  reversed: SummaryReversed[];
+  totals: { issued: SummaryAmounts; reversed: SummaryAmounts; net: SummaryAmounts };
+  choices: { kind: Choice[] };
+}
+
+/** 彙總表只看期間、門市、發票類型(狀態、搜尋、日期看哪一個不套)。 */
+export function summaryQuery(f: InvoiceFilter): string {
+  const q = new URLSearchParams();
+  q.set("from", f.from);
+  q.set("to", f.to);
+  if (f.warehouse !== "") q.set("warehouse", String(f.warehouse));
+  if (f.form !== "") q.set("form", f.form);
+  return q.toString();
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** 上一期發票(兩個月一期,單數月開始):十一月報稅時按「上期」= 9/1 ~ 10/31;一月 = 去年 11/1 ~ 12/31。 */
+export function lastPeriod(now: Date = new Date()): { from: string; to: string } {
+  const month = now.getMonth() + 1;
+  let first = (month % 2 === 1 ? month : month - 1) - 2;
+  let year = now.getFullYear();
+  if (first < 1) {
+    first += 12;
+    year -= 1;
+  }
+  const lastDay = new Date(year, first + 1, 0).getDate();        // 第二個月的最後一天
+  return { from: `${year}-${pad(first)}-01`, to: `${year}-${pad(first + 1)}-${pad(lastDay)}` };
+}
+
+/** 舊系統的日期寫法:20260905。 */
+const compact = (day: string) => day.replaceAll("-", "");
+
+const SUMMARY_HEAD = ["序號", "日期", "店別", "發票類別", "發票號碼", "銷貨金額", "銷貨稅額", "銷貨合計"];
+
+function amounts(a: SummaryAmounts): string[] {
+  return [intStr(a.subtotal), intStr(a.tax), intStr(a.total)];
+}
+
+/**
+ * 匯出的檔:照舊系統的欄位順序(會計師不用重新看懂)——
+ * 標題、上段(開立)+ 小計、下段(作廢與退回,多一欄說明)+ 小計、總計。金額不加千分位(檔裡要能加總)。
+ * store:門市名稱,空的 = 全部門市;madeAt:製表時間。
+ */
+export function summaryTable(data: InvoiceSummary, store: string, madeAt: string): unknown[][] {
+  const blank = ["", "", "", ""];
+  return [
+    ["開立發票彙總表", `日期：${compact(data.from)} ~ ${compact(data.to)}`, `門市：${store || "全部門市"}`, `製表時間：${madeAt}`],
+    SUMMARY_HEAD,
+    ...data.issued.map((r, i) => [i + 1, compact(r.date), r.store, r.form, `${r.first}-${r.last}`, ...amounts(r)]),
+    ["金額小計：", ...blank, ...amounts(data.totals.issued)],
+    [],
+    ["作廢與退回"],
+    [...SUMMARY_HEAD, "說明"],
+    ...data.reversed.map((r, i) => [
+      i + 1, compact(r.date), r.store, r.form, `${r.invoice_no}-${r.invoice_no}`, ...amounts(r),
+      choiceLabel(data.choices.kind, r.kind),
+    ]),
+    ["金額小計：", ...blank, ...amounts(data.totals.reversed)],
+    [],
+    ["金額總計：", ...blank, ...amounts(data.totals.net)],
+  ];
+}
+
+/** 製表時間:這台電腦的時間,2026/10/20 14:05。 */
+export function madeAtText(now: Date = new Date()): string {
+  return `${now.getFullYear()}/${pad(now.getMonth() + 1)}/${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}

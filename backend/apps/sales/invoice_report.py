@@ -18,6 +18,16 @@ owner 2026-10-12(取舊歐睿報表的優點;舊 FI012 開立發票表):發票�
   「日期」可以改成照作廢日:列出這段期間作廢的發票(不管是哪一期開的)—— 上一期開、這一期才作廢的在這裡找;沒有記到作廢日的舊單只在「照發票日」看得到。
   **報表怎麼算沒有變**:作廢的單照舊整張不算、算在原本開單那一天。
 - 要有「發票明細」那一項;鎖在門市的帳號只看自己門市。
+
+**開立發票彙總表**(`summary`;owner 2026-10-20:「我每個單數月，要傳發票開立明細彙總表excel給會計師報帳」)——
+照舊歐睿給會計師的那一份(FI012 的彙總)排,讓會計師不用重新看懂:
+- 上段「開立」:期間內(看發票日)有發票號碼的銷貨單,**同一天 × 門市 × 發票類型 × 字軌一列**,號碼寫當天第一張 ~ 最後一張。
+  **作廢的單也算**(號碼用掉了;舊系統也是開了又退的算在當天),在下段扣回去。
+- 下段「作廢與退回」一張一列、負數:期間內(看退的那一天)沒作廢的銷退 —— 作廢原發票的「退貨作廢」、沒有的「退貨折讓」;
+  期間內(看作廢的那一天;沒記到作廢時間的舊單看發票日)作廢的銷貨單「銷貨作廢」。
+  **一張發票只會扣一次**:有有效銷退的銷貨單不能作廢(要先作廢銷退),作廢了的銷退不列。
+- 金額 = 發票面額(單上的未稅、稅額、含稅;不收錢的那幾行本來就不在裡面),不是實收。總計 = 上段 + 下段(下段是負的)。
+- 條件只看期間、門市、發票類型(頁面上的狀態、搜尋、日期看哪一個不套)。
 """
 from decimal import Decimal
 
@@ -159,6 +169,102 @@ def rows_for(tenant):
 
 def _choices(labels):
     return [{"key": key, "label": label} for key, label in labels.items()]
+
+
+# ---- 開立發票彙總表 ----
+
+SALE_VOID, RETURN_VOID, RETURN_KEEP = "sale_void", "return_void", "return_keep"
+REVERSALS = {SALE_VOID: "銷貨作廢", RETURN_VOID: "退貨作廢", RETURN_KEEP: "退貨折讓"}
+
+
+def _sums(rows):
+    keys = ("subtotal", "tax", "total")
+    return {k: _money(sum((r[k] for r in rows), Decimal("0"))) for k in keys}
+
+
+def summary(tenant, *, start, end, warehouse_id=None, invoice_form=""):
+    """開立發票彙總表(寫法見開頭)。回 issued(上段)、reversed(下段,負數)、totals。"""
+    names = dict(InvoiceType.objects.filter(tenant=tenant).values_list("code", "name"))
+    base = SalesOrder.objects.filter(tenant=tenant).exclude(invoice_no="")
+    if warehouse_id is not None:
+        base = base.filter(warehouse_id=warehouse_id)
+    if invoice_form:
+        base = base.filter(invoice_form=invoice_form)
+
+    groups = {}
+    issued = base.annotate(day=Coalesce("invoice_date", "doc_date")).filter(day__gte=start, day__lte=end).values(
+        "day", "warehouse_id", "warehouse__name", "invoice_form", "invoice_no", "subtotal", "tax_amount", "total")
+    for so in issued:
+        number = so["invoice_no"].strip().upper()
+        key = (so["day"], so["warehouse_id"], so["invoice_form"], number[:2])
+        g = groups.setdefault(key, {
+            "_wh": so["warehouse_id"] or 0, "date": so["day"], "store": so["warehouse__name"] or "", "form": names.get(so["invoice_form"], so["invoice_form"]),
+            "numbers": [], "subtotal": Decimal("0"), "tax": Decimal("0"), "total": Decimal("0")})
+        g["numbers"].append(number)
+        g["subtotal"] += so["subtotal"]
+        g["tax"] += so["tax_amount"]
+        g["total"] += so["total"]
+    upper = []
+    for g in groups.values():
+        numbers = sorted(g.pop("numbers"))
+        upper.append({**g, "first": numbers[0], "last": numbers[-1], "count": len(numbers)})
+    upper.sort(key=lambda r: (r["date"], r["_wh"], r["form"], r["first"]))       # 同一天照門市(編號)排
+
+    lower = []
+    returns = SalesReturn.objects.filter(
+        tenant=tenant, is_void=False, doc_date__gte=start, doc_date__lte=end, original_so__in=base.values("pk"),
+    ).values("doc_date", "original_so__warehouse_id", "original_so__warehouse__name", "original_so__invoice_form", "original_so__invoice_no",
+             "void_original_invoice", "subtotal", "tax_amount", "total")
+    for sr in returns:
+        lower.append({
+            "_wh": sr["original_so__warehouse_id"] or 0, "date": sr["doc_date"], "store": sr["original_so__warehouse__name"] or "",
+            "form": names.get(sr["original_so__invoice_form"], sr["original_so__invoice_form"]),
+            "invoice_no": sr["original_so__invoice_no"].strip().upper(),
+            "kind": RETURN_VOID if sr["void_original_invoice"] else RETURN_KEEP,
+            "subtotal": -sr["subtotal"], "tax": -sr["tax_amount"], "total": -sr["total"]})
+    # 作廢那一刻在這裡的日期(跟發票明細的作廢日同一個算法);沒記到作廢時間的舊單看發票日(上段也在那一天)
+    voided = base.filter(is_void=True).annotate(
+        day=Coalesce(TruncDate("voided_at"), "invoice_date", "doc_date", output_field=DateField()),
+    ).filter(day__gte=start, day__lte=end).values(
+        "day", "warehouse_id", "warehouse__name", "invoice_form", "invoice_no", "subtotal", "tax_amount", "total")
+    for so in voided:
+        lower.append({
+            "_wh": so["warehouse_id"] or 0, "date": so["day"], "store": so["warehouse__name"] or "", "form": names.get(so["invoice_form"], so["invoice_form"]),
+            "invoice_no": so["invoice_no"].strip().upper(), "kind": SALE_VOID,
+            "subtotal": -so["subtotal"], "tax": -so["tax_amount"], "total": -so["total"]})
+    lower.sort(key=lambda r: (r["date"], r["_wh"], r["invoice_no"]))
+
+    issued_sum, reversed_sum = _sums(upper), _sums(lower)
+    def money(row):
+        return {**{k: v for k, v in row.items() if k != "_wh"}, **{k: _money(row[k]) for k in ("subtotal", "tax", "total")}}
+    return {
+        "issued": [money(r) for r in upper],
+        "reversed": [money(r) for r in lower],
+        "totals": {
+            "issued": issued_sum,
+            "reversed": reversed_sum,
+            "net": {k: _money(Decimal(issued_sum[k]) + Decimal(reversed_sum[k])) for k in issued_sum},
+        },
+    }
+
+
+@api_view(["GET"])
+def sales_invoice_summary(request):
+    """開立發票彙總表。?from= &to= &warehouse= &form=(發票類型代碼)。權限跟發票明細同一項。"""
+    abilities.require(request.user, abilities.REPORT_INVOICES)
+    p = request.query_params
+    try:
+        start, end = stock_reports.parse_range(p)
+    except stock_reports.ReportError as exc:
+        return Response({"detail": str(exc)}, status=400)
+    with stock_reports.one_moment():           # 上段與下段要是同一刻的
+        got = summary(request.tenant, start=start, end=end, warehouse_id=report_warehouse_id(request),
+                      invoice_form=(p.get("form") or "").strip())
+    return Response({
+        "from": start.isoformat(), "to": end.isoformat(), **got,
+        # 下段每一列「說明」的字由伺服器給(畫面不自己寫死)
+        "choices": {"kind": _choices(REVERSALS)},
+    })
 
 
 @api_view(["GET"])
