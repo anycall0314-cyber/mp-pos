@@ -40,7 +40,7 @@ import {
   type SerialRow,
 } from "@/lib/stockReports";
 import type { CatalogRow } from "@/lib/vendorOrder";
-import type { ExchangeTab, VendorExchangeList, VendorExchangeRow } from "@/lib/vendorExchange";
+import type { ExchangeLookup, ExchangeTab, VendorExchangeList, VendorExchangeRow } from "@/lib/vendorExchange";
 import type { VendorCategoryOption } from "@/lib/vendorPick";
 import type { ManualPlan, ManualSend, PastedItem } from "@/lib/vendorManual";
 import { withSaved, type MappingData, type MappingRow } from "@/lib/vendorMapping";
@@ -3229,7 +3229,11 @@ export const useVendorExchanges = (tab: ExchangeTab) =>
     gcTime: 0,
   });
 
-/** 送廠商換貨(path 空的)、已換貨(`編號/done/`、`done-serial/`)、標錯了(`編號/cancel/`) */
+/** 刷到的碼是哪一台設備 / 哪一個配件、各門市有幾個、進過的廠商(送廠商之前問一次) */
+export const lookupVendorExchange = (code: string) =>
+  api<ExchangeLookup>(`/vendor-exchanges/lookup/?code=${encodeURIComponent(code)}`);
+
+/** 送廠商換貨(path 空的)、已換貨(`編號/done/`、`done-serial/`)、標錯了(`編號/cancel/`)、不換了(`編號/unreturned/`) */
 export function useVendorExchangeDo() {
   const qc = useQueryClient();
   return useMutation({

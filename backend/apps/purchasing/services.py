@@ -495,7 +495,9 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
             tenant=po.tenant, product_id__in=[it.product_id for it in stock_items],
             from_warehouse=po.warehouse, created_at__gte=po.created_at, qty__gt=0,
             movement_type__in=[StockMovement.MovementType.SALE_OUT, StockMovement.MovementType.TRANSFER_OUT,
-                              StockMovement.MovementType.REPAIR_USAGE, StockMovement.MovementType.PARTS_TRANSFER],
+                              StockMovement.MovementType.REPAIR_USAGE, StockMovement.MovementType.PARTS_TRANSFER,
+                              # 配件送廠商換貨(寫了來源門市的那一筆;複審 2026-10-21 P0:不擋的話作廢後再換回來,成本少算)
+                              StockMovement.MovementType.VENDOR_EXCHANGE],
         ).exists()
         if serial_sales or batch_used:
             raise PurchaseOrderError("這張進貨單的商品已售出或動用，不能整張作廢；請逐筆辦理商品退貨（退貨功能待完成）")

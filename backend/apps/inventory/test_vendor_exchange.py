@@ -215,3 +215,152 @@ class VendorExchangeTests(TestCase):
         self.send()
         for result in checks.check_serials(self.c.tenant):
             self.assertEqual(result["samples"], [], result)
+
+
+class AccessoryExchangeTests(TestCase):
+    """配件(按數量的;owner:「換貨的通常都是配件沒序號也可以嗎」)。"""
+
+    def setUp(self):
+        from apps.parties.models import Supplier
+
+        self.c = Company("b", "乙通訊行", "乙")
+        self.home, self.other = self.c.warehouses
+        self.case = self.c.case
+        self.case.sku = "LC-0001"
+        self.case.save(update_fields=["sku"])
+        self.c.purchase(case_qty=5)                                   # 甲大盤商 100 元
+        self.s2 = Supplier.objects.create(tenant=self.c.tenant, name="第二家")
+        self.buy(self.s2, 2, "200")
+
+    def buy(self, supplier, qty, price):
+        self.c._post("/api/v1/purchase-orders/", {
+            "supplier": supplier.id, "warehouse": self.home.id, "tax_method": "untaxed",
+            "items": [{"product": self.case.id, "qty": qty, "unit_price": price}],
+        })
+
+    def balance(self):
+        from apps.inventory.models import StockBalance
+
+        return StockBalance.objects.get(product=self.case, warehouse=self.home)
+
+    def send(self, client=None, **body):
+        payload = {"product": self.case.id, "warehouse": self.home.id, "qty": 2, "supplier": self.s2.id, **body}
+        return (client or self.c.admin).post(URL, payload, format="json")
+
+    def test_lookup_lists_the_suppliers_who_sold_it(self):
+        r = self.c.admin.get(f"{URL}lookup/", {"code": "lc-0001"})
+        self.assertEqual(r.status_code, 200, r.content)
+        data = r.json()
+        self.assertEqual(data["kind"], "product")
+        self.assertEqual([s["id"] for s in data["suppliers"]], [self.s2.id, self.c.supplier.id])   # 最近的在前
+        self.assertIsNone(data["default_supplier"])                    # 兩家:要人照標籤選
+        self.assertEqual({s["id"]: s["qty"] for s in data["stores"]}, {self.home.id: 7, self.other.id: 0})
+        clerk = self.c.clerk.get(f"{URL}lookup/", {"code": "LC-0001"}).json()
+        self.assertEqual([s["id"] for s in clerk["stores"]], [self.home.id])   # 鎖在門市的只看自己那一家
+
+    def test_send_takes_them_off_the_shelf_and_supplier_is_required(self):
+        avg = self.balance().weighted_avg_cost
+        r = self.send(supplier="")
+        self.assertEqual(r.status_code, 400, r.content)               # 廠商一定要選(紅隊)
+        self.assertEqual(self.send(qty=8).status_code, 400)           # 比門市有的多
+        r = self.send(note="線斷了")
+        self.assertEqual(r.status_code, 201, r.content)
+        row = r.json()
+        self.assertEqual((row["kind"], row["qty"], row["back_qty"]), ("product", 2, 0))
+        self.assertEqual(row["amount"], str((avg * 2).quantize(Decimal("0.01"))))
+        self.assertEqual(self.balance().qty, 5)
+        move = StockMovement.objects.get(ref_doc_type="vendor_exchange", ref_doc_id=row["id"])
+        self.assertEqual((move.from_warehouse_id, move.to_warehouse_id, move.qty), (self.home.id, None, 2))
+        # 店員看不到成本
+        self.assertNotIn("amount", self.c.clerk.get(URL).json()["results"][0])
+        # 進銷存表:換貨那一欄 −2,等式成立;每日對帳的配件庫存對得上
+        flow = self.c.admin.get("/api/v1/stock-flow-report/", {
+            "from": str(timezone.localdate()), "to": str(timezone.localdate()), "warehouse": self.home.id}).json()
+        case = next(x for x in flow["rows"] if x["product"] == self.case.id)
+        self.assertEqual((case["vendor"], case["closing"]), (-2, 5))
+        self.assertIn({"key": "vendor", "label": "換貨", "sign": 1}, flow["columns"])
+        for result in checks.check_stock_balance(self.c.tenant):
+            self.assertEqual(result["samples"], [], result)
+
+    def test_back_in_batches_at_the_cost_it_left_with(self):
+        pk = self.send(qty=3).json()["id"]
+        sent_cost = VendorExchange.objects.get(pk=pk).unit_cost
+        self.buy(self.s2, 3, "300")                                    # 送出去之後又進了一批,平均變了
+        before = self.balance()
+        r = self.c.admin.post(f"{URL}{pk}/done/", {"qty": 1}, format="json")
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual((r.json()["status"], r.json()["back_qty"]), ("pending", 1))
+        self.assertEqual(self.c.admin.post(f"{URL}{pk}/done/", {"qty": 5}, format="json").status_code, 400)
+        r = self.c.admin.post(f"{URL}{pk}/done/", {}, format="json")   # 剩下的全部
+        self.assertEqual((r.json()["status"], r.json()["back_qty"]), ("done", 3))
+        after = self.balance()
+        self.assertEqual(after.qty, before.qty + 3)
+        want = ((before.qty * before.weighted_avg_cost + 3 * sent_cost) / (before.qty + 3)).quantize(Decimal("0.01"))
+        self.assertEqual(after.weighted_avg_cost, want)               # 照送出時的成本加回去
+        self.assertEqual(self.c.admin.post(f"{URL}{pk}/done/", {}, format="json").status_code, 400)
+
+    def test_vendor_short_ships_only_a_manager_can_close_it(self):
+        pk = self.send(qty=3).json()["id"]
+        self.c.admin.post(f"{URL}{pk}/done/", {"qty": 1}, format="json")
+        self.assertEqual(self.c.admin.post(f"{URL}{pk}/cancel/", {}, format="json").status_code, 400)  # 回來過就不能取消
+        r = self.c.clerk.post(f"{URL}{pk}/unreturned/", {}, format="json")
+        self.assertEqual(r.status_code, 403, r.content)               # 店員不能(紅隊)
+        r = self.c.admin.post(f"{URL}{pk}/unreturned/", {}, format="json")
+        self.assertEqual(r.status_code, 200, r.content)
+        row = r.json()
+        self.assertEqual((row["status"], row["back_qty"]), ("unreturned", 1))
+        self.assertEqual(self.balance().qty, 5)                        # 7 − 3 + 1,沒回來的不加回
+        unit = VendorExchange.objects.get(pk=pk).unit_cost
+        self.assertEqual(row["amount"], str((unit * 2).quantize(Decimal("0.01"))))
+        for result in checks.check_stock_balance(self.c.tenant):
+            self.assertEqual(result["samples"], [], result)
+
+    def test_cancel_puts_them_all_back(self):
+        pk = self.send().json()["id"]
+        r = self.c.admin.post(f"{URL}{pk}/cancel/", {}, format="json")
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(self.balance().qty, 7)
+
+    def test_clerk_only_in_own_store(self):
+        self.c.transfer(2)                                            # 民生店也有 2 個
+        r = self.send(self.c.clerk, warehouse=self.other.id)          # 鎖在湳雅店:照自己門市送
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()["warehouse"]["id"], self.home.id)
+        other = self.send(warehouse=self.other.id).json()["id"]
+        self.assertEqual(self.c.clerk.post(f"{URL}{other}/done/", {}, format="json").status_code, 403)
+        self.assertEqual(self.c.clerk.post(f"{URL}{other}/cancel/", {}, format="json").status_code, 403)
+
+    def test_purchase_cannot_be_voided_after_some_went_to_the_vendor(self):
+        # 送出去之後作廢那張進貨單、再換回來 → 成本會少算(複審 P0):送出去算動用過
+        from apps.purchasing.models import PurchaseOrder
+
+        po = PurchaseOrder.objects.filter(tenant=self.c.tenant, supplier=self.s2).order_by("-id").first()
+        self.send(qty=1)
+        r = self.c.admin.post(f"/api/v1/purchase-orders/{po.id}/void/", {}, format="json")
+        self.assertEqual(r.status_code, 400, r.content)
+        po.refresh_from_db()
+        self.assertFalse(po.is_void)
+
+    def test_manager_locked_to_a_store_cannot_close_another_stores(self):
+        # 管理員也可以被鎖在門市:不換了一樣只動得到自己門市的(複審 P1)
+        self.c.transfer(2)
+        pk = self.send(warehouse=self.other.id).json()["id"]
+        profile = self.c.admin_user.profile                # 測試的連線拿的是同一個帳號物件:改它身上的
+        profile.is_warehouse_locked, profile.default_warehouse = True, self.home
+        profile.save()
+        r = self.c.admin.post(f"{URL}{pk}/unreturned/", {}, format="json")
+        self.assertEqual(r.status_code, 403, r.content)
+        self.assertEqual(VendorExchange.objects.get(pk=pk).status, "pending")
+
+    def test_serial_without_purchase_needs_a_supplier(self):
+        # 盤點入庫的手機沒有進貨單:送廠商要選廠商
+        from apps.inventory.identifiers import create_serial
+
+        s = create_serial(tenant=self.c.tenant, product=self.c.phone, code=imei("35600000009999"),
+                          warehouse=self.home)
+        r = self.c.admin.post(URL, {"serial": s.id}, format="json")
+        self.assertEqual(r.status_code, 400, r.content)
+        r = self.c.admin.post(URL, {"serial": s.id, "supplier": self.s2.id}, format="json")
+        self.assertEqual(r.status_code, 201, r.content)
+        lookup = self.c.admin.get(f"{URL}lookup/", {"code": s.serial_no}).json()
+        self.assertEqual((lookup["kind"], lookup["sendable"]), ("serial", False))   # 已經在換了

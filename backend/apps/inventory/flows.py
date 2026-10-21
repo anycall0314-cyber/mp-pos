@@ -14,15 +14,15 @@ from .models import StockMovement
 T = StockMovement.MovementType
 
 # 進銷存表的欄(順序 = 畫面上的順序)。名稱一律兩個字。
-COLUMNS = ("purchase", "sale", "sale_return", "transfer_in", "transfer_out", "usage", "adjust")
+COLUMNS = ("purchase", "sale", "sale_return", "transfer_in", "transfer_out", "usage", "vendor", "adjust")
 COLUMN_LABELS = {
     "purchase": "進貨", "sale": "銷貨", "sale_return": "銷退",
-    "transfer_in": "調入", "transfer_out": "調出", "usage": "領用", "adjust": "調整",
+    "transfer_in": "調入", "transfer_out": "調出", "usage": "領用", "vendor": "換貨", "adjust": "調整",
 }
 # 這一欄的數字對庫存是加還是減:期末 = 期初 + Σ(欄 × 這個方向)
 SIGN = {
     "purchase": 1, "sale": -1, "sale_return": 1,
-    "transfer_in": 1, "transfer_out": -1, "usage": -1, "adjust": 1,
+    "transfer_in": 1, "transfer_out": -1, "usage": -1, "vendor": 1, "adjust": 1,
 }
 
 # 異動查詢的「類別」(順序 = 選單的順序)。名稱一律四個字。
@@ -173,6 +173,9 @@ def _column(kind: str, delta: int) -> str:
         return "adjust" if up else "usage"
     if kind == "usage_back":
         return "usage" if up else "adjust"
+    if kind == "vendor_exchange":
+        # 配件送廠商是減、換回來 / 取消是加(同一欄,跟調整一樣有正有負);設備那幾筆沒寫門市,不會到這裡
+        return "vendor"
     return "adjust"
 
 

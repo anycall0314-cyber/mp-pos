@@ -181,7 +181,7 @@ class StockFlowTests(TestCase):
             {k: case[k] for k in ("opening", "purchase", "sale", "transfer_out", "transfer_in", "closing", "transit")},
             {"opening": 0, "purchase": 10, "sale": 2, "transfer_out": 5, "transfer_in": 4, "closing": 7, "transit": 1},
         )
-        self.assertEqual([c["label"] for c in data["columns"]], ["進貨", "銷貨", "銷退", "調入", "調出", "領用", "調整"])
+        self.assertEqual([c["label"] for c in data["columns"]], ["進貨", "銷貨", "銷退", "調入", "調出", "領用", "換貨", "調整"])
         self.assertEqual(data["totals"]["closing"], 9)
         self.assertEqual(data["totals"]["transit"], 1)
 

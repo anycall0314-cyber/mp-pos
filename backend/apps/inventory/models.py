@@ -245,7 +245,15 @@ class ProductSerialCodeChange(TenantOwnedModel):
 
 
 class VendorExchange(TenantOwnedModel):
-    """一台有瑕疵的設備寄回廠商換貨(owner 2026-10-21:以前調去維修倉、換完再調回門市,門市常漏調回)。
+    """瑕疵品寄回廠商換貨(owner 2026-10-21:以前調去維修倉、換完再調回門市,門市常漏調回)。
+
+    兩種(同一張表):
+    - **有序號的設備**(`serial` 有值、數量 1)—— 下面這一段。
+    - **配件**(`serial` 空的;owner 同一天:「換貨的通常都是配件沒序號也可以嗎」):配件的庫存只有「這家門市幾個」,
+      沒辦法標「這幾個不能賣」→ 送出時**從門市數量扣掉**(異動寫來源門市),換回來加回原門市、成本照送出時的
+      (`unit_cost`,跟現在的平均再平均);可以分批回(`back_qty`)。廠商少補 / 不補 →「不換了」(只有管理員):
+      沒回來的不加回、這一筆結束(紅隊:不然店員只能用已換貨把帳灌平)。**廠商一定要選**(紅隊:可以空著的話,
+      弄丟的配件按送廠商就從庫存消失了);同一個品號跟兩家進過的,系統分不出這一個是哪家的,畫面列進過這個品號的廠商讓人照標籤選。
 
     不搬:那一台留在原門市的帳上,狀態「廠商換貨中」(`ProductSerial.Status.RMA`)= 不能賣、不能調撥、盤點不用刷。
     換回來按「已換貨」**一定要刷回來的那一台**(紅隊:不刷就按的話,廠商換了新機、帳上還是舊序號,掉包查不出來):
@@ -257,9 +265,20 @@ class VendorExchange(TenantOwnedModel):
         PENDING = "pending", "換貨中"
         DONE = "done", "已換貨"
         CANCELLED = "cancelled", "取消"
+        UNRETURNED = "unreturned", "不換了"
 
     serial = models.ForeignKey(
         ProductSerial, on_delete=models.PROTECT, related_name="vendor_exchanges", verbose_name="設備",
+        null=True, blank=True, help_text="配件(按數量的)是空的",
+    )
+    product = models.ForeignKey(
+        "catalog.Product", on_delete=models.PROTECT, related_name="vendor_exchanges", verbose_name="商品",
+    )
+    qty = models.PositiveIntegerField("送出數量", default=1, db_default=1)
+    back_qty = models.PositiveIntegerField("回來的數量", default=0, db_default=0)
+    unit_cost = models.DecimalField(
+        "送出時的單位成本", max_digits=14, decimal_places=2, default=0, db_default=0,
+        help_text="配件:送出那一刻這家門市的平均成本(換回來照這個加回去);設備:那一台的成本",
     )
     warehouse = models.ForeignKey(
         Warehouse, on_delete=models.PROTECT, related_name="vendor_exchanges", verbose_name="門市",
@@ -286,6 +305,9 @@ class VendorExchange(TenantOwnedModel):
             # 一台同時只能有一筆還在換的
             models.UniqueConstraint(
                 fields=["serial"], condition=models.Q(status="pending"), name="uniq_vendor_exchange_pending",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(qty__gte=1, back_qty__lte=models.F("qty")), name="vendor_exchange_qty_ok",
             ),
         ]
         indexes = [models.Index(fields=["tenant", "status", "warehouse"])]

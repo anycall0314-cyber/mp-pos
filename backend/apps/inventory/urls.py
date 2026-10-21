@@ -22,6 +22,8 @@ from .vendor_exchange_views import (
     vendor_exchange_cancel,
     vendor_exchange_done,
     vendor_exchange_done_serial,
+    vendor_exchange_lookup,
+    vendor_exchange_unreturned,
     vendor_exchanges,
 )
 from .views import (
@@ -59,7 +61,9 @@ urlpatterns = router.urls + [
     path("serial-report/", serial_report, name="serial-report"),
     # 廠商換貨(規則在 vendor_exchange.py)
     path("vendor-exchanges/", vendor_exchanges),
+    path("vendor-exchanges/lookup/", vendor_exchange_lookup),
     path("vendor-exchanges/done-serial/", vendor_exchange_done_serial),
+    path("vendor-exchanges/<int:pk>/unreturned/", vendor_exchange_unreturned),
     path("vendor-exchanges/<int:pk>/done/", vendor_exchange_done),
     path("vendor-exchanges/<int:pk>/cancel/", vendor_exchange_cancel),
     # 盤點(規則在 stockcount.py)
