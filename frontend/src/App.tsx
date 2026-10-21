@@ -64,6 +64,7 @@ import { ManagersOnly, NeedsAbility } from "@/components/NeedsAbility";
 import { VendorLinksPage } from "@/pages/settings/VendorLinksPage";
 import { VendorOrdersPage } from "@/pages/vendor-orders/VendorOrdersPage";
 import { FIXED_REPORTS } from "@/lib/fixedReports";
+import { isMemberHistoryPath } from "@/lib/memberUrl";
 import { InvoicePrinterPage } from "@/pages/settings/InvoicePrinterPage";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 import { StaffAccountsPage } from "@/pages/settings/StaffAccountsPage";
@@ -96,7 +97,10 @@ export function App() {
   const { user, loading: authLoading, logout } = useAuth();
   // 路由切換自動關閉漢堡選單
   useEffect(() => setMobileNavOpen(false), [location.pathname]);
-  const focusMode = new URLSearchParams(location.search).get("focus") === "1";
+  // 消費紀錄分頁(會員名單點一位開的)也是只看:不放側邊欄與上面那排
+  const focusMode =
+    new URLSearchParams(location.search).get("focus") === "1" ||
+    isMemberHistoryPath(location.pathname);
   // 列印頁面(/print/、/receipt、/labels)不渲染 topbar 與 main 框,避免列印時帶到導覽
   const isPrintMode =
     /\/print\//.test(location.pathname) ||

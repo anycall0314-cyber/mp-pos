@@ -13,6 +13,14 @@ export function memberIdFromRoute(raw: string | undefined): number | null {
   return n > 0 ? n : null;
 }
 
+/**
+ * 這個網址是消費紀錄分頁(`/members/:id`)→ 只看:不套側邊欄、上面那排(客戶 / 會員),畫面上沒有任何操作
+ * (owner 2026-10-21「不用有側邊欄，也不需要有客戶，單純只要消費紀錄，讓分頁無需有任何功能讓門市開了兩個功能pos頁面」)。
+ */
+export function isMemberHistoryPath(pathname: string): boolean {
+  return /^\/members\/[^/]+\/?$/.test(pathname);
+}
+
 /** 分頁標題:同時開好幾位會員分得出來。 */
 export function memberTabTitle(name: string | undefined | null): string {
   return name ? `會員 ${name}` : "會員";
@@ -37,4 +45,9 @@ export function showMemberHistory(
     return;
   }
   historyTab = open(url, "_blank");
+}
+
+/** 右邊對照了舊會員 → 開著的消費紀錄分頁換成這一位重新讀;沒開著就不開(開了瀏覽器會切過去)。 */
+export function refreshMemberHistory(id: number): void {
+  if (historyTab && !historyTab.closed) historyTab.location.href = memberUrl(id);
 }

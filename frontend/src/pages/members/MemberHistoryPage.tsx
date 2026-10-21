@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
 import {
   useLegacyPurchases,
@@ -18,9 +18,10 @@ import { LegacyHistorySection } from "./LegacyHistorySection";
  * 會員的消費紀錄(`/members/編號`;會員名單點一位開的新分頁)。
  * owner 2026-10-20:「跳分頁只要顯示消費紀錄不要編輯會員資料，原來的頁面右邊只需顯示編輯欄位」
  * —— 這一頁只看、不能改會員資料;改資料在原本那一頁的右邊。
+ * 2026-10-21:「不用有側邊欄，也不需要有客戶，單純只要消費紀錄，讓分頁無需有任何功能讓門市開了兩個功能pos頁面」
+ * —— 外框不放側邊欄與上面那排(`isMemberHistoryPath`),點一列也不跳去銷貨單。
  */
 export function MemberHistoryPage() {
-  const navigate = useNavigate();
   const memberId = memberIdFromRoute(useParams().id);
   const one = useMember(memberId);
   const member = one.data;
@@ -55,7 +56,6 @@ export function MemberHistoryPage() {
     sales_person_label: string;
     customer_name: string;
     doc_no: string;
-    so_id: number | null;
   };
 
   const rows = useMemo<Row[]>(() => {
@@ -79,7 +79,6 @@ export function MemberHistoryPage() {
           : "—",
         customer_name: so.source_name || so.customer_name || "—",
         doc_no: so.no,
-        so_id: so.id,
       })),
     );
     const fromLegacy: Row[] = (legacy.data ?? []).map((lp) => ({
@@ -96,7 +95,6 @@ export function MemberHistoryPage() {
       sales_person_label: "—",
       customer_name: "—",
       doc_no: lp.source_no || "(舊系統)",
-      so_id: null,
     }));
     return [...fromCurrent, ...fromLegacy].sort((a, b) =>
       a.doc_date < b.doc_date ? 1 : a.doc_date > b.doc_date ? -1 : 0,
@@ -176,19 +174,8 @@ export function MemberHistoryPage() {
                     {rows.map((r) => (
                       <tr
                         key={r.key}
-                        onClick={() =>
-                          r.so_id != null && navigate(`/sales/${r.so_id}`)
-                        }
                         className={r.is_void ? "row-void" : undefined}
-                        title={
-                          r.source === "legacy"
-                            ? "舊系統匯入紀錄"
-                            : "點擊檢視銷貨單"
-                        }
-                        style={{
-                          cursor: r.so_id != null ? "pointer" : "default",
-                          opacity: r.source === "legacy" ? 0.85 : 1,
-                        }}
+                        style={{ opacity: r.source === "legacy" ? 0.85 : 1 }}
                       >
                         <td>{r.doc_date}</td>
                         <td>

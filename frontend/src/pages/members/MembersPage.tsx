@@ -14,6 +14,8 @@ import { Toolbar } from "@/components/Toolbar";
 import { byId, cutNote } from "@/lib/listAll";
 import { showMemberHistory } from "@/lib/memberUrl";
 
+import { LegacyLinkCandidates } from "./LegacyLinkCandidates";
+
 type Selection = { kind: "member"; id: number } | { kind: "new" } | null;
 
 interface FormState {
@@ -377,6 +379,7 @@ export function MembersPage() {
                   取消
                 </button>
               </div>
+              {isEditing && selected && <LegacyLinkCandidates memberId={selected.id} />}
             </div>
           )}
         </div>

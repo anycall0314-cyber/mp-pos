@@ -4,7 +4,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { memberIdFromRoute, memberTabTitle, memberUrl, showMemberHistory } from "./memberUrl.ts";
+import {
+  isMemberHistoryPath,
+  memberIdFromRoute,
+  memberTabTitle,
+  memberUrl,
+  refreshMemberHistory,
+  showMemberHistory,
+} from "./memberUrl.ts";
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
 
@@ -43,6 +50,36 @@ test("新分頁只有消費紀錄,不能改會員資料", () => {
   assert.match(read("../styles.css"), /\.pc-layout\.solo \{\s*grid-template-columns: 1fr;/);
 });
 
+// owner 2026-10-21「不用有側邊欄，也不需要有客戶，單純只要消費紀錄，讓分頁無需有任何功能讓門市開了兩個功能pos頁面」
+test("消費紀錄分頁不套側邊欄與上面那排(跟報表另開的只看分頁一樣)", () => {
+  for (const p of ["/members/42", "/members/42/", "/members/abc"]) assert.ok(isMemberHistoryPath(p), p);
+  for (const p of ["/members", "/members/", "/members/42/edit", "/customers/42", "/sales/42"]) {
+    assert.ok(!isMemberHistoryPath(p), p);
+  }
+  const app = read("../App.tsx");
+  assert.match(app, /const focusMode =\s*new URLSearchParams\(location\.search\)\.get\("focus"\) === "1" \|\|\s*isMemberHistoryPath\(location\.pathname\);/);
+  // 側邊欄、手機的選單列、上面那排都看 focusMode
+  assert.match(app, /\{!focusMode && !isPrintMode && \(\s*<>\s*<div className="mobile-topbar">/);
+  assert.match(app, /\{!focusMode && !isPrintMode && <ModuleBar /);
+});
+
+test("消費紀錄分頁沒有任何操作:點一列不跳銷貨單、舊紀錄不能對照", () => {
+  const page = read("../pages/members/MemberHistoryPage.tsx");
+  for (const gone of ["navigate", "onClick", "<button", "<Link"]) assert.ok(!page.includes(gone), gone);
+  const legacy = read("../pages/members/LegacyHistorySection.tsx");
+  for (const gone of ["確認對照", "/link/", "method: \"POST\"", "useLegacyCandidates"]) {
+    assert.ok(!legacy.includes(gone), gone);
+  }
+  // 對照搬到名單右邊(管理員)
+  const members = read("../pages/members/MembersPage.tsx");
+  assert.match(members, /\{isEditing && selected && <LegacyLinkCandidates memberId=\{selected\.id\} \/>\}/);
+  const link = read("../pages/members/LegacyLinkCandidates.tsx");
+  assert.match(link, /確認對照/);
+  assert.match(link, /role === "tenant_admin"/);
+  assert.match(link, /if \(!isAdmin \|\| /);
+  assert.match(link, /refreshMemberHistory\(memberId\);/);
+});
+
 test("消費紀錄只開一個分頁:第一次開,之後換成點的那一位、不再開新的(不會切過去)", () => {
   const opened = [];
   const tab = { closed: false, location: { href: "" } };
@@ -75,4 +112,18 @@ test("消費紀錄只開一個分頁:第一次開,之後換成點的那一位、
   showMemberHistory(6, () => null);
   showMemberHistory(7, open);
   assert.deepEqual(opened.at(-1), ["/members/7", "_blank"]);
+});
+
+test("對照舊會員之後:消費紀錄分頁開著就換成這一位重新讀,沒開著不開", () => {
+  // 上一個測試最後留下的分頁是關著的:不開新的(這裡沒有 window,開了會出錯)
+  refreshMemberHistory(8);
+  const tab = { closed: false, location: { href: "" } };
+  showMemberHistory(9, () => tab);
+  tab.location.href = "/members/1";
+  refreshMemberHistory(9);
+  assert.equal(tab.location.href, "/members/9");
+  tab.closed = true;
+  tab.location.href = "";
+  refreshMemberHistory(9);
+  assert.equal(tab.location.href, "", "關掉了就不動");
 });
