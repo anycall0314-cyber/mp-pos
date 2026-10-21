@@ -12,6 +12,7 @@ import {
   useSaveCustomer,
   useSaveMember,
   useSalesDefaultSource,
+  useVendorExchangeDo,
   useWarehouses,
 } from "@/api/hooks";
 import {
@@ -58,6 +59,7 @@ import { toast } from "@/components/workbench/toast";
 import { addMonths } from "@/lib/dates";
 import { codesLabel, mainCode, normalizeCode } from "@/lib/deviceCodes";
 import { estimateStaffCost } from "@/lib/staffCost";
+import { backAtCounter } from "@/lib/vendorExchange";
 import {
   intStr,
   lineTotal,
@@ -370,6 +372,7 @@ type Panel = "info" | "checkout" | "customer" | "member";
 export function SalesWorkbenchPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const exchange = useVendorExchangeDo();
   const listPath = "/sales";
 
   const me = useDefaultWarehouse();
@@ -1080,6 +1083,13 @@ export function SalesWorkbenchPage() {
       return `對到 ${devices.length} 台設備,請先到每日對帳處理`;
     }
     const device = devices[0];
+    // 廠商換貨中、就在這個出貨倉:剛刷的就是這一台 = 換回來了,按「已換貨」接著賣(2026-10-21)
+    if (backAtCounter(device, at)) {
+      toast(`${device.product_name} 廠商換貨中`, "err", {
+        action: { label: "已換貨", fn: () => void exchangeBack(device.id, code) },
+      });
+      return "這一台廠商換貨中";
+    }
     if (device.status !== "in_stock" || device.warehouse !== at) {
       return `這一台${device.status_label}${
         device.warehouse_code ? `,在 ${device.warehouse_code}` : ""
@@ -1095,6 +1105,23 @@ export function SalesWorkbenchPage() {
       toUnit(device),
     );
     return problem ?? true;
+  }
+
+  /** 開單刷到廠商換貨中的那一台、按了「已換貨」:伺服器確認刷的碼就是這一台,回到在庫,再照剛刷的加進明細 */
+  async function exchangeBack(serialId: number, code: string) {
+    try {
+      await exchange.mutateAsync({ path: "done-serial/", body: { serial: serialId, code } });
+    } catch (e) {
+      toast(apiErrorText(e), "err");
+      return;
+    }
+    const verdict = await onScan(code);
+    if (verdict === true) {
+      scanApi.current?.added(code, null);
+      toast("已換貨,加進明細了", "ok");
+    } else {
+      toast(typeof verdict === "string" ? `已換貨,但${verdict}` : "已換貨,請再刷一次", "err");
+    }
   }
 
   function removeLine(key: string) {

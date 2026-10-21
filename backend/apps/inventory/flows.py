@@ -41,6 +41,8 @@ KIND_LABELS = {
     "sale_void": "銷貨作廢",
     "return_void": "銷退作廢",
     "transfer_void": "調撥作廢",
+    # 送廠商換貨 / 已換貨 / 取消:不寫門市、不動數量(那一台一直掛在原門市),只是序號履歷上的紀錄
+    "vendor_exchange": "廠商換貨",
 }
 
 # 作廢那一筆是哪一種單的作廢、零件歸還是哪一種單:看來源單據
@@ -76,17 +78,20 @@ def kind_of(movement_type: str, ref_doc_type: str) -> str:
         return "usage_back" if ref_doc_type == _REOPEN else "adjust"
     if movement_type == T.VOID:
         return _VOID_KIND.get(ref_doc_type, "adjust")
+    if movement_type == T.VENDOR_EXCHANGE:
+        return "vendor_exchange"
     return "adjust"
 
 
 def kind_q(kind: str) -> Q:
     """異動查詢照類別篩:跟 `kind_of` 是同一份規則的資料庫寫法(有測試逐一對照)。"""
     known = [T.PURCHASE_IN, T.TRADE_IN, T.SALE_OUT, T.PARTS_TRANSFER, T.RETURN_IN,
-             T.TRANSFER_OUT, T.TRANSFER_IN, T.REPAIR_USAGE, T.ADJUST, T.VOID]
+             T.TRANSFER_OUT, T.TRANSFER_IN, T.REPAIR_USAGE, T.ADJUST, T.VOID, T.VENDOR_EXCHANGE]
     simple = {
         "purchase": T.PURCHASE_IN, "trade_in": T.TRADE_IN, "sale": T.SALE_OUT,
         "parts_sale": T.PARTS_TRANSFER, "transfer_out": T.TRANSFER_OUT,
         "transfer_in": T.TRANSFER_IN, "usage": T.REPAIR_USAGE,
+        "vendor_exchange": T.VENDOR_EXCHANGE,
     }
     if kind in simple:
         return Q(movement_type=simple[kind])

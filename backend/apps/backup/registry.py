@@ -49,6 +49,8 @@ REGISTRY: dict[str, Entry] = {
         "inventory.Warehouse", "inventory.ProductSerial",
         "inventory.ProductSerialIdentifier", "inventory.ProductSerialCodeChange",
         "inventory.StockBalance", "inventory.StockMovement",
+        # 廠商換貨(2026-10-21):誰把哪一台送廠商、換回來是不是同一台
+        "inventory.VendorExchange",
         # 盤點單(2026-10-12):盤到的數量、刷到的碼、核准時的決定都是紀錄,要跟著庫存異動一起備份
         "inventory.StockCount", "inventory.StockCountCategory", "inventory.StockCountLine",
         "inventory.StockCountScan", "inventory.StockCountMissing",

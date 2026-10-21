@@ -125,7 +125,7 @@ export const SERIAL_DEFAULT_STATUSES = ["in_stock", "returned"];
 
 /**
  * 序號查詢的「狀態」選單(名稱一律兩個字)。在店 = 在庫 + 已退;在途 = 調撥中(跟進銷存表的「在途」同一個詞);
- * 全部 = 不篩(含維修中)。
+ * 全部 = 不篩(含廠商換貨中)。
  */
 export const SERIAL_STATUS_CHOICES: { key: string; label: string; statuses: string[] }[] = [
   { key: "store", label: "在店", statuses: SERIAL_DEFAULT_STATUSES },

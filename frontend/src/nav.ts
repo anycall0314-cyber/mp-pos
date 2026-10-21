@@ -129,6 +129,8 @@ export const NAV_MODULES: NavModule[] = [
       { to: "/inventory/movements", label: "異動查詢", aliases: ["庫存異動查詢", "庫存異動", "異動紀錄"] },
       { to: "/inventory/alerts", label: "庫存警示" },
       { to: "/transfers", label: "調撥作業", aliases: ["調撥"] },
+      // 瑕疵機送廠商換貨(2026-10-21):不搬、在原門市標記
+      { to: "/inventory/vendor-exchanges", label: "廠商換貨", aliases: ["瑕疵換貨", "送廠商", "換貨", "瑕疵"] },
       { to: "/inventory/stocktake", label: "盤點作業", aliases: ["盤點", "庫存盤點", "盤點單", "盤虧", "盤盈"], needs: ["stock_count"] },
     ],
   },

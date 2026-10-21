@@ -33,7 +33,8 @@ class ProductSerial(TenantOwnedModel):
         IN_TRANSIT = "in_transit", "調撥中"
         SOLD = "sold", "已售"
         RETURNED = "returned", "已退"
-        RMA = "rma", "維修中"
+        # 送廠商換貨(2026-10-21):還掛在原門市、算這家門市的庫存,不能賣、不能調撥、盤點不用刷。紀錄在 VendorExchange
+        RMA = "rma", "廠商換貨中"
         VOID = "void", "作廢"
         # 盤點時帳上在庫、現場沒有,管理員核准之後標成這個(2026-10-12)。不算在庫、不能賣;
         # **還佔著它的碼**(跟作廢不一樣:找到了可以按「找回」變回在庫,所以同一個 IMEI 不能再進一次貨)
@@ -173,6 +174,11 @@ class ProductSerial(TenantOwnedModel):
         super().save(*args, **kwargs)
 
 
+# 算平均成本時算進去的設備:在庫 + 廠商換貨中(還是這家公司的貨、有成本,只是暫時在廠商那邊)。
+# 只算在庫的話,有一台在換貨時進貨,平均成本會被新進的那一批拉走(複審 2026-10-21 P0)
+COSTED_STATUSES = (ProductSerial.Status.IN_STOCK, ProductSerial.Status.RMA)
+
+
 class ProductSerialIdentifier(TenantOwnedModel):
     """一台裝置的多組識別碼(IMEI / IMEI2 / EID / SN)。
 
@@ -238,6 +244,58 @@ class ProductSerialCodeChange(TenantOwnedModel):
         return f"{self.serial_id}:{self.before_imei}/{self.before_sn}→{self.after_imei}/{self.after_sn}"
 
 
+class VendorExchange(TenantOwnedModel):
+    """一台有瑕疵的設備寄回廠商換貨(owner 2026-10-21:以前調去維修倉、換完再調回門市,門市常漏調回)。
+
+    不搬:那一台留在原門市的帳上,狀態「廠商換貨中」(`ProductSerial.Status.RMA`)= 不能賣、不能調撥、盤點不用刷。
+    換回來按「已換貨」**一定要刷回來的那一台**(紅隊:不刷就按的話,廠商換了新機、帳上還是舊序號,掉包查不出來):
+    碼跟送出去的一樣 = 同一台回來;不一樣 = 廠商換了一台,帳上這一台的碼改成新的(`set_codes` 留修改紀錄),成本、進貨來源、門市照舊。
+    操作的人存當下的帳號名稱(不是外鍵),跟序號修改紀錄一樣。
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "換貨中"
+        DONE = "done", "已換貨"
+        CANCELLED = "cancelled", "取消"
+
+    serial = models.ForeignKey(
+        ProductSerial, on_delete=models.PROTECT, related_name="vendor_exchanges", verbose_name="設備",
+    )
+    warehouse = models.ForeignKey(
+        Warehouse, on_delete=models.PROTECT, related_name="vendor_exchanges", verbose_name="門市",
+        help_text="送出時這一台在哪家門市(換回來也回到這一家)",
+    )
+    supplier = models.ForeignKey(
+        "parties.Supplier", on_delete=models.PROTECT, related_name="vendor_exchanges",
+        null=True, blank=True, verbose_name="廠商", help_text="沒選就照這一台的進貨單",
+    )
+    note = models.CharField("瑕疵狀況", max_length=200, blank=True)
+    status = models.CharField("狀態", max_length=12, choices=Status.choices, default=Status.PENDING)
+    sent_imei = models.CharField("送出時的 IMEI", max_length=80, blank=True)
+    sent_sn = models.CharField("送出時的 SN", max_length=80, blank=True)
+    back_imei = models.CharField("回來的 IMEI", max_length=80, blank=True)
+    back_sn = models.CharField("回來的 SN", max_length=80, blank=True)
+    swapped = models.BooleanField("換成另一台", default=False)
+    sent_by = models.CharField("送出的帳號", max_length=150, blank=True)
+    done_by = models.CharField("收回的帳號", max_length=150, blank=True)
+    done_at = models.DateTimeField("收回時間", null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        constraints = [
+            # 一台同時只能有一筆還在換的
+            models.UniqueConstraint(
+                fields=["serial"], condition=models.Q(status="pending"), name="uniq_vendor_exchange_pending",
+            ),
+        ]
+        indexes = [models.Index(fields=["tenant", "status", "warehouse"])]
+        verbose_name = "廠商換貨"
+        verbose_name_plural = "廠商換貨"
+
+    def __str__(self) -> str:
+        return f"{self.serial_id} {self.get_status_display()}"
+
+
 class StockBalance(TenantOwnedModel):
     """非序號商品(配件)的倉別庫存餘額。每個 (商品, 倉庫) 一筆。
 
@@ -298,6 +356,8 @@ class StockMovement(TenantOwnedModel):
         PARTS_TRANSFER = "parts_transfer", "零件調貨"
         ADJUST = "adjust", "盤點調整"
         VOID = "void", "作廢"
+        # 送廠商換貨 / 已換貨 / 取消(2026-10-21):只是紀錄,不寫門市、不動數量(那一台一直掛在原門市)
+        VENDOR_EXCHANGE = "vendor_exchange", "廠商換貨"
 
     serial = models.ForeignKey(
         ProductSerial,

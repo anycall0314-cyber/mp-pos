@@ -18,6 +18,12 @@ from .stockcount_views import (
     stock_count_scans,
     stock_counts,
 )
+from .vendor_exchange_views import (
+    vendor_exchange_cancel,
+    vendor_exchange_done,
+    vendor_exchange_done_serial,
+    vendor_exchanges,
+)
 from .views import (
     ProductSerialViewSet,
     StockBalanceViewSet,
@@ -51,6 +57,11 @@ urlpatterns = router.urls + [
     path("stock-flow-report/", stock_flow_report, name="stock-flow-report"),
     path("stock-movement-report/", stock_movement_report, name="stock-movement-report"),
     path("serial-report/", serial_report, name="serial-report"),
+    # 廠商換貨(規則在 vendor_exchange.py)
+    path("vendor-exchanges/", vendor_exchanges),
+    path("vendor-exchanges/done-serial/", vendor_exchange_done_serial),
+    path("vendor-exchanges/<int:pk>/done/", vendor_exchange_done),
+    path("vendor-exchanges/<int:pk>/cancel/", vendor_exchange_cancel),
     # 盤點(規則在 stockcount.py)
     path("stock-counts/", stock_counts),
     path("stock-counts/old-units/", stock_count_old_units),

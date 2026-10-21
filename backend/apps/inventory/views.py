@@ -124,7 +124,7 @@ class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
             "warehouse_name": serial.warehouse.name if serial.warehouse_id else "",
             "status": serial.status,
             "status_label": serial.get_status_display(),
-            # 還在店裡(在庫 / 調撥中 / 維修中)還是已經不在了(已售 / 已退):個人收購要分開講
+            # 還在店裡(在庫 / 調撥中 / 廠商換貨中)還是已經不在了(已售 / 已退):個人收購要分開講
             "in_store": serial.status in IN_STORE,
         } for code, serial in found.items()]})
 

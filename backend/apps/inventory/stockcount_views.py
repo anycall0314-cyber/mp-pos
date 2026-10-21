@@ -27,7 +27,7 @@ from apps.tenants import abilities
 from apps.tenants.permissions import is_tenant_admin
 
 from . import stockcount, stockcount_phone
-from .models import ProductSerial, StockBalance, StockCount, StockCountPhone, Warehouse
+from .models import ProductSerial, StockBalance, StockCount, StockCountPhone, VendorExchange, Warehouse
 
 S = StockCount.Status
 _CENT = Decimal("0.01")
@@ -132,6 +132,20 @@ def _detail(count, user):
         "product": {"id": u.product_id, "sku": u.product.sku, "name": u.product.name} if u.product_id else None,
         "skipped": u.skipped, "reason": u.reason, "resolved": u.resolved_at is not None,
     } for u in count.unknowns.select_related("product").order_by("id")]
+    # 送廠商換貨、還沒換回來的(紅隊:盤點不用刷,但不能從表上消失):盤的人也看得到,才知道那幾台不在店裡是對的
+    at_vendor = VendorExchange.objects.filter(
+        tenant=count.tenant, warehouse_id=wh, status=VendorExchange.Status.PENDING,
+        serial__status=ProductSerial.Status.RMA, serial__warehouse_id=wh,
+    ).select_related("serial__product", "supplier").order_by("created_at", "id")
+    scope = stockcount.scope_ids(count)
+    if scope:
+        at_vendor = at_vendor.filter(serial__product__category_id__in=scope)
+    today = stockcount_phone.timezone.localdate()
+    out["vendor_rows"] = [{
+        "id": x.id, "serial_no": x.serial.serial_no, "name": x.serial.product.name,
+        "supplier": x.supplier.name if x.supplier_id else "",
+        "days": (today - stockcount_phone.timezone.localdate(x.created_at)).days,
+    } for x in at_vendor]
     states = dict(ProductSerial.Status.choices)
     out["scan_rows"] = [{
         "id": s.id, "code": s.code, "known": s.serial_id is not None,

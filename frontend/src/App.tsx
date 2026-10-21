@@ -14,6 +14,7 @@ import { PhoneBillsPage } from "@/pages/phone-bills/PhoneBillsPage";
 import { PhoneBillReceiptPage } from "@/pages/phone-bills/PhoneBillReceiptPage";
 import { CategoriesPage } from "@/pages/inventory/CategoriesPage";
 import { InventoryAlertsPage } from "@/pages/inventory/InventoryAlertsPage";
+import { VendorExchangesPage } from "@/pages/inventory/VendorExchangesPage";
 import { InventoryQueryPage } from "@/pages/inventory/InventoryQueryPage";
 import { SerialListPage } from "@/pages/inventory/SerialListPage";
 import { PurchaseLinesPage } from "@/pages/purchases/PurchaseLinesPage";
@@ -347,6 +348,7 @@ export function App() {
           <Route path="/transfers/:id" element={<TransferWorkbenchPage />} />
           <Route path="/inventory" element={<InventoryQueryPage />} />
           <Route path="/inventory/alerts" element={<InventoryAlertsPage />} />
+          <Route path="/inventory/vendor-exchanges" element={<VendorExchangesPage />} />
           <Route path="/inventory/categories" element={<CategoriesPage />} />
           <Route path="/serials" element={<SerialListPage />} />
           <Route path="/inventory/flow" element={<StockFlowPage />} />

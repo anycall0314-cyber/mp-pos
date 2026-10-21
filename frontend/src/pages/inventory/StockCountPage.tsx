@@ -490,6 +490,31 @@ export function StockCountPage() {
         </div>
       )}
 
+      {(detail.vendor_rows?.length ?? 0) > 0 && (
+        <div className="report-table sr-table">
+          <table className="report-grid">
+            <thead>
+              <tr>
+                <th>換貨中的序號</th>
+                <th>品名</th>
+                <th>廠商</th>
+                <th className="num">送出天數</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(detail.vendor_rows ?? []).map((v) => (
+                <tr key={v.id} className="report-row">
+                  <td>{v.serial_no}</td>
+                  <td>{v.name}</td>
+                  <td>{v.supplier || "—"}</td>
+                  <td className="num">{v.days}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {detail.manager && (detail.missing_rows?.length ?? 0) > 0 && (
         <div className="report-table sr-table">
           <table className="report-grid">

@@ -99,14 +99,16 @@ test("「商品設定」選單跟著商品管理在「進貨入庫」;「商品�
   );
   assert.equal(byKey("stock").tools, undefined);
   // 2026-10-12 多了庫存三張(序號查詢、進銷存表、異動查詢)與盤點作業(排在調撥後面;要有「盤點作業」那一項才看得到)
+  // 2026-10-21 多了廠商換貨(排在調撥後面;誰都看得到)
   assert.deepEqual(
     byKey("stock").tabs.map((t) => t.to),
-    ["/inventory", "/serials", "/inventory/flow", "/inventory/movements", "/inventory/alerts", "/transfers", "/inventory/stocktake"],
+    ["/inventory", "/serials", "/inventory/flow", "/inventory/movements", "/inventory/alerts", "/transfers",
+      "/inventory/vendor-exchanges", "/inventory/stocktake"],
   );
   const stockTabs = (abilities) => visibleModules({ role: "tenant_user", abilities }).find((m) => m.key === "stock").tabs.map((t) => t.to);
   assert.ok(stockTabs(undefined).includes("/inventory/stocktake"));
   assert.ok(!stockTabs({ stock_count: false }).includes("/inventory/stocktake"));
-  assert.equal(stockTabs({ stock_count: false }).length, 6);                    // 只少那一頁
+  assert.equal(stockTabs({ stock_count: false }).length, 7);                    // 只少那一頁
   assert.equal(searchNav("盤點", visibleModules({ role: "tenant_user" }))[0].page.to, "/inventory/stocktake");
   for (const word of ["盤虧", "盤盈", "庫存盤點"])
     assert.equal(searchNav(word, visibleModules({ role: "tenant_user" }))[0]?.page.to, "/inventory/stocktake", word);

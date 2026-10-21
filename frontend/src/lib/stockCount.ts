@@ -113,6 +113,15 @@ export interface CountUnknown {
   resolved: boolean;
 }
 
+/** 這家門市送廠商換貨、還沒換回來的(盤點不用刷,但另外列出來;每個人都看得到) */
+export interface CountVendor {
+  id: number;
+  serial_no: string;
+  name: string;
+  supplier: string;
+  days: number;
+}
+
 export interface CountDetail extends CountSummary {
   manager: boolean;
   /** 帳上有數量、還沒輸入的配件有幾樣(只有數字) */
@@ -121,6 +130,7 @@ export interface CountDetail extends CountSummary {
   scan_rows: CountScan[];
   phones?: CountPhone[];
   unknown_rows?: CountUnknown[];
+  vendor_rows?: CountVendor[];
   /** 剛按「手機盤點」那一次回來才有:QR Code 的憑證(只在這一刻看得到) */
   pair?: { id: number; label: string; token: string; expires_at: string };
   missing_rows?: CountMissing[];

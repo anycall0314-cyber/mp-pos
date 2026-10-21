@@ -40,6 +40,7 @@ import {
   type SerialRow,
 } from "@/lib/stockReports";
 import type { CatalogRow } from "@/lib/vendorOrder";
+import type { ExchangeTab, VendorExchangeList, VendorExchangeRow } from "@/lib/vendorExchange";
 import type { VendorCategoryOption } from "@/lib/vendorPick";
 import type { ManualPlan, ManualSend, PastedItem } from "@/lib/vendorManual";
 import { withSaved, type MappingData, type MappingRow } from "@/lib/vendorMapping";
@@ -3219,6 +3220,28 @@ export const useRepairMonthly = (filter: RepairFilter, page: number) =>
 
 export const fetchRepairMonthlyExport = (filter: RepairFilter) =>
   api<RepairListing>(`/repair-monthly-report/?${repairQuery(filter, "export")}`);
+
+// 廠商換貨:規則在伺服器(vendor_exchange.py)。還在換的整份;處理過的伺服器只給最近幾筆(回應裡有總數)
+export const useVendorExchanges = (tab: ExchangeTab) =>
+  useQuery({
+    queryKey: ["vendor-exchanges", tab],
+    queryFn: () => api<VendorExchangeList>(`/vendor-exchanges/?status=${tab}`),
+    gcTime: 0,
+  });
+
+/** 送廠商換貨(path 空的)、已換貨(`編號/done/`、`done-serial/`)、標錯了(`編號/cancel/`) */
+export function useVendorExchangeDo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ path = "", body = {} }: { path?: string; body?: object }) =>
+      api<VendorExchangeRow>(`/vendor-exchanges/${path}`, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      // 那一台能不能賣、碼是什麼都可能變了
+      for (const key of ["vendor-exchanges", "products", "serials", "serial-list", "stock-moves", "stock-count"])
+        qc.invalidateQueries({ queryKey: [key] });
+    },
+  });
+}
 
 // 盤點:規則都在伺服器(核准才動庫存;帳上數量只有管理員的回應裡有)
 export const useStockCounts = () =>

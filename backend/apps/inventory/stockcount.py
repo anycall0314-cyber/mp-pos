@@ -33,6 +33,7 @@ from apps.tenants.models import Tenant
 from .identifiers import IdentifierError, create_serial, find_serial_ids
 from .locking import lock_document, lock_stock_rows, locked_balance
 from .models import (
+    COSTED_STATUSES,
     ProductSerial,
     StockBalance,
     StockCount,
@@ -42,6 +43,7 @@ from .models import (
     StockCountScan,
     StockCountUnknown,
     StockMovement,
+    VendorExchange,
 )
 
 S = StockCount.Status
@@ -280,7 +282,12 @@ def expected_serials(count):
     arrived = StockMovement.objects.filter(
         tenant=count.tenant, serial__isnull=False, to_warehouse=count.warehouse, created_at__gte=count.created_at,
     ).exclude(movement_type=T.TRANSFER_OUT)               # 調撥派發那一筆的「目的」只是路線,貨還沒到
-    return serials.exclude(pk__in=arrived.values("serial_id"))
+    # 開盤之後才從廠商換回來(或取消送廠商)的:那一筆異動沒有寫門市,看換貨紀錄(複審 2026-10-21 P0:
+    # 盤完那一區才收回來、按已換貨,不排掉的話核准時會被標成盤虧)
+    back = VendorExchange.objects.filter(
+        tenant=count.tenant, warehouse=count.warehouse, done_at__gte=count.created_at,
+    ).exclude(status=VendorExchange.Status.PENDING)
+    return serials.exclude(pk__in=arrived.values("serial_id")).exclude(pk__in=back.values("serial_id"))
 
 
 def unknown_key(code: str) -> str:
@@ -545,7 +552,7 @@ def _blend_average(tenant, plans, targets):
     for pid in sorted(batches):
         product = targets[pid]
         product.refresh_from_db(fields=["weighted_avg_cost"])
-        here = ProductSerial.objects.filter(tenant=tenant, product=product, status=ProductSerial.Status.IN_STOCK).count()
+        here = ProductSerial.objects.filter(tenant=tenant, product=product, status__in=COSTED_STATUSES).count()
         costs = batches[pid]
         product.weighted_avg_cost = (
             (Decimal(here) * product.weighted_avg_cost + sum(costs, Decimal("0"))) / Decimal(here + len(costs))

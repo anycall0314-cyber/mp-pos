@@ -209,7 +209,7 @@ class ListingTests(_Trade):
         ProductSerial.objects.filter(pk=gone.id).update(status="rma")
         r = self.a.admin.post(T + "units/list/", {"rows": [{"serial": gone.id}]}, format="json")
         self.assertEqual(r.status_code, 400)
-        self.assertIn("維修中", r.json()["detail"])
+        self.assertIn("廠商換貨中", r.json()["detail"])
         # 別家公司的中古機(就算它本身是可以上架的那一種)
         theirs = Product.objects.create(tenant=self.b.tenant, category=self.b.cat_phone, name="乙 中古機", is_secondhand=True, list_price=9000)
         other = ProductSerial.objects.create(tenant=self.b.tenant, product=theirs, serial_no="X1", warehouse=self.b.wh)
@@ -792,7 +792,7 @@ class ShippingTests(_Trade):
         self.assertIn("要刷那一台", bad["detail"])
         self.assertEqual(self.scan("U301", expect=400)["detail"], "U301(甲 中古 iPhone 13 128GB)沒有同行訂")
         ProductSerial.objects.filter(pk=self.one.id).update(status="rma")
-        self.assertEqual(self.scan("U300", expect=400)["detail"], "U300 現在是「維修中」,不能出貨")
+        self.assertEqual(self.scan("U300", expect=400)["detail"], "U300 現在是「廠商換貨中」,不能出貨")
         self.assertEqual(self.scan("沒有這個碼", expect=400)["detail"], "找不到這個碼")
 
     def test_a_unit_ships_from_the_store_it_is_in(self):

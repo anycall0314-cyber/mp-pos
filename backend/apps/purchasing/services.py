@@ -30,7 +30,7 @@ from apps.inventory.identifiers import (
     twin_ids,
 )
 from apps.inventory.locking import lock_document, lock_stock_rows, locked_balance
-from apps.inventory.models import ProductSerial, StockBalance, StockMovement
+from apps.inventory.models import COSTED_STATUSES, ProductSerial, StockBalance, StockMovement
 
 from .models import PurchaseOrder, PurchaseOrderItem
 
@@ -279,7 +279,7 @@ def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
                 continue
             current_stock = (
                 ProductSerial.objects.for_tenant(po.tenant)
-                .filter(product=product, status=ProductSerial.Status.IN_STOCK)
+                .filter(product=product, status__in=COSTED_STATUSES)
                 .count()
             )
             # unit_landed_cost 已含贈品稀釋;乘 qty 得本批未稅總成本
@@ -431,9 +431,9 @@ def _recompute_product_avg_cost(tenant, product):
 
 
 def _recompute_weighted_avg_cost(tenant, product):
-    """以該商品目前 in_stock 序號的 purchase_unit_cost 重算加權平均。"""
+    """以該商品目前在庫(含廠商換貨中)序號的 purchase_unit_cost 重算加權平均。"""
     serials = ProductSerial.objects.for_tenant(tenant).filter(
-        product=product, status=ProductSerial.Status.IN_STOCK
+        product=product, status__in=COSTED_STATUSES
     )
     n = serials.count()
     if n == 0:
