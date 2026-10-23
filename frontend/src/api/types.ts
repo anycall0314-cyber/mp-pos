@@ -302,6 +302,8 @@ export interface Supplier {
   id: number;
   code: string;
   name: string;
+  /** 印在商品標籤上;沒填就印名稱 */
+  short_name: string;
   contact: string;
   phone: string;
   tax_id: string;

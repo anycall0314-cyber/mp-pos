@@ -14,6 +14,7 @@ type Selection =
 
 interface FormState {
   name: string;
+  short_name: string;
   contact: string;
   phone: string;
   tax_id: string;
@@ -24,6 +25,7 @@ interface FormState {
 
 const EMPTY_FORM: FormState = {
   name: "",
+  short_name: "",
   contact: "",
   phone: "",
   tax_id: "",
@@ -35,6 +37,7 @@ const EMPTY_FORM: FormState = {
 function toForm(s: Supplier): FormState {
   return {
     name: s.name,
+    short_name: s.short_name ?? "",
     contact: s.contact,
     phone: s.phone,
     tax_id: s.tax_id,
@@ -116,6 +119,7 @@ export function SuppliersPage() {
     }
     const payload: Partial<Supplier> & { id?: number } = {
       name,
+      short_name: form.short_name.trim(),
       contact: form.contact.trim(),
       phone: form.phone.trim(),
       tax_id: form.tax_id.trim(),
@@ -363,6 +367,15 @@ export function SuppliersPage() {
                     maxLength={120}
                     placeholder="例:蘋果經銷"
                     style={{ width: 280 }}
+                  />
+                </dd>
+                <dt>簡稱</dt>
+                <dd>
+                  <input
+                    value={form.short_name}
+                    onChange={(e) => patch("short_name", e.target.value)}
+                    maxLength={20}
+                    style={{ width: 120 }}
                   />
                 </dd>
                 <dt>聯絡人</dt>

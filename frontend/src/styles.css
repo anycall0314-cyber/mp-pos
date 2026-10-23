@@ -1104,6 +1104,9 @@ button { font-family: inherit; }
 .label-last5 b { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 2.4mm; font-weight: 900; letter-spacing: 0.1mm; }
 .label-nobars b { font-weight: 900; }
 .label-sku { min-width: 0; overflow: hidden; font-size: 1.9mm; font-weight: 700; }
+/* 廠商:靠右、貼在品號前面;最寬 10 mm(再寬會把 13 碼條碼字 + 品號那一行擠爆),放不下由畫面量出比例壓扁(跟品名一樣,從左邊壓) */
+.label-supplier { flex: none; max-width: 10mm; margin-left: auto; overflow: hidden; font-size: 1.9mm; font-weight: 700; white-space: nowrap; }
+.label-supplier > span { display: inline-block; transform-origin: left center; }
 .label-slot { flex: none; height: 3.5mm; }
 /* 條碼:疊在兩聯中間(位置與大小由畫面照點數算出來填) */
 .label-bars { position: absolute; display: block; z-index: 1; }

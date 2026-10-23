@@ -203,9 +203,22 @@ test("位置微調:推的是整張的內容,外框與紙不動;只有測試標�
   assert.doesNotMatch(page.match(/const hasWarning = [^;]*;/)[0], /nudge/);
 });
 
+test("廠商印在碼那一行的右邊、品號前面;印不出條碼時改印在進貨單那一行;太長壓扁", () => {
+  const tile = read("../components/labels/LabelTile.tsx");
+  assert.match(tile, /<span className="label-code">\{text\.head\}<\/span>\s*\)\}\s*\{supplier\}\s*<span className="label-sku">/);
+  assert.match(tile, /<span className="label-src">\{text\.source\}<\/span>\s*\{!bars && supplier\}/);
+  assert.match(tile, /setSupplierSqueeze\(measureSqueeze\(supplierRef\.current\)\)/);
+  const css = read("../styles.css");
+  assert.match(css.match(/\.label-supplier \{[^}]*\}/)[0], /max-width: 10mm; margin-left: auto; overflow: hidden;/);
+  // 測試標籤印得出廠商(簡稱、太長的名稱、印不出條碼的那一張),owner 實機印一次就看得到
+  const page = read("../pages/labels/LabelPrintPage.tsx");
+  assert.ok(page.includes('supplier: "國圳通訊",'));
+  assert.equal((page.match(/supplier: "國圳",/g) ?? []).length, 2);
+});
+
 test("標籤上的小字都是粗體(熱感印表機細的筆畫印不出來)", () => {
   const css = read("../styles.css");
-  for (const cls of ["label-name", "label-src", "label-grade", "label-price", "label-code", "label-last5", "label-sku", "label-nobars"]) {
+  for (const cls of ["label-name", "label-src", "label-grade", "label-price", "label-code", "label-last5", "label-sku", "label-nobars", "label-supplier"]) {
     const rule = css.match(new RegExp(`\\.${cls} \\{[^}]*\\}`));
     assert.ok(rule, cls);
     assert.match(rule[0], /font-weight: (700|900);/, cls);

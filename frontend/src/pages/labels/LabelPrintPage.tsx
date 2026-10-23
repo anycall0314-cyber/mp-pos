@@ -77,6 +77,7 @@ const TEST_LABELS: LabelData[] = [
     grade: "",
     doc_no: "條碼槍刷得到 TEST1234",
     doc_date: "",
+    supplier: "",
     copies: 1,
   },
   {
@@ -92,6 +93,7 @@ const TEST_LABELS: LabelData[] = [
     grade: "A",
     doc_no: "PO-000001",
     doc_date: "2026-10-06",
+    supplier: "國圳",
     copies: 1,
   },
   {
@@ -108,6 +110,8 @@ const TEST_LABELS: LabelData[] = [
     grade: "",
     doc_no: "PO-000002",
     doc_date: "2025-02-04",
+    // 沒填簡稱的廠商印名稱去掉公司別(「國圳通訊有限公司」→「國圳通訊」),再放不下就壓扁
+    supplier: "國圳通訊",
     copies: 1,
   },
   {
@@ -125,6 +129,7 @@ const TEST_LABELS: LabelData[] = [
     grade: "",
     doc_no: "序號太長:沒有條碼",
     doc_date: "",
+    supplier: "國圳",
     copies: 1,
   },
 ];

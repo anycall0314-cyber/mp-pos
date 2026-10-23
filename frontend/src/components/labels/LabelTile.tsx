@@ -53,18 +53,14 @@ export const LabelTile = memo(function LabelTile({
     () => (printed.bars ? barsFor(printed.code) : null),
     [printed.bars, printed.code],
   );
-  // 品名一行放不下就壓扁:量上半那一份(字本來多寬、格子多寬),上下兩聯用同一個比例。
-  // 量的是畫出來的寬度(有小數;`offsetWidth` 是整數,差那半個點最後一個字會被切到),所以要除掉**畫面上現在**已經壓的比例 ——
-  // 從元素自己身上讀,不另外記(開發模式這一段會連跑兩次,另外記的那一份會比畫面早一步,就壓過頭了)
+  // 品名一行放不下就壓扁:量上半那一份(字本來多寬、格子多寬),上下兩聯用同一個比例(怎麼量見 `measureSqueeze`)
   const nameRef = useRef<HTMLSpanElement>(null);
   const [squeeze, setSqueeze] = useState(1);
-  useLayoutEffect(() => {
-    const text = nameRef.current;
-    const box = text?.parentElement;
-    if (!text || !box) return;
-    const now = Number(/scaleX\(([\d.]+)\)/.exec(text.style.transform)?.[1] ?? 1) || 1;
-    setSqueeze(squeezeFor(text.getBoundingClientRect().width / now, box.getBoundingClientRect().width));
-  }, [label.name]);
+  useLayoutEffect(() => setSqueeze(measureSqueeze(nameRef.current)), [label.name]);
+  // 廠商也一樣:沒填簡稱的印名稱,放不下壓扁(格子最寬 10 mm,樣式 `.label-supplier`)
+  const supplierRef = useRef<HTMLSpanElement>(null);
+  const [supplierSqueeze, setSupplierSqueeze] = useState(1);
+  useLayoutEffect(() => setSupplierSqueeze(measureSqueeze(supplierRef.current)), [label.supplier, layout]);
 
   const half = (side: "top" | "bottom") => (
     <Half
@@ -74,6 +70,8 @@ export const LabelTile = memo(function LabelTile({
       bars={layout !== null}
       squeeze={squeeze}
       nameRef={side === "top" ? nameRef : undefined}
+      supplierSqueeze={supplierSqueeze}
+      supplierRef={side === "top" ? supplierRef : undefined}
     />
   );
   return (
@@ -114,7 +112,23 @@ export const LabelTile = memo(function LabelTile({
   );
 });
 
-/** 一聯:品名、進貨單與日期 + 成色 + 售價、碼的字(有序號的只印末 5 碼)+ 品號;下半那一聯順序倒過來(樣式 `column-reverse`) */
+/**
+ * 一行字放不下要壓多少:量畫出來的寬度(有小數;`offsetWidth` 是整數,差那半個點最後一個字會被切到),
+ * 所以要除掉**畫面上現在**已經壓的比例 —— 從元素自己身上讀,不另外記
+ * (開發模式這一段會連跑兩次,另外記的那一份會比畫面早一步,就壓過頭了)
+ */
+function measureSqueeze(text: HTMLSpanElement | null): number {
+  const box = text?.parentElement;
+  if (!text || !box) return 1;
+  const now = Number(/scaleX\(([\d.]+)\)/.exec(text.style.transform)?.[1] ?? 1) || 1;
+  return squeezeFor(text.getBoundingClientRect().width / now, box.getBoundingClientRect().width);
+}
+
+/**
+ * 一聯:品名、進貨單與日期 + 成色 + 售價、碼的字(有序號的只印末 5 碼)+ 廠商 + 品號;下半那一聯順序倒過來(樣式 `column-reverse`)。
+ * 廠商(owner 2026-10-21「標籤也要印廠商簡稱」,舊標籤印在右邊):印在碼那一行的右邊、品號前面;
+ * 印不出條碼時碼那一行沒有了,改印在進貨單那一行。
+ */
 function Half({
   side,
   label,
@@ -122,6 +136,8 @@ function Half({
   bars,
   squeeze,
   nameRef,
+  supplierSqueeze,
+  supplierRef,
 }: {
   side: "top" | "bottom";
   label: LabelData;
@@ -129,8 +145,17 @@ function Half({
   bars: boolean;
   squeeze: number;
   nameRef?: React.Ref<HTMLSpanElement>;
+  supplierSqueeze: number;
+  supplierRef?: React.Ref<HTMLSpanElement>;
 }) {
   const text = halfText(label, code, bars);
+  const supplier = label.supplier && (
+    <span className="label-supplier">
+      <span ref={supplierRef} style={supplierSqueeze < 1 ? { transform: `scaleX(${supplierSqueeze})` } : undefined}>
+        {label.supplier}
+      </span>
+    </span>
+  );
   return (
     <div className={`label-half ${side}`}>
       <div className="label-name">
@@ -140,6 +165,7 @@ function Half({
       </div>
       <div className="label-meta">
         <span className="label-src">{text.source}</span>
+        {!bars && supplier}
         {label.grade && <span className="label-grade">{label.grade} 級</span>}
         {label.price != null && <span className="label-price">${money(label.price)}</span>}
       </div>
@@ -153,6 +179,7 @@ function Half({
             ) : (
               <span className="label-code">{text.head}</span>
             )}
+            {supplier}
             <span className="label-sku">{text.sku}</span>
           </div>
           {/* 條碼的那一半(條碼本身是另外疊上去的,跨兩聯) */}

@@ -14,6 +14,8 @@ class Supplier(TenantOwnedModel):
         help_text="系統自動產生:S-{6位流水};前端不輸入",
     )
     name = models.CharField("供應商名稱", max_length=120)
+    # 印在商品標籤上(owner 2026-10-21「標籤也要印廠商簡稱」,舊歐睿的標籤右邊印「國圳」);沒填就印供應商名稱
+    short_name = models.CharField("簡稱", max_length=20, blank=True, default="", db_default="")
     contact = models.CharField("聯絡人", max_length=60, blank=True)
     phone = models.CharField("電話", max_length=40, blank=True)
     tax_id = models.CharField("統一編號", max_length=20, blank=True)

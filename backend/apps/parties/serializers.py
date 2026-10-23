@@ -26,6 +26,7 @@ class SupplierSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerial
             "id",
             "code",
             "name",
+            "short_name",
             "contact",
             "phone",
             "tax_id",

@@ -22,6 +22,8 @@ export interface LabelData {
   /** 這一台 / 這一批是哪一張單進來的(不知道就是空的) */
   doc_no: string;
   doc_date: string;
+  /** 那一張進貨單的廠商(簡稱,沒填是名稱);分不出是哪一家的(個人收購、盤點入庫、配件補印)是空的 */
+  supplier: string;
   /** 配件預設印幾張(進貨數量 / 補印時打的張數);某一台固定 1 */
   copies: number;
 }

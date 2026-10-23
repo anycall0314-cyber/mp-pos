@@ -186,6 +186,44 @@ class ReprintTests(_Shop):
         (label,) = self.labels(serials=str(self.serial(IMEI_A).id))["labels"]
         self.assertEqual((label["doc_no"], label["doc_date"]), ("", ""))
 
+    def test_labels_print_that_purchase_orders_supplier_short_name(self):
+        from apps.parties.models import Supplier
+        Supplier.objects.filter(pk=self.c.supplier.pk).update(short_name=" 國圳 ")
+        po = self.c.purchase(phone_serials=(IMEI_A,), case_qty=2)
+        data = self.labels(po=po["id"])
+        self.assertEqual([x["supplier"] for x in data["labels"]], ["國圳", "國圳"])
+        # 那一台補印:印它當初那張進貨單的廠商
+        (unit,) = self.labels(serials=str(self.serial(IMEI_A).id))["labels"]
+        self.assertEqual(unit["supplier"], "國圳")
+        # 沒填簡稱:印廠商名稱,去掉公司別(標籤上那一格放不下)
+        Supplier.objects.filter(pk=self.c.supplier.pk).update(short_name="")
+        self.assertEqual({x["supplier"] for x in self.labels(po=po["id"])["labels"]}, {self.c.supplier.name})
+        for name, printed in (("國圳通訊有限公司", "國圳通訊"), ("大發股份有限公司", "大發"), ("阿明企業社", "阿明"),
+                              ("有限公司", "有限公司"), ("蘋果經銷", "蘋果經銷")):
+            Supplier.objects.filter(pk=self.c.supplier.pk).update(name=name)
+            self.assertEqual(self.labels(po=po["id"])["labels"][0]["supplier"], printed, name)
+        # 配件補印分不出是哪一家進的:不印(紅隊:不讓人挑,挑的是猜的)
+        (case,) = self.labels(product=self.c.case.id, copies=1)["labels"]
+        self.assertEqual(case["supplier"], "")
+
+    def test_supplier_short_name_is_saved_from_the_supplier_page(self):
+        r = self.c.admin.patch(f"/api/v1/suppliers/{self.c.supplier.id}/", {"short_name": "國圳"}, format="json")
+        self.assertEqual((r.status_code, r.json().get("short_name")), (200, "國圳"), r.content)
+        r = self.c.admin.patch(f"/api/v1/suppliers/{self.c.supplier.id}/", {"short_name": "國" * 21}, format="json")
+        self.assertEqual(r.status_code, 400, r.content)
+        r = self.c.admin.post("/api/v1/suppliers/", {"name": "新廠商"}, format="json")
+        self.assertEqual((r.status_code, r.json().get("short_name")), (201, ""), r.content)
+
+    def test_a_unit_without_a_purchase_order_prints_no_supplier(self):
+        self.c.purchase(phone_serials=(IMEI_A,), case_qty=2)
+        so = SalesOrder.objects.get(pk=self.c.sell(case_qty=1)["id"])
+        # 個人收購進來的(收購單是一張銷貨單)、盤點入庫的(兩個都沒有)
+        ProductSerial.objects.filter(pk=self.serial(IMEI_A).pk).update(
+            purchase_order_item=None, acquired_via_sales_order=so)
+        self.assertEqual(self.labels(serials=str(self.serial(IMEI_A).id))["labels"][0]["supplier"], "")
+        ProductSerial.objects.filter(pk=self.serial(IMEI_A).pk).update(acquired_via_sales_order=None)
+        self.assertEqual(self.labels(serials=str(self.serial(IMEI_A).id))["labels"][0]["supplier"], "")
+
     def test_accessory_reprint_by_count(self):
         (label,) = self.labels(product=self.c.case.id, copies=12)["labels"]
         self.assertEqual((label["code"], label["copies"], label["price"], label["doc_no"]),

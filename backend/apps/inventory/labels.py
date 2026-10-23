@@ -13,6 +13,9 @@
   「那一台自己的售價」是 0(或負的)= 沒填:跟銷貨開單帶價的規則一樣(`> 0` 才用),不然標籤上的價錢會跟結帳帶出來的不一樣。
 - 成色:只有逐台記機況的商品才印。
 - 進貨單號與日期:那一台當初進貨的那一張;個人收購進來的印收購那一張單;配件補印沒有「哪一批」可言,不印(不猜)。
+- 廠商(owner 2026-10-21「標籤也要印廠商簡稱」):印那一張進貨單的廠商(簡稱,沒填印名稱)。
+  個人收購、盤點入庫(沒有進貨單)、配件補印都不印 —— 系統分不出是哪一家的就不印,不讓人挑
+  (紅隊:補印時讓人挑,店員會挑排第一的,標籤看起來跟進貨印的一樣,其實是猜的)。
 """
 from apps.catalog.models import Product
 from apps.core.money import money_int
@@ -40,7 +43,25 @@ def _price(product, serial=None):
     return money_int(value) or None
 
 
-def _for_product(product, copies, source=None):
+# 沒填簡稱、改印名稱時去掉的公司別(標籤上那一格只有 10 mm:「國圳通訊有限公司」會把品號擠掉,印「國圳通訊」)
+COMPANY_SUFFIXES = ("股份有限公司", "有限公司", "企業社", "商行")
+
+
+def _supplier_text(supplier):
+    """標籤上的廠商:簡稱;沒填就是名稱去掉公司別(去掉之後沒有字就照原名);沒有廠商是空的。"""
+    if supplier is None:
+        return ""
+    short = (supplier.short_name or "").strip()
+    if short:
+        return short
+    name = (supplier.name or "").strip()
+    for suffix in COMPANY_SUFFIXES:
+        if name.endswith(suffix) and name != suffix:
+            return name[: -len(suffix)].strip()
+    return name
+
+
+def _for_product(product, copies, source=None, supplier=None):
     barcode = (product.barcode or "").strip()
     return {
         "key": f"p{product.id}",
@@ -55,6 +76,7 @@ def _for_product(product, copies, source=None):
         "grade": "",
         "doc_no": source[0] if source else "",
         "doc_date": source[1] if source else "",
+        "supplier": _supplier_text(supplier),
         "copies": copies,
     }
 
@@ -88,6 +110,8 @@ def _for_serial(serial):
         "grade": serial.condition_grade if product.tracks_unit_condition else "",
         "doc_no": source[0] if source else "",
         "doc_date": source[1] if source else "",
+        # 那一台當初的進貨單的廠商;個人收購、盤點入庫的沒有
+        "supplier": _supplier_text(item.po.supplier) if (item := serial.purchase_order_item) else "",
         "copies": 1,
     }
 
@@ -97,7 +121,7 @@ def _serials(tenant):
         ProductSerial.objects.for_tenant(tenant)
         .exclude(status=ProductSerial.Status.VOID)
         .select_related(
-            "product", "product__condition", "purchase_order_item__po", "acquired_via_sales_order",
+            "product", "product__condition", "purchase_order_item__po__supplier", "acquired_via_sales_order",
         )
         # 進貨明細上那一整包序號清單(JSON)這裡用不到:一台帶一份太重
         .defer("purchase_order_item__serial_numbers")
@@ -108,7 +132,7 @@ def for_purchase_order(tenant, po_id):
     """一張進貨單的標籤。回 (這張單的說明, 標籤清單, 要講出來的事)。"""
     from apps.purchasing.models import PurchaseOrder
 
-    po = PurchaseOrder.objects.for_tenant(tenant).filter(pk=po_id).first()
+    po = PurchaseOrder.objects.for_tenant(tenant).select_related("supplier").filter(pk=po_id).first()
     if po is None:
         raise LabelError("找不到這張進貨單")
     if po.is_void:
@@ -135,7 +159,7 @@ def for_purchase_order(tenant, po_id):
                 # 舊資料沒有逐台的序號、或那幾台已經作廢:照實講,不能看起來像整張都印了
                 notes.append(f"{product.name}:進貨 {item.qty} 台,可以印的只有 {len(mine)} 台")
         else:
-            label = _for_product(product, min(item.qty, MAX_COPIES), source)
+            label = _for_product(product, min(item.qty, MAX_COPIES), source, po.supplier)
             label["key"] = f"i{item.id}"
             labels.append(label)
             if item.qty > MAX_COPIES:
