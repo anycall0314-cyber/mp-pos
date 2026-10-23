@@ -67,7 +67,7 @@ export function CashAdjustmentsPage() {
   const columns: MasterColumn<CashAdjustment>[] = [
     { key: "doc_date", header: "日期", render: (r) => r.doc_date },
     { key: "no", header: "單號", render: (r) => r.no },
-    { key: "warehouse", header: "門市", render: (r) => r.warehouse_name },
+    { key: "warehouse", header: "門市", render: (r) => r.warehouse_name, side: true },
     {
       key: "direction",
       header: "方向",
@@ -77,7 +77,7 @@ export function CashAdjustmentsPage() {
         </span>
       ),
     },
-    { key: "reason", header: "事由", render: (r) => r.reason_label },
+    { key: "reason", header: "事由", render: (r) => r.reason_label, side: true },
     {
       key: "amount",
       header: "金額",
@@ -93,13 +93,14 @@ export function CashAdjustmentsPage() {
     },
     {
       key: "handled_by",
+      side: true,
       header: "經手人",
       render: (r) =>
         r.handled_by_name
           ? r.handled_by_name
           : "—",
     },
-    { key: "note", header: "備註", render: (r) => r.note || "—" },
+    { key: "note", header: "備註", render: (r) => r.note || "—", side: true },
   ];
 
   // 作廢按兩下(全站檢視 G1:以前跳瀏覽器的確認框,失敗再跳一個)
@@ -125,7 +126,7 @@ export function CashAdjustmentsPage() {
             <dd>{r.doc_date}</dd>
             <dt>門市</dt>
             <dd>
-              {r.warehouse_code} {r.warehouse_name}
+              {r.warehouse_name}
             </dd>
             <dt>方向</dt>
             <dd>{r.direction_label}</dd>

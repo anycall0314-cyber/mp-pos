@@ -280,9 +280,10 @@ export function TelecomPlansPage() {
         header: "綁約",
         render: (r) => <span className="num">{r.contract_months} 月</span>,
       },
-      { key: "kind", header: "類型", render: (r) => r.kind_label },
+      { key: "kind", header: "類型", render: (r) => r.kind_label, side: true },
       {
         key: "commission",
+        side: true,
         header: "業務員佣金",
         render: (r) => {
           if (!canEdit) return <span className="num">{money(r.commission)}</span>;
@@ -318,6 +319,7 @@ export function TelecomPlansPage() {
       {
         // 公司實際拿的:只有管理員的資料裡有,這一欄也只給管理員
         key: "company_commission",
+        side: true,
         header: "公司佣金",
         render: (r) => {
           const original = companyCommissionInput(r.company_commission);

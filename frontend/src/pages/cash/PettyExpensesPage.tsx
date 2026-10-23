@@ -64,7 +64,7 @@ export function PettyExpensesPage() {
   const columns: MasterColumn<PettyExpense>[] = [
     { key: "doc_date", header: "日期", render: (r) => r.doc_date },
     { key: "no", header: "單號", render: (r) => r.no },
-    { key: "warehouse", header: "門市", render: (r) => r.warehouse_name },
+    { key: "warehouse", header: "門市", render: (r) => r.warehouse_name, side: true },
     { key: "category", header: "類別", render: (r) => r.category_label },
     {
       key: "amount",
@@ -77,12 +77,14 @@ export function PettyExpensesPage() {
     },
     {
       key: "payment",
+      side: true,
       header: "付款",
       render: (r) => r.payment_method_name,
     },
-    { key: "payee", header: "收款對象", render: (r) => r.payee || "—" },
+    { key: "payee", header: "收款對象", render: (r) => r.payee || "—", side: true },
     {
       key: "handled_by",
+      side: true,
       header: "經手人",
       render: (r) =>
         r.handled_by_name
@@ -124,7 +126,7 @@ export function PettyExpensesPage() {
             <dd>{r.doc_date}</dd>
             <dt>門市</dt>
             <dd>
-              {r.warehouse_code} {r.warehouse_name}
+              {r.warehouse_name}
             </dd>
             <dt>類別</dt>
             <dd>{r.category_label}</dd>

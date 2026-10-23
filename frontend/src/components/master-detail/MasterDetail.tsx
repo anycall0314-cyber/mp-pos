@@ -4,6 +4,11 @@ export interface MasterColumn<T> {
   key: string;
   header: ReactNode;
   render: (row: T) => ReactNode;
+  /**
+   * 右邊打開一筆的時候收起來(那些欄位右邊的明細看得到)。全站檢視 E11:打開一筆後清單變窄,
+   * 9~12 欄要往右捲才看得到狀態、金額;沒打開的時候清單佔滿整個寬度,照樣全部列出來。
+   */
+  side?: boolean;
 }
 
 export interface DetailTab<T> {
@@ -53,6 +58,7 @@ export function MasterDetail<T>({
   const selectedRow = rows.find((r) => rowKey(r) === selectedKey) ?? null;
   const currentActions = selectedRow && actions ? actions(selectedRow) : [];
   const currentTab = tabs.find((t) => t.key === activeTab) ?? tabs[0];
+  const shown = selectedRow ? columns.filter((c) => !c.side) : columns;
 
   // 沒選任何一筆:清單佔滿整個寬度、不開右邊(UI 改善計劃 UI-07:不留一大塊空白寫「從左側選擇…」)。
   // 選了一筆:電腦是左右兩欄;手機(窄畫面)整頁換成那一筆,右上「×」回清單(`md-show-detail` 只在窄畫面有作用)
@@ -71,7 +77,7 @@ export function MasterDetail<T>({
           <table>
             <thead>
               <tr>
-                {columns.map((c) => (
+                {shown.map((c) => (
                   <th key={c.key}>{c.header}</th>
                 ))}
               </tr>
@@ -85,7 +91,7 @@ export function MasterDetail<T>({
                     className={k === selectedKey ? "selected" : undefined}
                     onClick={() => setSelectedKey(k)}
                   >
-                    {columns.map((c) => (
+                    {shown.map((c) => (
                       <td key={c.key}>{c.render(row)}</td>
                     ))}
                   </tr>
@@ -93,7 +99,7 @@ export function MasterDetail<T>({
               })}
               {rows.length === 0 && (
                 <tr className="md-empty-row">
-                  <td colSpan={columns.length} className="md-empty">
+                  <td colSpan={shown.length} className="md-empty">
                     {emptyText}
                   </td>
                 </tr>

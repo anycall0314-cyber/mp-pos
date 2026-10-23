@@ -285,13 +285,11 @@ export function RepairsPage() {
           <table className="md-table-inner">
             <thead>
               <tr>
+                {/* 13 欄 → 10 欄(全站檢視 E11):方式、機型、預計完修放在同一格的第二行 */}
                 <th>單號</th>
-                <th>方式</th>
                 <th>狀態</th>
-                <th>會員</th>
-                <th>機型</th>
-                <th>收件日</th>
-                <th>預計完修</th>
+                <th>會員 / 機型</th>
+                <th>收件 / 預計完修</th>
                 <th>門市</th>
                 <th className="num" title="委外:預估費用">
                   預估
@@ -338,13 +336,17 @@ export function RepairsPage() {
                           返修
                         </span>
                       )}
+                      <div className="rp-sub">{r.mode_label}</div>
                     </td>
-                    <td>{r.mode_label}</td>
                     <td>{r.status_label}</td>
-                    <td>{r.customer_name}</td>
-                    <td>{r.host_model_name}</td>
-                    <td>{r.received_date}</td>
-                    <td>{r.expected_complete_date ?? "—"}</td>
+                    <td>
+                      <div>{r.customer_name}</div>
+                      <div className="rp-sub">{r.host_model_name}</div>
+                    </td>
+                    <td>
+                      <div>{r.received_date}</div>
+                      <div className="rp-sub">{r.expected_complete_date ?? "—"}</div>
+                    </td>
                     <td>{r.warehouse_name || r.warehouse_code}</td>
                     <td className="num">
                       {r.mode === "external" ? (
