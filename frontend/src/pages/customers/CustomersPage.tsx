@@ -237,7 +237,7 @@ export function CustomersPage() {
             className="btn primary"
             onClick={() => setSelection({ kind: "new" })}
           >
-            + 新增來源
+            新增來源
           </button>
         }
       />

@@ -105,14 +105,14 @@ export function RepairItemsPage() {
         title="維修項目設定"
         actions={
           <button className="btn primary" onClick={openNew}>
-            + 新增項目
+            新增項目
           </button>
         }
       />
       <div className="entry-body" style={{ padding: 16 }}>
         {items.isLoading && <div className="md-empty">載入中…</div>}
         {!items.isLoading && (items.data?.length ?? 0) === 0 && (
-          <div className="md-empty">尚無維修項目,按右上「+ 新增項目」開始</div>
+          <div className="md-empty">尚無維修項目,按右上「新增項目」開始</div>
         )}
         <div className="ri-list">
           {items.data?.map((it) => (

@@ -525,7 +525,7 @@ export function SettingsPage() {
         {canTracks && (
           <div style={{ marginBottom: 8 }}>
             <button className="btn primary" onClick={startNew}>
-              + 新增字軌
+              新增字軌
             </button>
           </div>
         )}
@@ -797,7 +797,7 @@ export function SettingsPage() {
               })
             }
           >
-            + 新增付款方式
+            新增付款方式
           </button>
         </div>
 

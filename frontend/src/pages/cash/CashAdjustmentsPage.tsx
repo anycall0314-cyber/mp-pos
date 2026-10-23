@@ -178,7 +178,7 @@ export function CashAdjustmentsPage() {
                 setDrawerOpen(true);
               }}
             >
-              + 新增調整
+              新增調整
             </button>
           ) : null
         }

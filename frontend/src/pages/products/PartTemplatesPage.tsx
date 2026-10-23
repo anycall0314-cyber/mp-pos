@@ -458,7 +458,7 @@ export function PartTemplatesPage() {
         title="零件範本管理"
         actions={
           <button className="btn primary" onClick={startNew}>
-            + 新增範本
+            新增範本
           </button>
         }
       />
@@ -517,7 +517,7 @@ export function PartTemplatesPage() {
                 color: "var(--text-dim)",
               }}
             >
-              左側選一個範本,或按「+ 新增範本」
+              左側選一個範本,或按「新增範本」
             </div>
           ) : (
             <>
@@ -669,8 +669,8 @@ export function PartTemplatesPage() {
                 />
                 <div className="form-field-hint">
                   例:殼 / 貼。線、充電器走通用配件不綁機型,不放這裡。
-                  「+ 新增手機型號」wizard 會把這些當成「相容類別槽位」記錄,
-                  但不會直接建配件 SKU,實際配件商品走「+ 新增配件」獨立建立。
+                  「新增手機型號」wizard 會把這些當成「相容類別槽位」記錄,
+                  但不會直接建配件 SKU,實際配件商品走「新增配件」獨立建立。
                 </div>
               </div>
 
@@ -683,7 +683,7 @@ export function PartTemplatesPage() {
                 />
                 <div className="form-field-hint">
                   例:imos / HODA / JTLEGEND。
-                  「+ 新增配件」wizard 套此範本時,會顯示這些品牌讓你一個個建商品線
+                  「新增配件」wizard 套此範本時,會顯示這些品牌讓你一個個建商品線
                   (例:imos 抗藍光保護貼、HODA 軍規防摔殼)。純參考用,不直接建 SKU。
                 </div>
               </div>

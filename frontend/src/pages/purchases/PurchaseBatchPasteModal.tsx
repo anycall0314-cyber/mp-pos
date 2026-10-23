@@ -584,7 +584,7 @@ PH-000023\t1\t29000\t356121234567000`}
 
               <div style={{ marginTop: 8 }}>
                 <button type="button" className="btn" onClick={addBlankRow}>
-                  + 新增空白列
+                  新增空白列
                 </button>
               </div>
             </>

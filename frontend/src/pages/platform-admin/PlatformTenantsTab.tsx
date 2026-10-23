@@ -57,7 +57,7 @@ export function PlatformTenantsTab() {
             setDrawerOpen(true);
           }}
         >
-          + 新增經銷商
+          新增經銷商
         </button>
       </div>
 

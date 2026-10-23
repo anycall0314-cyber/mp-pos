@@ -133,7 +133,7 @@ export function SalesPersonsPage() {
         title="業務員"
         actions={
           <button className="btn primary" onClick={() => setSelection({ kind: "new" })}>
-            + 新增業務員
+            新增業務員
           </button>
         }
       />

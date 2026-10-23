@@ -60,7 +60,7 @@ test("消費紀錄分頁不套側邊欄與上面那排(跟報表另開的只看�
   assert.match(app, /const focusMode =\s*new URLSearchParams\(location\.search\)\.get\("focus"\) === "1" \|\|\s*isMemberHistoryPath\(location\.pathname\);/);
   // 側邊欄、手機的選單列、上面那排都看 focusMode
   assert.match(app, /\{!focusMode && !isPrintMode && \(\s*<>\s*<div className="mobile-topbar">/);
-  assert.match(app, /\{!focusMode && !isPrintMode && <ModuleBar /);
+  assert.match(app, /\{!focusMode && !isPrintMode && \(?\s*<ModuleBar /);
 });
 
 test("消費紀錄分頁沒有任何操作:點一列不跳銷貨單、舊紀錄不能對照", () => {

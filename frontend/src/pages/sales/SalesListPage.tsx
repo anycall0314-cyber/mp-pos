@@ -24,6 +24,7 @@ import { orderActualMargin, orderStaffMargin } from "@/lib/staffCost";
 import { voidStamp } from "@/lib/voidStamp";
 
 import { SALES_DRAFT_KEY, SALES_MARGIN_KEY } from "./SalesWorkbenchPage";
+import { EyeToggle } from "@/components/EyeToggle";
 
 /**
  * 銷貨單清單:最近的銷貨單,點一列就地展開明細,列印收據 / 列印發票 / 整張銷退 / 作廢直接在那一列上。
@@ -368,22 +369,19 @@ export function SalesListPage() {
   }
 
   const marginToggle = (
-      <button
-            type="button"
-            className="wb-link"
-            title="螢幕會給客人看到時先遮起來"
-            onClick={() => {
-              const next = !marginHidden;
-              setMarginHidden(next);
-              try {
-                localStorage.setItem(SALES_MARGIN_KEY, next ? "1" : "0");
-              } catch {
-                /* 存不了就算了 */
-              }
-            }}
-          >
-            {marginHidden ? "顯示毛利" : "遮住毛利"}
-          </button>
+      <EyeToggle
+        what="毛利"
+        hidden={marginHidden}
+        onToggle={() => {
+          const next = !marginHidden;
+          setMarginHidden(next);
+          try {
+            localStorage.setItem(SALES_MARGIN_KEY, next ? "1" : "0");
+          } catch {
+            /* 存不了就算了 */
+          }
+        }}
+      />
   );
 
   // 從報表另開的檢視:只看那一張

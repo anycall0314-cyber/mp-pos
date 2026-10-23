@@ -311,6 +311,14 @@ button { font-family: inherit; }
 .module-tab:hover { color: var(--text); }
 .module-tab.active { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
 .module-tools { margin-left: auto; position: relative; display: flex; align-items: center; flex: none; }
+/* 頁面主要按鈕(新增…):有分頁列的頁放在分頁列最右邊、設定選單左邊(2026-10-23) */
+.module-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
+.module-actions:empty { display: none; }
+.module-actions ~ .module-tools { margin-left: 8px; }
+.module-actions:empty ~ .module-tools { margin-left: auto; }
+.module-actions .page-toolbar-actions { flex-wrap: nowrap; }
+/* 有分頁列時頁內只剩篩選 / 小分頁那一排:不放大標題,高度跟著內容 */
+.page-toolbar.slim { min-height: 0; padding-top: 6px; padding-bottom: 6px; }
 /* 窄螢幕:分頁放不下就換行,不要藏到要橫向捲才看得到(看起來像功能被拿掉) */
 @media (max-width: 900px) {
   .module-bar { flex-wrap: wrap; }
@@ -8336,3 +8344,19 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   gap: 8px;
   margin: 8px 0;
 }
+
+/* 毛利的顯示 / 遮住:只有眼睛圖示(2026-10-23) */
+.eye-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 4px;
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  cursor: pointer;
+  vertical-align: middle;
+}
+.eye-toggle:hover { color: var(--text); }

@@ -33,7 +33,7 @@ export function SalesReturnsPage() {
               className="btn primary"
               onClick={() => navigate("/sales/returns/new")}
             >
-              + 新增銷退單
+              新增銷退單
             </button>
           ) : null
         }

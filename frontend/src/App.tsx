@@ -74,6 +74,7 @@ import { SuppliersPage } from "@/pages/suppliers/SuppliersPage";
 import { ContractsPage } from "@/pages/telecom/ContractsPage";
 import { TelecomPlansPage } from "@/pages/telecom-plans/TelecomPlansPage";
 import { ModuleBar } from "@/components/shell/ModuleBar";
+import { ModuleActionsSlot } from "@/components/shell/moduleActions";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { matchForUser, visibleModules } from "@/nav";
 
@@ -94,6 +95,8 @@ function readTheme(): Theme {
 export function App() {
   const [theme, setTheme] = useState<Theme>(readTheme);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // 分頁列右邊放頁面按鈕的那一格(有分頁列、正在看分頁本身才有)
+  const [actionsSlot, setActionsSlot] = useState<HTMLDivElement | null>(null);
   const location = useLocation();
   const { user, loading: authLoading, logout } = useAuth();
   // 路由切換自動關閉漢堡選單
@@ -244,7 +247,10 @@ export function App() {
           </div>
         )}
         <main className="main">
-        {!focusMode && !isPrintMode && <ModuleBar match={navMatch} pathname={location.pathname} />}
+        {!focusMode && !isPrintMode && (
+          <ModuleBar match={navMatch} pathname={location.pathname} actionsRef={setActionsSlot} />
+        )}
+        <ModuleActionsSlot.Provider value={actionsSlot}>
         <div className="main-page">
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
@@ -492,6 +498,7 @@ export function App() {
           />
         </Routes>
         </div>
+        </ModuleActionsSlot.Provider>
         </main>
         {!isPrintMode && <ToastHost />}
       </div>

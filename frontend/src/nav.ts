@@ -372,6 +372,15 @@ export function isWorkspacePath(pathname: string): boolean {
   return WORKSPACE_PATHS.includes(pathname.replace(/\/+$/, ""));
 }
 
+/**
+ * 正在看分頁本身(或清單頁展開某一張:`/purchases/12`):頁面主要按鈕放到分頁列最右邊、不再多一排大標題。
+ * 子頁(新增 / 編輯商品 `/products/12/edit`)照舊自己有標題。
+ */
+export function isTabPage(pathname: string, tab: string): boolean {
+  const p = pathname.replace(/\/+$/, "");
+  return p === tab || (p.startsWith(`${tab}/`) && /^\d+$/.test(p.slice(tab.length + 1)));
+}
+
 export interface NavMatch {
   module: NavModule;
   page: NavPage;

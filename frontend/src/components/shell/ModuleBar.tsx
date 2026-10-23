@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { isWorkspacePath, NavMatch } from "@/nav";
+import { isTabPage, isWorkspacePath, NavMatch } from "@/nav";
 
 /**
  * 頁面上方的分頁列:同一個入口底下的其他頁在這裡切換。
@@ -11,9 +11,12 @@ import { isWorkspacePath, NavMatch } from "@/nav";
 export function ModuleBar({
   match,
   pathname,
+  actionsRef,
 }: {
   match: NavMatch | null;
   pathname: string;
+  /** 頁面主要按鈕放的那一格(`moduleActions.ts`);只有正在看分頁本身時才有 */
+  actionsRef?: (el: HTMLDivElement | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const toolsRef = useRef<HTMLDivElement>(null);
@@ -68,6 +71,7 @@ export function ModuleBar({
           );
         })}
       </nav>
+      {isTabPage(pathname, page.to) && <div className="module-actions" ref={actionsRef} />}
       {module.tools && tools.length > 0 && (
         <div className="module-tools" ref={toolsRef}>
           <button

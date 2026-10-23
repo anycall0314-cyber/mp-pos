@@ -777,7 +777,7 @@ export function NewPhoneModelWizardPage() {
               />
               <div className="form-field-hint">
                 只記這支手機會配哪幾類配件,不會建立配件商品。
-                配件商品用「+ 新增配件」建,建好在那邊勾相容機型。
+                配件商品用「新增配件」建,建好在那邊勾相容機型。
               </div>
             </div>
 
@@ -949,7 +949,7 @@ export function NewPhoneModelWizardPage() {
                       </span>
                     ))}
                     <span style={{ marginLeft: 8 }}>
-                      不建立商品;配件用「+ 新增配件」建
+                      不建立商品;配件用「新增配件」建
                     </span>
                   </div>
                 )}
@@ -1053,7 +1053,7 @@ export function NewPhoneModelWizardPage() {
                     <>
                       {" "}
                       已記錄 <b>{created.accessory_slots.length}</b> 個相容配件類別,
-                      配件商品請用「+ 新增配件」建。
+                      配件商品請用「新增配件」建。
                     </>
                   )}{" "}
                   這次勾的品況已經有品項,進貨 / 收購時直接掛序號;沒勾的品況要用的時候再來新增。

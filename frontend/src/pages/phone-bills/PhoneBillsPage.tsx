@@ -174,7 +174,7 @@ export function PhoneBillsPage() {
             className="btn primary"
             onClick={() => setDrawerOpen(true)}
           >
-            + 新增代收
+            新增代收
           </button>
         }
       >

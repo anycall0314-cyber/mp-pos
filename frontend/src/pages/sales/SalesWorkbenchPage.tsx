@@ -42,6 +42,7 @@ import { useCan, useDefaultHandledBy, useDefaultWarehouse } from "@/auth/AuthCon
 import { InvoiceJumpDialog } from "@/components/invoice/InvoiceJumpDialog";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { SourcePicker, sourceOption } from "@/components/SourcePicker";
+import { EyeToggle } from "@/components/EyeToggle";
 import { memberPrefill, memberSource, nameLooksScanned, sourceAfterMemberChange, taxAfterMemberChange } from "@/lib/customerSources";
 import { sameCardNo, sameMember } from "@/lib/exactPick";
 import { taxMethodFor } from "@/lib/invoiceTracks";
@@ -2423,18 +2424,15 @@ export function SalesWorkbenchPage() {
         </span>
         <span className="ws-sub">
           業務員毛利 {marginHidden ? "•••" : money(estMargin)}{" "}
-          <button
-            type="button"
-            className="wb-link"
-            title="螢幕會給客人看到時先遮起來"
-            onClick={() => {
+          <EyeToggle
+            what="毛利"
+            hidden={marginHidden}
+            onToggle={() => {
               const next = !marginHidden;
               setMarginHidden(next);
               remember(SALES_MARGIN_KEY, next ? "1" : "0");
             }}
-          >
-            {marginHidden ? "顯示" : "遮住"}
-          </button>
+          />
         </span>
         {done && lines.length === 0 && (
           <span className="ws-sub ws-last">

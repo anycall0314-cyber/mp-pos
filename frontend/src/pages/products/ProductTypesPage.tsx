@@ -308,7 +308,7 @@ export function ProductTypesPage() {
               {bulkBusy ? "建立中…" : "一鍵建立全部常用類型"}
             </button>
             <button className="btn primary" onClick={() => startNew()}>
-              + 新增類型
+              新增類型
             </button>
           </>
         }

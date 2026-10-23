@@ -119,7 +119,7 @@ export function PlatformWarehousesTab() {
             setDrawerOpen(true);
           }}
         >
-          + 新增門市
+          新增門市
         </button>
       </div>
 

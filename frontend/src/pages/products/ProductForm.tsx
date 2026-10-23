@@ -1108,7 +1108,7 @@ export function ProductForm({
                     }}
                     title="新增品牌主檔"
                   >
-                    + 新增
+                    新增
                   </button>
                 </div>
               </Field>
@@ -1151,7 +1151,7 @@ export function ProductForm({
                     }}
                     title="新增此品牌的系列"
                   >
-                    + 新增
+                    新增
                   </button>
                 </div>
               </Field>

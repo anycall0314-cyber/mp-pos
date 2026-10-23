@@ -171,7 +171,7 @@ export function PlatformUsersTab() {
             setCreateOpen(true);
           }}
         >
-          + 新增用戶
+          新增用戶
         </button>
       </div>
 

@@ -387,7 +387,7 @@ export function ProductsPage() {
               className="btn primary"
               onClick={startCreatingCategory}
             >
-              + 新增類別
+              新增類別
             </button>
           )
         }

@@ -426,7 +426,7 @@ export function TelecomPlansPage() {
                 setDrawerOpen(true);
               }}
             >
-              + 新增方案
+              新增方案
             </button>
           </>
         }
@@ -504,7 +504,7 @@ export function TelecomPlansPage() {
           onSearch={setQuery}
           emptyDetailHint={
             (data ?? []).length === 0
-              ? canEdit ? "尚無方案,點右上「+ 新增方案」開始建立" : "尚無方案"
+              ? canEdit ? "尚無方案,點右上「新增方案」開始建立" : "尚無方案"
               : filtered.length === 0
                 ? `查無符合「${query}」的方案`
                 : "從左側選擇方案檢視詳細"

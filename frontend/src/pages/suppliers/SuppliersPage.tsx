@@ -177,7 +177,7 @@ export function SuppliersPage() {
         title="廠商"
         actions={
           <button className="btn primary" onClick={startNew}>
-            + 新增廠商
+            新增廠商
           </button>
         }
       />

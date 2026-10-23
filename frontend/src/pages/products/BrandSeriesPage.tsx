@@ -214,7 +214,7 @@ export function BrandSeriesPage() {
               </button>
             )}
             <button className="btn primary" onClick={startNewBrand}>
-              + 新增品牌
+              新增品牌
             </button>
           </>
         }
@@ -389,7 +389,7 @@ export function BrandSeriesPage() {
                 color: "var(--text-dim)",
               }}
             >
-              左側選一個品牌,或先按「+ 新增品牌」
+              左側選一個品牌,或先按「新增品牌」
             </div>
           ) : (
             <>
@@ -435,7 +435,7 @@ export function BrandSeriesPage() {
                   className="btn primary"
                   onClick={startNewSeries}
                 >
-                  + 新增系列
+                  新增系列
                 </button>
               </div>
 
@@ -590,7 +590,7 @@ export function BrandSeriesPage() {
                     color: "var(--text-dim)",
                   }}
                 >
-                  尚未建立系列。按右上「+ 新增系列」開始。
+                  尚未建立系列。按右上「新增系列」開始。
                 </div>
               )}
               {(series.data?.length ?? 0) > 0 && (

@@ -111,7 +111,7 @@ export function ConditionsPage() {
         title="商品品況"
         actions={
           <button className="btn primary" onClick={startNew}>
-            + 新增品況
+            新增品況
           </button>
         }
       />

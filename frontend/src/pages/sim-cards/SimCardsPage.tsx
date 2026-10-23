@@ -111,7 +111,7 @@ export function SimCardsPage() {
               setDrawerOpen(true);
             }}
           >
-            + 新增卡片
+            新增卡片
           </button>
         }
       />
@@ -126,7 +126,7 @@ export function SimCardsPage() {
           searchPlaceholder=""
           emptyDetailHint={
             (data ?? []).length === 0
-              ? "尚無 SIM 卡,點右上「+ 新增卡片」開始建立"
+              ? "尚無 SIM 卡,點右上「新增卡片」開始建立"
               : "從左側選擇卡片檢視詳細"
           }
         />

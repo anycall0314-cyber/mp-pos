@@ -44,7 +44,7 @@ export function PlatformVendorsTab() {
       <div className="pv-head">
         <h3>廠商</h3>
         <button className="btn primary" type="button" onClick={() => setEditing("new")}>
-          + 新增廠商
+          新增廠商
         </button>
       </div>
       {vendors.isLoading && <div className="md-empty">載入中…</div>}
@@ -140,7 +140,7 @@ function CategoryBlock({ rows, loading }: { rows: PlatformVendorCategory[]; load
         >
           <input value={name} maxLength={20} placeholder="新類別的名稱" onChange={(e) => setName(e.target.value)} />
           <button className="btn primary" type="submit" disabled={save.isPending || !name.trim()}>
-            + 新增類別
+            新增類別
           </button>
         </form>
       </div>
@@ -520,7 +520,7 @@ function PriceListDrawer({ vendor, onClose }: { vendor: PlatformVendor; onClose:
       >
         <input value={name} maxLength={200} placeholder="新品項的品名" onChange={(e) => setName(e.target.value)} />
         <button className="btn primary" type="submit" disabled={save.isPending || !name.trim()}>
-          + 新增品項
+          新增品項
         </button>
       </form>
 

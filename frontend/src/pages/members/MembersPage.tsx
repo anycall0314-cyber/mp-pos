@@ -182,7 +182,7 @@ export function MembersPage() {
             className="btn primary"
             onClick={() => setSelection({ kind: "new" })}
           >
-            + 新增會員
+            新增會員
           </button>
         }
       />

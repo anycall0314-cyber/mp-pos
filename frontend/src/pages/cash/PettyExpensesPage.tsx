@@ -181,7 +181,7 @@ export function PettyExpensesPage() {
                 setDrawerOpen(true);
               }}
             >
-              + 新增雜支
+              新增雜支
             </button>
           ) : null
         }
