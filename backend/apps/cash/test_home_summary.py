@@ -93,3 +93,32 @@ class HomeTodoTests(TestCase):
         alerts = self.get(self.c.admin)["repair_alerts"]
         self.assertEqual(alerts["overdue_repairs"]["count"], 12)
         self.assertEqual(len(alerts["overdue_repairs"]["items"]), 10)
+
+
+class LowStockSameEverywhereTests(TestCase):
+    """首頁、庫存查詢(都讀 home-summary)、庫存警示的「庫存不足」是同一套算法、同一個數字(owner 2026-10-23「改」)。
+    清倉中的不算不足(看清倉壓力)。"""
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()       # 首頁的庫存不足暫存一分鐘;每個測試從乾淨的開始
+
+    def test_home_and_alerts_list_the_same_products(self):
+        from apps.catalog.models import Product
+
+        c = Company("s", "同通訊行", "同")
+        c.purchase(case_qty=2)
+        Product.objects.filter(pk=c.case.pk).update(safety_stock=5)                     # 2 < 5:不足
+        Product.objects.filter(pk=c.phone.pk).update(safety_stock=1)                    # 0 < 1:斷貨
+        clear = Product.objects.create(tenant=c.tenant, category=c.cat_case, name="同 清倉皮套", requires_serial=False,
+                                       safety_stock=9, lifecycle_status=Product.LifecycleStatus.CLEARANCE)
+        home = c.admin.get(URL).json()["low_stock"]
+        alerts = c.admin.get("/api/v1/inventory-alerts/").json()
+        self.assertEqual(home["count"], alerts["counts"]["total"])
+        self.assertEqual([i["id"] for i in home["items"]], [r["id"] for r in alerts["rows"]][:10])
+        self.assertEqual(sorted(i["id"] for i in home["items"]), sorted([c.case.pk, c.phone.pk]))
+        self.assertNotIn(clear.pk, [r["id"] for r in alerts["rows"]])                  # 清倉的不在補貨警示
+        # 鎖門市的店員:兩邊都只算自己那一家
+        self.assertEqual(c.clerk.get(URL).json()["low_stock"]["count"],
+                         c.clerk.get("/api/v1/inventory-alerts/").json()["counts"]["total"])

@@ -67,7 +67,7 @@ export const NAV_MODULES: NavModule[] = [
     label: "進貨入庫",
     to: "/purchases",
     tabs: [
-      { to: "/purchases", label: "進貨單", aliases: ["進貨", "進貨作業"] },
+      { to: "/purchases", label: "進貨單據", aliases: ["進貨單", "進貨", "進貨作業"] },
       // 商品管理放在進貨這裡(2026-10-07 owner:建好品號的下一步就是進貨)。以前在「商品庫存」底下
       {
         to: "/products",

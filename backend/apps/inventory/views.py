@@ -548,27 +548,13 @@ def _annotate_stock(qs, serial_sq, balance_sq):
     )
 
 
-@api_view(["GET"])
-def inventory_alerts(request):
-    """庫存警示 API,回傳當前所有需要關注的商品。
+def alert_rows(tenant, wid, include_clearance=False):
+    """「庫存不足」只有這一套算法(2026-10-23 owner 選「改」:今日總覽、庫存查詢、庫存警示三處用同一個數字)。
 
-    觸發條件:
-    - active/replacing 商品 + qty < effective_safety(可動態 / 靜態)
-    - clearance 商品 + qty > 0
-
-    effective_safety 計算:
-    - 機型專屬配件 + 有關聯主機 → 動態公式
-      (Σ主機日均 × 配件購買率 × 補貨天數;任一主機 replacing 折半)
-    - 其他 → 靜態 safety_stock 欄位
-
-    推論 reason:
-    - out_of_stock / low_stock / host_hot_selling / host_replaced /
-      replacing_review / clearance_remain
+    - active/replacing 商品 + qty < effective_safety(機型專屬配件有關聯主機 → 動態公式;其他 → 靜態 safety_stock)
+    - include_clearance:清倉中還有庫存的也列(以前補貨警示會列;現在清倉的看「清倉壓力」那一頁,補貨警示不列)
+    回每一列(嚴重的在前、同一級數量少的在前)。
     """
-    tenant = request.tenant
-
-    wid = report_warehouse_id(request)
-
     serial_sq, balance_sq = _build_stock_annotation(tenant, wid)
 
     # 1. 撈所有可能進警示的候選商品(active/replacing/clearance)
@@ -609,7 +595,7 @@ def inventory_alerts(request):
         # 過濾:不符合警示條件的跳過
         is_clearance = p.lifecycle_status == Product.LifecycleStatus.CLEARANCE
         if is_clearance:
-            if p.stock <= 0:
+            if not include_clearance or p.stock <= 0:
                 continue
         else:
             if effective_safety <= 0:
@@ -682,7 +668,29 @@ def inventory_alerts(request):
 
     sev_rank = {"critical": 0, "warning": 1, "info": 2}
     rows.sort(key=lambda r: (sev_rank.get(r["severity"], 9), r["current_qty"]))
+    return rows
 
+
+
+
+@api_view(["GET"])
+def inventory_alerts(request):
+    """庫存警示 API(補貨警示),規則在 alert_rows();今日總覽、庫存查詢的「庫存不足」是同一份。
+
+    觸發條件:
+    - active/replacing 商品 + qty < effective_safety(可動態 / 靜態)
+    - 清倉中的商品不列(看「清倉壓力」;2026-10-23 起)
+
+    effective_safety 計算:
+    - 機型專屬配件 + 有關聯主機 → 動態公式
+      (Σ主機日均 × 配件購買率 × 補貨天數;任一主機 replacing 折半)
+    - 其他 → 靜態 safety_stock 欄位
+
+    推論 reason:
+    - out_of_stock / low_stock / host_hot_selling / host_replaced /
+      replacing_review / clearance_remain
+    """
+    rows = alert_rows(request.tenant, report_warehouse_id(request))
     counts = {
         "critical": sum(1 for r in rows if r["severity"] == "critical"),
         "warning": sum(1 for r in rows if r["severity"] == "warning"),

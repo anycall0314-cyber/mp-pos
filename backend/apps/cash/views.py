@@ -698,66 +698,30 @@ def home_summary(request):
     today_data = _revenue_count(today)
     yesterday_data = _revenue_count(yesterday)
 
-    # 低於安全庫存:safety_stock>0 AND stock < safety_stock
-    # 跟 catalog/views.py 同一 Subquery 模式
-    serial_filter = Q(
-        product=OuterRef("pk"),
-        status=ProductSerial.Status.IN_STOCK,
-    )
-    balance_filter = Q(product=OuterRef("pk"), tenant=tenant)
-    if wid is not None:
-        serial_filter &= Q(warehouse_id=wid)
-        balance_filter &= Q(warehouse_id=wid)
-    serial_sq = (
-        ProductSerial.objects.filter(serial_filter)
-        .order_by()
-        .values("product")
-        .annotate(c=Count("*"))
-        .values("c")[:1]
-    )
-    balance_sq = (
-        StockBalance.objects.filter(balance_filter)
-        .order_by()
-        .values("product")
-        .annotate(t=Sum("qty"))
-        .values("t")[:1]
-    )
-    # 安全庫存判定:取「人工 safety_stock」與「系統算出 dynamic_safety_stock」
-    # 兩者較大者。dynamic_safety_stock 已經考量 lifecycle(停產 / 清倉會是 0)
-    # 與配件主機帶動需求,所以不再用 lifecycle 過濾。
-    from django.db.models.functions import Greatest
-    low_qs = (
-        Product.objects.for_tenant(tenant)
-        .filter(
-            is_active=True,
-            is_virtual=False,
-        )
-        .annotate(
-            _sc=Coalesce(
-                Subquery(serial_sq, output_field=IntegerField()), Value(0)
-            ),
-            _bc=Coalesce(
-                Subquery(balance_sq, output_field=IntegerField()), Value(0)
-            ),
-            stock=F("_sc") + F("_bc"),
-            effective_safety=Greatest(F("safety_stock"), F("dynamic_safety_stock")),
-        )
-        .filter(effective_safety__gt=0, stock__lt=F("effective_safety"))
-        .order_by("stock", "name")
-    )
+    # 庫存不足:跟庫存警示同一套算法(2026-10-23 owner 選「改」:首頁、庫存查詢、庫存警示三處同一個數字;
+    # 以前這裡只看安全庫存與系統算的取大的,機型配件的動態算法沒有,三處對不起來)
+    # 首頁每 30 秒重抓;這套算法要把全部商品看一遍(手機玩家 1.3 萬個約 0.6 秒),首頁這邊暫存一分鐘
+    # (庫存警示那一頁照舊即時算)
+    from django.core.cache import cache
+
+    from apps.inventory.views import alert_rows
+
+    cache_key = f"home-low-stock:{tenant.pk}:{'all' if wid is None else wid}"
+    rows = cache.get(cache_key)
+    if rows is None:
+        rows = alert_rows(tenant, wid)
+        cache.set(cache_key, rows, 60)
     low_items = [
         {
-            "id": p.id,
-            "name": p.name,
-            "sku": p.sku,
-            "qty": int(p.stock),
-            "safety_stock": int(p.effective_safety),
-            "dynamic_safety_stock": p.dynamic_safety_stock,
-            "trend_ratio": str(p.trend_ratio),
+            "id": r["id"],
+            "name": r["name"],
+            "sku": r["sku"],
+            "qty": r["current_qty"],
+            "safety_stock": r["safety_stock"],
         }
-        for p in low_qs[:10]
+        for r in rows[:10]
     ]
-    low_count = low_qs.count()
+    low_count = len(rows)
 
     # 今日最新 5 筆銷貨單
     recent_qs = (
@@ -949,7 +913,7 @@ def _build_repair_alerts(tenant, wid):
         rows = []
         for r in qs.select_related("customer").order_by(F("completed_at").asc(nulls_first=True), "id")[:n]:
             # 完工日是 completed_at;若沒填(老資料)用 received_date
-            completed_d = r.completed_at.date() if r.completed_at else r.received_date
+            completed_d = timezone.localdate(r.completed_at) if r.completed_at else r.received_date
             rows.append(
                 {
                     "id": r.id,
