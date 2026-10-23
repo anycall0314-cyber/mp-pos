@@ -983,6 +983,8 @@ export function SettingsPage() {
           </table>
         )}
       </div>
+      {/* 版本(2026-10-23 從今日總覽搬來;UI 改善計劃 UI-10:技術資訊不放在工作的第一頁) */}
+      <div className="settings-version">版本 {__APP_VERSION__}</div>
     </div>
   );
 }

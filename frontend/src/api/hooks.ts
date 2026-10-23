@@ -511,10 +511,12 @@ export const useBusinessDailyReport = (
   });
 
 // 首頁總覽:今日 / 昨日營業額、低庫存、今日最新銷貨
-export const useHomeSummary = () =>
+/** `warehouse` = 沒鎖門市的帳號在首頁選的那一家(null = 全公司;鎖門市的伺服器一律算自己那一家) */
+export const useHomeSummary = (warehouse: number | null = null, enabled = true) =>
   useQuery({
-    queryKey: ["home-summary"],
-    queryFn: () => api<HomeSummary>("/home-summary/"),
+    enabled,
+    queryKey: ["home-summary", warehouse],
+    queryFn: () => api<HomeSummary>(warehouse ? `/home-summary/?warehouse=${warehouse}` : "/home-summary/"),
     // 每 30 秒重抓一次,讓首頁數字接近即時
     refetchInterval: 30000,
     refetchOnWindowFocus: true,

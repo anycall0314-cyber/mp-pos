@@ -823,8 +823,39 @@ def home_summary(request):
     if wid is not None:
         returned_qs = returned_qs.filter(warehouse_id=wid)
 
+    # 首頁的待辦(2026-10-23,UI 改善計劃 6.1):寄到這家(沒選門市 = 任何一家)還沒入庫的調撥、
+    # 還沒過帳的進貨匯入(跟進貨匯入那一頁同一個範圍:還沒指定門市的也算)、送出等核准的盤點單
+    from apps.identity.models import IntakeBatch
+    from apps.inventory.models import StockCount
+    from apps.transfers.models import TransferOrder
+
+    transfer_qs = TransferOrder.objects.for_tenant(tenant).filter(
+        status=TransferOrder.Status.DISPATCHED, is_void=False
+    )
+    intake_qs = IntakeBatch.objects.for_tenant(tenant).filter(
+        status__in=[IntakeBatch.Status.OPEN, IntakeBatch.Status.RESOLVED]
+    )
+    count_qs = StockCount.objects.for_tenant(tenant).filter(status=StockCount.Status.SUBMITTED)
+    if wid is not None:
+        transfer_qs = transfer_qs.filter(to_warehouse_id=wid)
+        intake_qs = intake_qs.filter(Q(warehouse_id=wid) | Q(warehouse__isnull=True))
+        count_qs = count_qs.filter(warehouse_id=wid)
+    transfer_items = [
+        {
+            "id": t.id,
+            "no": t.no,
+            "from_name": t.from_warehouse.name,
+            "to_name": t.to_warehouse.name,
+            "days": (today - timezone.localdate(t.created_at)).days,
+        }
+        for t in transfer_qs.select_related("from_warehouse", "to_warehouse").order_by("created_at", "id")[:3]
+    ]
+
     return Response(
         {
+            "transfers_pending": {"count": transfer_qs.count(), "items": transfer_items},
+            "intake_open": intake_qs.count(),
+            "counts_pending": count_qs.count(),
             "contracts_pending": contracts_pending,
             "returns_pending": returned_qs.count(),
             "warehouse_id": wid,
@@ -860,14 +891,8 @@ def _build_repair_alerts(tenant, wid):
         base = base.filter(warehouse_id=wid)
 
     # 1. 維修單逾期(預計完修日 < 今天 + 狀態 !=completed)
-    overdue_repairs = list(
-        base.filter(
-            expected_complete_date__lt=today,
-        )
-        .exclude(status=RepairOrder.Status.COMPLETED)
-        .select_related("customer")
-        .order_by("expected_complete_date")[:10]
-    )
+    overdue_qs = base.filter(expected_complete_date__lt=today).exclude(status=RepairOrder.Status.COMPLETED)
+    overdue_repairs = list(overdue_qs.select_related("customer").order_by("expected_complete_date")[:10])
     overdue_data = [
         {
             "id": r.id,
@@ -888,14 +913,13 @@ def _build_repair_alerts(tenant, wid):
     ]
 
     # 2. 委外超過預計取回日期
+    external_qs = base.filter(
+        mode=RepairOrder.Mode.EXTERNAL,
+        external_expected_pickup__lt=today,
+        status=RepairOrder.Status.SENT_EXTERNAL,
+    )
     overdue_external = list(
-        base.filter(
-            mode=RepairOrder.Mode.EXTERNAL,
-            external_expected_pickup__lt=today,
-            status=RepairOrder.Status.SENT_EXTERNAL,
-        )
-        .select_related("customer", "external_vendor")
-        .order_by("external_expected_pickup")[:10]
+        external_qs.select_related("customer", "external_vendor").order_by("external_expected_pickup")[:10]
     )
     external_data = [
         {
@@ -917,29 +941,28 @@ def _build_repair_alerts(tenant, wid):
         for r in overdue_external
     ]
 
-    # 3. 待取件超過 3 天
-    awaiting_pickup = list(
-        base.filter(
-            status=RepairOrder.Status.READY_PICKUP,
-            completed_at__date__lt=pickup_threshold,
-        )
-        .select_related("customer")
-        .order_by("completed_at")[:10]
-    )
-    # 完工日是 completed_at;若沒填(老資料)用 received_date
-    pickup_data = []
-    for r in awaiting_pickup:
-        completed_d = r.completed_at.date() if r.completed_at else r.received_date
-        pickup_data.append(
-            {
-                "id": r.id,
-                "no": r.no,
-                "customer_name": r.party.name if r.party else "",
-                "customer_phone": r.party.phone if r.party else "",
-                "host_model_name": r.host_model_name,
-                "ready_days": (today - completed_d).days,
-            }
-        )
+    # 3. 待取件:全部(`pickup`,首頁的待辦,放最久的在前)與超過 3 天的(`awaiting_pickup`)
+    ready_qs = base.filter(status=RepairOrder.Status.READY_PICKUP)
+    late_qs = ready_qs.filter(completed_at__date__lt=pickup_threshold)
+
+    def _pickup_rows(qs, n):
+        rows = []
+        for r in qs.select_related("customer").order_by(F("completed_at").asc(nulls_first=True), "id")[:n]:
+            # 完工日是 completed_at;若沒填(老資料)用 received_date
+            completed_d = r.completed_at.date() if r.completed_at else r.received_date
+            rows.append(
+                {
+                    "id": r.id,
+                    "no": r.no,
+                    "customer_name": r.party.name if r.party else "",
+                    "customer_phone": r.party.phone if r.party else "",
+                    "host_model_name": r.host_model_name,
+                    "ready_days": (today - completed_d).days if completed_d else 0,
+                }
+            )
+        return rows
+
+    pickup_data = _pickup_rows(late_qs, 10)
 
     # 4. 零件不足(零件倉 + 低於 safety_stock)
     serial_filter = Q(
@@ -996,16 +1019,20 @@ def _build_repair_alerts(tenant, wid):
 
     return {
         "overdue_repairs": {
-            "count": len(overdue_data),
+            "count": overdue_qs.count(),
             "items": overdue_data,
         },
         "overdue_external": {
-            "count": len(external_data),
+            "count": external_qs.count(),
             "items": external_data,
         },
         "awaiting_pickup": {
-            "count": len(pickup_data),
+            "count": late_qs.count(),
             "items": pickup_data,
+        },
+        "pickup": {
+            "count": ready_qs.count(),
+            "items": _pickup_rows(ready_qs, 3),
         },
         "parts_low_stock": {
             "count": len(parts_low_data),

@@ -1106,6 +1106,15 @@ export interface HomeSummary {
   contracts_pending?: number;
   /** 銷退退回來、還沒確認可賣(也還沒送廠商換貨)的手機有幾台 */
   returns_pending?: number;
+  /** 寄到這家(沒選門市 = 任何一家)還沒入庫的調撥;明細是最早寄的三張 */
+  transfers_pending?: {
+    count: number;
+    items: { id: number; no: string; from_name: string; to_name: string; days: number }[];
+  };
+  /** 還沒過帳的進貨匯入(還沒指定門市的也算) */
+  intake_open?: number;
+  /** 送出等核准的盤點單 */
+  counts_pending?: number;
   warehouse_id: number | null;
   warehouse_name: string;
   today: { revenue: number; sales_count: number };
@@ -1158,6 +1167,18 @@ export interface HomeSummary {
       }[];
     };
     awaiting_pickup: {
+      count: number;
+      items: {
+        id: number;
+        no: string;
+        customer_name: string;
+        customer_phone: string;
+        host_model_name: string;
+        ready_days: number;
+      }[];
+    };
+    /** 全部待取件(首頁的待辦);明細是放最久的三張 */
+    pickup?: {
       count: number;
       items: {
         id: number;

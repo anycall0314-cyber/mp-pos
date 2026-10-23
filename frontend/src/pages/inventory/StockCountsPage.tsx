@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { useOldUnitsLeft, useOpenStockCount, useStockCounts, useWarehouses } from "@/api/hooks";
 import type { Category } from "@/api/types";
@@ -36,7 +36,11 @@ function rememberStore(id: number) {
 export function StockCountsPage() {
   const navigate = useNavigate();
   const own = useDefaultWarehouse();
-  const { data, isLoading, isError, error } = useStockCounts();
+  const { data: allCounts, isLoading, isError, error } = useStockCounts();
+  // 今日總覽點「盤點待核准」過來帶 ?status=submitted
+  const [params] = useSearchParams();
+  const [onlySubmitted, setOnlySubmitted] = useState(() => params.get("status") === "submitted");
+  const data = onlySubmitted ? allCounts?.filter((c) => c.status === "submitted") : allCounts;
   const open = useOpenStockCount();
   const manager = isManager(useCurrentUser()?.profile?.role);
   const left = useOldUnitsLeft(manager);
@@ -87,12 +91,16 @@ export function StockCountsPage() {
         <button className="btn primary" type="button" disabled={!ready || open.isPending} onClick={() => void start().catch(() => undefined)}>
           開始盤點
         </button>
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <input type="checkbox" checked={onlySubmitted} onChange={(e) => setOnlySubmitted(e.target.checked)} />
+          只看待核准
+        </label>
       </div>
       {open.isError && <Banner kind="error" message={errorMessageOf(open.error)} />}
       {isError && <Banner kind="error" message={errorMessageOf(error)} />}
       <div className="report-table sr-table">
         {isLoading && <div className="md-empty">載入中…</div>}
-        {data && data.length === 0 && <div className="md-empty">還沒有盤點單</div>}
+        {data && data.length === 0 && <div className="md-empty">{onlySubmitted ? "沒有待核准的盤點單" : "還沒有盤點單"}</div>}
         {data && data.length > 0 && (
           <table className="report-grid">
             <thead>

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { useRepairOrders, useSaveRepairOrder } from "@/api/hooks";
 import { MoneyInput } from "@/components/MoneyInput";
 import { Toolbar } from "@/components/Toolbar";
+import { localDay } from "@/lib/fixedReports";
 import { intStr, money } from "@/lib/money";
 
 const STATUS_OPTIONS = [
@@ -85,14 +86,33 @@ const NUMBER_FMT = (v: string | number) =>
   money(v);
 
 export function RepairsPage() {
-  const [status, setStatus] = useState("");
+  // 今日總覽點過來帶的條件:?status=ready_pickup(待取件)、?overdue=1(預計完修日過了還沒完成)、
+  // ?overdue=external(委外超過預計取回日還沒取回;跟首頁「委外單逾期」同一條)
+  const [params] = useSearchParams();
+  const [status, setStatus] = useState(() => {
+    const v = params.get("status") ?? "";
+    return STATUS_OPTIONS.some((o) => o.v === v) ? v : "";
+  });
   const [mode, setMode] = useState("");
   const [returnVisitOnly, setReturnVisitOnly] = useState(false);
+  const [overdue, setOverdue] = useState<"" | "1" | "external">(() => {
+    const v = params.get("overdue");
+    return v === "1" || v === "external" ? v : "";
+  });
   const { data, isLoading } = useRepairOrders({ status, mode });
   const all = data ?? [];
-  const rows = returnVisitOnly
-    ? all.filter((r) => r.is_return_visit)
-    : all;
+  const today = localDay();
+  const late = (r: (typeof all)[number]) =>
+    overdue === "external"
+      ? r.mode === "external" && r.status === "sent_external" && !!r.external_expected_pickup && r.external_expected_pickup < today
+      : !!r.expected_complete_date && r.expected_complete_date < today && r.status !== "completed";
+  const rows = all.filter(
+    (r) =>
+      (!returnVisitOnly || r.is_return_visit) &&
+      // 挑了狀態 / 逾期時作廢的不算(跟今日總覽的件數一樣)
+      ((!status && !overdue) || !r.is_void) &&
+      (!overdue || late(r)),
+  );
   const returnVisitCount = all.filter((r) => r.is_return_visit).length;
   const save = useSaveRepairOrder();
 
@@ -106,7 +126,7 @@ export function RepairsPage() {
         title="維修單"
         actions={
           <Link to="/repairs/new" className="btn primary">
-            + 建立維修單
+            建立維修單
           </Link>
         }
       />
@@ -138,6 +158,16 @@ export function RepairsPage() {
             onChange={(e) => setReturnVisitOnly(e.target.checked)}
           />
           僅看返修
+        </label>
+        <label
+          style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+        >
+          <input
+            type="checkbox"
+            checked={!!overdue}
+            onChange={(e) => setOverdue(e.target.checked ? "1" : "")}
+          />
+          僅看逾期
         </label>
         <span className="list-filterbar-count">
           {rows.length} 筆

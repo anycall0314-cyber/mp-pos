@@ -251,7 +251,8 @@ export function TransferWorkbenchPage() {
   /** 上一次送出時連線中斷,不確定有沒有成立:再送要多按一次 */
   const [unsure, setUnsure] = useState(false);
   // 最近調撥那一塊的狀態
-  const [onlyPending, setOnlyPending] = useState(false);
+  // 今日總覽點「調撥待入庫」過來帶 ?pending=1
+  const [onlyPending, setOnlyPending] = useState(() => searchParams.get("pending") === "1");
   const [day, setDay] = useState("");
   const [showAll, setShowAll] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(focusId);
