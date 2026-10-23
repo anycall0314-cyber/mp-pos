@@ -99,6 +99,8 @@ export function MembersPage() {
       setSearchParams(next, { replace: true });
     }
   }, [selection]);
+  /** 剛剛點開消費紀錄的那一位(名單上標起來,回到這一頁知道看到哪裡) */
+  const [viewed, setViewed] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -218,6 +220,7 @@ export function MembersPage() {
                       <th>姓名</th>
                       <th style={{ width: 120 }}>電話</th>
                       <th style={{ width: 90 }}>會員號</th>
+                      <th style={{ width: 84 }} aria-label="編輯" />
                     </tr>
                   </thead>
                   <tbody>
@@ -225,13 +228,13 @@ export function MembersPage() {
                       <tr
                         key={m.id}
                         onClick={() => {
-                          // 右邊編輯這一位,消費紀錄在另一個分頁、留在這一頁(owner 2026-10-20)
-                          setPicked(m);
-                          setSelection({ kind: "member", id: m.id });
+                          // 點一位 = 只在另一個分頁看消費紀錄,這一頁維持整頁名單(owner 2026-10-23「清單一直整頁」;
+                          // 10-20 是點了同時開右邊編輯,點完回來版面變成左右兩欄,他覺得奇怪)
+                          setViewed(m.id);
                           showMemberHistory(m.id);
                         }}
                         className={
-                          selection?.kind === "member" && selection.id === m.id
+                          (selection?.kind === "member" ? selection.id === m.id : viewed === m.id)
                             ? "selected"
                             : ""
                         }
@@ -241,18 +244,32 @@ export function MembersPage() {
                           {m.phone || "—"}
                         </td>
                         <td style={{ color: "var(--text-dim)" }}>{m.code}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn pc-row-edit"
+                            onClick={(e) => {
+                              // 要改資料才開右邊(不另外開消費紀錄)
+                              e.stopPropagation();
+                              setPicked(m);
+                              setSelection({ kind: "member", id: m.id });
+                            }}
+                          >
+                            編輯
+                          </button>
+                        </td>
                       </tr>
                     ))}
                     {members.length === 0 && (
                       <tr>
-                        <td colSpan={3} className="md-empty">
-                          {search ? "查無會員" : "尚無會員"}
+                        <td colSpan={4} className="md-empty">
+                          {search ? "查無會員" : "還沒有會員"}
                         </td>
                       </tr>
                     )}
                     {cut && (
                       <tr>
-                        <td colSpan={3} className="md-empty">
+                        <td colSpan={4} className="md-empty">
                           {cut}
                         </td>
                       </tr>

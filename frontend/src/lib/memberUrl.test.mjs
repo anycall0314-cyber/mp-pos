@@ -27,9 +27,12 @@ test("分頁標題寫會員名字,還沒讀到寫「會員」", () => {
   assert.equal(memberTabTitle(""), "會員");
 });
 
-test("名單點一位:右邊編輯這一位,同時開新分頁看消費紀錄", () => {
+test("名單點一位:只開消費紀錄分頁、名單維持整頁;按那一列的「編輯」才開右邊(owner 2026-10-23)", () => {
   const page = read("../pages/members/MembersPage.tsx");
-  assert.match(page, /setSelection\(\{ kind: "member", id: m\.id \}\);\s*showMemberHistory\(m\.id\);/);
+  assert.match(page, /setViewed\(m\.id\);\s*showMemberHistory\(m\.id\);/);
+  assert.match(page, /e\.stopPropagation\(\);\s*setPicked\(m\);\s*setSelection\(\{ kind: "member", id: m\.id \}\);/);
+  // 點名字那一下不能再打開右邊的編輯(10-20 的做法)
+  assert.doesNotMatch(page, /setSelection\(\{ kind: "member", id: m\.id \}\);\s*showMemberHistory/);
   assert.ok(!page.includes("window.open"), "不自己開分頁,一律走 showMemberHistory");
   assert.match(read("../App.tsx"), /<Route path="\/members\/:id" element=\{<MemberHistoryPage \/>\} \/>/);
 });

@@ -8456,3 +8456,9 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   font-size: var(--font-section);
 }
 .pc-layout.list-only > .pc-detail { display: none; }
+
+/* 名單那一列最後的「編輯」(會員頁:點名字只看消費紀錄,要改資料按這顆) */
+.pc-list-table .pc-row-edit {
+  min-height: 32px;
+  padding: 2px 12px;
+}
