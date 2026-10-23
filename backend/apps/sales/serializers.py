@@ -208,6 +208,8 @@ class SalesOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSeri
     )
     # 誰作廢的(帳號);沒作廢、或有這一欄之前就作廢的 = 空的
     voided_by_name = serializers.SerializerMethodField()
+    # 退過了:那張沒作廢的銷退單號(沒退過 = 空的;全站檢視 A7)
+    return_no = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesOrder
@@ -242,6 +244,7 @@ class SalesOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSeri
             "is_void",
             "voided_at",
             "voided_by_name",
+            "return_no",
             "subtotal",
             "tax_amount",
             "total",
@@ -274,6 +277,12 @@ class SalesOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSeri
             "created_at",
             "updated_at",
         ]
+
+    def get_return_no(self, so) -> str:
+        active = getattr(so, "active_returns", None)
+        if active is None:      # 沒有預先載入(剛建好的單)
+            active = list(so.returns.filter(is_void=False).only("no")[:1]) if so.pk else []
+        return active[0].no if active else ""
 
     def get_voided_by_name(self, so) -> str:
         """這家公司自己的帳號寫帳號名稱;不是這家公司的人(平台管理員代為操作)只寫「平台管理員」,

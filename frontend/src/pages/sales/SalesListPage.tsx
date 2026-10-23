@@ -340,7 +340,8 @@ export function SalesListPage() {
                 列印發票
               </button>
             )}
-            {!t.is_void && canReturn && (
+            {/* 退過的單不能再退、也不能作廢(要先作廢那張銷退;全站檢視 A7) */}
+            {!t.is_void && !t.return_no && canReturn && (
               <button
                 type="button"
                 className="wb-btn small"
@@ -354,7 +355,7 @@ export function SalesListPage() {
                 整張銷退
               </button>
             )}
-            {!t.is_void && canVoid && (
+            {!t.is_void && !t.return_no && canVoid && (
               <ArmButton
                 label="作廢"
                 className="wb-btn danger small"
@@ -401,6 +402,7 @@ export function SalesListPage() {
               <div className="wb-xfer-card-head">
                 <span className={t.is_void ? "wb-dim" : "pname"}>{t.no}</span>
                 {t.is_void && <span className="wb-badge">已作廢</span>}
+                {!t.is_void && t.return_no && <span className="wb-badge warn">已退 {t.return_no}</span>}
                 {t.is_void && voidStamp(t) && <span className="wb-dim wb-small">{voidStamp(t)}</span>}
                 <span className="wb-dim wb-small">
                   {t.doc_date} {clock(t.created_at)}
@@ -475,6 +477,7 @@ export function SalesListPage() {
                 <div className="wb-xfer-card-head">
                   <span className={t.is_void ? "wb-dim" : "pname"}>{t.no}</span>
                   {t.is_void && <span className="wb-badge">已作廢</span>}
+                  {!t.is_void && t.return_no && <span className="wb-badge warn">已退</span>}
                   {t.is_void && voidStamp(t) && <span className="wb-dim wb-small">{voidStamp(t)}</span>}
                   <span className="wb-dim wb-small">
                     {t.doc_date.slice(5)} {clock(t.created_at)}
@@ -551,6 +554,8 @@ export function SalesListPage() {
                     <td className="keep">
                       {t.is_void ? (
                         <span className="wb-badge">已作廢</span>
+                      ) : t.return_no ? (
+                        <span className="wb-badge warn" title={t.return_no}>已退</span>
                       ) : (
                         <span className="wb-badge ok">已完成</span>
                       )}

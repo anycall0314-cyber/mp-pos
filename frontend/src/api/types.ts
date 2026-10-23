@@ -776,6 +776,8 @@ export interface SalesOrder {
   /** 作廢的那一刻與誰按的(伺服器在作廢當下記的;沒作廢、或以前作廢沒有記到的 = 空的) */
   voided_at: string | null;
   voided_by_name: string;
+  /** 退過了:那張沒作廢的銷退單號(沒退過 = 空的) */
+  return_no?: string;
   subtotal: string;
   tax_amount: string;
   total: string;

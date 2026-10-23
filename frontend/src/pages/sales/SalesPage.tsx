@@ -2,7 +2,7 @@ import { useCan } from "@/auth/AuthContext";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { useSalesReturns } from "@/api/hooks";
+import { usePaymentMethods, useSalesReturns } from "@/api/hooks";
 import { AppliedFilters } from "@/components/AppliedFilters";
 import { Toolbar } from "@/components/Toolbar";
 import { money } from "@/lib/money";
@@ -24,6 +24,9 @@ export function SalesReturnsPage() {
   const [from, setFrom] = useState<string>(today);
   const [to, setTo] = useState<string>(today);
   const returns = useSalesReturns({ from, to });
+  // 退款方式顯示名稱,不顯示代碼(全站檢視 A7:以前寫 cash、card)
+  const methods = usePaymentMethods();
+  const methodName = (code: string) => (methods.data ?? []).find((m) => m.code === code)?.name ?? code;
 
   return (
     <div className="page">
@@ -106,7 +109,7 @@ export function SalesReturnsPage() {
                     <th>單號</th>
                     <th>日期</th>
                     <th>原銷貨單</th>
-                    <th>來源</th>
+                    <th>會員</th>
                     <th>門市</th>
                     <th>退款方式</th>
                     <th className="num">退款額</th>
@@ -122,11 +125,11 @@ export function SalesReturnsPage() {
                       <td>{sr.no}</td>
                       <td>{sr.doc_date}</td>
                       <td>{sr.original_so_no}</td>
-                      <td>{sr.customer_name || "(直客)"}</td>
+                      <td>{sr.member_name || "非會員"}</td>
                       <td>
                         {sr.warehouse_code} {sr.warehouse_name}
                       </td>
-                      <td>{sr.payment_method}</td>
+                      <td>{sr.payment_method ? methodName(sr.payment_method) : "—"}</td>
                       <td className="num">
                         {money(sr.total)}
                       </td>
@@ -135,7 +138,7 @@ export function SalesReturnsPage() {
                   {(returns.data ?? []).length === 0 && (
                     <tr>
                       <td colSpan={7} className="md-empty">
-                        此區間無銷退單
+                        這段期間沒有銷退單
                       </td>
                     </tr>
                   )}

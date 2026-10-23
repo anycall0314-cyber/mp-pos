@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Count, Max, Sum
+from django.db.models import Count, Max, Prefetch, Sum
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -86,6 +86,9 @@ class SalesOrderViewSet(
         "customer__code",
         "customer__name",
         "customer__phone",
+        # 會員(實際的那個人):客人拿手機回來退,店員只知道電話 / 名字(全站檢視 A5)
+        "member__name",
+        "member__phone",
         "invoice_no",
         "note",
     ]
@@ -103,7 +106,7 @@ class SalesOrderViewSet(
     }
 
     def get_queryset(self):
-        return (
+        qs = (
             SalesOrder.objects.for_tenant(self.request.tenant)
             .select_related("customer", "member", "warehouse", "voided_by__profile")
             .prefetch_related(
@@ -111,8 +114,19 @@ class SalesOrderViewSet(
                 "items__sim_card",
                 "items__serials__serial",
                 "payments",
+                # 這張單有沒有退過(沒作廢的銷退;清單上標「已退」、收起整張銷退與作廢)
+                Prefetch("returns", queryset=SalesReturn.objects.filter(is_void=False).only("id", "no", "original_so_id"),
+                         to_attr="active_returns"),
             )
         )
+        # ?code=:刷手機的 IMEI / 序號(完全相同)找賣出那一台的那張單(全站檢視 A5:找原單來退)
+        code = self.request.query_params.get("code", "").strip()
+        if code:
+            from apps.inventory.identifiers import find_serial_ids
+
+            ids = find_serial_ids(self.request.tenant, code)
+            qs = qs.filter(items__serials__serial_id__in=ids).distinct()
+        return qs
 
     def perform_create(self, serializer):
         user = (

@@ -658,13 +658,24 @@ export async function fetchInStockSerials(
 export async function searchSalesOrdersForReturn(
   query: string,
 ): Promise<ComboOption<SalesOrder>[]> {
-  const data = await fetchPaginated<SalesOrder>(
-    `/sales-orders/?${qs({ search: query, is_void: false, page_size: LIMIT })}`,
-  );
-  return data.map((so) => ({
-    id: so.id,
-    label: so.no,
-    secondary: [so.doc_date, so.customer_name || "(直客)"].join(" / "),
-    payload: so,
-  }));
+  // 客人拿手機回來退:打單號、會員電話 / 姓名、或刷那一台的 IMEI / 序號(完全相同)都找得到(全站檢視 A5)
+  const q = query.trim();
+  const looksLikeCode = /^[A-Za-z0-9-]{6,}$/.test(q);
+  const [bySearch, byCode] = await Promise.all([
+    fetchPaginated<SalesOrder>(`/sales-orders/?${qs({ search: q, is_void: false, page_size: LIMIT })}`),
+    looksLikeCode
+      ? fetchPaginated<SalesOrder>(`/sales-orders/?${qs({ code: q, is_void: false, page_size: LIMIT })}`)
+      : Promise.resolve([] as SalesOrder[]),
+  ]);
+  const seen = new Set<number>();
+  return [...byCode, ...bySearch]
+    .filter((so) => (seen.has(so.id) ? false : (seen.add(so.id), true)))
+    .map((so) => ({
+      id: so.id,
+      label: so.no,
+      secondary: [so.doc_date, so.member_name || so.customer_name || "直客", so.return_no ? `已退 ${so.return_no}` : ""]
+        .filter(Boolean)
+        .join(" / "),
+      payload: so,
+    }));
 }
