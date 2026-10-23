@@ -44,8 +44,8 @@ function formatMoney(value: string | number) {
 
 function flagText(p: Product) {
   const flags: string[] = [];
-  if (p.requires_serial) flags.push("追序號");
-  if (p.allows_telecom_line) flags.push("可綁約");
+  if (p.requires_serial) flags.push("需追蹤序號");
+  if (p.allows_telecom_line) flags.push("可綁門號合約");
   if (p.allows_commission) flags.push("可佣金");
   return flags.length > 0 ? flags.join(" / ") : "純商品";
 }
@@ -58,7 +58,6 @@ type Selection =
   | null;
 
 interface CategoryEditState {
-  code: string;
   name: string;
   is_active: boolean;
   is_secondhand_default: boolean;
@@ -74,7 +73,6 @@ const SHARE_OPTIONS: { key: SharePart | "none"; label: string }[] = [
 ];
 
 interface CategoryNewState {
-  code: string;
   name: string;
   sort_order: string;
   is_active: boolean;
@@ -83,7 +81,6 @@ interface CategoryNewState {
 }
 
 const EMPTY_NEW_CAT: CategoryNewState = {
-  code: "",
   name: "",
   sort_order: "",
   is_active: true,
@@ -189,7 +186,6 @@ export function ProductsPage() {
   // ─── 類別編輯(右側面板 inline form)
   const saveCategory = useSaveCategory();
   const [catEdit, setCatEdit] = useState<CategoryEditState>({
-    code: "",
     name: "",
     is_active: true,
     is_secondhand_default: false,
@@ -207,7 +203,6 @@ export function ProductsPage() {
   useEffect(() => {
     if (!selectedCategory) return;
     setCatEdit({
-      code: selectedCategory.code,
       name: selectedCategory.name,
       is_active: selectedCategory.is_active,
       is_secondhand_default: selectedCategory.is_secondhand_default,
@@ -223,7 +218,6 @@ export function ProductsPage() {
     try {
       await saveCategory.mutateAsync({
         id: selectedCategory.id,
-        code: catEdit.code.trim().toUpperCase(),
         name: catEdit.name.trim(),
         is_active: catEdit.is_active,
         is_secondhand_default: catEdit.is_secondhand_default,
@@ -245,10 +239,10 @@ export function ProductsPage() {
   }
 
   async function saveNewCategory() {
-    const code = catNew.code.trim().toUpperCase();
+    // 代碼(品號開頭)系統給(全站檢視 D6)
     const name = catNew.name.trim();
-    if (!code || !name) {
-      setCatNewError("代碼與名稱必填");
+    if (!name) {
+      setCatNewError("要填名稱");
       return;
     }
     if (!catNew.kind) {
@@ -264,7 +258,6 @@ export function ProductsPage() {
         : 10;
     try {
       await saveCategory.mutateAsync({
-        code,
         name,
         sort_order,
         is_active: catNew.is_active,
@@ -637,7 +630,7 @@ export function ProductsPage() {
               <input
                 value={categoryQuery}
                 onChange={(e) => setCategoryQuery(e.target.value)}
-                placeholder="輸入代碼 / 名稱 過濾"
+                placeholder="搜尋類別"
               />
             </div>
             <div className="pc-section-body">
@@ -648,7 +641,6 @@ export function ProductsPage() {
                     <th className="num" style={{ width: 44 }}>
                       序
                     </th>
-                    <th style={{ width: 70 }}>代碼</th>
                     <th>名稱</th>
                   </tr>
                 </thead>
@@ -696,7 +688,6 @@ export function ProductsPage() {
                       >
                         <td className="drag-handle">≡</td>
                         <td className="num">{c.sort_order}</td>
-                        <td>{c.code}</td>
                         <td>
                           {c.name}
                           {!c.is_active && (
@@ -799,10 +790,9 @@ export function ProductsPage() {
                     </dd>
                     <dt>類別</dt>
                     <dd>
-                      {selectedProduct.category_code}{" "}
                       {selectedProduct.category_name}
                     </dd>
-                    <dt>建議零售價</dt>
+                    <dt>售價</dt>
                     <dd>{formatMoney(selectedProduct.list_price)}</dd>
                     <dt>加權平均成本</dt>
                     <dd>{formatMoney(selectedProduct.weighted_avg_cost)}</dd>
@@ -863,33 +853,6 @@ export function ProductsPage() {
               )}
               <dl>
                 <dt>
-                  代碼 <span style={{ color: "var(--danger-text)" }}>*</span>
-                </dt>
-                <dd>
-                  <input
-                    value={catNew.code}
-                    onChange={(e) =>
-                      setCatNew((s) => ({
-                        ...s,
-                        code: e.target.value.toUpperCase(),
-                      }))
-                    }
-                    maxLength={8}
-                    placeholder="例:PH / AC / TB"
-                    style={{ width: 140 }}
-                    autoFocus
-                  />
-                  <span
-                    style={{
-                      color: "var(--text-dim)",
-                      fontSize: 14,
-                      marginLeft: 8,
-                    }}
-                  >
-                    2–4 個英數字,會作為品號前綴
-                  </span>
-                </dd>
-                <dt>
                   名稱 <span style={{ color: "var(--danger-text)" }}>*</span>
                 </dt>
                 <dd>
@@ -898,6 +861,7 @@ export function ProductsPage() {
                     onChange={(e) =>
                       setCatNew((s) => ({ ...s, name: e.target.value }))
                     }
+                    autoFocus
                     maxLength={80}
                     placeholder="例:手機 / 配件"
                     style={{ width: 260 }}
@@ -996,25 +960,11 @@ export function ProductsPage() {
           {selectedCategory && (
             <div className="pc-detail-body">
               <h3 className="pc-detail-title">
-                類別 · {selectedCategory.code} {selectedCategory.name}
+                類別 · {selectedCategory.name}
               </h3>
               {catError && <Banner kind="error" message={catError} />}
               {catSavedFlash && <Banner kind="success" message="已儲存" />}
               <dl>
-                <dt>代碼</dt>
-                <dd>
-                  <input
-                    value={catEdit.code}
-                    onChange={(e) =>
-                      setCatEdit((s) => ({
-                        ...s,
-                        code: e.target.value.toUpperCase(),
-                      }))
-                    }
-                    maxLength={8}
-                    style={{ width: 120 }}
-                  />
-                </dd>
                 <dt>名稱</dt>
                 <dd>
                   <input

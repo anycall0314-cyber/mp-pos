@@ -9,7 +9,7 @@ import { useCurrentUser } from "@/auth/AuthContext";
 import { errorText } from "@/lib/errorText";
 
 const KIND_LABELS: Record<AliasKind, string> = {
-  barcode: "條碼(GTIN/EAN/UPC)",
+  barcode: "條碼",
   vendor_sku: "廠商料號",
   vendor_name: "廠商品名",
   oem_model: "原廠型號",

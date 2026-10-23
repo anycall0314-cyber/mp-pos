@@ -290,7 +290,7 @@ export function ProductTypesPage() {
   return (
     <div className="page">
       <Toolbar
-        title="產品類型管理"
+        title="產品類型"
         actions={
           <>
             <button

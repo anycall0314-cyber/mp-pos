@@ -94,7 +94,7 @@ export function ProductFormPage() {
                 className="btn primary"
                 onClick={() => {
                   setNextCategory(
-                    saved.category ? { id: saved.category, label: saved.category_name, secondary: saved.category_code } : null,
+                    saved.category ? { id: saved.category, label: saved.category_name, secondary: "" } : null,
                   );
                   setSaved(null);
                   setRound((r) => r + 1);

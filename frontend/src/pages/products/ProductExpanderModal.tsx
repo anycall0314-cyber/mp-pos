@@ -630,11 +630,7 @@ export function ProductExpanderModal({
             </Field>
             <Field
               label={`售價(對應${axis1Label || "軸 1"})`}
-              hint={
-                pricesText.trim()
-                  ? "可在下方表格逐筆覆寫"
-                  : "留空 = 建議零售價填 0,建議至少統一輸入一個"
-              }
+              hint={pricesText.trim() ? undefined : "留空 = 售價 0"}
             >
               <input
                 value={pricesText}
@@ -669,7 +665,7 @@ export function ProductExpanderModal({
                 if (v !== requiresSerial) setSerialTouched(true);
                 setRequiresSerial(v);
               }}
-              label="需追蹤序號(手機/平板=勾)"
+              label="需追蹤序號"
             />
             <Checkbox
               checked={allowsTelecomLine}

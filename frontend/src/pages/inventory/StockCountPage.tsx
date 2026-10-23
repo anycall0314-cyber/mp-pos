@@ -870,7 +870,7 @@ export function StockCountPage() {
         open={finding !== null}
         initialText={finding ?? ""}
         // 盤點單裡沒有地方「過去看」:停用的也是「使用這款」,按了由這一頁講
-        inactiveLabel="使用這款"
+        inactiveLabel="就用這個"
         // 盲盤:候選不寫帳上數量(複審 P1)
         hideStock
         peeking={peek.isOpen}

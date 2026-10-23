@@ -91,7 +91,7 @@ function CandidateRow({
           disabled={busy}
           onClick={() => onUseExisting(c)}
         >
-          就是這個
+          就用這個
         </button>
       )}
     </div>

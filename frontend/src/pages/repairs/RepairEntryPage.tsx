@@ -1148,7 +1148,7 @@ function RepairEntryForm() {
                       <table className="re-parts-table">
                         <thead>
                           <tr>
-                            <th>品名 / SKU</th>
+                            <th>品名 / 品號</th>
                             <th style={{ width: 90 }}>數量</th>
                             <th style={{ width: 110 }} className="num">
                               單位成本

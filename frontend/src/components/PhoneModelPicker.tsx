@@ -154,7 +154,7 @@ export function PhoneModelPicker({
                       {lifecycleLabel(opt.any_lifecycle_status)}
                     </span>
                     {"  "}
-                    {opt.sku_count} 款 SKU
+                    {opt.sku_count} 個品項
                   </span>
                 </li>
               ))}

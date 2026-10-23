@@ -262,7 +262,7 @@ export function BulkEditProductsModal({
             {enPrice && (
               <div className="be-section-body">
                 <label>
-                  建議零售價
+                  售價
                   <MoneyInput
                     min="0"
                     value={listPrice}

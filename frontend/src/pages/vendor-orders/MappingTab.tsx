@@ -194,7 +194,7 @@ export function MappingTab({ link }: { link: VendorLinkRow }) {
         initialText={target ? findText(target) : ""}
         from={{ supplierId: list.data?.supplier?.id ?? "" }}
         // 停用的也列出來(人才看得到已經有一個);按了由這一頁講不能連
-        inactiveLabel="使用這款"
+        inactiveLabel="就用這個"
         peeking={peek.isOpen}
         onPeek={peek.open}
         onClose={closeAll}

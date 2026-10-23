@@ -293,7 +293,7 @@ test("複審:先記下連按兩次只送一次;盤點裡開的先找 / 可能已
   assert.match(page, /async function saveLine\(\) \{\s*if \(saving\.current\) return;\s*saving\.current = true;/);
   // 鎖要在提早 return 之前宣告(hooks 規則)
   assert.ok(page.indexOf("const saving = useRef(false);") < page.indexOf("if (isLoading) return"));
-  assert.match(page, /inactiveLabel="使用這款"\s*\/\/[^\n]*\n\s*hideStock/);
+  assert.match(page, /inactiveLabel="就用這個"\s*\/\/[^\n]*\n\s*hideStock/);
   assert.match(page, /draftKey="modal-draft:product-form-stocktake"\s*hideStock/);
   const ff = read("../pages/products/FindFirstPanel.tsx");
   assert.match(ff, /rowWhy\(row, hideStock\)/);

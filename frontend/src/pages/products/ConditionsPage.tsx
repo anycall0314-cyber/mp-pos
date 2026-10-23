@@ -155,22 +155,6 @@ export function ConditionsPage() {
 
             <div className="form-row-2col">
               <div className="form-field" style={{ marginBottom: 0 }}>
-                <label className="form-field-label" htmlFor="cd-code">
-                  品況代碼
-                </label>
-                <input
-                  id="cd-code"
-                  value={editing.code}
-                  onChange={(e) =>
-                    setEditing({ ...editing, code: e.target.value })
-                  }
-                  placeholder="留空自動產生"
-                />
-                <div className="form-field-hint">
-                  留空時依名稱自動產,例:全新 → brand-new
-                </div>
-              </div>
-              <div className="form-field" style={{ marginBottom: 0 }}>
                 <label className="form-field-label" htmlFor="cd-sort">
                   顯示排序
                 </label>
@@ -312,7 +296,6 @@ export function ConditionsPage() {
             <thead>
               <tr>
                 <th style={{ width: 60 }}>排序</th>
-                <th style={{ width: 160 }}>代碼</th>
                 <th>名稱</th>
                 <th style={{ width: 110, textAlign: "center" }}>
                   視為中古機
@@ -329,9 +312,6 @@ export function ConditionsPage() {
               {(conditions.data ?? []).map((c) => (
                 <tr key={c.id}>
                   <td>{c.sort_order}</td>
-                  <td>
-                    <code style={{ fontSize: 14 }}>{c.code}</code>
-                  </td>
                   <td>
                     <b>{c.name}</b>
                   </td>

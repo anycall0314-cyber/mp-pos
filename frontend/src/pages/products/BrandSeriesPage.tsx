@@ -199,7 +199,7 @@ export function BrandSeriesPage() {
   return (
     <div className="page">
       <Toolbar
-        title="品牌 / 系列管理"
+        title="品牌系列"
         actions={
           <>
             {canImport && (
@@ -269,15 +269,6 @@ export function BrandSeriesPage() {
             >
               <div className="pt-list-name">
                 {b.name}
-                <span
-                  style={{
-                    marginLeft: 6,
-                    color: "var(--text-dim)",
-                    fontSize: 14,
-                  }}
-                >
-                  ({b.code})
-                </span>
               </div>
               <div className="pt-list-meta">
                 {b.series_count ?? 0} 個系列
@@ -318,14 +309,6 @@ export function BrandSeriesPage() {
                     setEditingBrand({ ...editingBrand, name_en: e.target.value })
                   }
                   style={{ flex: "1 1 160px" }}
-                />
-                <input
-                  placeholder="代碼(留空自動產)"
-                  value={editingBrand.code}
-                  onChange={(e) =>
-                    setEditingBrand({ ...editingBrand, code: e.target.value })
-                  }
-                  style={{ flex: "0 0 160px" }}
                 />
                 <input
                   type="number"
@@ -495,17 +478,6 @@ export function BrandSeriesPage() {
                       }
                       style={{ flex: "1 1 200px" }}
                     />
-                    <input
-                      placeholder="代碼(留空自動產)"
-                      value={editingSeries.code}
-                      onChange={(e) =>
-                        setEditingSeries({
-                          ...editingSeries,
-                          code: e.target.value,
-                        })
-                      }
-                      style={{ width: 160 }}
-                    />
                     <select
                       value={editingSeries.product_type ?? ""}
                       onChange={(e) =>
@@ -597,7 +569,6 @@ export function BrandSeriesPage() {
                   <thead>
                     <tr>
                       <th style={{ width: 60 }}>排序</th>
-                      <th style={{ width: 120 }}>代碼</th>
                       <th>名稱</th>
                       <th style={{ width: 100 }}>類型</th>
                       <th style={{ width: 80 }}>啟用</th>
@@ -608,9 +579,6 @@ export function BrandSeriesPage() {
                     {(series.data ?? []).map((s) => (
                       <tr key={s.id}>
                         <td>{s.sort_order}</td>
-                        <td>
-                          <code style={{ fontSize: 14 }}>{s.code}</code>
-                        </td>
                         <td>
                           <b>{s.name}</b>
                         </td>

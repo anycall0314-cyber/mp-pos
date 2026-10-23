@@ -252,7 +252,7 @@ export function FindFirstPanel({
                 disabled={!view.canUse}
                 onClick={() => use(p)}
               >
-                {p.is_active ? "使用這款" : inactiveLabel}
+                {p.is_active ? "就用這個" : inactiveLabel}
               </button>
             </div>
           );

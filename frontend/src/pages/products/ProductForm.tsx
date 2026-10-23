@@ -337,12 +337,13 @@ export function ProductForm({
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [showNewCategory, setShowNewCategory] = useState(false);
-  const [newCategory, setNewCategory] = useState<{ code: string; name: string; sort_order: string; kind: CategoryKind | "" }>({
-    code: "",
+  const [newCategory, setNewCategory] = useState<{ name: string; sort_order: string; kind: CategoryKind | "" }>({
     name: "",
     sort_order: "",
     kind: "",
   });
+  /** 按了「建立並選用」但沒填名稱:那一格標紅 */
+  const [newCategoryMissing, setNewCategoryMissing] = useState(false);
   const [closePromptOpen, setClosePromptOpen] = useState(false);
   const baselineRef = useRef<FormState>(withPrefill(toState(initial), initial, prefill));
 
@@ -446,7 +447,7 @@ export function ProductForm({
           ? {
               id: initial.category,
               label: initial.category_name,
-              secondary: initial.category_code,
+              secondary: "",
             }
           : (!initial && prefillRef.current?.category) || null,
       );
@@ -456,7 +457,8 @@ export function ProductForm({
       setDistinctReason("");
       setRememberName(false);
       setShowNewCategory(false);
-      setNewCategory({ code: "", name: "", sort_order: "", kind: "" });
+      setNewCategory({ name: "", sort_order: "", kind: "" });
+      setNewCategoryMissing(false);
       setClosePromptOpen(false);
       genTouchedRef.current = !!initial?.generation;
     }
@@ -572,15 +574,18 @@ export function ProductForm({
   }
 
   async function handleCreateCategory() {
-    if (!newCategory.code || !newCategory.name) return;
+    // 代碼(品號開頭)系統給(全站檢視 D6:以前沒填代碼按「建立並選用」什麼事都沒發生)
+    if (!newCategory.name.trim()) {
+      setNewCategoryMissing(true);
+      return;
+    }
     if (!newCategory.kind) {
       setError("新類別要選主機、配件或一般");
       return;
     }
     try {
       const payload: Partial<Category> = {
-        code: newCategory.code,
-        name: newCategory.name,
+        name: newCategory.name.trim(),
         kind: newCategory.kind,
       };
       const sortOrderNum = Number(newCategory.sort_order);
@@ -589,9 +594,9 @@ export function ProductForm({
       }
       const c = await saveCategory.mutateAsync(payload);
       patch("category", c.id);
-      setCategoryOption({ id: c.id, label: c.name, secondary: c.code });
+      setCategoryOption({ id: c.id, label: c.name, secondary: "" });
       setShowNewCategory(false);
-      setNewCategory({ code: "", name: "", sort_order: "", kind: "" });
+      setNewCategory({ name: "", sort_order: "", kind: "" });
     } catch (e) {
       setError(`建立類別失敗:${errorText(e)}`);
     }
@@ -1318,7 +1323,7 @@ export function ProductForm({
                   setCategoryOption(opt ?? null);
                 }}
                 fetchOptions={searchCategories}
-                placeholder="搜尋類別(代碼/名稱)"
+                placeholder="搜尋類別"
               />
             </div>
             <button
@@ -1335,24 +1340,14 @@ export function ProductForm({
           <div className="fieldset">
             <legend>新增類別</legend>
             <div className="field-row">
-              <Field label="類別代碼">
-                <input
-                  value={newCategory.code}
-                  onChange={(e) =>
-                    setNewCategory((s) => ({
-                      ...s,
-                      code: e.target.value.toUpperCase(),
-                    }))
-                  }
-                  maxLength={8}
-                />
-              </Field>
-              <Field label="類別名稱">
+              <Field label="類別名稱" required error={newCategoryMissing ? "要填類別名稱" : undefined}>
                 <input
                   value={newCategory.name}
-                  onChange={(e) =>
-                    setNewCategory((s) => ({ ...s, name: e.target.value }))
-                  }
+                  autoFocus
+                  onChange={(e) => {
+                    setNewCategory((s) => ({ ...s, name: e.target.value }));
+                    setNewCategoryMissing(false);
+                  }}
                 />
               </Field>
               <Field label="排序(留空自動)">
@@ -1469,7 +1464,7 @@ export function ProductForm({
             />
           </Field>
           {state.warehouse_type === "product" && (
-            <Field label="建議零售價" error={fieldErrors.list_price}>
+            <Field label="售價" error={fieldErrors.list_price}>
               <MoneyInput
                 value={state.list_price}
                 onChange={(v) => patch("list_price", v)}

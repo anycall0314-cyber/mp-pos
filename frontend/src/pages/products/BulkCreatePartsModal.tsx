@@ -326,7 +326,7 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
                 </span>
                 <span>=</span>
                 <span>
-                  <b>{summarySku}</b> 筆 SKU 待建立
+                  <b>{summarySku}</b> 個品項待建立
                 </span>
               </div>
             </>
@@ -499,7 +499,7 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
             <>
               <div className="bcp-result-card">
                 <div className="bcp-result-hero">
-                  成功建立 <b>{result.created}</b> 筆零件 SKU
+                  建立 <b>{result.created}</b> 個零件品項
                 </div>
                 {result.skipped.length > 0 && (
                   <div className="bcp-result-row">
@@ -524,10 +524,6 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
                   </div>
                 )}
               </div>
-              <Banner
-                kind="info"
-                message="建立的零件已自動設定:商品性質=機型專屬、倉別=零件倉、不追蹤序號、產品狀態=主力現貨,並綁定對應機型相容性。"
-              />
             </>
           )}
         </div>

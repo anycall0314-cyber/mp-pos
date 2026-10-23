@@ -258,6 +258,15 @@ class _TenantUniqueMixin:
         return value
 
 
+def _next_category_code(tenant) -> str:
+    """這家公司還沒用過的最小 C 加兩碼(C01、C02…;用到 C99 之後接 C100)。不分大小寫比。"""
+    used = {c.upper() for c in Category.objects.filter(tenant=tenant).values_list("code", flat=True)}
+    n = 1
+    while f"C{n:02d}" in used:
+        n += 1
+    return f"C{n:02d}"
+
+
 class CategorySerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
     # 三種走法(主機 / 配件 / 一般);寫的時候換成 holds_devices + needs_host_model。新增類別一定要選(紅隊第 3 條)
     kind = serializers.ChoiceField(choices=Category.Kind.choices, required=False)
@@ -286,11 +295,30 @@ class CategorySerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, ser
             "updated_at",
         ]
         read_only_fields = ["id", "needs_host_model", "holds_devices", "next_sku_seq", "created_at", "updated_at"]
+        # 代碼(品號開頭)新增時不用填,系統給(全站檢視 D6:以前要店員自己編 2~4 碼英數)
+        extra_kwargs = {"code": {"required": False}}
 
     def get_shares_part(self, obj) -> str:
         from .device_share import part_of
 
         return part_of(obj)
+
+    def create(self, validated_data):
+        if validated_data.get("code"):
+            return super().create(validated_data)
+        # 沒填代碼:給這家公司還沒用過的 C01、C02…;兩個人同時建撞到同一個號,換下一個再試
+        from django.db import IntegrityError, transaction
+
+        tenant = validated_data["tenant"]
+        for _ in range(5):
+            validated_data["code"] = _next_category_code(tenant)
+            try:
+                with transaction.atomic():
+                    return super().create(validated_data)
+            except IntegrityError as exc:
+                if "uniq_category_tenant_code" not in str(exc):
+                    raise
+        raise serializers.ValidationError({"detail": "類別代碼一直撞號,請再按一次"})
 
     def get_brands(self, obj) -> list:
         return [{"id": link.brand_id, "name": link.brand.name}

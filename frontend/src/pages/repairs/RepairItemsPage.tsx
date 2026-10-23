@@ -203,7 +203,7 @@ export function RepairItemsPage() {
 
         <Field
           label="適用機型"
-          hint="此項目可用於哪些機型;選擇機型 = 涵蓋該機型所有 SKU 變體"
+          hint="選機型 = 這個機型的每一種容量顏色都算"
         >
           <PhoneModelPicker
             onPick={(m) => {

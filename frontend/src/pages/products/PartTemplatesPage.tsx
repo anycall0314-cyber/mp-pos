@@ -453,7 +453,7 @@ export function PartTemplatesPage() {
   return (
     <div className="page">
       <Toolbar
-        title="零件範本管理"
+        title="零件範本"
         actions={
           <button className="btn primary" onClick={startNew}>
             新增範本
@@ -628,9 +628,6 @@ export function PartTemplatesPage() {
                 style={{ marginTop: 8, marginBottom: 6 }}
               >
                 機型維度預設
-                <span className="section-head-meta">
-                  新增手機型號 wizard 套用此範本後自動帶入,可再微調
-                </span>
               </div>
 
               <div className="form-field">
@@ -640,10 +637,6 @@ export function PartTemplatesPage() {
                   onChange={(v) => patch("default_capacities", v)}
                   placeholder="輸入後按 Enter / 逗號 / 頓號 加入,例:128GB"
                 />
-                <div className="form-field-hint">
-                  例:128GB / 256GB / 512GB / 1TB。
-                  排序就是顯示順序,wizard 第 2 步用這個當預設勾選項。
-                </div>
               </div>
 
               <div className="form-field">
@@ -653,9 +646,6 @@ export function PartTemplatesPage() {
                   onChange={(v) => patch("default_colors", v)}
                   placeholder="輸入後按 Enter,例:黑"
                 />
-                <div className="form-field-hint">
-                  例:黑 / 白 / 鈦原色。中古機收購時的具體成色寫在序號備註,不放這裡。
-                </div>
               </div>
 
               <div className="form-field">
@@ -665,11 +655,6 @@ export function PartTemplatesPage() {
                   onChange={(v) => patch("default_accessory_categories", v)}
                   placeholder="輸入後按 Enter,例:殼"
                 />
-                <div className="form-field-hint">
-                  例:殼 / 貼。線、充電器走通用配件不綁機型,不放這裡。
-                  「新增手機型號」wizard 會把這些當成「相容類別槽位」記錄,
-                  但不會直接建配件 SKU,實際配件商品走「新增配件」獨立建立。
-                </div>
               </div>
 
               <div className="form-field">
@@ -679,11 +664,6 @@ export function PartTemplatesPage() {
                   onChange={(v) => patch("default_accessory_brands", v)}
                   placeholder="輸入後按 Enter,例:imos"
                 />
-                <div className="form-field-hint">
-                  例:imos / HODA / JTLEGEND。
-                  「新增配件」wizard 套此範本時,會顯示這些品牌讓你一個個建商品線
-                  (例:imos 抗藍光保護貼、HODA 軍規防摔殼)。純參考用,不直接建 SKU。
-                </div>
               </div>
 
               {/* ─── 零件種類清單 ─── */}

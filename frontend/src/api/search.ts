@@ -553,10 +553,11 @@ export async function searchCategories(
   const data = await fetchPaginated<Category>(
     `/categories/?${qs({ search: query, page_size: LIMIT })}`,
   );
+  // 類別代碼(品號開頭)不列出來(全站檢視 D12)
   return data.map((c) => ({
     id: c.id,
     label: c.name,
-    secondary: c.code,
+    secondary: "",
     payload: c,
   }));
 }

@@ -2268,7 +2268,7 @@ export function PurchaseWorkbenchPage({
             // 中古機也列出來(人才看得到已經有一個中古的);按了由這一頁講「請到中古收購進」
             from={{ supplierId: supplier }}
             // 單據裡沒有地方「過去看」:停用的也是「使用這款」,按了由這一頁講(管理員可以當場恢復)
-            inactiveLabel="使用這款"
+            inactiveLabel="就用這個"
             peeking={peek.isOpen}
             onPeek={peek.open}
             onClose={() => {
