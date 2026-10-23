@@ -1,6 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
 
-import { ApiHttpError } from "@/api/client";
 import {
   lookupMember,
   useSaveMember,
@@ -24,6 +23,7 @@ import { MoneyInput } from "@/components/MoneyInput";
 import { money, roundInt } from "@/lib/money";
 
 import { maskIdNo } from "./mask";
+import { errorText } from "@/lib/errorText";
 
 interface Props {
   open: boolean;
@@ -170,11 +170,7 @@ export function PhoneBillForm({ open, onClose }: Props) {
       }
       setNewMember({ name: "", national_id: "" });
     } catch (e) {
-      if (e instanceof ApiHttpError) {
-        setError(`新增會員失敗:${JSON.stringify(e.body)}`);
-      } else {
-        setError(String(e));
-      }
+      setError(`新增會員失敗:${errorText(e)}`);
     }
   }
 
@@ -236,11 +232,7 @@ export function PhoneBillForm({ open, onClose }: Props) {
       setMemberStatus("idle");
       setConfirming(false);
     } catch (e) {
-      if (e instanceof ApiHttpError) {
-        setError(`儲存失敗:${JSON.stringify(e.body)}`);
-      } else {
-        setError(String(e));
-      }
+      setError(errorText(e));
       setConfirming(false);
     }
   }

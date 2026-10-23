@@ -30,6 +30,7 @@ import { SerialHistoryModal } from "@/components/SerialHistoryModal";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { codesLabel } from "@/lib/deviceCodes";
 import { money, roundInt } from "@/lib/money";
+import { errorText } from "@/lib/errorText";
 
 /**
  * 庫存查詢(工作台版型)。
@@ -361,7 +362,7 @@ export function InventoryQueryPage() {
       );
       if (refused) toast(refused, "err");
     } catch (e) {
-      toast(e instanceof Error ? e.message : "匯出失敗", "err");
+      toast(errorText(e), "err");
     } finally {
       setExporting(false);
     }

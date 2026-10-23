@@ -11,6 +11,7 @@ import {
 import { money } from "@/lib/money";
 
 import { SimCardForm } from "./SimCardForm";
+import { errorText } from "@/lib/errorText";
 
 const columns: MasterColumn<SimCard>[] = [
   { key: "card_no", header: "卡號", render: (r) => r.card_no },
@@ -116,7 +117,7 @@ export function SimCardsPage() {
         }
       />
       {isLoading && <div className="md-empty">載入中…</div>}
-      {isError && <div className="md-empty">載入失敗:{String(error)}</div>}
+      {isError && <div className="md-empty">載入失敗:{errorText(error)}</div>}
       {!isLoading && !isError && (
         <MasterDetail
           rows={data ?? []}

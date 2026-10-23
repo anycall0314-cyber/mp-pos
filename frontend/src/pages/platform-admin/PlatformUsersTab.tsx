@@ -1,6 +1,5 @@
 import { FormEvent, useMemo, useState } from "react";
 
-import { ApiHttpError } from "@/api/client";
 import {
   usePlatformTenants,
   usePlatformUsers,
@@ -9,9 +8,11 @@ import {
   useSavePlatformUser,
 } from "@/api/hooks";
 import type { PlatformUser, UserRole } from "@/api/types";
+import { toast } from "@/components/workbench/toast";
 import { Banner } from "@/components/Banner";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
+import { errorText } from "@/lib/errorText";
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "tenant_user", label: "店員 (鎖倉)" },
@@ -98,9 +99,7 @@ export function PlatformUsersTab() {
       setForm(emptyCreateForm());
     } catch (e) {
       setError(
-        e instanceof ApiHttpError
-          ? `儲存失敗:${JSON.stringify(e.body)}`
-          : String(e),
+        errorText(e),
       );
     }
   }
@@ -109,14 +108,14 @@ export function PlatformUsersTab() {
     const pwd = prompt(`為 ${u.username} 重設密碼,請輸入新密碼:`);
     if (!pwd) return;
     if (pwd.length < 4) {
-      alert("密碼至少 4 碼");
+      toast("密碼至少 4 碼", "err");
       return;
     }
     try {
       await resetPassword.mutateAsync({ id: u.id, password: pwd });
-      alert(`已重設 ${u.username} 的密碼`);
+      toast(`已重設 ${u.username} 的密碼`, "ok");
     } catch (e) {
-      alert(`重設失敗:${e instanceof Error ? e.message : e}`);
+      toast(`重設失敗:${errorText(e)}`, "err");
     }
   }
 

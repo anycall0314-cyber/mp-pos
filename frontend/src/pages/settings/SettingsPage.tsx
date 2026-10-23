@@ -16,6 +16,8 @@ import {
 } from "@/api/hooks";
 import type { InvoiceTrack, InvoiceType, PaymentMethod, PaymentMethodKind } from "@/api/types";
 import { useAuth, useDefaultWarehouse } from "@/auth/AuthContext";
+import { ArmButton } from "@/components/workbench/ArmButton";
+import { errorText } from "@/lib/errorText";
 import { Banner } from "@/components/Banner";
 import { InvoiceJumpDialog } from "@/components/invoice/InvoiceJumpDialog";
 import { openLabelPrint } from "@/components/labels/openLabelPrint";
@@ -92,7 +94,7 @@ export function SettingsPage() {
   async function saveRemindMonths() {
     const n = Number(remindMonths);
     if (!Number.isInteger(n) || n < 1 || n > 24) {
-      alert("提醒的月數需在 1 ~ 24 之間");
+      toast("提醒的月數需在 1 ~ 24 之間", "err");
       return;
     }
     try {
@@ -136,7 +138,7 @@ export function SettingsPage() {
   async function saveWarranty() {
     const n = Number(warrantyDays);
     if (!Number.isFinite(n) || n < 1 || n > 3650) {
-      alert("保固天數需在 1 ~ 3650 之間");
+      toast("保固天數需在 1 ~ 3650 之間", "err");
       return;
     }
     await saveTenantSettings.mutateAsync({ repair_warranty_days: n });
@@ -744,15 +746,13 @@ export function SettingsPage() {
                         {(ownStore === null || t.warehouse === ownStore) && (
                           <>
                             <button onClick={() => startEdit(t)}>編輯</button>
-                            <button
-                              onClick={() => {
-                                if (confirm(`確定刪除字軌 ${t.prefix}?`)) {
-                                  delTrack.mutate(t.id);
-                                }
-                              }}
-                            >
-                              刪除
-                            </button>
+                            <ArmButton
+                              label="刪除"
+                              className=""
+                              onConfirm={() =>
+                                delTrack.mutateAsync(t.id).catch((e) => toast(`刪除失敗:${errorText(e)}`, "err"))
+                              }
+                            />
                           </>
                         )}
                       </>
@@ -960,15 +960,13 @@ export function SettingsPage() {
                   </td>
                   <td className="row-actions">
                     <button onClick={() => setEditingPm(p)}>編輯</button>
-                    <button
-                      onClick={() => {
-                        if (confirm(`確定刪除付款方式 ${p.name}?`)) {
-                          delPm.mutate(p.id);
-                        }
-                      }}
-                    >
-                      刪
-                    </button>
+                    <ArmButton
+                      label="刪除"
+                      className=""
+                      onConfirm={() =>
+                        delPm.mutateAsync(p.id).catch((e) => toast(`刪除失敗:${errorText(e)}`, "err"))
+                      }
+                    />
                   </td>
                 </tr>
               ))}

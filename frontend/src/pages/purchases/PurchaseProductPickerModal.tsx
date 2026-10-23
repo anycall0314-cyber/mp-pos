@@ -5,6 +5,7 @@ import type { Paginated, Product } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { money } from "@/lib/money";
 import { keepPicked } from "@/lib/purchasePrefill";
+import { errorText } from "@/lib/errorText";
 
 export interface PickerProduct {
   product: Product;
@@ -82,7 +83,7 @@ export function PurchaseProductPickerModal({
       })
       .catch((e) => {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : "搜尋失敗");
+        setError(errorText(e));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

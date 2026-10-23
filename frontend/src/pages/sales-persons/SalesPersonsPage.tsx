@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { ApiHttpError } from "@/api/client";
 import { useSalesPersons, useSaveSalesPerson } from "@/api/hooks";
 import type { SalesPerson } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { errorText } from "@/lib/errorText";
 
 type Selection = { kind: "person"; id: number } | { kind: "new" } | null;
 
@@ -107,20 +107,8 @@ export function SalesPersonsPage() {
       setTimeout(() => setSavedFlash(false), 2000);
       setSelection({ kind: "person", id: saved.id });
     } catch (e) {
-      if (e instanceof ApiHttpError) {
-        const body = e.body;
-        if (typeof body === "object" && body) {
-          const firstKey = Object.keys(body)[0];
-          const msg = Array.isArray((body as Record<string, unknown>)[firstKey])
-            ? (body as Record<string, string[]>)[firstKey][0]
-            : JSON.stringify(body);
-          setError(firstKey === "code" ? `代號問題:${msg}` : `${firstKey}:${msg}`);
-        } else {
-          setError(`儲存失敗 (${e.status})`);
-        }
-      } else {
-        setError(String(e));
-      }
+      // 欄位錯誤只留中文那幾句、不露欄位名(全站檢視 G2;規則在 lib/errorText.ts)
+      setError(errorText(e));
     }
   }
 

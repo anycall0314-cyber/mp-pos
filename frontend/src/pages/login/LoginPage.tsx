@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
+import { errorText } from "@/lib/errorText";
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -24,7 +25,7 @@ export function LoginPage() {
       await login(username.trim(), password);
       navigate(next, { replace: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       setSubmitting(false);
     }

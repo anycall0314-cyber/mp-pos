@@ -31,6 +31,8 @@ import type {
   IntakeTaxMethod,
   Product,
 } from "@/api/types";
+import { useArm } from "@/components/workbench/useArm";
+import { toast } from "@/components/workbench/toast";
 import { Banner } from "@/components/Banner";
 import { ComboBox } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
@@ -38,6 +40,7 @@ import { Field } from "@/components/Field";
 import { Toolbar } from "@/components/Toolbar";
 import { MoneyInput } from "@/components/MoneyInput";
 import { intStr } from "@/lib/money";
+import { errorText } from "@/lib/errorText";
 
 const STATUS_META: Record<IntakeMatchStatus, { label: string; cls: string }> = {
   auto_matched: { label: "自動對應", cls: "ok" },
@@ -134,7 +137,7 @@ export function IntakePage() {
       setCommitMsg(null);
       setCommitErr("");
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : String(e));
+      setFormError(errorText(e));
     }
   }
 
@@ -151,7 +154,7 @@ export function IntakePage() {
       setCommitMsg(null);
       setCommitErr("");
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : String(e));
+      setFormError(errorText(e));
     }
   }
 
@@ -165,7 +168,7 @@ export function IntakePage() {
         poId: b.committed_purchase_order_id ?? 0,
       });
     } catch (e) {
-      setCommitErr(e instanceof Error ? e.message : String(e));
+      setCommitErr(errorText(e));
     }
   }
 
@@ -425,6 +428,8 @@ export function IntakePage() {
 }
 
 function ItemDetail({ item }: { item: IntakeItem }) {
+  // 刪除 / 套用這類按錯代價大的:再按一次才做(全站檢視 G1:不跳瀏覽器的確認框)
+  const arm = useArm();
   const role = useCurrentUser()?.profile?.role;
   const isAdmin = role === "tenant_admin" || role === "platform_admin";
   const [pickError, setPickError] = useState("");
@@ -494,7 +499,8 @@ function ItemDetail({ item }: { item: IntakeItem }) {
   async function chooseProduct(productId: number, inactiveName = "") {
     if (picking) return;
     // 已停用的商品不會因為被選到就悄悄恢復:要管理員明確點頭
-    if (inactiveName && !confirm(`「${inactiveName}」已停用,要恢復並入庫嗎?`)) {
+    if (inactiveName && !arm.confirm(`restore:${productId}`)) {
+      toast(`「${inactiveName}」已停用:再選一次就恢復並入庫`, "err");
       return;
     }
     setPicking(true);
@@ -509,7 +515,7 @@ function ItemDetail({ item }: { item: IntakeItem }) {
         restore: !!inactiveName,
       });
     } catch (e) {
-      setPickError(e instanceof Error ? e.message : "對應失敗");
+      setPickError(errorText(e));
     } finally {
       setPicking(false);
     }
@@ -600,7 +606,7 @@ function ItemDetail({ item }: { item: IntakeItem }) {
         setNpDup(found);
         setNpError("");
       } else {
-        setNpError(e instanceof Error ? e.message : String(e));
+        setNpError(errorText(e));
       }
     } finally {
       setPicking(false);

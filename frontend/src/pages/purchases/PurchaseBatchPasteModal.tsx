@@ -7,6 +7,7 @@ import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { pickActiveProduct } from "@/pages/products/pickActiveProduct";
 import { MoneyInput } from "@/components/MoneyInput";
 import { parseLine, pasteLeftovers, type RawRow } from "@/lib/batchPaste";
+import { errorText } from "@/lib/errorText";
 
 /**
  * 經過比對後、可編輯的一行
@@ -179,7 +180,7 @@ export function PurchaseBatchPasteModal({
       setRows(matched);
       setHasParsed(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "比對失敗");
+      setError(errorText(e));
     } finally {
       setMatching(false);
     }

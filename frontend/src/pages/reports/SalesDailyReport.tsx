@@ -36,6 +36,7 @@ import {
 } from "@/lib/salesDaily";
 import { downloadCsv } from "@/components/downloadCsv";
 import { exportFileName, exportIfComplete } from "@/lib/reportExports";
+import { errorText } from "@/lib/errorText";
 
 /** 這台電腦的今天(不用世界時間:台灣早上八點以前會變成昨天)。 */
 function today(): string {
@@ -409,7 +410,7 @@ export function SalesDailyReportPage() {
 
       <div className="report-table sd-table">
         {isLoading && <div className="md-empty">載入中…</div>}
-        {isError && <div className="md-empty">{String(error)}</div>}
+        {isError && <div className="md-empty">{errorText(error)}</div>}
         {!isLoading && !isError && (
           <>
             {isMobile ? (

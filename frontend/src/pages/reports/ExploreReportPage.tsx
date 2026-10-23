@@ -1,3 +1,4 @@
+import { useArm } from "@/components/workbench/useArm";
 import { exportIfComplete } from "@/lib/reportExports";
 import { downloadCsv } from "@/components/downloadCsv";
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -91,6 +92,8 @@ function allowedDims(catalog: AnalyticsCatalog, measures: string[]): string[] {
 }
 
 export function ExploreReportPage() {
+  // 刪除 / 套用這類按錯代價大的:再按一次才做(全站檢視 G1:不跳瀏覽器的確認框)
+  const arm = useArm();
   const role = useCurrentUser()?.profile?.role;
   const isAdmin = role === "tenant_admin" || role === "platform_admin";
   const { data: catalog, error: catalogError } = useAnalyticsCatalog();
@@ -229,7 +232,8 @@ export function ExploreReportPage() {
   }
 
   async function removeLoaded() {
-    if (!loaded || !confirm(`確定刪除「${loaded.name}」?`)) return;
+    // 綁在這一份報表上:換了一份就重來(複審 P1 同一類)
+    if (!loaded || !arm.confirm(`del:${loaded.id}`)) return;
     try {
       await deleteReport.mutateAsync(loaded.id);
       setLoaded(null);
@@ -507,7 +511,7 @@ export function ExploreReportPage() {
           </button>
           {loaded?.editable && (
             <button type="button" className="btn danger" onClick={removeLoaded}>
-              刪除
+              {arm.armed === `del:${loaded.id}` ? "再按一次刪除" : "刪除"}
             </button>
           )}
         </div>

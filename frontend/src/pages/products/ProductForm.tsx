@@ -66,6 +66,7 @@ import {
   withSerialByHand,
   withWarehouse,
 } from "@/lib/productDefaults";
+import { errorText } from "@/lib/errorText";
 
 /** 比對兩個 form state 是否不同(用於 dirty 判斷) */
 function isDirtyAgainst<T extends object>(state: T, baseline: T): boolean {
@@ -592,10 +593,7 @@ export function ProductForm({
       setShowNewCategory(false);
       setNewCategory({ code: "", name: "", sort_order: "", kind: "" });
     } catch (e) {
-      if (e instanceof ApiHttpError) {
-        const body = e.body as Record<string, string[]>;
-        setError("建立類別失敗:" + JSON.stringify(body));
-      }
+      setError(`建立類別失敗:${errorText(e)}`);
     }
   }
 
@@ -630,7 +628,7 @@ export function ProductForm({
         } catch (e) {
           // 沒記住不影響「改用既有商品」,但要讓人知道(例:這句話已指到別的商品)
           note = {
-            text: "叫法沒有記住:" + (e instanceof Error ? e.message : String(e)),
+            text: "叫法沒有記住:" + (errorText(e)),
             tone: "err",
           };
         }
@@ -750,7 +748,7 @@ export function ProductForm({
         setFieldErrors(fe);
         if (detail) setError(detail);
       } else {
-        setError(String(e));
+        setError(errorText(e));
       }
     } finally {
       saving.current = false;
@@ -1237,7 +1235,7 @@ export function ProductForm({
                         patch("series", "");
                         setShowNewBrand(false);
                       } catch (e) {
-                        setNewBrandError(e instanceof Error ? e.message : String(e));
+                        setNewBrandError(errorText(e));
                       }
                     }}
                   >
@@ -1295,9 +1293,7 @@ export function ProductForm({
                         patch("series", s.id);
                         setShowNewSeries(false);
                       } catch (e) {
-                        alert(
-                          e instanceof Error ? e.message : String(e),
-                        );
+                        toast(errorText(e), "err");
                       }
                     }}
                   >
@@ -1678,7 +1674,7 @@ function MakerField({
       if (saved.linked_brand) onChange(saved.linked_brand);
       setText("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "沒有加到");
+      setError(errorText(e));
     }
   }
 

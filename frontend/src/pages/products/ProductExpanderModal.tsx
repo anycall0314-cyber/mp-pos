@@ -26,6 +26,7 @@ import {
   flaggedRows,
 } from "./BulkDuplicateRows";
 import { defaultRequiresSerial, stockModeLabel } from "@/lib/productDefaults";
+import { errorText } from "@/lib/errorText";
 
 interface Props {
   open: boolean;
@@ -374,7 +375,7 @@ export function ProductExpanderModal({
       if (e instanceof ApiHttpError && e.body && typeof e.body === "object") {
         setFlagged(flaggedRows((e.body as { errors?: unknown }).errors));
       }
-      setError(e instanceof Error ? e.message : "建立失敗");
+      setError(errorText(e));
     }
   }
 

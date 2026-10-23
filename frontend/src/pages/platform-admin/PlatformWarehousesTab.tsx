@@ -1,6 +1,5 @@
 import { FormEvent, useMemo, useState } from "react";
 
-import { ApiHttpError } from "@/api/client";
 import {
   usePlatformTenants,
   usePlatformWarehouses,
@@ -9,6 +8,7 @@ import {
 import { Banner } from "@/components/Banner";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
+import { errorText } from "@/lib/errorText";
 
 interface Form {
   tenant: number | "";
@@ -58,9 +58,7 @@ export function PlatformWarehousesTab() {
       setForm({ tenant: "", code: "", name: "", address: "", phone: "" });
     } catch (e) {
       setError(
-        e instanceof ApiHttpError
-          ? `儲存失敗:${JSON.stringify(e.body)}`
-          : String(e),
+        errorText(e),
       );
     }
   }

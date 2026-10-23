@@ -16,6 +16,7 @@ import { Banner } from "@/components/Banner";
 import { DraftBanner } from "@/components/DraftBanner";
 import { useModalDraft } from "@/hooks/useModalDraft";
 import { MoneyInput } from "@/components/MoneyInput";
+import { errorText } from "@/lib/errorText";
 
 const DRAFT_KEY = "modal-draft:bulk-create-parts";
 
@@ -110,7 +111,7 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
       }[]
     >("/products/phone-models/")
       .then((list) => setModels(list))
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+      .catch((e) => setError(errorText(e)));
   }, [step, models.length]);
 
   // Step 3 → 呼叫 preview
@@ -129,7 +130,7 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
       setRows(res.rows);
       setStep(3);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
@@ -156,7 +157,7 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
       setResult(res);
       setStep(4);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 

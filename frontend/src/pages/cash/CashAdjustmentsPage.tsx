@@ -6,6 +6,8 @@ import {
   useVoidCashAdjustment,
 } from "@/api/hooks";
 import type { CashAdjustment } from "@/api/types";
+import { ArmButton } from "@/components/workbench/ArmButton";
+import { toast } from "@/components/workbench/toast";
 import { AppliedFilters } from "@/components/AppliedFilters";
 import { Toolbar } from "@/components/Toolbar";
 import {
@@ -18,6 +20,7 @@ import { localDay, monthStart } from "@/lib/fixedReports";
 import { money, roundInt } from "@/lib/money";
 
 import { CashAdjustmentForm } from "./CashAdjustmentForm";
+import { errorText } from "@/lib/errorText";
 
 export function CashAdjustmentsPage() {
   // 清單與合計 = 這段期間(預設本月)。以前不分期間只拿最新 50 筆,合計只加了那 50 筆
@@ -99,12 +102,13 @@ export function CashAdjustmentsPage() {
     { key: "note", header: "備註", render: (r) => r.note || "—" },
   ];
 
+  // 作廢按兩下(全站檢視 G1:以前跳瀏覽器的確認框,失敗再跳一個)
   async function handleVoid(r: CashAdjustment) {
-    if (!confirm(`確定作廢現金調整 ${r.no}?`)) return;
     try {
       await voidMutation.mutateAsync(r.id);
+      toast(`${r.no} 已作廢`, "ok");
     } catch (e) {
-      alert(`作廢失敗:${e instanceof Error ? e.message : e}`);
+      toast(`作廢失敗:${errorText(e)}`, "err");
     }
   }
 
@@ -152,13 +156,14 @@ export function CashAdjustmentsPage() {
                 </button>
               )}
               {canVoid && (
-                <button
+                <ArmButton
+                  // 換一張單就重來:不能沿用上一張「已按一下」(複審 P1)
+                  key={r.id}
+                  label="作廢"
                   className="btn danger"
-                  onClick={() => handleVoid(r)}
+                  onConfirm={() => handleVoid(r)}
                   disabled={voidMutation.isPending}
-                >
-                  作廢
-                </button>
+                />
               )}
             </div>
           )}
@@ -236,7 +241,7 @@ export function CashAdjustmentsPage() {
         }}
       />
       {isLoading && <div className="md-empty">載入中…</div>}
-      {isError && <div className="md-empty">載入失敗:{String(error)}</div>}
+      {isError && <div className="md-empty">載入失敗:{errorText(error)}</div>}
       {!isLoading && !isError && (
         <MasterDetail
           rows={filtered}

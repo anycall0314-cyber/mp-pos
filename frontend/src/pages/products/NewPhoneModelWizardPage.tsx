@@ -27,6 +27,7 @@ import {
 import { hasRealReason } from "./DuplicatePanel";
 import { defaultConditionIds } from "@/lib/productDefaults";
 import { purchaseLinkFor } from "@/lib/purchasePrefill";
+import { errorText } from "@/lib/errorText";
 
 /**
  * 「新增手機型號」3 步 wizard。
@@ -381,7 +382,7 @@ export function NewPhoneModelWizardPage() {
       );
       setStep(3);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
@@ -399,7 +400,7 @@ export function NewPhoneModelWizardPage() {
       const res = await create.mutateAsync(body);
       setCreated(res);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 

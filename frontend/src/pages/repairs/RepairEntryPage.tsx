@@ -35,6 +35,9 @@ import type {
   SalesPerson,
   Supplier,
 } from "@/api/types";
+import { ArmButton } from "@/components/workbench/ArmButton";
+import { toast } from "@/components/workbench/toast";
+import { useArm } from "@/components/workbench/useArm";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Field } from "@/components/Field";
@@ -47,6 +50,7 @@ import { intStr, money } from "@/lib/money";
 import { marginFormula, personalSplit, repairMargin } from "@/lib/repairMargin";
 import { RepairHistoryModal } from "./RepairHistoryModal";
 import { UnlockPatternInput } from "./UnlockPatternInput";
+import { errorText } from "@/lib/errorText";
 
 interface PartLine {
   part_product: number;
@@ -100,6 +104,8 @@ export function RepairEntryPage() {
 }
 
 function RepairEntryForm() {
+  // 切換維修方式(會清掉內容)、按「完成」(會扣零件)要再按一次
+  const arm = useArm();
   const { id: idParam } = useParams();
   const isEdit = idParam !== "new";
   const id = isEdit ? Number(idParam) : null;
@@ -379,7 +385,7 @@ function RepairEntryForm() {
     try {
       const m = await saveMember.mutateAsync({name, phone});
       setMember(m); setLookupStatus("found"); setShowQuickCreate(false); setError(null);
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    } catch (e) { setError(errorText(e)); }
     finally { setCreating(false); }
   }
 
@@ -496,7 +502,7 @@ function RepairEntryForm() {
       }
       return true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
       return false;
     }
   }
@@ -516,14 +522,8 @@ function RepairEntryForm() {
       !!expectedPickup;
     const hasContent =
       mode === "in_house" ? hasInHouseContent : hasExternalContent;
-    if (
-      hasContent &&
-      !confirm(
-        `此操作將清除目前的${mode === "in_house" ? "自修" : "委外"}維修內容,是否確認切換為${next === "in_house" ? "自修" : "委外"}?`,
-      )
-    ) {
-      return;
-    }
+    // 切換會清掉目前填的內容:要再按一次(全站檢視 G1:以前跳瀏覽器的確認框)
+    if (hasContent && !arm.confirm(`mode:${next}`)) return;
     if (next === "external") {
       setParts([]);
       setRepairItemId(null);
@@ -559,7 +559,8 @@ function RepairEntryForm() {
           setError("有收錢,請先選收款方式再完成");
           return;
         }
-        if (!confirm("完工會扣零件倉庫存,確定?")) return;
+        // 完工會扣零件倉庫存:要再按一次(全站檢視 G1)
+        if (!arm.confirm("complete")) return;
         // 先把畫面上改過的存起來再完工(全站檢視 E5:實付、工資填好直接按完成,完成只改狀態,剛填的錢沒存、
         // 完成之後又不能改 —— 月報、業績少這一筆)。沒存成(有欄位沒填)就不完工
         let saved = false;
@@ -578,7 +579,7 @@ function RepairEntryForm() {
       }
       setStatusState(newStatus);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
@@ -592,31 +593,24 @@ function RepairEntryForm() {
         actions={
           <>
             <button className="btn" onClick={() => navigate("/repairs")}>
-              {isLocked ? "回列表" : "取消"}
+              {isLocked ? "返回列表" : "取消"}
             </button>
             {isLocked ? (
               isAdmin ? (
-                <button
+                <ArmButton
+                  label="重開維修單"
                   className="btn primary"
                   disabled={reopen.isPending}
-                  onClick={async () => {
+                  onConfirm={async () => {
                     if (!id) return;
-                    if (
-                      !confirm(
-                        "重開維修單會把已扣的零件庫存歸還,狀態退回『待取件』。確認?",
-                      )
-                    )
-                      return;
                     try {
                       await reopen.mutateAsync(id);
                       setStatusState("ready_pickup");
                     } catch (e) {
-                      setError(e instanceof Error ? e.message : String(e));
+                      setError(errorText(e));
                     }
                   }}
-                >
-                  {reopen.isPending ? "重開中…" : "重開維修單"}
-                </button>
+                />
               ) : (
                 <span
                   style={{
@@ -703,7 +697,7 @@ function RepairEntryForm() {
                 onClick={() => tryChangeMode("in_house")}
               >
                 自修
-                <span className="pf-tab-sub">店內處理</span>
+                <span className="pf-tab-sub">{arm.armed === "mode:in_house" ? "再按一次,內容會清掉" : "店內處理"}</span>
               </button>
               <button
                 type="button"
@@ -711,7 +705,7 @@ function RepairEntryForm() {
                 onClick={() => tryChangeMode("external")}
               >
                 委外
-                <span className="pf-tab-sub">送外廠</span>
+                <span className="pf-tab-sub">{arm.armed === "mode:external" ? "再按一次,內容會清掉" : "送外廠"}</span>
               </button>
             </>
           )}
@@ -1079,7 +1073,7 @@ function RepairEntryForm() {
                       onChange={(_id, opt) => {
                         if (!opt) return;
                         if (opt.payload?.warehouse_type !== "parts") {
-                          alert("只能挑零件倉的商品");
+                          toast("只能挑零件倉的商品", "err");
                           return;
                         }
                         if (parts.some((p) => p.part_product === opt.id)) return;
@@ -1416,13 +1410,12 @@ function RepairEntryForm() {
                         title={`切換到 ${s.label}`}
                       >
                         <span className="re-step-dot">{i + 1}</span>
-                        <span className="re-step-label">{s.label}</span>
+                        <span className="re-step-label">
+                          {s.value === "completed" && arm.armed === "complete" ? "再按一次完成" : s.label}
+                        </span>
                       </button>
                     );
                   })}
-                </div>
-                <div className="re-stepper-hint">
-                  點擊任一節點切換狀態;按「完成」會扣零件倉庫存
                 </div>
               </section>
             )}

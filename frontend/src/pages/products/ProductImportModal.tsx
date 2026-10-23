@@ -7,6 +7,7 @@ import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Checkbox, Field } from "@/components/Field";
 import { money } from "@/lib/money";
 import { parsePaste, previewBlocker, templateCsv, type SerialChoice } from "@/lib/productImport";
+import { errorText } from "@/lib/errorText";
 
 interface ImportReport {
   dry_run: boolean;
@@ -85,7 +86,7 @@ export function ProductImportModal({ open, onClose, onImported }: Props) {
       if (mine !== gen.current) return;
       setReport(res);
     } catch (e) {
-      if (mine === gen.current) setError(e instanceof Error ? e.message : String(e));
+      if (mine === gen.current) setError(errorText(e));
     } finally {
       if (mine === gen.current) setLoading(false);
     }

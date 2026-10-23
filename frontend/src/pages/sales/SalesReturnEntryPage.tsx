@@ -2,7 +2,6 @@ import { useCan } from "@/auth/AuthContext";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
-import { ApiHttpError } from "@/api/client";
 import {
   usePaymentMethods,
   useCreateSalesReturn,
@@ -12,10 +11,12 @@ import {
 } from "@/api/hooks";
 import { searchSalesOrdersForReturn } from "@/api/search";
 import type { SalesOrder } from "@/api/types";
+import { ArmButton } from "@/components/workbench/ArmButton";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Toolbar } from "@/components/Toolbar";
 import { money } from "@/lib/money";
+import { errorText } from "@/lib/errorText";
 
 /**
  * 銷退單:只能整張退。選原銷貨單 → 原單每一行、每一台全部退,退款 = 原單總額。
@@ -100,26 +101,18 @@ export function SalesReturnEntryPage() {
       });
       navigate(`/sales/returns/${sr.id}`);
     } catch (e) {
-      if (e instanceof ApiHttpError) {
-        const body = e.body;
-        if (typeof body === "object" && body && "detail" in body) {
-          setError(String((body as { detail: unknown }).detail));
-        } else {
-          setError(`儲存失敗:${JSON.stringify(body)}`);
-        }
-      } else {
-        setError(String(e));
-      }
+      // 欄位錯誤只留中文那幾句、不露欄位名(全站檢視 G2;規則在 lib/errorText.ts)
+      setError(errorText(e));
     }
   }
 
+  // 作廢按兩下(全站檢視 G1;以前跳確認框寫「回扣到 sold 狀態」,失敗顯示 [object Object])
   async function handleVoid() {
     if (!existing.data) return;
-    if (!confirm(`確定要作廢銷退單 ${existing.data.no}?庫存會回扣到 sold 狀態。`)) return;
     try {
       await voidMutation.mutateAsync(existing.data.id);
     } catch (e) {
-      if (e instanceof ApiHttpError) setError(String(e.body));
+      setError(errorText(e));
     }
   }
 
@@ -158,16 +151,16 @@ export function SalesReturnEntryPage() {
           focusMode ? null : (
             <>
               <button className="btn" onClick={() => navigate("/sales/returns")}>
-                回列表
+                返回列表
               </button>
               {!isNew && sr && !sr.is_void && canReturn && (
-                <button
+                <ArmButton
+                  key={sr.id}
+                  label="作廢單"
                   className="btn danger"
-                  onClick={handleVoid}
+                  onConfirm={handleVoid}
                   disabled={voidMutation.isPending}
-                >
-                  {voidMutation.isPending ? "作廢中" : "作廢單"}
-                </button>
+                />
               )}
               {isNew && canReturn && (
                 <button

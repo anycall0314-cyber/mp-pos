@@ -6,8 +6,10 @@ import {
   useSaveCondition,
 } from "@/api/hooks";
 import type { Condition } from "@/api/types";
+import { useArm } from "@/components/workbench/useArm";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { errorText } from "@/lib/errorText";
 
 interface Editing {
   id?: number;
@@ -31,6 +33,8 @@ function slugify(s: string): string {
 }
 
 export function ConditionsPage() {
+  // 刪除 / 套用這類按錯代價大的:再按一次才做(全站檢視 G1:不跳瀏覽器的確認框)
+  const arm = useArm();
   // ─── 後端串接 ──────────────────────────────────────
   const conditions = useConditions();         // GET /conditions/
   const save = useSaveCondition();            // POST / PATCH /conditions/
@@ -86,22 +90,16 @@ export function ConditionsPage() {
       });
       setEditing(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
   async function handleDelete(c: Condition) {
-    if (
-      !confirm(
-        `刪除品況「${c.name}」?\n` +
-          `已經有 ${c.product_count ?? 0} 個商品是這個品況的話刪不掉:請先把那些商品改成別的品況,或改成停用。`,
-      )
-    )
-      return;
+    if (!arm.confirm(`del:${c.id}`)) return;
     try {
       await del.mutateAsync(c.id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
@@ -384,7 +382,7 @@ export function ConditionsPage() {
                       onClick={() => handleDelete(c)}
                       style={{ marginLeft: 4 }}
                     >
-                      刪除
+                      {arm.armed === `del:${c.id}` ? "再按一次刪除" : "刪除"}
                     </button>
                   </td>
                 </tr>

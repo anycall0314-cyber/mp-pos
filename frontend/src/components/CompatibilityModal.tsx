@@ -1,5 +1,6 @@
 import { useProductCompatibility } from "@/api/hooks";
 import type { CompatibilityItem, DemandLabel } from "@/api/types";
+import { errorText } from "@/lib/errorText";
 
 interface Props {
   productId: number;
@@ -50,7 +51,7 @@ export function CompatibilityModal({
         <div className="modal-title">{title}</div>
         <div className="modal-body">
           {isLoading && <div className="md-empty">載入中…</div>}
-          {isError && <div className="md-empty">{String(error)}</div>}
+          {isError && <div className="md-empty">{errorText(error)}</div>}
           {!isLoading && !isError && role === "universal" && (
             <div className="md-empty">
               通用配件不綁定特定機型,沒有相容性資料

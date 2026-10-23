@@ -4,6 +4,7 @@ import wasmUrl from "zxing-wasm/reader/zxing_reader.wasm?url";
 import { countPhoneCall, CountPhoneError, type PhoneCountState } from "@/api/countPhone";
 import { newId } from "@/lib/newId";
 import { BARCODE_FORMATS, createScanGate, pileQty, tapText } from "@/lib/phoneCount";
+import { errorText } from "@/lib/errorText";
 
 /**
  * 手機走動盤點(`/m/count#憑證`;owner 2026-10-15「盤點要有手機可以配對掃，方便走動盤點」)。不用登入、不用裝 App。
@@ -211,7 +212,7 @@ export function PhoneCountPage() {
     setClaimError("");
     countPhoneCall(token, device, "claim").then(setInfo, (e) => {
       if (e instanceof CountPhoneError && ["gone", "expired", "taken"].includes(e.code)) fail(e);
-      else setClaimError(e instanceof Error ? e.message : "連不上,請再試一次");
+      else setClaimError(errorText(e));
     });
   }
 

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSaveTelecomPlan, useTelecomPlans } from "@/api/hooks";
 import type { TelecomPlan } from "@/api/types";
 import { useCurrentUser } from "@/auth/AuthContext";
+import { useArm } from "@/components/workbench/useArm";
 import { Toolbar } from "@/components/Toolbar";
 import {
   MasterDetail,
@@ -20,8 +21,11 @@ import { MoneyInput } from "@/components/MoneyInput";
 
 import { BulkAddTelecomPlansModal } from "./BulkAddTelecomPlansModal";
 import { TelecomPlanForm } from "./TelecomPlanForm";
+import { errorText } from "@/lib/errorText";
 
 export function TelecomPlansPage() {
+  // 刪除 / 套用這類按錯代價大的:再按一次才做(全站檢視 G1:不跳瀏覽器的確認框)
+  const arm = useArm();
   const { data, isLoading, isError, error } = useTelecomPlans({
     includeInactive: true,
   });
@@ -209,9 +213,11 @@ export function TelecomPlansPage() {
     }
   }
 
+  const selKey = Array.from(selectedIds).sort((a, b) => a - b).join(",");
   async function patchSelected(patch: Partial<TelecomPlan>, label: string) {
     if (selectedIds.size === 0) return;
-    if (!confirm(`對勾選的 ${selectedIds.size} 筆方案執行「${label}」?`)) return;
+    // 綁在這一次勾的那幾筆上:勾選換了就重來
+    if (!arm.confirm(`batch:${label}:${selKey}`)) return;
     setBatchPending(true);
     try {
       await Promise.all(
@@ -224,7 +230,7 @@ export function TelecomPlansPage() {
       clearSelection();
     } catch (e) {
       setBulkResult(
-        `批次失敗:${e instanceof Error ? e.message : String(e)}`,
+        `批次失敗:${errorText(e)}`,
       );
       setTimeout(() => setBulkResult(null), 6000);
     } finally {
@@ -461,7 +467,7 @@ export function TelecomPlansPage() {
             onClick={() => patchSelected({ is_active: true }, "上架")}
             disabled={batchPending}
           >
-            批次上架
+            {arm.armed === `batch:上架:${selKey}` ? `再按一次上架 ${selectedIds.size} 筆` : "批次上架"}
           </button>
           <button
             className="btn"
@@ -469,7 +475,7 @@ export function TelecomPlansPage() {
             onClick={() => patchSelected({ is_active: false }, "下架")}
             disabled={batchPending}
           >
-            批次下架
+            {arm.armed === `batch:下架:${selKey}` ? `再按一次下架 ${selectedIds.size} 筆` : "批次下架"}
           </button>
           {batchPending && (
             <span style={{ color: "var(--text-dim)" }}>處理中…</span>
@@ -493,7 +499,7 @@ export function TelecomPlansPage() {
         </div>
       )}
       {isLoading && <div className="md-empty">載入中…</div>}
-      {isError && <div className="md-empty">載入失敗:{String(error)}</div>}
+      {isError && <div className="md-empty">載入失敗:{errorText(error)}</div>}
       {!isLoading && !isError && (
         <MasterDetail
           rows={filtered}

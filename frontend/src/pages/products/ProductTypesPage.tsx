@@ -6,8 +6,11 @@ import {
   useSaveProductType,
 } from "@/api/hooks";
 import type { ProductType } from "@/api/types";
+import { useArm } from "@/components/workbench/useArm";
+import { toast } from "@/components/workbench/toast";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { errorText } from "@/lib/errorText";
 
 /**
  * 常用類型對照(膠囊鈕 + 一鍵建立全部用)
@@ -176,6 +179,8 @@ interface Editing {
 }
 
 export function ProductTypesPage() {
+  // 刪除 / 套用這類按錯代價大的:再按一次才做(全站檢視 G1:不跳瀏覽器的確認框)
+  const arm = useArm();
   // ─── 後端串接 ──────────────────────────────────────
   const types = useProductTypes();             // GET /product-types/
   const save = useSaveProductType();           // POST / PATCH /product-types/
@@ -229,22 +234,17 @@ export function ProductTypesPage() {
       await save.mutateAsync({ ...editing, code });
       setEditing(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
   async function handleDelete(t: ProductType) {
-    if (
-      !confirm(
-        `刪除類型「${t.name}」?\n旗下系列 (${t.series_count ?? 0} 個) 的「產品類型」會變空白(不會連動刪除系列)。`,
-      )
-    )
-      return;
+    if (!arm.confirm(`del:${t.id}`)) return;
     try {
       await del.mutateAsync(t.id);
       if (editing?.id === t.id) setEditing(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
@@ -257,15 +257,10 @@ export function ProductTypesPage() {
     );
     const toCreate = PRESETS.filter((p) => !existing.has(p.code.toUpperCase()));
     if (toCreate.length === 0) {
-      alert("常用類型已全部建立完成");
+      toast("常用類型已全部建立完成", "ok");
       return;
     }
-    if (
-      !confirm(
-        `將建立 ${toCreate.length} 個常用類型(已存在的會自動略過),確定?`,
-      )
-    )
-      return;
+    if (!arm.confirm("bulk")) return;
     setBulkBusy(true);
     let ok = 0;
     let fail = 0;
@@ -285,7 +280,7 @@ export function ProductTypesPage() {
     }
     setBulkBusy(false);
     setError(null);
-    alert(`建立完成:成功 ${ok} 筆${fail > 0 ? ` / 失敗 ${fail} 筆` : ""}`);
+    toast(`建立完成:成功 ${ok} 筆${fail > 0 ? ` / 失敗 ${fail} 筆` : ""}`, fail > 0 ? "err" : "ok");
   }
 
   const currentPresetMatch = editing
@@ -305,7 +300,7 @@ export function ProductTypesPage() {
               disabled={bulkBusy}
               title="把常用的 8 種類型一次建好(已存在的會略過)"
             >
-              {bulkBusy ? "建立中…" : "一鍵建立全部常用類型"}
+              {bulkBusy ? "建立中…" : arm.armed === "bulk" ? "再按一次建立" : "一鍵建立全部常用類型"}
             </button>
             <button className="btn primary" onClick={() => startNew()}>
               新增類型
@@ -503,7 +498,7 @@ export function ProductTypesPage() {
                 onClick={bulkCreateAll}
                 disabled={bulkBusy}
               >
-                {bulkBusy ? "建立中…" : "一鍵建立全部常用類型"}
+                {bulkBusy ? "建立中…" : arm.armed === "bulk" ? "再按一次建立" : "一鍵建立全部常用類型"}
               </button>
               <button
                 type="button"
@@ -571,7 +566,6 @@ export function ProductTypesPage() {
                 <span className="type-card-sort">#{t.sort_order}</span>
                 <button
                   type="button"
-                  className="icon-btn icon-btn-danger"
                   style={{
                     position: "absolute",
                     bottom: 8,
@@ -581,8 +575,9 @@ export function ProductTypesPage() {
                     e.stopPropagation();
                     handleDelete(t);
                   }}
-                  aria-label="刪除"
-                  title="刪除此類型"
+                  aria-label={arm.armed === `del:${t.id}` ? "再按一次刪除" : "刪除"}
+                  title={arm.armed === `del:${t.id}` ? "再按一次刪除" : "刪除此類型"}
+                  className={arm.armed === `del:${t.id}` ? "icon-btn icon-btn-danger armed" : "icon-btn icon-btn-danger"}
                 >
                   <TrashIcon />
                 </button>

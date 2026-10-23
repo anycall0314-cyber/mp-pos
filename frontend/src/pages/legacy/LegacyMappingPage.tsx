@@ -19,6 +19,7 @@ import { useCurrentUser } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
 import { ComboBox, type ComboOption } from "@/components/ComboBox";
 import { Toolbar } from "@/components/Toolbar";
+import { errorText } from "@/lib/errorText";
 
 /**
  * 設定 → 歐睿對照(公司管理員;以前叫舊系統對照)
@@ -92,7 +93,7 @@ function useAction() {
       }
       return true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
       return false;
     } finally {
       setBusy(false);
@@ -433,7 +434,7 @@ function MapPicker({
 }) {
   const candidates = useLegacyMapCandidates(kind, id);
   const [picked, setPicked] = useState<number | "">("");
-  const confirm = async (target: number, method: string) => {
+  const confirmMatch = async (target: number, method: string) => {
     if (await run(`/legacy/maps/${kind}/${id}/confirm/`, { target, method })) onDone();
   };
   return (
@@ -444,7 +445,7 @@ function MapPicker({
             {c.label} <span className="legacy-sub">{c.reason}</span>
           </span>
           <button className="btn small" disabled={busy}
-            onClick={() => confirm(c.id, c.reason === "代碼相同" ? "code" : kind === "products" ? "match" : "name")}>
+            onClick={() => confirmMatch(c.id, c.reason === "代碼相同" ? "code" : kind === "products" ? "match" : "name")}>
             確認
           </button>
         </div>
@@ -457,7 +458,7 @@ function MapPicker({
           placeholder="搜尋"
         />
         <button className="btn small" disabled={busy || picked === ""}
-          onClick={() => picked !== "" && confirm(picked, "manual")}>
+          onClick={() => picked !== "" && confirmMatch(picked, "manual")}>
           確認
         </button>
       </div>

@@ -7,6 +7,7 @@ import type { LegacyMemberRow } from "@/api/types";
 import { useCurrentUser } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
 import { refreshMemberHistory } from "@/lib/memberUrl";
+import { errorText } from "@/lib/errorText";
 
 /**
  * 會員名單右邊(管理員):「可能是同一人」的舊 POS 會員,按「確認對照」把他的舊紀錄掛到這一位。
@@ -35,7 +36,7 @@ export function LegacyLinkCandidates({ memberId }: { memberId: number }) {
       qc.invalidateQueries({ queryKey: ["legacy-candidates"] });
       refreshMemberHistory(memberId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       setBusy(false);
     }

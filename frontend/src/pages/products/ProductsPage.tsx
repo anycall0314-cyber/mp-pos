@@ -33,6 +33,7 @@ import { MiniThumb, ProductPhotoStrip, usePhotoPeek } from "@/components/photos/
 import { fitsLine } from "@/lib/fits";
 
 import { ProductImportModal } from "./ProductImportModal";
+import { errorText } from "@/lib/errorText";
 
 function formatMoney(value: string | number) {
   const n = Number(value);
@@ -226,7 +227,7 @@ export function ProductsPage() {
       setCatSavedFlash(true);
       setTimeout(() => setCatSavedFlash(false), 2000);
     } catch (e) {
-      setCatError(e instanceof Error ? e.message : "儲存失敗");
+      setCatError(errorText(e));
     }
   }
 
@@ -247,7 +248,6 @@ export function ProductsPage() {
       setCatNewError("要選主機、配件或一般");
       return;
     }
-    if (!confirm(`確定新增類別「${code} ${name}」?`)) return;
     const explicit = Number(catNew.sort_order);
     const sort_order =
       Number.isFinite(explicit) && explicit > 0
@@ -268,7 +268,7 @@ export function ProductsPage() {
       setCatNew(EMPTY_NEW_CAT);
       setCatNewError(null);
     } catch (e) {
-      setCatNewError(e instanceof Error ? e.message : "建立失敗");
+      setCatNewError(errorText(e));
     }
   }
 
@@ -1166,7 +1166,7 @@ function CategoryBrandsEditor({ category }: { category: Category }) {
     try {
       await job();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "沒有存到");
+      setError(errorText(e));
     }
   }
   function add() {

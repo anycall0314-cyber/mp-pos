@@ -8,6 +8,7 @@ import type {
   InventoryAlertRow,
 } from "@/api/types";
 import { Toolbar } from "@/components/Toolbar";
+import { errorText } from "@/lib/errorText";
 
 const SEVERITY_LABEL: Record<AlertSeverity, string> = {
   critical: "緊急",
@@ -125,7 +126,7 @@ function AlertsPanel() {
 
       <div className="ia-list">
         {isLoading && <div className="md-empty">載入中…</div>}
-        {isError && <div className="md-empty">{String(error)}</div>}
+        {isError && <div className="md-empty">{errorText(error)}</div>}
         {!isLoading && !isError && filtered.length === 0 && (
           <div className="ia-empty">
             <div className="ia-empty-title">
@@ -230,7 +231,7 @@ function ClearancePanel() {
 
       <div className="ia-list">
         {isLoading && <div className="md-empty">載入中…</div>}
-        {isError && <div className="md-empty">{String(error)}</div>}
+        {isError && <div className="md-empty">{errorText(error)}</div>}
         {!isLoading && !isError && rows.length === 0 && (
           <div className="ia-empty">
             <div className="ia-empty-title">目前沒有出清中的商品</div>

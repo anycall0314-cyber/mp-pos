@@ -3,6 +3,8 @@ import { useMemo, useState } from "react";
 
 import { usePhoneBills, useVoidPhoneBill } from "@/api/hooks";
 import type { PhoneBillCollection } from "@/api/types";
+import { ArmButton } from "@/components/workbench/ArmButton";
+import { toast } from "@/components/workbench/toast";
 import { AppliedFilters } from "@/components/AppliedFilters";
 import { Toolbar } from "@/components/Toolbar";
 import {
@@ -16,6 +18,7 @@ import { money, roundInt } from "@/lib/money";
 
 import { PhoneBillForm } from "./PhoneBillForm";
 import { maskIdNo } from "./mask";
+import { errorText } from "@/lib/errorText";
 
 export function PhoneBillsPage() {
   // 清單與合計 = 這段期間(預設本月)。以前不分期間只拿最新 50 筆,合計只加了那 50 筆
@@ -93,12 +96,13 @@ export function PhoneBillsPage() {
     },
   ];
 
+  // 作廢按兩下(全站檢視 G1:以前跳瀏覽器的確認框,失敗再跳一個)
   async function handleVoid(r: PhoneBillCollection) {
-    if (!confirm(`確定作廢代收話費單 ${r.no}?`)) return;
     try {
       await voidMutation.mutateAsync(r.id);
+      toast(`${r.no} 已作廢`, "ok");
     } catch (e) {
-      alert(`作廢失敗:${e instanceof Error ? e.message : e}`);
+      toast(`作廢失敗:${errorText(e)}`, "err");
     }
   }
 
@@ -153,13 +157,14 @@ export function PhoneBillsPage() {
               列印收據
             </button>
             {!r.is_void && canVoid && (
-              <button
+              <ArmButton
+                // 換一張單就重來:不能沿用上一張「已按一下」(複審 P1)
+                key={r.id}
+                label="作廢"
                 className="btn danger"
-                onClick={() => handleVoid(r)}
+                onConfirm={() => handleVoid(r)}
                 disabled={voidMutation.isPending}
-              >
-                作廢
-              </button>
+              />
             )}
           </div>
         </div>
@@ -226,7 +231,7 @@ export function PhoneBillsPage() {
         }}
       />
       {isLoading && <div className="md-empty">載入中…</div>}
-      {isError && <div className="md-empty">載入失敗:{String(error)}</div>}
+      {isError && <div className="md-empty">載入失敗:{errorText(error)}</div>}
       {!isLoading && !isError && (
         <MasterDetail
           rows={filtered}

@@ -4,6 +4,7 @@ import { useCurrentUser } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { money } from "@/lib/money";
+import { errorText } from "@/lib/errorText";
 
 /**
  * 設定 → 每日對帳(公司管理員)
@@ -46,7 +47,7 @@ export function LedgerChecksPage() {
     <div className="page">
       <Toolbar title="每日對帳" />
       <div className="entry-body backup-page">
-        {error && <Banner kind="error" message={`讀取失敗:${String(error)}`} />}
+        {error && <Banner kind="error" message={`讀取失敗:${errorText(error)}`} />}
 
         <section className="backup-card">
           <dl className="backup-facts">

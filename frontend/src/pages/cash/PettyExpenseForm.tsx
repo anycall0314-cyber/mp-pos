@@ -1,6 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
 
-import { ApiHttpError } from "@/api/client";
 import { usePaymentMethods, useSavePettyExpense } from "@/api/hooks";
 import { searchSalesPersons, searchWarehouses } from "@/api/search";
 import type { PettyExpense, PettyExpenseCategory } from "@/api/types";
@@ -14,6 +13,7 @@ import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
 import { MoneyInput } from "@/components/MoneyInput";
 import { keepOrInt, money } from "@/lib/money";
+import { errorText } from "@/lib/errorText";
 
 interface Props {
   open: boolean;
@@ -216,11 +216,8 @@ export function PettyExpenseForm({ open, initial, onClose }: Props) {
         setConfirming(false);
       }
     } catch (e) {
-      if (e instanceof ApiHttpError) {
-        setError(`儲存失敗:${JSON.stringify(e.body)}`);
-      } else {
-        setError(String(e));
-      }
+      // 欄位錯誤只留中文那幾句、不露欄位名(全站檢視 G2;規則在 lib/errorText.ts)
+      setError(errorText(e));
       setConfirming(false);
     }
   }

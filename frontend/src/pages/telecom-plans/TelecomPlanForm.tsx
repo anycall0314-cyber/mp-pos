@@ -9,6 +9,7 @@ import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Checkbox, Field } from "@/components/Field";
 import { MoneyInput } from "@/components/MoneyInput";
+import { errorText } from "@/lib/errorText";
 
 interface Props {
   open: boolean;
@@ -109,9 +110,7 @@ export function TelecomPlanForm({ open, initial, onClose }: Props) {
       setShowNewCarrier(false);
       setNewCarrier({ code: "", name: "" });
     } catch (e) {
-      if (e instanceof ApiHttpError) {
-        setError("建立電信商失敗:" + JSON.stringify(e.body));
-      }
+      setError(`建立電信商失敗:${errorText(e)}`);
     }
   }
 
@@ -154,7 +153,7 @@ export function TelecomPlanForm({ open, initial, onClose }: Props) {
         setFieldErrors(fe);
         if (detail) setError(detail);
       } else {
-        setError(String(e));
+        setError(errorText(e));
       }
     }
   }

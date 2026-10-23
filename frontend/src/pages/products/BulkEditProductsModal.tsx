@@ -7,6 +7,7 @@ import {
 } from "@/api/hooks";
 import { ApiHttpError } from "@/api/client";
 import type { Brand, PhoneSeries } from "@/api/types";
+import { useArm } from "@/components/workbench/useArm";
 import { Banner } from "@/components/Banner";
 import { DraftBanner } from "@/components/DraftBanner";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
@@ -18,6 +19,7 @@ import { intStr } from "@/lib/money";
 import { isManager } from "@/lib/roles";
 import { PRODUCT_MODES, ruleProblem, rulePayload, valueUnit } from "@/lib/staffCost";
 import { useCurrentUser } from "@/auth/AuthContext";
+import { errorText } from "@/lib/errorText";
 
 const DRAFT_KEY = "modal-draft:bulk-edit-products";
 
@@ -46,6 +48,8 @@ export function BulkEditProductsModal({
   onClose,
   onSuccess,
 }: Props) {
+  // 刪除 / 套用這類按錯代價大的:再按一次才做(全站檢視 G1:不跳瀏覽器的確認框)
+  const arm = useArm();
   const save = useBulkEditProducts();
   const [error, setError] = useState<string | null>(null);
   // 整批被退回時:哪一個商品、為什麼(伺服器逐個回報;例:用過的商品不能改「需追蹤序號」)
@@ -203,18 +207,14 @@ export function BulkEditProductsModal({
       enHost && "主機資訊",
       enCompat && "相容機型",
     ].filter(Boolean);
-    if (
-      !confirm(
-        `將套用到 ${productIds.length} 筆商品。\n變更:${changes.join("、")}\n確認?`,
-      )
-    )
-      return;
+    if (changes.length === 0) return;
+    if (!arm.confirm("apply")) return;
     try {
       const res = await save.mutateAsync({ ids: productIds, patch });
       draftHelper.markSavedAndClear();
       onSuccess(res.updated);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
       setFailures(e instanceof ApiHttpError ? bulkFailureLines(e.body) : []);
     }
   }
@@ -585,7 +585,9 @@ export function BulkEditProductsModal({
           >
             {save.isPending
               ? "套用中…"
-              : `套用至 ${productIds.length} 筆`}
+              : arm.armed === "apply"
+                ? `再按一次套用至 ${productIds.length} 筆`
+                : `套用至 ${productIds.length} 筆`}
           </button>
         </div>
       </div>

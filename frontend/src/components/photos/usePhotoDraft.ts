@@ -14,6 +14,7 @@ import {
 } from "@/api/photos";
 import { shrinkImage } from "@/lib/imageShrink";
 import { newId } from "@/lib/newId";
+import { errorText } from "@/lib/errorText";
 
 /** 照片區的一格 */
 export interface PhotoTile {
@@ -56,7 +57,7 @@ export interface PhotoStored {
 }
 
 function errText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
+  return errorText(e);
 }
 
 /**

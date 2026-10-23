@@ -7,6 +7,8 @@ import {
 } from "@/api/hooks";
 import { searchProducts } from "@/api/search";
 import type { Product, RepairItem } from "@/api/types";
+import { useArm } from "@/components/workbench/useArm";
+import { toast } from "@/components/workbench/toast";
 import { Banner } from "@/components/Banner";
 import { ComboBox } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
@@ -15,6 +17,7 @@ import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { Toolbar } from "@/components/Toolbar";
 import { MoneyInput } from "@/components/MoneyInput";
 import { money } from "@/lib/money";
+import { errorText } from "@/lib/errorText";
 
 interface PartLine {
   part_product: number;
@@ -37,6 +40,8 @@ const EMPTY = {
 };
 
 export function RepairItemsPage() {
+  // 刪除 / 套用這類按錯代價大的:再按一次才做(全站檢視 G1:不跳瀏覽器的確認框)
+  const arm = useArm();
   const items = useRepairItems();
   const save = useSaveRepairItem();
   const del = useDeleteRepairItem();
@@ -90,13 +95,17 @@ export function RepairItemsPage() {
       });
       setDrawerOpen(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
   async function handleDelete(it: RepairItem) {
-    if (!confirm(`確定刪除維修項目「${it.name}」?`)) return;
-    await del.mutateAsync(it.id);
+    if (!arm.confirm(`del:${it.id}`)) return;
+    try {
+      await del.mutateAsync(it.id);
+    } catch (e) {
+      toast(`刪除失敗:${errorText(e)}`, "err");
+    }
   }
 
   return (
@@ -147,7 +156,7 @@ export function RepairItemsPage() {
                   className="btn danger"
                   onClick={() => handleDelete(it)}
                 >
-                  刪除
+                  {arm.armed === `del:${it.id}` ? "再按一次刪除" : "刪除"}
                 </button>
               </div>
             </div>
@@ -248,7 +257,7 @@ export function RepairItemsPage() {
               ) {
                 // 已加 或 不是零件 → 無視
                 if (opt.payload?.warehouse_type !== "parts") {
-                  alert("只能選擇『零件倉』的商品");
+                  toast("只能選擇零件倉的商品", "err");
                 }
                 return;
               }

@@ -403,3 +403,9 @@
 - 選了一筆才開右邊;共用版型(`MasterDetail`)右上一顆「×」收起,手機寬度整頁換成那一筆(`md-show-detail`)。
 - 清單是空的寫在清單裡(`MasterDetail` 的 `emptyText`),分「這段期間沒有…/還沒有…」與「查無符合…」。
 
+## 不跳瀏覽器的視窗;錯誤訊息一律中文一句(2026-10-23,全站檢視 G1 / G2)
+
+- 作廢、刪除、完成、會清掉內容的切換:用兩段式 —— 一顆獨立按鈕用 `components/workbench/ArmButton`,切換分頁 / 狀態節點這種用 `components/workbench/useArm`(`if (!arm.confirm(key)) return;`、按鈕字 `arm.armed === key ? "再按一次…" : "…"`)。4 秒內再按一次才做,半秒內的第二下不算。
+- **不用 `confirm(` / `alert(` / `prompt(`**(`lib/noBrowserDialogs.test.mjs` 會掃;唯一例外是平台管理員重設密碼)。成功 / 失敗用 `toast`,表單的錯誤寫在表單上。
+- 錯誤訊息一律走 `lib/errorText.ts`(`errorMessageOf`、`apiErrorText` 都是它):連不上 =「連不上伺服器,請再試一次」、伺服器出錯 =「系統忙碌,請再試一次」、欄位錯誤只留中文那一句、常見欄位前面加中文欄名(`FIELD_LABELS`),不露英文欄位名。**頁面不要自己 `JSON.stringify(e.body)`、`${欄位}:${訊息}`。**
+

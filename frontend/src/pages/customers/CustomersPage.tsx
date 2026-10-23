@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-import { ApiHttpError } from "@/api/client";
 import { useCustomers, useOrdersOf, useOrderSummary, useSaveCustomer, useSalesDefaultSource, useSaveSalesDefaultSource } from "@/api/hooks";
 import type { Customer, CustomerKind } from "@/api/types";
 import { Banner } from "@/components/Banner";
@@ -10,6 +9,7 @@ import { useCurrentUser } from "@/auth/AuthContext";
 import { Toolbar } from "@/components/Toolbar";
 import { cutNote } from "@/lib/listAll";
 import { money } from "@/lib/money";
+import { errorText } from "@/lib/errorText";
 
 const CUSTOMER_KINDS: { value: CustomerKind; label: string }[] = [
   { value: "channel", label: "通路" },
@@ -82,7 +82,7 @@ export function CustomersPage() {
   const manager = role === "tenant_admin" || role === "platform_admin";
   async function changeDefault(source: Customer | null) {
     try { await saveDefault.mutateAsync(source?.id ?? null); setError(null); }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    catch (e) { setError(errorText(e)); }
   }
 
   const [query, setQuery] = useState("");
@@ -208,20 +208,8 @@ export function CustomersPage() {
       setTimeout(() => setSavedFlash(false), 2000);
       setSelection({ kind: "customer", id: saved.id });
     } catch (e) {
-      if (e instanceof ApiHttpError) {
-        const body = e.body;
-        if (typeof body === "object" && body) {
-          const firstKey = Object.keys(body)[0];
-          const msg = Array.isArray((body as Record<string, unknown>)[firstKey])
-            ? (body as Record<string, string[]>)[firstKey][0]
-            : JSON.stringify(body);
-          setError(firstKey === "phone" ? `電話問題:${msg}` : `${firstKey}:${msg}`);
-        } else {
-          setError(`儲存失敗 (${e.status})`);
-        }
-      } else {
-        setError(String(e));
-      }
+      // 欄位錯誤只留中文那幾句、不露欄位名(全站檢視 G2;規則在 lib/errorText.ts)
+      setError(errorText(e));
     }
   }
 

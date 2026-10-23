@@ -129,8 +129,8 @@ test("系統設定:字軌要選門市與期別;下一張不能直接改、要用
   // 狀態照規則寫(過期的不會寫成使用中)
   assert.match(tracks, /\{trackStateLabel\(t\)\}/);
   // 同一排的動作字數一樣
-  const actions = [...tracks.matchAll(/>\s*(跳號|編輯|刪除|刪)\s*<\/button>/g)].map((m) => m[1]);
-  assert.deepEqual(actions, ["跳號", "編輯", "刪除"]);
+  const actions = [...tracks.matchAll(/>\s*(跳號|編輯|刪除|刪)\s*<\/button>|<ArmButton\s+label="(刪除)"/g)].map((m) => m[1] ?? m[2]);
+  assert.deepEqual(actions, ["跳號", "編輯", "刪除"]);      // 刪除按兩下(全站檢視 G1)
 });
 
 test("跳號視窗:打的是紙上的下一張,預覽照規則,送出去的是讀出來的號碼", () => {

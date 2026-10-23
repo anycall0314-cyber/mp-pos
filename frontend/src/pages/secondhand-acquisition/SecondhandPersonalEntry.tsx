@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 
-import { ApiHttpError } from "@/api/client";
 import {
   lookupMember,
   usePaymentMethods,
@@ -30,6 +29,7 @@ import { intStr, money, roundInt } from "@/lib/money";
 import { useTradeSetting } from "@/api/trade";
 import { useCan } from "@/auth/AuthContext";
 import { autoPrice, priceOf } from "@/lib/trade";
+import { errorText } from "@/lib/errorText";
 
 const GRADE_OPTIONS: { value: ConditionGrade; label: string }[] = [
   { value: "S", label: "S 媲美新機 / 拆封未使用" },
@@ -179,11 +179,7 @@ export function SecondhandPersonalEntry() {
       setShowCreateMember(false);
       setNewMember({ name: "", national_id: "" });
     } catch (e) {
-      if (e instanceof ApiHttpError) {
-        setError(`新增會員失敗:${JSON.stringify(e.body)}`);
-      } else {
-        setError(String(e));
-      }
+      setError(`新增會員失敗:${errorText(e)}`);
     }
   }
 
@@ -221,16 +217,8 @@ export function SecondhandPersonalEntry() {
       setSavedSerial({ id: res.serial.id, last5: res.serial.serial_no.slice(-5) });
       reset();
     } catch (e) {
-      if (e instanceof ApiHttpError) {
-        const body = e.body;
-        if (typeof body === "object" && body && "detail" in body) {
-          setError(String((body as { detail: unknown }).detail));
-        } else {
-          setError(`儲存失敗 (${e.status}): ${JSON.stringify(body)}`);
-        }
-      } else {
-        setError(String(e));
-      }
+      // 欄位錯誤只留中文那幾句、不露欄位名(全站檢視 G2;規則在 lib/errorText.ts)
+      setError(errorText(e));
     }
   }
 

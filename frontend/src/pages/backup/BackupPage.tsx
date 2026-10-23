@@ -7,6 +7,7 @@ import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 
 import { sha256File } from "./sha256";
+import { errorText } from "@/lib/errorText";
 
 /**
  * 設定 → 備份與還原(公司管理員)
@@ -111,7 +112,7 @@ function requestKey(): string {
 }
 
 function message(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
+  return errorText(e);
 }
 
 export function BackupPage() {

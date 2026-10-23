@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useSuppliers, useSaveSupplier } from "@/api/hooks";
-import { ApiHttpError } from "@/api/client";
 import type { Supplier } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { useReorder } from "@/hooks/useReorder";
+import { errorText } from "@/lib/errorText";
 
 type Selection =
   | { kind: "supplier"; id: number }
@@ -144,27 +144,8 @@ export function SuppliersPage() {
       }
       setTimeout(() => setFlashMsg(null), 2500);
     } catch (e) {
-      if (e instanceof ApiHttpError) {
-        const body = e.body;
-        if (typeof body === "object" && body) {
-          // 後端欄位錯誤(例如 code 重複)會回 {code: ["..."]}
-          const firstKey = Object.keys(body)[0];
-          const msg = Array.isArray((body as Record<string, unknown>)[firstKey])
-            ? (body as Record<string, string[]>)[firstKey][0]
-            : JSON.stringify(body);
-          setError(
-            firstKey === "code"
-              ? `代碼問題:${msg}`
-              : firstKey === "detail"
-                ? String(msg)
-                : `${firstKey}:${msg}`,
-          );
-        } else {
-          setError(`儲存失敗 (${e.status})`);
-        }
-      } else {
-        setError(String(e));
-      }
+      // 欄位錯誤只留中文那幾句、不露欄位名(全站檢視 G2;規則在 lib/errorText.ts)
+      setError(errorText(e));
     }
   }
 

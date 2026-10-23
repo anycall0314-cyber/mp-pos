@@ -13,6 +13,7 @@ import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Field } from "@/components/Field";
 import { MoneyInput } from "@/components/MoneyInput";
 import { intStr } from "@/lib/money";
+import { errorText } from "@/lib/errorText";
 
 interface Props {
   open: boolean;
@@ -205,13 +206,11 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
               .errors,
           );
           setError("部分方案失敗,請修正後重送");
-        } else if (typeof body === "object" && body && "detail" in body) {
-          setError(String((body as { detail: unknown }).detail));
         } else {
-          setError(`儲存失敗 (${e.status})`);
+          setError(errorText(e));
         }
       } else {
-        setError(String(e));
+        setError(errorText(e));
       }
     }
   }

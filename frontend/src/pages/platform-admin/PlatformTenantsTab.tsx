@@ -1,6 +1,5 @@
 import { FormEvent, useState } from "react";
 
-import { ApiHttpError } from "@/api/client";
 import {
   usePlatformTenants,
   useSavePlatformTenant,
@@ -8,6 +7,7 @@ import {
 import { Banner } from "@/components/Banner";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
+import { errorText } from "@/lib/errorText";
 
 export function PlatformTenantsTab() {
   const list = usePlatformTenants();
@@ -28,9 +28,7 @@ export function PlatformTenantsTab() {
       setForm({ code: "", name: "" });
     } catch (e) {
       setError(
-        e instanceof ApiHttpError
-          ? `儲存失敗:${JSON.stringify(e.body)}`
-          : String(e),
+        errorText(e),
       );
     }
   }

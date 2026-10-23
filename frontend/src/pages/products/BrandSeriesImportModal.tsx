@@ -5,6 +5,7 @@ import {
   useImportBrandsSeries,
 } from "@/api/hooks";
 import { Banner } from "@/components/Banner";
+import { errorText } from "@/lib/errorText";
 
 interface Props {
   open: boolean;
@@ -61,7 +62,7 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
       const res = await importMut.mutateAsync({ file, dryRun: true });
       setPreview(res);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
@@ -78,7 +79,7 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
       onSuccess();
       reset();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 

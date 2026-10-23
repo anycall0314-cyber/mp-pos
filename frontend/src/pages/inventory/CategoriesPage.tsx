@@ -5,6 +5,7 @@ import type { Category, CategoryKind } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { KindPicker } from "@/pages/products/KindPicker";
+import { errorText } from "@/lib/errorText";
 
 interface EditState {
   code: string;
@@ -129,7 +130,7 @@ export function CategoriesPage() {
       });
       setEditingId(null);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "儲存失敗");
+      setError(errorText(err));
     }
   }
 
@@ -160,7 +161,7 @@ export function CategoriesPage() {
       setShowNew(false);
       setError(null);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "新增失敗");
+      setError(errorText(err));
     }
   }
 

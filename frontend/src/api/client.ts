@@ -1,3 +1,5 @@
+import { httpErrorText } from "@/lib/errorText";
+
 import type { DuplicateBody } from "./types";
 
 // 預設走相對路徑(前後端同 host,Django serve dist)。
@@ -97,11 +99,8 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
       setToken(null);
       authEvents.dispatchEvent(new Event("unauthorized"));
     }
-    const msg =
-      body && typeof body === "object" && "detail" in body
-        ? String((body as { detail: unknown }).detail)
-        : `${res.status} ${res.statusText}`;
-    throw new ApiHttpError(res.status, body, msg);
+    // 給人看的一句中文(lib/errorText.ts;以前沒有 detail 時是「400 Bad Request」)
+    throw new ApiHttpError(res.status, body, httpErrorText(res.status, body));
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;

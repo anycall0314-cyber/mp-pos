@@ -26,6 +26,7 @@ import {
   stockScope,
   viewOf,
 } from "@/lib/findFirst";
+import { errorText } from "@/lib/errorText";
 
 interface Props {
   open: boolean;
@@ -106,7 +107,7 @@ export function FindFirstPanel({
       .then(
         (rows) => apply((s) => settle(s, sent.seq, rows)),
         // 整理回應時出錯也算沒查成功(不能停在「尋找中…」)
-        (e) => apply((s) => fail(s, sent.seq, e instanceof Error ? e.message : String(e))),
+        (e) => apply((s) => fail(s, sent.seq, errorText(e))),
       );
   }
 

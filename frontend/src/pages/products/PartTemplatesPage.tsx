@@ -6,9 +6,12 @@ import {
   useSavePartTemplate,
 } from "@/api/hooks";
 import type { PartTemplate } from "@/api/types";
+import { useArm } from "@/components/workbench/useArm";
+import { ArmButton } from "@/components/workbench/ArmButton";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { MoneyInput } from "@/components/MoneyInput";
+import { errorText } from "@/lib/errorText";
 
 /**
  * 「快速加入」常用零件 — 點一下加一列並自動帶入名稱與代碼。
@@ -271,6 +274,8 @@ function emptyEditing(): EditingTemplate {
 }
 
 export function PartTemplatesPage() {
+  // 刪除 / 套用這類按錯代價大的:再按一次才做(全站檢視 G1:不跳瀏覽器的確認框)
+  const arm = useArm();
   // ─── 後端串接 ─────────────────────────────────────────
   const list = usePartTemplates();          // GET /part-templates/
   const save = useSavePartTemplate();       // POST / PATCH /part-templates/
@@ -350,14 +355,8 @@ export function PartTemplatesPage() {
       editing.default_colors.length > 0 ||
       editing.default_accessory_categories.length > 0 ||
       editing.default_accessory_brands.length > 0;
-    if (
-      dirty &&
-      !confirm(
-        `套用「${name}」範本會清空現有零件 / 容量 / 顏色 / 配件類別清單,確定?`,
-      )
-    ) {
-      return;
-    }
+    // 會清空現有的清單:再按一次才套用
+    if (dirty && !arm.confirm(`preset:${editing.id ?? "new"}:${name}`)) return;
     const preset = PRESET_TEMPLATES[name];
     const items: EditingItem[] = preset.parts.map((p, idx) => ({
       name: p.name,
@@ -436,19 +435,18 @@ export function PartTemplatesPage() {
       setSelectedId(saved.id);
       setEditing(toEditing(saved));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
   async function handleDelete() {
     if (!editing?.id) return;
-    if (!confirm(`刪除範本「${editing.name}」?既有零件 SKU 不受影響`)) return;
     try {
       await del.mutateAsync(editing.id);
       setEditing(null);
       setSelectedId(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
@@ -550,7 +548,7 @@ export function PartTemplatesPage() {
                         applyPreset(k as keyof typeof PRESET_TEMPLATES)
                       }
                     >
-                      {k}
+                      {arm.armed === `preset:${editing.id ?? "new"}:${k}` ? `再按一次套用${k}` : k}
                     </button>
                   ))}
                 </div>
@@ -865,14 +863,9 @@ export function PartTemplatesPage() {
                 }}
               >
                 {editing.id ? (
-                  <button
-                    type="button"
-                    className="btn danger"
-                    onClick={handleDelete}
-                    style={{ marginRight: "auto" }}
-                  >
-                    刪除範本
-                  </button>
+                  <span style={{ marginRight: "auto" }}>
+                    <ArmButton key={editing.id} label="刪除範本" className="btn danger" onConfirm={handleDelete} />
+                  </span>
                 ) : null}
                 <button type="button" className="btn" onClick={cancel}>
                   取消

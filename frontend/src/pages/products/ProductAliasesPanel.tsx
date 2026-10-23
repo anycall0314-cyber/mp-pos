@@ -6,6 +6,7 @@ import { ComboBox } from "@/components/ComboBox";
 import { Banner } from "@/components/Banner";
 import { searchSuppliers } from "@/api/search";
 import { useCurrentUser } from "@/auth/AuthContext";
+import { errorText } from "@/lib/errorText";
 
 const KIND_LABELS: Record<AliasKind, string> = {
   barcode: "條碼(GTIN/EAN/UPC)",
@@ -50,7 +51,7 @@ export function ProductAliasesPanel({ productId }: { productId: number }) {
       });
       setValue("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
@@ -59,7 +60,7 @@ export function ProductAliasesPanel({ productId }: { productId: number }) {
     try {
       await save.mutateAsync({ id, is_active: !isActive });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 

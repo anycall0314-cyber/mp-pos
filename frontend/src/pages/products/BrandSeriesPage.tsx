@@ -12,9 +12,11 @@ import {
 } from "@/api/hooks";
 import type { Brand, PhoneSeries } from "@/api/types";
 import { useCurrentUser } from "@/auth/AuthContext";
+import { useArm } from "@/components/workbench/useArm";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { BrandSeriesImportModal } from "./BrandSeriesImportModal";
+import { errorText } from "@/lib/errorText";
 
 interface EditingBrand {
   id?: number;
@@ -47,6 +49,8 @@ function slugify(s: string): string {
 }
 
 export function BrandSeriesPage() {
+  // 刪除 / 套用這類按錯代價大的:再按一次才做(全站檢視 G1:不跳瀏覽器的確認框)
+  const arm = useArm();
   const user = useCurrentUser();
   const canImport = user?.profile?.role === "platform_admin";
   const brands = useBrands();
@@ -111,22 +115,17 @@ export function BrandSeriesPage() {
       await saveBrand.mutateAsync(code.trim() ? { ...rest, code: code.trim() } : rest);
       setEditingBrand(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
   async function handleDeleteBrand(b: Brand) {
-    if (
-      !confirm(
-        `刪除品牌「${b.name}」?\n旗下系列 (${b.series_count ?? 0} 個) 與商品的 FK 引用會變成 protect 錯誤 — 請先把商品改別的品牌。`,
-      )
-    )
-      return;
+    if (!arm.confirm(`brand:${b.id}`)) return;
     try {
       await delBrand.mutateAsync(b.id);
       if (selectedBrandId === b.id) setSelectedBrandId(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
@@ -167,16 +166,16 @@ export function BrandSeriesPage() {
       await saveSeries.mutateAsync({ ...editingSeries, code });
       setEditingSeries(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
   async function handleDeleteSeries(s: PhoneSeries) {
-    if (!confirm(`刪除系列「${s.name}」?`)) return;
+    if (!arm.confirm(`series:${s.id}`)) return;
     try {
       await delSeries.mutateAsync(s.id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
@@ -193,7 +192,7 @@ export function BrandSeriesPage() {
       setSelectedBrandId(r.brand.id);
       setMergeInto(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     }
   }
 
@@ -428,7 +427,7 @@ export function BrandSeriesPage() {
                   className="btn danger"
                   onClick={() => handleDeleteBrand(selectedBrand)}
                 >
-                  刪除品牌
+                  {arm.armed === `brand:${selectedBrand.id}` ? "再按一次刪除" : "刪除品牌"}
                 </button>
                 <button
                   type="button"
@@ -653,7 +652,7 @@ export function BrandSeriesPage() {
                             onClick={() => handleDeleteSeries(s)}
                             style={{ marginLeft: 4 }}
                           >
-                            刪除
+                            {arm.armed === `series:${s.id}` ? "再按一次刪除" : "刪除"}
                           </button>
                         </td>
                       </tr>
