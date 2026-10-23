@@ -10,6 +10,7 @@ export type AbilityKey =
   | "edit_products"
   | "stock_count"
   | "release_returned"
+  | "remember_barcode"
   | "purchase"
   | "secondhand_buy"
   | "cash_ops"

@@ -59,7 +59,7 @@ import {
 import { PhotoName, usePhotoPeek } from "@/components/photos/PhotoName";
 import { toast } from "@/components/workbench/toast";
 import { addMonths } from "@/lib/dates";
-import { codesLabel, mainCode, normalizeCode } from "@/lib/deviceCodes";
+import { codesLabel, isProductCode, mainCode } from "@/lib/deviceCodes";
 import { estimateStaffCost } from "@/lib/staffCost";
 import { backAtCounter } from "@/lib/vendorExchange";
 import {
@@ -258,12 +258,7 @@ function refused(e: unknown): boolean {
   return e instanceof ApiHttpError && e.status >= 400 && e.status < 500;
 }
 function isExactProduct(p: Product, q: string): boolean {
-  const nv = normalizeCode(q);
-  return (
-    !!nv &&
-    (normalizeCode(p.sku) === nv ||
-      (!!p.barcode && normalizeCode(p.barcode) === nv))
-  );
+  return isProductCode(p, q);
 }
 
 function loadDraft(): Draft | null {

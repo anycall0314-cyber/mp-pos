@@ -6,6 +6,8 @@
 - **擋在伺服器**:端點裡呼叫 `require(request.user, 項目)`,關掉的回 403 與一句話。
   畫面把按鈕收起來只是不讓人白按。
 - 只放「已經真的會擋」的項目(放了沒有用的勾比沒有更糟)。要加一項:這裡加一筆 + 端點裡呼叫 `require` + 測試。
+- **預設不開的項目**(`opt_in=True`,2026-10-23 起;owner「此權限作為開關形式,可以讓管理員指派」):
+  管理員勾了才算開,記成同一個清單裡的一筆 `+代碼`(`GRANT`)—— 不用另外一個欄位,公司備份照樣帶著。
 """
 from dataclasses import dataclass
 
@@ -21,6 +23,7 @@ class Ability:
     label: str          # 同一類的名稱字數一樣(owner:同一排的選項等長)
     group: str
     note: str = ""      # 這一項包含哪些(名稱講不完的才寫)
+    opt_in: bool = False  # 預設不開:管理員勾了才算開
 
 
 VOID_SALES = "void_sales"
@@ -30,6 +33,7 @@ VOID_OTHERS = "void_others"
 EDIT_PRODUCTS = "edit_products"
 STOCK_COUNT = "stock_count"
 RELEASE_RETURNED = "release_returned"
+REMEMBER_BARCODE = "remember_barcode"
 PURCHASE = "purchase"
 SECONDHAND_BUY = "secondhand_buy"
 CASH_OPS = "cash_ops"
@@ -60,6 +64,9 @@ ABILITIES = [
     # 銷退退回來的手機是「已退」(不能賣),確認可以賣才回在庫(owner 2026-10-23「先標不能賣,確認可賣再點回倉」;
     # 紅隊:放行的人老闆要能收回)
     Ability(RELEASE_RETURNED, "確認可賣", "商品", "銷退退回來的手機確認可以再賣、回到在庫"),
+    # 進貨 / 盤點刷到不認得的條碼,用某一款時順便把條碼記到那個商品上(之後刷這個條碼直接對到)。
+    # 記錯了之後每一刷都帶錯 → 預設不開,管理員勾給信得過的人(owner 2026-10-23)
+    Ability(REMEMBER_BARCODE, "記住條碼", "商品", "刷到不認得的條碼,用這款時記到商品上;預設不開", opt_in=True),
     Ability(PURCHASE, "進貨入庫", "進貨與帳務", "進貨單、進貨匯入、中古的廠商收購"),
     Ability(SECONDHAND_BUY, "中古收購", "進貨與帳務", "跟客人收購二手機"),
     Ability(CASH_OPS, "雜支調整", "進貨與帳務", "新增、修改雜支與現金調整"),
@@ -84,6 +91,8 @@ ABILITIES = [
     Ability(REPORT_REPAIRS, "維修月報", "報表", "完工的維修單:件數、毛利、每個人分到多少"),
 ]
 KEYS = frozenset(a.key for a in ABILITIES)
+OPT_IN = frozenset(a.key for a in ABILITIES if a.opt_in)
+GRANT = "+"
 LABELS = {a.key: a.label for a in ABILITIES}
 
 # 這一項要另外那幾項都開著才能用。自訂分析什麼數字都組得出來(照業務員分、照商品分、一天一列、每天收了多少錢):
@@ -94,9 +103,11 @@ ALSO_NEEDS = {REPORT_EXPLORE: (REPORT_STAFF, REPORT_PRODUCTS, REPORT_DAILY, REPO
 
 
 def switched_off(profile) -> set[str]:
-    """管理員在員工帳號頁關掉的那幾項(資料庫裡記的)。只認清單裡有的、而且是字串的;怪東西不當成任何項目。"""
-    stored = getattr(profile, "denied_abilities", None) or []
-    return {k for k in stored if isinstance(k, str)} & KEYS
+    """管理員在員工帳號頁關掉的那幾項(資料庫裡記的),加上預設不開、也沒有被勾的那幾項。
+    只認清單裡有的、而且是字串的;怪東西不當成任何項目。"""
+    stored = [k for k in (getattr(profile, "denied_abilities", None) or []) if isinstance(k, str)]
+    granted = {k[len(GRANT):] for k in stored if k.startswith(GRANT)}
+    return (set(stored) & KEYS) | (OPT_IN - granted)
 
 
 def blocked_by(off: set[str], key: str) -> list[str]:
@@ -113,7 +124,10 @@ def denied(user) -> set[str]:
     """這個帳號不能做的項目(關掉的 + 連帶的)。管理員、沒有帳號設定的(只有平台的超級帳號會這樣)都是空的。"""
     if is_tenant_admin(user):
         return set()
-    return with_blocked(switched_off(getattr(user, "profile", None)))
+    profile = getattr(user, "profile", None)
+    if profile is None:
+        return set()
+    return with_blocked(switched_off(profile))
 
 
 def can(user, key: str) -> bool:
@@ -158,17 +172,21 @@ def for_user(user) -> dict[str, bool]:
 
 
 def catalog() -> list[dict]:
-    return [{"key": a.key, "label": a.label, "group": a.group, "note": a.note} for a in ABILITIES]
+    return [{"key": a.key, "label": a.label, "group": a.group, "note": a.note, "opt_in": a.opt_in} for a in ABILITIES]
 
 
 def change(profile, wanted: dict) -> list[str]:
-    """把 `{項目: 可不可以}` 套到這個帳號上,回新的「關掉的項目」(照清單的順序;不在這次送來的項目不動)。"""
-    off = {k for k in (profile.denied_abilities or []) if isinstance(k, str)}
+    """把 `{項目: 可不可以}` 套到這個帳號上,回新的「關掉的項目」(照清單的順序;不在這次送來的項目不動)。
+    預設不開的項目:勾了記一筆 `+代碼`,取消就拿掉。"""
+    stored = {k for k in (profile.denied_abilities or []) if isinstance(k, str)}
     for key, allowed in wanted.items():
-        if allowed:
-            off.discard(key)
+        if key in OPT_IN:
+            stored.discard(key)
+            (stored.add if allowed else stored.discard)(GRANT + key)
+        elif allowed:
+            stored.discard(key)
         else:
-            off.add(key)
-    ordered = [a.key for a in ABILITIES if a.key in off]
+            stored.add(key)
+    ordered = [a.key for a in ABILITIES if a.key in stored] + [GRANT + a.key for a in ABILITIES if GRANT + a.key in stored]
     # 清單裡已經沒有的舊項目留著(不替人丟資料),排在後面
-    return ordered + sorted(off - KEYS)
+    return ordered + sorted(stored - set(ordered))

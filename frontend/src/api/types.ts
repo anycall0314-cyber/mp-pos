@@ -85,6 +85,8 @@ export interface Product {
   name: string;
   spec: string;
   barcode: string;
+  /** 另外記的條碼(記住條碼、舊品號帶進來時另記的);刷這些也是完全相同 */
+  barcodes?: string[];
   category: number;
   category_code: string;
   category_name: string;

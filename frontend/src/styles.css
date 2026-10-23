@@ -8325,3 +8325,11 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .biz-count-ok {
   color: var(--success-text);
 }
+
+/* 先找有沒有建過:記住這個條碼(有「記住條碼」權限、找的是條碼才有;2026-10-23) */
+.ff-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}

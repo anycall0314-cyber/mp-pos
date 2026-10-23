@@ -351,6 +351,8 @@ class ProductSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, 
     tracks_unit_condition = serializers.BooleanField(read_only=True)
     # 商品照片:有幾張、主圖的縮圖網址(清單、搜尋結果、開單明細用來顯示「有照片」與小縮圖)
     photo_count = serializers.SerializerMethodField()
+    # 這個商品另外記的條碼(已確認的條碼別名;「記住條碼」記的、舊品號帶進來時另記的):刷這些碼也是完全相同
+    barcodes = serializers.SerializerMethodField()
     photo_thumb = serializers.SerializerMethodField()
     last_purchase_price = serializers.DecimalField(
         max_digits=14, decimal_places=2, read_only=True, allow_null=True
@@ -430,6 +432,14 @@ class ProductSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, 
         if after("is_virtual", False) and after("telecom_carrier", None) is None:
             raise serializers.ValidationError({"telecom_carrier": "門號商品要選電信商"})
 
+    def get_barcodes(self, obj) -> list[str]:
+        rows = getattr(obj, "barcode_aliases", None)
+        if rows is None:
+            from apps.identity.models import ProductAlias
+
+            rows = obj.aliases.filter(kind=ProductAlias.Kind.BARCODE, is_active=True, verified=True).order_by("id")
+        return [a.value for a in rows]
+
     def get_photo_count(self, obj) -> int:
         # 清單查詢已經算好(photo_count_n);單筆(剛建好那一筆)才另外查
         n = getattr(obj, "photo_count_n", None)
@@ -452,6 +462,7 @@ class ProductSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, 
             "name",
             "spec",
             "barcode",
+            "barcodes",
             "capacity",
             "color",
             "region_version",

@@ -278,3 +278,13 @@ test("商品條碼的長相:8 / 12 / 13 / 14 碼、檢查碼對才算;IMEI 15 �
   // 批次貼上、匯入表格沒加進去的放進「沒加入」
   assert.equal((page.match(/scanApi\.current\?\.note\(leftovers\);/g) ?? []).length, 2);
 });
+
+test("品號、條碼、另外記的條碼都算這個商品(完全相同,去掉符號不分大小寫)", async () => {
+  const { isProductCode } = await import("./deviceCodes.ts");
+  const p = { sku: "LC-000001", barcode: "OLD-LC-01", barcodes: ["4712345678901"] };
+  assert.equal(isProductCode(p, "lc000001"), true);
+  assert.equal(isProductCode(p, "old lc 01"), true);
+  assert.equal(isProductCode(p, "4712-3456-78901"), true);
+  assert.equal(isProductCode(p, "471234567890"), false);
+  assert.equal(isProductCode({ sku: "A1", barcode: "" }, ""), false);
+});

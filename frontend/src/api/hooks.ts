@@ -3261,6 +3261,11 @@ export const lookupVendorExchange = (code: string) =>
   api<ExchangeLookup>(`/vendor-exchanges/lookup/?code=${encodeURIComponent(code)}`);
 
 /** 送廠商換貨(path 空的)、已換貨(`編號/done/`、`done-serial/`)、標錯了(`編號/cancel/`)、不換了(`編號/unreturned/`) */
+/** 記住條碼:把刷到的條碼記到這個商品上(要員工帳號的「記住條碼」,預設不開;2026-10-23) */
+export async function rememberBarcode(productId: number, code: string): Promise<{ action: string; code: string }> {
+  return api(`/products/${productId}/remember-barcode/`, { method: "POST", body: JSON.stringify({ code }) });
+}
+
 /** 銷退退回來的「已退」確認可以賣(回在庫;要員工帳號的「確認可賣」) */
 export function useReleaseReturned() {
   const qc = useQueryClient();

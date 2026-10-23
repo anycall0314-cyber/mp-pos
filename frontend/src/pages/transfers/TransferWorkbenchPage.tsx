@@ -32,7 +32,7 @@ import {
 } from "@/components/workbench/ScanBox";
 import { toast } from "@/components/workbench/toast";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { codesLabel, normalizeCode } from "@/lib/deviceCodes";
+import { codesLabel, isProductCode, normalizeCode } from "@/lib/deviceCodes";
 
 /**
  * 調撥(工作台版型):一個畫面做完。
@@ -1155,13 +1155,7 @@ export function TransferWorkbenchPage() {
               apiRef={scanApi}
               search={search}
               onScan={onScan}
-              isExact={(o, q) => {
-                const nv = normalizeCode(q);
-                return (
-                  normalizeCode(o.payload.sku) === nv ||
-                  (!!o.payload.barcode && normalizeCode(o.payload.barcode) === nv)
-                );
-              }}
+              isExact={(o, q) => isProductCode(o.payload, q)}
               onPick={onPick}
             />
           </div>

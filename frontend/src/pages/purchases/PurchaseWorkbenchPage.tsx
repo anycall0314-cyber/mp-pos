@@ -39,6 +39,7 @@ import {
 } from "@/components/workbench/ScanBox";
 import { PhotoName, usePhotoPeek } from "@/components/photos/PhotoName";
 import { toast } from "@/components/workbench/toast";
+import { rememberCode } from "@/components/rememberBarcode";
 import { FindFirstPanel } from "@/pages/products/FindFirstPanel";
 import { ProductForm } from "@/pages/products/ProductForm";
 import type { Missed } from "@/lib/scanMissed";
@@ -46,6 +47,7 @@ import {
   hasDeviceCode,
   isProductBarcode,
   mainCode,
+  isProductCode,
   normalizeCode,
   placeScannedCode,
   removeUnitAt,
@@ -309,12 +311,7 @@ function looksLikeDeviceCode(text: string): boolean {
 }
 
 function isExactProduct(p: Product, q: string): boolean {
-  const nv = normalizeCode(q);
-  return (
-    !!nv &&
-    (normalizeCode(p.sku) === nv ||
-      (!!p.barcode && normalizeCode(p.barcode) === nv))
-  );
+  return isProductCode(p, q);
 }
 
 export function PurchaseWorkbenchPage({
@@ -326,6 +323,8 @@ export function PurchaseWorkbenchPage({
   const isSecondhandVendor = mode === "secondhand-vendor";
   // 員工帳號的權限:刷到系統沒有的商品要當場建,得有「商品建檔」(沒有的人掃碼框沒有「建立」那一顆)
   const canEditProducts = useCan("edit_products");
+  // 「記住條碼」(預設不開,管理員勾給信得過的人):先找的框多一格「記住這個條碼」
+  const canRemember = useCan("remember_barcode");
   /** 嵌在別頁裡(中古收購):沒有自己的頁首,存完不離開 */
   const embedded = !!onAfterCreated;
   const listPath = "/purchases";
@@ -2172,8 +2171,10 @@ export function PurchaseWorkbenchPage({
               setFinding(null);
               scanAfterOverlay();
             }}
-            onUse={(p) => {
+            rememberable={canRemember}
+            onUse={(p, code) => {
               setFinding(null);
+              if (code) void rememberCode(p, code);
               bringBack(p);
               // 加成了、被擋下來(中古機、虛擬、停用)都一樣:游標回掃碼框
               scanAfterOverlay();

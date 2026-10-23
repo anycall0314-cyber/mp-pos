@@ -3,7 +3,7 @@
 //
 // owner 2026-10-12 定的三條:差異要管理員調整與核准(盤的人只記數到的,核准才動庫存)、帶序號的逐台刷、盤點中可以繼續開單。
 // 盲盤:帳上數量、差異、金額只有管理員的回應裡有(這裡拿不到就不會畫)。
-import { normalizeCode } from "./deviceCodes.ts";
+import { isProductCode } from "./deviceCodes.ts";
 import { money } from "./money.ts";
 
 export type CountStatus = "counting" | "submitted" | "approved" | "void";
@@ -337,9 +337,8 @@ export function countedQty(text: string): number | null {
  * 配件那一格刷到 / 打完 Enter 的字,是不是這個商品的品號或條碼(完全相同)。
  * 條碼槍打得比搜尋快:只有這種才直接選起來,其他的要人看著下拉挑(`ScanBox`)。舊貼紙印的是舊品號 = 商品的條碼。
  */
-export function sameCode(p: { sku: string; barcode?: string | null }, text: string): boolean {
-  const key = normalizeCode(text);
-  return !!key && (normalizeCode(p.sku) === key || (!!p.barcode && normalizeCode(p.barcode) === key));
+export function sameCode(p: { sku: string; barcode?: string | null; barcodes?: string[] }, text: string): boolean {
+  return isProductCode(p, text);
 }
 
 /** 這個商品可不可以在配件那一格打數量;不行回一句話(記在「沒加入」)。伺服器一樣會擋(`stockcount._countable`)。 */

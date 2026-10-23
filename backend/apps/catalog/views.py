@@ -9,6 +9,7 @@ from django.db.models import (
     F,
     IntegerField,
     OuterRef,
+    Prefetch,
     Q,
     Subquery,
     Sum,
@@ -27,6 +28,7 @@ from rest_framework.response import Response
 
 from apps.core.filters import _is_postgres
 from apps.identity.dedup import DuplicateProduct
+from apps.identity.models import ProductAlias
 from apps.identity.product_match import MatchResult, find_candidates
 from apps.inventory.identifiers import find_serial_ids
 from apps.inventory.models import (
@@ -193,6 +195,7 @@ CATEGORY_GROUP = {"手機": "phone", "平板": "tablet", "穿戴": "wear", "手�
 
 class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
     needs_ability = abilities.EDIT_PRODUCTS      # 員工帳號的權限:新增 / 修改要有「商品建檔」;看照舊
+    ability_exempt = ("remember_barcode",)       # 記住條碼看的是「記住條碼」那一項(預設不開)
     serializer_class = ProductSerializer
     # 基本搜尋欄;serials__serial_no 改由 get_search_fields 動態加入,
     # 只有純數字 6 碼以上的查詢(IMEI-like)才會把序號納入比對,
@@ -370,6 +373,11 @@ class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
             )
             # search 走 serials__serial_no 會 JOIN serials,distinct 避免單一商品出現多次
             .distinct()
+            # 另外記的條碼(刷這些碼也是完全相同;serializer 的 barcodes)
+            .prefetch_related(Prefetch(
+                "aliases", to_attr="barcode_aliases",
+                queryset=ProductAlias.objects.filter(kind=ProductAlias.Kind.BARCODE, is_active=True, verified=True)
+                .order_by("id")))
         )
         # 庫存查詢頁 + 庫存倉別篩選 都會帶 ?warehouse 或要看 stock_qty,
         # 用 ?in_stock_only=true 過濾掉沒貨的(主檔頁不帶,所以仍可看到全部商品)
@@ -615,6 +623,56 @@ class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
                 {"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST
             )
         return Response(report)
+
+    @action(detail=True, methods=["post"], url_path="remember-barcode")
+    def remember_barcode(self, request, pk=None):
+        """記住條碼(owner 2026-10-23;員工帳號「記住條碼」,預設不開):進貨 / 盤點刷到不認得的條碼、用了這一款,
+        把那個條碼記到這個商品上(已確認的條碼別名,記下是誰記的;記錯了到商品的「別名」拿掉)。
+        別的商品的條碼 / 品號、系統裡某一台設備的碼 → 不記,講是誰的。`{code}` → `{action, code}`(created / kept)。"""
+        from django.db.models.functions import Upper
+
+        from apps.identity.normalize import normalize_serial
+        from apps.identity.services import _upsert_alias
+        from apps.inventory.identifiers import looks_like_imei, taken
+
+        abilities.require(request.user, abilities.REMEMBER_BARCODE)
+        product = self.get_object()
+        code = str((request.data or {}).get("code") or "").strip() if isinstance(request.data, dict) else ""
+        # 比法跟刷碼「完全相同」同一套(前端 normalizeCode = 後端 normalize_serial:去掉空白 / 破折號 / 底線 / 點,不分大小寫)
+        key = normalize_serial(code)
+        if not key or len(code) > 60:
+            return Response({"detail": "條碼看不懂"}, status=status.HTTP_400_BAD_REQUEST)
+        # 手機的 IMEI 不能當商品條碼(複審 P1:記了之後進貨刷那一台會直接選到商品,序號放不進格子)
+        if looks_like_imei(key):
+            return Response({"detail": "這是手機的 IMEI,不能當商品條碼"}, status=status.HTTP_400_BAD_REQUEST)
+        if key in {normalize_serial(product.barcode or ""), normalize_serial(product.sku)}:
+            return Response({"action": "kept", "code": code})
+
+        def squeezed(field):
+            out = field
+            for ch in (" ", "-", "_", "."):
+                out = Replace(out, Value(ch), Value(""))
+            return Upper(out)
+
+        # 別的商品的品號 / 條碼,寫法不一樣(4712-3456-7890)也算(複審 P1);別的商品另外記的條碼由 `_upsert_alias`
+        # 擋(它的比對鍵 alias_key 本來就去掉這些符號)
+        other = (Product.objects.for_tenant(request.tenant).exclude(pk=product.pk)
+                 .annotate(_s=squeezed("sku"), _b=squeezed("barcode")).filter(Q(_s=key) | Q(_b=key)).first())
+        if other is not None:
+            return Response({"detail": f"這個碼是「{other.name}」的", "owner": {"id": other.id, "name": other.name}},
+                            status=status.HTTP_409_CONFLICT)
+        if taken(request.tenant, [code]):
+            return Response({"detail": "這個碼是系統裡某一台設備的序號,不能當商品條碼"}, status=status.HTTP_409_CONFLICT)
+        with transaction.atomic():
+            alias, action_taken = _upsert_alias(
+                request.tenant, None, ProductAlias.Kind.BARCODE, code, product,
+                allow_repoint=False, verified=True, user=request.user)
+        if action_taken == "conflict":
+            owner = getattr(alias, "product", None)
+            name = owner.name if owner is not None else "別的商品"
+            return Response({"detail": f"這個碼已經是「{name}」的", "owner": {"id": owner.id, "name": name} if owner else None},
+                            status=status.HTTP_409_CONFLICT)
+        return Response({"action": action_taken, "code": code})
 
     @action(detail=False, methods=["get"], url_path="fit-suggest")
     def fit_suggest(self, request):

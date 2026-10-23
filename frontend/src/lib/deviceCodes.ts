@@ -17,6 +17,19 @@ export function normalizeCode(text: string | null | undefined): string {
     .toUpperCase();
 }
 
+/**
+ * 刷到的字是不是這個商品的品號、條碼,或另外記的條碼(`barcodes`:記住條碼記的、舊品號帶進來時另記的)。
+ * 完全相同才算(去掉符號、不分大小寫)。進貨、開單、調撥、盤點的「完全相同就直接選」都用這一份(2026-10-23)。
+ */
+export function isProductCode(
+  p: { sku: string; barcode?: string | null; barcodes?: string[] },
+  text: string,
+): boolean {
+  const nv = normalizeCode(text);
+  if (!nv) return false;
+  return [p.sku, p.barcode ?? "", ...(p.barcodes ?? [])].some((c) => !!c && normalizeCode(c) === nv);
+}
+
 /** 15 碼數字而且檢查碼正確。只用來猜該放哪一格、提醒打錯,不拿來擋人。 */
 export function looksLikeImei(text: string | null | undefined): boolean {
   const nv = normalizeCode(text);

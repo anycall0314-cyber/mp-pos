@@ -4,6 +4,7 @@ import { findProductsBeforeCreate } from "@/api/search";
 import type { Product } from "@/api/types";
 import { useCurrentUser } from "@/auth/AuthContext";
 import { Drawer } from "@/components/Drawer";
+import { looksLikeImei } from "@/lib/deviceCodes";
 import { MiniThumb } from "@/components/photos/PhotoName";
 import type { PeekTarget } from "@/components/photos/ProductPhotoPanel";
 import {
@@ -11,6 +12,7 @@ import {
   askable,
   createPrefill,
   fail,
+  barcodeIn,
   type FindState,
   type FoundRow,
   IDLE,
@@ -28,8 +30,8 @@ import {
 interface Props {
   open: boolean;
   onClose: () => void;
-  /** 已經有了:用這一款,不新增 */
-  onUse: (p: Product) => void;
+  /** 已經有了:用這一款,不新增。`rememberCode` = 有勾「記住這個條碼」時那一串條碼 */
+  onUse: (p: Product, rememberCode?: string) => void;
   /** 找過、確定沒有:建新的。prefill = 找的時候打的字(是條碼就在條碼那一格) */
   onCreate: (kind: "phone" | "other", prefill: { name: string; barcode: string }) => void;
   onPeek: (t: PeekTarget) => void;
@@ -41,6 +43,8 @@ interface Props {
   from?: { supplierId?: number | "" };
   /** 不寫庫存(盤點裡開的:盲盤,盤的人不能看到帳上數量) */
   hideStock?: boolean;
+  /** 這個帳號可以記住條碼(員工帳號「記住條碼」):找的是條碼時多一格「記住這個條碼」(預設不勾) */
+  rememberable?: boolean;
   /** 已停用的那一列按鈕上的字。商品管理是「查看這款」(過去看、管理員可以恢復);單據裡沒有地方可以「過去看」,由頁面決定怎麼講 */
   inactiveLabel?: string;
 }
@@ -60,6 +64,7 @@ export function FindFirstPanel({
   from,
   inactiveLabel = "查看這款",
   hideStock = false,
+  rememberable = false,
 }: Props) {
   const scope = stockScope(useCurrentUser()?.profile);
   const [input, setInput] = useState("");
@@ -72,8 +77,11 @@ export function FindFirstPanel({
   }
 
   // 每次打開都重新開始(關掉之前送出去的那一次回來也不算);有帶字進來就先找一次
+  // 「記住這個條碼」:預設不勾(紅隊:「這張單用這款」跟「以後這個條碼就是這款」要分開按)
+  const [remember, setRemember] = useState(false);
   useEffect(() => {
     const start = open ? (initialText ?? "") : "";
+    setRemember(false);
     setInput(start);
     apply(reset);
     if (open && askable(start)) run(start);
@@ -110,6 +118,12 @@ export function FindFirstPanel({
   const live = useRef({ open, input });
   live.current = { open, input };
   const prefill = () => createPrefill(state.phase === "done" ? state.asked : "");
+  // 刷進來的是條碼、而且這個帳號可以記:勾了「使用這款」時帶著那一串條碼。
+  // 看的是刷進來的那一串(initialText),不是框裡現在的字 —— 刷條碼找不到、改打品名找到才是平常的路
+  const scanned = rememberable ? barcodeIn(initialText ?? "") : null;
+  // 手機的 IMEI 不能當商品條碼(複審 P1)
+  const code = scanned && !looksLikeImei(scanned) ? scanned : null;
+  const use = (p: Product) => onUse(p, remember && code ? code : undefined);
 
   function peek(row: FoundRow<Product>) {
     const p = row.product;
@@ -127,7 +141,7 @@ export function FindFirstPanel({
                 seq: given,
                 open: live.current.open,
               });
-              if (ok) onUse(p);
+              if (ok) use(p);
             }
           : undefined,
     });
@@ -204,6 +218,12 @@ export function FindFirstPanel({
           {view.note}
         </div>
       )}
+      {code && (
+        <label className="ff-remember">
+          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+          記住這個條碼 {code}
+        </label>
+      )}
       <div className={view.stale ? "ff-list stale" : "ff-list"}>
         {view.rows.map((row) => {
           const p = row.product;
@@ -229,7 +249,7 @@ export function FindFirstPanel({
                 type="button"
                 className="btn small primary"
                 disabled={!view.canUse}
-                onClick={() => onUse(p)}
+                onClick={() => use(p)}
               >
                 {p.is_active ? "使用這款" : inactiveLabel}
               </button>

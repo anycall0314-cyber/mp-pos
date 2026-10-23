@@ -13,6 +13,7 @@ import { Toolbar } from "@/components/Toolbar";
 import { ArmButton } from "@/components/workbench/ArmButton";
 import { ScanBox, type ScanBoxApi, type ScanOption } from "@/components/workbench/ScanBox";
 import { toast } from "@/components/workbench/toast";
+import { rememberCode } from "@/components/rememberBarcode";
 import { isNegative } from "@/lib/fixedReports";
 import { tripBox, tripSettles } from "@/lib/purchasePrefill";
 import type { Missed } from "@/lib/scanMissed";
@@ -112,6 +113,7 @@ export function StockCountPage() {
    * 沒有的 → 「先記下」:打數量記成沒對到的碼,有權限的人在「沒對到碼」指定 / 建立(紅隊:不讓現場店員建主檔,也不讓那個碼卡住整張單)。
    */
   const canBuild = useCan("edit_products");
+  const canRemember = useCan("remember_barcode");
   const trip = useRef(tripBox<Missed>()).current;
   /** 從「沒對到碼」那一列按的「建立」:找到 / 建好的指定給那一筆(不是選起來打數量) */
   const unknownTarget = useRef<number | null>(null);
@@ -868,8 +870,10 @@ export function StockCountPage() {
           setFinding(null);
           focusScan();
         }}
-        onUse={(p) => {
+        rememberable={canRemember}
+        onUse={(p, code) => {
           setFinding(null);
+          if (code) void rememberCode(p, code);
           void bring(p);
           focusScan();
         }}

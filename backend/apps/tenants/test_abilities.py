@@ -22,6 +22,8 @@ from .models import UserProfile
 
 ACCOUNTS = "/api/v1/staff-accounts/"
 ALL = [a.key for a in abilities.ABILITIES]
+# 店員帳號一開始的樣子:預設不開的項目(記住條碼)關著,其他都開著
+CLERK = {k: k not in abilities.OPT_IN for k in ALL}
 
 
 def someone(role="tenant_user", off=()):
@@ -31,11 +33,11 @@ def someone(role="tenant_user", off=()):
 class RuleTests(SimpleTestCase):
     def test_everything_is_allowed_until_something_is_turned_off(self):
         clerk = someone()
-        self.assertEqual(abilities.for_user(clerk), {k: True for k in ALL})
+        self.assertEqual(abilities.for_user(clerk), CLERK)
         clerk = someone(off=["void_sales"])
         self.assertFalse(abilities.can(clerk, "void_sales"))
         self.assertTrue(abilities.can(clerk, "sales_return"))
-        self.assertEqual(abilities.for_user(clerk), {**{k: True for k in ALL}, "void_sales": False})
+        self.assertEqual(abilities.for_user(clerk), {**CLERK, "void_sales": False})
 
     def test_managers_always_can(self):
         for role in ("tenant_admin", "platform_admin"):
@@ -59,7 +61,7 @@ class RuleTests(SimpleTestCase):
 
     def test_odd_things_in_the_stored_list_are_ignored(self):
         clerk = someone(off=["void_sales", "gone_item", 7, None, ["void_purchase"]])
-        self.assertEqual(abilities.denied(clerk), {"void_sales"})
+        self.assertEqual(abilities.denied(clerk), {"void_sales"} | abilities.OPT_IN)
         self.assertEqual(abilities.denied(SimpleNamespace(is_authenticated=True)), set())      # 沒有帳號設定
 
     def test_changing_touches_only_what_was_sent(self):
@@ -100,7 +102,7 @@ class AccountPageTests(_Shop):
         rows = {a["username"]: a for a in body["accounts"]}
         self.assertEqual(set(rows), {"a-boss", "a-clerk"})
         self.assertEqual((rows["a-clerk"]["editable"], rows["a-boss"]["editable"]), (True, False))
-        self.assertEqual(rows["a-clerk"]["abilities"], {k: True for k in ALL})          # 預設全開
+        self.assertEqual(rows["a-clerk"]["abilities"], CLERK)          # 預設全開
         self.assertEqual(rows["a-clerk"]["warehouse"], f"{self.c.wh.code} {self.c.wh.name}")
         self.assertEqual(rows["a-clerk"]["name"], "甲店員")
 
@@ -108,7 +110,7 @@ class AccountPageTests(_Shop):
         one = f"{ACCOUNTS}{self.clerk.id}/"
         r = self.c.admin.patch(one, {"abilities": {"void_sales": False}}, format="json")
         self.assertEqual(r.status_code, 200, r.content.decode())
-        self.assertEqual(r.json()["abilities"], {**{k: True for k in ALL}, "void_sales": False})
+        self.assertEqual(r.json()["abilities"], {**CLERK, "void_sales": False})
         self.assertEqual(self.off(), ["void_sales"])
         self.c.admin.patch(one, {"abilities": {"sales_return": False}}, format="json")        # 別的項目不動
         self.assertEqual(self.off(), ["void_sales", "sales_return"])
@@ -150,7 +152,7 @@ class AccountPageTests(_Shop):
     def test_the_login_data_carries_what_this_account_can_do(self):
         self.turn_off("void_sales", "void_others")
         me = self.c.clerk.get("/api/v1/auth/me/").json()
-        self.assertEqual(me["abilities"], {**{k: True for k in ALL}, "void_sales": False, "void_others": False})
+        self.assertEqual(me["abilities"], {**CLERK, "void_sales": False, "void_others": False})
         self.turn_off(*ALL, user=self.c.admin_user)                 # 管理員身上就算有,也不算
         self.assertEqual(self.c.admin.get("/api/v1/auth/me/").json()["abilities"], {k: True for k in ALL})
 
