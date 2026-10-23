@@ -325,6 +325,8 @@ class PhoneTests(_Count):
         sold = __import__("apps.sales.models", fromlist=["SalesOrder"]).SalesOrder.objects.filter(tenant=self.c.tenant).order_by("id")
         for order in sold:
             self.c._post("/api/v1/sales-returns/", {"original_so": order.id, "payment_method": "cash"})
+        # 2026-10-23 起銷退直接回在庫;「已退」只剩這一版之前退的
+        ProductSerial.objects.filter(tenant=self.c.tenant, serial_no__in=["甲IMEI1", "甲IMEI2"]).update(status="returned")
         self.assertEqual((self.status_of("甲IMEI1"), self.status_of("甲IMEI2"), so["id"] > 0), ("returned", "returned", True))
         count = self.open()
         self.ok(self.scan(count, "甲IMEI1"))                # 已退、刷到了

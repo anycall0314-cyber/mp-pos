@@ -953,7 +953,8 @@ def _validate_sales_return(sr: SalesReturn):
 def commit_sales_return(sr: SalesReturn) -> SalesReturn:
     """銷退單儲存即觸發。
 
-    - 序號:status → returned,warehouse = 銷退倉,sold_at 清空 → 後續可手動轉回 in_stock
+    - 序號:status → in_stock,warehouse = 銷退倉(= 原銷貨單的門市),sold_at 清空 → 可以再賣、再調撥
+      (owner 2026-10-23「銷退過後，庫存自動轉回原倉」;以前停在 returned、沒有任何入口轉回在庫。瑕疵的走廠商換貨)
     - 配件:本倉 StockBalance.qty += qty
     - 寫 StockMovement(RETURN_IN)
     - 只能整張退:每行的金額 / 未稅 / 稅額 / 成本、單頭的 subtotal / tax / total 全部照抄原單,
@@ -996,10 +997,10 @@ def commit_sales_return(sr: SalesReturn) -> SalesReturn:
             it.save(update_fields=["amount", "untaxed_amount", "tax_amount", "cost_at_post", "staff_cost",
                                    "counts_cash"])
 
-            # 序號狀態 → returned,warehouse 回到銷退倉
+            # 序號直接回銷退倉(原銷貨單的門市)在庫
             for sos in it.serials.select_related("serial").all():
                 serial = sos.serial
-                serial.status = ProductSerial.Status.RETURNED
+                serial.status = ProductSerial.Status.IN_STOCK
                 serial.warehouse = sr.warehouse
                 serial.sold_at = None
                 serial.save(
@@ -1045,7 +1046,8 @@ def commit_sales_return(sr: SalesReturn) -> SalesReturn:
 def void_sales_return(sr: SalesReturn) -> SalesReturn:
     """銷退單作廢:把退回的庫存再扣回去(=回到「銷售出去」的狀態)。
 
-    - 序號:returned → sold,warehouse=None,sold_at 不重設(歷史已失,僅恢復狀態)
+    - 序號:在庫(以前的銷退是 returned)→ sold,warehouse=None,sold_at 不重設(歷史已失,僅恢復狀態)。
+      要還在銷退倉、而且退回來之後沒有任何異動(再賣、調撥、送換貨、盤點都算),不然擋
     - 配件:該倉 balance.qty -= qty(若不足會擋下,避免負庫存)
     - 不還原 SO.invoice_voided(由使用者決定是否要再去發票系統處理)
 
@@ -1067,12 +1069,27 @@ def void_sales_return(sr: SalesReturn) -> SalesReturn:
         serials = {
             x.pk: x for x in ProductSerial.objects.filter(pk__in=[l.serial_id for l in links])
         }
-        # 退回來的機器之後如果已經被處理(轉回在庫、再賣掉、調走),就不能再把它打回「已售」
+        # 退回來的機器之後如果已經被處理(再賣掉、調走、送換貨、盤點),就不能再把它打回「已售」。
+        # 退回來就是在庫,光看狀態分不出「沒動過」跟「賣掉又退回來」:還要看這張銷退之後這一台有沒有別的異動
+        back_in = dict(
+            StockMovement.objects.filter(
+                tenant=sr.tenant, serial_id__in=list(serials),
+                movement_type=StockMovement.MovementType.RETURN_IN,
+                ref_doc_type="sales_return", ref_doc_id=sr.id,
+            ).values_list("serial_id", "id")
+        )
         for serial in serials.values():
-            if serial.status != ProductSerial.Status.RETURNED or serial.warehouse_id != sr.warehouse_id:
+            here = (
+                serial.status in (ProductSerial.Status.IN_STOCK, ProductSerial.Status.RETURNED)
+                and serial.warehouse_id == sr.warehouse_id
+            )
+            moved = serial.pk not in back_in or StockMovement.objects.filter(
+                tenant=sr.tenant, serial_id=serial.pk, id__gt=back_in[serial.pk]
+            ).exists()
+            if not here or moved:
                 raise SalesReturnError(
-                    f"作廢失敗:序號 {serial.serial_no} 目前是「{serial.get_status_display()}」,"
-                    "已經不是這張銷退退回來的狀態"
+                    f"作廢失敗:序號 {serial.serial_no} 退回來之後已經動過(目前「{serial.get_status_display()}」),"
+                    "不能再打回已售"
                 )
 
         for it in items:

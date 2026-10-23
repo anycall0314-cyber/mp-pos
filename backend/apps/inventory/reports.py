@@ -172,12 +172,14 @@ def stock_flow(tenant, *, start, end, warehouse_id=None, category_id=None, searc
         pid=Coalesce("product_id", "serial__product_id"),
         later=Case(When(created_at__gte=period_end, then=Value(True)),
                    default=Value(False), output_field=BooleanField()),
-        one=Case(When(serial__isnull=False, then=Value(True)),
-                 default=Value(False), output_field=BooleanField()),
+        # 這一台現在還是「已退」:2026-10-23 起銷退直接回在庫,只有以前退的會停在已退(Codex 複審 P1:
+        # 不分的話,迄日之後新的銷退會被倒推成迄日當時「已退」)
+        back=Case(When(serial__status=ProductSerial.Status.RETURNED, then=Value(True)),
+                  default=Value(False), output_field=BooleanField()),
     ).values(
-        "pid", "later", "one", "movement_type", "ref_doc_type", "from_warehouse_id", "to_warehouse_id",
+        "pid", "later", "back", "movement_type", "ref_doc_type", "from_warehouse_id", "to_warehouse_id",
     ).annotate(q=Sum("qty")).values_list(
-        "pid", "later", "one", "movement_type", "ref_doc_type",
+        "pid", "later", "back", "movement_type", "ref_doc_type",
         "from_warehouse_id", "to_warehouse_id", "q",
     )
 
@@ -187,7 +189,7 @@ def stock_flow(tenant, *, start, end, warehouse_id=None, category_id=None, searc
     after = defaultdict(int)             # 迄日之後數量的增減(要倒回去)
     returned_after = defaultdict(int)    # 迄日之後「已退」的增減
     transit_after = defaultdict(int)     # 迄日之後「在途」的增減(只有全公司那一張用)
-    for pid, later, one, kind, ref, w_from, w_to, qty in grouped:
+    for pid, later, back, kind, ref, w_from, w_to, qty in grouped:
         if pid is None:
             continue
         if later and company:
@@ -200,8 +202,9 @@ def stock_flow(tenant, *, start, end, warehouse_id=None, category_id=None, searc
                 touched.add(pid)
                 continue
             after[pid] += amount * flows.SIGN[column]
-            # 序號商品被退回來 = 變成「已退」;那張銷退作廢 = 不再是「已退」。其他動作不會碰到已退的那一台
-            if one and column == "sale_return":
+            # 以前的銷退:退回來 = 變成「已退」、那張銷退作廢 = 不再是「已退」。只看現在還是已退的那幾台 ——
+            # 以前退的、迄日之後才作廢的那一台現在不是已退,迄日當時的「已退」會少算它(正式站、測試站都沒有已退的機器)
+            if back and column == "sale_return":
                 returned_after[pid] += amount
 
     stock, returned = _current_stock(tenant, warehouse_id)
