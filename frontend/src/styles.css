@@ -5277,7 +5277,8 @@ input.rp-inline-money {
   text-align: right;
   font-variant-numeric: tabular-nums;
   background: transparent;
-  border: 1px solid transparent;
+  /* 看得出可以改:平常就有一條虛線框(以前要滑過去才有框) */
+  border: 1px dashed var(--border);
   border-radius: 4px;
   color: var(--text);
   font-size: var(--font-body);
@@ -5296,12 +5297,45 @@ input.rp-inline-money:disabled {
   color: var(--text-dim);
   cursor: not-allowed;
 }
+input.rp-inline-money:disabled { border-color: transparent; }
 input.rp-inline-money.saving {
   opacity: 0.6;
 }
 input.rp-inline-money.saved {
+  border-style: solid;
   border-color: var(--success-text);
-  background: rgba(74, 222, 128, 0.1);
+}
+input.rp-inline-money.failed {
+  border-style: solid;
+  border-color: var(--danger-text);
+}
+/* 存檔中 / 已存 / 沒存成(lib/inlineSave.ts) */
+.rp-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 6px;
+  max-width: 220px;
+}
+.rp-inline-state {
+  font-size: var(--font-meta);
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.rp-inline-state.saved { color: var(--success-text); }
+.rp-inline-state.failed { color: var(--danger-text); }
+.rp-inline-retry {
+  margin-left: 4px;
+  min-height: 28px;
+  padding: 0 8px;
+}
+.rp-inline-err {
+  flex-basis: 100%;
+  text-align: right;
+  white-space: normal;
+  font-size: var(--font-meta);
+  color: var(--danger-text);
 }
 
 /* ============== 維修收據列印頁 (A4 直式,單張兩聯,中間裁切線) ============== */

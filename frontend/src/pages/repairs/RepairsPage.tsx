@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { useRepairOrders, useSaveRepairOrder } from "@/api/hooks";
 import { AppliedFilters } from "@/components/AppliedFilters";
 import { MoneyInput } from "@/components/MoneyInput";
+import { apiErrorText } from "@/components/workbench/errors";
 import { Toolbar } from "@/components/Toolbar";
 import { appliedList, cond } from "@/lib/appliedFilters";
 import { localDay } from "@/lib/fixedReports";
+import { type InlinePhase, needsSave, phaseText, takeServerValue } from "@/lib/inlineSave";
 import { intStr, money } from "@/lib/money";
 
 const STATUS_OPTIONS = [
@@ -19,7 +21,10 @@ const STATUS_OPTIONS = [
   { v: "completed", label: "完成" },
 ];
 
-/** 一筆數字 inline 編輯欄:點即改,失焦或按 Enter 自動 PATCH 存入。 */
+/**
+ * 清單上直接改的數字格(UI 改善計劃 UI-13;規則在 lib/inlineSave.ts):離開格子或按 Enter 就存,
+ * 旁邊寫「存檔中 / 已存 / 沒存成」;沒存成時打的字留著、寫原因、可以重試;Esc 放棄改回原本的。
+ */
 function InlineMoneyCell({
   initial,
   disabled,
@@ -31,56 +36,97 @@ function InlineMoneyCell({
   onSave: (v: string) => Promise<void>;
   title?: string;
 }) {
-  const normalized = intStr(initial);
-  const [val, setVal] = useState(normalized);
-  const [saving, setSaving] = useState(false);
-  const [savedFlash, setSavedFlash] = useState(false);
+  const server = intStr(initial);
+  const [val, setVal] = useState(server);
+  const [phase, setPhase] = useState<InlinePhase>("idle");
+  const [error, setError] = useState("");
+  // 打的字也記在 ref:按 Esc 改回原本的之後馬上離開格子,存檔要看到改回來的那一個(state 還沒更新)
+  const valRef = useRef(server);
+  // 人有沒有打字(只是點進去不算):沒打字就不送,格子跟著伺服器現在的值
+  const dirty = useRef(false);
+  const busy = useRef(false);
+  const timer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
-    setVal(normalized);
-  }, [normalized]);
+    if (takeServerValue(phase, dirty.current)) {
+      setVal(server);
+      valRef.current = server;
+    }
+    // 只在伺服器的值換了的時候看
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [server]);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+
+  function show(v: string) {
+    setVal(v);
+    valRef.current = v;
+  }
+  function edit(v: string) {
+    show(v);
+    dirty.current = true;
+  }
 
   async function flush() {
-    if (saving) return;
-    const trimmed = intStr(val);
-    if (trimmed === normalized) {
-      setVal(normalized);
+    if (busy.current) return;
+    const next = intStr(valRef.current);
+    if (!needsSave(next, server, dirty.current)) {
+      dirty.current = false;
+      show(server);
+      setPhase("idle");
+      setError("");
       return;
     }
-    setSaving(true);
+    busy.current = true;
+    setPhase("saving");
+    setError("");
     try {
-      await onSave(trimmed);
-      setSavedFlash(true);
-      setTimeout(() => setSavedFlash(false), 900);
+      await onSave(next);
+      dirty.current = false;
+      setPhase("saved");
+      window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(() => setPhase((p) => (p === "saved" ? "idle" : p)), 2000);
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
-      setVal(normalized);
+      setPhase("failed");
+      setError(apiErrorText(e));
     } finally {
-      setSaving(false);
+      busy.current = false;
     }
   }
 
   return (
-    <MoneyInput
-      min={0}
-      value={val}
-      disabled={disabled || saving}
-      onChange={setVal}
-      onBlur={flush}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-        if (e.key === "Escape") {
-          setVal(normalized);
-          (e.target as HTMLInputElement).blur();
-        }
-      }}
-      title={title}
-      className={
-        "rp-inline-money" +
-        (saving ? " saving" : "") +
-        (savedFlash ? " saved" : "")
-      }
-    />
+    <span className="rp-inline">
+      <MoneyInput
+        min={0}
+        value={val}
+        disabled={disabled || phase === "saving"}
+        onChange={edit}
+        onBlur={() => void flush()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          if (e.key === "Escape") {
+            dirty.current = false;
+            show(server);
+            setPhase("idle");
+            setError("");
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        title={title}
+        aria-invalid={phase === "failed" || undefined}
+        className={`rp-inline-money ${phase}`}
+      />
+      {phase !== "idle" && (
+        <span className={`rp-inline-state ${phase}`} role="status">
+          {phaseText(phase)}
+          {phase === "failed" && (
+            <button type="button" className="rp-inline-retry" onClick={() => void flush()}>
+              重試
+            </button>
+          )}
+        </span>
+      )}
+      {phase === "failed" && error && <span className="rp-inline-err">{error}</span>}
+    </span>
   );
 }
 
@@ -178,15 +224,6 @@ export function RepairsPage() {
               (含返修 {returnVisitCount} 筆)
             </span>
           )}
-        </span>
-        <span
-          style={{
-            marginLeft: "auto",
-            color: "var(--text-dim)",
-            fontSize: 14,
-          }}
-        >
-          報價 / 成本 / 實付欄位可直接點選編輯(失焦自動存)
         </span>
       </div>
 
