@@ -5634,6 +5634,277 @@ input.rp-inline-money.failed {
   color: #92400e;
 }
 
+/* ─── 卡片 / 面板 ─────────────────────────────────────── */
+:root[data-theme="light"] .pf-inline-modal,
+:root[data-theme="light"] .modal-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+/* 頂部導覽列細邊框、白底 */
+:root[data-theme="light"] .topbar {
+  background: #ffffff;
+  border-bottom-color: #e5e7eb;
+}
+
+/* ─── 表格 ─────────────────────────────────────────── */
+:root[data-theme="light"] table tbody tr:hover {
+  background: #f9fafb;
+}
+:root[data-theme="light"] table th {
+  background: #f9fafb;
+  color: #6b7280;
+  border-bottom-color: #e5e7eb;
+  font-weight: 600;
+}
+:root[data-theme="light"] table td,
+:root[data-theme="light"] table th {
+  border-bottom-color: #f3f4f6;
+}
+
+/* ─── ComboBox / 下拉 ─────────────────────────────────── */
+/* combobox 選中態:不再用實心藍,改用淺底色 */
+:root[data-theme="light"] .combobox-option.active,
+:root[data-theme="light"] .combobox-create.active {
+  background: #f3f4f6 !important;
+  color: #1f2937 !important;
+}
+/* 底色改淺之後,副標還是原本的白字就看不見了(庫存 / 符合原因都在副標) */
+:root[data-theme="light"] .combobox-option.active .combobox-option-secondary {
+  color: #6b7280;
+}
+:root[data-theme="light"] .combobox-option-create .combobox-option-label {
+  color: #1f2937;
+}
+
+/* ─── 表單欄位 focus ─────────────────────────────────── */
+/* focus ring 用較柔和的藍邊 + 淺藍光暈,不用實心藍 */
+:root[data-theme="light"] input:focus,
+:root[data-theme="light"] textarea:focus,
+:root[data-theme="light"] select:focus,
+:root[data-theme="light"] .combobox.open .combobox-input {
+  border-color: var(--info-text-soft);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.25);
+}
+
+/* ─── 導覽分頁:active 改用淺灰底 + 深字,不用實心藍 ─── */
+:root[data-theme="light"] .topnav-link.active {
+  background: #f3f4f6;
+  color: #111827;
+}
+:root[data-theme="light"] .topnav-link:hover {
+  background: #f9fafb;
+}
+
+/* ─── 通用元件:膠囊鈕 / 開關 / 提示問號 / 圖示鈕 / 虛線新增列
+       (零件範本管理頁主用,其他頁面也可共用)─── */
+
+/* 膠囊鈕(套用範本 / 快速加入零件)*/
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: var(--font-secondary);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.pill:hover {
+  background: var(--row-hover);
+  border-color: var(--text-dim);
+}
+.pill.pill-strong {
+  background: rgba(79, 140, 255, 0.12);
+  border-color: rgba(79, 140, 255, 0.35);
+  color: var(--accent);
+}
+.pill.pill-strong:hover {
+  background: rgba(79, 140, 255, 0.2);
+  border-color: rgba(79, 140, 255, 0.55);
+}
+:root[data-theme="light"] .pill {
+  background: #ffffff;
+}
+:root[data-theme="light"] .pill:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+:root[data-theme="light"] .pill.pill-strong {
+  background: #eef2ff;
+  color: #4338ca;
+  border-color: #c7d2fe;
+}
+:root[data-theme="light"] .pill.pill-strong:hover {
+  background: #e0e7ff;
+  border-color: #818cf8;
+}
+
+/* Toggle 開關 */
+.toggle-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: var(--font-body);
+}
+.toggle-switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.toggle-track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: #6b7280;
+  border-radius: 12px;
+  transition: background 0.18s ease;
+  flex-shrink: 0;
+}
+.toggle-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
+  border-radius: 50%;
+  transition: left 0.18s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+.toggle-switch input:checked + .toggle-track {
+  background: var(--accent-fill);
+}
+.toggle-switch input:checked + .toggle-track::after {
+  left: 18px;
+}
+.toggle-switch input:focus-visible + .toggle-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+:root[data-theme="light"] .toggle-track {
+  background: #d1d5db;
+}
+:root[data-theme="light"] .toggle-switch input:checked + .toggle-track {
+  background: #2962ff;
+}
+
+/* 問號提示(hover 顯示說明)*/
+.info-tip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+  font-weight: 600;
+  cursor: help;
+  margin-left: 6px;
+  position: relative;
+}
+.info-tip:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+.info-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 260px;
+  white-space: normal;
+  background: #1f2937;
+  color: #ffffff;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: var(--font-secondary);
+  font-weight: 400;
+  line-height: 1.5;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+.info-tip:hover::after {
+  opacity: 1;
+}
+
+/* 圖示按鈕(垃圾桶等,hover 才顯色)*/
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease,
+    border-color 0.12s ease;
+}
+.icon-btn:hover {
+  background: var(--row-hover);
+  color: var(--text);
+}
+.icon-btn.icon-btn-danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+:root[data-theme="light"] .icon-btn.icon-btn-danger:hover {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+/* 全寬虛線「+ 加一項」 */
+.btn-add-row {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 10px;
+  margin-top: 8px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: var(--font-body);
+  transition: background 0.12s ease, border-color 0.12s ease,
+    color 0.12s ease;
+}
+.btn-add-row:hover {
+  background: var(--row-hover);
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+:root[data-theme="light"] .btn-add-row:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+  color: #1f2937;
+}
+
 /* 大型輸入框(範本名稱、主標題輸入框)*/
 .input-lg {
   width: 100%;
@@ -6462,6 +6733,240 @@ tr.selected .intake-badge { filter: none; }
 
 /* .wb-btn 的長相跟 .btn 同一份(檔案最前面「按鈕:全站一套」);這裡只留工作台自己的 */
 .wb-btn.icon { padding: 0 8px; }
+.wb-x {
+  border: 0;
+  background: transparent;
+  color: var(--wb-red);
+  cursor: pointer;
+  font-size: var(--font-body);
+  line-height: 1;
+  padding: 5px 8px;
+  border-radius: 6px;
+}
+.wb-x:hover { background: var(--wb-red-soft); }
+.wb-check { display: inline-flex; align-items: center; gap: 6px; min-height: var(--control-height); font-size: var(--font-body); color: var(--wb-dim); white-space: nowrap; cursor: pointer; }
+.wb-check input { width: 18px; height: 18px; min-height: 0; }
+
+.wb-total { display: flex; flex-direction: column; gap: 1px; padding: 0 6px; }
+.wb-total b { font-size: var(--font-total); line-height: 1.2857; font-variant-numeric: tabular-nums; }
+
+.wb-warn {
+  margin-top: 10px;
+  background: var(--wb-amber-soft);
+  color: var(--wb-amber-text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: var(--font-secondary);
+}
+.wb-warn.err { background: var(--wb-red-soft); color: var(--wb-red); }
+
+.wb-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: var(--font-secondary);
+  background: var(--wb-head);
+  color: var(--wb-dim);
+  white-space: nowrap;
+}
+.wb-badge.ok { background: var(--wb-green-soft); color: var(--wb-green-text); }
+.wb-badge.warn { background: var(--wb-amber-soft); color: var(--wb-amber-text); }
+.wb-badge.bad { background: var(--wb-red-soft); color: var(--wb-red); }
+.wb-dim { color: var(--wb-dim); }
+.wb-small { font-size: var(--font-secondary); }
+.wb-mono { font-family: ui-monospace, Menlo, monospace; }
+
+/* 掃碼框 + 下拉 */
+.wb-scan { flex: 1; min-width: 240px; }
+.wb-scan-in { position: relative; }
+.wb-scan-in > input {
+  width: 100%;
+  min-height: var(--control-height-lg);
+  font-size: var(--font-section) !important;
+  padding: 8px 12px !important;
+  border: 1.5px solid var(--wb-blue) !important;
+  border-radius: 9px !important;
+}
+.wb-scan-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 100%;
+  max-height: 360px;
+  overflow: auto;
+  margin-top: 2px;
+  background: var(--wb-card);
+  border: 1px solid var(--wb-input-border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  z-index: 40;
+}
+.wb-scan-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: var(--font-body);
+}
+.wb-scan-item.sel, .wb-scan-item:hover { background: var(--wb-blue-soft); }
+.wb-scan-item .code { color: var(--wb-dim); font-size: var(--font-secondary); }
+.wb-scan-item .hint { margin-left: auto; padding-left: 16px; color: var(--wb-dim); font-size: var(--font-secondary); }
+.wb-scan-item.none { color: var(--wb-dim); cursor: default; }
+.wb-scan-item.none:hover { background: transparent; }
+/* 沒加進去的碼留在掃碼框下面(連續刷的時候訊息條一閃就過了);點一下放回輸入框 */
+.wb-scan-missed { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+/* 一筆「沒加入」與它旁邊的「建立」:外面這一層不佔位置,版面跟只有那顆碼的時候一樣 */
+.wb-scan-miss { display: contents; }
+/* 旁邊有「建立」的:那顆碼跟它的「建立」綁在一起,換行時不拆開 */
+.wb-scan-miss.has-create { display: inline-flex; align-items: center; gap: 6px; }
+/* 下拉最下面的「建立商品」 */
+/* 候選再多也看得到:固定在下拉的最下面(下拉自己會捲) */
+.wb-scan-item.create {
+  position: sticky; bottom: 0;
+  color: var(--wb-blue); background: var(--wb-card); border-top: 1px solid var(--wb-line);
+}
+/* 反白色是半透明的:底下墊一層不透明的,捲過去的候選才不會透出來 */
+.wb-scan-item.create.sel, .wb-scan-item.create:hover {
+  background: linear-gradient(var(--wb-blue-soft), var(--wb-blue-soft)), var(--wb-card);
+}
+.wb-scan-missed .wb-badge { border: 0; cursor: pointer; font: inherit; font-size: var(--font-secondary); }
+/* 有掃碼框的那一排:往上對齊,「沒加入」冒出來時右邊的按鈕不會跟著往下掉 */
+.wb-row.scanrow { align-items: flex-start; }
+.wb-row.scanrow > .wb-btn { margin-top: 29px; }
+.wb-row.scanrow > .wb-check { margin-top: 29px; }
+
+/* 明細與清單 */
+.wb-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--wb-card);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--wb-card-shadow);
+  border: 1px solid var(--wb-line-soft);
+}
+.wb-table th, .wb-table td {
+  padding: var(--row-pad) 12px;
+  border-bottom: 1px solid var(--wb-line);
+  text-align: left;
+  vertical-align: middle;
+}
+.wb-table th {
+  background: var(--wb-head);
+  font-weight: 600;
+  font-size: var(--font-table-head);
+  white-space: nowrap;
+}
+.wb-table tbody tr:last-child > td { border-bottom: 0; }
+.wb-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.wb-table tr.clickable { cursor: pointer; }
+.wb-table tr.clickable:hover > td { background: var(--wb-hover); }
+.wb-table tr.void > td { color: var(--wb-dim); text-decoration: line-through; }
+.wb-table tr.void > td.keep { text-decoration: none; }
+.wb-table tr.detail > td { background: var(--wb-hover); font-size: var(--font-secondary); }
+.wb-table td.empty { text-align: center; color: var(--wb-dim); padding: 22px 10px; }
+.wb-lines input.qty { width: 80px; }
+.wb-lines td { padding-top: 6px; padding-bottom: 6px; }
+.wb-lines th.prod { min-width: 260px; }
+.wb-lines td.prod { white-space: nowrap; }
+.wb-lines th.fill, .wb-lines td.fill { width: 99%; }
+.wb-lines .pname { font-weight: 600; }
+.wb-lines .pcode { margin-left: 6px; font-size: var(--font-secondary); color: var(--wb-dim); }
+@keyframes wbflash { from { background: var(--wb-green-soft); } to { background: transparent; } }
+.wb-table tr.flash > td { animation: wbflash 1.2s ease; }
+.wb-inv-card.flash { animation: wbflash 1.6s ease; }
+
+/* 序號小標籤:顯示後 6 碼,點一下選 / 取消 */
+.wb-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.wb-chip {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: var(--font-body);
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--wb-input-border);
+  background: var(--wb-input);
+  color: var(--wb-text);
+  cursor: pointer;
+  user-select: none;
+}
+.wb-chip:hover { border-color: var(--wb-blue); }
+.wb-chip.on { background: var(--wb-blue-fill); border-color: var(--wb-blue-fill); color: #fff; }
+.wb-chip:disabled { cursor: default; opacity: 0.6; }
+.wb-chip-count { margin-left: auto; color: var(--wb-dim); font-size: var(--font-secondary); white-space: nowrap; padding-left: 8px; }
+
+.wb-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 8px;
+}
+.wb-section h3 { margin: 0; font-size: var(--font-section); line-height: 1.4445; }
+.wb-detail-lines { border-collapse: collapse; }
+.wb-detail-lines td { padding: 3px 14px 3px 0; border: 0; vertical-align: top; }
+.wb-detail-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+/* 訊息條:畫面下方中間,幾秒自己消失;可以帶一個「復原」 */
+.wb-toasts {
+  position: fixed;
+  left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 900;
+  pointer-events: none;
+}
+.wb-toast {
+  pointer-events: auto;
+  background: var(--wb-toast);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  font-size: var(--font-body);
+  max-width: 80vw;
+}
+.wb-toast.err { background: #b91c1c; }
+.wb-toast.ok { background: #15803d; }
+.wb-toast button {
+  margin-left: 14px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+  padding: 0 2px;
+}
+@media (max-width: 640px) {
+  .wb { padding: 10px 10px 24px; }
+  .wb-table { display: block; overflow-x: auto; }
+  /* 手機:掃碼框自己佔一整排,合計與按鈕排下一排 */
+  .wb-row.scanrow { align-items: center; }
+  .wb-row.scanrow > .wb-field.grow { flex: 1 1 100%; }
+  .wb-row.scanrow > .wb-btn, .wb-row.scanrow > .wb-check { margin-top: 0; }
+  .wb-row.scanrow > .wb-total { flex-direction: row; align-items: baseline; gap: 8px; margin-right: auto; }
+  /* 明細在手機上一行變一塊:品名一排、數量與移除一排、序號標籤一排(不用橫向捲) */
+  .wb-table.wb-lines { display: block; overflow: visible; }
+  .wb-lines thead { display: none; }
+  .wb-lines tbody { display: block; }
+  .wb-lines tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--wb-line);
+  }
+  .wb-lines td, .wb-lines td.fill { display: block; padding: 0; border: 0; width: auto; }
+  .wb-lines td.prod, .wb-lines td.fill, .wb-lines td.empty { flex: 1 1 100%; white-space: normal; }
+}
+
 /* 工作台:庫存查詢 */
 .wb input.wb-big { font-size: var(--font-section); min-height: var(--control-height-lg); padding: 10px 12px; width: 100%; }
 .wb-link {
