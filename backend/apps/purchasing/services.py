@@ -525,7 +525,7 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
             current = balance.qty if balance else 0
             if current < need[it.product_id]:
                 raise PurchaseOrderError(
-                    f"商品 {it.product.sku} 在 {po.warehouse.code} 現有 {current},"
+                    f"{it.product.name} 在{po.warehouse.name} 現有 {current},"
                     f"無法回退本單的 {need[it.product_id]} 件(部分已售出/調撥)"
                 )
             balances[it.product_id] = balance

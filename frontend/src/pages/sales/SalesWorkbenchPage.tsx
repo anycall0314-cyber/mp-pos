@@ -1089,7 +1089,7 @@ export function SalesWorkbenchPage() {
     if (devices.length === 0) return false;
     if (warehouseRef.current !== at) return "查的時候換了門市,請再刷一次";
     if (devices.length > 1) {
-      return `對到 ${devices.length} 台設備,請先到每日對帳處理`;
+      return `這個碼對到 ${devices.length} 台設備,請找管理員`;
     }
     const device = devices[0];
     // 廠商換貨中、就在這個門市:剛刷的就是這一台 = 換回來了,按「已換貨」接著賣(2026-10-21)
@@ -1100,9 +1100,9 @@ export function SalesWorkbenchPage() {
       return "這一台廠商換貨中";
     }
     if (device.status !== "in_stock" || device.warehouse !== at) {
-      return `這一台${device.status_label}${
-        device.warehouse_code ? `,在 ${device.warehouse_code}` : ""
-      },不能在這裡賣`;
+      const where =
+        device.warehouse_name || stores.find((s) => s.id === device.warehouse)?.name || device.warehouse_code;
+      return `這一台${device.status_label}${where ? `,在${where}` : ""},不能在這裡賣`;
     }
     const results = await searchProductsForSales(code, { warehouseId: at });
     if (warehouseRef.current !== at) return "查的時候換了門市,請再刷一次";
@@ -2110,7 +2110,6 @@ export function SalesWorkbenchPage() {
                         onPeek={photoPeek.open}
                         className="pname"
                       />
-                      <span className="pcode">{p.sku}</span>
                       {todo.length > 0 && (
                         <button
                           type="button"

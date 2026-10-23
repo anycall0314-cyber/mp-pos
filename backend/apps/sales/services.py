@@ -120,7 +120,7 @@ def _validate_items(so: SalesOrder, items):
             current = balance.qty if balance else 0
             if current < it.qty:
                 raise SalesOrderError(
-                    f"第 {it.line_no} 行 {product.sku} 在 {so.warehouse.code} "
+                    f"第 {it.line_no} 行 {product.name} 在{so.warehouse.name} "
                     f"現有 {current},不足銷售 {it.qty}"
                 )
 
@@ -524,7 +524,7 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
                 if bal is None or bal.qty < it.qty:
                     # 檢查庫存夠不夠是在鎖之前做的;鎖到之後數量可能已經被另一張單賣掉
                     raise SalesOrderError(
-                        f"第 {it.line_no} 行 {product.sku} 在 {so.warehouse.code} "
+                        f"第 {it.line_no} 行 {product.name} 在{so.warehouse.name} "
                         f"現有 {bal.qty if bal else 0},不足銷售 {it.qty}"
                     )
                 bal.qty -= it.qty

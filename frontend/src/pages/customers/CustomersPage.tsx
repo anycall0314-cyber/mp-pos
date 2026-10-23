@@ -474,9 +474,7 @@ export function CustomersPage() {
                             <td>{so.no}</td>
                             <td>{so.doc_date}</td>
                             <td>
-                              {so.sales_person_name
-                                ? `${so.sales_person_code ?? ""} ${so.sales_person_name}`
-                                : "—"}
+                              {so.sales_person_name || "—"}
                             </td>
                             <td>{so.tax_method_label}</td>
                             <td>{so.invoice_no || "—"}</td>

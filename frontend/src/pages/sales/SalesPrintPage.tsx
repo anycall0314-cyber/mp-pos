@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 
-import { useSalesOrder } from "@/api/hooks";
+import { useInvoiceTypes, useSalesOrder } from "@/api/hooks";
 import { money } from "@/lib/money";
 
 /**
@@ -15,6 +15,7 @@ export function SalesPrintPage() {
   const { id, type } = useParams<{ id: string; type: string }>();
   const soId = id ? Number(id) : null;
   const { data, isLoading } = useSalesOrder(soId);
+  const invoiceTypes = useInvoiceTypes().data ?? [];
   const isInvoice = type === "invoice";
 
   useEffect(() => {
@@ -45,7 +46,10 @@ export function SalesPrintPage() {
 
       {isInvoice && (
         <div className="print-section">
-          <Row label="發票類型" value={so.invoice_form || "(未指定)"} />
+          <Row
+            label="發票類型"
+            value={invoiceTypes.find((t) => t.code === so.invoice_form)?.name || "(未指定)"}
+          />
           {so.invoice_no && <Row label="發票號碼" value={so.invoice_no} />}
           {so.invoice_date && <Row label="發票日期" value={so.invoice_date} />}
           {so.buyer_tax_id && (
@@ -63,7 +67,7 @@ export function SalesPrintPage() {
         {so.sales_person_name && (
           <Row
             label="業務員"
-            value={`${so.sales_person_code ?? ""} ${so.sales_person_name}`}
+            value={so.sales_person_name}
           />
         )}
       </div>

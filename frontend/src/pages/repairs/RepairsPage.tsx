@@ -345,7 +345,7 @@ export function RepairsPage() {
                     <td>{r.host_model_name}</td>
                     <td>{r.received_date}</td>
                     <td>{r.expected_complete_date ?? "—"}</td>
-                    <td>{r.warehouse_code}</td>
+                    <td>{r.warehouse_name || r.warehouse_code}</td>
                     <td className="num">
                       {r.mode === "external" ? (
                         <InlineMoneyCell

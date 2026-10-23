@@ -74,9 +74,7 @@ export function MemberHistoryPage() {
           it.msisdn ||
           (it.serials ?? []).map((s) => s.serial_no).join(", ") ||
           "—",
-        sales_person_label: so.sales_person_name
-          ? `${so.sales_person_code ?? ""} ${so.sales_person_name}`
-          : "—",
+        sales_person_label: so.sales_person_name || "—",
         customer_name: so.source_name || so.customer_name || "—",
         doc_no: so.no,
       })),
