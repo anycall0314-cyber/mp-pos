@@ -1,21 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   lookupMembers,
   usePaymentMethods,
   useSaveMember,
   useSecondhandAcquisition,
+  useWarehouses,
 } from "@/api/hooks";
-import {
-  searchSecondhandProducts,
-  searchWarehouses,
-} from "@/api/search";
+import { searchSecondhandProducts } from "@/api/search";
 import type {
   ConditionGrade,
   Member,
   Product,
-  Warehouse,
 } from "@/api/types";
+import { useDefaultWarehouse } from "@/auth/AuthContext";
 import { SamePhonePick } from "@/components/SamePhonePick";
 import { Banner } from "@/components/Banner";
 import { openLabelPrint } from "@/components/labels/openLabelPrint";
@@ -48,6 +46,24 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
  * 對應銷貨單(虛擬商品「收購二手」、tax_free、total 負數代表現金流出);
  * 後端會自動依會員建立 / 比對個人 Customer 作為銷貨單歸屬。
  */
+/** 上次進貨 / 收購選的門市(跟進貨開單頁同一格,記在這台電腦) */
+const K_STORE = "mp_pos_pur_store";
+function readStore(): number | null {
+  try {
+    const n = Number(localStorage.getItem(K_STORE));
+    return n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+function rememberStore(id: number) {
+  try {
+    localStorage.setItem(K_STORE, String(id));
+  } catch {
+    /* 存不了就算了 */
+  }
+}
+
 export function SecondhandPersonalEntry() {
   const acquire = useSecondhandAcquisition();
   const saveMember = useSaveMember();
@@ -67,9 +83,20 @@ export function SecondhandPersonalEntry() {
     name: string;
     national_id: string;
   }>({ name: "", national_id: "" });
-  const [warehouse, setWarehouse] = useState<number | "">("");
-  const [warehouseOption, setWarehouseOption] =
-    useState<ComboOption<Warehouse> | null>(null);
+  // 門市:跟進貨單一樣自動帶(鎖門市的 = 自己那一家;沒鎖 = 上次進貨 / 收購選的那一家,沒有就帳號的門市)。
+  // 門市只有幾家,用一般下拉(全站檢視 C10:以前每次都要重新搜尋)
+  const me = useDefaultWarehouse();
+  const warehousesQ = useWarehouses();
+  const stores = (warehousesQ.data ?? []).filter((w) => w.is_active);
+  const [picked, setPicked] = useState<number | "" | null>(null);
+  const remembered = readStore();
+  const warehouse: number | "" = me.locked && me.id
+    ? me.id
+    : picked !== null
+      ? picked
+      : stores.find((w) => w.id === remembered)?.id ?? stores.find((w) => w.id === me.id)?.id ?? stores[0]?.id ?? "";
+  const imeiRef = useRef<HTMLInputElement>(null);
+  const snRef = useRef<HTMLInputElement>(null);
   const [product, setProduct] = useState<number | "">("");
   const [productOption, setProductOption] = useState<ComboOption<Product> | null>(
     null,
@@ -313,16 +340,22 @@ export function SecondhandPersonalEntry() {
             )}
           </Field>
           <Field label="門市" required>
-            <ComboBox<Warehouse>
+            <select
               value={warehouse}
-              selectedOption={warehouseOption}
-              onChange={(id, opt) => {
-                setWarehouse(id);
-                setWarehouseOption(opt ?? null);
+              disabled={me.locked}
+              onChange={(e) => {
+                const id = e.target.value ? Number(e.target.value) : "";
+                setPicked(id);
+                if (id) rememberStore(id);
               }}
-              fetchOptions={searchWarehouses}
-              placeholder="搜尋倉庫"
-            />
+            >
+              {warehouse === "" && <option value="">請選</option>}
+              {stores.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
           </Field>
           <Field label="單據日期" required>
             <input
@@ -355,16 +388,27 @@ export function SecondhandPersonalEntry() {
             }
           >
             <input
+              ref={imeiRef}
               value={imei}
               onChange={(e) => setImei(e.target.value)}
-              placeholder="例:354123456789012"
+              onKeyDown={(e) => {
+                // 刷完 IMEI(條碼槍帶 Enter)游標跳 SN(全站檢視 C10)
+                if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  snRef.current?.focus();
+                }
+              }}
               maxLength={80}
             />
           </Field>
           <Field label="SN" error={snTaken ? buybackText(snTaken) : undefined}>
             <input
+              ref={snRef}
               value={sn}
               onChange={(e) => setSn(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.nativeEvent.isComposing) e.preventDefault();
+              }}
               maxLength={80}
             />
           </Field>
@@ -389,14 +433,13 @@ export function SecondhandPersonalEntry() {
               max={100}
               value={batteryHealth}
               onChange={(e) => setBatteryHealth(e.target.value)}
-              placeholder="iOS 機填,Android 留空"
             />
           </Field>
           <Field label="預計售價(自定)">
             <MoneyInput
               value={customPrice}
               onChange={setCustomPrice}
-              placeholder="留空使用主檔售價"
+              placeholder="照主檔"
             />
           </Field>
           <Field label="收購金額(付給會員)" required>

@@ -8,6 +8,7 @@ import {
   useInvoiceTypes,
   usePaymentMethods,
   useWarehouses,
+  useSaveSupplier,
 } from "@/api/hooks";
 import {
   findDevicesByCode,
@@ -145,7 +146,7 @@ interface Props {
    */
   mode?: "regular" | "secondhand-vendor";
   /** 建單成功之後(嵌在別頁時用) */
-  onAfterCreated?: () => void;
+  onAfterCreated?: (created: { id: number; no: string }) => void;
 }
 
 const TAX_METHODS: { value: TaxMethod; label: string }[] = [
@@ -321,6 +322,29 @@ export function PurchaseWorkbenchPage({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isSecondhandVendor = mode === "secondhand-vendor";
+  /** 開單頁直接新增廠商(名稱、電話、統編;全站檢視 C6) */
+  const saveSupplier = useSaveSupplier();
+  const [newSup, setNewSup] = useState<{ name: string; phone: string; tax_id: string } | null>(null);
+  const [newSupError, setNewSupError] = useState("");
+  async function createSupplier() {
+    if (!newSup || !newSup.name.trim()) return;
+    try {
+      const made = await saveSupplier.mutateAsync({
+        name: newSup.name.trim(),
+        phone: newSup.phone.trim(),
+        tax_id: newSup.tax_id.trim(),
+        is_active: true,
+      });
+      setSupplier(made.id);
+      setSupplierOption({ id: made.id, label: made.name, secondary: made.code });
+      setNewSup(null);
+      toast(`已新增廠商 ${made.name}`, "ok");
+    } catch (e) {
+      setNewSupError(apiErrorText(e));
+    }
+  }
+  /** validate() 抓到問題的那一行(底下那一句點了捲過去) */
+  const issueKeyRef = useRef<string | null>(null);
   // 員工帳號的權限:刷到系統沒有的商品要當場建,得有「商品建檔」(沒有的人掃碼框沒有「建立」那一顆)
   const canEditProducts = useCan("edit_products");
   // 「記住條碼」(預設不開,管理員勾給信得過的人):先找的框多一格「記住這個條碼」
@@ -1280,6 +1304,8 @@ export function PurchaseWorkbenchPage({
   );
 
   function validate(): string | null {
+    // 有問題的是哪一行:底下那一句點了捲到那一行(全站檢視 C5)
+    issueKeyRef.current = null;
     if (!supplier) return "請選廠商";
     if (!warehouse) return "請選門市";
     const ls = linesRef.current;
@@ -1292,6 +1318,7 @@ export function PurchaseWorkbenchPage({
     if (known) return known;
     const seen = new Set<string>();
     for (const l of ls) {
+      issueKeyRef.current = l.key;
       const name = l.product.name;
       if (!(l.qty > 0)) return `「${name}」數量要大於 0`;
       if (l.billedQty > l.qty) return `「${name}」計價數量不能大於進貨數量`;
@@ -1319,6 +1346,7 @@ export function PurchaseWorkbenchPage({
         }
       }
     }
+    issueKeyRef.current = null;
     return null;
   }
 
@@ -1467,7 +1495,7 @@ export function PurchaseWorkbenchPage({
         toast(`送出時才加進來的 ${left} 筆還留在明細`, "");
         return;
       }
-      if (onAfterCreated) onAfterCreated();
+      if (onAfterCreated) onAfterCreated({ id: created.id, no: created.no });
       else navigate(`${listPath}/${created.id}`, { state: { created: created.id } });
     } catch (e) {
       setError(apiErrorText(e));
@@ -1535,7 +1563,15 @@ export function PurchaseWorkbenchPage({
   const kinds = new Set(lines.map((l) => l.product.id)).size;
   const totalUnits = lines.reduce((s, l) => s + l.qty, 0);
   const issue = lines.length > 0 ? validate() : null;
+  const issueKey = issue ? issueKeyRef.current : null;
   const zeroCount = lines.filter(zeroPriced).length;
+  // 中古收購:沒填售價的台數(標籤不印價錢;只提醒不擋 —— 全站檢視 C9)
+  const noPriceUnits = isSecondhandVendor
+    ? lines.reduce(
+        (n, l) => n + l.serials.filter((e) => (e.imei.trim() || e.sn.trim()) && !(roundInt(e.price ?? "") > 0)).length,
+        0,
+      )
+    : 0;
   const taxLabel = TAX_METHODS.find((t) => t.value === taxMethod)?.label ?? "";
   const payName = paymentMethods.find((m) => m.id === paymentMethod)?.name;
   const storeName = stores.find((s) => s.id === warehouse)?.name;
@@ -1601,6 +1637,18 @@ export function PurchaseWorkbenchPage({
               disabled={locked}
               placeholder="代碼 / 名稱 / 統編"
             />
+            {/* 新廠商第一次送貨:不用離開這張單(全站檢視 C6) */}
+            <button
+              type="button"
+              className="wb-link"
+              disabled={locked}
+              onClick={() => {
+                setNewSupError("");
+                setNewSup({ name: "", phone: "", tax_id: "" });
+              }}
+            >
+              新增
+            </button>
           </div>
           <label className="ws-f">
             <span className="ws-lbl">門市</span>
@@ -1700,6 +1748,7 @@ export function PurchaseWorkbenchPage({
               匯入表格
             </button>
           )}
+
         </div>
 
         {serialBlock && (
@@ -2024,9 +2073,25 @@ export function PurchaseWorkbenchPage({
         <span className="ws-sub">
           未稅 {money(estSubtotal)} · 稅 {money(estTax)}
         </span>
-        {issue && !unsure && <span className="ws-issue">{issue}</span>}
+        {issue && !unsure && (issueKey ? (
+          <button
+            type="button"
+            className="ws-issue ws-issue-link"
+            onClick={() => {
+              // 用 setCurrent:掃碼要刷進的那一行也跟著換(複審 P0:只改畫面上的那一行,刷碼會掛到別行)
+              setCurrent(issueKey);
+              tableRef.current?.querySelector(`[data-line="${issueKey}"]`)?.scrollIntoView({ block: "center" });
+              backToScan();
+            }}
+          >
+            {issue}
+          </button>
+        ) : (
+          <span className="ws-issue">{issue}</span>
+        ))}
         {/* 單價 0 只提醒、不擋(贈品可能真的是 0;全站檢視 C4) */}
         {!issue && zeroCount > 0 && <span className="ws-issue">{zeroCount} 行單價 0,仍可儲存</span>}
+        {!issue && noPriceUnits > 0 && <span className="ws-issue">{noPriceUnits} 台沒填售價,仍可儲存</span>}
         <span className="ws-grow" />
         <span className="ws-total">
           <span>含稅總額</span>
@@ -2062,6 +2127,46 @@ export function PurchaseWorkbenchPage({
           </button>
         )}
       </footer>
+
+      <Drawer
+        open={newSup !== null}
+        title="新增廠商"
+        width={400}
+        onClose={() => setNewSup(null)}
+        footer={
+          <>
+            <button type="button" className="wb-btn" onClick={() => setNewSup(null)}>
+              取消
+            </button>
+            <button
+              type="button"
+              className="wb-btn go"
+              disabled={!newSup?.name.trim() || saveSupplier.isPending}
+              onClick={() => void createSupplier()}
+            >
+              建立並使用
+            </button>
+          </>
+        }
+      >
+        {newSup && (
+          <div className="ws-form">
+            {newSupError && <div className="wb-warn err">{newSupError}</div>}
+            <label>
+              <span>名稱</span>
+              <input autoFocus value={newSup.name} maxLength={100} onChange={(e) => setNewSup({ ...newSup, name: e.target.value })} />
+            </label>
+            <label>
+              <span>電話</span>
+              <input value={newSup.phone} maxLength={30} onChange={(e) => setNewSup({ ...newSup, phone: e.target.value })} />
+            </label>
+            <label>
+              <span>統一編號</span>
+              <input value={newSup.tax_id} maxLength={8} inputMode="numeric" onChange={(e) => setNewSup({ ...newSup, tax_id: e.target.value })} />
+            </label>
+          </div>
+        )}
+      </Drawer>
 
       <Drawer
         open={infoOpen}

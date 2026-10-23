@@ -321,15 +321,6 @@ export function SuppliersPage() {
                       <span style={{ color: "var(--text-dim)" }}>
                         {selectedSupplier?.code}
                       </span>
-                      <span
-                        style={{
-                          marginLeft: 8,
-                          fontSize: 14,
-                          color: "var(--text-dim)",
-                        }}
-                      >
-                        (系統自動產生)
-                      </span>
                     </dd>
                   </>
                 )}

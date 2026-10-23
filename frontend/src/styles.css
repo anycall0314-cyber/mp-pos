@@ -8472,3 +8472,22 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 }
 .same-phone .btn { min-height: 36px; }
 .same-phone-who { font-weight: 600; }
+
+/* 進貨單底下「還缺什麼」那一句:點了捲到那一行(全站檢視 C5) */
+.ws-issue-link {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  font: inherit;
+}
+
+/* 中古收購(廠商)存好之後:訊息旁邊留著「列印標籤」 */
+.hub-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 0;
+}
+.hub-done .banner { flex: 1; margin: 0; }

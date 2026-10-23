@@ -1,6 +1,7 @@
 import { useCan } from "@/auth/AuthContext";
 import { useState } from "react";
 
+import { openPurchaseLabels } from "@/components/labels/openLabelPrint";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 
@@ -42,10 +43,11 @@ export function SecondhandAcquisitionPage() {
   const tab: Tab | null = allowed[picked] ? picked : (tabs[0]?.value ?? null);
   // 廠商收購儲存成功後 bump 強制進貨工作台重建(清空所有 state)
   const [vendorKey, setVendorKey] = useState(0);
-  const [vendorSuccess, setVendorSuccess] = useState<string | null>(null);
+  // 剛存好的那一張:訊息與「列印標籤」留著(全站檢視 C9:以前只在 7 秒的訊息條上)
+  const [vendorDone, setVendorDone] = useState<{ id: number; no: string } | null>(null);
 
-  function handleVendorCreated() {
-    setVendorSuccess("中古機收購單已儲存");
+  function handleVendorCreated(created: { id: number; no: string }) {
+    setVendorDone(created);
     setVendorKey((k) => k + 1);
   }
 
@@ -65,7 +67,7 @@ export function SecondhandAcquisitionPage() {
                 onClick={() => {
                   setTab(t.value);
                   // 切 tab 時清掉前一個 tab 的成功訊息
-                  setVendorSuccess(null);
+                  setVendorDone(null);
                 }}
                 title={t.hint}
               >
@@ -81,9 +83,12 @@ export function SecondhandAcquisitionPage() {
         <SecondhandPersonalEntry />
       ) : (
         <>
-          {vendorSuccess && (
-            <div style={{ padding: "8px 12px 0" }}>
-              <Banner kind="success" message={vendorSuccess} />
+          {vendorDone && (
+            <div className="hub-done">
+              <Banner kind="success" message={`${vendorDone.no} 已儲存`} />
+              <button type="button" className="btn" onClick={() => openPurchaseLabels(vendorDone.id)}>
+                列印標籤
+              </button>
             </div>
           )}
           <PurchaseWorkbenchPage
