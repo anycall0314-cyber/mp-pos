@@ -166,7 +166,7 @@ export function MemberHistoryPage() {
                       <th className="num" style={{ width: 90 }}>單價</th>
                       <th className="num" style={{ width: 100 }}>小計</th>
                       <th style={{ width: 100 }}>業務員</th>
-                      <th style={{ width: 100 }}>來源／舊客戶</th>
+                      <th style={{ width: 100 }}>來源</th>
                       <th style={{ width: 120 }}>單號</th>
                     </tr>
                   </thead>

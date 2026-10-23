@@ -77,7 +77,7 @@ export function PlatformTenantsTab() {
                 用戶數
               </th>
               <th style={{ width: 80 }} className="num">
-                倉別數
+                門市數
               </th>
               <th style={{ width: 80, textAlign: "center" }}>啟用</th>
               <th style={{ width: 120, textAlign: "center" }} title="型號庫自動加了新機,就建成這家的品號">

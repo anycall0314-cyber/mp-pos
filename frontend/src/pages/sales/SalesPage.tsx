@@ -96,7 +96,7 @@ export function SalesReturnsPage() {
                     <th>單號</th>
                     <th>日期</th>
                     <th>原銷貨單</th>
-                    <th>客戶</th>
+                    <th>來源</th>
                     <th>退回倉</th>
                     <th>退款方式</th>
                     <th className="num">退款額</th>
@@ -112,7 +112,7 @@ export function SalesReturnsPage() {
                       <td>{sr.no}</td>
                       <td>{sr.doc_date}</td>
                       <td>{sr.original_so_no}</td>
-                      <td>{sr.customer_name || "(散客)"}</td>
+                      <td>{sr.customer_name || "(直客)"}</td>
                       <td>
                         {sr.warehouse_code} {sr.warehouse_name}
                       </td>

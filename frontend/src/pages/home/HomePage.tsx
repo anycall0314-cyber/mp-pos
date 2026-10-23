@@ -327,7 +327,7 @@ export function HomePage() {
             <QuickLink to="/sales/new" label="銷貨作業" tone="primary" />
             <QuickLink to="/purchases/new" label="進貨作業" tone="primary" />
             <QuickLink to="/inventory" label="庫存查詢" tone="primary" />
-            <QuickLink to="/customers" label="客戶管理" />
+            <QuickLink to="/members" label="會員來源" />
             <QuickLink to="/reports/sales-daily" label="銷貨日報" />
             <QuickLink to="/reports/business-daily" label="營業日報" />
             <QuickLink to="/transfers/new" label="調撥作業" />

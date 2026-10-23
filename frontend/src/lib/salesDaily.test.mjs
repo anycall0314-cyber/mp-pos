@@ -135,15 +135,15 @@ test("有會讓合計變小的條件就要講(期間與門市不算)", () => {
   assert.deepEqual(narrowedBy({ ...filter, warehouse: 8 }), []);
   assert.deepEqual(narrowedBy({ ...filter, search: " iphone " }), ["商品"]);
   assert.deepEqual(narrowedBy({ ...filter, search: "   " }), []);
-  assert.deepEqual(narrowedBy({ ...filter, sales_person: 3, customer: 5, member: 7, search: "x" }), ["業務員", "客戶", "會員", "商品"]);
+  assert.deepEqual(narrowedBy({ ...filter, sales_person: 3, customer: 5, member: 7, search: "x" }), ["業務員", "來源", "會員", "商品"]);
 });
 
 test("客戶那一格:來源在前,會員不是同一個名字才接在後面", () => {
   assert.equal(customerText({ customer_name: "直客", member_name: "王小明" }), "直客 · 王小明");
   assert.equal(customerText({ customer_name: "王小明", member_name: "王小明" }), "王小明");
   assert.equal(customerText({ customer_name: "甲同行", member_name: null }), "甲同行");
-  assert.equal(customerText({ customer_name: null, member_name: null }), "散客");
-  assert.equal(customerText({ customer_name: null, member_name: "王小明" }), "散客 · 王小明");
+  assert.equal(customerText({ customer_name: null, member_name: null }), "直客");
+  assert.equal(customerText({ customer_name: null, member_name: "王小明" }), "直客 · 王小明");
 });
 
 test("超過上限要講", () => {
@@ -151,9 +151,9 @@ test("超過上限要講", () => {
   assert.equal(truncatedText({ truncated: false, limit: 2000 }), "");
 });
 
-test("匯出:前 14 欄的欄名與內容跟以前一樣,後面多「銷退」「原銷貨單」「會員」;IMEI 是文字", () => {
+test("匯出:前 14 欄的內容跟以前一樣(欄名 2026-10-23 照全站用語改:門市、來源),後面多「銷退」「原銷貨單」「會員」;IMEI 是文字", () => {
   assert.deepEqual(DAILY_CSV_HEAD, [
-    "日期", "單號", "出貨倉", "業務員", "客戶", "商品", "序號", "數量", "單價", "金額", "成本", "毛利", "業務員毛利", "作廢",
+    "日期", "單號", "門市", "業務員", "來源", "商品", "序號", "數量", "單價", "金額", "成本", "毛利", "業務員毛利", "作廢",
     "銷退", "原銷貨單", "會員",
   ]);
   const sold = order({ member_name: "王小明", items: [line({ serials: [{ serial_no: "356789012345678" }] })] });
@@ -167,7 +167,7 @@ test("匯出:前 14 欄的欄名與內容跟以前一樣,後面多「銷退」�
   ]);
   assert.deepEqual(table[1].slice(14), ["", "", "王小明"]);
   assert.deepEqual(table[2].slice(7), ["-1", "25000", "-25000", "-20000", "-3810", "-2810", "", "Y", "SO-000001", ""]);
-  assert.equal(table[3][4], "散客");                                       // 沒有客戶的舊單
+  assert.equal(table[3][4], "直客");                                       // 沒有客戶的舊單
   assert.deepEqual(table[3].slice(10), ["", "", "", "Y", "", "", ""]);     // 不計毛利的行成本與毛利空著;作廢
   assert.equal(table.length, 4);
   assert.ok(table.every((row) => row.length === DAILY_CSV_HEAD.length));

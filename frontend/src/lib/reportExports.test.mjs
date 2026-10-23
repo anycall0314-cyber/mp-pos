@@ -160,7 +160,7 @@ test("合約到期:一位客人一列,電話與門號是文字", () => {
     member_name: "王小明", member_phone: "0911222333", state: "open", follow: { status: "", note: "沒人接" },
   };
   const table = contractTable([row, { ...row, state: "declined", follow: null, days_left: -3 }]);
-  assert.deepEqual(table[0], ["到期日", "剩幾天", "門號", "客戶", "客戶電話", "會員", "會員電話", "電信", "方案", "門市", "業務員", "銷貨單", "狀況", "備註"]);
+  assert.deepEqual(table[0], ["到期日", "剩幾天", "門號", "來源", "來源電話", "會員", "會員電話", "電信", "方案", "門市", "業務員", "銷貨單", "狀況", "備註"]);
   assert.deepEqual(table[1], ["2026-11-30", 49, "0912345678", "直客", "", "王小明", "0911222333", "中華", "5G 1399", "湳雅店", "小陳", "SO-000009", "未聯絡", "沒人接"]);
   assert.deepEqual(table[2].slice(12), ["不續約", ""]);
   assert.equal(table[2][1], -3);

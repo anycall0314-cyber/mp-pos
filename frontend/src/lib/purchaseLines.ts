@@ -55,7 +55,7 @@ export function qtyText(row: Pick<PurchaseLine, "qty" | "free_qty">): string {
 }
 
 export function purchaseLineTable(rows: PurchaseLine[]): unknown[][] {
-  const head = ["日期", "單號", "門市", "供應商", "品號", "品名", "數量", "贈品", "單價", "金額", "成本", "備註"];
+  const head = ["日期", "單號", "門市", "廠商", "品號", "品名", "數量", "贈品", "單價", "金額", "成本", "備註"];
   return [
     head,
     ...rows.map((r) => [

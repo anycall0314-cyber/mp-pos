@@ -21,10 +21,10 @@ const CUSTOMER_KINDS: { value: CustomerKind; label: string }[] = [
 
 type TabKey = "all" | CustomerKind;
 
+// 「個人(舊類別)」不另外一個分頁(全站檢視 E1):以前個人收購自動建的,照樣在「全部」裡、單據不動;新的單選不到
 const TABS: { key: TabKey; label: string }[] = [
   { key: "all", label: "全部" },
   { key: "channel", label: "通路" },
-  { key: "individual", label: "個人（舊類別）" },
   { key: "peer", label: "同業 / 盤商" },
   { key: "corporate", label: "企業" },
   { key: "other", label: "其他" },
@@ -231,13 +231,13 @@ export function CustomersPage() {
   return (
     <div className="page">
       <Toolbar
-        title="客戶來源管理"
+        title="來源"
         actions={
           <button
             className="btn primary"
             onClick={() => setSelection({ kind: "new" })}
           >
-            + 新增客戶
+            + 新增來源
           </button>
         }
       />
@@ -285,7 +285,7 @@ export function CustomersPage() {
         <aside className="pc-master" style={{ gridTemplateRows: "1fr" }}>
           <section className="pc-section">
             <div className="pc-section-header">
-              客戶
+              來源
               <span style={{ fontWeight: "normal" }}>
                 {!result.isLoading && `${filtered.length} 筆`}
               </span>
@@ -335,7 +335,7 @@ export function CustomersPage() {
                     {filtered.length === 0 && (
                       <tr>
                         <td colSpan={3} className="md-empty">
-                          {query ? "查無客戶" : "此分類尚無客戶"}
+                          {query ? "查無來源" : "此分類尚無來源"}
                         </td>
                       </tr>
                     )}
@@ -349,14 +349,14 @@ export function CustomersPage() {
         <div className="pc-detail">
           {!isEditing && !isNew && (
             <div className="md-empty" style={{ marginTop: 40 }}>
-              從左側選擇客戶以檢視 / 編輯,或按右上角「新增客戶」
+              從左側選擇來源以檢視 / 編輯,或按右上角「新增來源」
             </div>
           )}
 
           {(isEditing || isNew) && (
             <div className="pc-detail-body">
               <h3 className="pc-detail-title">
-                {isNew ? "新增客戶" : `客戶 · ${selected?.name}`}
+                {isNew ? "新增來源" : `來源 · ${selected?.name}`}
               </h3>
               {error && <Banner kind="error" message={error} />}
               {savedFlash && <Banner kind="success" message="已儲存" />}
@@ -389,7 +389,8 @@ export function CustomersPage() {
                     onChange={(e) => patch("kind", e.target.value as CustomerKind)}
                     style={{ width: 200 }}
                   >
-                    {CUSTOMER_KINDS.map((k) => (
+                    {/* 個人(舊類別)只有本來就是的那一筆看得到,新增不能選 */}
+                    {CUSTOMER_KINDS.filter((k) => k.value !== "individual" || form.kind === "individual").map((k) => (
                       <option key={k.value} value={k.value}>
                         {k.label}
                       </option>
@@ -504,7 +505,7 @@ export function CustomersPage() {
                         {!ordersLoading && !ordersFailed && (orders.data?.rows ?? []).length === 0 && (
                           <tr>
                             <td colSpan={6} className="md-empty">
-                              此客戶尚無銷售紀錄
+                              此來源尚無銷售紀錄
                             </td>
                           </tr>
                         )}

@@ -118,7 +118,7 @@ export function summaryCards(totals: InvoiceTotals, states: Choice[] | undefined
 }
 
 export const INVOICE_HEAD = [
-  "發票日期", "發票號碼", "類型", "買方統編", "銷貨單號", "門市", "客戶", "課稅別", "未稅", "稅額", "含稅", "狀態", "作廢日",
+  "發票日期", "發票號碼", "類型", "買方統編", "銷貨單號", "門市", "來源", "課稅別", "未稅", "稅額", "含稅", "狀態", "作廢日",
   "銷退", "銷退日",
 ];
 

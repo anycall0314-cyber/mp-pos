@@ -60,7 +60,7 @@ class CustomerRankingTests(TestCase):
 
     def test_by_customer(self):
         data = self.report()
-        self.assertEqual((data["title"], [b["label"] for b in data["by"]]), ("客戶排行", ["客戶", "會員"]))
+        self.assertEqual((data["title"], [b["label"] for b in data["by"]]), ("來源排行", ["來源", "會員"]))
         self.assertEqual([m["label"] for m in data["columns"]["measures"]], ["銷貨單數", "淨銷售額", "業務員毛利", "實際毛利"])
         rows = self.rows(data)
         # 散客:手機 25,000 + 皮套 780 + 皮套 1,170;同行:賣 390 又整張退 = 0(那張單還是算一張)
@@ -113,7 +113,7 @@ class CustomerRankingTests(TestCase):
         for params in (self.range, {**self.range, "by": "member"}, {**self.range, "export": "1"}):
             r = self.c.clerk.get(URL, params)
             self.assertEqual(r.status_code, 403, r.content.decode())
-            self.assertEqual(r.json()["detail"], "「客戶排行」只有管理員可以看")
+            self.assertEqual(r.json()["detail"], "「來源排行」只有管理員可以看")
             self.assertNotIn("王小明", r.content.decode())
         self.assertEqual(self.c.admin.get(URL, self.range).status_code, 200)
         root_user = self.root()
@@ -204,7 +204,7 @@ class PeopleDimensionTests(TestCase):
 
     def test_clerks_cannot_split_filter_or_list_by_people(self):
         """照客戶 / 會員分就是客戶排行:分組、條件、下拉的名單、選單都一起收(owner 2026-10-12)。店員的自訂分析其餘照舊。"""
-        for dim, label, one in (("customer", "客戶", self.c.customer.id), ("member", "會員", self.wang.id)):
+        for dim, label, one in (("customer", "來源", self.c.customer.id), ("member", "會員", self.wang.id)):
             for spec in ({"dimensions": [dim]}, {"dimensions": ["warehouse"], "filters": {dim: [one]}},
                          {"dimensions": [], "filters": {dim: [one]}}):
                 r = self.query(self.c.clerk, measures=["net_sales"], **spec)

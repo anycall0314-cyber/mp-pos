@@ -280,7 +280,7 @@ export function ContractsPage() {
           {r.contract_months ? ` · 綁約 ${r.contract_months} 個月` : ""}
           {r.sales_person_name ? ` · 業務 ${r.sales_person_name}` : ""}
           {r.member_name && r.customer_name && r.customer_name !== r.member_name
-            ? ` · 客戶 ${r.customer_name}`
+            ? ` · 來源 ${r.customer_name}`
             : ""}
         </div>
         {r.follow && (
@@ -461,7 +461,7 @@ export function ContractsPage() {
               <th>到期日</th>
               <th>還剩</th>
               <th>門號</th>
-              <th>客人</th>
+              <th>會員</th>
               <th>電信 / 方案</th>
               <th>門市</th>
               <th>備註</th>

@@ -338,7 +338,7 @@ def business_daily_report(request):
             warehouse_id=wid,
             is_void=False,
         )
-        .select_related("customer", "sales_person")
+        .select_related("customer", "member", "sales_person")
         .prefetch_related("payments")
     )
     sales_rows = []
@@ -383,6 +383,8 @@ def business_daily_report(request):
                     "id": so.id,
                     "no": so.no,
                     "customer_name": so.display_customer_name,
+                    # 賣機的那個人(2026-10-23 起收購的來源一律是直客,看人要看會員)
+                    "member_name": so.member.name if so.member_id else "",
                     "sales_person_name": (
                         so.sales_person.name if so.sales_person_id else ""
                     ),

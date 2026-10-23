@@ -308,7 +308,7 @@ export function PurchaseListPage() {
             <tr>
               <th>單號</th>
               <th>時間</th>
-              <th>供應商</th>
+              <th>廠商</th>
               <th>入庫</th>
               <th className="num">項數</th>
               <th className="num">含稅總額</th>

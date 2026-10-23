@@ -200,7 +200,7 @@ export function SalesReturnEntryPage() {
                   setOriginalSO(option ?? null);
                 }}
                 fetchOptions={searchSalesOrdersForReturn}
-                placeholder="單號 / 客戶 / 電話"
+                placeholder="單號 / 姓名 / 電話"
                 autoFocus
               />
             </div>
@@ -214,8 +214,8 @@ export function SalesReturnEntryPage() {
         {(isNew ? rd : sr) && (
           <>
             <div>
-              <label style={labelStyle}>客戶</label>
-              <div>{(isNew ? rd?.customer_name : sr?.customer_name) || "(散客)"}</div>
+              <label style={labelStyle}>來源</label>
+              <div>{(isNew ? rd?.customer_name : sr?.customer_name) || "(直客)"}</div>
             </div>
             <div>
               <label style={labelStyle}>退回倉</label>

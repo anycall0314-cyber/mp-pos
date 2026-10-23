@@ -97,7 +97,7 @@ export function RepairReceiptPrintPage() {
 
         <div className="rr-info-grid">
           <div>
-            <div className="rr-info-label">客戶</div>
+            <div className="rr-info-label">會員</div>
             <div className="rr-info-val">{o.customer_name}</div>
           </div>
           <div>

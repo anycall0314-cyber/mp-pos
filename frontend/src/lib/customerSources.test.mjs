@@ -45,3 +45,11 @@ test("新增會員帶入打過的字:電話帶進電話、其他帶進姓名(全
   assert.equal(nameLooksScanned("王小明"), false);
   assert.equal(nameLooksScanned("Mary Chen"), false);
 });
+
+test("新的單選得到的來源:啟用中、不是「個人(舊類別)」", async () => {
+  const { pickableSource } = await import("./customerSources.ts");
+  assert.equal(pickableSource({ is_active: true, kind: "channel" }), true);
+  assert.equal(pickableSource({ is_active: true, kind: "individual" }), false);
+  assert.equal(pickableSource({ is_active: false, kind: "peer" }), false);
+  assert.equal(pickableSource(undefined), false);
+});

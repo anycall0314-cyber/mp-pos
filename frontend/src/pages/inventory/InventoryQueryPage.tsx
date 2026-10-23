@@ -537,7 +537,7 @@ export function InventoryQueryPage() {
           />
         </div>
         <div className="wb-field">
-          <label>分店{noStore ? "(至少選一家)" : ""}</label>
+          <label>門市{noStore ? "(至少選一家)" : ""}</label>
           <div className="wb-chips" style={{ minHeight: 44 }}>
             {allWarehouses.map((w) => (
               <button
@@ -677,7 +677,7 @@ export function InventoryQueryPage() {
             className="wb-dim"
             style={{ textAlign: "center", padding: "28px 0" }}
           >
-            先選分店
+            先選門市
           </div>
         )}
         {!applied && !noStore && (

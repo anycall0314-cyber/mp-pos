@@ -27,7 +27,7 @@ export function PlatformAdminPage() {
             [
               { key: "tenants", label: "經銷商" },
               { key: "users", label: "用戶" },
-              { key: "warehouses", label: "倉別" },
+              { key: "warehouses", label: "門市" },
               { key: "vendors", label: "廠商" },
               { key: "devices", label: "型號" },
             ] as const

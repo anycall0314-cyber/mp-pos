@@ -141,7 +141,7 @@ const CONTRACT_STATE: Record<ContractLike["state"], string> = {
 
 export function contractTable(rows: ContractLike[]): unknown[][] {
   return [
-    ["到期日", "剩幾天", "門號", "客戶", "客戶電話", "會員", "會員電話", "電信", "方案", "門市", "業務員", "銷貨單", "狀況", "備註"],
+    ["到期日", "剩幾天", "門號", "來源", "來源電話", "會員", "會員電話", "電信", "方案", "門市", "業務員", "銷貨單", "狀況", "備註"],
     ...rows.map((r) => [
       r.contract_end, r.days_left, r.msisdn, r.customer_name, r.customer_phone, r.member_name, r.member_phone,
       r.carrier_name, r.plan_name, r.warehouse_name, r.sales_person_name, r.so_no,

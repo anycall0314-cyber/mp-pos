@@ -37,12 +37,12 @@ export function RepairHistoryModal({ open, phone, onClose, onPick }: Props) {
         </div>
         <div className="modal-body rh-body">
           {!phone && (
-            <div className="rh-empty">請先在客戶欄選擇含電話的客戶</div>
+            <div className="rh-empty">請先選有電話的會員</div>
           )}
           {phone && isLoading && <div className="rh-empty">載入中…</div>}
           {phone && !isLoading && (data?.length ?? 0) === 0 && (
             <div className="rh-empty">
-              查無相符維修紀錄,請確認客戶電話是否正確
+              查無相符維修紀錄,請確認會員電話是否正確
             </div>
           )}
           {phone && (data?.length ?? 0) > 0 && (

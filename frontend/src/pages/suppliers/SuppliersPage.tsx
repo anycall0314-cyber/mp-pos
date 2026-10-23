@@ -114,7 +114,7 @@ export function SuppliersPage() {
   async function save() {
     const name = form.name.trim();
     if (!name) {
-      setError("供應商名稱必填");
+      setError("廠商名稱必填");
       return;
     }
     const payload: Partial<Supplier> & { id?: number } = {
@@ -174,10 +174,10 @@ export function SuppliersPage() {
   return (
     <div className="page">
       <Toolbar
-        title="供應商"
+        title="廠商"
         actions={
           <button className="btn primary" onClick={startNew}>
-            + 新增供應商
+            + 新增廠商
           </button>
         }
       />
@@ -186,7 +186,7 @@ export function SuppliersPage() {
         <aside className="pc-master" style={{ gridTemplateRows: "1fr" }}>
           <section className="pc-section">
             <div className="pc-section-header">
-              供應商
+              廠商
               <span style={{ fontWeight: "normal" }}>
                 {!suppliersResult.isLoading && `${filtered.length} 筆`}
               </span>
@@ -212,7 +212,7 @@ export function SuppliersPage() {
                   color: "var(--text-dim)",
                 }}
               >
-                拖曳左側 ≡ 調整順序,常用供應商往前排,挑選時更快
+                拖曳左側 ≡ 調整順序,常用廠商往前排,挑選時更快
               </div>
             )}
             <div className="pc-section-body">
@@ -310,7 +310,7 @@ export function SuppliersPage() {
                     {filtered.length === 0 && (
                       <tr>
                         <td colSpan={5} className="md-empty">
-                          {query ? "查無供應商" : "尚無供應商,按右上角新增"}
+                          {query ? "查無廠商" : "尚無廠商,按右上角新增"}
                         </td>
                       </tr>
                     )}
@@ -324,7 +324,7 @@ export function SuppliersPage() {
         <div className="pc-detail">
           {!isEditing && !isNew && (
             <div className="md-empty" style={{ marginTop: 40 }}>
-              從左側選擇供應商以檢視 / 編輯,或按右上角「新增供應商」
+              從左側選擇廠商以檢視 / 編輯,或按右上角「新增廠商」
             </div>
           )}
 
@@ -332,8 +332,8 @@ export function SuppliersPage() {
             <div className="pc-detail-body">
               <h3 className="pc-detail-title">
                 {isNew
-                  ? "新增供應商"
-                  : `供應商 · ${selectedSupplier?.code} ${selectedSupplier?.name}`}
+                  ? "新增廠商"
+                  : `廠商 · ${selectedSupplier?.code} ${selectedSupplier?.name}`}
               </h3>
               {error && <Banner kind="error" message={error} />}
               {flashMsg && <Banner kind="success" message={flashMsg} />}

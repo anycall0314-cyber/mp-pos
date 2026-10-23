@@ -289,7 +289,7 @@ export function SalesDailyReportPage() {
 
         <div className="sd-filter-group sd-filter-people">
           <label className="sd-field">
-            <span className="sd-label">倉別</span>
+            <span className="sd-label">門市</span>
             {defaultWarehouse.locked ? (
               <input
                 value={defaultWarehouse.name || "(未設定)"}
@@ -305,7 +305,7 @@ export function SalesDailyReportPage() {
                   setWarehouseOpt(opt ?? null);
                 }}
                 fetchOptions={searchWarehouses}
-                placeholder="全部倉別"
+                placeholder="全部門市"
               />
             )}
           </label>
@@ -323,7 +323,7 @@ export function SalesDailyReportPage() {
             />
           </label>
           <label className="sd-field">
-            <span className="sd-label">客戶</span>
+            <span className="sd-label">來源</span>
             <ComboBox<Customer>
               value={customer}
               selectedOption={customerOpt}
@@ -332,7 +332,7 @@ export function SalesDailyReportPage() {
                 setCustomerOpt(opt ?? null);
               }}
               fetchOptions={searchCustomers}
-              placeholder="全部客戶"
+              placeholder="全部來源"
             />
           </label>
           <label className="sd-field">
@@ -623,9 +623,9 @@ function SalesReportTable({
         <tr>
           <th>日期</th>
           <th>單號</th>
-          <th>出貨倉</th>
+          <th>門市</th>
           <th>業務員</th>
-          <th>客戶</th>
+          <th>來源</th>
           <th>商品</th>
           <th>序號</th>
           <th className="num">數量</th>

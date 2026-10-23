@@ -195,7 +195,7 @@ export function IntakePage() {
             />
           </div>
           <div className="intake-create-field">
-            <span className="intake-label">入庫倉(選填)</span>
+            <span className="intake-label">門市(選填)</span>
             <select
               value={warehouseId}
               onChange={(e) =>

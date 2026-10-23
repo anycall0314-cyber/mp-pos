@@ -239,7 +239,7 @@ export function InvoiceListPage() {
                 <th>統編</th>
                 <th>單號</th>
                 <th>門市</th>
-                <th>客戶</th>
+                <th>來源</th>
                 <th>課稅別</th>
                 <th className="num">未稅</th>
                 <th className="num">稅額</th>

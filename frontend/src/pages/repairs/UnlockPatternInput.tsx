@@ -70,7 +70,7 @@ export function UnlockPatternInput({ value, onChange }: Props) {
           </button>
         </div>
         <div className="up-tip">
-          依客戶指示點擊節點(允許重複)。點錯按「退一步」回到上一節點。
+          依會員指示點擊節點(允許重複)。點錯按「退一步」回到上一節點。
         </div>
       </div>
     </div>

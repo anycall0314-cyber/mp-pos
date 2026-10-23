@@ -100,7 +100,8 @@ export const NAV_MODULES: NavModule[] = [
         label: "進貨明細",
         aliases: ["進退貨商品查詢表", "進貨商品查詢", "進貨明細表", "進價查詢"],
       },
-      { to: "/suppliers", label: "供應商" },
+      // 進貨對象一律叫「廠商」(全站檢視 G3,2026-10-23)
+      { to: "/suppliers", label: "廠商資料", aliases: ["供應商", "供應商管理"] },
     ],
     // 跟著商品管理一起搬過來:建商品時才用得到的幾個主檔
     tools: {
@@ -136,11 +137,12 @@ export const NAV_MODULES: NavModule[] = [
   },
   {
     key: "people",
-    label: "客戶會員",
-    to: "/customers",
+    // 客人一律叫「會員」、通路同業叫「來源」(全站檢視 G3 / E1,2026-10-23):一進來先到會員
+    label: "會員來源",
+    to: "/members",
     tabs: [
-      { to: "/customers", label: "客戶", aliases: ["客戶管理"] },
-      { to: "/members", label: "會員", aliases: ["會員管理"] },
+      { to: "/members", label: "會員", aliases: ["會員管理", "客戶會員"] },
+      { to: "/customers", label: "來源", aliases: ["客戶", "客戶管理", "來源管理", "通路", "同業"] },
     ],
   },
   {
@@ -217,8 +219,8 @@ export const NAV_MODULES: NavModule[] = [
       },
       {
         to: "/reports/customers",
-        label: "客戶排行",
-        aliases: ["毛利彙總", "毛利彙總表", "客戶毛利", "會員排行", "會員消費", "客戶彙總"],
+        label: "來源排行",
+        aliases: ["客戶排行", "毛利彙總", "毛利彙總表", "客戶毛利", "會員排行", "會員消費", "客戶彙總"],
         // 只有管理員看得到(owner 2026-10-12:「客戶排行不用給店員看」);平台管理員也算
         managersOnly: true,
       },

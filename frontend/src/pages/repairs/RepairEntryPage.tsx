@@ -556,7 +556,7 @@ function RepairEntryForm() {
       if (newStatus === "completed") {
         // 有收錢就要選怎麼收的(全站檢視 E6;伺服器也擋)
         if (paidNeedsMethod(customerPaid, paymentMethod)) {
-          setError("客戶有付錢,請先選收款方式再完成");
+          setError("有收錢,請先選收款方式再完成");
           return;
         }
         if (!confirm("完工會扣零件倉庫存,確定?")) return;
@@ -810,7 +810,7 @@ function RepairEntryForm() {
                   <div className="re-customer-status">
                     {customer && lookupStatus === "found" && (
                       <span className="re-customer-badge ok">
-                        客戶 ✓ {customerName}
+                        來源 ✓ {customerName}
                       </span>
                     )}
                     {member && (
@@ -865,7 +865,7 @@ function RepairEntryForm() {
                   <Field
                     label="收件人"
                     required
-                    hint="客戶實付歸這位"
+                    hint="實付歸這位"
                   >
                     <ComboBox<SalesPerson>
                       value={salesPerson}
@@ -885,7 +885,7 @@ function RepairEntryForm() {
                       technician && technician !== salesPerson
                         ? mode === "external"
                           ? "委外模式:此單視為內部轉單,毛利按內部結算價分潤"
-                          : "自修:工資全歸維修人員,客戶實付剩餘歸收件人"
+                          : "自修:工資全歸維修人員,實付剩餘歸收件人"
                         : "留空 = 同收件人;填了會啟動個人毛利分潤"
                     }
                   >
@@ -931,7 +931,7 @@ function RepairEntryForm() {
                     <input
                       value={serialUnavailable ? "" : deviceSerial}
                       onChange={(e) => setDeviceSerial(e.target.value)}
-                      placeholder={serialUnavailable ? "取不到" : "客戶這台機的 IMEI"}
+                      placeholder={serialUnavailable ? "取不到" : "這台機的 IMEI"}
                       disabled={serialUnavailable}
                     />
                     <label className="re-serial-none">
@@ -973,7 +973,7 @@ function RepairEntryForm() {
                     rows={3}
                     value={defect}
                     onChange={(e) => setDefect(e.target.value)}
-                    placeholder="客戶描述的問題"
+                    placeholder="會員描述的問題"
                   />
                 </Field>
 
@@ -984,8 +984,8 @@ function RepairEntryForm() {
                     unlockMethod === "password"
                       ? "此資訊僅供維修使用,不對外揭露,列印收據時自動隱藏"
                       : unlockMethod === "pattern"
-                        ? "依客戶指示繪製九宮格路徑,列印收據時自動隱藏"
-                        : "請確認客戶裝置的解鎖方式"
+                        ? "依會員指示繪製九宮格路徑,列印收據時自動隱藏"
+                        : "請確認會員裝置的解鎖方式"
                   }
                 >
                   <div className="re-unlock-bar">
@@ -1197,7 +1197,7 @@ function RepairEntryForm() {
                         setVendorOpt(opt ?? null);
                       }}
                       fetchOptions={searchRepairVendors}
-                      placeholder="搜尋已標記『維修委外廠商』的供應商"
+                      placeholder="搜尋已標記『維修委外廠商』的廠商"
                     />
                   </Field>
                   <div className="re-2col">
@@ -1233,7 +1233,7 @@ function RepairEntryForm() {
                   {technician && technician !== salesPerson && (
                     <Field
                       label="內部結算價(收件人 → 維修人員)"
-                      hint="此單視為內部轉單。收件人毛利 = 客戶實付 − 此值;維修人員毛利 = 此值 − 零件成本"
+                      hint="此單視為內部轉單。收件人毛利 = 實付 − 此值;維修人員毛利 = 此值 − 零件成本"
                     >
                       <MoneyInput
                         min="0"
@@ -1301,7 +1301,7 @@ function RepairEntryForm() {
                   </>
                 )}
                 <div className="re-summary-row re-summary-hero">
-                  <span>客戶實付金額</span>
+                  <span>實付金額</span>
                   <MoneyInput
                     min="0"
                     value={customerPaid}
@@ -1435,7 +1435,7 @@ function RepairEntryForm() {
                 rows={4}
                 value={internalNote}
                 onChange={(e) => setInternalNote(e.target.value)}
-                placeholder="師傅 / 經手人內部記事(不顯示給客戶)"
+                placeholder="師傅 / 經手人內部記事(不顯示給會員)"
               />
             </section>
           </aside>

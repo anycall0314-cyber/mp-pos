@@ -664,7 +664,7 @@ export async function searchSalesOrdersForReturn(
   return data.map((so) => ({
     id: so.id,
     label: so.no,
-    secondary: [so.doc_date, so.customer_name || "(散客)"].join(" / "),
+    secondary: [so.doc_date, so.customer_name || "(直客)"].join(" / "),
     payload: so,
   }));
 }

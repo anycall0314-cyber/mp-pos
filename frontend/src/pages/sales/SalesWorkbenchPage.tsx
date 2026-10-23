@@ -74,7 +74,7 @@ import {
 /**
  * 新增銷貨單(開單頁,`/sales/new`):商品明細優先。
  *
- * 由上到下:頁首(返回列表、更多 → 清空草稿)→ 出貨倉、客戶、會員(常駐)+「單據資訊」(發票類型、課稅別、統編、
+ * 由上到下:頁首(返回列表、更多 → 清空草稿)→ 門市、客戶、會員(常駐)+「單據資訊」(發票類型、課稅別、統編、
  * 業務員、備註收在右邊的抽屜,要改才打開;有沒填的、沒有可用字軌,按鈕上直接寫出來)→ 掃碼框
  * → 明細(吃掉剩下的高度,表頭固定、自己捲;新的一行在最上面)→ 最下面固定一排:幾種幾件、未稅 / 稅額、毛利、
  * 含稅總額、結帳。結帳在右邊的抽屜選付款方式、確認;結完在同一塊給列印收據 / 發票。
@@ -166,9 +166,9 @@ const TAX_METHODS: { value: TaxMethod; label: string }[] = [
   { value: "taxable_excluded", label: "應稅外加" },
   { value: "untaxed", label: "未稅" },
 ];
+// 新增來源選不到「個人(舊類別)」(全站檢視 E1 複審 P2:那是以前個人收購自動建的,新的單不能再掛)
 const CUSTOMER_KINDS: { value: CustomerKind; label: string }[] = [
   { value: "channel", label: "通路" },
-  { value: "individual", label: "個人（舊類別）" },
   { value: "peer", label: "同業" },
   { value: "corporate", label: "企業" },
   { value: "other", label: "其他" },
@@ -477,7 +477,7 @@ export function SalesWorkbenchPage() {
 
   /** 右邊打開的是哪一塊(單據資訊 / 結帳 / 新增客戶 / 新增會員);資料都在這一頁,關掉不會不見 */
   const [panel, setPanel] = useState<Panel | null>(null);
-  /** 換出貨倉要先問:明細是照原本那家的庫存加的,換了要清空 */
+  /** 換門市要先問:明細是照原本那家的庫存加的,換了要清空 */
   const [pendingStore, setPendingStore] = useState<number | null>(null);
 
   const [busy, setBusy] = useState(false);
@@ -544,7 +544,7 @@ export function SalesWorkbenchPage() {
     taxMethod === "taxable_included" || taxMethod === "taxable_excluded";
   const noInvoice = invoiceForm === "" || invoiceForm === "none";
 
-  // 出貨倉還沒選、門市清單載進來了:帶第一家(鎖倉帳號是自己那一家)
+  // 門市還沒選、門市清單載進來了:帶第一家(鎖倉帳號是自己那一家)
   useEffect(() => {
     if (warehouse !== "" || stores.length === 0) return;
     setWarehouse(me.id && stores.some((s) => s.id === me.id) ? me.id : stores[0].id);
@@ -737,7 +737,7 @@ export function SalesWorkbenchPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 出貨倉 ───────────────────────────────────────────
+  // ── 門市 ───────────────────────────────────────────
   /** 人在下拉選了另一家:沒有明細就直接換;有明細先問(換了要清空,不悄悄清) */
   function askStore(next: number) {
     if (next === warehouseRef.current || lockedRef.current) return;
@@ -754,7 +754,7 @@ export function SalesWorkbenchPage() {
     if (kept.lines.length === 0) return;
     // 明細是照原本那家分店的庫存加的,換店就不能留
     commit(() => []);
-    toast(`已換出貨倉,清掉 ${kept.lines.length} 行明細`, "", {
+    toast(`已換門市,清掉 ${kept.lines.length} 行明細`, "", {
       action: {
         label: "復原",
         fn: () => {
@@ -966,7 +966,7 @@ export function SalesWorkbenchPage() {
    */
   function addProduct(p: SalesProductHit, via: "enter" | "mouse"): string | null {
     const at = warehouseRef.current;
-    if (at === "") return "請先選出貨倉";
+    if (at === "") return "請先選門市";
     if (frozenRef.current) return "這張單已經送出,沒有加進去";
     const serial = needsSerial(p);
     const perUnit = perUnitPriced(p);
@@ -1003,7 +1003,7 @@ export function SalesWorkbenchPage() {
   /** 把「這一台」加進明細:刷到它的碼,或人從下拉點了列著這一台的那一筆 */
   function addDevice(p: SalesProductHit, unit: Unit): string | null {
     const at = warehouseRef.current;
-    if (at === "") return "請先選出貨倉";
+    if (at === "") return "請先選門市";
     if (frozenRef.current) return "這張單已經送出,沒有加進去";
     if (linesRef.current.some((l) => l.picked.includes(unit.id))) {
       toast(`${tailOf(unit)} 已經在單上`, "");
@@ -1084,15 +1084,15 @@ export function SalesWorkbenchPage() {
    */
   async function onScan(code: string): Promise<boolean | string> {
     const at = warehouseRef.current;
-    if (at === "") return "請先選出貨倉";
+    if (at === "") return "請先選門市";
     const devices = await findDevicesByCode(code);
     if (devices.length === 0) return false;
-    if (warehouseRef.current !== at) return "查的時候換了出貨倉,請再刷一次";
+    if (warehouseRef.current !== at) return "查的時候換了門市,請再刷一次";
     if (devices.length > 1) {
       return `對到 ${devices.length} 台設備,請先到每日對帳處理`;
     }
     const device = devices[0];
-    // 廠商換貨中、就在這個出貨倉:剛刷的就是這一台 = 換回來了,按「已換貨」接著賣(2026-10-21)
+    // 廠商換貨中、就在這個門市:剛刷的就是這一台 = 換回來了,按「已換貨」接著賣(2026-10-21)
     if (backAtCounter(device, at)) {
       toast(`${device.product_name} 廠商換貨中`, "err", {
         action: { label: "已換貨", fn: () => void exchangeBack(device.id, code) },
@@ -1105,7 +1105,7 @@ export function SalesWorkbenchPage() {
       },不能在這裡賣`;
     }
     const results = await searchProductsForSales(code, { warehouseId: at });
-    if (warehouseRef.current !== at) return "查的時候換了出貨倉,請再刷一次";
+    if (warehouseRef.current !== at) return "查的時候換了門市,請再刷一次";
     const hit = results.find((r) => r.payload?.matched_serial?.id === device.id)
       ?.payload as SalesProductHit | undefined;
     if (!hit) return `這一台的商品目前不能銷貨:${device.product_name}`;
@@ -1147,7 +1147,7 @@ export function SalesWorkbenchPage() {
             return;
           }
           if (gone.warehouse !== warehouseRef.current) {
-            toast("出貨倉已經換了,沒有放回", "err");
+            toast("門市已經換了,沒有放回", "err");
             return;
           }
           const taken = new Set(linesRef.current.flatMap((l) => l.picked));
@@ -1259,7 +1259,7 @@ export function SalesWorkbenchPage() {
   /** 還缺什麼。withPayment = 連付款對不對得上也看(按結帳之前只看單據與明細) */
   function problems(withPayment: boolean): Issue[] {
     const out: Issue[] = [];
-    if (!warehouse) out.push({ text: "請選出貨倉", at: "store" });
+    if (!warehouse) out.push({ text: "請選門市", at: "store" });
     if (!defaultApplied.current && (sourceDefaults.isPending || sourceDefaults.isError)) out.push({ text: "銷貨預設來源尚未載入，請重新整理", at: "customer" });
     if (customer?.is_active === false) out.push({text: "來源已停用，請改選本次來源", at: "customer"});
     if (!salesPerson) out.push({ text: "請選業務員", at: "person" });
@@ -1269,7 +1269,7 @@ export function SalesWorkbenchPage() {
     for (const l of ls) {
       const name = l.product.name;
       if (l.warehouse !== warehouseRef.current) {
-        out.push({ text: `「${name}」不是這家分店的明細,請移除重掃`, at: "lines" });
+        out.push({ text: `「${name}」不是這家門市的明細,請移除重掃`, at: "lines" });
       } else if (needsSerial(l.product)) {
         if (l.units === null) out.push({ text: `「${name}」序號還在載入`, at: "lines" });
         else if (l.picked.length === 0)
@@ -1622,7 +1622,7 @@ export function SalesWorkbenchPage() {
           fn: () => {
             if (lockedRef.current || linesRef.current.length > 0) return;
             if (kept.at !== warehouseRef.current) {
-              toast("出貨倉已經換了,沒有放回", "err");
+              toast("門市已經換了,沒有放回", "err");
               return;
             }
             commit(() => kept.lines);
@@ -1673,7 +1673,7 @@ export function SalesWorkbenchPage() {
     if (lockedRef.current) return;
     const name = newCustomer.name.trim();
     if (!name) {
-      toast("客戶名稱要填", "err");
+      toast("來源名稱要填", "err");
       return;
     }
     try {
@@ -1694,7 +1694,7 @@ export function SalesWorkbenchPage() {
       setNewCustomer({ name: "", kind: "peer", tax_id: "", phone: "" });
       closePanel();
     } catch (e) {
-      toast(`新增客戶失敗:${apiErrorText(e)}`, "err", { ms: 7000 });
+      toast(`新增來源失敗:${apiErrorText(e)}`, "err", { ms: 7000 });
     }
   }
   async function createMember() {
@@ -1759,7 +1759,7 @@ export function SalesWorkbenchPage() {
   const panelTitle: Record<Panel, string> = {
     info: "單據資訊",
     checkout: "結帳",
-    customer: "新增客戶",
+    customer: "新增來源",
     member: "新增會員",
   };
 
@@ -1849,7 +1849,7 @@ export function SalesWorkbenchPage() {
                 armedLabel="確定清空"
                 className="ws-more-item danger"
                 disabled={busy || (!hasContent && !unsure)}
-                title="明細、客戶、會員、備註、付款都清掉"
+                title="明細、來源、會員、備註、付款都清掉"
                 onConfirm={() => {
                   cancel();
                   close();
@@ -1861,11 +1861,11 @@ export function SalesWorkbenchPage() {
 
         <div className="ws-party" ref={partyRef}>
           <label className="ws-f" data-at="store">
-            <span className="ws-lbl">出貨倉</span>
+            <span className="ws-lbl">門市</span>
             <select
               value={warehouse}
               disabled={me.locked || stores.length === 0 || locked}
-              title={me.locked ? "這個帳號只能賣自己分店的東西" : undefined}
+              title={me.locked ? "這個帳號只能賣自己門市的東西" : undefined}
               onChange={(e) => askStore(Number(e.target.value))}
             >
               {warehouse === "" && <option value="">請選擇</option>}
@@ -1877,7 +1877,7 @@ export function SalesWorkbenchPage() {
             </select>
           </label>
           <div className="ws-f grow" data-at="customer">
-            <span className="ws-lbl">來源客戶</span>
+            <span className="ws-lbl">來源</span>
             <SourcePicker source={customer} disabled={locked || sourceDefaults.isPending || sourceDefaults.isError} onChange={source => pickCustomer(sourceOption(source))} />
             {keptSource && <div style={{fontSize: 13}}>保留本單手選來源 <button type="button" className="wb-link" disabled={locked} onClick={() => { setSourceManual(false); setCustomerOption(sourceOption(memberSource(member, sourceDefaults.data?.customer ?? null))); }}>套用會員來源</button></div>}
             <button
@@ -1967,7 +1967,7 @@ export function SalesWorkbenchPage() {
             autoFocus
             placeholder={
               warehouse === ""
-                ? "請先選出貨倉"
+                ? "請先選門市"
                 : "掃品號 / 條碼 / IMEI,或打品名搜尋商品"
             }
             disabled={warehouse === "" || locked}
@@ -2130,7 +2130,7 @@ export function SalesWorkbenchPage() {
                           {l.picked.length > 0 ? `已選 ${l.picked.length}` : ""}
                         </span>
                       ) : units.length === 0 ? (
-                        <span className="wb-badge bad">這家分店沒有在庫</span>
+                        <span className="wb-badge bad">這家門市沒有在庫</span>
                       ) : (
                         <div className="wb-chips">
                           {pickedUnits.map((u) => (
@@ -2643,7 +2643,7 @@ export function SalesWorkbenchPage() {
           <div className="ws-form">
             <section>
               <label>
-                <span>客戶名稱</span>
+                <span>來源名稱</span>
                 <input
                   autoFocus
                   value={newCustomer.name}

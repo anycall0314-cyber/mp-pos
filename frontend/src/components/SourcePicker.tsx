@@ -1,5 +1,6 @@
 import { useSalesDefaultSource } from "@/api/hooks";
 import { searchCustomers } from "@/api/search";
+import { pickableSource } from "@/lib/customerSources";
 import type { Customer, Member } from "@/api/types";
 import { ComboBox, type ComboOption } from "./ComboBox";
 
@@ -21,7 +22,7 @@ export function SourcePicker({ source, onChange, disabled, inherit = false, mode
   async function search(q: string) {
     const special = inherit ? [inherited, DIRECT_SOURCE] : [DIRECT_SOURCE];
     const matches = await searchCustomers(q);
-    return special.filter(o => !q || o.label.includes(q)).concat(matches.filter(o => o.payload?.is_active));
+    return special.filter(o => !q || o.label.includes(q)).concat(matches.filter(o => pickableSource(o.payload)));
   }
   return <ComboBox<Customer>
     value={chosen.id}

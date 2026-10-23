@@ -31,3 +31,11 @@ export function nameLooksScanned(name: string): boolean {
   const t = name.trim();
   return /^\d{8,}$/.test(t) || /^[A-Z0-9]{10,}$/.test(t);
 }
+
+/**
+ * 新的單、會員的預設能不能選這個來源:停用的不行;「個人(舊類別)」不行(全站檢視 E1 紅隊:
+ * 那是以前個人收購自動建的、跟會員同名,選進新單會讓同一支電話又多一套紀錄)。舊單上已經掛著的照樣顯示。
+ */
+export function pickableSource(source: Pick<Customer, "is_active" | "kind"> | undefined): boolean {
+  return !!source && source.is_active && source.kind !== "individual";
+}

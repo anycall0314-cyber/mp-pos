@@ -91,7 +91,7 @@ export function repairCards(totals: RepairTotals): { label: string; value: strin
 }
 
 export const PEOPLE_HEAD = ["人員", "收件", "維修", "分到"];
-export const REPAIR_HEAD = ["完工日", "維修單號", "門市", "機型", "方式", "收件人", "維修人員", "客戶實付", "零件成本", "委外費用", "毛利"];
+export const REPAIR_HEAD = ["完工日", "維修單號", "門市", "機型", "方式", "收件人", "維修人員", "實付", "零件成本", "委外費用", "毛利"];
 
 /**
  * 匯出:上面是每個人分到多少,空一行,下面是逐筆。金額不加千分位。

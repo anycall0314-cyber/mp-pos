@@ -92,7 +92,7 @@ REPORTS = {r.key: r for r in [
            (Col("sales_orders", "銷貨單數"), *MONEY), grain="day", max_days=366),
     # 取舊歐睿 SA040 毛利彙總表「照客戶 / 照會員」(owner 2026-10-12):誰買得最多。欄位跟商品排行同一套
     # **只有管理員看得到**(owner 同一天:「客戶排行不用給店員看」)
-    Report("customers", "客戶排行", MANAGERS_ONLY, {"customer": "客戶", "member": "會員"},
+    Report("customers", "來源排行", MANAGERS_ONLY, {"customer": "來源", "member": "會員"},
            (Col("sales_orders", "銷貨單數"), Col("net_sales", "淨銷售額"),
             Col("staff_gross_profit", "業務員毛利"), Col("gross_profit", "實際毛利", managers=True)),
            sort="-net_sales", keep=200),

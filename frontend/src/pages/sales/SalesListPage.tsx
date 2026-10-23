@@ -343,7 +343,7 @@ export function SalesListPage() {
               <button
                 type="button"
                 className="wb-btn small"
-                title="整張退:東西退回分店、錢退給客人"
+                title="整張退:東西退回門市、錢退回去"
                 onClick={() =>
                   navigate(
                     `/sales/returns/new?so=${t.id}&no=${encodeURIComponent(t.no)}`,
@@ -507,8 +507,8 @@ export function SalesListPage() {
             <tr>
               <th>單號</th>
               <th>時間</th>
-              <th>來源／客戶・會員</th>
-              <th>分店</th>
+              <th>來源・會員</th>
+              <th>門市</th>
               <th>業務</th>
               <th className="num">項數</th>
               <th className="num">總額</th>

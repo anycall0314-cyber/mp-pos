@@ -129,7 +129,7 @@ export function SecondhandPersonalEntry() {
 
   function validate(): string | null {
     if (!member) return "請輸入收購來源會員電話(查無請新增)";
-    if (!warehouse) return "請選擇入庫倉";
+    if (!warehouse) return "請選擇門市";
     if (!product) return "請選擇中古機商品";
     if (!imei.trim() && !sn.trim()) return "IMEI 與 SN 至少要填一個";
     // 已經知道這個碼在系統裡:先講(還在店裡 / 是我們賣出去的,兩種講法);還沒查到答案的不擋,送出時伺服器會擋
@@ -296,7 +296,7 @@ export function SecondhandPersonalEntry() {
               )}
             </div>
           </Field>
-          <Field label="入庫倉" required>
+          <Field label="門市" required>
             <ComboBox<Warehouse>
               value={warehouse}
               selectedOption={warehouseOption}
@@ -452,14 +452,6 @@ export function SecondhandPersonalEntry() {
         >
           {acquire.isPending ? "儲存中…" : "儲存收購"}
         </button>
-      </div>
-
-      <div
-        className="md-empty"
-        style={{ marginTop: 24, fontSize: 14, lineHeight: 1.7 }}
-      >
-        系統會以未稅方式同步建立「收購二手」銷貨單(金額負數,代表現金流出)與中古機序號,
-        並依該會員自動帶 / 建立個人客戶作為銷貨單歸屬。
       </div>
 
       <Drawer

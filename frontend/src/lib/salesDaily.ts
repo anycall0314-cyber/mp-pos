@@ -217,7 +217,7 @@ export function netTotals(
 export function narrowedBy(f: Pick<DailyFilter, "sales_person" | "customer" | "member" | "search">): string[] {
   const out: string[] = [];
   if (f.sales_person !== "") out.push("業務員");
-  if (f.customer !== "") out.push("客戶");
+  if (f.customer !== "") out.push("來源");
   if (f.member !== "") out.push("會員");
   if (f.search.trim() !== "") out.push("商品");
   return out;
@@ -225,7 +225,7 @@ export function narrowedBy(f: Pick<DailyFilter, "sales_person" | "customer" | "m
 
 /** 客戶那一格:這張單的來源;有會員而且不是同一個名字就接在後面。 */
 export function customerText(o: Pick<DailyOrder, "customer_name" | "member_name">): string {
-  const who = o.customer_name ?? "散客";
+  const who = o.customer_name ?? "直客";
   return o.member_name && o.member_name !== who ? `${who} · ${o.member_name}` : who;
 }
 
@@ -237,7 +237,7 @@ export function truncatedText(report: Pick<DailyReport, "truncated" | "limit">):
 // ── 匯出 ────────────────────────────────────────────────────
 
 export const DAILY_CSV_HEAD = [
-  "日期", "單號", "出貨倉", "業務員", "客戶", "商品", "序號", "數量", "單價", "金額", "成本", "毛利", "業務員毛利",
+  "日期", "單號", "門市", "業務員", "來源", "商品", "序號", "數量", "單價", "金額", "成本", "毛利", "業務員毛利",
   "作廢", "銷退", "原銷貨單", "會員",
 ];
 
@@ -255,7 +255,7 @@ export function dailyTable(active: DailyOrder[], returns: DailyOrder[], voided: 
         o.no,
         `${o.warehouse_code ?? ""} ${o.warehouse_name ?? ""}`.trim(),
         o.sales_person_name ?? "",
-        o.customer_name ?? "散客",
+        o.customer_name ?? "直客",
         it.product_name,
         serialList(it),
         String(it.qty),

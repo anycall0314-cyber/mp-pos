@@ -264,7 +264,7 @@ function LinkCard({ row, categories }: { row: VendorLinkRow; categories: string 
           </>
         )}
         <div className="vl-field">
-          入庫供應商
+          入庫廠商
           <ComboBox
             value={supplier?.id ?? ""}
             selectedOption={supplier}

@@ -13,12 +13,12 @@ const TABS: { value: Tab; label: string; hint: string }[] = [
   {
     value: "personal",
     label: "個人收購",
-    hint: "向會員 / 散客收購中古機",
+    hint: "向會員收購中古機",
   },
   {
     value: "vendor",
     label: "廠商收購",
-    hint: "向供應商批量收購中古機(走進貨單)",
+    hint: "向廠商批量收購中古機(走進貨單)",
   },
 ];
 

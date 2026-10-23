@@ -65,7 +65,7 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
                   </span>
                 </div>
                 <div>
-                  目前狀態:<b>{data.serial.status_label}</b> · 倉別:
+                  目前狀態:<b>{data.serial.status_label}</b> · 門市:
                   {data.serial.warehouse_code ?? "—"}
                 </div>
                 <div className="serial-codes-row">
@@ -143,7 +143,7 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
                 <div style={{ fontSize: 14, marginBottom: 12, lineHeight: 1.8 }}>
                   廠商進貨單{" "}
                   <b>{data.acquisition.purchase_order_no}</b>(
-                  {data.acquisition.doc_date}),供應商{" "}
+                  {data.acquisition.doc_date}),廠商{" "}
                   <b>{data.acquisition.supplier_name || "—"}</b>,單台成本{" "}
                   <b>{money(data.acquisition.amount)}</b>
                 </div>
@@ -172,7 +172,7 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
                       <th style={{ width: 40 }}>#</th>
                       <th>銷貨單</th>
                       <th>日期</th>
-                      <th>客戶</th>
+                      <th>來源</th>
                       <th className="num">單價</th>
                       <th>狀態</th>
                     </tr>
@@ -187,7 +187,7 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
                         <td>{s.sales_order_no}</td>
                         <td>{s.doc_date}</td>
                         <td>
-                          {s.customer_name || s.customer_phone || "(散客)"}
+                          {s.customer_name || s.customer_phone || "(直客)"}
                         </td>
                         <td className="num">
                           {money(s.unit_price)}

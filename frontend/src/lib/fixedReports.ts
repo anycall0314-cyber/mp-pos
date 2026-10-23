@@ -22,7 +22,7 @@ export const FIXED_REPORTS: FixedReportPage[] = [
   { key: "products", path: "/reports/products", title: "商品排行", ability: "report_products" },
   // 照客戶 / 照會員看誰買得最多(2026-10-12;取舊歐睿 SA040 毛利彙總表的優點)。
   // 只有管理員看得到(owner 同一天:「客戶排行不用給店員看」),所以沒有 ability
-  { key: "customers", path: "/reports/customers", title: "客戶排行" },
+  { key: "customers", path: "/reports/customers", title: "來源排行" },
   // 各家電信、各種方案開了幾門(2026-10-12;取舊歐睿 SIM031 開通數量統計)。逐筆的是佣金明細
   { key: "activations", path: "/reports/activations", title: "開通統計", ability: "report_activations" },
 ];

@@ -1281,8 +1281,8 @@ export function PurchaseWorkbenchPage({
   );
 
   function validate(): string | null {
-    if (!supplier) return "請選供應商";
-    if (!warehouse) return "請選入庫倉";
+    if (!supplier) return "請選廠商";
+    if (!warehouse) return "請選門市";
     const ls = linesRef.current;
     if (ls.length === 0) return "請至少掃一筆商品";
     // 已經知道有問題的序號(已經在系統裡 / 單內重複):先講是哪幾個、為什麼。還沒查到答案的不擋(伺服器存檔時會擋)
@@ -1590,7 +1590,7 @@ export function PurchaseWorkbenchPage({
 
         <div className="ws-party">
           <div className="ws-f grow">
-            <span className="ws-lbl">供應商</span>
+            <span className="ws-lbl">廠商</span>
             <ComboBox
               value={supplier}
               selectedOption={supplierOption}
@@ -1604,11 +1604,11 @@ export function PurchaseWorkbenchPage({
             />
           </div>
           <label className="ws-f">
-            <span className="ws-lbl">入庫倉</span>
+            <span className="ws-lbl">門市</span>
             <select
               value={warehouse}
               disabled={me.locked || stores.length === 0 || locked}
-              title={me.locked ? "這個帳號只能進自己的分店" : undefined}
+              title={me.locked ? "這個帳號只能進自己的門市" : undefined}
               onChange={(e) => {
                 const next = Number(e.target.value);
                 setWarehouse(next);
@@ -2057,7 +2057,7 @@ export function PurchaseWorkbenchPage({
             className="wb-btn go ws-go"
             onClick={submit}
             disabled={busy}
-            title={`進到「${storeName ?? "入庫倉"}」,存了就入庫`}
+            title={`進到「${storeName ?? "門市"}」,存了就入庫`}
           >
             {busy ? "儲存中" : "儲存"}
           </button>

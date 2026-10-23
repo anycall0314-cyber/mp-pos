@@ -101,7 +101,7 @@ export function PlatformWarehousesTab() {
             ))}
           </select>
           <span style={{ color: "var(--text-dim)" }}>
-            ({filtered.length} 個倉別)
+            ({filtered.length} 個門市)
           </span>
         </label>
         <button
@@ -119,7 +119,7 @@ export function PlatformWarehousesTab() {
             setDrawerOpen(true);
           }}
         >
-          + 新增倉別
+          + 新增門市
         </button>
       </div>
 
@@ -183,7 +183,7 @@ export function PlatformWarehousesTab() {
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={6} className="md-empty">
-                  尚無倉別
+                  尚無門市
                 </td>
               </tr>
             )}
@@ -193,7 +193,7 @@ export function PlatformWarehousesTab() {
 
       <Drawer
         open={drawerOpen}
-        title="新增倉別"
+        title="新增門市"
         onClose={() => setDrawerOpen(false)}
         width={480}
         footer={

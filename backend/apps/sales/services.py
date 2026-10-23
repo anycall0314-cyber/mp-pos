@@ -23,7 +23,7 @@ from apps.core.tenant_fields import same_company as _same_company
 from apps.inventory.locking import lock_document, lock_stock_rows, locked_balance as _locked_balance
 from apps.inventory.identifiers import IdentifierError, create_serial, main_code, split_codes, taken
 from apps.inventory.models import ProductSerial, StockBalance, StockMovement
-from apps.parties.models import Customer, SimCard, TelecomPlan
+from apps.parties.models import SimCard, TelecomPlan
 from apps.tenants.models import Tenant
 from apps.tenants.services import InvoiceTrackError, assign_invoice_no
 
@@ -633,30 +633,6 @@ def _get_or_create_secondhand_intake_product(tenant) -> Product:
     )
 
 
-def _get_or_create_customer_for_member(tenant, member) -> Customer:
-    """個人收購對應一筆 Customer(銷貨單的歸屬必填)。
-
-    優先以 phone 比對既有個人客戶;phone 為空時退而求其次以 name 比對。
-    都沒有就照會員資料新建一筆 individual Customer。
-    """
-    qs = Customer.objects.for_tenant(tenant).filter(kind=Customer.Kind.INDIVIDUAL)
-    if member.phone:
-        existing = qs.filter(phone=member.phone).order_by("created_at").first()
-        if existing is not None:
-            return existing
-    else:
-        existing = qs.filter(phone="", name=member.name).order_by("created_at").first()
-        if existing is not None:
-            return existing
-    return Customer.objects.create(
-        tenant=tenant,
-        name=member.name,
-        phone=member.phone,
-        kind=Customer.Kind.INDIVIDUAL,
-        address=member.address,
-    )
-
-
 def acquire_secondhand_from_member(
     *,
     tenant,
@@ -682,7 +658,9 @@ def acquire_secondhand_from_member(
     `wholesale` = 表單上對批發的指定 `{"list": 要不要上架, "price": 批發價}`;沒給就照公司的批發設定。
 
     記帳方向:銷貨單 total 為負數(現金流出),與一般銷貨(正數現金流入)在報表自然相加。
-    銷貨單 customer 自動帶該會員對應的個人 Customer(查無則新建),member 欄位記會員本身。
+    銷貨單的來源一律是直客(customer 空、source_name「直客」),member 記賣機的那個人。
+    2026-10-23 起(全站檢視 E1,owner「好」):以前照會員電話自動建一筆「個人」類的 Customer 掛在單上,
+    來源清單因此多出一堆跟會員同名的「個人(舊類別)」;舊單不改寫。
 
     這一台的碼:imei / sn 可以都給、也可以只給一個;serial_no 是「沒講是哪一種」的單一個碼(舊寫法)。
     """
@@ -709,8 +687,6 @@ def acquire_secondhand_from_member(
     virtual_product = _get_or_create_secondhand_intake_product(tenant)
 
     with transaction.atomic():
-        customer = _get_or_create_customer_for_member(tenant, member)
-
         try:
             serial = create_serial(
                 tenant=tenant,
@@ -732,7 +708,8 @@ def acquire_secondhand_from_member(
 
         so = SalesOrder.objects.create(
             tenant=tenant,
-            customer=customer,
+            customer=None,
+            source_name="直客",
             member=member,
             warehouse=warehouse,
             doc_date=doc_date or date.today(),

@@ -170,7 +170,7 @@ export function RepairsPage() {
                 <th>單號</th>
                 <th>方式</th>
                 <th>狀態</th>
-                <th>客戶</th>
+                <th>會員</th>
                 <th>機型</th>
                 <th>收件日</th>
                 <th>預計完修</th>
@@ -181,7 +181,7 @@ export function RepairsPage() {
                 <th className="num" title="委外:實際費用 / 自修:工資">
                   費用
                 </th>
-                <th className="num">客戶實付</th>
+                <th className="num">實付</th>
                 <th className="num" title="自修:實付 − 零件成本 / 委外:實付 − 委外費用">
                   毛利
                 </th>
@@ -270,7 +270,7 @@ export function RepairsPage() {
                       <InlineMoneyCell
                         initial={r.customer_paid_amount}
                         disabled={locked}
-                        title="客戶實付金額"
+                        title="實付金額"
                         onSave={(v) =>
                           patchField(r.id, { customer_paid_amount: v })
                         }

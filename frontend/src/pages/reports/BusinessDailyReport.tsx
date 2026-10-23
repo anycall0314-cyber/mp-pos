@@ -76,7 +76,7 @@ export function BusinessDailyReportPage() {
     lines.push(`前日現金,${openingInt}`);
     lines.push("");
     lines.push("【銷貨現金收入】");
-    lines.push("單號,客戶,業務員,單據總額,現金部分");
+    lines.push("單號,來源,業務員,單據總額,現金部分");
     for (const r of report.sales.rows) {
       lines.push(
         [
@@ -91,7 +91,7 @@ export function BusinessDailyReportPage() {
     lines.push(`小計,,,,${salesTotal}`);
     lines.push("");
     lines.push("【非現金收入(匯款 / 刷卡 / LinePay 等)】");
-    lines.push("單號,客戶,業務員,單據總額,非現金部分,方式拆分");
+    lines.push("單號,來源,業務員,單據總額,非現金部分,方式拆分");
     for (const r of report.non_cash_sales.rows) {
       const breakdown = Array.isArray(r.method_breakdown)
         ? (r.method_breakdown as { name: string; amount: string }[])
@@ -128,7 +128,7 @@ export function BusinessDailyReportPage() {
     lines.push(`小計,,,,,${phoneBillsTotal}`);
     lines.push("");
     lines.push("【維修現金】");
-    lines.push("單號,客人,機型,金額");
+    lines.push("單號,會員,機型,金額");
     for (const r of repairRows) {
       lines.push(
         [
@@ -142,7 +142,7 @@ export function BusinessDailyReportPage() {
     lines.push(`小計,,,${repairsTotal}`);
     lines.push("");
     lines.push("【進貨現金付款】");
-    lines.push("單號,供應商,付款方式,金額");
+    lines.push("單號,廠商,付款方式,金額");
     for (const r of report.purchases.rows) {
       lines.push(
         [
@@ -171,7 +171,7 @@ export function BusinessDailyReportPage() {
     lines.push(`小計,,,,${expensesTotal}`);
     lines.push("");
     lines.push("【銷退現金支出】");
-    lines.push("銷退單號,原銷貨單,客戶,退款方式,金額");
+    lines.push("銷退單號,原銷貨單,來源,退款方式,金額");
     for (const r of report.sales_returns.rows) {
       lines.push(
         [
@@ -186,12 +186,12 @@ export function BusinessDailyReportPage() {
     lines.push(`小計,,,,${salesReturnsTotal}`);
     lines.push("");
     lines.push("【收購現金支出】");
-    lines.push("單號,客戶,業務員,金額");
+    lines.push("單號,會員,業務員,金額");
     for (const r of buybackRows) {
       lines.push(
         [
           r.no,
-          (r.customer_name ?? "").toString().replace(/,/g, " "),
+          (r.member_name || r.customer_name || "").toString().replace(/,/g, " "),
           (r.sales_person_name ?? "").toString().replace(/,/g, " "),
           intStr(r.cash_amount),
         ].join(","),
@@ -328,7 +328,7 @@ export function BusinessDailyReportPage() {
                 <thead>
                   <tr>
                     <th>單號</th>
-                    <th>客戶</th>
+                    <th>來源</th>
                     <th>業務員</th>
                     <th className="num">單據總額</th>
                     <th className="num">現金部分</th>
@@ -376,7 +376,7 @@ export function BusinessDailyReportPage() {
                 <thead>
                   <tr>
                     <th>單號</th>
-                    <th>客戶</th>
+                    <th>來源</th>
                     <th>業務員</th>
                     <th className="num">單據總額</th>
                     <th className="num">非現金部分</th>
@@ -489,7 +489,7 @@ export function BusinessDailyReportPage() {
                 <thead>
                   <tr>
                     <th>單號</th>
-                    <th>客人</th>
+                    <th>會員</th>
                     <th>機型</th>
                     <th className="num">金額</th>
                   </tr>
@@ -530,7 +530,7 @@ export function BusinessDailyReportPage() {
                 <thead>
                   <tr>
                     <th>單號</th>
-                    <th>供應商</th>
+                    <th>廠商</th>
                     <th>付款方式</th>
                     <th className="num">金額</th>
                   </tr>
@@ -621,7 +621,7 @@ export function BusinessDailyReportPage() {
                   <tr>
                     <th>銷退單號</th>
                     <th>原銷貨單</th>
-                    <th>客戶</th>
+                    <th>來源</th>
                     <th>退款方式</th>
                     <th className="num">退款金額</th>
                   </tr>
@@ -667,7 +667,7 @@ export function BusinessDailyReportPage() {
                 <thead>
                   <tr>
                     <th>單號</th>
-                    <th>客戶</th>
+                    <th>會員</th>
                     <th>業務員</th>
                     <th className="num">付出金額</th>
                   </tr>
@@ -683,7 +683,7 @@ export function BusinessDailyReportPage() {
                       title="點擊在新分頁查看收購單"
                     >
                       <td>{r.no}</td>
-                      <td>{String(r.customer_name || "—")}</td>
+                      <td>{String(r.member_name || r.customer_name || "—")}</td>
                       <td>{String(r.sales_person_name || "—")}</td>
                       <td className="num" style={{ color: "var(--danger-text)" }}>
                         −{money(r.cash_amount)}

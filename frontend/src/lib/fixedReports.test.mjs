@@ -61,7 +61,7 @@ test("幾張彙總報表的名稱、網址、權限各是各的,而且導覽與�
     ["daily", "/reports/daily", "每日彙總", "report_daily"],
     ["staff", "/reports/staff", "業績彙總", "report_staff"],
     ["products", "/reports/products", "商品排行", "report_products"],
-    ["customers", "/reports/customers", "客戶排行", undefined],               // 只有管理員看得到:沒有勾
+    ["customers", "/reports/customers", "來源排行", undefined],               // 只有管理員看得到:沒有勾
     ["activations", "/reports/activations", "開通統計", "report_activations"],  // 2026-10-12:各家電信開了幾門
   ]);
   assert.deepEqual([...new Set(FIXED_REPORTS.map((r) => r.title.length))], [4]);

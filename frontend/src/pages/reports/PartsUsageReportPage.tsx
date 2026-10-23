@@ -27,7 +27,7 @@ export function PartsUsageReportPage() {
 
   function exportCsv() {
     if (!rows.length) return;
-    const headers = ["品號", "品名", "倉別", "維修領用", "對外調貨", "合計"];
+    const headers = ["品號", "品名", "門市", "維修領用", "對外調貨", "合計"];
     const lines = [headers.join(",")];
     for (const r of rows) {
       lines.push(
@@ -129,7 +129,7 @@ export function PartsUsageReportPage() {
               <tr>
                 <th>品號</th>
                 <th>品名</th>
-                <th>倉別</th>
+                <th>門市</th>
                 <th className="num">維修領用</th>
                 <th className="num">對外調貨</th>
                 <th className="num">合計</th>

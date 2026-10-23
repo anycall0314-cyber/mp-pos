@@ -37,16 +37,16 @@ import { codesLabel, normalizeCode } from "@/lib/deviceCodes";
 /**
  * 調撥(工作台版型):一個畫面做完。
  *
- * 上面一張卡:調出 / 調入分店、日期、備註、掃碼框、確認。
+ * 上面一張卡:調出 / 調入門市、日期、備註、掃碼框、確認。
  * 掃一下(品號 / 條碼 / IMEI / SN)或打品名就加一行,新的一行排最上面;
- * 序號商品把調出分店在庫的每一台列成小標籤(後 6 碼),點一下或再掃那一台的碼就選起來。
+ * 序號商品把調出門市在庫的每一台列成小標籤(後 6 碼),點一下或再掃那一台的碼就選起來。
  * 下面是最近的調撥單:點一列展開明細,待入庫的直接在列上按「入庫」。
  *
- * 規則沒有變:確認 = 派發(東西離開調出分店,變成調撥中),調入分店按入庫才進庫存;
+ * 規則沒有變:確認 = 派發(東西離開調出門市,變成調撥中),調入門市按入庫才進庫存;
  * 能不能調由後端存檔時鎖住庫存再檢查。
  *
- * 選哪一台只有三條路:刷到那一台的碼(完全相同)、人點小標籤、人從下拉用滑鼠點了商品而那家分店只剩一台。
- * 其他情況一律不替人選 —— 刷的可能是別台的碼的一部分,自動選起來的卻是這家分店剩下的那一台。
+ * 選哪一台只有三條路:刷到那一台的碼(完全相同)、人點小標籤、人從下拉用滑鼠點了商品而那家門市只剩一台。
+ * 其他情況一律不替人選 —— 刷的可能是別台的碼的一部分,自動選起來的卻是這家門市剩下的那一台。
  */
 
 interface Unit {
@@ -58,17 +58,17 @@ interface Unit {
 
 interface Line {
   key: string;
-  /** 這一行是照哪一家調出分店的庫存建的(換了分店就不能再用) */
+  /** 這一行是照哪一家調出門市的庫存建的(換了門市就不能再用) */
   warehouse: number;
   product: number;
   sku: string;
   name: string;
   requiresSerial: boolean;
-  /** 序號商品:調出分店在庫的每一台;null = 還在載入 */
+  /** 序號商品:調出門市在庫的每一台;null = 還在載入 */
   units: Unit[] | null;
   /** 選起來要調的那幾台 */
   picked: number[];
-  /** 配件:調出分店現有幾個;null = 不知道(交給後端檢查) */
+  /** 配件:調出門市現有幾個;null = 不知道(交給後端檢查) */
   avail: number | null;
   /** 配件數量(序號商品的數量 = 選了幾台) */
   qty: number;
@@ -85,7 +85,7 @@ interface NewProduct {
   avail?: number;
 }
 
-/** 一次掃碼 / 選商品是照哪一家調出分店做的;中途換了分店(gen 不一樣)就整個不算 */
+/** 一次掃碼 / 選商品是照哪一家調出門市做的;中途換了門市(gen 不一樣)就整個不算 */
 interface Ctx {
   warehouse: number;
   gen: number;
@@ -178,7 +178,7 @@ function refused(e: unknown): boolean {
   return e instanceof ApiHttpError && e.status >= 400 && e.status < 500;
 }
 /**
- * 這一張已經成立的調撥單,是不是剛剛送出去的那一份(同樣的分店、同樣的商品 / 數量 / 那幾台,而且是剛剛才建的)。
+ * 這一張已經成立的調撥單,是不是剛剛送出去的那一份(同樣的門市、同樣的商品 / 數量 / 那幾台,而且是剛剛才建的)。
  * 連線在送出途中斷掉時,用它回頭認「其實有沒有成立」,免得同一份再送一次變成兩張。
  */
 function sameOrder(
@@ -276,10 +276,10 @@ export function TransferWorkbenchPage() {
   const sending = useRef(false);
   const scanApi = useRef<ScanBoxApi | null>(null);
   // 掃碼是一個接一個排隊處理的:下一個碼要馬上看得到上一個碼加的那一行,
-  // 所以明細、調出分店都另外留一份「當下最新」的,不等畫面重畫。
+  // 所以明細、調出門市都另外留一份「當下最新」的,不等畫面重畫。
   const linesRef = useRef<Line[]>([]);
   const fromRef = useRef<number | "">(from);
-  /** 調出分店每換一次加一;還在查的碼、還在載的序號發現自己是舊的就不做了 */
+  /** 調出門市每換一次加一;還在查的碼、還在載的序號發現自己是舊的就不做了 */
   const genRef = useRef(0);
 
   function switchFrom(next: number | "") {
@@ -344,15 +344,15 @@ export function TransferWorkbenchPage() {
             toast("正在送出,不能復原", "err");
             return;
           }
-          // 清空之後又掃了新的:不能拿舊的蓋掉(換過調出分店的話,兩邊的東西也不能混在一張單)
+          // 清空之後又掃了新的:不能拿舊的蓋掉(換過調出門市的話,兩邊的東西也不能混在一張單)
           if (linesRef.current.length > 0) {
             toast("已經有新的明細,沒有復原", "err");
             return;
           }
           undo();
-          // 分店沒有回到這些明細當初的那一家(中間又換過)就不放回來
+          // 門市沒有回到這些明細當初的那一家(中間又換過)就不放回來
           if (kept.some((l) => l.warehouse !== fromRef.current)) {
-            toast("調出分店已經不一樣,沒有復原", "err");
+            toast("調出門市已經不一樣,沒有復原", "err");
             return;
           }
           commit(() => kept);
@@ -382,8 +382,8 @@ export function TransferWorkbenchPage() {
     if (next === to) setTo(prev.from);
     remember(K_FROM, String(next));
     if (next === to && prev.from !== "") remember(K_TO, String(prev.from));
-    clearLines("已換調出分店,明細已清空", () => {
-      // 中間又換過別家就不動分店(下面會因為分店對不上而不放回明細)
+    clearLines("已換調出門市,明細已清空", () => {
+      // 中間又換過別家就不動門市(下面會因為門市對不上而不放回明細)
       if (fromRef.current !== next) return;
       switchFrom(prev.from);
       setTo(prev.to);
@@ -404,8 +404,8 @@ export function TransferWorkbenchPage() {
   }
 
   /**
-   * 序號商品:把調出分店在庫的每一台載進來當小標籤。
-   * autoPick:那家分店只剩一台時要不要直接選起來(只有人用滑鼠從下拉點商品時才會是 true)。
+   * 序號商品:把調出門市在庫的每一台載進來當小標籤。
+   * autoPick:那家門市只剩一台時要不要直接選起來(只有人用滑鼠從下拉點商品時才會是 true)。
    * optional:這一行本來就有可用的序號(整張調撥帶進來的),這次只是多列幾台給人換;載不到就照原樣,不算錯。
    */
   async function loadUnits(
@@ -461,7 +461,7 @@ export function TransferWorkbenchPage() {
     if (!line) return null;
     if (line.units && !line.units.some((u) => u.id === serialId)) {
       bump(key);
-      return `「${line.name}」這一台不在調出分店的在庫裡`;
+      return `「${line.name}」這一台不在調出門市的在庫裡`;
     }
     bump(key, (l) =>
       l.picked.includes(serialId)
@@ -512,7 +512,7 @@ export function TransferWorkbenchPage() {
     // 新加的放最上面:品項多的時候不用一路往下找
     commit((ls) => [line, ...ls]);
     if (!p.requiresSerial) {
-      return p.avail != null && p.avail <= 0 ? "調出分店沒有可調庫存" : null;
+      return p.avail != null && p.avail <= 0 ? "調出門市沒有可調庫存" : null;
     }
     const dropped = await loadUnits(
       key,
@@ -552,9 +552,9 @@ export function TransferWorkbenchPage() {
             toast("正在送出,不能復原", "err");
             return;
           }
-          // 移除之後換了調出分店:這一行的序號與可調數量都是舊分店的,不能放回來
+          // 移除之後換了調出門市:這一行的序號與可調數量都是舊門市的,不能放回來
           if (fromRef.current !== gone.warehouse) {
-            toast("已經換了調出分店,沒有復原", "err");
+            toast("已經換了調出門市,沒有復原", "err");
             return;
           }
           commit((ls) => {
@@ -577,12 +577,12 @@ export function TransferWorkbenchPage() {
   /** 刷到 / 打完 Enter 的那串字,先看是不是某一台設備的碼 */
   async function onScan(code: string): Promise<boolean | string> {
     const ctx = ctxNow();
-    if (!ctx) return "先選調出分店";
+    if (!ctx) return "先選調出門市";
     if (!normalizeCode(code)) return true;
     // 不管多短、畫面上有沒有這一台,一律先問整家公司「這個碼是哪一台」(完全相同才算):
     // 舊資料裡兩台的碼撞在一起時,不能因為其中一台剛好已經在畫面上就選它。
     const devices: ProductSerial[] = await findDevicesByCode(code);
-    // 查的這段時間換了調出分店:這個碼是照舊分店刷的,不要了
+    // 查的這段時間換了調出門市:這個碼是照舊門市刷的,不要了
     if (!live(ctx)) return true;
     if (devices.length === 0) return false;
     if (devices.length > 1) {
@@ -592,9 +592,9 @@ export function TransferWorkbenchPage() {
     if (d.status !== "in_stock" || d.warehouse !== ctx.warehouse) {
       const where =
         d.status === "in_stock"
-          ? `在${storeName(d.warehouse) || d.warehouse_code || "別的分店"}`
+          ? `在${storeName(d.warehouse) || d.warehouse_code || "別的門市"}`
           : d.status_label;
-      return `${d.product_name} ${where},不在調出分店`;
+      return `${d.product_name} ${where},不在調出門市`;
     }
     // 畫面上已經有這一台 → 直接選起來
     const shown = linesRef.current.find((l) =>
@@ -622,7 +622,7 @@ export function TransferWorkbenchPage() {
       inStockOnly: true,
       warehouseId: ctx.warehouse,
     });
-    // 查的時候換了調出分店:這份結果是舊分店的庫存
+    // 查的時候換了調出門市:這份結果是舊門市的庫存
     if (!live(ctx)) return [];
     const out: ScanOption<Product>[] = [];
     for (const o of found) {
@@ -645,7 +645,7 @@ export function TransferWorkbenchPage() {
     via: "enter" | "mouse",
   ): Promise<string | null> {
     const ctx = ctxNow();
-    if (!ctx) return "先選調出分店";
+    if (!ctx) return "先選調出門市";
     return addProduct(
       {
         id: o.payload.id,
@@ -660,7 +660,7 @@ export function TransferWorkbenchPage() {
   }
 
   // 整張調撥:從進貨單頁按過來(?from_po=編號),把那張單還留在進貨門市的東西一次帶好,
-  // 選好調入分店就能確認。已經賣掉 / 調走的自動略過,並講出來。
+  // 選好調入門市就能確認。已經賣掉 / 調走的自動略過,並講出來。
   useEffect(() => {
     if (!fromPo) return;
     let alive = true;
@@ -735,7 +735,7 @@ export function TransferWorkbenchPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromPo]);
 
-  // 調入分店被整張調撥清掉時(剛好等於進貨門市),補另一家
+  // 調入門市被整張調撥清掉時(剛好等於進貨門市),補另一家
   useEffect(() => {
     if (to !== "" || from === "" || stores.length === 0) return;
     const other = stores.find((s) => s.id !== from);
@@ -744,13 +744,13 @@ export function TransferWorkbenchPage() {
 
   function validate(): string | null {
     const warehouse = fromRef.current;
-    if (warehouse === "" || to === "") return "請選調出與調入分店";
-    if (warehouse === to) return "調出與調入分店不能相同";
+    if (warehouse === "" || to === "") return "請選調出與調入門市";
+    if (warehouse === to) return "調出與調入門市不能相同";
     const ls = linesRef.current;
     if (ls.length === 0) return "請至少掃一筆商品";
     for (const l of ls) {
       if (l.warehouse !== warehouse) {
-        return `「${l.name}」不是這家調出分店的明細,請移除重掃`;
+        return `「${l.name}」不是這家調出門市的明細,請移除重掃`;
       }
       if (l.error) return `「${l.name}」${l.error}`;
       if (l.requiresSerial) {
@@ -804,7 +804,7 @@ export function TransferWorkbenchPage() {
         if (landed) {
           toast(`${created.no} 已調撥並入庫`, "ok", { ms: 4000 });
         } else {
-          // 單已經成立、東西已經離開調出分店:要留在畫面上講清楚,不然會被當成整筆沒成功再做一次
+          // 單已經成立、東西已經離開調出門市:要留在畫面上講清楚,不然會被當成整筆沒成功再做一次
           const text = offline
             ? `${created.no} 已送出;入庫那一步連線中斷,不確定有沒有入庫。不用重做,看下面那一列:還是待入庫就按「入庫」。`
             : `${created.no} 已送出、還沒入庫(${apiErrorText(e)})。不用重做,到下面那一列按「入庫」。`;
@@ -1069,7 +1069,7 @@ export function TransferWorkbenchPage() {
             <ArmButton
               label="作廢"
               className="wb-btn danger small"
-              title="把已經調過去的東西退回調出分店"
+              title="把已經調過去的東西退回調出門市"
               onConfirm={() => voidOrder(t)}
             />
           </div>
@@ -1083,11 +1083,11 @@ export function TransferWorkbenchPage() {
       <div className="wb-card">
         <div className="wb-row">
           <div className="wb-field">
-            <label>調出分店</label>
+            <label>調出門市</label>
             <select
               value={from}
               disabled={me.locked || stores.length === 0 || locked}
-              title={me.locked ? "這個帳號只能從自己的分店調出" : undefined}
+              title={me.locked ? "這個帳號只能從自己的門市調出" : undefined}
               onChange={(e) => changeFrom(Number(e.target.value))}
             >
               {from === "" && <option value="">請選擇</option>}
@@ -1110,7 +1110,7 @@ export function TransferWorkbenchPage() {
             </button>
           )}
           <div className="wb-field">
-            <label>調入分店</label>
+            <label>調入門市</label>
             <select
               value={to}
               disabled={stores.length === 0 || locked}
@@ -1172,7 +1172,7 @@ export function TransferWorkbenchPage() {
           {!me.locked && (
             <label
               className="wb-check"
-              title="打勾:確認後直接進調入分店的庫存,不用對方再按入庫"
+              title="打勾:確認後直接進調入門市的庫存,不用對方再按入庫"
             >
               <input
                 type="checkbox"
@@ -1303,7 +1303,7 @@ export function TransferWorkbenchPage() {
                   ) : l.units === null || tails === null ? (
                     <span className="wb-dim wb-small">載入中…</span>
                   ) : l.units.length === 0 ? (
-                    <span className="wb-badge bad">調出分店沒有在庫</span>
+                    <span className="wb-badge bad">調出門市沒有在庫</span>
                   ) : (
                     <div className="wb-chips">
                       {l.units.map((u) => (

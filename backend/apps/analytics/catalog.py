@@ -142,9 +142,9 @@ DIMENSIONS = {d.key: d for d in [
     # 銷貨單上的兩個人(2026-10-12;取舊歐睿 SA040 毛利彙總表可以照客戶 / 會員看):
     # 客戶 = 這張單的來源(通路 / 同業 / 直客);會員 = 實際的那個人或公司(可以沒有)
     # **只給管理員**(owner 2026-10-12:「客戶排行不用給店員看」):照這兩個分就是客戶排行,所以分組、條件、下拉的值都一起收
-    Dim("customer", "客戶", "ref", model="parties.Customer", roles=MANAGERS),
+    Dim("customer", "來源", "ref", model="parties.Customer", roles=MANAGERS),
     Dim("member", "會員", "ref", model="parties.Member", roles=MANAGERS),
-    Dim("supplier", "供應商", "ref", model="parties.Supplier"),
+    Dim("supplier", "廠商", "ref", model="parties.Supplier"),
     Dim("payment_method", "付款方式", "choice", labels=_payment_labels),
     Dim("tax_method", "課稅別", "choice", labels=lambda tenant: _tax_labels()),
     Dim("stock_state", "庫存狀態", "choice", labels=lambda tenant: _state_labels()),
