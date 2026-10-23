@@ -8404,3 +8404,21 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   min-height: 32px;
   padding: 2px 12px;
 }
+
+/* 主檔頁沒選任何一筆:清單佔滿整個寬度、不開右邊(UI 改善計劃 UI-07) */
+.md-layout.list-only,
+.pc-layout.list-only {
+  grid-template-columns: 1fr;
+}
+.md-layout.list-only > .md-master,
+.pc-layout.list-only > .pc-master {
+  border-right: 0;
+}
+.md-table tr.md-empty-row { cursor: default; }
+.md-table tr.md-empty-row:hover td { background: transparent; }
+.md-detail-close {
+  margin-left: auto;
+  min-width: 44px;
+  font-size: var(--font-section);
+}
+.pc-layout.list-only > .pc-detail { display: none; }

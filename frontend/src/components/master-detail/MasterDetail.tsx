@@ -32,7 +32,8 @@ interface MasterDetailProps<T> {
    * 框不會變成空的、清單卻還照著剛才的字篩。沒給 = 框自己記(父頁不會把這個元件卸下的才可以不給)。
    */
   searchValue?: string;
-  emptyDetailHint?: string;
+  /** 清單是空的時候,清單裡寫的那一句(例:「這段期間沒有雜支」「查無符合「x」的雜支」) */
+  emptyText?: string;
 }
 
 export function MasterDetail<T>({
@@ -44,7 +45,7 @@ export function MasterDetail<T>({
   searchPlaceholder = "搜尋…",
   onSearch,
   searchValue,
-  emptyDetailHint = "從左側選擇一列以檢視詳細資料",
+  emptyText = "沒有資料",
 }: MasterDetailProps<T>) {
   const [selectedKey, setSelectedKey] = useState<string | number | null>(null);
   const [activeTab, setActiveTab] = useState<string>(tabs[0]?.key ?? "");
@@ -53,8 +54,10 @@ export function MasterDetail<T>({
   const currentActions = selectedRow && actions ? actions(selectedRow) : [];
   const currentTab = tabs.find((t) => t.key === activeTab) ?? tabs[0];
 
+  // 沒選任何一筆:清單佔滿整個寬度、不開右邊(UI 改善計劃 UI-07:不留一大塊空白寫「從左側選擇…」)。
+  // 選了一筆:電腦是左右兩欄;手機(窄畫面)整頁換成那一筆,右上「×」回清單(`md-show-detail` 只在窄畫面有作用)
   return (
-    <div className="md-layout">
+    <div className={selectedRow ? "md-layout md-show-detail" : "md-layout list-only"}>
       <section className="md-master">
         <div className="md-master-toolbar">
           <input
@@ -88,10 +91,18 @@ export function MasterDetail<T>({
                   </tr>
                 );
               })}
+              {rows.length === 0 && (
+                <tr className="md-empty-row">
+                  <td colSpan={columns.length} className="md-empty">
+                    {emptyText}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </section>
+      {selectedRow && (
       <section className="md-detail">
         <div className="md-detail-tabs">
           {tabs.map((t) => (
@@ -103,14 +114,11 @@ export function MasterDetail<T>({
               {t.label}
             </button>
           ))}
+          <button type="button" className="md-detail-close" aria-label="收起" title="收起" onClick={() => setSelectedKey(null)}>
+            ×
+          </button>
         </div>
-        <div className="md-detail-body">
-          {selectedRow && currentTab ? (
-            currentTab.render(selectedRow)
-          ) : (
-            <div className="md-empty">{emptyDetailHint}</div>
-          )}
-        </div>
+        <div className="md-detail-body">{currentTab ? currentTab.render(selectedRow) : null}</div>
         <div className="md-detail-footer">
           {currentActions.map((a) => (
             <button key={a.key} className={a.primary ? "primary" : undefined} onClick={a.onClick}>
@@ -119,6 +127,7 @@ export function MasterDetail<T>({
           ))}
         </div>
       </section>
+      )}
     </div>
   );
 }

@@ -182,7 +182,7 @@ export function SuppliersPage() {
         }
       />
 
-      <div className="pc-layout">
+      <div className={isEditing || isNew ? "pc-layout" : "pc-layout list-only"}>
         <aside className="pc-master" style={{ gridTemplateRows: "1fr" }}>
           <section className="pc-section">
             <div className="pc-section-header">
@@ -310,7 +310,7 @@ export function SuppliersPage() {
                     {filtered.length === 0 && (
                       <tr>
                         <td colSpan={5} className="md-empty">
-                          {query ? "查無廠商" : "尚無廠商,按右上角新增"}
+                          {query ? "查無廠商" : "還沒有廠商"}
                         </td>
                       </tr>
                     )}
@@ -322,11 +322,6 @@ export function SuppliersPage() {
         </aside>
 
         <div className="pc-detail">
-          {!isEditing && !isNew && (
-            <div className="md-empty" style={{ marginTop: 40 }}>
-              從左側選擇廠商以檢視 / 編輯,或按右上角「新增廠商」
-            </div>
-          )}
 
           {(isEditing || isNew) && (
             <div className="pc-detail-body">

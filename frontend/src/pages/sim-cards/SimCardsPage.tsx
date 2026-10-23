@@ -124,11 +124,7 @@ export function SimCardsPage() {
           rowKey={(r) => r.id}
           tabs={tabs}
           searchPlaceholder=""
-          emptyDetailHint={
-            (data ?? []).length === 0
-              ? "尚無 SIM 卡,點右上「新增卡片」開始建立"
-              : "從左側選擇卡片檢視詳細"
-          }
+          emptyText={(data ?? []).length === 0 ? "還沒有 SIM 卡" : "查無符合的卡片"}
         />
       )}
       <SimCardForm

@@ -246,13 +246,7 @@ export function CashAdjustmentsPage() {
           searchPlaceholder="搜尋 單號 / 門市 / 方向 / 事由 / 備註"
           onSearch={setQuery}
           searchValue={query}
-          emptyDetailHint={
-            (data ?? []).length === 0
-              ? "這段期間沒有現金調整"
-              : filtered.length === 0
-                ? `查無符合「${query}」的調整`
-                : "從左側選擇調整單檢視詳細"
-          }
+          emptyText={(data ?? []).length === 0 ? "這段期間沒有現金調整" : `查無符合「${query}」的調整`}
         />
       )}
       <CashAdjustmentForm

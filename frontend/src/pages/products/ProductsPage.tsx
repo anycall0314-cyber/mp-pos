@@ -444,7 +444,7 @@ export function ProductsPage() {
         </div>
       )}
 
-      <div className="pc-layout">
+      <div className={selection ? "pc-layout" : "pc-layout list-only"}>
         <aside
           className="pc-master"
           style={{ gridTemplateRows: "1fr" }}
@@ -704,14 +704,6 @@ export function ProductsPage() {
 
         {/* ─── 右側面板 ─── */}
         <main className="pc-detail">
-          {!selection && (
-            <div className="md-empty" style={{ marginTop: 60 }}>
-              {leftTab === "models"
-                ? "從左側選類別、品牌、型號"
-                : "從左側選擇商品或類別以檢視 / 編輯"}
-            </div>
-          )}
-
           {selection?.kind === "model" && (
             <ModelSkuPanel
               modelKey={selection.key}

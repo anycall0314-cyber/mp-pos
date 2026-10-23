@@ -236,13 +236,7 @@ export function PhoneBillsPage() {
           searchPlaceholder="搜尋 單號 / 門市 / 電信 / 電話 / 會員 / 經手人"
           onSearch={setQuery}
           searchValue={query}
-          emptyDetailHint={
-            (data ?? []).length === 0
-              ? "這段期間沒有代收話費"
-              : filtered.length === 0
-                ? `查無符合「${query}」的紀錄`
-                : "從左側選擇代收單檢視詳細"
-          }
+          emptyText={(data ?? []).length === 0 ? "這段期間沒有代收話費" : `查無符合「${query}」的紀錄`}
         />
       )}
       <PhoneBillForm

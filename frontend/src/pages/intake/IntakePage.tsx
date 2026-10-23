@@ -364,7 +364,7 @@ export function IntakePage() {
               ))}
             </div>
           )}
-          <div className="md-layout intake-work">
+          <div className={selectedItem ? "md-layout intake-work" : "md-layout intake-work list-only"}>
           <section className="md-master">
             <div className="md-table">
               <table>
@@ -408,20 +408,16 @@ export function IntakePage() {
               </table>
             </div>
           </section>
-          <section className="md-detail">
-            {selectedItem ? (
+          {selectedItem && (
+            <section className="md-detail">
               <ItemDetail key={selectedItem.id} item={selectedItem} />
-            ) : (
-              <div className="md-empty" style={{ marginTop: 40 }}>
-                從左側選一行來處理
-              </div>
-            )}
-          </section>
+            </section>
+          )}
           </div>
         </>
       ) : (
         <div className="md-empty" style={{ marginTop: 40 }}>
-          貼一張進貨單送出識別,或從上方選一個批次
+          還沒有選批次
         </div>
       )}
     </div>

@@ -187,7 +187,7 @@ export function MembersPage() {
         }
       />
 
-      <div className="pc-layout">
+      <div className={isEditing || isNew ? "pc-layout" : "pc-layout list-only"}>
         <aside className="pc-master" style={{ gridTemplateRows: "1fr" }}>
           <section className="pc-section">
             <div className="pc-section-header">
@@ -265,11 +265,6 @@ export function MembersPage() {
         </aside>
 
         <div className="pc-detail">
-          {!isEditing && !isNew && (
-            <div className="md-empty" style={{ marginTop: 40 }}>
-              從左側選擇會員,或按右上角「新增會員」
-            </div>
-          )}
 
           {/* 那一位還沒讀到之前不給表單:上一位的資料還在格子裡,按儲存會存到這一位身上 */}
           {isEditing && !selected && (

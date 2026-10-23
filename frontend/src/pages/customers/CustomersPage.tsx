@@ -281,7 +281,7 @@ export function CustomersPage() {
         </div>
       </div>
 
-      <div className="pc-layout">
+      <div className={isEditing || isNew ? "pc-layout" : "pc-layout list-only"}>
         <aside className="pc-master" style={{ gridTemplateRows: "1fr" }}>
           <section className="pc-section">
             <div className="pc-section-header">
@@ -347,11 +347,6 @@ export function CustomersPage() {
         </aside>
 
         <div className="pc-detail">
-          {!isEditing && !isNew && (
-            <div className="md-empty" style={{ marginTop: 40 }}>
-              從左側選擇來源以檢視 / 編輯,或按右上角「新增來源」
-            </div>
-          )}
 
           {(isEditing || isNew) && (
             <div className="pc-detail-body">

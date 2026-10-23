@@ -244,13 +244,7 @@ export function PettyExpensesPage() {
           searchPlaceholder="搜尋 單號 / 門市 / 類別 / 收款對象 / 備註"
           onSearch={setQuery}
           searchValue={query}
-          emptyDetailHint={
-            (data ?? []).length === 0
-              ? "這段期間沒有雜支"
-              : filtered.length === 0
-                ? `查無符合「${query}」的雜支`
-                : "從左側選擇雜支單檢視詳細"
-          }
+          emptyText={(data ?? []).length === 0 ? "這段期間沒有雜支" : `查無符合「${query}」的雜支`}
         />
       )}
       <PettyExpenseForm

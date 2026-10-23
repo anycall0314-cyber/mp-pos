@@ -502,13 +502,7 @@ export function TelecomPlansPage() {
           tabs={tabs}
           searchPlaceholder="搜尋 專案名稱 / 電信商 / 月租 / 綁約"
           onSearch={setQuery}
-          emptyDetailHint={
-            (data ?? []).length === 0
-              ? canEdit ? "尚無方案,點右上「新增方案」開始建立" : "尚無方案"
-              : filtered.length === 0
-                ? `查無符合「${query}」的方案`
-                : "從左側選擇方案檢視詳細"
-          }
+          emptyText={(data ?? []).length === 0 ? "還沒有方案" : `查無符合「${query}」的方案`}
         />
       )}
       {canEdit && (
