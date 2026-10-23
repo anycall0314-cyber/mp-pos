@@ -21,7 +21,7 @@ import { ComboBox, type ComboOption } from "@/components/ComboBox";
 import { Toolbar } from "@/components/Toolbar";
 
 /**
- * 設定 → 舊系統對照(公司管理員)
+ * 設定 → 歐睿對照(公司管理員;以前叫舊系統對照)
  *
  * 舊 POS 的會員 / 店別 / 品號 / 業務員,要對到 MP 的會員 / 門市 / 商品 / 業務員,
  * 十年紀錄才能跟新系統放在同一張報表、會員頁才看得到。系統只列候選,一律由人確認。
@@ -45,7 +45,7 @@ export function LegacyMappingPage() {
   if (!isAdmin) {
     return (
       <div className="page">
-        <Toolbar title="舊系統對照" />
+        <Toolbar title="歐睿對照" />
         <div className="entry-body">
           <Banner kind="error" message="需要公司管理員權限" />
         </div>
@@ -54,7 +54,7 @@ export function LegacyMappingPage() {
   }
   return (
     <div className="page">
-      <Toolbar title="舊系統對照" />
+      <Toolbar title="歐睿對照" />
       <div className="entry-body legacy-page">
         <div className="legacy-tabs">
           {TABS.map((t) => (

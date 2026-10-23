@@ -312,7 +312,7 @@ export const NAV_MODULES: NavModule[] = [
         aliases: ["發票機", "發票列印", "WP-103", "發票機測試"],
         needs: ["invoice_tracks"],
       },
-      { to: "/settings/legacy", label: "舊系統對照", adminOnly: true },
+      { to: "/settings/legacy", label: "歐睿對照", aliases: ["舊系統對照", "舊系統", "舊 POS"], adminOnly: true },
       { to: "/settings/ledger", label: "每日對帳", adminOnly: true },
     ],
   },
