@@ -86,7 +86,7 @@ export function PettyExpensesPage() {
       header: "經手人",
       render: (r) =>
         r.handled_by_name
-          ? `${r.handled_by_code} ${r.handled_by_name}`
+          ? r.handled_by_name
           : "—",
     },
     {
@@ -137,7 +137,7 @@ export function PettyExpensesPage() {
             <dt>經手人</dt>
             <dd>
               {r.handled_by_name
-                ? `${r.handled_by_code} ${r.handled_by_name}`
+                ? r.handled_by_name
                 : "—"}
             </dd>
             <dt>備註</dt>

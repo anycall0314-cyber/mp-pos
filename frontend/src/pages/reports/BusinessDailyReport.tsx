@@ -8,8 +8,9 @@ import { countedValue, diffText } from "@/lib/cashCount";
 import { useDefaultWarehouse } from "@/auth/AuthContext";
 import { Toolbar } from "@/components/Toolbar";
 import { intStr, money } from "@/lib/money";
+import { localToday } from "@/lib/dates";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = localToday;
 
 export function BusinessDailyReportPage() {
   const defaultWarehouse = useDefaultWarehouse();

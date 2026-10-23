@@ -1,9 +1,14 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
-import { usePaymentMethods, useSavePettyExpense } from "@/api/hooks";
+import {
+  usePaymentMethods,
+  useSavePettyExpense,
+  useVoidPettyExpense,
+} from "@/api/hooks";
 import { searchSalesPersons, searchWarehouses } from "@/api/search";
 import type { PettyExpense, PettyExpenseCategory } from "@/api/types";
 import {
+  useCan,
   useDefaultHandledBy,
   useDefaultWarehouse,
 } from "@/auth/AuthContext";
@@ -12,8 +17,11 @@ import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
 import { MoneyInput } from "@/components/MoneyInput";
+import { SavedStrip } from "@/components/SavedStrip";
+import { ArmButton } from "@/components/workbench/ArmButton";
 import { keepOrInt, money } from "@/lib/money";
 import { errorText } from "@/lib/errorText";
+import { localToday } from "@/lib/dates";
 
 interface Props {
   open: boolean;
@@ -40,7 +48,7 @@ interface FormState {
   note: string;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = localToday;
 
 function emptyState(): FormState {
   return {
@@ -78,6 +86,10 @@ const CATEGORY_LABEL: Record<PettyExpenseCategory, string> = {
 
 export function PettyExpenseForm({ open, initial, onClose }: Props) {
   const save = useSavePettyExpense();
+  const voidExpense = useVoidPettyExpense();
+  const canVoid = useCan("void_others");
+  // 連按兩下只送一次
+  const busyRef = useRef(false);
   const paymentMethodsQuery = usePaymentMethods({ activeOnly: true });
   const paymentMethods = paymentMethodsQuery.data ?? [];
   const defaultCash = paymentMethods.find((p) => p.kind === "cash");
@@ -92,16 +104,14 @@ export function PettyExpenseForm({ open, initial, onClose }: Props) {
     ComboOption<unknown> | null
   >(null);
   const [error, setError] = useState<string | null>(null);
-  const [flash, setFlash] = useState<string | null>(null);
-  // 兩階段:editing → 點建立 → confirming(顯示摘要再次確認)→ 真正送出
-  const [confirming, setConfirming] = useState(false);
+  // 剛存好的那一筆(全站檢視 E8:一步存好,記錯了馬上作廢)
+  const [last, setLast] = useState<{ id: number; text: string; no: string; voided: boolean } | null>(null);
 
   // 開啟 drawer 時根據 initial 載入或重置
   useEffect(() => {
     if (!open) return;
     setError(null);
-    setFlash(null);
-    setConfirming(false);
+    setLast(null);
     if (initial) {
       setState(toState(initial));
       setWarehouseOption({
@@ -163,33 +173,28 @@ export function PettyExpenseForm({ open, initial, onClose }: Props) {
     setState((s) => ({ ...s, [k]: v }));
   }
 
-  function goConfirm(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    if (!state.warehouse) {
-      setError("請選門市");
-      return;
-    }
-    if (!state.payment_method) {
-      setError("請選付款方式");
-      return;
-    }
+  /** 還缺什麼(沒缺回 null) */
+  function problem(): string | null {
+    if (!state.warehouse) return "請選門市";
+    if (!state.payment_method) return "請選付款方式";
     // 用原值判斷:以前存的 0.49 沒動過也要能存其他欄位(收成整數會變 0 被擋)
-    if (!(Number(state.amount) > 0)) {
-      setError("金額需大於 0");
-      return;
-    }
-    if (!state.handled_by) {
-      setError("請選經手人(老闆會看誰執行了這筆支出)");
-      return;
-    }
-    setConfirming(true);
+    if (!(Number(state.amount) > 0)) return "金額需大於 0";
+    if (!state.handled_by) return "請選經手人";
+    return null;
   }
 
-  async function reallySave() {
+  /** 一步存(全站檢視 E8:以前要按「下一步:確認」再按「確認送出」) */
+  async function doSave() {
+    if (busyRef.current) return;
+    const why = problem();
+    if (why) {
+      setError(why);
+      return;
+    }
+    busyRef.current = true;
     setError(null);
     try {
-      await save.mutateAsync({
+      const saved = await save.mutateAsync({
         id: initial?.id,
         warehouse: state.warehouse as number,
         doc_date: state.doc_date,
@@ -202,124 +207,87 @@ export function PettyExpenseForm({ open, initial, onClose }: Props) {
       });
       if (isEdit) {
         onClose();
-      } else {
-        // 連續新增:留在 drawer,清掉金額/收款對象/備註,保留 門市/類別/付款方式/經手人
-        setFlash(`已建立`);
-        setTimeout(() => setFlash(null), 2000);
-        setState((s) => ({
-          ...s,
-          amount: "",
-          payee: "",
-          note: "",
-          doc_date: today(),
-        }));
-        setConfirming(false);
+        return;
+      }
+      setLast({
+        id: saved.id,
+        no: saved.no,
+        text: `已存 ${saved.no} · ${CATEGORY_LABEL[state.category]} · $${money(saved.amount)}`,
+        voided: false,
+      });
+      // 連續記下一筆:門市、類別留著;付款方式回到現金、經手人回到登入的人(紅隊:沿用上一筆會把刷卡、別人的名字帶到下一筆)
+      setState((s) => ({
+        ...s,
+        amount: "",
+        payee: "",
+        note: "",
+        doc_date: today(),
+        payment_method: defaultCash?.id ?? s.payment_method,
+        handled_by: defaultHandledBy.id || s.handled_by,
+      }));
+      if (defaultHandledBy.id) {
+        setHandledByOption({
+          id: defaultHandledBy.id,
+          label: defaultHandledBy.name,
+          secondary: defaultHandledBy.code,
+        });
       }
     } catch (e) {
       // 欄位錯誤只留中文那幾句、不露欄位名(全站檢視 G2;規則在 lib/errorText.ts)
       setError(errorText(e));
-      setConfirming(false);
+    } finally {
+      busyRef.current = false;
     }
   }
 
-  const pmName =
-    paymentMethods.find((m) => m.id === state.payment_method)?.name ?? "—";
+  async function voidLast() {
+    if (!last) return;
+    try {
+      await voidExpense.mutateAsync(last.id);
+      setLast({ ...last, voided: true });
+    } catch (e) {
+      setError(`作廢失敗:${errorText(e)}`);
+    }
+  }
 
   return (
     <Drawer
       open={open}
-      title={
-        confirming
-          ? "確認雜支內容"
-          : isEdit
-            ? `編輯雜支 ${initial?.no}`
-            : "新增雜支"
-      }
+      title={isEdit ? `編輯雜支 ${initial?.no}` : "新增雜支"}
       onClose={onClose}
       footer={
-        confirming ? (
-          <>
-            <button
-              className="btn"
-              type="button"
-              onClick={() => setConfirming(false)}
-              disabled={save.isPending}
-            >
-              返回修改
-            </button>
-            <button
-              className="btn primary"
-              type="button"
-              onClick={reallySave}
-              disabled={save.isPending}
-            >
-              {save.isPending ? "送出中…" : "確認送出"}
-            </button>
-          </>
-        ) : (
-          <>
-            <button className="btn" onClick={onClose} type="button">
-              {isEdit ? "取消" : "關閉"}
-            </button>
-            <button
-              className="btn primary"
-              onClick={goConfirm}
-              type="button"
-              disabled={save.isPending}
-            >
-              下一步:確認
-            </button>
-          </>
-        )
+        <>
+          <button className="btn" onClick={onClose} type="button">
+            {isEdit ? "取消" : "關閉"}
+          </button>
+          <button
+            className="btn primary"
+            onClick={() => void doSave()}
+            type="button"
+            disabled={save.isPending}
+          >
+            {save.isPending ? "儲存中…" : "儲存"}
+          </button>
+        </>
       }
     >
       {error && <Banner kind="error" message={error} />}
-      {flash && <Banner kind="success" message={flash} />}
+      {last && (
+        <SavedStrip tone={last.voided ? "void" : "ok"} text={last.voided ? `${last.no} 已作廢` : last.text}>
+          {!last.voided && canVoid && (
+            <ArmButton
+              key={last.id}
+              label="作廢"
+              className="btn small danger"
+              onConfirm={voidLast}
+              disabled={voidExpense.isPending}
+            />
+          )}
+        </SavedStrip>
+      )}
 
-      {confirming ? (
-        <div>
-          <div
-            style={{
-              padding: "8px 12px",
-              background: "var(--panel)",
-              borderLeft: "3px solid #ffa500",
-              fontSize: 14,
-              color: "var(--text-dim)",
-              marginBottom: 12,
-            }}
-          >
-            請再次確認以下內容,送出後將立即過帳。需要修改請按「返回修改」。
-          </div>
-          <dl>
-            <dt>日期</dt>
-            <dd>{state.doc_date}</dd>
-            <dt>門市</dt>
-            <dd>{warehouseOption?.label ?? "—"}</dd>
-            <dt>類別</dt>
-            <dd>{CATEGORY_LABEL[state.category]}</dd>
-            <dt>金額</dt>
-            <dd
-              style={{
-                fontSize: 20,
-                fontWeight: 700,
-                color: "var(--danger-text)",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              ${money(state.amount)}
-            </dd>
-            <dt>付款方式</dt>
-            <dd>{pmName}</dd>
-            <dt>收款對象</dt>
-            <dd>{state.payee.trim() || "—"}</dd>
-            <dt>經手人</dt>
-            <dd style={{ fontWeight: 600 }}>{handledByOption?.label ?? "—"}</dd>
-            <dt>備註</dt>
-            <dd>{state.note.trim() || "—"}</dd>
-          </dl>
-        </div>
-      ) : (
-        <form onSubmit={goConfirm}>
+      {/* 按 Enter 不存(要人按「儲存」) */}
+        <form onSubmit={(e: FormEvent) => e.preventDefault()}>
           <Field label="日期" required>
             <input
               type="date"
@@ -412,7 +380,6 @@ export function PettyExpenseForm({ open, initial, onClose }: Props) {
             />
           </Field>
         </form>
-      )}
     </Drawer>
   );
 }

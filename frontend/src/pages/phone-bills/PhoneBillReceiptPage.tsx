@@ -70,7 +70,7 @@ export function PhoneBillReceiptPage() {
         {pb.handled_by_name && (
           <Row
             label="經手人"
-            value={`${pb.handled_by_code} ${pb.handled_by_name}`}
+            value={pb.handled_by_name}
           />
         )}
       </div>

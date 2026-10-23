@@ -1,6 +1,9 @@
 // 合約到期日的試算(addMonths)。跑法:npm test。要跟後端 apps/core/dates.py 的 add_months 一樣。
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { addMonths, shortDay } from "./dates.ts";
 
@@ -35,4 +38,18 @@ test("報表列上的日期:期間在同一年只寫月日,跨年才寫完整的
   assert.equal(shortDay("2026/10/06", "2026-10-01", "2026-10-10"), "2026/10/06");
   assert.equal(shortDay("2026-10-06", "", "2026-10-10"), "2026-10-06");
   assert.equal(shortDay("2026-10-06", "2026-10-01", ""), "2026-10-06");
+});
+
+test("頁面不用國際時間當今天(toISOString 的日期在台灣早上 8 點前是昨天;用 localToday)", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const walk = (dir) =>
+    readdirSync(dir).flatMap((n) => {
+      const p = join(dir, n);
+      if (statSync(p).isDirectory()) return walk(p);
+      return /\.tsx?$/.test(n) && !n.includes(".test.") ? [p] : [];
+    });
+  const hits = [...walk(join(root, "pages")), ...walk(join(root, "components"))].filter((f) =>
+    /new Date\(\)\.toISOString\(\)\.slice\(0, 10\)/.test(readFileSync(f, "utf8")),
+  );
+  assert.deepEqual(hits.map((f) => f.slice(root.length)), []);
 });

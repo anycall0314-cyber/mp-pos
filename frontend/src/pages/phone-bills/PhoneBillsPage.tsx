@@ -81,7 +81,7 @@ export function PhoneBillsPage() {
       header: "經手人",
       render: (r) =>
         r.handled_by_name
-          ? `${r.handled_by_code} ${r.handled_by_name}`
+          ? r.handled_by_name
           : "—",
     },
     {
@@ -132,7 +132,7 @@ export function PhoneBillsPage() {
             <dt>經手人</dt>
             <dd>
               {r.handled_by_name
-                ? `${r.handled_by_code} ${r.handled_by_name}`
+                ? r.handled_by_name
                 : "—"}
             </dd>
             <dt>會員</dt>

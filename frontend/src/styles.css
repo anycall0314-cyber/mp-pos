@@ -5905,6 +5905,18 @@ input.rp-inline-money.failed {
   color: #1f2937;
 }
 
+/* 剛存好的那一筆(代收話費、雜支連續記;components/SavedStrip) */
+.saved-strip {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 12px; margin-bottom: 12px;
+  background: var(--panel-2); color: var(--text);
+  border-left: 3px solid var(--success-text-soft); border-radius: var(--btn-radius);
+}
+.saved-strip.warn { border-left-color: var(--warn-text); }
+.saved-strip.void { border-left-color: var(--border); color: var(--text-dim); }
+.saved-strip-text { min-width: 0; overflow-wrap: anywhere; }
+.saved-strip-acts { display: flex; gap: 6px; flex: none; }
+
 /* 大型輸入框(範本名稱、主標題輸入框)*/
 .input-lg {
   width: 100%;

@@ -1,17 +1,16 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 import {
   lookupMembers,
+  useCarriers,
   useSaveMember,
   useSavePhoneBill,
+  useVoidPhoneBill,
 } from "@/api/hooks";
-import {
-  searchCarriers,
-  searchSalesPersons,
-  searchWarehouses,
-} from "@/api/search";
+import { searchSalesPersons, searchWarehouses } from "@/api/search";
 import type { Member } from "@/api/types";
 import {
+  useCan,
   useDefaultHandledBy,
   useDefaultWarehouse,
 } from "@/auth/AuthContext";
@@ -21,10 +20,14 @@ import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
 import { MoneyInput } from "@/components/MoneyInput";
+import { SavedStrip } from "@/components/SavedStrip";
+import { ArmButton } from "@/components/workbench/ArmButton";
 import { money, roundInt } from "@/lib/money";
+import { pickRemembered, readKey, writeKey } from "@/lib/remember";
 
 import { maskIdNo } from "./mask";
 import { errorText } from "@/lib/errorText";
+import { localToday } from "@/lib/dates";
 
 interface Props {
   open: boolean;
@@ -41,7 +44,7 @@ interface FormState {
   handled_by: number | "";
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = localToday;
 
 function emptyState(): FormState {
   return {
@@ -57,17 +60,39 @@ function emptyState(): FormState {
 
 type MemberStatus = "idle" | "checking" | "found" | "not_found" | "pick";
 
+/** 這台電腦上次選的電信業者(全站檢視 E8:連續繳常常同一家) */
+const CARRIER_KEY = "mp_pos_pb_carrier";
+
+/** 剛存好的那一筆:單號、電話、金額,收據有沒有跳出來,作廢了沒 */
+interface LastSaved {
+  id: number;
+  no: string;
+  phone: string;
+  amount: number;
+  printed: boolean;
+  voided: boolean;
+}
+
+function openReceipt(id: number): boolean {
+  return (
+    window.open(`/telecom/billing/${id}/receipt`, "_blank", "width=380,height=720") !== null
+  );
+}
+
 export function PhoneBillForm({ open, onClose }: Props) {
   const save = useSavePhoneBill();
+  const voidBill = useVoidPhoneBill();
   const saveMember = useSaveMember();
   const defaultWarehouse = useDefaultWarehouse();
   const defaultHandledBy = useDefaultHandledBy();
+  const canVoid = useCan("void_others");
+  const carriers = (useCarriers().data ?? []).filter((c) => c.is_active);
+  const phoneRef = useRef<HTMLInputElement>(null);
+  // 連按兩下只送一次(按鈕變灰要等畫面更新,這一格是當下就擋)
+  const busyRef = useRef(false);
 
   const [state, setState] = useState<FormState>(emptyState());
   const [warehouseOption, setWarehouseOption] = useState<
-    ComboOption<unknown> | null
-  >(null);
-  const [carrierOption, setCarrierOption] = useState<
     ComboOption<unknown> | null
   >(null);
   const [handledByOption, setHandledByOption] = useState<
@@ -81,18 +106,13 @@ export function PhoneBillForm({ open, onClose }: Props) {
   const [newMember, setNewMember] = useState({ name: "", national_id: "" });
 
   const [error, setError] = useState<string | null>(null);
-  const [flash, setFlash] = useState<{
-    msg: string;
-    lastSavedId: number;
-  } | null>(null);
-  const [confirming, setConfirming] = useState(false);
+  const [last, setLast] = useState<LastSaved | null>(null);
 
   // 開啟 / 重置
   useEffect(() => {
     if (!open) return;
     setError(null);
-    setFlash(null);
-    setConfirming(false);
+    setLast(null);
     // 預設帶當前登入帳號的門市 + 業務員(經手人)
     const initial = emptyState();
     if (defaultWarehouse.id) {
@@ -116,11 +136,13 @@ export function PhoneBillForm({ open, onClose }: Props) {
       setHandledByOption(null);
     }
     setState(initial);
-    setCarrierOption(null);
     setMember(null);
     setMemberStatus("idle");
     setShowCreateMember(false);
     setNewMember({ name: "", national_id: "" });
+    // 一打開游標在電話(抽屜滑出來之後)
+    const t = window.setTimeout(() => phoneRef.current?.focus(), 50);
+    return () => window.clearTimeout(t);
   }, [
     open,
     defaultWarehouse.id,
@@ -132,6 +154,18 @@ export function PhoneBillForm({ open, onClose }: Props) {
 
   function patch<K extends keyof FormState>(k: K, v: FormState[K]) {
     setState((s) => ({ ...s, [k]: v }));
+  }
+
+  // 電信業者:帶這台電腦上次選的(還在清單上才帶)
+  useEffect(() => {
+    if (!open || state.carrier !== "" || carriers.length === 0) return;
+    const remembered = pickRemembered(readKey(CARRIER_KEY), carriers.map((c) => c.id));
+    if (remembered !== null) patch("carrier", remembered);
+  }, [open, carriers, state.carrier]);
+
+  function chooseCarrier(id: number) {
+    patch("carrier", id);
+    writeKey(CARRIER_KEY, String(id));
   }
 
   async function handlePhoneLookup() {
@@ -194,194 +228,122 @@ export function PhoneBillForm({ open, onClose }: Props) {
     }
   }
 
-  function goConfirm(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    if (!state.warehouse) {
-      setError("請選門市");
-      return;
-    }
-    if (!state.carrier) {
-      setError("請選電信業者");
-      return;
-    }
-    if (!state.phone_no.trim()) {
-      setError("請輸入電話號碼");
-      return;
-    }
-    const amountInt = roundInt(state.amount);
-    if (amountInt <= 0) {
-      setError("金額需大於 0");
-      return;
-    }
-    if (!state.id_no.trim()) {
-      setError("請輸入身分證字號");
-      return;
-    }
-    if (!state.handled_by) {
-      setError("請選經手人");
-      return;
-    }
-    if (memberStatus === "pick") {
-      setError("先點是哪一位會員");
-      return;
-    }
-    setConfirming(true);
+  /** 還缺什麼(沒缺回 null) */
+  function problem(): string | null {
+    if (!state.warehouse) return "請選門市";
+    if (!state.carrier) return "請選電信業者";
+    if (!state.phone_no.trim()) return "請輸入電話號碼";
+    if (roundInt(state.amount) <= 0) return "金額需大於 0";
+    if (!state.id_no.trim()) return "請輸入身分證字號";
+    if (!state.handled_by) return "請選經手人";
+    if (memberStatus === "pick") return "先點是哪一位會員";
+    return null;
   }
 
-  async function reallySave() {
+  /** 一步存好就印收據(全站檢視 E8:以前要按「下一步:確認」、「確認送出」、再另按列印) */
+  async function saveAndPrint() {
+    if (busyRef.current) return;
+    const why = problem();
+    if (why) {
+      setError(why);
+      return;
+    }
+    busyRef.current = true;
     setError(null);
     const amountInt = roundInt(state.amount);
+    const phone = state.phone_no.trim();
     try {
       const created = await save.mutateAsync({
         warehouse: state.warehouse as number,
         doc_date: state.doc_date,
         carrier: state.carrier as number,
-        phone_no: state.phone_no.trim(),
+        phone_no: phone,
         amount: String(amountInt),
         id_no: state.id_no.trim(),
         handled_by: state.handled_by as number,
         member: member?.id ?? null,
       });
-      // 連續模式:留在 drawer,只清會單據相關欄位
-      setFlash({ msg: `已建立 ${created.no}`, lastSavedId: created.id });
-      setState((s) => ({
-        ...s,
-        phone_no: "",
-        amount: "",
-        id_no: "",
-        doc_date: today(),
-      }));
+      const printed = openReceipt(created.id);
+      setLast({ id: created.id, no: created.no, phone, amount: amountInt, printed, voided: false });
+      // 連續記下一筆:門市、電信業者、經手人留著;電話、金額、身分證清掉(下一位客人不會看到上一位的)
+      setState((s) => ({ ...s, phone_no: "", amount: "", id_no: "", doc_date: today() }));
       setMember(null);
       setMemberStatus("idle");
-      setConfirming(false);
+      setSamePhone([]);
+      phoneRef.current?.focus();
     } catch (e) {
       setError(errorText(e));
-      setConfirming(false);
+    } finally {
+      busyRef.current = false;
     }
   }
 
-  function openReceipt() {
-    if (!flash) return;
-    window.open(
-      `/telecom/billing/${flash.lastSavedId}/receipt`,
-      "_blank",
-      "width=380,height=720",
-    );
+  async function voidLast() {
+    if (!last) return;
+    try {
+      await voidBill.mutateAsync(last.id);
+      setLast({ ...last, voided: true });
+    } catch (e) {
+      setError(`作廢失敗:${errorText(e)}`);
+    }
   }
 
   return (
     <Drawer
       open={open}
-      title={confirming ? "確認代收話費內容" : "新增代收話費"}
+      title="新增代收話費"
       onClose={onClose}
       footer={
-        confirming ? (
-          <>
-            <button
-              className="btn"
-              type="button"
-              onClick={() => setConfirming(false)}
-              disabled={save.isPending}
-            >
-              返回修改
-            </button>
-            <button
-              className="btn primary"
-              type="button"
-              onClick={reallySave}
-              disabled={save.isPending}
-            >
-              {save.isPending ? "送出中…" : "確認送出"}
-            </button>
-          </>
-        ) : (
-          <>
-            <button className="btn" onClick={onClose} type="button">
-              關閉
-            </button>
-            <button
-              className="btn primary"
-              onClick={goConfirm}
-              type="button"
-              disabled={save.isPending}
-            >
-              下一步:確認
-            </button>
-          </>
-        )
+        <>
+          <button className="btn" onClick={onClose} type="button">
+            關閉
+          </button>
+          <button
+            className="btn primary"
+            onClick={() => void saveAndPrint()}
+            type="button"
+            disabled={save.isPending}
+          >
+            {save.isPending ? "儲存中…" : "儲存並列印"}
+          </button>
+        </>
       }
     >
       {error && <Banner kind="error" message={error} />}
-      {flash && (
-        <div
-          style={{
-            padding: "8px 12px",
-            background: "var(--panel)",
-            borderLeft: "3px solid var(--success-text-soft)",
-            color: "var(--text)",
-            marginBottom: 12,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-          }}
+      {last && (
+        <SavedStrip
+          tone={last.voided ? "void" : last.printed ? "ok" : "warn"}
+          text={
+            last.voided
+              ? `${last.no} 已作廢`
+              : `已存 ${last.no} · ${last.phone} · $${money(last.amount)}${last.printed ? "" : " · 收據沒跳出來"}`
+          }
         >
-          <span>{flash.msg}</span>
-          <button
-            className="btn"
-            type="button"
-            onClick={openReceipt}
-          >
-            列印收據
-          </button>
-        </div>
+          {!last.voided && (
+            <>
+              <button
+                className="btn small"
+                type="button"
+                onClick={() => setLast({ ...last, printed: openReceipt(last.id) })}
+              >
+                再印收據
+              </button>
+              {canVoid && (
+                <ArmButton
+                  key={last.id}
+                  label="作廢"
+                  className="btn small danger"
+                  onConfirm={voidLast}
+                  disabled={voidBill.isPending}
+                />
+              )}
+            </>
+          )}
+        </SavedStrip>
       )}
 
-      {confirming ? (
-        <div>
-          <div
-            style={{
-              padding: "8px 12px",
-              background: "var(--panel)",
-              borderLeft: "3px solid #ffa500",
-              fontSize: 14,
-              color: "var(--text-dim)",
-              marginBottom: 12,
-            }}
-          >
-            請再次確認以下內容,送出後將立即過帳。需要修改請按「返回修改」。
-          </div>
-          <dl>
-            <dt>日期</dt>
-            <dd>{state.doc_date}</dd>
-            <dt>門市</dt>
-            <dd>{warehouseOption?.label ?? "—"}</dd>
-            <dt>電信業者</dt>
-            <dd>{carrierOption?.label ?? "—"}</dd>
-            <dt>電話號碼</dt>
-            <dd style={{ fontWeight: 600 }}>{state.phone_no.trim()}</dd>
-            <dt>金額</dt>
-            <dd
-              style={{
-                fontSize: 22,
-                fontWeight: 700,
-                color: "var(--text)",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              ${money(state.amount)}
-            </dd>
-            <dt>身分證</dt>
-            <dd>{state.id_no.trim() || "—"}</dd>
-            <dt>經手人</dt>
-            <dd style={{ fontWeight: 600 }}>{handledByOption?.label ?? "—"}</dd>
-            <dt>會員</dt>
-            <dd>{member ? `${member.code} ${member.name}` : "(非會員)"}</dd>
-          </dl>
-        </div>
-      ) : (
-        <form onSubmit={goConfirm}>
+      {/* 按 Enter 不存(要人按「儲存並列印」) */}
+      <form onSubmit={(e: FormEvent) => e.preventDefault()}>
           <Field label="日期" required>
             <input
               type="date"
@@ -410,20 +372,23 @@ export function PhoneBillForm({ open, onClose }: Props) {
             )}
           </Field>
           <Field label="電信業者" required>
-            <ComboBox
-              value={state.carrier}
-              selectedOption={carrierOption}
-              onChange={(id, opt) => {
-                patch("carrier", id);
-                setCarrierOption(opt ?? null);
-              }}
-              fetchOptions={searchCarriers}
-              placeholder="搜尋電信業者"
-            />
+            <div className="wb-chips">
+              {carriers.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`wb-chip pay${state.carrier === c.id ? " on" : ""}`}
+                  onClick={() => chooseCarrier(c.id)}
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
           </Field>
           <Field label="電話號碼" required>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <input
+                ref={phoneRef}
                 type="tel"
                 value={state.phone_no}
                 onChange={(e) => {
@@ -522,7 +487,6 @@ export function PhoneBillForm({ open, onClose }: Props) {
             />
           </Field>
         </form>
-      )}
 
       <Drawer
         open={showCreateMember}

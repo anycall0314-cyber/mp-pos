@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePartsUsageReport } from "@/api/hooks";
 import { Toolbar } from "@/components/Toolbar";
 import { money } from "@/lib/money";
+import { localToday } from "@/lib/dates";
 
 function firstOfMonth(): string {
   const d = new Date();
@@ -13,7 +14,7 @@ function firstOfMonth(): string {
 }
 
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localToday();
 }
 
 export function PartsUsageReportPage() {

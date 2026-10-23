@@ -7,9 +7,10 @@ import { AppliedFilters } from "@/components/AppliedFilters";
 import { Toolbar } from "@/components/Toolbar";
 import { money } from "@/lib/money";
 import { appliedList, rangeCond } from "@/lib/appliedFilters";
+import { localToday } from "@/lib/dates";
 
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localToday();
 }
 
 /**

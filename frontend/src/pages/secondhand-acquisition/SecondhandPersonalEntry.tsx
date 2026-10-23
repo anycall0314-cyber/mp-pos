@@ -29,6 +29,7 @@ import { useTradeSetting } from "@/api/trade";
 import { useCan } from "@/auth/AuthContext";
 import { autoPrice, priceOf } from "@/lib/trade";
 import { errorText } from "@/lib/errorText";
+import { localToday } from "@/lib/dates";
 
 const GRADE_OPTIONS: { value: ConditionGrade; label: string }[] = [
   { value: "S", label: "S 媲美新機 / 拆封未使用" },
@@ -38,7 +39,7 @@ const GRADE_OPTIONS: { value: ConditionGrade; label: string }[] = [
   { value: "D", label: "D 瑕疵 / 需報備" },
 ];
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = localToday;
 
 /**
  * 個人收購中古機:會員賣機進來。

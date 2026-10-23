@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { useSaveCashAdjustment } from "@/api/hooks";
 import { searchSalesPersons, searchWarehouses } from "@/api/search";
@@ -16,9 +16,11 @@ import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
 import { MoneyInput } from "@/components/MoneyInput";
+import { toast } from "@/components/workbench/toast";
 import { directionOfReason } from "@/lib/cashAdjust";
 import { keepOrInt, money } from "@/lib/money";
 import { errorText } from "@/lib/errorText";
+import { localToday } from "@/lib/dates";
 
 interface Props {
   open: boolean;
@@ -62,7 +64,7 @@ interface FormState {
   note: string;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = localToday;
 
 function emptyState(): FormState {
   return {
@@ -100,14 +102,12 @@ export function CashAdjustmentForm({ open, initial, onClose }: Props) {
     ComboOption<unknown> | null
   >(null);
   const [error, setError] = useState<string | null>(null);
-  const [flash, setFlash] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
+  // 連按兩下只送一次
+  const busyRef = useRef(false);
 
   useEffect(() => {
     if (!open) return;
     setError(null);
-    setFlash(null);
-    setConfirming(false);
     if (initial) {
       setState(toState(initial));
       setWarehouseOption({
@@ -164,29 +164,30 @@ export function CashAdjustmentForm({ open, initial, onClose }: Props) {
     setState((s) => ({ ...s, [k]: v }));
   }
 
-  function goConfirm(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    if (!state.warehouse) {
-      setError("請選門市");
-      return;
-    }
+  /** 還缺什麼(沒缺回 null) */
+  function problem(): string | null {
+    if (!state.warehouse) return "請選門市";
     // 用原值判斷:以前存的 0.49 沒動過也要能存其他欄位(收成整數會變 0 被擋)
-    if (!(Number(state.amount) > 0)) {
-      setError("金額需大於 0");
-      return;
-    }
-    if (!state.handled_by) {
-      setError("請選經手人(老闆會看誰執行了這筆現金調整)");
-      return;
-    }
-    setConfirming(true);
+    if (!(Number(state.amount) > 0)) return "金額需大於 0";
+    if (!state.handled_by) return "請選經手人";
+    return null;
   }
 
-  async function reallySave() {
+  /**
+   * 一步存(全站檢視 E8:以前要按「下一步:確認」再按「確認送出」)。
+   * 存好就關起來、訊息寫出存入還是提取多少(紅隊:現金調整一天一兩筆,不要鼓勵連記;方向反了要一眼看得出來)。
+   */
+  async function doSave() {
+    if (busyRef.current) return;
+    const why = problem();
+    if (why) {
+      setError(why);
+      return;
+    }
+    busyRef.current = true;
     setError(null);
     try {
-      await save.mutateAsync({
+      const saved = await save.mutateAsync({
         id: initial?.id,
         warehouse: state.warehouse as number,
         doc_date: state.doc_date,
@@ -196,127 +197,44 @@ export function CashAdjustmentForm({ open, initial, onClose }: Props) {
         handled_by: (state.handled_by as number) || null,
         note: state.note.trim(),
       });
-      if (isEdit) {
-        onClose();
-      } else {
-        setFlash("已建立");
-        setTimeout(() => setFlash(null), 2000);
-        setState((s) => ({
-          ...s,
-          amount: "",
-          note: "",
-          doc_date: today(),
-        }));
-        setConfirming(false);
-      }
+      toast(
+        `已存 ${saved.no} · ${REASON_LABEL[saved.reason]} · ${DIRECTION_LABEL[saved.direction]} $${money(saved.amount)}`,
+        "ok",
+      );
+      onClose();
     } catch (e) {
       // 欄位錯誤只留中文那幾句、不露欄位名(全站檢視 G2;規則在 lib/errorText.ts)
       setError(errorText(e));
-      setConfirming(false);
+    } finally {
+      busyRef.current = false;
     }
   }
 
   return (
     <Drawer
       open={open}
-      title={
-        confirming
-          ? "確認現金調整內容"
-          : isEdit
-            ? `編輯現金調整 ${initial?.no}`
-            : "新增現金調整"
-      }
+      title={isEdit ? `編輯現金調整 ${initial?.no}` : "新增現金調整"}
       onClose={onClose}
       footer={
-        confirming ? (
-          <>
-            <button
-              className="btn"
-              type="button"
-              onClick={() => setConfirming(false)}
-              disabled={save.isPending}
-            >
-              返回修改
-            </button>
-            <button
-              className="btn primary"
-              type="button"
-              onClick={reallySave}
-              disabled={save.isPending}
-            >
-              {save.isPending ? "送出中…" : "確認送出"}
-            </button>
-          </>
-        ) : (
-          <>
-            <button className="btn" onClick={onClose} type="button">
-              {isEdit ? "取消" : "關閉"}
-            </button>
-            <button
-              className="btn primary"
-              onClick={goConfirm}
-              type="button"
-              disabled={save.isPending}
-            >
-              下一步:確認
-            </button>
-          </>
-        )
+        <>
+          <button className="btn" onClick={onClose} type="button">
+            {isEdit ? "取消" : "關閉"}
+          </button>
+          <button
+            className="btn primary"
+            onClick={() => void doSave()}
+            type="button"
+            disabled={save.isPending}
+          >
+            {save.isPending ? "儲存中…" : "儲存"}
+          </button>
+        </>
       }
     >
       {error && <Banner kind="error" message={error} />}
-      {flash && <Banner kind="success" message={flash} />}
 
-      {confirming ? (
-        <div>
-          <div
-            style={{
-              padding: "8px 12px",
-              background: "var(--panel)",
-              borderLeft: "3px solid #ffa500",
-              fontSize: 14,
-              color: "var(--text-dim)",
-              marginBottom: 12,
-            }}
-          >
-            請再次確認以下內容,送出後將立即過帳。需要修改請按「返回修改」。
-          </div>
-          <dl>
-            <dt>日期</dt>
-            <dd>{state.doc_date}</dd>
-            <dt>門市</dt>
-            <dd>{warehouseOption?.label ?? "—"}</dd>
-            <dt>方向</dt>
-            <dd
-              style={{
-                color: state.direction === "in" ? "var(--success-text-soft)" : "var(--danger-text)",
-                fontWeight: 600,
-              }}
-            >
-              {DIRECTION_LABEL[state.direction]}
-            </dd>
-            <dt>事由</dt>
-            <dd>{REASON_LABEL[state.reason]}</dd>
-            <dt>金額</dt>
-            <dd
-              style={{
-                fontSize: 20,
-                fontWeight: 700,
-                color: state.direction === "in" ? "var(--success-text-soft)" : "var(--danger-text)",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {state.direction === "in" ? "+" : "−"}$
-              {money(state.amount)}
-            </dd>
-            <dt>經手人</dt>
-            <dd style={{ fontWeight: 600 }}>{handledByOption?.label ?? "—"}</dd>
-            <dt>備註</dt>
-            <dd>{state.note.trim() || "—"}</dd>
-          </dl>
-        </div>
-      ) : (
-        <form onSubmit={goConfirm}>
+      {/* 按 Enter 不存(要人按「儲存」) */}
+        <form onSubmit={(e: FormEvent) => e.preventDefault()}>
           <Field label="日期" required>
             <input
               type="date"
@@ -405,7 +323,6 @@ export function CashAdjustmentForm({ open, initial, onClose }: Props) {
             />
           </Field>
         </form>
-      )}
     </Drawer>
   );
 }

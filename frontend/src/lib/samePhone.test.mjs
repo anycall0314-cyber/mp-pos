@@ -16,7 +16,10 @@ test("維修收件、代收話費、個人收購都查同一支電話的每一�
   }
   // 還沒點是哪一位不能存(不然沒掛會員、或維修存檔時用打的姓名又建一位)
   assert.match(read("../pages/repairs/RepairEntryPage.tsx"), /if \(lookupStatus === "pick"\) \{\s*setError\("先點是哪一位會員"\);/);
-  assert.match(read("../pages/phone-bills/PhoneBillForm.tsx"), /if \(memberStatus === "pick"\) \{\s*setError\("先點是哪一位會員"\);/);
+  // 代收話費一步存(全站檢視 E8):存之前看 problem(),還沒點是哪一位就不存
+  const pb = read("../pages/phone-bills/PhoneBillForm.tsx");
+  assert.match(pb, /if \(memberStatus === "pick"\) return "先點是哪一位會員";/);
+  assert.match(pb, /const why = problem\(\);\s*if \(why\) \{\s*setError\(why\);\s*return;/);
   // 伺服器舊版只回一位:當成只找到這一位(更新到一半)
   assert.match(read("../api/hooks.ts"), /return "id" in r \? \[r\] : \[\];/);
 });

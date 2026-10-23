@@ -96,7 +96,7 @@ export function CashAdjustmentsPage() {
       header: "經手人",
       render: (r) =>
         r.handled_by_name
-          ? `${r.handled_by_code} ${r.handled_by_name}`
+          ? r.handled_by_name
           : "—",
     },
     { key: "note", header: "備註", render: (r) => r.note || "—" },
@@ -136,7 +136,7 @@ export function CashAdjustmentsPage() {
             <dt>經手人</dt>
             <dd>
               {r.handled_by_name
-                ? `${r.handled_by_code} ${r.handled_by_name}`
+                ? r.handled_by_name
                 : "—"}
             </dd>
             <dt>備註</dt>

@@ -25,3 +25,10 @@ export function shortDay(day: string, from: string, to: string): string {
   const year = from.slice(0, 4);
   return to.slice(0, 4) === year && day.slice(0, 4) === year ? day.slice(5) : day;
 }
+
+/** 這台電腦的今天(YYYY-MM-DD)。不要用 toISOString:那是國際時間,台灣早上 8 點前會變成昨天 */
+export function localToday(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
