@@ -535,12 +535,8 @@ export function ProductExpanderModal({
 
           {/* 機型配件 → 多選相容機型,套用至所有展開 SKU */}
           {accessoryType === "phone_specific" && (
-            <Field
-              label="相容機型(這次建立的每一個品項都一樣)"
-              hint="搜尋並選取多個機型;找不到可直接輸入新增"
-            >
+            <Field label="相容機型(這次建立的每一個品項都一樣)">
               <PhoneModelPicker
-                allowCreate
                 placeholder="搜尋機型加入相容清單…"
                 onPick={(m) => {
                   setCompat((prev) => {

@@ -505,7 +505,6 @@ export function BulkEditProductsModal({
             {enCompat && (
               <div className="be-section-body">
                 <PhoneModelPicker
-                  allowCreate
                   placeholder="搜尋機型加入相容清單…"
                   onPick={(m) => {
                     setCompat((prev) => {

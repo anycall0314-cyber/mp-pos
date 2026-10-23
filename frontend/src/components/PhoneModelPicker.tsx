@@ -13,7 +13,7 @@ interface PhoneModelOption {
 interface Props {
   onPick: (model: PhoneModelOption) => void;
   placeholder?: string;
-  /** 允許找不到時直接以輸入字串新增一個機型(維修單 / 配件挑機型常用)。 */
+  /** 允許找不到時直接以輸入字串新增一個機型(只有維修單:機型是自由文字)。商品的相容機型要是型號庫有的,不能開(全站檢視 D5:以前開著,看起來加上去了、按儲存才被退回)。 */
   allowCreate?: boolean;
 }
 
@@ -59,6 +59,8 @@ export function PhoneModelPicker({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [options, setOptions] = useState<PhoneModelOption[]>([]);
+  // 上下鍵移動、Enter 選(全站檢視 D5:以前只能用滑鼠點)
+  const [highlight, setHighlight] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -86,6 +88,7 @@ export function PhoneModelPicker({
               any_lifecycle_status: o.any_lifecycle_status,
             })),
           );
+          setHighlight(0);
           setLoading(false);
         })
         .catch(() => setLoading(false));
@@ -95,6 +98,46 @@ export function PhoneModelPicker({
       clearTimeout(t);
     };
   }, [open, query]);
+
+  const trimmed = query.trim();
+  const canCreate =
+    allowCreate &&
+    !!trimmed &&
+    !options.some(
+      (o) => o.model_name.toLowerCase() === trimmed.toLowerCase() || o.model_key === trimmed.toLowerCase(),
+    );
+  /** 下拉裡可以選的:搜到的機型,加上(允許的話)最後一列「新增機型」 */
+  const choiceCount = options.length + (canCreate ? 1 : 0);
+
+  function choose(idx: number) {
+    if (idx < options.length) {
+      onPick(options[idx]);
+    } else if (canCreate) {
+      onPick({ model_key: trimmed.toLowerCase(), model_name: trimmed, sku_count: 0, any_lifecycle_status: "" });
+    } else {
+      return;
+    }
+    setOpen(false);
+    setQuery("");
+  }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (!open) setOpen(true);
+      else if (choiceCount > 0) setHighlight((h) => (h + 1) % choiceCount);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (choiceCount > 0) setHighlight((h) => (h - 1 + choiceCount) % choiceCount);
+    } else if (e.key === "Enter") {
+      // 還在搜(打完字 0.2 秒內)不選:等這次的結果回來,不會選到上一次清單的第一筆
+      e.preventDefault();
+      if (open && !loading && choiceCount > 0) choose(Math.min(highlight, choiceCount - 1));
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  }
 
   function focusAndOpen(e?: React.FocusEvent<HTMLInputElement>) {
     setOpen(true);
@@ -118,32 +161,32 @@ export function PhoneModelPicker({
           onFocus={focusAndOpen}
           onChange={(e) => {
             setQuery(e.target.value);
+            setLoading(true);
             if (!open) setOpen(true);
           }}
+          onKeyDown={onKeyDown}
         />
       </div>
       {open && (
         <div className="combobox-pop">
           {loading && options.length === 0 ? (
             <div className="combobox-hint">搜尋中…</div>
-          ) : options.length === 0 && !(allowCreate && query.trim()) ? (
+          ) : options.length === 0 && !canCreate ? (
             <div className="combobox-hint">
-              {allowCreate
-                ? "請輸入機型名稱以新增"
-                : "找不到符合的機型"}
+              {allowCreate && !trimmed ? "打機型名稱" : "型號庫沒有這支"}
             </div>
           ) : (
             <ul className="combobox-list" role="listbox">
-              {options.map((opt) => (
+              {options.map((opt, idx) => (
                 <li
                   key={opt.model_key}
                   role="option"
-                  className="combobox-option"
+                  aria-selected={idx === highlight}
+                  className={`combobox-option${idx === highlight ? " active" : ""}`}
+                  onMouseEnter={() => setHighlight(idx)}
                   onMouseDown={(e) => {
                     e.preventDefault();
-                    onPick(opt);
-                    setOpen(false);
-                    setQuery("");
+                    choose(idx);
                   }}
                 >
                   <span className="combobox-option-label">
@@ -158,28 +201,15 @@ export function PhoneModelPicker({
                   </span>
                 </li>
               ))}
-              {allowCreate &&
-                query.trim() &&
-                !options.some(
-                  (o) =>
-                    o.model_name.toLowerCase() ===
-                      query.trim().toLowerCase() ||
-                    o.model_key === query.trim().toLowerCase(),
-                ) && (
+              {canCreate && (
                   <li
                     role="option"
-                    className="combobox-option combobox-option-create"
+                    aria-selected={highlight === options.length}
+                    className={`combobox-option combobox-option-create${highlight === options.length ? " active" : ""}`}
+                    onMouseEnter={() => setHighlight(options.length)}
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      const name = query.trim();
-                      onPick({
-                        model_key: name.toLowerCase(),
-                        model_name: name,
-                        sku_count: 0,
-                        any_lifecycle_status: "",
-                      });
-                      setOpen(false);
-                      setQuery("");
+                      choose(options.length);
                     }}
                   >
                     <span className="combobox-option-label">
