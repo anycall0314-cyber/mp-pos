@@ -272,6 +272,8 @@ def seed_tenant_defaults(tenant):
                 "sort_order": sort_order,
                 "is_active": True,
                 "is_default": is_default,
+                # 免用照以前的意思帶未稅;店家發票在別的系統開的,在業務設定改
+                "tax_method": "untaxed" if code == "none" else "",
             },
         )
     for code, name, kind, sort_order, is_default in PAYMENT_METHOD_SEED:

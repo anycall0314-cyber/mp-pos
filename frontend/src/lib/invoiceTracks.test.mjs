@@ -174,3 +174,12 @@ test("開單頁:預覽帶門市去問;換期沒設定講是哪一期;發票號�
 test("權限清單有「發票字軌」這一項", () => {
   assert.match(read("./abilities.ts"), /\| "invoice_tracks"/);
 });
+
+test("開單選了這種發票帶什麼課稅別:照業務設定,空的 / 找不到 = 不動(全站檢視 A1)", async () => {
+  const { taxMethodFor } = await import("./invoiceTracks.ts");
+  const types = [{ code: "none", tax_method: "taxable_included" }, { code: "e_invoice", tax_method: "" }];
+  assert.equal(taxMethodFor(types, "none"), "taxable_included");
+  assert.equal(taxMethodFor(types, "e_invoice"), null);
+  assert.equal(taxMethodFor(types, "hand_tri"), null);
+  assert.equal(taxMethodFor([{ code: "none" }], "none"), null);
+});

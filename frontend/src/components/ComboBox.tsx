@@ -34,6 +34,11 @@ interface ComboBoxProps<T = unknown> {
   onEnterAfterValue?: () => void;
   /** 載入後自動 focus 這個輸入框 */
   autoFocus?: boolean;
+  /**
+   * 沒用上下鍵動過反白時,Enter 只選「跟打的字完全相同」的那一筆(卡號、電話);沒有就留著清單讓人挑。
+   * 條碼槍自帶 Enter:刷 SIM 卡選到第一筆、會員打完電話選到別人(全站檢視 A2)。不給 = 照舊選反白的那一筆。
+   */
+  exactOnEnter?: (opt: ComboOption<T>, query: string) => boolean;
 }
 
 export function ComboBox<T = unknown>({
@@ -51,6 +56,7 @@ export function ComboBox<T = unknown>({
   required = false,
   onEnterAfterValue,
   autoFocus = false,
+  exactOnEnter,
 }: ComboBoxProps<T>) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -61,6 +67,12 @@ export function ComboBox<T = unknown>({
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const requestSeq = useRef(0);
+  /** 現在這份清單是哪一串字的結果:Enter 要等「現在打的字」的結果回來才選(全站檢視 A2:以前會選到舊清單的第一筆) */
+  const resultsFor = useRef<string | null>(null);
+  const pendingEnter = useRef(false);
+  const queryNow = useRef("");
+  /** 人用上下鍵動過反白(動過就照反白的選,不要求完全相同) */
+  const moved = useRef(false);
 
   // 已選 → 顯示其 label;未選 → 空字串
   const selectedLabel = useMemo(() => {
@@ -77,6 +89,7 @@ export function ComboBox<T = unknown>({
       try {
         const results = await fetchOptions(q);
         if (seq !== requestSeq.current) return;
+        resultsFor.current = q;
         setOptions(results);
         // 預設反白第一個「能選的」;第一筆若是不能選的(已停用)就往下找
         const first = results.findIndex((o) => !o.disabled);
@@ -98,6 +111,7 @@ export function ComboBox<T = unknown>({
     function onDocMouseDown(e: MouseEvent) {
       if (!rootRef.current) return;
       if (!rootRef.current.contains(e.target as Node)) {
+        pendingEnter.current = false;
         setOpen(false);
         setQuery("");
       }
@@ -110,17 +124,49 @@ export function ComboBox<T = unknown>({
     if (disabled) return;
     setOpen(true);
     setQuery("");
+    queryNow.current = "";
+    moved.current = false;
     runSearch("");
   }
 
+  /** Enter 選哪一筆:要求完全相同的(沒動過反白)只選完全相同的;不然選反白的(或「新增」那一列) */
+  function enterPick() {
+    if (exactOnEnter && !moved.current) {
+      const exact = options.find((o) => !o.disabled && exactOnEnter(o, query.trim()));
+      if (exact) pickOption(exact);
+      return;
+    }
+    if (highlightIdx < options.length) {
+      const opt = options[highlightIdx];
+      if (opt) pickOption(opt);
+    } else if (onCreateNew && query.trim()) {
+      onCreateNew(query.trim());
+      setOpen(false);
+      setQuery("");
+    }
+  }
+
+  // 按 Enter 的時候結果還沒回來:回來了(而且是現在這串字的)才選
+  // 等的時候人按了 Esc / 點到外面 / 自己點了一筆(複審 P1:晚到的結果不能再替他選,例如銷退的原單被換掉)
+  useEffect(() => {
+    if (!pendingEnter.current || resultsFor.current !== queryNow.current) return;
+    pendingEnter.current = false;
+    if (!open) return;
+    enterPick();
+    // 只跟著新的結果走
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options]);
+
   function pickOption(opt: ComboOption<T>) {
     if (opt.disabled) return;
+    pendingEnter.current = false;
     onChange(opt.id, opt);
     setOpen(false);
     setQuery("");
   }
 
   function clearValue() {
+    pendingEnter.current = false;
     onChange("", undefined);
     setQuery("");
     inputRef.current?.focus();
@@ -168,21 +214,23 @@ export function ComboBox<T = unknown>({
     };
     if (e.key === "ArrowDown") {
       e.preventDefault();
+      moved.current = true;
       setHighlightIdx((i) => step(i, 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
+      moved.current = true;
       setHighlightIdx((i) => step(i, -1));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (highlightIdx < options.length) {
-        const opt = options[highlightIdx];
-        if (opt) pickOption(opt);
-      } else if (onCreateNew && query.trim()) {
-        onCreateNew(query.trim());
-        setOpen(false);
-        setQuery("");
+      // 現在打的這串字還沒有結果(還在等、或還沒開始查):馬上查,回來再選
+      if (resultsFor.current !== query) {
+        pendingEnter.current = true;
+        void runSearch(query);
+        return;
       }
+      enterPick();
     } else if (e.key === "Escape") {
+      pendingEnter.current = false;
       setOpen(false);
       setQuery("");
     }
@@ -216,6 +264,9 @@ export function ComboBox<T = unknown>({
           }}
           onChange={(e) => {
             setQuery(e.target.value);
+            queryNow.current = e.target.value;
+            moved.current = false;
+            pendingEnter.current = false;
             if (!open) setOpen(true);
           }}
           onKeyDown={handleKey}

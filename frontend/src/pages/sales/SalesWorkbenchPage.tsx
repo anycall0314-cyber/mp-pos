@@ -42,7 +42,9 @@ import { useCan, useDefaultHandledBy, useDefaultWarehouse } from "@/auth/AuthCon
 import { InvoiceJumpDialog } from "@/components/invoice/InvoiceJumpDialog";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { SourcePicker, sourceOption } from "@/components/SourcePicker";
-import { memberSource, sourceAfterMemberChange, taxAfterMemberChange } from "@/lib/customerSources";
+import { memberPrefill, memberSource, nameLooksScanned, sourceAfterMemberChange, taxAfterMemberChange } from "@/lib/customerSources";
+import { sameCardNo, sameMember } from "@/lib/exactPick";
+import { taxMethodFor } from "@/lib/invoiceTracks";
 import { Drawer } from "@/components/Drawer";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ArmButton } from "@/components/workbench/ArmButton";
@@ -560,11 +562,18 @@ export function SalesWorkbenchPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handledBy.id]);
 
-  // 發票類型主檔載進來之後帶預設;免用發票 → 課稅別跟著切成未稅
+  // 發票類型主檔載進來之後帶預設;課稅別照那種發票設的帶(業務設定「帶入課稅別」,空的 = 不動)。
+  // 以前「免用」寫死切成未稅;發票在舊系統開、稅有繳的店每張單毛利多算約 5%(owner 2026-10-23;全站檢視 A1)
+  function chooseInvoice(code: string) {
+    setInvoiceForm(code);
+    const taxOf = taxMethodFor(invoiceTypes, code);
+    if (taxOf) setTaxMethod(taxOf);
+  }
   useEffect(() => {
     if (invoiceForm || !defaultInvoiceCode) return;
-    setInvoiceForm(defaultInvoiceCode);
-    if (defaultInvoiceCode === "none") setTaxMethod("untaxed");
+    chooseInvoice(defaultInvoiceCode);
+    // 只跟著預設走
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceForm, defaultInvoiceCode]);
 
   // 預覽下一張發票號碼(結帳時伺服器才真的取號)。這種發票沒有可用的字軌時結帳會被擋,所以先查、先講。
@@ -1555,7 +1564,9 @@ export function SalesWorkbenchPage() {
         /* 清不掉就算了 */
       }
       setDone(created);
-      setPanel("checkout");
+      // 結帳成功就收起來、游標回刷碼框(全站檢視 A4;owner 2026-10-23「改成自動收起」):
+      // 下一位客人的商品直接刷;要印收據從底下那一列「上一張」按
+      setPanel(null);
       setPeekTick((n) => n + 1);
       void queryClient.invalidateQueries({ queryKey: ["sales-orders"] });
       toast(`${created.no} 完成 · ${money(created.total)}`, "ok", { ms: 4000 });
@@ -1650,6 +1661,13 @@ export function SalesWorkbenchPage() {
     const chosen = sourceAfterMemberChange(customer, sourceManual, next, sourceDefaults.data?.customer ?? null);
     if (!sourceManual) setCustomerOption(sourceOption(chosen.source));
     setBuyerTaxId(taxAfterMemberChange(buyerTaxId, buyerTaxManual, next));
+    // 選好會員游標回刷碼框(全站檢視 A3:以前停在會員格,接著刷手機會打進會員搜尋、還可能把會員換掉)
+    if (opt) window.setTimeout(backToScan, 0);
+  }
+  /** 會員格打了字、找不到 →「新增會員」:打的是電話就帶進電話,不是就帶進姓名(游標停在姓名) */
+  function newMemberFrom(typed: string) {
+    setNewMember((m) => ({ ...m, ...memberPrefill(typed) }));
+    setPanel("member");
   }
   async function createCustomer() {
     if (lockedRef.current) return;
@@ -1684,6 +1702,11 @@ export function SalesWorkbenchPage() {
     const name = newMember.name.trim();
     if (!name) {
       toast("會員姓名要填", "err");
+      return;
+    }
+    // 游標停在姓名、接著刷商品,條碼會刷進姓名(紅隊):一長串數字 / 碼不收
+    if (nameLooksScanned(name)) {
+      toast("姓名像是刷到條碼了,請重打", "err");
       return;
     }
     try {
@@ -1735,7 +1758,7 @@ export function SalesWorkbenchPage() {
 
   const panelTitle: Record<Panel, string> = {
     info: "單據資訊",
-    checkout: done ? "結帳完成" : "結帳",
+    checkout: "結帳",
     customer: "新增客戶",
     member: "新增會員",
   };
@@ -1760,21 +1783,6 @@ export function SalesWorkbenchPage() {
           onClick={panel === "customer" ? createCustomer : createMember}
         >
           儲存
-        </button>
-      </>
-    );
-  } else if (panel === "checkout" && done) {
-    panelFooter = (
-      <>
-        <button
-          type="button"
-          className="wb-btn"
-          onClick={() => navigate(`${listPath}/${done.id}`, { state: { created: done.id } })}
-        >
-          返回列表
-        </button>
-        <button type="button" className="wb-btn go" onClick={closePanel}>
-          繼續開單
         </button>
       </>
     );
@@ -1889,6 +1897,9 @@ export function SalesWorkbenchPage() {
               onChange={(_mid, opt) => pickMember(opt ?? null)}
               fetchOptions={searchMembers}
               disabled={locked}
+              onCreateNew={newMemberFrom}
+              createNewLabel="新增會員"
+              exactOnEnter={sameMember}
               placeholder="電話 / 姓名 / 公司 / 統編（可不填）"
             />
             <button
@@ -2305,6 +2316,7 @@ export function SalesWorkbenchPage() {
                                     if (opt) afterCard(l.key, plan);
                                   }}
                                   onEnterAfterValue={() => afterCard(l.key, plan)}
+                                  exactOnEnter={sameCardNo}
                                   fetchOptions={(q) =>
                                     searchSimCards(q, {
                                       vendor: plan?.carrier,
@@ -2514,10 +2526,7 @@ export function SalesWorkbenchPage() {
                 <select
                   value={invoiceForm}
                   disabled={locked}
-                  onChange={(e) => {
-                    setInvoiceForm(e.target.value);
-                    if (e.target.value === "none") setTaxMethod("untaxed");
-                  }}
+                  onChange={(e) => chooseInvoice(e.target.value)}
                 >
                   {invoiceForm === "" && <option value="">請選擇</option>}
                   {invoiceTypes.map((t) => (
@@ -2733,33 +2742,6 @@ export function SalesWorkbenchPage() {
               </label>
               </>}
             </section>
-          </div>
-        )}
-
-        {panel === "checkout" && done && (
-          <div className="ws-form" tabIndex={-1} ref={checkoutRef}>
-            <div className="wb-pay-done">
-              <b>{done.no}</b> 完成 · {money(done.total)}
-              {done.invoice_no ? ` · 發票 ${done.invoice_no}` : ""}
-            </div>
-            <div className="wb-detail-actions">
-              <button
-                type="button"
-                className="wb-btn"
-                onClick={() => printDoc(done.id, "receipt")}
-              >
-                列印收據
-              </button>
-              {done.invoice_no && (
-                <button
-                  type="button"
-                  className="wb-btn"
-                  onClick={() => printDoc(done.id, "invoice")}
-                >
-                  列印發票
-                </button>
-              )}
-            </div>
           </div>
         )}
 

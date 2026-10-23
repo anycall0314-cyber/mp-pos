@@ -609,3 +609,21 @@ class OverlapWaitsTests(_TwoConnections):
             "prefix": "AB", "range_start": 550, "range_end": 649}, format="json")
         self.assertLess(time.monotonic() - began, 0.5)                # 別家公司的事,不用等
         self.assertEqual(r.status_code, 201, r.content.decode())
+
+
+class InvoiceTaxMethodTests(_Shop):
+    """全站檢視 A1:開單選了哪種發票課稅別帶什麼,每種發票自己設(以前「免用」寫死切成未稅)。"""
+
+    def test_new_companies_keep_the_old_meaning_of_no_invoice(self):
+        from apps.tenants.models import Tenant
+        t = Tenant.objects.create(name="新公司", code="nn")
+        services.seed_tenant_defaults(t)
+        self.assertEqual(InvoiceType.objects.get(tenant=t, code="none").tax_method, "untaxed")
+        self.assertEqual(InvoiceType.objects.get(tenant=t, code="e_invoice").tax_method, "")
+
+    def test_the_shop_can_choose_what_no_invoice_brings(self):
+        it = InvoiceType.objects.get(tenant=self.c.tenant, code="none")
+        r = self.c.admin.patch(f"/api/v1/invoice-types/{it.id}/", {"tax_method": "taxable_included"}, format="json")
+        self.assertEqual((r.status_code, r.json().get("tax_method")), (200, "taxable_included"), r.content)
+        r = self.c.admin.patch(f"/api/v1/invoice-types/{it.id}/", {"tax_method": "nonsense"}, format="json")
+        self.assertEqual(r.status_code, 400, r.content)

@@ -114,3 +114,11 @@ export function trackStateLabel(t: TrackState): string {
 export function trackUsable(t: TrackState): boolean {
   return trackStateLabel(t) === "使用中";
 }
+
+/** 開單選了這種發票,課稅別跟著帶什麼(業務設定「帶入課稅別」;空的 / 找不到 = 不動)。全站檢視 A1 */
+export function taxMethodFor<T extends string>(
+  types: { code: string; tax_method?: T | "" }[],
+  code: string,
+): T | null {
+  return types.find((t) => t.code === code)?.tax_method || null;
+}

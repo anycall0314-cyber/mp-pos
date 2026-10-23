@@ -175,6 +175,12 @@ class InvoiceType(TenantOwnedModel):
     sort_order = models.PositiveIntegerField("排序", default=0)
     is_active = models.BooleanField("啟用", default=True)
     is_default = models.BooleanField("預設", default=False)
+    # 開單選了這種發票,課稅別跟著帶什麼(空的 = 不動)。以前「免用」寫死切成未稅;發票在別的系統開、稅有繳的店
+    # (手機玩家 12/1 起照舊用舊系統印)這樣每張單毛利多算約 5% —— 改成每種發票自己設(全站檢視 A1;紅隊:不要改「免用」的定義)
+    tax_method = models.CharField(
+        "帶入課稅別", max_length=20, blank=True, default="", db_default="",
+        choices=[("", "不帶"), ("taxable_included", "應稅內含"), ("taxable_excluded", "應稅外加"), ("untaxed", "未稅")],
+    )
 
     class Meta:
         constraints = [

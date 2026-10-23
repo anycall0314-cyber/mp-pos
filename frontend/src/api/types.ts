@@ -529,6 +529,8 @@ export interface InvoiceType {
   sort_order: number;
   is_active: boolean;
   is_default: boolean;
+  /** 開單選了這種發票,課稅別跟著帶什麼(空的 = 不動);「免用」預設帶未稅 */
+  tax_method?: "" | "taxable_included" | "taxable_excluded" | "untaxed";
 }
 
 export interface InvoiceTrack {

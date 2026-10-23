@@ -14,7 +14,7 @@ import {
   useTenantSettings,
   useWarehouses,
 } from "@/api/hooks";
-import type { InvoiceTrack, PaymentMethod, PaymentMethodKind } from "@/api/types";
+import type { InvoiceTrack, InvoiceType, PaymentMethod, PaymentMethodKind } from "@/api/types";
 import { useAuth, useDefaultWarehouse } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
 import { InvoiceJumpDialog } from "@/components/invoice/InvoiceJumpDialog";
@@ -449,6 +449,7 @@ export function SettingsPage() {
                 <th style={{ width: 80 }} className="num">排序</th>
                 <th style={{ width: 70, textAlign: "center" }}>啟用</th>
                 <th style={{ width: 70, textAlign: "center" }}>預設</th>
+                <th style={{ width: 130 }}>帶入課稅別</th>
               </tr>
             </thead>
             <tbody>
@@ -495,6 +496,20 @@ export function SettingsPage() {
                         saveType.mutate({ id: t.id, is_default: true })
                       }
                     />
+                  </td>
+                  <td>
+                    {/* 開單選了這種發票,課稅別跟著帶什麼(全站檢視 A1:發票在舊系統開、稅有繳的店,免用要帶應稅內含) */}
+                    <select
+                      value={t.tax_method ?? ""}
+                      onChange={(e) =>
+                        saveType.mutate({ id: t.id, tax_method: e.target.value as InvoiceType["tax_method"] })
+                      }
+                    >
+                      <option value="">不帶</option>
+                      <option value="taxable_included">應稅內含</option>
+                      <option value="taxable_excluded">應稅外加</option>
+                      <option value="untaxed">未稅</option>
+                    </select>
                   </td>
                 </tr>
               ))}

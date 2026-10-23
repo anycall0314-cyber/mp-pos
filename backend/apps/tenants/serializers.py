@@ -11,7 +11,7 @@ from .services import track_in_use
 class InvoiceTypeSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = InvoiceType
-        fields = ["id", "code", "name", "sort_order", "is_active", "is_default"]
+        fields = ["id", "code", "name", "sort_order", "is_active", "is_default", "tax_method"]
         read_only_fields = ["id", "code"]
 
 
