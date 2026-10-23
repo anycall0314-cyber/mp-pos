@@ -61,6 +61,8 @@ export function SerialListPage() {
   const [soldFrom, setSoldFrom] = useState("");
   const [soldTo, setSoldTo] = useState("");
   const [search, setSearch] = useState("");
+  // 少用的條件(廠商、進貨日、賣出日)收在「更多條件」(全站檢視 B12:9 個篩選擠成兩三排)
+  const [more, setMore] = useState(false);
   const [page, setPage] = useState(1);
   const [unit, setUnit] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -81,6 +83,8 @@ export function SerialListPage() {
     search,
   };
   const ready = serialFilterReady(draft);
+  /** 收起來的那幾格填了幾個(收著也看得出來有條件) */
+  const moreCount = [supplier.id !== "", receivedFrom || receivedTo, soldFrom || soldTo].filter(Boolean).length;
   const { data, isFetching, isError, error } = useSerialReport(applied, page);
   const rows = data?.results ?? [];
 
@@ -169,28 +173,6 @@ export function SerialListPage() {
         </label>
         <StoreField value={store} onChange={setStore} lockable={false} />
         <label>
-          廠商
-          <ComboBox<Supplier>
-            value={supplier.id}
-            selectedOption={supplier.option}
-            onChange={(id, opt) => setSupplier({ id, option: opt ?? null })}
-            fetchOptions={searchSuppliers}
-            placeholder="全部"
-          />
-        </label>
-        <label>
-          進貨
-          <input type="date" value={receivedFrom} onChange={(e) => setReceivedFrom(e.target.value)} />
-          <span>~</span>
-          <input type="date" value={receivedTo} onChange={(e) => setReceivedTo(e.target.value)} />
-        </label>
-        <label>
-          賣出
-          <input type="date" value={soldFrom} onChange={(e) => setSoldFrom(e.target.value)} />
-          <span>~</span>
-          <input type="date" value={soldTo} onChange={(e) => setSoldTo(e.target.value)} />
-        </label>
-        <label>
           商品
           <input
             type="text"
@@ -205,7 +187,36 @@ export function SerialListPage() {
         <button className="btn primary" type="button" disabled={!ready} onClick={apply}>
           查詢
         </button>
+        <button className="btn" type="button" onClick={() => setMore(!more)}>
+          {moreCount > 0 && !more ? `更多條件(${moreCount})` : "更多條件"}
+        </button>
       </div>
+      {more && (
+        <div className="list-filterbar sr-filter">
+          <label>
+            廠商
+            <ComboBox<Supplier>
+              value={supplier.id}
+              selectedOption={supplier.option}
+              onChange={(id, opt) => setSupplier({ id, option: opt ?? null })}
+              fetchOptions={searchSuppliers}
+              placeholder="全部"
+            />
+          </label>
+          <label>
+            進貨
+            <input type="date" value={receivedFrom} onChange={(e) => setReceivedFrom(e.target.value)} />
+            <span>~</span>
+            <input type="date" value={receivedTo} onChange={(e) => setReceivedTo(e.target.value)} />
+          </label>
+          <label>
+            賣出
+            <input type="date" value={soldFrom} onChange={(e) => setSoldFrom(e.target.value)} />
+            <span>~</span>
+            <input type="date" value={soldTo} onChange={(e) => setSoldTo(e.target.value)} />
+          </label>
+        </div>
+      )}
       <AppliedFilters items={appliedItems} onClear={clearAll} />
       {isError && <Banner kind="error" message={errorMessageOf(error)} />}
       {exportNote && <Banner kind="error" message={exportNote} />}
@@ -222,19 +233,15 @@ export function SerialListPage() {
         {data && rows.length > 0 && (
           <table className="report-grid">
             <thead>
+              {/* 13 欄 → 8 欄(全站檢視 B12:以前一定要往右捲才看得到賣出單與賣出日) */}
               <tr>
-                <th>IMEI</th>
-                <th>SN</th>
-                <th>品號</th>
+                <th>序號</th>
                 <th>品名</th>
                 <th>狀態</th>
                 <th>門市</th>
-                <th>來源</th>
-                <th>進貨單</th>
-                <th>進貨日</th>
+                <th>進貨</th>
                 <th className="num">成本</th>
-                <th>賣出單</th>
-                <th>賣出日</th>
+                <th>賣出</th>
                 <th>處理</th>
               </tr>
             </thead>
@@ -243,22 +250,25 @@ export function SerialListPage() {
                 const codes = unitCodes(r);
                 return (
                   <tr key={r.id} className="report-row sr-pick" onClick={() => setUnit(r.id)}>
-                    <td>{codes.imei}</td>
-                    <td>{codes.sn}</td>
-                    <td>{r.sku}</td>
-                    <td className="sr-name">{r.name}</td>
+                    <td>
+                      <div>{codes.imei || codes.sn}</div>
+                      {codes.imei && codes.sn && <div className="sr-sub">{codes.sn}</div>}
+                    </td>
+                    <td className="sr-name">
+                      <div>{r.name}</div>
+                      <div className="sr-sub">{r.sku}</div>
+                    </td>
                     <td>{r.status_label}</td>
                     <td>{r.store}</td>
-                    <td>{r.source?.label}</td>
                     <td onClick={(e) => e.stopPropagation()}>
                       {r.source && <Link to={docPath(r.source.doc)}>{r.source.doc.no}</Link>}
+                      <div className="sr-sub">{[dayOf(r.received_at), r.source?.label].filter(Boolean).join(" · ")}</div>
                     </td>
-                    <td>{dayOf(r.received_at)}</td>
                     <td className="num">{costText(r.cost)}</td>
                     <td onClick={(e) => e.stopPropagation()}>
                       {r.sale && <Link to={docPath(r.sale.doc)}>{r.sale.doc.no}</Link>}
+                      {r.sale?.date && <div className="sr-sub">{r.sale.date}</div>}
                     </td>
-                    <td>{r.sale?.date}</td>
                     {/* 銷退退回來的「已退」:確認可以賣 → 回在庫;有瑕疵的送廠商換貨(owner 2026-10-23) */}
                     <td onClick={(e) => e.stopPropagation()} className="sr-act">
                       {r.status === "returned" && (

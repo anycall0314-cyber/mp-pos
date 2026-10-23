@@ -8056,6 +8056,9 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .sr-table .sr-closing .wb-badge { margin-right: 8px; }
 .sr-table .report-neg-text { color: var(--danger-text); }
 .sr-table tr.sr-pick { cursor: pointer; }
+/* 序號查詢:品名可以換行,第二行(SN、品號、日期)小字(全站檢視 B12) */
+.sr-table td.sr-name { white-space: normal; min-width: 12rem; }
+.sr-table .sr-sub { font-size: var(--font-secondary); color: var(--text-dim); }
 .sr-link {
   background: none; border: 0; padding: 0;
   color: var(--accent); font: inherit; cursor: pointer;

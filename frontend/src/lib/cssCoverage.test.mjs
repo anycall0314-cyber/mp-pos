@@ -16,7 +16,7 @@ const NO_RULE_YET = new Set(
     "bcp-actions btn-save field-control fieldset-skip focus-banner ia-count-total intake-candidate-main " +
     "intake-candidate-reason intake-candidates md-table-inner name pc-section-categories pc-section-products " +
     "pc-undo re-summary report-row ri-badge-disabled ri-card ri-card-actions ri-card-fee ri-card-head " +
-    "ri-card-name ri-card-parts ri-card-sub ri-list ri-part-chip rr-store sc-phone-scan sr-name tr-facets ws-held"
+    "ri-card-name ri-card-parts ri-card-sub ri-list ri-part-chip rr-store sc-phone-scan tr-facets ws-held"
   ).split(" "),
 );
 
