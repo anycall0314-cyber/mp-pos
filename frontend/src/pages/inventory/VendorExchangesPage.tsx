@@ -13,6 +13,7 @@ import {
   cutText,
   defaultStore,
   EXCHANGE_TABS,
+  focusAfterLook,
   qtyText,
   resultText,
   supplierGroups,
@@ -46,6 +47,7 @@ export function VendorExchangesPage() {
   const [store, setStore] = useState<number | "">("");
   const codeRef = useRef<HTMLInputElement>(null);
   const nextRef = useRef<HTMLInputElement>(null);
+  const supplierRef = useRef<HTMLSelectElement>(null);
   const [backOf, setBackOf] = useState<number | null>(null);
   const [backValue, setBackValue] = useState("");
 
@@ -60,7 +62,12 @@ export function VendorExchangesPage() {
       setQty("1");
       setStore(hit.kind === "product" ? defaultStore(hit.stores) : "");
       if (hit.kind === "serial" && !hit.sendable) toast(`這一台${hit.status_label},不能送廠商`, "err");
-      window.setTimeout(() => nextRef.current?.focus(), 0);
+      const to = focusAfterLook(hit);
+      window.setTimeout(() => {
+        const el = to === "qty" ? nextRef.current : to === "supplier" ? supplierRef.current : codeRef.current;
+        el?.focus();
+        if (el instanceof HTMLInputElement) el.select();
+      }, 0);
     } catch (e) {
       setFound(null);
       toast(errorMessageOf(e), "err");
@@ -155,7 +162,10 @@ export function VendorExchangesPage() {
               setFound(null);
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.nativeEvent.isComposing) void look();
+              if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+              // 刷到之後碼沒改過(改了 found 就清掉)、設備、可以送:再按一次 Enter = 送出
+              if (found?.kind === "serial" && ready) void send();
+              else void look();
             }}
           />
         </label>
@@ -191,7 +201,7 @@ export function VendorExchangesPage() {
           <>
             <label>
               廠商
-              <select value={supplier} onChange={(e) => setSupplier(e.target.value ? Number(e.target.value) : "")}>
+              <select ref={supplierRef} value={supplier} onChange={(e) => setSupplier(e.target.value ? Number(e.target.value) : "")}>
                 <option value="">選廠商</option>
                 {groups.hinted.length > 0 && (
                   <optgroup label="進過">
@@ -210,7 +220,6 @@ export function VendorExchangesPage() {
             <label>
               瑕疵狀況
               <input
-                ref={found.kind === "serial" ? nextRef : undefined}
                 type="text"
                 value={note}
                 maxLength={200}

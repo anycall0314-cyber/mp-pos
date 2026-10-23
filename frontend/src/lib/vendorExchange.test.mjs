@@ -9,6 +9,7 @@ import {
   cutText,
   defaultStore,
   EXCHANGE_TABS,
+  focusAfterLook,
   qtyText,
   resultText,
   supplierGroups,
@@ -109,4 +110,16 @@ test("盤點單列出這家門市換貨中的(不用刷,但不會從表上消失
   assert.match(page, /<th>換貨中的序號<\/th>/);
   // 盤的人也看得到(不是只有管理員)
   assert.doesNotMatch(page, /detail\.manager && \(detail\.vendor_rows/);
+});
+
+test("刷到之後游標去哪裡:設備有廠商留在刷碼格(再按 Enter 送、刷下一台蓋掉),沒廠商去選廠商,配件去數量", () => {
+  const serial = (over) => ({ kind: "serial", sendable: true, default_supplier: 3, ...over });
+  assert.equal(focusAfterLook(serial({})), "code");
+  assert.equal(focusAfterLook(serial({ default_supplier: null })), "supplier");
+  assert.equal(focusAfterLook(serial({ sendable: false, default_supplier: null })), "code");
+  assert.equal(focusAfterLook({ kind: "product", default_supplier: 3 }), "qty");
+  const page = read("../pages/inventory/VendorExchangesPage.tsx");
+  // 瑕疵狀況不搶游標(B7:第二台的碼曾寫進第一台的瑕疵狀況)
+  assert.doesNotMatch(page, /ref=\{found\.kind === "serial" \? nextRef/);
+  assert.match(page, /if \(found\?\.kind === "serial" && ready\) void send\(\);\s*else void look\(\);/);
 });

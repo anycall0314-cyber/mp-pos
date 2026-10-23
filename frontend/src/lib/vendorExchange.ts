@@ -115,3 +115,14 @@ export function cutText(list: VendorExchangeList | undefined): string {
 export function backAtCounter(device: { status: string; warehouse: number | null }, at: number): boolean {
   return device.status === "rma" && device.warehouse === at;
 }
+
+/**
+ * 刷到之後游標去哪裡(owner 2026-10-23 檢視 B7:以前一律跳到「瑕疵狀況」,一箱寄好幾台時接著刷第二台,
+ * 第二台的碼會寫進第一台的瑕疵狀況、條碼槍的 Enter 把第一台送出,第二台沒送)。
+ * 設備:廠商已經帶好(或不能送)→ 留在刷碼格、整段反白,再按 Enter 就送、刷下一台會蓋掉;沒有廠商 → 去選廠商。
+ * 瑕疵狀況要點了才填。配件 → 數量。
+ */
+export function focusAfterLook(hit: ExchangeLookup): "code" | "supplier" | "qty" {
+  if (hit.kind === "product") return "qty";
+  return !hit.sendable || hit.default_supplier ? "code" : "supplier";
+}
