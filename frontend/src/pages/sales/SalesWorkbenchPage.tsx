@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api, ApiHttpError } from "@/api/client";
+import { fillRemaining } from "@/lib/splitPay";
 import { heldUnits, type HeldUnit } from "@/lib/trade";
 import {
   lookupMemberLastPrice,
@@ -540,11 +541,14 @@ export function SalesWorkbenchPage() {
     taxMethod === "taxable_included" || taxMethod === "taxable_excluded";
   const noInvoice = invoiceForm === "" || invoiceForm === "none";
 
-  // 門市還沒選、門市清單載進來了:帶第一家(鎖倉帳號是自己那一家)
+  // 門市還沒選、門市清單載進來了:帶第一家(鎖倉帳號是自己那一家)。
+  // 記著的門市(上次選的、草稿裡的)已經不在清單上(停用了)也一樣重帶 —— 不然下拉顯示的是別家,
+  // 刷碼卻拿那一家去查(2026-10-23 走查抓到:「門市:選擇有效的選項」)
   useEffect(() => {
-    if (warehouse !== "" || stores.length === 0) return;
+    if (stores.length === 0) return;
+    if (warehouse !== "" && (me.locked || stores.some((s) => s.id === warehouse))) return;
     setWarehouse(me.id && stores.some((s) => s.id === me.id) ? me.id : stores[0].id);
-  }, [warehouse, stores, me.id]);
+  }, [warehouse, stores, me.id, me.locked]);
 
   // 業務員:帳號有綁業務員、這一格還空著就帶進來(登入資料比畫面晚到的時候)
   useEffect(() => {
@@ -2796,7 +2800,13 @@ export function SalesWorkbenchPage() {
                       min={0}
                       disabled={locked}
                       value={payAmounts[m.code] ?? "0"}
-                      onFocus={(e) => e.target.select()}
+                      onFocus={(e) => {
+                        // 還是 0 的那一格:填入還差多少(全站檢視 A10;一半現金一半刷卡不用心算)
+                        const fill = fillRemaining(payAmounts[m.code], payDiff);
+                        if (fill !== null) setPayAmounts({ ...payAmounts, [m.code]: fill });
+                        const el = e.target;
+                        window.setTimeout(() => el.select(), 0);
+                      }}
                       onChange={(v) =>
                         setPayAmounts({ ...payAmounts, [m.code]: v })
                       }
