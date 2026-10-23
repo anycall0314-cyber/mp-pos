@@ -58,3 +58,21 @@ test("頁面:只在廠商收購那一頁有;要先選廠商與門市才能選檔
   assert.ok(panel.includes("if (!preview || readFor !== supplier) return;"));
   assert.ok(page.includes("serials: g.entries })),\n      false,"), "匯入的不因為那一行的單價不一樣被擋");
 });
+
+test("匯入表格沒加進去的那幾列(有問題、還沒挑品號)放進「沒加入」(全站檢視 C8)", async () => {
+  const { sheetLeftovers } = await import("./secondhandSheet.ts");
+  const base = { name: "iPhone 15", imei: "", sn: "", grade: "A", battery: 90, cost: 10000, price: 15000, note: "", problems: [], product: 1 };
+  const rows = [
+    { ...base, row: 2, imei: "356789012345671" },
+    { ...base, row: 3, imei: "356789012345689", problems: ["碼已經在系統裡"] },
+    { ...base, row: 4, sn: "SN0004", product: null, name: "對不到的品名" },
+  ];
+  const products = new Map([[1, { id: 1 }]]);
+  // 那一筆的字用品名(重查找的是商品,複審 P0:用碼會被當成正在刷的那一台的序號),碼寫在原因裡
+  assert.deepEqual(sheetLeftovers(rows, products, {}), [
+    { kw: "iPhone 15", reason: "匯入表格第 3 列(356789012345689):碼已經在系統裡" },
+    { kw: "對不到的品名", reason: "匯入表格第 4 列(SN0004):還沒挑品號" },
+  ]);
+  // 人挑了品號就能加
+  assert.deepEqual(sheetLeftovers(rows, products, { "對不到的品名": { id: 1 } }).map((r) => r.kw), ["iPhone 15"]);
+});

@@ -52,3 +52,17 @@ export function parseLine(line: string): RawRow | null {
     serials,
   };
 }
+
+/**
+ * 批次貼上對不到商品的那幾列(全站檢視 C8):按「加入」之後不能直接不見(容易少進貨),
+ * 一列一筆放進掃碼框的「沒加入」—— 要逐筆加進去或明講清掉,沒處理不能存(紅隊:一顆「知道了」換不到存檔)。
+ */
+export function pasteLeftovers(
+  rows: { rawProductText: string; productOption: unknown; qty: number; serials: string[] }[],
+): { kw: string; reason: string }[] {
+  return rows.flatMap((r, i) => {
+    if (r.productOption) return [];
+    const serials = r.serials.length > 0 ? `、序號 ${r.serials.length} 個` : "";
+    return [{ kw: r.rawProductText.trim() || `第 ${i + 1} 列`, reason: `批次貼上第 ${i + 1} 列,${r.qty} 件${serials},對不到` }];
+  });
+}

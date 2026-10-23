@@ -307,3 +307,25 @@ export function prefillReport(o: PrefillOutcome): string[] {
   }
   return lines;
 }
+
+/**
+ * 換關鍵字搜尋時,勾過的留在最上面(搜得到的用新的資料、搜不到的照舊留著),其餘是這一次搜到的。
+ * (全站檢視 C7)
+ */
+export function keepPicked<T extends { product: { id: number; is_active: boolean }; selected: boolean; qty: number }>(
+  prev: T[],
+  results: T["product"][],
+): { product: T["product"]; selected: boolean; qty: number }[] {
+  const byId = new Map(results.map((p) => [p.id, p]));
+  const picked = prev
+    .filter((r) => r.selected)
+    .map((r) => {
+      const fresh = byId.get(r.product.id) ?? r.product;
+      return { product: fresh, selected: fresh.is_active, qty: r.qty };
+    });
+  const pickedIds = new Set(picked.map((r) => r.product.id));
+  return [
+    ...picked,
+    ...results.filter((p) => !pickedIds.has(p.id)).map((p) => ({ product: p, selected: false, qty: 1 })),
+  ];
+}

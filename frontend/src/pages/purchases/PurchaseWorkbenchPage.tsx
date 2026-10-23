@@ -44,11 +44,13 @@ import { ProductForm } from "@/pages/products/ProductForm";
 import type { Missed } from "@/lib/scanMissed";
 import {
   hasDeviceCode,
+  isProductBarcode,
   mainCode,
   normalizeCode,
   placeScannedCode,
   removeUnitAt,
   resizeUnits,
+  scannedIntoQty,
 } from "@/lib/deviceCodes";
 import { intStr, lineTotal, money, roundInt, splitTax } from "@/lib/money";
 import { blockText, codesOf, problemsOf, whereText } from "@/lib/serialCheck";
@@ -285,6 +287,17 @@ function lineAmount(l: Line): number {
   return lineTotal(l.billedQty, l.unitPrice);
 }
 
+/** 數量格最多幾件:條碼刷進來(8 碼以上)就超過,不會被當成數量存起來(全站檢視 C3) */
+const QTY_MAX = 99999;
+
+/**
+ * 單價 0 的那一行(全站檢視 C4:平台機型沒有上次進價,0 元照樣存得進去,成本就是 0)。只提醒、不擋;
+ * 中古機看每一台自己的成本,不算。
+ */
+function zeroPriced(l: Line): boolean {
+  return !l.product.is_secondhand && l.qty > 0 && roundInt(l.unitPrice) === 0;
+}
+
 /** 伺服器明講不行(4xx):單沒有成立。其他(斷線、5xx)= 不知道 */
 function refused(e: unknown): boolean {
   return e instanceof ApiHttpError && e.status >= 400 && e.status < 500;
@@ -408,6 +421,11 @@ export function PurchaseWorkbenchPage({
 
   const scanRef = useRef<HTMLInputElement>(null);
   const scanApi = useRef<ScanBoxApi | null>(null);
+  /**
+   * 數量格點進去那一刻的這一行(數量、計價數量、每一台的格子):條碼刷進數量格時整組改回(全站檢視 C3)。
+   * 刷碼途中合法的數字會當下生效、連帶改計價數量,只改回數量的話金額就錯了(複審 P0)。
+   */
+  const qtySnap = useRef<({ key: string } & Pick<Line, "qty" | "billedQty" | "billedTouched" | "serials">) | null>(null);
   // ── 找不到的商品當場找 / 當場建(只有一般進貨;中古廠商收購沒有) ──
   /** 「先找有沒有建過」開著(帶著掃碼框那一串字) */
   const [finding, setFinding] = useState<string | null>(null);
@@ -1025,6 +1043,9 @@ export function PurchaseWorkbenchPage({
     )?.payload as Product | undefined;
     const elsewhere = foreign ? wrongDoor(foreign, isSecondhandVendor) : null;
     if (elsewhere) return elsewhere;
+    // 商品條碼的長相(8 / 12 / 13 / 14 碼、檢查碼對)又找不到商品:是還沒登記條碼的商品,不是這一台的序號
+    // (全站檢視 C1;owner 2026-10-23 同意:以前會放進正在刷的那一行、默默多一台)。記在「沒加入」,旁邊可以「建立」
+    if (isProductBarcode(text)) return { problem: "找不到這個條碼的商品", unresolved: true };
     // 查完之後才看「現在」正在刷哪一行(查的這段時間那一行可能被拿掉、或換成另一行)
     const now = linesRef.current.find(
       (l) => l.key === currentRef.current && l.product.requires_serial,
@@ -1225,7 +1246,7 @@ export function PurchaseWorkbenchPage({
       false,
     );
   }
-  function appendBatch(results: BatchPasteResult[]) {
+  function appendBatch(results: BatchPasteResult[], leftovers: { kw: string; reason: string }[]) {
     // 批次貼上每一列都有單價(預覽時看得到、改得了):寫 0 就是 0
     appendLines(
       results.map((r) => ({
@@ -1236,15 +1257,21 @@ export function PurchaseWorkbenchPage({
       })),
       true,
     );
+    // 對不到的那幾列放進「沒加入」:逐筆加進去或清掉,沒處理不能存(全站檢視 C8)
+    scanApi.current?.note(leftovers);
   }
 
-  function appendSheet(groups: { product: Product; entries: SerialEntry[] }[]) {
+  function appendSheet(
+    groups: { product: Product; entries: SerialEntry[] }[],
+    leftovers: { kw: string; reason: string }[],
+  ) {
     // 中古機 Excel:每一台有自己的成本(進價,一定大於 0);那一行的單價只是沒填成本時的預設,所以不用來擋併行
     // (複審:明細裡已經有同一個品號、單價不是 0 的話,整組會被當成「單價不一樣」不加)
     appendLines(
       groups.map((g) => ({ ...newLineOf(g.product, g.entries.length, "0"), serials: g.entries })),
       false,
     );
+    scanApi.current?.note(leftovers);
   }
 
   // 試算跟伺服器存檔用同一套算法(整數元、四捨五入)
@@ -1509,6 +1536,7 @@ export function PurchaseWorkbenchPage({
   const kinds = new Set(lines.map((l) => l.product.id)).size;
   const totalUnits = lines.reduce((s, l) => s + l.qty, 0);
   const issue = lines.length > 0 ? validate() : null;
+  const zeroCount = lines.filter(zeroPriced).length;
   const taxLabel = TAX_METHODS.find((t) => t.value === taxMethod)?.label ?? "";
   const payName = paymentMethods.find((m) => m.id === paymentMethod)?.name;
   const storeName = stores.find((s) => s.id === warehouse)?.name;
@@ -1822,10 +1850,35 @@ export function PurchaseWorkbenchPage({
                         aria-label="進貨數量"
                         title={l.qty === 0 ? "還沒填進幾件" : undefined}
                         min={Math.max(1, filled.length)}
+                        max={QTY_MAX}
                         disabled={locked}
                         value={l.qty}
                         onCommit={(n) => setQty(l.key, n)}
-                        onRejected={() => {
+                        onFocus={() => {
+                          qtySnap.current = { key: l.key, qty: l.qty, billedQty: l.billedQty, billedTouched: l.billedTouched, serials: l.serials };
+                        }}
+                        // 打好數量按 Enter 回刷碼框(全站檢視 C3:以前游標留在這裡,下一槍的條碼接在數量後面)
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                            e.preventDefault();
+                            backToScan();
+                          }
+                        }}
+                        onRejected={(typed) => {
+                          if (scannedIntoQty(typed)) {
+                            const snap = qtySnap.current;
+                            if (snap && snap.key === l.key) {
+                              patch(l.key, (x) => ({
+                                ...x,
+                                qty: snap.qty,
+                                billedQty: snap.billedQty,
+                                billedTouched: snap.billedTouched,
+                                serials: snap.serials,
+                              }));
+                            }
+                            toast(`條碼刷進數量格了,數量改回 ${snap?.qty ?? l.qty}:請再刷一次`, "err", { ms: 6000 });
+                            return;
+                          }
                           if (filled.length > 1) {
                             toast(
                               `已經刷了 ${filled.length} 台,要少一台請按那一台的 ✕`,
@@ -1882,7 +1935,7 @@ export function PurchaseWorkbenchPage({
                     <td className="num">
                       <MoneyInput
                         data-price={l.key}
-                        className="price num num-input"
+                        className={`price num num-input${zeroPriced(l) ? " need" : ""}`}
                         aria-label="單價"
                         min={0}
                         disabled={locked}
@@ -1973,6 +2026,8 @@ export function PurchaseWorkbenchPage({
           未稅 {money(estSubtotal)} · 稅 {money(estTax)}
         </span>
         {issue && !unsure && <span className="ws-issue">{issue}</span>}
+        {/* 單價 0 只提醒、不擋(贈品可能真的是 0;全站檢視 C4) */}
+        {!issue && zeroCount > 0 && <span className="ws-issue">{zeroCount} 行單價 0,仍可儲存</span>}
         <span className="ws-grow" />
         <span className="ws-total">
           <span>含稅總額</span>

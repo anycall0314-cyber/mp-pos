@@ -148,3 +148,18 @@ test("帶回來的那一刻,放回輸入框重查的那一筆要不要放掉", (
   // 本來就沒有在重查
   assert.equal(retryAfterCreated(null, "A", a, "A"), null);
 });
+
+test("別的地方記進來的那一筆(批次貼上、匯入表格):重查只找商品,重查沒成也還是只找商品(複審 P0)", async () => {
+  const { notedEntry, addMissed, missedEntry } = await import("./scanMissed.ts");
+  const noted = notedEntry(7, "ABC123XYZ", "批次貼上第 2 列,3 件,對不到");
+  assert.deepEqual(noted, { id: 7, kw: "ABC123XYZ", reason: "批次貼上第 2 列,3 件,對不到", creatable: true, productOnly: true });
+  // 人點了重查、還是找不到:原因換了,「只找商品」留著
+  const again = addMissed([noted], missedEntry(8, "ABC123XYZ", "找不到", "unresolved"), noted);
+  assert.equal(again.length, 1);
+  assert.equal(again[0].productOnly, true);
+  assert.equal(again[0].reason, "找不到");
+  const { readFileSync } = await import("node:fs");
+  const box = readFileSync(new URL("../components/workbench/ScanBox.tsx", import.meta.url), "utf8");
+  assert.match(box, /if \(onScan && !retryOf\?\.productOnly\) \{/);
+  assert.match(box, /addMissed\(acc, notedEntry\(\+\+missSeq, it\.kw, it\.reason\), null\)/);
+});

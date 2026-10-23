@@ -407,3 +407,22 @@ test("品名去掉連字號剛好等於別的商品的條碼:不是同一個東�
   // 沒載入草稿的一趟不受影響
   assert.equal(tripSettles({ kw: "X-1", entry, detached: false }, { barcode: "X1" }), true);
 });
+
+test("勾選商品:換關鍵字勾過的留在最上面(不見了是少進貨);打數量自動打勾(全站檢視 C7)", async () => {
+  const { keepPicked } = await import("./purchasePrefill.ts");
+  const p = (id, active = true) => ({ id, is_active: active });
+  const prev = [
+    { product: p(1), selected: true, qty: 3 },
+    { product: p(2), selected: false, qty: 1 },
+    { product: p(3), selected: true, qty: 2 },
+  ];
+  const out = keepPicked(prev, [p(4), p(3), p(5)]);
+  assert.deepEqual(out.map((r) => [r.product.id, r.selected, r.qty]), [[1, true, 3], [3, true, 2], [4, false, 1], [5, false, 1]]);
+  // 搜得到的用新的資料:停用了就不再勾
+  assert.deepEqual(keepPicked([{ product: p(1), selected: true, qty: 3 }], [p(1, false)]).map((r) => r.selected), [false]);
+  const modal = readFileSync(new URL("../pages/purchases/PurchaseProductPickerModal.tsx", import.meta.url), "utf8");
+  assert.match(modal, /setRows\(\(prev\) => keepPicked\(prev, data\.results\)\);/);
+  assert.match(modal, /qty: Math\.max\(1, qty \|\| 1\), selected: r\.product\.is_active/);
+  assert.ok(!modal.includes("勾選後按下方「加入」即可"), "拿掉說明句");
+  assert.ok(!modal.includes("批次選商品入庫"), "標題跟按鈕同名");
+});

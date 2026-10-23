@@ -12,6 +12,7 @@ import {
   Missed,
   missedEntry,
   MissKind,
+  notedEntry,
   resolveMissed,
   retryAfterCreated,
   retryTarget,
@@ -53,6 +54,11 @@ export interface ScanBoxApi {
   added: (kw: string, entry: Missed | null) => void;
   /** 「沒加入」現在有哪幾筆(頁面要帶人離開這一頁之前看:那幾筆不在草稿裡,離開就沒了) */
   missed: () => Missed[];
+  /**
+   * 別的地方(批次貼上、匯入表格)沒加進去的,記到「沒加入」:一筆一筆加進去或清掉,沒處理不能送出
+   * (全站檢視 C8;以前按「加入」之後那幾列就不見了)。都算「找不到是哪個商品」,旁邊有「建立」。
+   */
+  note: (items: { kw: string; reason: string }[]) => void;
 }
 
 /** 回一句話 = 沒加成(原因);其他 = 加好了 */
@@ -252,6 +258,12 @@ export function ScanBox<T>({
         ref.current?.focus();
       },
       missed: () => missedNow.current,
+      note: (items) => {
+        if (items.length === 0) return;
+        setMissed((cur) =>
+          items.reduce((acc, it) => addMissed(acc, notedEntry(++missSeq, it.kw, it.reason), null), cur),
+        );
+      },
       added: (kw, entry) => {
         setMissed((cur) => settleCreated(cur, kw, entry));
         retrying.current = retryAfterCreated(retrying.current, kw, entry, textRef.current);
@@ -407,7 +419,8 @@ export function ScanBox<T>({
     retryOf: Missed | null,
   ) {
     const stale = () => born !== epoch.current;
-    if (onScan) {
+    // 別的地方記進來的那一筆重查:只找商品,不交給頁面(不會被當成正在刷的那一台的序號)
+    if (onScan && !retryOf?.productOnly) {
       let result: ScanVerdict;
       try {
         result = await onScan(kw);

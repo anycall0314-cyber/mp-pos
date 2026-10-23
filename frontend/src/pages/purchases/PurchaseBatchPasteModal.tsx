@@ -6,7 +6,7 @@ import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { pickActiveProduct } from "@/pages/products/pickActiveProduct";
 import { MoneyInput } from "@/components/MoneyInput";
-import { parseLine, type RawRow } from "@/lib/batchPaste";
+import { parseLine, pasteLeftovers, type RawRow } from "@/lib/batchPaste";
 
 /**
  * 經過比對後、可編輯的一行
@@ -36,7 +36,8 @@ export interface BatchPasteResult {
 interface Props {
   open: boolean;
   onClose: () => void;
-  onConfirm: (rows: BatchPasteResult[]) => void;
+  /** leftovers = 對不到商品、沒加進去的那幾列(頁面放進「沒加入」,不能就這樣不見) */
+  onConfirm: (rows: BatchPasteResult[], leftovers: { kw: string; reason: string }[]) => void;
   /** "regular":比對排除中古機;"secondhand-vendor":只比對中古機 */
   mode?: "regular" | "secondhand-vendor";
   /** 工作台版型:不開彈出視窗,直接放在頁面裡 */
@@ -259,7 +260,7 @@ export function PurchaseBatchPasteModal({
       );
       return;
     }
-    onConfirm(final);
+    onConfirm(final, pasteLeftovers(rows));
   }
 
   if (!open) return null;
@@ -294,9 +295,7 @@ export function PurchaseBatchPasteModal({
                   marginBottom: 8,
                 }}
               >
-                <div style={{ fontSize: 16, color: "var(--text-dim)", flex: 1 }}>
-                  從 Excel 複製貼入,商品可用品名、品號或條碼,系統會自動比對,模糊符合會給你下拉再選。
-                </div>
+                <div style={{ flex: 1 }} />
                 <button
                   type="button"
                   className="btn"

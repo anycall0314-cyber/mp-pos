@@ -16,6 +16,11 @@ export interface Missed {
    * 其他原因(已停用、這張單已經送出、那一台在別的地方、連線錯誤)不是「沒建過」,沒有這一顆。
    */
   creatable?: boolean;
+  /**
+   * 別的地方記進來的(批次貼上、匯入表格;`ScanBoxApi.note`):重查**只找商品**,不交給頁面的 `onScan`
+   * (複審 P0:進貨頁正在刷一台手機時,重查的字會被當成那一台的序號放進去,設備歸錯商品)。
+   */
+  productOnly?: boolean;
 }
 
 /** 沒加進去的原因是哪一種:找商品時沒有定案(可以當場建) / 其他 */
@@ -24,6 +29,11 @@ export type MissKind = "unresolved" | "other";
 /** 記一筆「沒加入」要用的內容 */
 export function missedEntry(id: number, kw: string, reason: string, kind: MissKind): Missed {
   return kind === "unresolved" ? { id, kw, reason, creatable: true } : { id, kw, reason };
+}
+
+/** 別的地方(批次貼上、匯入表格)沒加進去、記進「沒加入」的一筆:可以當場建、重查只找商品 */
+export function notedEntry(id: number, kw: string, reason: string): Missed {
+  return { id, kw, reason, creatable: true, productOnly: true };
 }
 
 /**

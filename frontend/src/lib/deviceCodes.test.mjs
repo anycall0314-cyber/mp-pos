@@ -246,3 +246,35 @@ test("改數量:刷過碼的一台都不丟,少掉的只會是空格", () => {
   // 清單長度永遠等於數量:沒有藏在後面的碼
   assert.equal(resizeUnits(three, 2, unit).entries.length, 2);
 });
+
+test("商品條碼的長相:8 / 12 / 13 / 14 碼、檢查碼對才算;IMEI 15 碼不算(全站檢視 C1)", async () => {
+  const { isProductBarcode, scannedIntoQty } = await import("./deviceCodes.ts");
+  assert.equal(isProductBarcode("4710007836224"), true);   // EAN-13
+  assert.equal(isProductBarcode(" 4710007836224 "), true);
+  assert.equal(isProductBarcode("4710007836225"), false);  // 檢查碼不對:可能是序號
+  assert.equal(isProductBarcode("036000291452"), true);    // UPC-A
+  assert.equal(isProductBarcode("96385074"), true);        // EAN-8
+  assert.equal(isProductBarcode("10012345678902"), true);  // GTIN-14
+  assert.equal(isProductBarcode("356789012345671"), false); // IMEI 15 碼
+  assert.equal(isProductBarcode("ABC4710007836224"), false);
+  assert.equal(isProductBarcode("471000783622"), false);   // 12 碼但檢查碼不對
+  assert.equal(scannedIntoQty("504710007836224"), true);
+  assert.equal(scannedIntoQty("50"), false);
+  assert.equal(scannedIntoQty("1234567"), false);
+  const { readFileSync } = await import("node:fs");
+  const page = readFileSync(new URL("../pages/purchases/PurchaseWorkbenchPage.tsx", import.meta.url), "utf8");
+  // 找不到商品、又是商品條碼的長相:記在「沒加入」(可以建立),不放進正在刷的那一行 —— 要在放進序號格之前
+  const at = page.indexOf('if (isProductBarcode(text)) return { problem: "找不到這個條碼的商品", unresolved: true };');
+  assert.ok(at > 0 && at < page.indexOf("const placed = placeScannedCode("));
+  // 數量格:Enter 回刷碼框;條碼刷進來改回點進去那一刻的數量
+  assert.match(page, /onKeyDown=\{\(e\) => \{\s*if \(e\.key === "Enter" && !e\.nativeEvent\.isComposing\) \{\s*e\.preventDefault\(\);\s*backToScan\(\);/);
+  // 整組改回:數量、計價數量、每一台的格子(複審 P0:只改回數量的話計價數量留著刷碼途中的數字,金額錯)
+  assert.match(page, /qtySnap\.current = \{ key: l\.key, qty: l\.qty, billedQty: l\.billedQty, billedTouched: l\.billedTouched, serials: l\.serials \};/);
+  assert.match(page, /patch\(l\.key, \(x\) => \(\{\s*\.\.\.x,\s*qty: snap\.qty,\s*billedQty: snap\.billedQty,\s*billedTouched: snap\.billedTouched,\s*serials: snap\.serials,/);
+  assert.match(page, /max=\{QTY_MAX\}/);
+  // 單價 0 只提醒
+  assert.match(page, /\{zeroCount\} 行單價 0,仍可儲存/);
+  assert.match(page, /className=\{`price num num-input\$\{zeroPriced\(l\) \? " need" : ""\}`\}/);
+  // 批次貼上、匯入表格沒加進去的放進「沒加入」
+  assert.equal((page.match(/scanApi\.current\?\.note\(leftovers\);/g) ?? []).length, 2);
+});

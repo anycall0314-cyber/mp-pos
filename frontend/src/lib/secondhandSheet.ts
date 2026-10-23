@@ -102,3 +102,20 @@ export function templateBlob(base64: string): Blob {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
 }
+
+/** 匯入表格沒加進去的那幾列(有問題、還沒挑品號):放進掃碼框的「沒加入」,逐筆處理(全站檢視 C8) */
+export function sheetLeftovers<P extends { id: number }>(
+  rows: SheetRow[],
+  products: Map<number, P>,
+  picks: Record<string, P | undefined>,
+): { kw: string; reason: string }[] {
+  const ready = new Set(readyRows(rows, products, picks));
+  // 用品名當那一筆的字(重查找的是商品);碼寫在原因裡,補的時候照著刷
+  return rows.filter((r) => !ready.has(r)).map((r) => {
+    const code = r.imei || r.sn;
+    return {
+      kw: r.name || code,
+      reason: `匯入表格第 ${r.row} 列${code ? `(${code})` : ""}:${r.problems.length > 0 ? r.problems.join("、") : "還沒挑品號"}`,
+    };
+  });
+}

@@ -7107,6 +7107,8 @@ button.wb-chip-count:hover { color: var(--wb-blue); }
 .ws-count.bad { color: var(--wb-red); border-color: var(--wb-red); font-weight: 600; }
 /* 從商品那一邊帶過來、還沒填進幾件的配件(數量 0,存不了) */
 .ws-table input.qty.need { color: var(--wb-red); border-color: var(--wb-red); font-weight: 600; }
+/* 單價 0:只提醒(琥珀色),不是錯 */
+.ws-table input.price.need { color: var(--wb-amber-text); border-color: var(--wb-amber-text); }
 .ws-count:disabled { cursor: default; opacity: 0.6; }
 .ws-table td.rel .wb-chips { gap: 4px; }
 .ws-table td.rel .wb-chip { min-height: 36px; }

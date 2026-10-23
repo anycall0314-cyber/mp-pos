@@ -13,6 +13,7 @@ import {
   productOf,
   sheetCounts,
   sheetHeader,
+  sheetLeftovers,
   templateBlob,
   type SheetEntry,
   type SheetPreview,
@@ -22,7 +23,8 @@ interface Props {
   open: boolean;
   onClose: () => void;
   /** 加進進貨單:一個品號一組,每一台自己的機況與成本 */
-  onConfirm: (groups: { product: Product; entries: SheetEntry[] }[]) => void;
+  /** leftovers = 有問題 / 還沒挑品號、沒加進去的那幾列(頁面放進「沒加入」) */
+  onConfirm: (groups: { product: Product; entries: SheetEntry[] }[], leftovers: { kw: string; reason: string }[]) => void;
   supplier: number | "";
   supplierName: string;
   warehouse: number | "";
@@ -111,7 +113,7 @@ export function SecondhandSheetImport(props: Props) {
       const p = picks[name];
       if (keep[name] && p) remember.mutate({ product: p.id, value: name, supplier: supplier === "" ? null : supplier });
     }
-    onConfirm(groups);
+    onConfirm(groups, sheetLeftovers(preview.rows, products, picks));
     setPreview(null);
   }
 

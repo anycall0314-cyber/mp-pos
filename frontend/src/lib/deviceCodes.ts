@@ -253,3 +253,22 @@ export function resizeUnits<T extends DeviceCodes>(
   while (next.length < qty) next.push(blank());
   return { entries: next, qty };
 }
+
+/**
+ * 商品條碼的長相(全站檢視 C1;owner 2026-10-23「可以」):8 / 12 / 13 / 14 碼純數字、最後一碼的檢查碼對得上
+ * (EAN-8 / UPC-A / EAN-13 / GTIN-14)。進貨刷到這種碼又找不到商品時,不放進正在刷序號的那一行 ——
+ * 以前會被當成上一支手機的序號,那一行默默多一台。IMEI 是 15 碼,不受影響。
+ */
+export function isProductBarcode(text: string): boolean {
+  const t = text.trim();
+  if (!/^\d+$/.test(t) || ![8, 12, 13, 14].includes(t.length)) return false;
+  const digits = [...t].map(Number);
+  const check = digits.pop()!;
+  const sum = digits.reverse().reduce((acc, d, i) => acc + d * (i % 2 === 0 ? 3 : 1), 0);
+  return (10 - (sum % 10)) % 10 === check;
+}
+
+/** 數量格裡出現 8 碼以上的數字 = 條碼槍刷進數量格了(全站檢視 C3),不是真的數量 */
+export function scannedIntoQty(typed: string): boolean {
+  return /^\d{8,}$/.test(typed.trim());
+}

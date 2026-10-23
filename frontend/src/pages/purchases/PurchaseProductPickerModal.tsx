@@ -4,6 +4,7 @@ import { api } from "@/api/client";
 import type { Paginated, Product } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { money } from "@/lib/money";
+import { keepPicked } from "@/lib/purchasePrefill";
 
 export interface PickerProduct {
   product: Product;
@@ -76,20 +77,8 @@ export function PurchaseProductPickerModal({
     )
       .then((data) => {
         if (cancelled) return;
-        // 已選的保留勾選與數量(merge)
-        setRows((prev) => {
-          const prevMap = new Map(prev.map((r) => [r.product.id, r]));
-          return data.results.map((p) => {
-            const existed = prevMap.get(p.id);
-            return existed
-              ? {
-                  product: p,
-                  selected: existed.selected && p.is_active,
-                  qty: existed.qty,
-                }
-              : { product: p, selected: false, qty: 1 };
-          });
-        });
+        // 勾過的留在最上面、換關鍵字也不會不見(全站檢視 C7:以前搜第二次,前面勾的就從清單消失,按「加入」只進後面那幾項)
+        setRows((prev) => keepPicked(prev, data.results));
       })
       .catch((e) => {
         if (cancelled) return;
@@ -120,10 +109,13 @@ export function PurchaseProductPickerModal({
     );
   }
 
+  /** 打數量就自動打勾(停用的不行) */
   function updateQty(id: number, qty: number) {
     setRows((prev) =>
       prev.map((r) =>
-        r.product.id === id ? { ...r, qty: Math.max(1, qty || 1) } : r,
+        r.product.id === id
+          ? { ...r, qty: Math.max(1, qty || 1), selected: r.product.is_active }
+          : r,
       ),
     );
   }
@@ -158,9 +150,7 @@ export function PurchaseProductPickerModal({
         aria-modal={inline ? undefined : true}
       >
         <div className="modal-title">
-          {mode === "secondhand-vendor"
-            ? "批次選中古機入庫"
-            : "批次選商品入庫"}
+          勾選商品
         </div>
 
         {error && <Banner kind="error" message={error} />}
@@ -211,12 +201,6 @@ export function PurchaseProductPickerModal({
           </div>
 
           {loading && <div className="md-empty">搜尋中…</div>}
-
-          {!loading && !appliedSearch && (
-            <div className="md-empty">
-              輸入關鍵字搜尋商品。勾選後按下方「加入」即可批次加入進貨單。
-            </div>
-          )}
 
           {!loading && appliedSearch && rows.length === 0 && (
             <div className="md-empty">查無商品</div>
@@ -278,7 +262,7 @@ export function PurchaseProductPickerModal({
                           step="1"
                           className="num-input"
                           value={r.qty}
-                          disabled={!r.selected}
+                          disabled={!r.product.is_active}
                           onChange={(e) =>
                             updateQty(r.product.id, Number(e.target.value))
                           }

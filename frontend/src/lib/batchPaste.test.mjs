@@ -17,3 +17,17 @@ test("用空白 / 逗號分的照舊:第三格之後都是序號", () => {
   assert.equal(parseLine("   "), null);
   assert.equal(parseLine("只有品名"), null);
 });
+
+test("批次貼上對不到的那幾列放進「沒加入」:第幾列、幾件、序號幾個(全站檢視 C8)", async () => {
+  const { pasteLeftovers } = await import("./batchPaste.ts");
+  const rows = [
+    { rawProductText: "IP17 玻璃貼", productOption: { id: 1 }, qty: 5, serials: [] },
+    { rawProductText: " 不知道的東西 ", productOption: null, qty: 3, serials: [] },
+    { rawProductText: "", productOption: null, qty: 2, serials: ["A1", "A2"] },
+  ];
+  assert.deepEqual(pasteLeftovers(rows), [
+    { kw: "不知道的東西", reason: "批次貼上第 2 列,3 件,對不到" },
+    { kw: "第 3 列", reason: "批次貼上第 3 列,2 件、序號 2 個,對不到" },
+  ]);
+  assert.deepEqual(pasteLeftovers(rows.slice(0, 1)), []);
+});
