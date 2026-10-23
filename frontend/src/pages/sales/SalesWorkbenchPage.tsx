@@ -75,7 +75,7 @@ import {
  * 新增銷貨單(開單頁,`/sales/new`):商品明細優先。
  *
  * 由上到下:頁首(返回列表、更多 → 清空草稿)→ 門市、客戶、會員(常駐)+「單據資訊」(發票類型、課稅別、統編、
- * 業務員、備註收在右邊的抽屜,要改才打開;有沒填的、沒有可用字軌,按鈕上直接寫出來)→ 掃碼框
+ * 業務員在上面那一排(owner 2026-10-23:「業務員切換也是高頻按鈕,要把它放出來」);備註收在右邊的抽屜,要改才打開;有沒填的、沒有可用字軌,按鈕上直接寫出來)→ 掃碼框
  * → 明細(吃掉剩下的高度,表頭固定、自己捲;新的一行在最上面)→ 最下面固定一排:幾種幾件、未稅 / 稅額、毛利、
  * 含稅總額、結帳。結帳在右邊的抽屜選付款方式、確認;結完在同一塊給列印收據 / 發票。
  * 序號商品把這家分店在庫的每一台列成小標籤,點一下或刷那一台的碼就選起來。
@@ -1319,14 +1319,14 @@ export function SalesWorkbenchPage() {
   const docIssues = problems(false);
   const allIssues = problems(true);
 
-  /** 帶人去補那一項:客戶 → 游標到客戶那一格;業務員 / 發票 → 打開單據資訊並停在那一格 */
+  /** 帶人去補那一項:門市 / 業務員 / 客戶 → 游標到上面那一排的那一格;發票 → 打開單據資訊並停在那一格 */
   function goFix(issue: Issue) {
-    if (issue.at === "person" || issue.at === "invoice") {
+    if (issue.at === "invoice") {
       openInfo(issue.at);
-    } else if (issue.at === "customer" || issue.at === "store") {
+    } else if (issue.at === "customer" || issue.at === "store" || issue.at === "person") {
       partyRef.current
         ?.querySelector<HTMLElement>(
-          issue.at === "customer" ? '[data-at="customer"] input' : '[data-at="store"] select',
+          issue.at === "store" ? '[data-at="store"] select' : `[data-at="${issue.at}"] input`,
         )
         ?.focus();
     } else if (issue.at === "lines") {
@@ -1346,7 +1346,7 @@ export function SalesWorkbenchPage() {
   }
 
   // ── 右邊那一塊 ───────────────────────────────────────
-  function openInfo(field?: "person" | "invoice") {
+  function openInfo(field?: "invoice") {
     setPanel("info");
     if (!field) return;
     focusOn(
@@ -1739,10 +1739,7 @@ export function SalesWorkbenchPage() {
   /** 這種發票沒有可用的字軌:結帳會被伺服器擋下來 */
   const trackMissing = peek.state === "none";
   /** 單據資訊裡還沒填的必填(收起來的時候也要看得到) */
-  const infoTodo = [
-    !invoiceForm ? "發票類型" : null,
-    !salesPerson ? "業務員" : null,
-  ].filter(Boolean) as string[];
+  const infoTodo = [!invoiceForm ? "發票類型" : null].filter(Boolean) as string[];
   const firstIssue = lines.length > 0 ? docIssues[0] : undefined;
 
   /**
@@ -1871,6 +1868,22 @@ export function SalesWorkbenchPage() {
               ))}
             </select>
           </label>
+          {/* 業務員換人很常(幾個人共用一台櫃檯):放在這一排,不收進單據資訊(owner 2026-10-23) */}
+          <div className="ws-f person" data-at="person">
+            <span className="ws-lbl">業務員</span>
+            <ComboBox
+              value={salesPerson}
+              selectedOption={salesPersonOption}
+              onChange={(sid, opt) => {
+                setSalesPerson(sid);
+                setSalesPersonOption(opt ?? null);
+                if (sid !== "") backToScan();
+              }}
+              fetchOptions={searchSalesPersons}
+              disabled={locked}
+              placeholder="業務員"
+            />
+          </div>
           <div className="ws-f grow" data-at="customer">
             <span className="ws-lbl">來源</span>
             <SourcePicker source={customer} disabled={locked || sourceDefaults.isPending || sourceDefaults.isError} onChange={source => pickCustomer(sourceOption(source))} />
@@ -1909,16 +1922,8 @@ export function SalesWorkbenchPage() {
           <button
             type="button"
             className={`ws-info${infoTodo.length > 0 || trackMissing ? " todo" : ""}`}
-            title="發票類型、課稅別、買受人統編、業務員、備註"
-            onClick={() =>
-              openInfo(
-                !invoiceForm || trackMissing
-                  ? "invoice"
-                  : !salesPerson
-                    ? "person"
-                    : undefined,
-              )
-            }
+            title="發票類型、課稅別、買受人統編、備註"
+            onClick={() => openInfo(!invoiceForm || trackMissing ? "invoice" : undefined)}
           >
             <span className="ws-info-t">單據資訊</span>
             <span className="ws-info-s">
@@ -2602,23 +2607,6 @@ export function SalesWorkbenchPage() {
                   />
                 </label>
               )}
-            </section>
-            <section>
-              <h4>經手人</h4>
-              <div className="ws-field" data-info="person">
-                <span>業務員</span>
-                <ComboBox
-                  value={salesPerson}
-                  selectedOption={salesPersonOption}
-                  onChange={(sid, opt) => {
-                    setSalesPerson(sid);
-                    setSalesPersonOption(opt ?? null);
-                  }}
-                  fetchOptions={searchSalesPersons}
-                  disabled={locked}
-                  placeholder="業務員"
-                />
-              </div>
             </section>
             <section>
               <h4>備註</h4>

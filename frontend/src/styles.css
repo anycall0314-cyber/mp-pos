@@ -7065,6 +7065,8 @@ button.wb-chip-count:hover { color: var(--wb-blue); }
 .ws-f { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .ws-f > .ws-lbl { font-size: var(--font-body); font-weight: 500; color: var(--wb-dim); white-space: nowrap; }
 .ws-f.grow { flex: 1 1 200px; max-width: 360px; }
+/* 開銷貨單上面那一排的業務員(2026-10-23 從單據資訊拿出來):名字不長,固定寬一點 */
+.ws-f.person > .combobox { width: 9em; }
 .ws-f.grow > .combobox { flex: 1 1 auto; min-width: 0; }
 .ws-f .wb-link { white-space: nowrap; padding: 10px 2px; }
 .ws-f > select { max-width: 180px; }
@@ -7270,6 +7272,7 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   .ws-party, .ws-tools, .ws-foot, .ws-head { padding-left: 10px; padding-right: 10px; }
   .ws-f, .ws-f.grow { flex: 1 1 100%; }
   .ws-f > select { max-width: none; flex: 1; }
+  .ws-f.person > .combobox { width: auto; flex: 1 1 auto; }
   .ws-info { flex: 1 1 100%; }
   .ws-tools > .wb-scan { flex: 1 1 100%; }
   .ws-table td { height: auto; }
