@@ -159,6 +159,14 @@ export const useProducts = (
     refetchOnWindowFocus: opts?.refetchOnWindowFocus ?? false,
   });
 
+/** 商品管理左邊的清單:第一頁 + 一共幾筆(超過寫「只列前 N 筆」;全站檢視 D2) */
+export const useProductList = (params: string, opts?: { refetchOnWindowFocus?: boolean }) =>
+  useQuery({
+    queryKey: ["products", "top", params],
+    queryFn: () => topPage<Product>(`/products/?${params}`),
+    refetchOnWindowFocus: opts?.refetchOnWindowFocus ?? false,
+  });
+
 export const useProduct = (id: number | null) =>
   useQuery({
     queryKey: ["product", id],

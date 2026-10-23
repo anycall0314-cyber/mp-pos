@@ -1,10 +1,10 @@
 import { useCan } from "@/auth/AuthContext";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   useCategories,
-  useProducts,
+  useProductList,
   useProductsByPhoneModel,
   useSaveCategory,
   useBrands,
@@ -18,6 +18,8 @@ import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { MoreMenu } from "@/components/workbench/MoreMenu";
 import { useReorder } from "@/hooks/useReorder";
+import { cutNote } from "@/lib/listAll";
+import { isProductCode } from "@/lib/deviceCodes";
 import { money } from "@/lib/money";
 import { newProductUrl } from "@/lib/productFormUrl";
 import { purchaseLinkFor } from "@/lib/purchasePrefill";
@@ -110,13 +112,18 @@ export function ProductsPage() {
   const [productQuery, setProductQuery] = useState("");
   const [appliedProductQuery, setAppliedProductQuery] = useState("");
   const isSearching = appliedProductQuery.length > 0;
-  const productsResult = useProducts(
+  const productsTop = useProductList(
     isSearching
       ? `search=${encodeURIComponent(appliedProductQuery)}&page_size=100`
       : `ordering=-created_at&page_size=10`,
     // 新增 / 編輯在另一個分頁做(SPEC-005):切回這一頁時重新抓,剛建的那一筆看得到
     { refetchOnWindowFocus: true },
   );
+  // 下面沿用陣列的寫法;超過一頁的另外講「只列前 N 筆」(全站檢視 D2:以前悄悄少掉)
+  const productsResult = { ...productsTop, data: productsTop.data?.rows };
+  const productsCut = isSearching ? cutNote(productsTop.data, "只列前", "筆") : "";
+  // 刷條碼 / 打品號剛好對到一筆(完全相同):直接選它(全站檢視 D2)
+  const autoPicked = useRef("");
 
   // ─── 類別搜尋(類別本來就少,一次撈完前端過濾)
   const [categoryQuery, setCategoryQuery] = useState("");
@@ -310,6 +317,18 @@ export function ProductsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedParam]);
 
+  useEffect(() => {
+    const rows = productsTop.data?.rows;
+    if (!isSearching || !rows || autoPicked.current === appliedProductQuery) return;
+    autoPicked.current = appliedProductQuery;
+    const exact = rows.filter((p) => isProductCode(p, appliedProductQuery));
+    if (exact.length === 1 && rows.length >= 1 && selection?.kind !== "product") {
+      setDetailTab("basic");
+      setSelection({ kind: "product", id: exact[0].id });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productsTop.data, appliedProductQuery]);
+
   function runProductSearch() {
     setAppliedProductQuery(productQuery.trim());
   }
@@ -463,7 +482,8 @@ export function ProductsPage() {
                     runProductSearch();
                   }
                 }}
-                placeholder="輸入品名 / 條碼,按 Enter 搜尋"
+                placeholder="品名 / 條碼"
+                autoFocus
               />
               <button className="btn primary" onClick={runProductSearch}>
                 搜尋
@@ -480,6 +500,15 @@ export function ProductsPage() {
                   {isSearching ? "搜尋中…" : "載入中…"}
                 </div>
               )}
+              {productsResult.isError && (
+                <div className="md-empty">
+                  沒有讀到:{errorText(productsResult.error)}{" "}
+                  <button type="button" className="btn" onClick={() => void productsTop.refetch()}>
+                    重試
+                  </button>
+                </div>
+              )}
+              {productsCut && <div className="md-empty">{productsCut}</div>}
               {!productsResult.isLoading && !productsResult.isError && (
                 <>
                   {!isSearching && (productsResult.data ?? []).length > 0 && (
@@ -493,7 +522,6 @@ export function ProductsPage() {
                       }}
                     >
                       近期新增 {(productsResult.data ?? []).length} 筆
-                      (搜尋以看更多)
                     </div>
                   )}
                   <table className="pc-list-table">

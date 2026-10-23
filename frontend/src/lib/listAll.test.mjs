@@ -189,7 +189,8 @@ test("沒有只拿第一頁、又不講的那一支了", () => {
 
 test("只要最前面那一頁的,就是這幾處(新的清單要整份的不能寫在這裡)", () => {
   assert.deepEqual(endpoints("firstPage"), ["/identity/intakes/", "/products/", "/serials/", "/serials/"]);
-  assert.deepEqual(endpoints("topPage"), ["/members/", "/sales-orders/"]);
+  // 商品管理左邊的清單:第一頁 + 一共幾筆,超過寫「只列前 N 筆」(全站檢視 D2)
+  assert.deepEqual(endpoints("topPage"), ["/members/", "/products/", "/sales-orders/"]);
   assert.deepEqual(endpoints("listSome"), ["/purchase-orders/", "/sales-orders/", "/sales-returns/", "/transfer-orders/"]);
 });
 
