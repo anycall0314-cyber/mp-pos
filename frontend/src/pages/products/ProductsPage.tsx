@@ -23,7 +23,6 @@ import { newProductUrl } from "@/lib/productFormUrl";
 import { purchaseLinkFor } from "@/lib/purchasePrefill";
 import { canSetStaffCost, ruleText, staffCostApplies } from "@/lib/staffCost";
 
-import { BulkAddProductsModal } from "./BulkAddProductsModal";
 import { KindPicker } from "./KindPicker";
 import { BulkCreatePartsModal } from "./BulkCreatePartsModal";
 import { BulkEditProductsModal } from "./BulkEditProductsModal";
@@ -89,16 +88,18 @@ const EMPTY_NEW_CAT: CategoryNewState = {
   kind: "",
 };
 
-type BatchTool = "expander" | "parts" | "paste" | "import" | "accessory" | "phone";
+type BatchTool = "parts" | "import" | "accessory" | "phone";
 
-/** 「批次工具」選單(字數一致)。原本散在上面那一排的入口都在這裡,一個都沒拿掉 */
+/**
+ * 「批次工具」選單(字數一致)。2026-10-23 收成這幾個(全站檢視 D8,owner「照你建議」):
+ * 手機照平台型號庫建;配件一次很多款用多款展開、貼表格用匯入表格(批次貼上併進去了)。
+ * 「型號展開」拿掉:它能直接建一批手機、繞過平台型號庫
+ */
 const BATCH_TOOLS: { key: BatchTool; label: string; title: string }[] = [
   { key: "phone", label: "手機型號", title: "一次建好這個機型的品況 × 容量 × 顏色" },
-  { key: "accessory", label: "配件展開", title: "建配件商品(品牌 × 功能 × 顏色),完成後勾選相容機型" },
-  { key: "expander", label: "型號展開", title: "一個型號展開成容量 × 顏色" },
+  { key: "accessory", label: "多款展開", title: "同一款配件的功能 × 顏色" },
+  { key: "import", label: "匯入表格", title: "貼上或選檔案,一次建很多個配件" },
   { key: "parts", label: "零件批次", title: "照零件範本一次建好維修零件" },
-  { key: "paste", label: "批次貼上", title: "一次貼上多筆商品" },
-  { key: "import", label: "匯入表格", title: "匯入 CSV / Excel 檔" },
 ];
 
 export function ProductsPage() {
@@ -166,8 +167,6 @@ export function ProductsPage() {
   const [findOpen, setFindOpen] = useState(false);
 
   // ─── 批次新增 Modal
-  const [bulkOpen, setBulkOpen] = useState(false);
-  const [expanderOpen, setExpanderOpen] = useState(false);
   const [accessoryExpanderOpen, setAccessoryExpanderOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [bulkPartsOpen, setBulkPartsOpen] = useState(false);
@@ -288,9 +287,7 @@ export function ProductsPage() {
   function openBatchTool(key: BatchTool) {
     if (key === "phone") nav("/products/new-phone-model");
     else if (key === "accessory") setAccessoryExpanderOpen(true);
-    else if (key === "expander") setExpanderOpen(true);
     else if (key === "parts") setBulkPartsOpen(true);
-    else if (key === "paste") setBulkOpen(true);
     else setImportOpen(true);
   }
 
@@ -716,7 +713,14 @@ export function ProductsPage() {
           )}
 
           {selection?.kind === "model" && (
-            <ModelSkuPanel modelKey={selection.key} modelName={selection.name} />
+            <ModelSkuPanel
+              modelKey={selection.key}
+              modelName={selection.name}
+              onPickProduct={(id) => {
+                setDetailTab("basic");
+                setSelection({ kind: "product", id });
+              }}
+            />
           )}
 
           {selectedProduct && (
@@ -751,6 +755,9 @@ export function ProductsPage() {
                   <dl>
                     <dt>品名</dt>
                     <dd>{selectedProduct.name}</dd>
+                    {/* 全站檢視 D1:品號顯示(owner 2026-10-23「顯示」;05-18「自動產生的代碼不在畫面顯示」只有品號例外) */}
+                    <dt>品號</dt>
+                    <dd>{selectedProduct.sku}</dd>
                     <dt>規格</dt>
                     <dd>{selectedProduct.spec || "—"}</dd>
                     {(selectedProduct.related_hosts ?? []).length > 0 && (
@@ -1113,15 +1120,6 @@ export function ProductsPage() {
       />
       {/* 看照片與規格的面板放在「先找有沒有建過」與商品表單後面:從那兩個地方點開時要疊在上面 */}
       {peek.panel}
-      <BulkAddProductsModal
-        open={bulkOpen}
-        onClose={() => setBulkOpen(false)}
-        onSuccess={(count) => {
-          setBulkOpen(false);
-          setBulkResult(`成功建立 ${count} 筆商品`);
-          setTimeout(() => setBulkResult(null), 4000);
-        }}
-      />
       <ProductImportModal
         open={importOpen}
         onClose={() => setImportOpen(false)}
@@ -1132,21 +1130,12 @@ export function ProductsPage() {
         }}
       />
       <ProductExpanderModal
-        open={expanderOpen}
-        onClose={() => setExpanderOpen(false)}
-        onSuccess={(count) => {
-          setExpanderOpen(false);
-          setBulkResult(`型號展開:成功建立 ${count} 筆商品`);
-          setTimeout(() => setBulkResult(null), 4000);
-        }}
-      />
-      <ProductExpanderModal
         mode="accessory"
         open={accessoryExpanderOpen}
         onClose={() => setAccessoryExpanderOpen(false)}
         onSuccess={(count) => {
           setAccessoryExpanderOpen(false);
-          setBulkResult(`新增配件:成功建立 ${count} 筆配件`);
+          setBulkResult(`多款展開:成功建立 ${count} 筆配件`);
           setTimeout(() => setBulkResult(null), 4000);
         }}
       />
@@ -1451,9 +1440,11 @@ function CategoryBrowser({
 function ModelSkuPanel({
   modelKey,
   modelName,
+  onPickProduct,
 }: {
   modelKey: string;
   modelName: string;
+  onPickProduct: (id: number) => void;
 }) {
   const groups = useProductsByPhoneModel(modelKey);
   const data = groups.data ?? [];
@@ -1461,7 +1452,16 @@ function ModelSkuPanel({
     <div className="pc-detail-body">
       <h3 className="pc-detail-title">{modelName}</h3>
       {groups.isLoading && <div className="md-empty">載入中…</div>}
-      {!groups.isLoading && data.length === 0 && (
+      {/* 讀不到不能寫成「還沒有商品」(像真的沒建) */}
+      {groups.isError && (
+        <div className="md-empty">
+          沒有讀到{" "}
+          <button type="button" className="btn" onClick={() => groups.refetch()}>
+            重試
+          </button>
+        </div>
+      )}
+      {groups.isSuccess && data.length === 0 && (
         <div className="md-empty">這個機型底下還沒有商品</div>
       )}
       {data.map((g) => (
@@ -1493,7 +1493,7 @@ function ModelSkuPanel({
             </thead>
             <tbody>
               {g.skus.map((s) => (
-                <tr key={s.id}>
+                <tr key={s.id} onClick={() => onPickProduct(s.id)}>
                   <td>
                     {s.capacity} {s.color}
                   </td>

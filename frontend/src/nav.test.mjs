@@ -17,20 +17,20 @@ const platform = visibleModules({ role: "platform_admin" });
 const pagesOf = (mods) =>
   mods.flatMap((m) => [...m.tabs, ...(m.tools?.items ?? [])]);
 
-// 改版前側邊欄的 32 個入口:一條都不能從新導覽消失
+// 改版前側邊欄的入口:一條都不能從新導覽消失(原本 32 個;「產品類型」2026-10-23 owner 同意拿出選單)
 const LEGACY = [
   "/home", "/sales", "/purchases", "/inventory", "/repairs", "/telecom/billing",
   "/reports/business-daily", "/products", "/secondhand-acquisition", "/customers",
-  "/members", "/suppliers", "/sales-persons", "/brand-series", "/product-types",
+  "/members", "/suppliers", "/sales-persons", "/brand-series",
   "/conditions", "/part-templates", "/telecom-plans", "/sim-cards", "/repairs/items",
   "/intake", "/inventory/alerts", "/transfers", "/reports/sales-daily",
   "/reports/explore", "/reports/parts-usage", "/expenses", "/cash-adjustments",
   "/settings", "/settings/backup", "/settings/legacy", "/settings/ledger",
 ];
 
-test("改版前的 32 個入口在新導覽都找得到", () => {
+test("改版前的入口在新導覽都找得到", () => {
   const have = new Set(pagesOf(admin).map((p) => p.to));
-  assert.equal(LEGACY.length, 32);
+  assert.equal(LEGACY.length, 31);
   for (const to of LEGACY) assert.ok(have.has(to), `少了 ${to}`);
 });
 
@@ -81,7 +81,6 @@ test("網址屬於哪個入口", () => {
   assert.equal(mod("/products/new-phone-model"), "purchasing");
   assert.equal(mod("/conditions"), "purchasing");
   assert.equal(mod("/brand-series"), "purchasing");
-  assert.equal(mod("/product-types"), "purchasing");
   assert.equal(mod("/inventory"), "stock");
   assert.equal(mod("/inventory/alerts"), "stock");
   assert.equal(mod("/expenses"), "cash");
@@ -95,7 +94,7 @@ test("「商品設定」選單跟著商品管理在「進貨入庫」;「商品�
   assert.equal(byKey("purchasing").tools?.label, "商品設定");
   assert.deepEqual(
     byKey("purchasing").tools.items.map((t) => t.to),
-    ["/brand-series", "/product-types", "/conditions"],
+    ["/brand-series", "/conditions"],
   );
   assert.equal(byKey("stock").tools, undefined);
   // 2026-10-12 多了庫存三張(序號查詢、進銷存表、異動查詢)與盤點作業(排在調撥後面;要有「盤點作業」那一項才看得到)

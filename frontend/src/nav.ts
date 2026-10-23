@@ -111,7 +111,7 @@ export const NAV_MODULES: NavModule[] = [
           label: "品牌系列",
           aliases: ["品牌 / 系列", "品牌與系列"],
         },
-        { to: "/product-types", label: "產品類型" },
+        // 「產品類型」2026-10-23 拿出選單(全站檢視 D8,owner「照你建議」;網址照舊打得開)
         // 品況(全新 / 已拆封 / 中古機)。以前叫「商品狀態」,跟商品表單的主力 / 停產那個「狀態」撞名
         { to: "/conditions", label: "商品品況", aliases: ["商品狀態", "品況"] },
       ],

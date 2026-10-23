@@ -559,29 +559,56 @@ class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
         parser_classes=[MultiPartParser, FormParser, JSONParser],
     )
     def import_csv(self, request):
-        """CSV / Excel 商品匯入。
+        """匯入表格(檔案或貼上的表格;全站檢視 D7 / D8,規則在 `import_service.py`)。
 
-        - 必填:品名 / 類別(名稱或代碼)/ 品號
-        - 選填:安全庫存(預設 0)/ 建議售價 / 條碼
-        - 類別不存在自動建立,品號 / 品名重複跳過
-        - 新匯入商品 lifecycle_status=pending,不影響庫存警示
-        - dry_run=true(預設)只回報告不寫入;false 才正式 commit
-
-        Body(multipart):
-            file: 上傳檔(xlsx / csv)
+        Body(multipart 或 JSON):
+            file: 上傳檔(xlsx / csv);或 rows: 貼上的表格(JSON 陣列,每一列 {標題: 值};multipart 時放 JSON 字串)
+            first_row: rows 的第一列在畫面上是第幾列(預設 2 = 第 1 列是標題)
+            category: 一開始選的類別(必填;主機類別、中古機類別不收)
+            requires_serial: "true" / "false"(必填,沒有預設)
+            allows_commission: "true" / "false"(預設 false)
             dry_run: "true" / "false"(預設 true)
         """
+        import json
+
+        from .import_service import DEVICE_CATEGORY, blocks_import
+
+        def flag(name):
+            raw = request.data.get(name)
+            if raw in (None, ""):
+                return None
+            return str(raw).lower() in ("true", "1", "yes")
+
+        cat_raw = str(request.data.get("category") or "")
+        category = (Category.objects.for_tenant(request.tenant).filter(pk=int(cat_raw)).first()
+                    if cat_raw.isdigit() else None)
+        if category is None:
+            return Response({"detail": "請先選類別"}, status=status.HTTP_400_BAD_REQUEST)
+        if blocks_import(category):
+            return Response({"detail": DEVICE_CATEGORY}, status=status.HTTP_400_BAD_REQUEST)
+        requires_serial = flag("requires_serial")
+        if requires_serial is None:
+            return Response({"detail": "請選按數量或逐件記序號"}, status=status.HTTP_400_BAD_REQUEST)
+
+        rows = request.data.get("rows")
         file_obj = request.FILES.get("file")
-        if not file_obj:
-            return Response(
-                {"detail": "請上傳 xlsx 或 csv 檔(欄位名稱 file)"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        dry_run_raw = request.data.get("dry_run", "true")
-        dry_run = str(dry_run_raw).lower() not in ("false", "0", "no")
+        if isinstance(rows, str):
+            try:
+                rows = json.loads(rows)
+            except ValueError:
+                rows = None
+        if rows is not None and not (isinstance(rows, list) and all(isinstance(r, dict) for r in rows)):
+            return Response({"detail": "貼上的表格看不懂"}, status=status.HTTP_400_BAD_REQUEST)
+        if rows is None and not file_obj:
+            return Response({"detail": "請貼上表格或選擇檔案"}, status=status.HTTP_400_BAD_REQUEST)
+        first_row = str(request.data.get("first_row") or "2")
         try:
             report = import_products_from_file(
-                request.tenant, file_obj, file_obj.name, dry_run=dry_run
+                request.tenant, file_obj, file_obj.name if file_obj else "",
+                dry_run=flag("dry_run") is not False,
+                rows=rows, first_row=int(first_row) if first_row.isdigit() else 2,
+                category=category, requires_serial=requires_serial,
+                allows_commission=bool(flag("allows_commission")),
             )
         except ValueError as e:
             return Response(

@@ -185,7 +185,9 @@ export function ProductExpanderModal({
     if (!d) return;
     const s = d.state;
     setModel(s.model);
-    setAccessoryType(s.accessoryType);
+    // 型號展開(建主機)拿掉之前,兩個共用這一份草稿:多款展開不能建主機,載回來的主機改成機型配件
+    const nature: AccessoryType = isAccessoryMode && s.accessoryType === "none" ? "phone_specific" : s.accessoryType;
+    setAccessoryType(nature);
     setBrandId(s.brandId);
     setSeriesId(s.seriesId);
     setGeneration(s.generation);
@@ -195,12 +197,13 @@ export function ProductExpanderModal({
     setAxis1Text(s.axis1Text);
     setAxis2Text(s.axis2Text);
     setPricesText(s.pricesText);
-    setRequiresSerial(s.requiresSerial);
     // 這一版之前存的草稿沒有記「人動過沒有」:那一格跟這種商品的預設不一樣才當成動過
-    setSerialTouched(
+    const touched =
       (s as { serialTouched?: boolean }).serialTouched ??
-        s.requiresSerial !== defaultRequiresSerial(s.accessoryType),
-    );
+      s.requiresSerial !== defaultRequiresSerial(s.accessoryType);
+    // 主機改成配件時沒動過的那一格跟著配件的預設(按數量)
+    setRequiresSerial(nature !== s.accessoryType && !touched ? defaultRequiresSerial(nature) : s.requiresSerial);
+    setSerialTouched(touched);
     setAllowsTelecomLine(s.allowsTelecomLine);
     setAllowsCommission(s.allowsCommission);
     setCompat(new Map(s.compat));
@@ -390,7 +393,7 @@ export function ProductExpanderModal({
         aria-modal="true"
       >
         <div className="modal-title">
-          {isAccessoryMode ? "新增配件(同款多規格展開)" : "型號展開新增"}
+          {isAccessoryMode ? "多款展開" : "型號展開新增"}
         </div>
 
         {error && <Banner kind="error" message={error} />}
@@ -414,14 +417,17 @@ export function ProductExpanderModal({
             required
             hint={`庫存:${stockModeLabel(requiresSerial)}`}
           >
-            <div className="pf-tabs">
+            <div className="pf-tabs" style={isAccessoryMode ? { gridTemplateColumns: "1fr 1fr" } : undefined}>
               {(
                 [
                   ["none", "主機", "手機 / 平板"],
                   ["phone_specific", "機型配件", "殼 / 保護貼"],
                   ["universal", "通用配件", "充電線 / 耳機"],
                 ] as const
-              ).map(([v, label, sub]) => (
+              )
+                // 多款展開不能建主機(全站檢視 D8):手機照平台型號庫,走「手機型號」
+                .filter(([v]) => !(isAccessoryMode && v === "none"))
+                .map(([v, label, sub]) => (
                 <button
                   key={v}
                   type="button"

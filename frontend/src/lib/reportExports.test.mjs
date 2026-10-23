@@ -199,7 +199,7 @@ test("全站的匯出都走同一份寫法:頁面裡不自己組檔、不自己�
   const templates = [
     "pages/purchases/PurchaseBatchPasteModal.tsx",
     "pages/products/BrandSeriesImportModal.tsx",
-    "pages/products/BulkAddProductsModal.tsx",
+    "pages/products/ProductImportModal.tsx",
   ];
   const own = [];
   for (const file of files) {

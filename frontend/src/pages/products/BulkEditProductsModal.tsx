@@ -13,6 +13,7 @@ import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { useModalDraft } from "@/hooks/useModalDraft";
 import { MoneyInput } from "@/components/MoneyInput";
 import { bulkFailureLines } from "@/lib/bulkErrors";
+import { ATTRS, TRI_CHOICES, type AttrKey, type Tri, attrPatch, attrSummary, attrsFromDraft, keepAll } from "@/lib/bulkEdit";
 import { intStr } from "@/lib/money";
 import { isManager } from "@/lib/roles";
 import { PRODUCT_MODES, ruleProblem, rulePayload, valueUnit } from "@/lib/staffCost";
@@ -69,11 +70,8 @@ export function BulkEditProductsModal({
   const [accessoryType, setAccessoryType] = useState<AccessoryType>("none");
   const [lifecycleStatus, setLifecycleStatus] =
     useState<LifecycleStatus>("active");
-  const [requiresSerial, setRequiresSerial] = useState(false);
-  const [allowsTelecomLine, setAllowsTelecomLine] = useState(false);
-  const [allowsCommission, setAllowsCommission] = useState(false);
-  const [countsCash, setCountsCash] = useState(true);
-  const [countsMargin, setCountsMargin] = useState(true);
+  // 每個屬性各自「不改 / 是 / 否」,預設不改(全站檢視 D9)
+  const [attrs, setAttrs] = useState<Record<AttrKey, Tri>>(keepAll);
   const [brand, setBrand] = useState<number | "">("");
   const [series, setSeries] = useState<number | "">("");
   const [generation, setGeneration] = useState("");
@@ -101,11 +99,7 @@ export function BulkEditProductsModal({
     setSafetyStock("");
     setAccessoryType("none");
     setLifecycleStatus("active");
-    setRequiresSerial(false);
-    setAllowsTelecomLine(false);
-    setAllowsCommission(false);
-    setCountsCash(true);
-    setCountsMargin(true);
+    setAttrs(keepAll());
     setBrand("");
     setSeries("");
     setGeneration("");
@@ -118,7 +112,7 @@ export function BulkEditProductsModal({
     () => ({
       enPrice, enKind, enLifecycle, enAttrs, enHost, enCompat,
       listPrice, safetyStock, accessoryType, lifecycleStatus,
-      requiresSerial, allowsTelecomLine, allowsCommission, countsCash, countsMargin,
+      attrs,
       brand, series, generation, modelSuffix,
       compat: Array.from(compat.entries()),
       enStaff, staffMode, staffValue,
@@ -126,7 +120,7 @@ export function BulkEditProductsModal({
     [
       enPrice, enKind, enLifecycle, enAttrs, enHost, enCompat,
       listPrice, safetyStock, accessoryType, lifecycleStatus,
-      requiresSerial, allowsTelecomLine, allowsCommission, countsCash, countsMargin,
+      attrs,
       brand, series, generation, modelSuffix, compat,
       enStaff, staffMode, staffValue,
     ],
@@ -153,11 +147,8 @@ export function BulkEditProductsModal({
     setSafetyStock(s.safetyStock);
     setAccessoryType(s.accessoryType);
     setLifecycleStatus(s.lifecycleStatus);
-    setRequiresSerial(s.requiresSerial);
-    setAllowsTelecomLine(s.allowsTelecomLine);
-    setAllowsCommission(s.allowsCommission);
-    setCountsCash(s.countsCash);
-    setCountsMargin(s.countsMargin);
+    // 以前的草稿存的是五個勾(一起送的那種):一律當成不改
+    setAttrs(attrsFromDraft((s as { attrs?: unknown }).attrs));
     setBrand(s.brand);
     setSeries(s.series);
     setGeneration(s.generation);
@@ -181,13 +172,7 @@ export function BulkEditProductsModal({
     }
     if (enKind) patch.accessory_type = accessoryType;
     if (enLifecycle) patch.lifecycle_status = lifecycleStatus;
-    if (enAttrs) {
-      patch.requires_serial = requiresSerial;
-      patch.allows_telecom_line = allowsTelecomLine;
-      patch.allows_commission = allowsCommission;
-      patch.counts_cash = countsCash;
-      patch.counts_margin = countsMargin;
-    }
+    if (enAttrs) Object.assign(patch, attrPatch(attrs));
     if (enHost) {
       patch.brand = brand || null;
       patch.series = series || null;
@@ -209,9 +194,18 @@ export function BulkEditProductsModal({
       setError("沒有勾選任何要修改的欄位");
       return;
     }
+    const changes = [
+      enPrice && "售價 / 安全庫存",
+      enStaff && canSetStaff && "業務員成本",
+      enKind && "商品性質",
+      enLifecycle && "販售狀態",
+      ...(enAttrs ? attrSummary(attrs) : []),
+      enHost && "主機資訊",
+      enCompat && "相容機型",
+    ].filter(Boolean);
     if (
       !confirm(
-        `將套用到 ${productIds.length} 筆商品。\n變更欄位:${Object.keys(patch).join("、")}\n確認?`,
+        `將套用到 ${productIds.length} 筆商品。\n變更:${changes.join("、")}\n確認?`,
       )
     )
       return;
@@ -405,46 +399,23 @@ export function BulkEditProductsModal({
             </label>
             {enAttrs && (
               <div className="be-section-body be-attrs">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={requiresSerial}
-                    onChange={(e) => setRequiresSerial(e.target.checked)}
-                  />
-                  需追蹤序號
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={allowsTelecomLine}
-                    onChange={(e) => setAllowsTelecomLine(e.target.checked)}
-                  />
-                  可綁門號合約
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={allowsCommission}
-                    onChange={(e) => setAllowsCommission(e.target.checked)}
-                  />
-                  可有業務員佣金
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={countsCash}
-                    onChange={(e) => setCountsCash(e.target.checked)}
-                  />
-                  計入現金
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={countsMargin}
-                    onChange={(e) => setCountsMargin(e.target.checked)}
-                  />
-                  計入毛利
-                </label>
+                {ATTRS.map(([key, label]) => (
+                  <div key={key} className="be-tri">
+                    <span>{label}</span>
+                    <div className="pf-tabs">
+                      {TRI_CHOICES.map(([v, text]) => (
+                        <button
+                          key={v}
+                          type="button"
+                          className={"pf-tab" + (attrs[key] === v ? " active" : "")}
+                          onClick={() => setAttrs((a) => ({ ...a, [key]: v }))}
+                        >
+                          {text}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </section>

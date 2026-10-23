@@ -1,26 +1,26 @@
-"""商品 CSV / Excel 匯入服務。
+"""商品匯入(表格檔或貼上的表格)。
 
-欄位對應(headers 可中文或英文 / 大小寫):
-- 必填:品名(name)、類別(category,可填名稱或代碼)、品號(sku)
-- 選填:安全庫存(safety_stock 預設 0)、建議售價(list_price)、條碼(barcode)
-
-匯入規則:
-- 類別不存在時自動建立(不用報錯)
-- 已存在的品號 / 品名跳過
-- 必填欄位空 → 跳過
+2026-10-23 起(全站檢視 D7 / D8;「批次貼上」併進來):
+- 一開始先選類別(`category`,每一列沒填類別的用它),還有「按數量 / 逐件記序號」(`requires_serial`,
+  **一定要選、沒有預設** —— 紅隊:進過貨就改不回來,不能讓人照預設按確認)。
+- 欄位(標題可中文或英文):必填 品名;選填 規格、建議售價、條碼、類別(名稱或代碼,只收已經有的)、品號(空的由系統照類別產生)、安全庫存。
+- **主機類別(手機 / 平板 / 穿戴)、中古機類別不能用這裡建**:手機照平台型號庫,走「新增手機型號」。
+- 類別不再自動建立(打錯字會多出一個類別,也沒有主機 / 配件的設定)。
+- 已存在的品號 / 品名、可能重複的跳過(列出原因)。
 - 所有新商品 lifecycle_status='pending'(待補齊),不影響庫存警示推論
-- accessory_type 沿用 model default 'none';相容機型 / 屬性等預設空白
 """
 from __future__ import annotations
 
 import csv
 import io
+from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from typing import Any
 
 from django.db import transaction
 from openpyxl import load_workbook
 
+from apps.core.money import round_money
 from apps.identity.dedup import check_new_product
 from apps.identity.product_match import MatchContext
 
@@ -38,6 +38,9 @@ _FIELD_MAP: dict[str, str] = {
     "類別名稱": "category",
     "類別代碼": "category",
     "category": "category",
+    # spec
+    "規格": "spec",
+    "spec": "spec",
     # sku
     "品號": "sku",
     "sku": "sku",
@@ -108,50 +111,59 @@ def _read_csv(file_obj) -> list[dict]:
     return [dict(r) for r in reader]
 
 
-def _next_category_code(existing_codes: set[str]) -> str:
-    """匯入時為新類別自動產生代碼:從 001 流水,避開現有代碼。"""
-    n = 1
-    while True:
-        code = f"{n:03d}"
-        if code not in existing_codes:
-            return code
-        n += 1
-
-
-def _to_int(val, default=0) -> int:
-    if val is None or val == "":
-        return default
+def _number(val) -> Decimal:
+    """表格裡的數字:空的 = 0;千分位、$、元、空白去掉(Excel 複製出來常有「1,290」)。
+    看不懂、負的丟 ValueError —— 不能默默變成 0(Codex 複審 P1:以前「1,290」會存成售價 0)。"""
+    if val is None:
+        return Decimal("0")
+    text = str(val).strip()
+    for junk in (",", "，", "$", "NT", "元", " "):
+        text = text.replace(junk, "")
+    if text == "":
+        return Decimal("0")
     try:
-        return int(float(val))
-    except (TypeError, ValueError):
-        return default
+        num = Decimal(text)
+    except InvalidOperation:
+        raise ValueError(str(val).strip())
+    if not num.is_finite() or num < 0:
+        raise ValueError(str(val).strip())
+    return num
 
 
-def _to_decimal_str(val) -> str:
-    if val is None or val == "":
-        return "0"
-    try:
-        return str(float(val))
-    except (TypeError, ValueError):
-        return "0"
+DEVICE_CATEGORY = "手機、平板、穿戴請用「手機型號」建"
+MAX_ROWS = 2000
+
+
+def blocks_import(cat: Category) -> bool:
+    """主機類別、中古機類別不收:那種商品一台一個序號、照平台型號庫建。"""
+    return cat.holds_devices or cat.is_secondhand_default
+
+
+def read_rows(file_obj, filename: str) -> list[dict]:
+    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    if ext in ("xlsx", "xls"):
+        return _read_xlsx(file_obj)
+    if ext == "csv":
+        return _read_csv(file_obj)
+    raise ValueError(f"不支援的檔案格式 .{ext}(請使用 .xlsx 或 .csv)")
 
 
 @transaction.atomic
-def import_products_from_file(tenant, file_obj, filename: str, dry_run: bool = True) -> dict:
-    """主入口:解析檔案 + 匯入。dry_run=True 不寫入資料庫(用於預覽)。"""
-    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
-    if ext in ("xlsx", "xls"):
-        raw_rows = _read_xlsx(file_obj)
-    elif ext == "csv":
-        raw_rows = _read_csv(file_obj)
-    else:
-        raise ValueError(f"不支援的檔案格式 .{ext}(請使用 .xlsx 或 .csv)")
+def import_products_from_file(
+    tenant, file_obj=None, filename: str = "", dry_run: bool = True, *,
+    rows: list[dict] | None = None, first_row: int = 2, category: Category, requires_serial: bool,
+    allows_commission: bool = False,
+) -> dict:
+    """主入口:檔案(`file_obj`)或貼上的表格(`rows`,每一列 {標題: 值})。dry_run=True 不寫入資料庫(用於預覽)。
+    `category` / `requires_serial` 由呼叫端先驗好(view 擋掉沒選、主機類別)。"""
+    raw_rows = list(rows) if rows is not None else read_rows(file_obj, filename)
+    if len(raw_rows) > MAX_ROWS:
+        raise ValueError(f"一次最多 {MAX_ROWS:,} 列,請分批")
 
     # 預載既有 cache
     cats = list(Category.objects.for_tenant(tenant))
     cat_by_code = {c.code.strip().lower(): c for c in cats}
     cat_by_name = {c.name.strip(): c for c in cats}
-    existing_codes = {c.code for c in cats}
     existing_skus = set(
         Product.objects.for_tenant(tenant).values_list("sku", flat=True)
     )
@@ -161,29 +173,45 @@ def import_products_from_file(tenant, file_obj, filename: str, dry_run: bool = T
 
     success_rows: list[dict] = []
     skip_rows: list[dict] = []
-    created_categories: list[str] = []
     match_context = MatchContext(tenant)
 
     sid = transaction.savepoint()
 
-    for idx, raw in enumerate(raw_rows, start=2):  # 第 1 行是 header
+    for idx, raw in enumerate(raw_rows, start=first_row):  # 檔案的第 1 行是標題
         norm = _normalize_row(raw)
         name = (str(norm.get("name") or "")).strip()
         sku = (str(norm.get("sku") or "")).strip()
         category_raw = (str(norm.get("category") or "")).strip()
 
-        if not name or not sku or not category_raw:
-            skip_rows.append(
-                {
-                    "row_no": idx,
-                    "sku": sku,
-                    "name": name,
-                    "reason": "必填欄位不齊(品名 / 類別 / 品號 至少缺一)",
-                }
-            )
+        def skip(reason):
+            skip_rows.append({"row_no": idx, "sku": sku, "name": name, "reason": reason})
+
+        if not name:
+            skip("沒有品名")
+            continue
+        # 類別:沒填用一開始選的;有填先試代碼(精確)、再試名稱;找不到不建
+        cat = category
+        if category_raw:
+            cat = cat_by_code.get(category_raw.lower()) or cat_by_name.get(category_raw)
+            if cat is None:
+                skip(f"類別「{category_raw}」不存在")
+                continue
+        if blocks_import(cat):
+            skip(DEVICE_CATEGORY)
             continue
 
-        if sku in existing_skus:
+        try:
+            list_price = round_money(_number(norm.get("list_price")))
+        except ValueError as bad:
+            skip(f"建議售價「{bad}」看不懂")
+            continue
+        try:
+            safety = int(round_money(_number(norm.get("safety_stock"))))
+        except ValueError as bad:
+            skip(f"安全庫存「{bad}」看不懂")
+            continue
+
+        if sku and sku in existing_skus:
             skip_rows.append(
                 {
                     "row_no": idx,
@@ -221,45 +249,34 @@ def import_products_from_file(tenant, file_obj, filename: str, dry_run: bool = T
             )
             continue
 
-        # 類別:先試代碼(精確)、再試名稱;都找不到 → 建立
-        cat = cat_by_code.get(category_raw.lower()) or cat_by_name.get(category_raw)
-        if cat is None:
-            code = _next_category_code(existing_codes)
-            cat = Category.objects.create(
-                tenant=tenant, code=code, name=category_raw
-            )
-            cat_by_code[code.lower()] = cat
-            cat_by_name[category_raw] = cat
-            existing_codes.add(code)
-            created_categories.append(category_raw)
-
-        safety = max(_to_int(norm.get("safety_stock"), 0), 0)
-        list_price = _to_decimal_str(norm.get("list_price"))
         barcode = (str(norm.get("barcode") or "")).strip()
 
         p = Product(
             tenant=tenant,
-            sku=sku,
+            sku=sku,                      # 空的由 Product.save 照類別產生
             name=name,
-            spec="",
+            spec=(str(norm.get("spec") or "")).strip(),
             category=cat,
             list_price=list_price,
             safety_stock=safety,
             barcode=barcode,
+            requires_serial=requires_serial,
+            allows_commission=allows_commission,
             lifecycle_status=Product.LifecycleStatus.PENDING,
             is_active=True,
         )
         p.save()
         match_context.add(p)
 
-        existing_skus.add(sku)
+        existing_skus.add(p.sku)
         existing_names.add(name)
         success_rows.append(
             {
                 "row_no": idx,
-                "sku": sku,
+                "sku": p.sku if sku else "",          # 系統產生的不寫(預覽跟真的匯入可能不是同一號)
                 "name": name,
-                "category": category_raw,
+                "category": cat.name,
+                "list_price": int(list_price),
             }
         )
 
@@ -273,7 +290,6 @@ def import_products_from_file(tenant, file_obj, filename: str, dry_run: bool = T
         "total_rows": len(raw_rows),
         "success_count": len(success_rows),
         "skip_count": len(skip_rows),
-        "created_categories": list(dict.fromkeys(created_categories)),
         "success_rows": success_rows[:200],
         "skip_rows": skip_rows[:200],
     }

@@ -3788,6 +3788,29 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   color: var(--text-dim);
   font-size: var(--font-secondary);
 }
+/* 匯入表格(全站檢視 D7 / D8):庫存兩個選一個、貼上 / 選檔案切換、範例檔靠右 */
+.pi-serial {
+  grid-template-columns: 1fr 1fr;
+}
+.pi-serial .pf-tab {
+  padding: 8px;
+}
+.pi-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 6px;
+}
+.pi-template {
+  margin-left: auto;
+}
+.pi-paste {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: monospace;
+  font-size: var(--font-secondary);
+  resize: vertical;
+}
 .pi-file-info {
   margin-top: 8px;
   font-size: var(--font-secondary);
@@ -4982,10 +5005,26 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   gap: 4px;
   min-width: 140px;
 }
-.be-section-body.be-attrs label {
-  flex-direction: row;
+.be-section-body.be-attrs {
+  flex-direction: column;
+  gap: 8px;
+}
+/* 批次修改的屬性:一個一列,名稱 + 不改 / 是 / 否(放大字體時名稱自己一行) */
+.be-tri {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  min-width: auto;
+  gap: 4px 12px;
+}
+.be-tri > span {
+  min-width: 8em;
+  font-size: var(--font-secondary);
+}
+.be-tri .pf-tabs {
+  min-width: 15em;
+}
+.be-tri .pf-tab {
+  padding: 6px 12px;
 }
 .be-grid3 {
   display: grid !important;

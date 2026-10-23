@@ -312,7 +312,7 @@ class OtherEntryPointsTests(_Base):
             "reno-20/側翻/黑,皮套,X-003\n"       # 跟上一列是同一款
         ).encode("utf-8-sig")
         report = import_products_from_file(
-            self.tenant, io.BytesIO(csv), "p.csv", dry_run=False
+            self.tenant, io.BytesIO(csv), "p.csv", dry_run=False, category=self.cat, requires_serial=False
         )
         self.assertEqual([r["sku"] for r in report["success_rows"]], ["X-002"])
         self.assertEqual({r["sku"] for r in report["skip_rows"]}, {"X-001", "X-003"})
