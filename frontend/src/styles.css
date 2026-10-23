@@ -8271,3 +8271,57 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .pf-saved { padding: 24px 0; display: flex; flex-direction: column; gap: 12px; }
 .pf-saved-title { font-size: var(--font-section); font-weight: 700; }
 .pf-saved-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* 序號查詢:已退那一台的「確認可賣」「廠商換貨」(2026-10-23) */
+.sr-act {
+  white-space: nowrap;
+}
+.sr-act .btn + .btn {
+  margin-left: 6px;
+}
+
+/* 營業日報:打烊實點(2026-10-23) */
+.biz-count-input {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+}
+.biz-count-input input {
+  flex: 1;
+  min-width: 0;
+}
+.biz-count-list,
+.biz-count-adj {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: var(--font-secondary);
+}
+.biz-count-adj {
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+}
+.biz-count-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+.biz-count-time,
+.biz-count-by,
+.biz-count-empty {
+  color: var(--text-dim);
+}
+.biz-count-short,
+.biz-count-error {
+  color: var(--danger-text);
+  font-weight: 600;
+}
+.biz-count-over {
+  color: var(--warn-text);
+  font-weight: 600;
+}
+.biz-count-ok {
+  color: var(--success-text);
+}

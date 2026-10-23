@@ -930,8 +930,9 @@ def _validate_sales_return(sr: SalesReturn):
 def commit_sales_return(sr: SalesReturn) -> SalesReturn:
     """銷退單儲存即觸發。
 
-    - 序號:status → in_stock,warehouse = 銷退倉(= 原銷貨單的門市),sold_at 清空 → 可以再賣、再調撥
-      (owner 2026-10-23「銷退過後，庫存自動轉回原倉」;以前停在 returned、沒有任何入口轉回在庫。瑕疵的走廠商換貨)
+    - 序號:status → returned(已退,不能賣),warehouse = 銷退倉(= 原銷貨單的門市),sold_at 清空。
+      確認可以賣才回在庫(`release_returned`);瑕疵的走廠商換貨。owner 2026-10-23「先標不能賣，確認可賣再點回倉」
+      (同一天稍早做成直接回在庫,紅隊提醒瑕疵機會被賣掉;更早以前停在已退但沒有入口轉回)
     - 配件:本倉 StockBalance.qty += qty
     - 寫 StockMovement(RETURN_IN)
     - 只能整張退:每行的金額 / 未稅 / 稅額 / 成本、單頭的 subtotal / tax / total 全部照抄原單,
@@ -974,10 +975,10 @@ def commit_sales_return(sr: SalesReturn) -> SalesReturn:
             it.save(update_fields=["amount", "untaxed_amount", "tax_amount", "cost_at_post", "staff_cost",
                                    "counts_cash"])
 
-            # 序號直接回銷退倉(原銷貨單的門市)在庫
+            # 序號回銷退倉(原銷貨單的門市)、標成已退(確認可以賣才回在庫)
             for sos in it.serials.select_related("serial").all():
                 serial = sos.serial
-                serial.status = ProductSerial.Status.IN_STOCK
+                serial.status = ProductSerial.Status.RETURNED
                 serial.warehouse = sr.warehouse
                 serial.sold_at = None
                 serial.save(
@@ -1023,8 +1024,8 @@ def commit_sales_return(sr: SalesReturn) -> SalesReturn:
 def void_sales_return(sr: SalesReturn) -> SalesReturn:
     """銷退單作廢:把退回的庫存再扣回去(=回到「銷售出去」的狀態)。
 
-    - 序號:在庫(以前的銷退是 returned)→ sold,warehouse=None,sold_at 不重設(歷史已失,僅恢復狀態)。
-      要還在銷退倉、而且退回來之後沒有任何異動(再賣、調撥、送換貨、盤點都算),不然擋
+    - 序號:已退(2026-10-23 稍早那一版退的是在庫)→ sold,warehouse=None,sold_at 不重設(歷史已失,僅恢復狀態)。
+      要還在銷退倉、而且退回來之後沒有任何異動(確認可賣、送換貨、盤點、再賣、調撥都算),不然擋
     - 配件:該倉 balance.qty -= qty(若不足會擋下,避免負庫存)
     - 不還原 SO.invoice_voided(由使用者決定是否要再去發票系統處理)
 
@@ -1046,8 +1047,8 @@ def void_sales_return(sr: SalesReturn) -> SalesReturn:
         serials = {
             x.pk: x for x in ProductSerial.objects.filter(pk__in=[l.serial_id for l in links])
         }
-        # 退回來的機器之後如果已經被處理(再賣掉、調走、送換貨、盤點),就不能再把它打回「已售」。
-        # 退回來就是在庫,光看狀態分不出「沒動過」跟「賣掉又退回來」:還要看這張銷退之後這一台有沒有別的異動
+        # 退回來的機器之後如果已經被處理(確認可賣、送換貨、盤點、再賣掉、調走),就不能再把它打回「已售」。
+        # 光看狀態分不出「沒動過」跟「確認可賣之後又賣掉又退回來」:還要看這張銷退之後這一台有沒有別的異動
         back_in = dict(
             StockMovement.objects.filter(
                 tenant=sr.tenant, serial_id__in=list(serials),
@@ -1120,3 +1121,43 @@ def void_sales_return(sr: SalesReturn) -> SalesReturn:
         sr.save(update_fields=["is_void"])
 
     return sr
+
+
+class ReleaseError(Exception):
+    pass
+
+
+def release_returned(tenant, serial_id: int, user, *, check=None):
+    """銷退退回來的「已退」確認可以賣:回到在庫(同一家門市),記一筆「退回可賣」異動(不動數量,只是紀錄)。
+
+    owner 2026-10-23「先標不能賣，確認可賣再點回倉」。誰可以按看員工帳號的「確認可賣」(view 擋);
+    `check(serial)` = 鎖到那一台之後才判斷的門市檢查(鎖在門市的帳號只能按自己門市的)。
+    """
+    with transaction.atomic():
+        lock_stock_rows(tenant, serial_ids=[serial_id])
+        serial = ProductSerial.objects.filter(tenant=tenant, pk=serial_id).first()
+        if serial is None:
+            raise ReleaseError("找不到這一台")
+        if check is not None:
+            check(serial)
+        if serial.status != ProductSerial.Status.RETURNED or serial.warehouse_id is None:
+            raise ReleaseError(f"{serial.serial_no} 現在是「{serial.get_status_display()}」,不是已退")
+        back_in = (
+            StockMovement.objects.filter(
+                tenant=tenant, serial=serial, movement_type=StockMovement.MovementType.RETURN_IN,
+                ref_doc_type="sales_return",
+            ).order_by("-id").first()
+        )
+        sr = SalesReturn.objects.filter(pk=back_in.ref_doc_id).first() if back_in else None
+        serial.status = ProductSerial.Status.IN_STOCK
+        serial.save(update_fields=["status"])
+        who = getattr(user, "username", "") or ""
+        StockMovement.objects.create(
+            tenant=tenant,
+            serial=serial,
+            movement_type=StockMovement.MovementType.RETURN_RELEASE,
+            ref_doc_type="sales_return" if sr else "",
+            ref_doc_id=sr.id if sr else None,
+            note=((f"銷退單 {sr.no} 退回的機器確認可賣" if sr else "退回的機器確認可賣") + (f"({who})" if who else ""))[:200],
+        )
+        return serial

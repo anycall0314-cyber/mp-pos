@@ -132,7 +132,7 @@ class FlowRuleTests(TestCase):
 class Shop:
     """一家做過各種事的店(都是今天做的):
 
-    手機:進 3 支 → 賣 IMEI1 → 賣 IMEI2 又整張退(當成這一版之前退的、還停在「已退」)→ 剩 IMEI3 在庫。
+    手機:進 3 支 → 賣 IMEI1 → 賣 IMEI2 又整張退(變「已退」)→ 剩 IMEI3 在庫。
     皮套:進 10 → 賣 2 → 調 4 到第二家(確認)→ 再調 1(還在路上)→ 賣 1 又作廢 → 另外進 3 又整張作廢。
     """
 
@@ -143,8 +143,6 @@ class Shop:
         self.so1 = c.sell(serial_no=f"{tag}IMEI1", case_qty=2)
         self.so2 = c.sell(serial_no=f"{tag}IMEI2")
         self.sr = c._post("/api/v1/sales-returns/", {"original_so": self.so2["id"], "payment_method": "cash"})
-        # 2026-10-23 起銷退直接回在庫;報表的「已退」只剩以前退的,這裡放一台以前退的(報表照舊要分得出來)
-        ProductSerial.objects.filter(tenant=c.tenant, serial_no=f"{tag}IMEI2").update(status="returned")
         c.transfer(4)
         self.pending = c._post("/api/v1/transfer-orders/", {
             "from_warehouse": self.w1.id, "to_warehouse": self.w2.id,
@@ -684,8 +682,8 @@ class SerialReportTests(TestCase):
         self.assertEqual(reports.CODE_SEARCH_MIN, 3)
 
 
-class ReturnsAreBackInStockTests(TestCase):
-    """2026-10-23 起銷退直接回在庫:過去那一段的「已退」不能因為之後的銷退 / 作廢銷退變出來(Codex 複審 P1)。"""
+class ReturnedHistoryTests(TestCase):
+    """過去那一段的「已退」:之後的銷退 / 作廢銷退 / 確認可賣要倒回去(Codex 複審 2026-10-23)。"""
 
     def setUp(self):
         self.c = Company("a", "甲通訊行", "甲")
@@ -693,9 +691,9 @@ class ReturnsAreBackInStockTests(TestCase):
         self.so = self.c.sell(serial_no="甲N1")
         StockMovement.objects.filter(tenant=self.c.tenant).update(created_at=timezone.now() - timedelta(days=2))
 
-    def phone_on(self, days_ago):
+    def phone_on(self, days_ago, **params):
         day = today() - timedelta(days=days_ago)
-        r = self.c.admin.get(FLOW, {"from": day, "to": day})
+        r = self.c.admin.get(FLOW, {"from": day, "to": day, **params})
         self.assertEqual(r.status_code, 200, r.content.decode())
         row = Shop.row(r.json(), self.c.phone)
         self.assertTrue(balanced(row), row)
@@ -706,12 +704,16 @@ class ReturnsAreBackInStockTests(TestCase):
         old = self.phone_on(2)
         self.assertEqual((old["closing"], old["returned"]), (0, 0))
         now = self.phone_on(0)
-        self.assertEqual((now["sale_return"], now["closing"], now["returned"]), (1, 1, 0))
+        self.assertEqual((now["sale_return"], now["closing"], now["returned"]), (1, 1, 1))
 
-    def test_a_return_voided_later_was_in_stock_not_returned_that_day(self):
-        sr = self.c._post("/api/v1/sales-returns/", {"original_so": self.so["id"], "payment_method": "cash"})
+    def test_a_phone_confirmed_later_was_still_returned_that_day(self):
+        self.c._post("/api/v1/sales-returns/", {"original_so": self.so["id"], "payment_method": "cash"})
         StockMovement.objects.filter(tenant=self.c.tenant, ref_doc_type="sales_return").update(
             created_at=timezone.now() - timedelta(days=1))
-        self.assertEqual(self.c.admin.post(f"/api/v1/sales-returns/{sr['id']}/void/", {}, format="json").status_code, 200)
-        that_day = self.phone_on(1)
-        self.assertEqual((that_day["closing"], that_day["returned"]), (1, 0))
+        phone = ProductSerial.objects.get(tenant=self.c.tenant, serial_no="甲N1")
+        self.assertEqual(self.c.admin.post(f"/api/v1/serials/{phone.pk}/release/", {}, format="json").status_code, 200)
+        for kw in ({}, {"warehouse": self.c.wh.id}):
+            that_day = self.phone_on(1, **kw)
+            self.assertEqual((that_day["closing"], that_day["returned"]), (1, 1), kw)     # 那一天還是已退
+            now = self.phone_on(0, **kw)
+            self.assertEqual((now["closing"], now["returned"]), (1, 0), kw)

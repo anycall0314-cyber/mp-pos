@@ -30,7 +30,8 @@ export function HomePage() {
     (repair?.awaiting_pickup.count ?? 0) +
     (repair?.parts_low_stock.count ?? 0);
   const contractsPending = summary.data?.contracts_pending ?? 0;
-  const noticeCount = (lowStock?.count ?? 0) + repairAlertsCount + contractsPending;
+  const returnsPending = summary.data?.returns_pending ?? 0;
+  const noticeCount = (lowStock?.count ?? 0) + repairAlertsCount + contractsPending + returnsPending;
 
   const revenueDiff = pctDiff(today?.revenue, yesterday?.revenue);
   const countDiff = absDiff(today?.sales_count, yesterday?.sales_count);
@@ -120,6 +121,15 @@ export function HomePage() {
               )}
               {!summary.isLoading && noticeCount === 0 && (
                 <div className="hp-panel-empty">目前沒有待辦事項</div>
+              )}
+              {returnsPending > 0 && (
+                <NavLink to="/serials?status=returned" className="hp-alert-row hp-alert-link">
+                  <span className="hp-alert-dot hp-alert-red" />
+                  <div className="hp-alert-content">
+                    <div className="hp-alert-title">退回待確認 {returnsPending} 台</div>
+                    <div className="hp-alert-sub">確認可賣或送廠商換貨</div>
+                  </div>
+                </NavLink>
               )}
               {contractsPending > 0 && (
                 <NavLink to="/telecom/expiries" className="hp-alert-row hp-alert-link">

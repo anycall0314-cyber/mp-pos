@@ -1,7 +1,10 @@
 import { downloadCsv } from "@/components/downloadCsv";
 import { useEffect, useMemo, useState } from "react";
 
-import { useBusinessDailyReport, useWarehouses } from "@/api/hooks";
+import { useBusinessDailyReport, useCashCount, useWarehouses, type BusinessDailyReport as DailyData } from "@/api/hooks";
+import { MoneyInput } from "@/components/MoneyInput";
+import { errorMessageOf } from "@/components/Banner";
+import { countedValue, diffText } from "@/lib/cashCount";
 import { useDefaultWarehouse } from "@/auth/AuthContext";
 import { Toolbar } from "@/components/Toolbar";
 import { intStr, money } from "@/lib/money";
@@ -304,6 +307,7 @@ export function BusinessDailyReportPage() {
                   { label: "現金提取", value: adjOutTotal },
                 ]}
               />
+              <CashCountCard report={report} warehouse={warehouse === "" ? null : (warehouse as number)} />
               <RevenueCard
                 title="當日營收"
                 total={dailyRevenue}
@@ -952,3 +956,80 @@ function RevenueCard({
   );
 }
 
+/**
+ * 打烊實點(owner 2026-10-23「實點加上去」):把錢櫃數一遍打進來,記下點到多少、那一刻的應有現金、差額、點的人。
+ * 不改帳(今日結餘、隔天期初照舊);這一天每一次都列;只有今天能點;點過不能改、不能刪。
+ * 紅隊:補平的現金調整要看得到 —— 這一天的現金調整(事由、金額)列在同一張卡片裡。
+ */
+function CashCountCard({ report, warehouse }: { report: DailyData; warehouse: number | null }) {
+  const save = useCashCount();
+  const [raw, setRaw] = useState("");
+  const [error, setError] = useState("");
+  const counts = report.counts ?? [];
+  const adjustments = report.adjustments.rows;
+  const value = countedValue(raw);
+
+  async function submit() {
+    if (value === null || warehouse === null || save.isPending) return;
+    setError("");
+    try {
+      await save.mutateAsync({ warehouse, counted: value });
+      setRaw("");
+    } catch (e) {
+      setError(errorMessageOf(e));
+    }
+  }
+
+  return (
+    <div className="biz-summary-card">
+      <div className="biz-summary-card-title">打烊實點</div>
+      {report.can_count && (
+        <div className="biz-count-input">
+          <MoneyInput
+            value={raw}
+            onChange={setRaw}
+            placeholder="點到多少"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submit();
+            }}
+          />
+          <button type="button" className="btn primary" disabled={value === null || save.isPending} onClick={submit}>
+            記下
+          </button>
+        </div>
+      )}
+      {error && <div className="biz-count-error">{error}</div>}
+      {counts.length === 0 ? (
+        <div className="biz-count-empty">{report.can_count ? "今天還沒點" : "這一天沒有點"}</div>
+      ) : (
+        <div className="biz-count-list">
+          {counts.map((c) => (
+            <div key={c.id} className="biz-count-row">
+              <span className="biz-count-time">{c.at.slice(11, 16)}</span>
+              <span>點到 {money(c.counted)}</span>
+              <span className={c.diff < 0 ? "biz-count-short" : c.diff > 0 ? "biz-count-over" : "biz-count-ok"}>
+                {diffText(c.diff)}
+              </span>
+              <span className="biz-count-by">點的人 {c.by || "—"}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {adjustments.length > 0 && (
+        <div className="biz-count-adj">
+          {adjustments.map((r, i) => (
+            <div key={i} className="biz-count-row">
+              <span>現金調整</span>
+              <span>{String(r.reason_label ?? "")}</span>
+              <span>
+                {r.direction === "out" ? "−" : "+"}
+                {money(String(r.amount ?? "0"))}
+              </span>
+              {r.note ? <span className="biz-count-by">{String(r.note)}</span> : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

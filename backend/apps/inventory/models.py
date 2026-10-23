@@ -174,9 +174,10 @@ class ProductSerial(TenantOwnedModel):
         super().save(*args, **kwargs)
 
 
-# 算平均成本時算進去的設備:在庫 + 廠商換貨中(還是這家公司的貨、有成本,只是暫時在廠商那邊)。
-# 只算在庫的話,有一台在換貨時進貨,平均成本會被新進的那一批拉走(複審 2026-10-21 P0)
-COSTED_STATUSES = (ProductSerial.Status.IN_STOCK, ProductSerial.Status.RMA)
+# 算平均成本時算進去的設備:在庫 + 廠商換貨中 + 已退(都還是這家公司的貨、有成本)。
+# 只算在庫的話,有一台在換貨時進貨,平均成本會被新進的那一批拉走(複審 2026-10-21 P0);
+# 銷退退回來、還沒確認可賣的已退也一樣(複審 2026-10-23 P0)
+COSTED_STATUSES = (ProductSerial.Status.IN_STOCK, ProductSerial.Status.RMA, ProductSerial.Status.RETURNED)
 
 
 class ProductSerialIdentifier(TenantOwnedModel):
@@ -295,6 +296,8 @@ class VendorExchange(TenantOwnedModel):
     back_imei = models.CharField("回來的 IMEI", max_length=80, blank=True)
     back_sn = models.CharField("回來的 SN", max_length=80, blank=True)
     swapped = models.BooleanField("換成另一台", default=False)
+    # 送出那一刻是「已退」(銷退退回來、還沒確認可賣):標錯了取消時回到已退,不直接變成可以賣(複審 2026-10-23 P1)
+    was_returned = models.BooleanField("送出前是已退", default=False, db_default=False)
     sent_by = models.CharField("送出的帳號", max_length=150, blank=True)
     done_by = models.CharField("收回的帳號", max_length=150, blank=True)
     done_at = models.DateTimeField("收回時間", null=True, blank=True)
@@ -380,6 +383,8 @@ class StockMovement(TenantOwnedModel):
         VOID = "void", "作廢"
         # 送廠商換貨 / 已換貨 / 取消(2026-10-21):只是紀錄,不寫門市、不動數量(那一台一直掛在原門市)
         VENDOR_EXCHANGE = "vendor_exchange", "廠商換貨"
+        # 銷退退回來的「已退」確認可以賣、回到在庫(2026-10-23):只是紀錄,不寫門市、不動數量(一直在原門市)
+        RETURN_RELEASE = "return_release", "退回可賣"
 
     serial = models.ForeignKey(
         ProductSerial,
@@ -578,6 +583,8 @@ class StockCountMissing(TenantOwnedModel):
     reason = models.CharField("原因", max_length=100, blank=True)
     # 核准時真的改成盤虧了(核准當下已經不在庫的不會改)
     applied = models.BooleanField("已標成盤虧", default=False)
+    # 標成盤虧那一刻是「已退」(銷退退回來、還沒確認可賣):找回時回到已退,不直接變成可以賣(2026-10-23)
+    was_returned = models.BooleanField("盤虧前是已退", default=False, db_default=False)
     found_at = models.DateTimeField("找回時間", null=True, blank=True)
     found_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+", null=True, blank=True, verbose_name="找回的人")

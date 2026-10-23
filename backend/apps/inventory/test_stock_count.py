@@ -318,24 +318,40 @@ class PhoneTests(_Count):
         self.assertEqual(self.status_of("甲IMEI3"), "lost")
         self.assertEqual(self.c.admin.post(f"{URL}{first['id']}/missing/999999/found/", {}, format="json").status_code, 400)
 
-    def test_a_returned_phone_sitting_in_the_store_is_neither_extra_nor_missing(self):
-        # 客人退回來、還放在店裡的(狀態「已退」):刷到不算多;沒刷到也不算少(要刷的只有「在庫」的)
+    def test_a_returned_phone_in_the_store_has_to_be_scanned_and_comes_back_as_returned(self):
+        # 客人退回來、還放在店裡的(狀態「已退」,還沒確認可賣):刷到不算多;沒刷到算少(2026-10-23 紅隊:
+        # 東西在店裡、算在期末,盤點不能不看);標成盤虧之後找回來,回到已退(不直接變成可以賣)
         self.c.sell(serial_no="甲IMEI1")
         so = self.c.sell(serial_no="甲IMEI2")
         sold = __import__("apps.sales.models", fromlist=["SalesOrder"]).SalesOrder.objects.filter(tenant=self.c.tenant).order_by("id")
         for order in sold:
             self.c._post("/api/v1/sales-returns/", {"original_so": order.id, "payment_method": "cash"})
-        # 2026-10-23 起銷退直接回在庫;「已退」只剩這一版之前退的
-        ProductSerial.objects.filter(tenant=self.c.tenant, serial_no__in=["甲IMEI1", "甲IMEI2"]).update(status="returned")
         self.assertEqual((self.status_of("甲IMEI1"), self.status_of("甲IMEI2"), so["id"] > 0), ("returned", "returned", True))
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        StockMovement.objects.filter(tenant=self.c.tenant).update(created_at=timezone.now() - timedelta(days=3))
         count = self.open()
         self.ok(self.scan(count, "甲IMEI1"))                # 已退、刷到了
         self.ok(self.scan(count, "甲IMEI3"))                # 甲IMEI2 已退、沒刷到
         self.ok(self.act(count, "submit", self.c.clerk, phones_done=True))
         seen = self.detail(count)
-        self.assertEqual((seen["extra_rows"], seen["missing_rows"]), ([], []))
+        self.assertEqual(seen["extra_rows"], [])
+        self.assertEqual([m["serial_no"] for m in seen["missing_rows"]], ["甲IMEI2"])
         self.ok(self.act(count, "approve"))
-        self.assertEqual((self.status_of("甲IMEI1"), self.status_of("甲IMEI2")), ("returned", "returned"))
+        self.assertEqual((self.status_of("甲IMEI1"), self.status_of("甲IMEI2")), ("returned", "lost"))
+        # 進銷存表倒推:昨天標成盤虧(已退 → 盤虧)、今天找回(盤虧 → 已退)—— 昨天的「已退」只有甲IMEI1(複審 P1)
+        StockMovement.objects.filter(tenant=self.c.tenant, ref_doc_type="stock_count").update(
+            created_at=timezone.now() - timedelta(days=1))
+        missing = self.detail(count)["missing_rows"][0]
+        self.ok(self.c.admin.post(f"{URL}{count['id']}/missing/{missing['id']}/found/", {}, format="json"))
+        self.assertEqual(self.status_of("甲IMEI2"), "returned")
+        self.books_agree()
+        yesterday = (timezone.localdate() - timedelta(days=1)).isoformat()
+        flow = self.c.admin.get("/api/v1/stock-flow-report/", {"from": yesterday, "to": yesterday}).json()
+        phone = next(r for r in flow["rows"] if r["product"] == self.phone.id)
+        self.assertEqual(phone["returned"], 1)
 
     def test_a_code_or_a_phone_is_scanned_once(self):
         both = create_serial(tenant=self.c.tenant, product=self.phone, imei="356789012345678", sn="SNAB12",

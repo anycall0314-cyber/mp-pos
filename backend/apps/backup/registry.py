@@ -67,6 +67,8 @@ REGISTRY: dict[str, Entry] = {
         "transfers.TransferOrder", "transfers.TransferOrderItem",
         "transfers.TransferOrderItemSerial",
         "cash.PettyExpense", "cash.CashAdjustment", "cash.PhoneBillCollection",
+        # 打烊實點(只是紀錄,不改帳)
+        "cash.CashCount",
         "repairs.RepairItem", "repairs.RepairItemModel", "repairs.RepairItemPart",
         "repairs.RepairOrder", "repairs.RepairOrderPart",
         # 商品識別與待確認入庫(含進貨單原圖)

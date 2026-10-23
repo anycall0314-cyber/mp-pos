@@ -1102,6 +1102,8 @@ export interface PhoneModel {
 export interface HomeSummary {
   /** 門號合約:快到期(或已經過期)還沒處理的有幾筆 */
   contracts_pending?: number;
+  /** 銷退退回來、還沒確認可賣(也還沒送廠商換貨)的手機有幾台 */
+  returns_pending?: number;
   warehouse_id: number | null;
   warehouse_name: string;
   today: { revenue: number; sales_count: number };

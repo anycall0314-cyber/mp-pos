@@ -9,6 +9,7 @@ export type AbilityKey =
   // 第二批
   | "edit_products"
   | "stock_count"
+  | "release_returned"
   | "purchase"
   | "secondhand_buy"
   | "cash_ops"

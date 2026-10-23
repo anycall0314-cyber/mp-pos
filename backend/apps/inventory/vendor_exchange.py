@@ -123,6 +123,7 @@ def _send_serial(tenant, serial_id, *, user, supplier_id, note, check):
             tenant=tenant, serial=serial, product_id=serial.product_id, warehouse_id=serial.warehouse_id,
             supplier_id=supplier_id, note=note, unit_cost=serial.purchase_unit_cost,
             sent_imei=codes["imei"], sent_sn=codes["sn"], sent_by=_by(user),
+            was_returned=serial.status == S.RETURNED,
         )
         serial.status = S.RMA
         serial.save(update_fields=["status", "updated_at"])
@@ -306,12 +307,12 @@ def _done_product(tenant, exchange_id, qty, *, user, check):
 
 
 def cancel(tenant, exchange_id, *, user=None, check=None):
-    """標錯了:回到原樣(設備回在庫;配件數量加回去)。已經回來一部分的不能取消。"""
+    """標錯了:回到原樣(設備回在庫 —— 送出前是已退的回到已退;配件數量加回去)。已經回來一部分的不能取消。"""
     serial_id = kind_of(tenant, exchange_id)
     with transaction.atomic():
         if serial_id is not None:
             serial, exchange = _locked_serial(tenant, exchange_id=exchange_id, serial_id=serial_id, check=check)
-            serial.status = S.IN_STOCK
+            serial.status = S.RETURNED if exchange.was_returned else S.IN_STOCK
             serial.save(update_fields=["status", "updated_at"])
             _close(exchange, X.CANCELLED, user)
             _record(exchange, "取消送廠商換貨", serial=serial)

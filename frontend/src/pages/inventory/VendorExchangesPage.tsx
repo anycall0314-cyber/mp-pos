@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { lookupVendorExchange, useSuppliers, useVendorExchangeDo, useVendorExchanges } from "@/api/hooks";
 import { useCurrentUser } from "@/auth/AuthContext";
@@ -51,8 +52,8 @@ export function VendorExchangesPage() {
   const [backOf, setBackOf] = useState<number | null>(null);
   const [backValue, setBackValue] = useState("");
 
-  async function look() {
-    const c = code.trim();
+  async function look(given?: string) {
+    const c = (given ?? code).trim();
     if (!c || looking) return;
     setLooking(true);
     try {
@@ -75,6 +76,17 @@ export function VendorExchangesPage() {
       setLooking(false);
     }
   }
+
+  // 序號查詢「已退」那一台按「廠商換貨」帶 ?code= 進來:直接查好那一台(還要選廠商、按送出)
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const given = params.get("code");
+    if (!given) return;
+    setParams({}, { replace: true });
+    setCode(given);
+    look(given);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function reset() {
     setCode("");

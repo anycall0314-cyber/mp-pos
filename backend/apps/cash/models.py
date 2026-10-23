@@ -1,5 +1,6 @@
 from datetime import date
 
+from django.conf import settings
 from django.db import models
 
 from apps.core.models import TenantOwnedModel
@@ -270,3 +271,28 @@ class PhoneBillCollection(TenantOwnedModel):
                 raise ValueError("建立代收話費單必須先指定 tenant")
             self.no = self.tenant.issue_next_phone_bill_no()
         super().save(*args, **kwargs)
+
+
+class CashCount(TenantOwnedModel):
+    """打烊實點(2026-10-23,owner「實點加上去」):把錢櫃數一遍,打進點到多少。
+
+    **不改帳**:當天結餘、隔天期初照舊是系統算的;差額只是紀錄,要補帳另外開現金調整(兩邊各留紀錄)。
+    一家門市一天可以點好幾次(交班各點一次),點過的不能改、不能刪(點錯再點一次)。只能點今天的。
+    `expected` = 點的那一刻系統算的應有現金(之後才開的單不會回頭改它)。記的是「點的人」,不是短少算誰的
+    (紅隊:沒有班表,不能當成當班責任)。
+    """
+
+    warehouse = models.ForeignKey("inventory.Warehouse", on_delete=models.PROTECT, related_name="+", verbose_name="門市")
+    business_date = models.DateField("日期")
+    counted = models.DecimalField("點到", max_digits=12, decimal_places=2)
+    expected = models.DecimalField("當下應有", max_digits=12, decimal_places=2)
+    counted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+", null=True, blank=True,
+        verbose_name="點的人")
+    counted_by_name = models.CharField("點的人(名字)", max_length=80, blank=True, default="", db_default="")
+
+    class Meta:
+        ordering = ["business_date", "created_at", "id"]
+        indexes = [models.Index(fields=["tenant", "warehouse", "business_date"], name="cashcount_day")]
+        verbose_name = "打烊實點"
+        verbose_name_plural = "打烊實點"

@@ -973,7 +973,8 @@ class ReturnScreenPayloadTests(TestCase):
         })
         back = self.c._post("/api/v1/sales-returns/", {"original_so": so["id"],
                                                        "payment_method": "cash"})
-        # 退回來的機器(直接回在庫)又賣掉了
+        # 退回來的機器確認可賣、又賣掉了
+        self.c.admin.post(f"/api/v1/serials/{phone.pk}/release/", {}, format="json")
         self.c.sell(serial_no="甲V1")
         r = self.c.admin.post(f"/api/v1/sales-returns/{back['id']}/void/", {}, format="json")
         self.assertEqual(r.status_code, 400, r.content)

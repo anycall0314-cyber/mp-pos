@@ -1,7 +1,10 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
-import { fetchSerialReportExport, useSerialReport } from "@/api/hooks";
+import { fetchSerialReportExport, useReleaseReturned, useSerialReport } from "@/api/hooks";
+import { useCan } from "@/auth/AuthContext";
+import { ArmButton } from "@/components/workbench/ArmButton";
+import { toast } from "@/components/workbench/toast";
 import { searchSuppliers } from "@/api/search";
 import type { Supplier, Warehouse } from "@/api/types";
 import { Banner, errorMessageOf } from "@/components/Banner";
@@ -31,8 +34,15 @@ import { downloadCsv, NOT_PICKED, Pager, StoreField, useStoreName, type Picked }
  * 跟庫存查詢一樣各門市都看得到(不照帳號的門市鎖)。
  */
 export function SerialListPage() {
+  // 今日總覽「退回待確認」帶 ?status=returned 進來:一打開就是已退的那幾台
+  const [params] = useSearchParams();
+  const startStatus = SERIAL_STATUS_CHOICES.some((c) => c.key === params.get("status"))
+    ? (params.get("status") as string)
+    : "store";
+  const canRelease = useCan("release_returned");
+  const release = useReleaseReturned();
   const [applied, setApplied] = useState<SerialFilter>(() => ({
-    statuses: statusesOf("store"),
+    statuses: statusesOf(startStatus),
     warehouse: "",
     supplier: "",
     receivedFrom: "",
@@ -41,7 +51,7 @@ export function SerialListPage() {
     soldTo: "",
     search: "",
   }));
-  const [status, setStatus] = useState("store");
+  const [status, setStatus] = useState(startStatus);
   const [store, setStore] = useState<Picked<Warehouse>>(NOT_PICKED);
   const [supplier, setSupplier] = useState<Picked<Supplier>>(NOT_PICKED);
   const [receivedFrom, setReceivedFrom] = useState("");
@@ -191,6 +201,7 @@ export function SerialListPage() {
                 <th className="num">成本</th>
                 <th>賣出單</th>
                 <th>賣出日</th>
+                <th>處理</th>
               </tr>
             </thead>
             <tbody>
@@ -214,6 +225,30 @@ export function SerialListPage() {
                       {r.sale && <Link to={docPath(r.sale.doc)}>{r.sale.doc.no}</Link>}
                     </td>
                     <td>{r.sale?.date}</td>
+                    {/* 銷退退回來的「已退」:確認可以賣 → 回在庫;有瑕疵的送廠商換貨(owner 2026-10-23) */}
+                    <td onClick={(e) => e.stopPropagation()} className="sr-act">
+                      {r.status === "returned" && (
+                        <>
+                          {canRelease && (
+                            <ArmButton
+                              label="確認可賣"
+                              armedLabel="確定可賣?"
+                              className="btn"
+                              disabled={release.isPending}
+                              onConfirm={() =>
+                                release
+                                  .mutateAsync(r.id)
+                                  .then(() => toast(`${r.serial_no} 回到在庫`))
+                                  .catch((e) => toast(errorMessageOf(e), "err"))
+                              }
+                            />
+                          )}
+                          <Link className="btn" to={`/inventory/vendor-exchanges?code=${encodeURIComponent(r.serial_no)}`}>
+                            廠商換貨
+                          </Link>
+                        </>
+                      )}
+                    </td>
                   </tr>
                 );
               })}

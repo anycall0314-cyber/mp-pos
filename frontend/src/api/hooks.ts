@@ -470,6 +470,31 @@ export interface BusinessDailyReport {
   repairs?: BusinessDailySection;
   adjustments: BusinessDailyAdjustments;
   net_change: number;
+  /** 打烊實點:這一天每一次(不改帳;2026-10-23) */
+  counts?: CashCountRow[];
+  /** 只有今天能點 */
+  can_count?: boolean;
+}
+
+export interface CashCountRow {
+  id: number;
+  at: string;
+  counted: number;
+  expected: number;
+  /** 點到 − 當下應有(負的 = 短少) */
+  diff: number;
+  /** 點的人 */
+  by: string;
+}
+
+/** 打烊實點:記下點到多少(不改帳、不能改不能刪) */
+export function useCashCount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { warehouse: number; counted: number }) =>
+      api<{ counts: CashCountRow[] }>("/reports/business-daily/count/", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["business-daily"] }),
+  });
 }
 
 export const useBusinessDailyReport = (
@@ -3236,6 +3261,18 @@ export const lookupVendorExchange = (code: string) =>
   api<ExchangeLookup>(`/vendor-exchanges/lookup/?code=${encodeURIComponent(code)}`);
 
 /** 送廠商換貨(path 空的)、已換貨(`編號/done/`、`done-serial/`)、標錯了(`編號/cancel/`)、不換了(`編號/unreturned/`) */
+/** 銷退退回來的「已退」確認可以賣(回在庫;要員工帳號的「確認可賣」) */
+export function useReleaseReturned() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (serialId: number) => api(`/serials/${serialId}/release/`, { method: "POST", body: "{}" }),
+    onSuccess: () => {
+      for (const key of ["serial-report", "home-summary", "products", "serials", "stock-moves", "stock-count"])
+        qc.invalidateQueries({ queryKey: [key] });
+    },
+  });
+}
+
 export function useVendorExchangeDo() {
   const qc = useQueryClient();
   return useMutation({

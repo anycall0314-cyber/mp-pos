@@ -29,6 +29,7 @@ VOID_PURCHASE = "void_purchase"
 VOID_OTHERS = "void_others"
 EDIT_PRODUCTS = "edit_products"
 STOCK_COUNT = "stock_count"
+RELEASE_RETURNED = "release_returned"
 PURCHASE = "purchase"
 SECONDHAND_BUY = "secondhand_buy"
 CASH_OPS = "cash_ops"
@@ -56,6 +57,9 @@ ABILITIES = [
     Ability(EDIT_PRODUCTS, "商品建檔", "商品", "新增、修改商品與類別品牌,含批次與匯入"),
     # 盤點(2026-10-12):開盤點單、輸入數到的數量、刷手機、送出。**核准才動庫存,核准只有管理員**,不在這個勾裡
     Ability(STOCK_COUNT, "盤點作業", "商品", "開盤點單、盤、送出;核准只有管理員"),
+    # 銷退退回來的手機是「已退」(不能賣),確認可以賣才回在庫(owner 2026-10-23「先標不能賣,確認可賣再點回倉」;
+    # 紅隊:放行的人老闆要能收回)
+    Ability(RELEASE_RETURNED, "確認可賣", "商品", "銷退退回來的手機確認可以再賣、回到在庫"),
     Ability(PURCHASE, "進貨入庫", "進貨與帳務", "進貨單、進貨匯入、中古的廠商收購"),
     Ability(SECONDHAND_BUY, "中古收購", "進貨與帳務", "跟客人收購二手機"),
     Ability(CASH_OPS, "雜支調整", "進貨與帳務", "新增、修改雜支與現金調整"),

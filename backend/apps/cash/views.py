@@ -16,7 +16,7 @@ from apps.sales.models import SalesOrder, SalesOrderPayment
 from apps.tenants import abilities
 from apps.tenants.models import PaymentMethod
 
-from .models import CashAdjustment, PettyExpense, PhoneBillCollection
+from .models import CashAdjustment, CashCount, PettyExpense, PhoneBillCollection
 from .serializers import (
     CashAdjustmentSerializer,
     PettyExpenseSerializer,
@@ -617,8 +617,53 @@ def business_daily_report(request):
                 "out_total": adj_out_total,
             },
             "net_change": net,
+            # 打烊實點:這一天每一次都列(紅隊:交班兩次,早班的短少不能被晚班那一次蓋掉);只有今天能點
+            "counts": _counts_of(tenant, wid, target_date),
+            "can_count": target_date == timezone.localdate(),
         }
     )
+
+
+def _counts_of(tenant, warehouse_id, day):
+    return [{
+        "id": c.id,
+        "at": timezone.localtime(c.created_at).isoformat(),
+        "counted": money_int(c.counted),
+        "expected": money_int(c.expected),
+        "diff": money_int(c.counted) - money_int(c.expected),
+        "by": c.counted_by_name,
+    } for c in CashCount.objects.for_tenant(tenant).filter(warehouse_id=warehouse_id, business_date=day)]
+
+
+@api_view(["POST"])
+def cash_count(request):
+    """打烊實點(owner 2026-10-23「實點加上去」):`{warehouse, counted}` → 記下點到多少、那一刻系統算的應有現金。
+    不改帳(當天結餘、隔天期初照舊);只能點今天的;點過不能改、不能刪。看得到營業日報的人才能點,
+    鎖在門市的只能點自己門市。規則在 `CashCount`。"""
+    abilities.require(request.user, abilities.VIEW_BUSINESS_DAILY)
+    tenant = request.tenant
+    data = request.data if isinstance(request.data, dict) else {}
+    raw_wh, raw_counted = str(data.get("warehouse") or ""), str(data.get("counted") if data.get("counted") is not None else "")
+    if not raw_wh.isdigit():
+        return Response({"detail": "warehouse 為必填"}, status=status.HTTP_400_BAD_REQUEST)
+    wid = int(raw_wh)
+    if not Warehouse.objects.for_tenant(tenant).filter(pk=wid).exists():
+        return Response({"detail": "找不到這家門市"}, status=status.HTTP_400_BAD_REQUEST)
+    profile = getattr(request.user, "profile", None)
+    if profile and profile.is_warehouse_locked and profile.default_warehouse_id != wid:
+        return Response({"detail": "只能點自己門市的現金"}, status=status.HTTP_403_FORBIDDEN)
+    if not raw_counted.isdigit():
+        return Response({"detail": "點到的金額要是整數"}, status=status.HTTP_400_BAD_REQUEST)
+    today = timezone.localdate()
+    cash_codes = list(PaymentMethod.objects.for_tenant(tenant).filter(kind="cash").values_list("code", flat=True))
+    # 今天的結餘 = 明天的期初(同一份算法)
+    expected = _compute_cash_balance_before(tenant, wid, today + timedelta(days=1), cash_codes)
+    sp = getattr(request.user, "sales_person", None)
+    CashCount.objects.create(
+        tenant=tenant, warehouse_id=wid, business_date=today, counted=int(raw_counted), expected=expected,
+        counted_by=request.user, counted_by_name=(sp.name if sp else request.user.username)[:80],
+    )
+    return Response({"counts": _counts_of(tenant, wid, today)}, status=status.HTTP_201_CREATED)
 
 
 @api_view(["GET"])
@@ -738,7 +783,7 @@ def home_summary(request):
             {
                 "id": so.id,
                 "no": so.no,
-                "customer_name": so.display_customer_name or "散客",
+                "customer_name": so.display_customer_name or "直客",
                 "sales_person_name": so.sales_person.name if so.sales_person else "",
                 "total": money_int(so.total),
                 "doc_time": so.created_at.isoformat(),
@@ -773,9 +818,15 @@ def home_summary(request):
         contract_qs = contract_qs.filter(so__warehouse_id=wid)
     contracts_pending = contract_qs.count()
 
+    # 銷退退回來、還沒確認可賣(也還沒送廠商換貨)的手機(2026-10-23)
+    returned_qs = ProductSerial.objects.filter(tenant=tenant, status=ProductSerial.Status.RETURNED)
+    if wid is not None:
+        returned_qs = returned_qs.filter(warehouse_id=wid)
+
     return Response(
         {
             "contracts_pending": contracts_pending,
+            "returns_pending": returned_qs.count(),
             "warehouse_id": wid,
             "warehouse_name": warehouse_name,
             "today": today_data,

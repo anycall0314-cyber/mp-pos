@@ -56,7 +56,8 @@ class WarehouseViewSet(viewsets.ModelViewSet):
 
 
 class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
-    """序號只開讀取;新增由進貨 / 收購產生。唯一能改的是這一台的碼(`codes`:補登或修改 IMEI / SN)。"""
+    """序號只開讀取;新增由進貨 / 收購產生。能改的只有這一台的碼(`codes`:補登或修改 IMEI / SN)
+    與銷退退回來的已退確認可賣(`release`)。"""
 
     serializer_class = ProductSerialSerializer
     search_fields = ["serial_no", "product__sku", "product__name"]
@@ -172,6 +173,31 @@ class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
         except IdentifierDenied as exc:
             return Response({"detail": str(exc)}, status=http_status.HTTP_403_FORBIDDEN)
         except IdentifierError as exc:
+            return Response({"detail": str(exc)}, status=http_status.HTTP_400_BAD_REQUEST)
+        return Response(ProductSerialSerializer(self.get_queryset().get(pk=serial.pk)).data)
+
+    @action(detail=True, methods=["post"], url_path="release")
+    def release(self, request, pk=None):
+        """銷退退回來的「已退」確認可以賣 → 回在庫(owner 2026-10-23「先標不能賣，確認可賣再點回倉」)。
+        要員工帳號的「確認可賣」;鎖在門市的帳號只能按自己門市的(鎖住那一台之後才看)。規則在 `sales.services.release_returned`。"""
+        from apps.sales.services import ReleaseError, release_returned
+        from apps.tenants import abilities
+
+        abilities.require(request.user, abilities.RELEASE_RETURNED)
+        serial = self.get_object()
+        profile = getattr(request.user, "profile", None)
+
+        def own_store(locked):
+            if profile and profile.is_warehouse_locked and (
+                not profile.default_warehouse_id or locked.warehouse_id != profile.default_warehouse_id
+            ):
+                raise IdentifierDenied("只能確認自己門市的機器")
+
+        try:
+            serial = release_returned(request.tenant, serial.pk, request.user, check=own_store)
+        except IdentifierDenied as exc:
+            return Response({"detail": str(exc)}, status=http_status.HTTP_403_FORBIDDEN)
+        except ReleaseError as exc:
             return Response({"detail": str(exc)}, status=http_status.HTTP_400_BAD_REQUEST)
         return Response(ProductSerialSerializer(self.get_queryset().get(pk=serial.pk)).data)
 

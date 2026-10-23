@@ -271,11 +271,11 @@ def remove_scan(count, scan_id):
 
 
 def expected_serials(count):
-    """帳上現在在這家門市在庫、在這張單範圍裡的手機 —— 但盤點開始之後才進到這家門市的不算
-    (進貨、調撥收貨、銷退、作廢銷貨放回來的:盤的人可能已經刷完那一區了,下次再盤)。"""
+    """帳上現在在這家門市在庫(或已退)、在這張單範圍裡的手機 —— 但盤點開始之後才進到這家門市的不算
+    (進貨、調撥收貨、銷退、作廢銷貨放回來的:盤的人可能已經刷完那一區了,下次再盤)。
+    已退(銷退退回來、還沒確認可賣)的也要刷(2026-10-23 紅隊:東西在店裡、算在期末,盤點不能不看)。"""
     T = StockMovement.MovementType
-    serials = ProductSerial.objects.filter(
-        tenant=count.tenant, warehouse=count.warehouse, status=ProductSerial.Status.IN_STOCK)
+    serials = ProductSerial.objects.filter(tenant=count.tenant, warehouse=count.warehouse, status__in=ON_SHELF)
     scope = scope_ids(count)
     if scope:
         serials = serials.filter(product__category_id__in=scope)
@@ -529,15 +529,16 @@ def approve(count, user, lines=None, missing=None, extras=None):
             if m.skipped:
                 continue
             serial = ProductSerial.objects.get(pk=m.serial_id)           # 鎖到之後重讀
-            # 核准的當下已經不在這家門市在庫的(盤完才賣掉、調走)不動:它不是不見了
-            if serial.status == ProductSerial.Status.IN_STOCK and serial.warehouse_id == wh.pk:
+            # 核准的當下已經不在這家門市在庫 / 已退的(盤完才賣掉、調走)不動:它不是不見了
+            if serial.status in ON_SHELF and serial.warehouse_id == wh.pk:
+                m.was_returned = serial.status == ProductSerial.Status.RETURNED
                 serial.status = ProductSerial.Status.LOST
                 serial.save(update_fields=["status"])
                 StockMovement.objects.create(
                     tenant=tenant, serial=serial, qty=1, movement_type=M.ADJUST, from_warehouse=wh,
                     ref_doc_type=REF, ref_doc_id=count.id, note=f"盤點單 {count.no} 盤虧"[:200])
                 m.applied = True
-        StockCountMissing.objects.bulk_update(gone, ["skipped", "reason", "applied"])
+        StockCountMissing.objects.bulk_update(gone, ["skipped", "reason", "applied", "was_returned"])
         _blend_average(tenant, plans, targets)      # 先算(在庫的台數是入庫之前的),跟進貨一樣
         _add_units(count, plans, targets, user)
         count.status, count.approved_at, count.approved_by = S.APPROVED, timezone.now(), _by(user)
@@ -639,7 +640,7 @@ def suggested_products(tenant, old_codes) -> dict:
 
 
 def found(count, missing_id, user):
-    """核准之後手機找到了(管理員):那一台回到在庫、記一筆異動。"""
+    """核准之後手機找到了(管理員):那一台回到在庫(盤虧前是已退的回到已退,還要確認可賣)、記一筆異動。"""
     with transaction.atomic():
         _locked(count, S.APPROVED)
         m = count.missing.filter(pk=missing_id).first()
@@ -651,7 +652,7 @@ def found(count, missing_id, user):
         serial = ProductSerial.objects.get(pk=m.serial_id)
         if serial.status != ProductSerial.Status.LOST:
             raise CountError("這一台現在不是盤虧")
-        serial.status = ProductSerial.Status.IN_STOCK
+        serial.status = ProductSerial.Status.RETURNED if m.was_returned else ProductSerial.Status.IN_STOCK
         serial.save(update_fields=["status"])
         StockMovement.objects.create(
             tenant=count.tenant, serial=serial, qty=1, movement_type=StockMovement.MovementType.ADJUST,
