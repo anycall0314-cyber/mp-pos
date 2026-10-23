@@ -263,6 +263,12 @@ class RepairOrder(TenantOwnedModel):
         decimal_places=2,
         default=Decimal("0"),
     )
+    # 客戶實付是怎麼收的(全站檢視 E6;owner 2026-10-23「要」:維修取機收的現金進營業日報)。
+    # 完工那一天、是現金的,實付算進那一天的營業日報與現金結餘;沒有填的(以前的單)不算
+    payment_method = models.ForeignKey(
+        "tenants.PaymentMethod", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="+", verbose_name="收款方式",
+    )
     completed_at = models.DateTimeField("完工時間", null=True, blank=True)
     is_void = models.BooleanField("作廢", default=False)
 

@@ -45,11 +45,15 @@ export function BusinessDailyReportPage() {
   const purchasesTotal = report?.purchases.total ?? 0;
   const expensesTotal = report?.expenses.total ?? 0;
   const phoneBillsTotal = report?.phone_bills.total ?? 0;
+  // 維修取機收的現金(全站檢視 E6;只算現金,所以叫「維修現金」不叫收入 —— 紅隊)。`?.` 同上
+  const repairsTotal = report?.repairs?.total ?? 0;
+  const repairRows = report?.repairs?.rows ?? [];
   const adjInTotal = report?.adjustments.in_total ?? 0;
   const adjOutTotal = report?.adjustments.out_total ?? 0;
   const netChange =
     salesTotal
     + phoneBillsTotal
+    + repairsTotal
     - salesReturnsTotal
     - buybacksTotal
     - purchasesTotal
@@ -122,6 +126,20 @@ export function BusinessDailyReportPage() {
       );
     }
     lines.push(`小計,,,,,${phoneBillsTotal}`);
+    lines.push("");
+    lines.push("【維修現金】");
+    lines.push("單號,客人,機型,金額");
+    for (const r of repairRows) {
+      lines.push(
+        [
+          r.no,
+          String(r.name ?? "").replace(/,/g, " "),
+          String(r.model ?? "").replace(/,/g, " "),
+          intStr(String(r.amount ?? "0")),
+        ].join(","),
+      );
+    }
+    lines.push(`小計,,,${repairsTotal}`);
     lines.push("");
     lines.push("【進貨現金付款】");
     lines.push("單號,供應商,付款方式,金額");
@@ -201,6 +219,7 @@ export function BusinessDailyReportPage() {
     lines.push(`銷貨現金收入,${salesTotal}`);
     lines.push(`非現金收入,${nonCashSalesTotal}`);
     lines.push(`代收話費,${phoneBillsTotal}`);
+    lines.push(`維修現金,${repairsTotal}`);
     lines.push(`銷退現金支出,-${salesReturnsTotal}`);
     lines.push(`收購現金支出,-${buybacksTotal}`);
     lines.push(`進貨現金付款,-${purchasesTotal}`);
@@ -274,6 +293,7 @@ export function BusinessDailyReportPage() {
                 adds={[
                   { label: "銷貨現金", value: salesTotal },
                   { label: "代收話費", value: phoneBillsTotal },
+                  { label: "維修現金", value: repairsTotal },
                   { label: "現金存入", value: adjInTotal },
                 ]}
                 subs={[
@@ -456,6 +476,37 @@ export function BusinessDailyReportPage() {
                     <tr>
                       <td colSpan={6} className="md-empty">
                         本日無代收話費
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </Section>
+
+            {/* 維修現金(維修取機收的現金,看完工那一天) */}
+            <Section title="維修現金" count={repairRows.length} total={repairsTotal}>
+              <table className="line-table">
+                <thead>
+                  <tr>
+                    <th>單號</th>
+                    <th>客人</th>
+                    <th>機型</th>
+                    <th className="num">金額</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {repairRows.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.no}</td>
+                      <td>{String(r.name || "—")}</td>
+                      <td>{String(r.model || "—")}</td>
+                      <td className="num">{money(String(r.amount ?? "0"))}</td>
+                    </tr>
+                  ))}
+                  {repairRows.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="md-empty">
+                        本日無維修現金
                       </td>
                     </tr>
                   )}

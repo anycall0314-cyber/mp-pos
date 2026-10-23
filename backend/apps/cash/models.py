@@ -116,6 +116,10 @@ class CashAdjustment(TenantOwnedModel):
         ADJUSTMENT = "adjustment", "盤點校正"
         OTHER = "other", "其他"
 
+    # 事由決定方向的那幾種(全站檢視 E7:以前方向、事由各選各的,選了「領現存銀行」忘了改方向 = 記成放進櫃子,結餘差兩倍)。
+    # 盤點校正、其他兩個方向都可能,照人選的
+    REASON_DIRECTION = {"refill": "in", "deposit": "out", "owner_take": "out"}
+
     no = models.CharField(
         "單號",
         max_length=20,

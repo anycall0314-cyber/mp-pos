@@ -17,6 +17,7 @@ import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
 import { MoneyInput } from "@/components/MoneyInput";
+import { directionOfReason } from "@/lib/cashAdjust";
 import { keepOrInt, money } from "@/lib/money";
 
 interface Props {
@@ -26,8 +27,8 @@ interface Props {
 }
 
 const DIRECTION_OPTIONS: { value: CashAdjustmentDirection; label: string }[] = [
-  { value: "in", label: "存入(老闆補錢)" },
-  { value: "out", label: "提取(領出 / 存銀行)" },
+  { value: "in", label: "存入" },
+  { value: "out", label: "提取" },
 ];
 
 const REASON_OPTIONS: { value: CashAdjustmentReason; label: string }[] = [
@@ -39,8 +40,8 @@ const REASON_OPTIONS: { value: CashAdjustmentReason; label: string }[] = [
 ];
 
 const DIRECTION_LABEL: Record<CashAdjustmentDirection, string> = {
-  in: "存入(老闆補錢)",
-  out: "提取(領出 / 存銀行)",
+  in: "存入",
+  out: "提取",
 };
 
 const REASON_LABEL: Record<CashAdjustmentReason, string> = {
@@ -346,9 +347,28 @@ export function CashAdjustmentForm({ open, initial, onClose }: Props) {
               />
             )}
           </Field>
+          <Field label="事由">
+            <select
+              value={state.reason}
+              onChange={(e) => {
+                const reason = e.target.value as CashAdjustmentReason;
+                patch("reason", reason);
+                // 事由決定方向(全站檢視 E7);盤點校正、其他照人選
+                const must = directionOfReason(reason);
+                if (must) patch("direction", must);
+              }}
+            >
+              {REASON_OPTIONS.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </Field>
           <Field label="方向" required>
             <select
               value={state.direction}
+              disabled={directionOfReason(state.reason) !== null}
               onChange={(e) =>
                 patch("direction", e.target.value as CashAdjustmentDirection)
               }
@@ -356,20 +376,6 @@ export function CashAdjustmentForm({ open, initial, onClose }: Props) {
               {DIRECTION_OPTIONS.map((d) => (
                 <option key={d.value} value={d.value}>
                   {d.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="事由">
-            <select
-              value={state.reason}
-              onChange={(e) =>
-                patch("reason", e.target.value as CashAdjustmentReason)
-              }
-            >
-              {REASON_OPTIONS.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
                 </option>
               ))}
             </select>

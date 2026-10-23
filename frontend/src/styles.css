@@ -4106,6 +4106,8 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   width: 100%;
   box-sizing: border-box;
 }
+/* 完成的維修單:整張的格子一起鎖住(fieldset disabled),版面照舊(display: contents) */
+.re-lock { display: contents; }
 .re-mode-bar {
   display: grid;
   grid-template-columns: 1fr 1fr;

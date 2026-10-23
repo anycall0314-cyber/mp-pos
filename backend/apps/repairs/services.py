@@ -155,6 +155,10 @@ def complete_repair_order(repair_order: RepairOrder) -> None:
             raise ValueError("此維修單已作廢,不能完工")
         if repair_order.status == RepairOrder.Status.COMPLETED:
             return  # 已完工的不重扣
+        # 有收錢就要講怎麼收的(全站檢視 E6;紅隊:預設現金的話刷卡的也會被算成現金,完工之後又改不了):
+        # 現金的才進營業日報的維修現金與結餘。鎖住之後才看(畫面剛存的實付、收款方式)
+        if repair_order.customer_paid_amount > 0 and repair_order.payment_method_id is None:
+            raise ValueError("客戶有付錢,請先選收款方式再完成")
 
         tenant = repair_order.tenant
         wh = repair_order.warehouse

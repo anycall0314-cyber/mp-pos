@@ -129,6 +129,17 @@ class CashAdjustmentSerializer(TenantScopedRelatedFieldsMixin, serializers.Model
             "updated_at",
         ]
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        reason = attrs.get("reason", getattr(self.instance, "reason", None))
+        direction = attrs.get("direction", getattr(self.instance, "direction", None))
+        must = CashAdjustment.REASON_DIRECTION.get(reason)
+        if must and direction != must:
+            label = dict(CashAdjustment.Reason.choices).get(reason, reason)
+            raise serializers.ValidationError(
+                {"direction": f"「{label}」一定是{'存入' if must == 'in' else '提取'}"})
+        return attrs
+
 
 class PhoneBillCollectionSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     warehouse_code = serializers.CharField(

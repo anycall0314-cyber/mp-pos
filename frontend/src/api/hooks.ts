@@ -466,6 +466,8 @@ export interface BusinessDailyReport {
   purchases: BusinessDailySection;
   expenses: BusinessDailySection;
   phone_bills: BusinessDailySection;
+  /** 維修取機收的現金(完工那一天、收款方式是現金的;全站檢視 E6) */
+  repairs?: BusinessDailySection;
   adjustments: BusinessDailyAdjustments;
   net_change: number;
 }

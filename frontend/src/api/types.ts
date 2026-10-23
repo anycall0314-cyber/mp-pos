@@ -1416,6 +1416,8 @@ export interface RepairOrder {
   sent_external_at: string | null;
   external_expected_pickup: string | null;
   customer_paid_amount: string;
+  /** 客戶實付怎麼收的(現金的才進營業日報) */
+  payment_method?: number | null;
   completed_at: string | null;
   is_void: boolean;
   parts: RepairOrderPart[];

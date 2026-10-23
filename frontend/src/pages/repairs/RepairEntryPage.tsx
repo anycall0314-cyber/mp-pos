@@ -10,6 +10,7 @@ import {
   useReopenRepair,
   useSaveMember,
   useSaveRepairOrder,
+  usePaymentMethods,
   useSetRepairStatus,
   useWarehouses,
 } from "@/api/hooks";
@@ -41,7 +42,7 @@ import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { Toolbar } from "@/components/Toolbar";
 import { MoneyInput } from "@/components/MoneyInput";
 import { localDay } from "@/lib/fixedReports";
-import { intakeProblem, makeSubmitGate, phoneForNewMember } from "@/lib/repairIntake";
+import { intakeProblem, makeSubmitGate, paidNeedsMethod, phoneForNewMember } from "@/lib/repairIntake";
 import { intStr, money } from "@/lib/money";
 import { marginFormula, personalSplit, repairMargin } from "@/lib/repairMargin";
 import { RepairHistoryModal } from "./RepairHistoryModal";
@@ -162,6 +163,9 @@ function RepairEntryForm() {
   const [expectedPickup, setExpectedPickup] = useState("");
 
   const [customerPaid, setCustomerPaid] = useState("0");
+  /** 客戶實付怎麼收的(全站檢視 E6:現金的才進營業日報;紅隊:不預設,有收錢沒選就不能完成) */
+  const [paymentMethod, setPaymentMethod] = useState<number | "">("");
+  const paymentMethods = usePaymentMethods({ activeOnly: true }).data ?? [];
   const [status, setStatusState] = useState<RepairStatus>("pending");
   const isLocked = status === "completed"; // 完成後鎖定欄位,須重開才能改
 
@@ -254,6 +258,7 @@ function RepairEntryForm() {
     setSentDate(o.sent_external_at ?? "");
     setExpectedPickup(o.external_expected_pickup ?? "");
     setCustomerPaid(o.customer_paid_amount);
+    setPaymentMethod(o.payment_method ?? "");
     setStatusState(o.status);
     setUnlockMethod(o.unlock_method ?? "none");
     setUnlockPassword(o.unlock_password ?? "");
@@ -389,8 +394,9 @@ function RepairEntryForm() {
     });
   }
 
-  async function submitNow(opts?: { printAfter?: boolean }) {
-    if (notLoaded) return;
+  /** 存檔;存成了回 true(完工前先存要看這個) */
+  async function submitNow(opts?: { printAfter?: boolean }): Promise<boolean> {
+    if (notLoaded) return false;
     setError(null);
     // 收件要填的只有 lib/repairIntake 那幾格;門市、收件人、收件日沒有預設才要人選
     const problem = intakeProblem({
@@ -399,27 +405,27 @@ function RepairEntryForm() {
     });
     if (problem) {
       setError(problem);
-      return;
+      return false;
     }
     if (!intake && !customer && !member) {
       setError("請選或建立送修會員");
-      return;
+      return false;
     }
     if (!warehouseId) {
       setError("請選擇收件門市");
-      return;
+      return false;
     }
     if (!salesPerson) {
       setError("請選擇收件人");
-      return;
+      return false;
     }
     if (!receivedDate) {
       setError("請選擇收件日期");
-      return;
+      return false;
     }
     if (isReturnVisit && !previousId) {
       setError("已勾選『返修』,請先從歷史維修中選一張關聯單");
-      return;
+      return false;
     }
     // 維修項目 / 零件 / 報價屬於評估後再填,收件當下允許留空
     try {
@@ -429,7 +435,7 @@ function RepairEntryForm() {
         const bad = phoneForNewMember(customerPhone);
         if (bad) {
           setError(bad);
-          return;
+          return false;
         }
         sender = await saveMember.mutateAsync({ name: customerName.trim(), phone: customerPhone.trim() });
         setMember(sender);
@@ -461,6 +467,7 @@ function RepairEntryForm() {
         internal_settle_amount: internalSettle || "0",
         status,
         customer_paid_amount: customerPaid || "0",
+        payment_method: paymentMethod || null,
       };
       if (mode === "in_house") {
         body.repair_item = repairItemId;
@@ -487,8 +494,10 @@ function RepairEntryForm() {
       } else if (!isEdit) {
         navigate(`/repairs/${saved.id}`);
       }
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return false;
     }
   }
 
@@ -545,7 +554,24 @@ function RepairEntryForm() {
     if (!id) return;
     try {
       if (newStatus === "completed") {
+        // 有收錢就要選怎麼收的(全站檢視 E6;伺服器也擋)
+        if (paidNeedsMethod(customerPaid, paymentMethod)) {
+          setError("客戶有付錢,請先選收款方式再完成");
+          return;
+        }
         if (!confirm("完工會扣零件倉庫存,確定?")) return;
+        // 先把畫面上改過的存起來再完工(全站檢視 E5:實付、工資填好直接按完成,完成只改狀態,剛填的錢沒存、
+        // 完成之後又不能改 —— 月報、業績少這一筆)。沒存成(有欄位沒填)就不完工
+        let saved = false;
+        await submitGate.current(async () => {
+          setSubmitting(true);
+          try {
+            saved = await submitNow();
+          } finally {
+            setSubmitting(false);
+          }
+        });
+        if (!saved) return;
         await complete.mutateAsync(id);
       } else {
         await setStatus.mutateAsync({ id, status: newStatus });
@@ -640,6 +666,8 @@ function RepairEntryForm() {
           />
         )}
 
+        {/* 完成之後整張鎖住(全站檢視 E5:以前寫「欄位為唯讀」,格子其實還能打字) */}
+        <fieldset className="re-lock" disabled={isLocked}>
         {/* 保固狀態 banner */}
         {warrantyStatus && (
           <div
@@ -1281,6 +1309,20 @@ function RepairEntryForm() {
                     className="re-summary-input re-summary-input-hero"
                   />
                 </div>
+                <div className="re-summary-row">
+                  <span>收款方式</span>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value ? Number(e.target.value) : "")}
+                  >
+                    <option value="">請選</option>
+                    {paymentMethods.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="re-summary-row re-summary-margin">
                   <span>預估毛利</span>
                   <b style={{ color: margin < 0 ? "var(--danger-text)" : "var(--success-text)" }}>
@@ -1399,6 +1441,7 @@ function RepairEntryForm() {
           </aside>
           )}
         </div>
+        </fieldset>
       </div>
 
       <RepairHistoryModal

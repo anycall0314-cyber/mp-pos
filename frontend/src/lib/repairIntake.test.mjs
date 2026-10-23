@@ -49,3 +49,22 @@ test("存檔一次只跑一個:連按兩下只建一次", async () => {
   await run(save);                                   // 失敗也會放開
   assert.equal(created, 3);
 });
+
+test("維修完成:有收錢要選收款方式;按完成先存畫面上的再完成;完成後整張鎖住(全站檢視 E5 / E6)", async () => {
+  const { paidNeedsMethod } = await import("./repairIntake.ts");
+  assert.equal(paidNeedsMethod("1500", ""), true);
+  assert.equal(paidNeedsMethod("1500", 3), false);
+  assert.equal(paidNeedsMethod("0", ""), false);
+  assert.equal(paidNeedsMethod("", ""), false);
+  const { readFileSync } = await import("node:fs");
+  const page = readFileSync(new URL("../pages/repairs/RepairEntryPage.tsx", import.meta.url), "utf8");
+  // 先存、存成了才完成(以前「完成」只改狀態,剛填的實付沒存)
+  assert.match(page, /saved = await submitNow\(\);[\s\S]{0,120}if \(!saved\) return;\s*await complete\.mutateAsync\(id\);/);
+  assert.match(page, /if \(paidNeedsMethod\(customerPaid, paymentMethod\)\) \{/);
+  assert.match(page, /payment_method: paymentMethod \|\| null,/);
+  assert.match(page, /<fieldset className="re-lock" disabled=\{isLocked\}>/);
+  // 營業日報多「維修現金」(只算現金,不叫收入)
+  const daily = readFileSync(new URL("../pages/reports/BusinessDailyReport.tsx", import.meta.url), "utf8");
+  assert.match(daily, /\+ phoneBillsTotal\s*\+ repairsTotal/);
+  assert.match(daily, /\{ label: "維修現金", value: repairsTotal \}/);
+});

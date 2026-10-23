@@ -1,7 +1,8 @@
-from datetime import date as date_cls, timedelta
+from datetime import date as date_cls, datetime, time, timedelta
 
 from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce, Round
+from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
@@ -147,10 +148,29 @@ class CashAdjustmentViewSet(abilities.WritesNeed, WarehouseScopedMixin, viewsets
         return Response(self.get_serializer(obj).data)
 
 
+def _day_start(day):
+    """那一天 00:00(店裡的時區)。維修單看的是完工那一刻,換成日期要照店裡的時區切(凌晨完工的算當天)。"""
+    return timezone.make_aware(datetime.combine(day, time.min))
+
+
+def _repairs_paid_in_cash(tenant, warehouse_id):
+    """維修取機收的現金(全站檢視 E6;owner 2026-10-23「要」):完成、沒作廢、收款方式是現金的維修單,客戶實付。
+    哪一天看完工的時間(`completed_at`)。沒有填收款方式的(以前的單)不算。"""
+    from apps.repairs.models import RepairOrder
+
+    return RepairOrder.objects.for_tenant(tenant).filter(
+        warehouse_id=warehouse_id,
+        status=RepairOrder.Status.COMPLETED,
+        is_void=False,
+        payment_method__kind="cash",
+        completed_at__isnull=False,
+    )
+
+
 def _compute_cash_balance_before(tenant, warehouse_id, before_date, cash_codes):
     """算指定門市在某日「之前」的現金累計淨變動。
     用來當營業日報「期初現金」的值(全自動累加,使用者不可改)。
-    + 銷貨現金收入   + 代收話費    − 進貨現金付款  − 雜支現金支出  − 銷退現金支出
+    + 銷貨現金收入   + 代收話費    + 維修現金收入(完工那一天)  − 進貨現金付款  − 雜支現金支出  − 銷退現金支出
     + 現金存入       − 現金提取
 
     每一筆先四捨五入成整數元再加總(`Sum(Round(...))`),跟當日明細逐筆 `money_int` 再加的算法一樣。
@@ -233,9 +253,16 @@ def _compute_cash_balance_before(tenant, warehouse_id, before_date, cash_codes):
         .aggregate(s=Sum(Round("amount")))["s"]
         or 0
     )
+    repairs_in = (
+        _repairs_paid_in_cash(tenant, warehouse_id)
+        .filter(completed_at__lt=_day_start(before_date))
+        .aggregate(s=Sum(Round("customer_paid_amount")))["s"]
+        or 0
+    )
     return money_int(
         sales_in
         + phone_bills_in
+        + repairs_in
         - sales_return_out
         - purchases_out
         - expenses_out
@@ -501,6 +528,24 @@ def business_daily_report(request):
         )
         phone_bills_total += money_int(pb.amount)
 
+    # 3d. 維修收入(維修取機收的現金;看完工那一天)
+    repairs_rows = []
+    repairs_total = 0
+    for ro in (
+        _repairs_paid_in_cash(tenant, wid)
+        .filter(completed_at__gte=_day_start(target_date), completed_at__lt=_day_start(target_date + timedelta(days=1)))
+        .select_related("member", "customer")
+        .order_by("completed_at", "id")
+    ):
+        repairs_rows.append({
+            "id": ro.id,
+            "no": ro.no,
+            "name": (ro.member.name if ro.member_id else (ro.customer.name if ro.customer_id else "")),
+            "model": ro.host_model_name,
+            "amount": str(ro.customer_paid_amount),
+        })
+        repairs_total += money_int(ro.customer_paid_amount)
+
     # 4. 現金調整(老闆補錢進、領現金出去、盤點校正)
     adjustments_qs = (
         CashAdjustment.objects.for_tenant(tenant)
@@ -535,6 +580,7 @@ def business_daily_report(request):
         sales_total
         - buybacks_total
         + phone_bills_total
+        + repairs_total
         - purchases_total
         - expenses_total
         - sales_returns_total
@@ -562,6 +608,7 @@ def business_daily_report(request):
                 "rows": phone_bills_rows,
                 "total": phone_bills_total,
             },
+            "repairs": {"rows": repairs_rows, "total": repairs_total},
             "adjustments": {
                 "rows": adj_rows,
                 "in_total": adj_in_total,

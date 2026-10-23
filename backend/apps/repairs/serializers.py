@@ -273,6 +273,7 @@ class RepairOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSer
             "sent_external_at",
             "external_expected_pickup",
             "customer_paid_amount",
+            "payment_method",
             "completed_at",
             "is_void",
             "parts",

@@ -57,3 +57,8 @@ export function makeSubmitGate() {
     }
   };
 }
+
+/** 完成前:客戶有付錢就要選收款方式(全站檢視 E6;紅隊:不預設現金,刷卡的才不會被算成現金;伺服器同一條) */
+export function paidNeedsMethod(paid: string, method: number | ""): boolean {
+  return Number(paid || 0) > 0 && method === "";
+}
