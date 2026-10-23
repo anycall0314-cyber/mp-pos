@@ -228,8 +228,7 @@ export function PlatformUsersTab() {
                 <td>
                   <button
                     type="button"
-                    className="btn"
-                    style={{ fontSize: 14, padding: "4px 8px" }}
+                    className="btn small"
                     onClick={() => handleResetPassword(u)}
                   >
                     重設密碼

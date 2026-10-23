@@ -741,14 +741,14 @@ export function SettingsPage() {
                   <td className="row-actions">
                     {canTracks && (
                       <>
-                        <button onClick={() => setJumping(t)}>跳號</button>
+                        <button className="btn small" onClick={() => setJumping(t)}>跳號</button>
                         {/* 共用的舊字軌:鎖在門市的帳號只能跳號,改與刪要管理員 */}
                         {(ownStore === null || t.warehouse === ownStore) && (
                           <>
-                            <button onClick={() => startEdit(t)}>編輯</button>
+                            <button className="btn small" onClick={() => startEdit(t)}>編輯</button>
                             <ArmButton
                               label="刪除"
-                              className=""
+                              className="btn small danger"
                               onConfirm={() =>
                                 delTrack.mutateAsync(t.id).catch((e) => toast(`刪除失敗:${errorText(e)}`, "err"))
                               }
@@ -959,10 +959,10 @@ export function SettingsPage() {
                     />
                   </td>
                   <td className="row-actions">
-                    <button onClick={() => setEditingPm(p)}>編輯</button>
+                    <button className="btn small" onClick={() => setEditingPm(p)}>編輯</button>
                     <ArmButton
                       label="刪除"
-                      className=""
+                      className="btn small danger"
                       onConfirm={() =>
                         delPm.mutateAsync(p.id).catch((e) => toast(`刪除失敗:${errorText(e)}`, "err"))
                       }

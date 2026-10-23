@@ -122,7 +122,7 @@ test("系統設定:字軌要選門市與期別;下一張不能直接改、要用
   assert.match(page, /if \(!editing\.id && editing\.next_number !== undefined\) body\.next_number = editing\.next_number;/);
   assert.doesNotMatch(page, /saveTrack\.mutateAsync\(editing/);         // 不再把整筆(含下一張)送回去
   // 清單:跳號開同一個視窗;沒有「發票字軌」那一項的帳號按鈕都收起來
-  assert.match(tracks, /\{canTracks && \(\s*<>\s*<button onClick=\{\(\) => setJumping\(t\)\}>跳號<\/button>/);
+  assert.match(tracks, /\{canTracks && \(\s*<>\s*<button(?: className="[^"]*")? onClick=\{\(\) => setJumping\(t\)\}>跳號<\/button>/);
   assert.match(page, /\{jumping && <InvoiceJumpDialog track=\{jumping\} onClose=\{\(\) => setJumping\(null\)\} \/>\}/);
   assert.match(page, /const canTracks = can\(useAuth\(\)\.user, "invoice_tracks"\);/);
   assert.match(tracks, /\{canTracks && \(\s*<div style=\{\{ marginBottom: 8 \}\}>\s*<button className="btn primary" onClick=\{startNew\}>/);

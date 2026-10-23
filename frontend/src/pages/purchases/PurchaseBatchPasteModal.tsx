@@ -300,7 +300,6 @@ export function PurchaseBatchPasteModal({
                 <button
                   type="button"
                   className="btn"
-                  style={{ flexShrink: 0, fontSize: 16, whiteSpace: "nowrap" }}
                   onClick={() => downloadSampleCsv(mode)}
                   title="下載 CSV 範例,可用 Excel 打開編輯"
                 >
@@ -568,8 +567,7 @@ PH-000023\t1\t29000\t356121234567000`}
                           <td>
                             <button
                               type="button"
-                              className="btn"
-                              style={{ fontSize: 14, padding: "2px 6px" }}
+                              className="btn small"
                               onClick={() => removeRow(r.key)}
                               title="刪除這列"
                             >

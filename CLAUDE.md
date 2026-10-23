@@ -217,7 +217,7 @@ inventory-3c/
         ├── hooks/               useReorder(拖拉排序:放開就換、背景存、最後重抓一次;規則在 lib/reorder.ts 與 lib/reorderStore.ts)/ useModalDraft / useIsMobile
         ├── nav.ts               導覽的唯一設定(入口、分頁、設定選單、舊名字)+ matchNav / searchNav / visibleModules;nav.test.mjs
         ├── App.tsx              路由與外框(側邊欄 Sidebar、頁面上方的分頁 ModuleBar 都在 components/shell/)
-        └── styles.css           全站 CSS(暗色為預設、日間可切)。最上面是字級與尺寸的變數(正文 16 / 次要 14 / 區塊標題 18 / 頁標題 24 / 控制項 44px),畫面樣式一律用變數、不寫死 px;列印頁的樣式例外。同一段還有跟主題走的狀態文字色(`--warn-text` / `--success-text` / `--danger-text` / `--info-text`:夜間亮色、日間深色),寫警示 / 成功 / 錯誤的字一律用變數
+        └── styles.css           全站 CSS(暗色為預設、日間可切)。最上面是字級與尺寸的變數(正文 16 / 次要 14 / 區塊標題 18 / 頁標題 24 / 控制項 44px;按鈕留白 `--btn-pad-x`、圓角 `--btn-radius`、小按鈕 `--btn-h-sm`,**全站按鈕只有 `btn` / `wb-btn` 一套長相、主要按鈕藍色**,2026-10-24 owner,細節見 `docs/ui-patterns.md`),畫面樣式一律用變數、不寫死 px;列印頁的樣式例外。同一段還有跟主題走的狀態文字色(`--warn-text` / `--success-text` / `--danger-text` / `--info-text`:夜間亮色、日間深色),寫警示 / 成功 / 錯誤的字一律用變數
 ```
 
 後端新加的 endpoint:
