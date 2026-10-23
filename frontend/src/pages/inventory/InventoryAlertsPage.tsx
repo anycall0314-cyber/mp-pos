@@ -134,13 +134,6 @@ function AlertsPanel() {
                 ? "目前沒有需要關注的庫存"
                 : `沒有${SEVERITY_LABEL[severityFilter]}等級的警示`}
             </div>
-            <div className="ia-empty-hint">
-              安全庫存與販售狀態可在
-              <Link to="/products" className="ia-empty-link">
-                商品管理
-              </Link>
-              設定
-            </div>
           </div>
         )}
         {filtered.map((row) => (
@@ -178,9 +171,6 @@ function AlertRow({ row }: { row: InventoryAlertRow }) {
           )}
         </div>
         <div className="ia-row-reason">{row.reason_label}</div>
-        {row.safety_formula && (
-          <div className="ia-row-formula">動態:{row.safety_formula}</div>
-        )}
         {row.related_hosts.length > 0 && (
           <div className="ia-row-hosts">
             關聯主機:{row.related_hosts.map((h) => h.name).join(" / ")}
@@ -194,10 +184,11 @@ function AlertRow({ row }: { row: InventoryAlertRow }) {
         </div>
       </div>
       <div className="ia-row-actions">
-        <Link to="/purchases/new" className="btn primary ia-row-btn">
+        {/* 帶著這個商品去(全站檢視 B11:以前只開一張空白進貨單 / 商品管理首頁,要重找) */}
+        <Link to={`/purchases/new?add=${row.id}`} className="btn primary ia-row-btn">
           去進貨
         </Link>
-        <Link to="/products" className="btn ia-row-btn">
+        <Link to={`/products?selected=${row.id}`} className="btn ia-row-btn">
           編輯商品
         </Link>
       </div>
@@ -224,10 +215,6 @@ function ClearancePanel() {
           <span className="ia-count-label">出清品項</span>
         </div>
       </div>
-      <div className="ia-hint">
-        預估清倉天數 = 目前庫存 ÷ 過去 30 天日均銷量;
-        超過 {threshold} 天會自動標記建議降價
-      </div>
 
       <div className="ia-list">
         {isLoading && <div className="md-empty">載入中…</div>}
@@ -235,9 +222,6 @@ function ClearancePanel() {
         {!isLoading && !isError && rows.length === 0 && (
           <div className="ia-empty">
             <div className="ia-empty-title">目前沒有出清中的商品</div>
-            <div className="ia-empty-hint">
-              在商品管理把狀態改為「清倉處理」即可進入此清單
-            </div>
           </div>
         )}
         {rows.map((row) => (
@@ -306,7 +290,7 @@ function ClearanceRow({
         </div>
       </div>
       <div className="ia-row-actions">
-        <Link to="/products" className="btn primary ia-row-btn">
+        <Link to={`/products?selected=${row.id}`} className="btn primary ia-row-btn">
           調整售價
         </Link>
       </div>
