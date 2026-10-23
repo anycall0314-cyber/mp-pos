@@ -1344,13 +1344,16 @@ export function TransferWorkbenchPage() {
           title="只看這一天"
           onChange={(e) => setDay(e.target.value)}
         />
-        {day && (
+        {(day || onlyPending) && (
           <button
             type="button"
             className="wb-btn small"
-            onClick={() => setDay("")}
+            onClick={() => {
+              setDay("");
+              setOnlyPending(false);
+            }}
           >
-            全部日期
+            清除條件
           </button>
         )}
       </div>

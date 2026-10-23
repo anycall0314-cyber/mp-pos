@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 
 import { useStockFlow } from "@/api/hooks";
 import type { Category, Warehouse } from "@/api/types";
+import { AppliedFilters } from "@/components/AppliedFilters";
 import { Banner, errorMessageOf } from "@/components/Banner";
+import { appliedList, cond, rangeCond } from "@/lib/appliedFilters";
 import { Toolbar } from "@/components/Toolbar";
 import { localDay, monthStart, rangeReady } from "@/lib/fixedReports";
 import { exportFileName, exportIfComplete, tooManyToExport } from "@/lib/reportExports";
@@ -50,6 +52,7 @@ export function StockFlowPage() {
   const [page, setPage] = useState(1);
   // 查詢當下選的門市(點品名帶去異動查詢用;畫面上的框之後可能又被改了)
   const [appliedStore, setAppliedStore] = useState<Picked<Warehouse>>(NOT_PICKED);
+  const [appliedCategory, setAppliedCategory] = useState<Picked<Category>>(NOT_PICKED);
 
   const { data, isFetching, isError, error } = useStockFlow(applied);
   const ready = rangeReady({ from, to });
@@ -63,6 +66,29 @@ export function StockFlowPage() {
     if (!ready) return;
     setApplied({ from, to, warehouse: store.id, category: category.id, search, moved });
     setAppliedStore(store);
+    setAppliedCategory(category);
+    setPage(1);
+  }
+
+  // 已套用的條件(查的那一份;預設 = 本月、全部)
+  const appliedItems = appliedList([
+    rangeCond("期間", applied.from, applied.to, { from: monthStart(), to: localDay() }),
+    applied.warehouse !== "" && cond("門市", storeName),
+    applied.category !== "" && cond("類別", appliedCategory.option?.label),
+    cond("商品", applied.search),
+    applied.moved && cond("只看", "有進出"),
+  ]);
+
+  function clearAll() {
+    setFrom(monthStart());
+    setTo(localDay());
+    setStore(NOT_PICKED);
+    setCategory(NOT_PICKED);
+    setSearch("");
+    setMoved(false);
+    setApplied({ from: monthStart(), to: localDay(), warehouse: "", category: "", search: "", moved: false });
+    setAppliedStore(NOT_PICKED);
+    setAppliedCategory(NOT_PICKED);
     setPage(1);
   }
 
@@ -136,6 +162,7 @@ export function StockFlowPage() {
           查詢
         </button>
       </div>
+      <AppliedFilters items={appliedItems} onClear={clearAll} />
       {isError && <Banner kind="error" message={errorMessageOf(error)} />}
 
       {data && (

@@ -230,7 +230,7 @@ export function PurchaseListPage() {
         />
         {day && (
           <button type="button" className="wb-btn" onClick={() => setDay("")}>
-            全部日期
+            清除條件
           </button>
         )}
         <span className="ws-grow" />

@@ -3,8 +3,10 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useSalesReturns } from "@/api/hooks";
+import { AppliedFilters } from "@/components/AppliedFilters";
 import { Toolbar } from "@/components/Toolbar";
 import { money } from "@/lib/money";
+import { appliedList, rangeCond } from "@/lib/appliedFilters";
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -84,6 +86,14 @@ export function SalesReturnsPage() {
                 : `共 ${(returns.data ?? []).length} 筆`}
             </span>
           </div>
+          <AppliedFilters
+            items={appliedList([rangeCond("期間", from, to, { from: today(), to: today() })])}
+            onClear={() => {
+              const t = today();
+              setFrom(t);
+              setTo(t);
+            }}
+          />
           <div className="md-table" style={{ height: "calc(100% - 80px)" }}>
             {returns.isLoading && <div className="md-empty">載入中…</div>}
             {returns.isError && (
@@ -97,7 +107,7 @@ export function SalesReturnsPage() {
                     <th>日期</th>
                     <th>原銷貨單</th>
                     <th>來源</th>
-                    <th>退回倉</th>
+                    <th>門市</th>
                     <th>退款方式</th>
                     <th className="num">退款額</th>
                   </tr>

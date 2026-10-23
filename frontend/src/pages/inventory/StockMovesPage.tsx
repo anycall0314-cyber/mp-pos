@@ -3,7 +3,9 @@ import { Link, useLocation } from "react-router-dom";
 
 import { fetchStockMovesExport, useStockMoves } from "@/api/hooks";
 import type { Category, Warehouse } from "@/api/types";
+import { AppliedFilters } from "@/components/AppliedFilters";
 import { Banner, errorMessageOf } from "@/components/Banner";
+import { appliedList, cond, rangeCond } from "@/lib/appliedFilters";
 import { SerialHistoryModal } from "@/components/SerialHistoryModal";
 import { Toolbar } from "@/components/Toolbar";
 import { localDay, monthStart, rangeReady } from "@/lib/fixedReports";
@@ -68,6 +70,8 @@ export function StockMovesPage() {
   const [exportNote, setExportNote] = useState("");
   // 查詢當下選的門市(檔名用;畫面上的框之後可能又被改了)
   const [appliedStore, setAppliedStore] = useState<Picked<Warehouse>>(carried.store ?? NOT_PICKED);
+  const [appliedCategory, setAppliedCategory] = useState<Picked<Category>>(NOT_PICKED);
+  const [appliedOnly, setAppliedOnly] = useState(carried.product ?? null);
   const storeName = useStoreName(appliedStore);
 
   const { data, isFetching, isError, error } = useStockMoves(applied, page);
@@ -81,6 +85,34 @@ export function StockMovesPage() {
       search: only ? "" : search, product: only ? only.id : "",
     });
     setAppliedStore(store);
+    setAppliedCategory(category);
+    setAppliedOnly(only);
+    setPage(1);
+    setExportNote("");
+  }
+
+  // 已套用的條件(查的那一份;預設 = 本月、全部)
+  const appliedItems = appliedList([
+    rangeCond("期間", applied.from, applied.to, { from: monthStart(), to: localDay() }),
+    applied.warehouse !== "" && cond("門市", storeName),
+    cond("異動", applied.kind && ((data?.kinds ?? []).find((k) => k.key === applied.kind)?.label ?? applied.kind)),
+    applied.category !== "" && cond("類別", appliedCategory.option?.label),
+    cond("商品", appliedOnly ? appliedOnly.label : applied.search),
+  ]);
+
+  function clearAll() {
+    const fresh: MoveFilter = { from: monthStart(), to: localDay(), warehouse: "", kind: "", category: "", search: "", product: "" };
+    setFrom(fresh.from);
+    setTo(fresh.to);
+    setStore(NOT_PICKED);
+    setKind("");
+    setCategory(NOT_PICKED);
+    setSearch("");
+    setOnly(null);
+    setApplied(fresh);
+    setAppliedStore(NOT_PICKED);
+    setAppliedCategory(NOT_PICKED);
+    setAppliedOnly(null);
     setPage(1);
     setExportNote("");
   }
@@ -172,6 +204,7 @@ export function StockMovesPage() {
           查詢
         </button>
       </div>
+      <AppliedFilters items={appliedItems} onClear={clearAll} />
       {isError && <Banner kind="error" message={errorMessageOf(error)} />}
       {exportNote && <Banner kind="error" message={exportNote} />}
 

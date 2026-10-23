@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 
 import { fetchInvoiceListExport, fetchInvoiceSummary, useInvoiceList, useInvoiceTypes } from "@/api/hooks";
 import type { Warehouse } from "@/api/types";
+import { AppliedFilters } from "@/components/AppliedFilters";
 import { Banner, errorMessageOf } from "@/components/Banner";
+import { appliedList, cond, rangeCond } from "@/lib/appliedFilters";
 import { Toolbar } from "@/components/Toolbar";
 import { localDay, monthStart, rangeReady } from "@/lib/fixedReports";
 import {
@@ -66,6 +68,30 @@ export function InvoiceListPage() {
     if (!ready) return;
     setApplied({ from, to, by, warehouse: store.id, form, state, search });
     setAppliedStore(store);
+    setPage(1);
+    setExportNote("");
+  }
+
+  // 已套用的條件(查的那一份;預設 = 本月、照發票日、全部)
+  const appliedItems = appliedList([
+    applied.by !== "" && applied.by !== choices?.by?.[0]?.key && cond("日期", choiceLabel(choices?.by, applied.by)),
+    rangeCond("期間", applied.from, applied.to, { from: monthStart(), to: localDay() }),
+    applied.warehouse !== "" && cond("門市", storeName),
+    cond("類型", applied.form && ((types.data ?? []).find((t) => t.code === applied.form)?.name ?? applied.form)),
+    cond("狀態", applied.state && choiceLabel(choices?.state, applied.state)),
+    cond("搜尋", applied.search),
+  ]);
+
+  function clearAll() {
+    setFrom(monthStart());
+    setTo(localDay());
+    setBy("");
+    setStore(NOT_PICKED);
+    setForm("");
+    setState("");
+    setSearch("");
+    setApplied({ from: monthStart(), to: localDay(), by: "", warehouse: "", form: "", state: "", search: "" });
+    setAppliedStore(NOT_PICKED);
     setPage(1);
     setExportNote("");
   }
@@ -207,6 +233,7 @@ export function InvoiceListPage() {
           查詢
         </button>
       </div>
+      <AppliedFilters items={appliedItems} onClear={clearAll} />
       {isError && <Banner kind="error" message={errorMessageOf(error)} />}
       {exportNote && <Banner kind="error" message={exportNote} />}
 

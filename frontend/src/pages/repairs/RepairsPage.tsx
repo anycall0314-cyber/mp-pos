@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { useRepairOrders, useSaveRepairOrder } from "@/api/hooks";
+import { AppliedFilters } from "@/components/AppliedFilters";
 import { MoneyInput } from "@/components/MoneyInput";
 import { Toolbar } from "@/components/Toolbar";
+import { appliedList, cond } from "@/lib/appliedFilters";
 import { localDay } from "@/lib/fixedReports";
 import { intStr, money } from "@/lib/money";
 
@@ -188,10 +190,24 @@ export function RepairsPage() {
         </span>
       </div>
 
+      <AppliedFilters
+        items={appliedList([
+          cond("狀態", status && STATUS_OPTIONS.find((o) => o.v === status)?.label),
+          cond("方式", mode && (mode === "external" ? "委外" : "自修")),
+          returnVisitOnly && cond("只看", "返修"),
+          !!overdue && cond("只看", overdue === "external" ? "委外逾期" : "逾期"),
+        ])}
+        onClear={() => {
+          setStatus("");
+          setMode("");
+          setReturnVisitOnly(false);
+          setOverdue("");
+        }}
+      />
       <div className="md-table" style={{ height: "calc(100% - 100px)" }}>
         {isLoading && <div className="md-empty">載入中…</div>}
         {!isLoading && rows.length === 0 && (
-          <div className="md-empty">查無資料</div>
+          <div className="md-empty">{status || mode || returnVisitOnly || overdue ? "沒有符合的維修單" : "還沒有維修單"}</div>
         )}
         {rows.length > 0 && (
           <table className="md-table-inner">

@@ -4,8 +4,10 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useOldUnitsLeft, useOpenStockCount, useStockCounts, useWarehouses } from "@/api/hooks";
 import type { Category } from "@/api/types";
 import { useCurrentUser, useDefaultWarehouse } from "@/auth/AuthContext";
+import { AppliedFilters } from "@/components/AppliedFilters";
 import { Banner, errorMessageOf } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { appliedList, cond } from "@/lib/appliedFilters";
 import { isManager } from "@/lib/roles";
 import { defaultCountStore, oldStoresText, scopeText } from "@/lib/stockCount";
 import { CategoryField, NOT_PICKED, type Picked } from "@/pages/inventory/stockReportParts";
@@ -96,6 +98,7 @@ export function StockCountsPage() {
           只看待核准
         </label>
       </div>
+      <AppliedFilters items={appliedList([onlySubmitted && cond("只看", "待核准")])} onClear={() => setOnlySubmitted(false)} />
       {open.isError && <Banner kind="error" message={errorMessageOf(open.error)} />}
       {isError && <Banner kind="error" message={errorMessageOf(error)} />}
       <div className="report-table sr-table">

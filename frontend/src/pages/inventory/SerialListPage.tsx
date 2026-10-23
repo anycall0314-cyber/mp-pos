@@ -7,6 +7,8 @@ import { ArmButton } from "@/components/workbench/ArmButton";
 import { toast } from "@/components/workbench/toast";
 import { searchSuppliers } from "@/api/search";
 import type { Supplier, Warehouse } from "@/api/types";
+import { AppliedFilters } from "@/components/AppliedFilters";
+import { appliedList, cond, rangeCond } from "@/lib/appliedFilters";
 import { Banner, errorMessageOf } from "@/components/Banner";
 import { ComboBox } from "@/components/ComboBox";
 import { SerialHistoryModal } from "@/components/SerialHistoryModal";
@@ -64,6 +66,8 @@ export function SerialListPage() {
   const [exporting, setExporting] = useState(false);
   const [exportNote, setExportNote] = useState("");
   const [appliedStore, setAppliedStore] = useState<Picked<Warehouse>>(NOT_PICKED);
+  const [appliedStatus, setAppliedStatus] = useState(startStatus);
+  const [appliedSupplier, setAppliedSupplier] = useState<Picked<Supplier>>(NOT_PICKED);
   const storeName = useStoreName(appliedStore, false);
 
   const draft: SerialFilter = {
@@ -84,6 +88,35 @@ export function SerialListPage() {
     if (!ready) return;
     setApplied(draft);
     setAppliedStore(store);
+    setAppliedStatus(status);
+    setAppliedSupplier(supplier);
+    setPage(1);
+    setExportNote("");
+  }
+
+  // 已套用的條件(查的那一份;預設 = 在店、其他全部)
+  const appliedItems = appliedList([
+    appliedStatus !== "store" && cond("狀態", SERIAL_STATUS_CHOICES.find((c) => c.key === appliedStatus)?.label),
+    applied.warehouse !== "" && cond("門市", storeName),
+    applied.supplier !== "" && cond("廠商", appliedSupplier.option?.label),
+    rangeCond("進貨", applied.receivedFrom, applied.receivedTo),
+    rangeCond("賣出", applied.soldFrom, applied.soldTo),
+    cond("商品", applied.search),
+  ]);
+
+  function clearAll() {
+    setStatus("store");
+    setStore(NOT_PICKED);
+    setSupplier(NOT_PICKED);
+    setReceivedFrom("");
+    setReceivedTo("");
+    setSoldFrom("");
+    setSoldTo("");
+    setSearch("");
+    setApplied({ statuses: statusesOf("store"), warehouse: "", supplier: "", receivedFrom: "", receivedTo: "", soldFrom: "", soldTo: "", search: "" });
+    setAppliedStore(NOT_PICKED);
+    setAppliedStatus("store");
+    setAppliedSupplier(NOT_PICKED);
     setPage(1);
     setExportNote("");
   }
@@ -173,6 +206,7 @@ export function SerialListPage() {
           查詢
         </button>
       </div>
+      <AppliedFilters items={appliedItems} onClear={clearAll} />
       {isError && <Banner kind="error" message={errorMessageOf(error)} />}
       {exportNote && <Banner kind="error" message={exportNote} />}
 

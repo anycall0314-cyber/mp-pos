@@ -4,7 +4,9 @@ import { Link } from "react-router-dom";
 import { fetchPurchaseLinesExport, usePurchaseLines } from "@/api/hooks";
 import { searchSuppliers } from "@/api/search";
 import type { Category, Supplier, Warehouse } from "@/api/types";
+import { AppliedFilters } from "@/components/AppliedFilters";
 import { Banner, errorMessageOf } from "@/components/Banner";
+import { appliedList, cond, rangeCond } from "@/lib/appliedFilters";
 import { ComboBox } from "@/components/ComboBox";
 import { Toolbar } from "@/components/Toolbar";
 import { localDay, monthStart, rangeReady } from "@/lib/fixedReports";
@@ -46,6 +48,8 @@ export function PurchaseLinesPage() {
   const [exporting, setExporting] = useState(false);
   const [exportNote, setExportNote] = useState("");
   const [appliedStore, setAppliedStore] = useState<Picked<Warehouse>>(NOT_PICKED);
+  const [appliedSupplier, setAppliedSupplier] = useState<Picked<Supplier>>(NOT_PICKED);
+  const [appliedCategory, setAppliedCategory] = useState<Picked<Category>>(NOT_PICKED);
   const storeName = useStoreName(appliedStore);
 
   const { data, isFetching, isError, error } = usePurchaseLines(applied, page);
@@ -56,6 +60,32 @@ export function PurchaseLinesPage() {
     if (!ready) return;
     setApplied({ from, to, warehouse: store.id, supplier: supplier.id, category: category.id, search });
     setAppliedStore(store);
+    setAppliedSupplier(supplier);
+    setAppliedCategory(category);
+    setPage(1);
+    setExportNote("");
+  }
+
+  // 已套用的條件(查的那一份;預設 = 本月、全部)
+  const appliedItems = appliedList([
+    rangeCond("期間", applied.from, applied.to, { from: monthStart(), to: localDay() }),
+    applied.warehouse !== "" && cond("門市", storeName),
+    applied.supplier !== "" && cond("廠商", appliedSupplier.option?.label),
+    applied.category !== "" && cond("類別", appliedCategory.option?.label),
+    cond("商品", applied.search),
+  ]);
+
+  function clearAll() {
+    setFrom(monthStart());
+    setTo(localDay());
+    setStore(NOT_PICKED);
+    setSupplier(NOT_PICKED);
+    setCategory(NOT_PICKED);
+    setSearch("");
+    setApplied({ from: monthStart(), to: localDay(), warehouse: "", supplier: "", category: "", search: "" });
+    setAppliedStore(NOT_PICKED);
+    setAppliedSupplier(NOT_PICKED);
+    setAppliedCategory(NOT_PICKED);
     setPage(1);
     setExportNote("");
   }
@@ -137,6 +167,7 @@ export function PurchaseLinesPage() {
           查詢
         </button>
       </div>
+      <AppliedFilters items={appliedItems} onClear={clearAll} />
       {isError && <Banner kind="error" message={errorMessageOf(error)} />}
       {exportNote && <Banner kind="error" message={exportNote} />}
 

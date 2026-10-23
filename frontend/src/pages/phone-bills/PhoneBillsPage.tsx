@@ -3,12 +3,14 @@ import { useMemo, useState } from "react";
 
 import { usePhoneBills, useVoidPhoneBill } from "@/api/hooks";
 import type { PhoneBillCollection } from "@/api/types";
+import { AppliedFilters } from "@/components/AppliedFilters";
 import { Toolbar } from "@/components/Toolbar";
 import {
   MasterDetail,
   MasterColumn,
   DetailTab,
 } from "@/components/master-detail/MasterDetail";
+import { appliedList, cond, rangeCond } from "@/lib/appliedFilters";
 import { localDay, monthStart } from "@/lib/fixedReports";
 import { money, roundInt } from "@/lib/money";
 
@@ -215,6 +217,14 @@ export function PhoneBillsPage() {
           今天
         </button>
       </div>
+      <AppliedFilters
+        items={appliedList([rangeCond("期間", from, to, { from: monthStart(), to: localDay() }), cond("搜尋", query)])}
+        onClear={() => {
+          setFrom(monthStart());
+          setTo(localDay());
+          setQuery("");
+        }}
+      />
       {isLoading && <div className="md-empty">載入中…</div>}
       {isError && <div className="md-empty">載入失敗:{String(error)}</div>}
       {!isLoading && !isError && (

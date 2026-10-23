@@ -429,7 +429,7 @@ export function SalesListPage() {
         />
         {day && (
           <button type="button" className="wb-btn" onClick={() => setDay("")}>
-            全部日期
+            清除條件
           </button>
         )}
         {marginToggle}

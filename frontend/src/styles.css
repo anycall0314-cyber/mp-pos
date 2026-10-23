@@ -8381,3 +8381,26 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   font-size: var(--font-meta);
   font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
+
+/* 清單上面那一排「已套用的條件」(components/AppliedFilters.tsx) */
+.applied-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-secondary);
+}
+.applied-chip {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  white-space: nowrap;
+}
+.applied-clear {
+  min-height: 32px;
+  padding: 2px 12px;
+}
