@@ -1848,13 +1848,19 @@ export function useDeleteRepairItem() {
 
 export const useRepairOrders = (params?: {
   status?: string;
+  /** 還沒完成、沒作廢的(維修單清單預設) */
+  open?: boolean;
+  /** 單號 / 會員電話、姓名 / 機身序號 */
+  search?: string;
   mode?: string;
   date_from?: string;
   date_to?: string;
 }) => {
   const q = new URLSearchParams();
+  if (params?.open) q.set("open", "1");
   if (params?.status) q.set("status", params.status);
   if (params?.mode) q.set("mode", params.mode);
+  if (params?.search) q.set("search", params.search);
   if (params?.date_from) q.set("received_date__gte", params.date_from);
   if (params?.date_to) q.set("received_date__lte", params.date_to);
   q.set("page_size", "200");
@@ -1863,6 +1869,18 @@ export const useRepairOrders = (params?: {
     queryFn: () => listAll<RepairOrder>(`/repair-orders/?${q.toString()}`),
   });
 };
+
+/** 作廢維修單(要「作廢其他單」的權限;已完成的要先重開) */
+export function useVoidRepairOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api<RepairOrder>(`/repair-orders/${id}/void/`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["repair-orders"] });
+      qc.invalidateQueries({ queryKey: ["home-summary"] });
+    },
+  });
+}
 
 export const useRepairOrder = (id: number | null) =>
   useQuery({

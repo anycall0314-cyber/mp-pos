@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
-import { useRepairOrders, useSaveRepairOrder } from "@/api/hooks";
+import { useRepairOrders, useSaveRepairOrder, useVoidRepairOrder } from "@/api/hooks";
+import { useCan } from "@/auth/AuthContext";
+import { ArmButton } from "@/components/workbench/ArmButton";
+import { toast } from "@/components/workbench/toast";
+import { errorText } from "@/lib/errorText";
 import { AppliedFilters } from "@/components/AppliedFilters";
 import { MoneyInput } from "@/components/MoneyInput";
 import { apiErrorText } from "@/components/workbench/errors";
@@ -12,6 +16,8 @@ import { type InlinePhase, needsSave, phaseText, takeServerValue } from "@/lib/i
 import { intStr, money } from "@/lib/money";
 
 const STATUS_OPTIONS = [
+  // 預設只看還沒完成的(全站檢視 E4:以前連完成的都列,取機時要在一長串裡找)
+  { v: "open", label: "未完成" },
   { v: "", label: "全部" },
   { v: "pending", label: "待評估" },
   { v: "quoting", label: "報價中" },
@@ -138,16 +144,26 @@ export function RepairsPage() {
   // ?overdue=external(委外超過預計取回日還沒取回;跟首頁「委外單逾期」同一條)
   const [params] = useSearchParams();
   const [status, setStatus] = useState(() => {
-    const v = params.get("status") ?? "";
-    return STATUS_OPTIONS.some((o) => o.v === v) ? v : "";
+    const v = params.get("status");
+    return v !== null && STATUS_OPTIONS.some((o) => o.v === v) ? v : "open";
   });
+  // 搜尋:單號、會員電話 / 姓名、機身序號;按 Enter 才查
+  const [searchDraft, setSearchDraft] = useState("");
+  const [search, setSearch] = useState("");
+  const canVoid = useCan("void_others");
+  const voidRepair = useVoidRepairOrder();
   const [mode, setMode] = useState("");
   const [returnVisitOnly, setReturnVisitOnly] = useState(false);
   const [overdue, setOverdue] = useState<"" | "1" | "external">(() => {
     const v = params.get("overdue");
     return v === "1" || v === "external" ? v : "";
   });
-  const { data, isLoading } = useRepairOrders({ status, mode });
+  const { data, isLoading, isError, error } = useRepairOrders({
+    open: status === "open",
+    status: status === "open" ? "" : status,
+    mode,
+    search,
+  });
   const all = data ?? [];
   const today = localDay();
   const late = (r: (typeof all)[number]) =>
@@ -158,7 +174,7 @@ export function RepairsPage() {
     (r) =>
       (!returnVisitOnly || r.is_return_visit) &&
       // 挑了狀態 / 逾期時作廢的不算(跟今日總覽的件數一樣)
-      ((!status && !overdue) || !r.is_void) &&
+      ((status === "" && !overdue) || !r.is_void) &&
       (!overdue || late(r)),
   );
   const returnVisitCount = all.filter((r) => r.is_return_visit).length;
@@ -179,6 +195,21 @@ export function RepairsPage() {
         }
       />
       <div className="list-filterbar">
+        <label>
+          搜尋
+          <input
+            type="text"
+            value={searchDraft}
+            placeholder="單號 / 電話 / 姓名 / 序號"
+            onChange={(e) => setSearchDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                setSearch(searchDraft.trim());
+                e.currentTarget.select();
+              }
+            }}
+          />
+        </label>
         <label>
           狀態
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -229,13 +260,16 @@ export function RepairsPage() {
 
       <AppliedFilters
         items={appliedList([
-          cond("狀態", status && STATUS_OPTIONS.find((o) => o.v === status)?.label),
+          status !== "open" && cond("狀態", STATUS_OPTIONS.find((o) => o.v === status)?.label),
+          cond("搜尋", search),
           cond("方式", mode && (mode === "external" ? "委外" : "自修")),
           returnVisitOnly && cond("只看", "返修"),
           !!overdue && cond("只看", overdue === "external" ? "委外逾期" : "逾期"),
         ])}
         onClear={() => {
-          setStatus("");
+          setStatus("open");
+          setSearch("");
+          setSearchDraft("");
           setMode("");
           setReturnVisitOnly(false);
           setOverdue("");
@@ -243,8 +277,9 @@ export function RepairsPage() {
       />
       <div className="md-table" style={{ height: "calc(100% - 100px)" }}>
         {isLoading && <div className="md-empty">載入中…</div>}
-        {!isLoading && rows.length === 0 && (
-          <div className="md-empty">{status || mode || returnVisitOnly || overdue ? "沒有符合的維修單" : "還沒有維修單"}</div>
+        {isError && <div className="md-empty">沒有讀到:{errorText(error)}</div>}
+        {!isLoading && !isError && rows.length === 0 && (
+          <div className="md-empty">{status || mode || returnVisitOnly || overdue || search ? "沒有符合的維修單" : "還沒有維修單"}</div>
         )}
         {rows.length > 0 && (
           <table className="md-table-inner">
@@ -268,6 +303,7 @@ export function RepairsPage() {
                 <th className="num" title="自修:實付 − 零件成本 / 委外:實付 − 委外費用">
                   毛利
                 </th>
+                {canVoid && <th aria-label="作廢" />}
               </tr>
             </thead>
             <tbody>
@@ -373,6 +409,24 @@ export function RepairsPage() {
                     >
                       ${NUMBER_FMT(margin)}
                     </td>
+                    {canVoid && (
+                      <td>
+                        {/* 開錯的單作廢(按兩下;已完成的要先在單裡重開,伺服器也擋) */}
+                        {!r.is_void && r.status !== "completed" && (
+                          <ArmButton
+                            key={r.id}
+                            label="作廢"
+                            className="btn danger"
+                            onConfirm={() =>
+                              voidRepair
+                                .mutateAsync(r.id)
+                                .then(() => toast(`${r.no} 已作廢`, "ok"))
+                                .catch((e) => toast(`作廢失敗:${errorText(e)}`, "err"))
+                            }
+                          />
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}

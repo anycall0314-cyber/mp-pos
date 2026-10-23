@@ -47,3 +47,26 @@ class IntakeTests(TestCase):
         r = self.intake()
         r = self.c.clerk.patch(f"{ORDERS}{r.json()['id']}/", {"internal_note": "師傅看過了"}, format="json")
         self.assertEqual(r.status_code, 200, r.content.decode())
+
+
+class OpenRepairsFilterTests(TestCase):
+    """維修單清單預設只看還沒完成的(全站檢視 E4):?open=1 不列完成的、作廢的。"""
+
+    def test_open_lists_only_unfinished_and_not_void(self):
+        from apps.backup.tests.factory import Company
+        from apps.repairs.models import RepairOrder
+
+        c = Company("o", "開通訊行", "開")
+        ids = {}
+        for key, fields in {"doing": {"status": "in_repair"}, "ready": {"status": "ready_pickup"},
+                            "done": {"status": "completed"}, "void": {"status": "in_repair", "is_void": True}}.items():
+            o = c._post("/api/v1/repair-orders/", {"warehouse": c.wh.id, "customer": c.customer.id, "received_date": "2026-10-20",
+                                                   "mode": "in_house", "unlock_method": "none", "host_model_name": "iPhone 15"})
+            RepairOrder.objects.filter(pk=o["id"]).update(**fields)
+            ids[key] = o["id"]
+        r = c.admin.get("/api/v1/repair-orders/", {"open": "1"})
+        rows = r.json()["results"] if isinstance(r.json(), dict) else r.json()
+        self.assertEqual(sorted(o["id"] for o in rows), sorted([ids["doing"], ids["ready"]]))
+        r = c.admin.get("/api/v1/repair-orders/")
+        rows = r.json()["results"] if isinstance(r.json(), dict) else r.json()
+        self.assertEqual(len(rows), 4)

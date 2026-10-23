@@ -68,7 +68,7 @@ class RepairOrderViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
     ordering = ["-received_date", "-id"]
 
     def get_queryset(self):
-        return (
+        qs = (
             RepairOrder.objects.for_tenant(self.request.tenant)
             .select_related(
                 "customer", "member", "member__default_customer",
@@ -79,6 +79,10 @@ class RepairOrderViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
             )
             .prefetch_related("parts__part_product")
         )
+        # ?open=1:還沒完成、沒作廢的(維修單清單預設看這些;全站檢視 E4)
+        if self.request.query_params.get("open") == "1":
+            qs = qs.filter(is_void=False).exclude(status=RepairOrder.Status.COMPLETED)
+        return qs
 
     def perform_create(self, serializer):
         self.check_create_warehouse(serializer)
