@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { api } from "@/api/client";
 import {
-  lookupMember,
+  lookupMembers,
   useCompleteRepair,
   useRepairItemsByModel,
   useRepairOrder,
@@ -35,6 +35,7 @@ import type {
   SalesPerson,
   Supplier,
 } from "@/api/types";
+import { SamePhonePick } from "@/components/SamePhonePick";
 import { ArmButton } from "@/components/workbench/ArmButton";
 import { toast } from "@/components/workbench/toast";
 import { useArm } from "@/components/workbench/useArm";
@@ -132,8 +133,12 @@ function RepairEntryForm() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [member, setMember] = useState<Member | null>(null);
   const [lookupStatus, setLookupStatus] = useState<
-    "idle" | "checking" | "found" | "not_found"
+    "idle" | "checking" | "found" | "not_found" | "pick"
   >("idle");
+  // 同一支電話好幾位會員(家人共用):列出來讓人點,不替人挑(全站檢視 E2)
+  const [samePhone, setSamePhone] = useState<Member[]>([]);
+  // 按了「都不是 / 換人」的那支電話:不再自動帶會員(這個人還沒建檔,存檔時用打的姓名建)
+  const skipFor = useRef<string | null>(null);
   const [showQuickCreate, setShowQuickCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const saveMember = useSaveMember();
@@ -361,21 +366,52 @@ function RepairEntryForm() {
     if (member?.phone === phone) return;
     setMember(null);
     setCustomer("");
+    setSamePhone([]);
     if (phone.length < 4) { setLookupStatus("idle"); setShowQuickCreate(false); return; }
+    if (skipFor.current !== null && skipFor.current !== phone) skipFor.current = null;
+    if (skipFor.current === phone) { setLookupStatus("not_found"); setShowQuickCreate(true); return; }
     let active = true;
     setLookupStatus("checking");
     const t = setTimeout(async () => {
       try {
-        const mem = await lookupMember(phone);
+        const mems = await lookupMembers(phone);
         if (!active) return;
-        setMember(mem);
-        setLookupStatus(mem ? "found" : "not_found");
-        setShowQuickCreate(!mem);
-        if (mem) setCustomerName(mem.name);
+        if (mems.length === 1) {
+          setMember(mems[0]);
+          setLookupStatus("found");
+          setShowQuickCreate(false);
+          setCustomerName(mems[0].name);
+        } else if (mems.length > 1) {
+          setSamePhone(mems);
+          setLookupStatus("pick");
+          setShowQuickCreate(false);
+        } else {
+          setLookupStatus("not_found");
+          setShowQuickCreate(true);
+        }
       } catch { if (active) setLookupStatus("idle"); }
     }, 400);
     return () => { active = false; clearTimeout(t); };
   }, [customerPhone, isEdit, member]);
+
+  /** 同一支電話好幾位:點了是哪一位 */
+  function pickSamePhone(m: Member) {
+    setMember(m);
+    setCustomerName(m.name);
+    setLookupStatus("found");
+    setSamePhone([]);
+    setShowQuickCreate(false);
+  }
+
+  /** 都不是 / 換人:這支電話底下還沒有這個人,姓名自己打(存檔或「立即建立」時建一位) */
+  function notThisMember() {
+    skipFor.current = customerPhone.trim();
+    setMember(null);
+    setSamePhone([]);
+    setCustomerName("");
+    setLookupStatus("not_found");
+    setShowQuickCreate(true);
+  }
 
   async function quickCreateCustomer() {
     const phone = customerPhone.trim();
@@ -415,6 +451,10 @@ function RepairEntryForm() {
     }
     if (!intake && !customer && !member) {
       setError("請選或建立送修會員");
+      return false;
+    }
+    if (lookupStatus === "pick") {
+      setError("先點是哪一位會員");
       return false;
     }
     if (!warehouseId) {
@@ -768,6 +808,8 @@ function RepairEntryForm() {
                     hint={
                       lookupStatus === "checking"
                         ? "查詢中…"
+                        : lookupStatus === "pick"
+                          ? `同一支電話 ${samePhone.length} 位`
                         : lookupStatus === "found" && (customer || member)
                           ? "已對應送修對象"
                           : lookupStatus === "not_found"
@@ -799,6 +841,9 @@ function RepairEntryForm() {
                     />
                   </Field>
                 </div>
+                {lookupStatus === "pick" && !isEdit && (
+                  <SamePhonePick members={samePhone} onPick={pickSamePhone} onNone={notThisMember} />
+                )}
                 {(member || (customer && lookupStatus === "found") ||
                   (showQuickCreate && !intake)) && (
                   <div className="re-customer-status">
@@ -811,6 +856,11 @@ function RepairEntryForm() {
                       <span className="re-customer-badge member">
                         會員 {member.code} {member.name}
                       </span>
+                    )}
+                    {member && !isEdit && !isLocked && (
+                      <button type="button" className="btn" onClick={notThisMember}>
+                        換人
+                      </button>
                     )}
                     {showQuickCreate && !customer && !intake && (
                       <div className="re-quick-create">

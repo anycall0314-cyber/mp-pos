@@ -130,12 +130,20 @@ class MemberViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="lookup")
     def lookup(self, request):
-        """以電話精準查會員;查無回 404 由前端詢問是否新增。"""
+        """以電話精準查會員;查無回 404 由前端詢問是否新增。
+
+        `?many=1`:同一支電話的每一位都回(`{"count", "results"}`,最早建的在前,最多 10 位)——
+        舊系統帶進來的會員有一批是家人共用一支電話,只回最早那一位的話維修收據、代收話費會印成家人的名字
+        (2026-10-23 全站檢視 E2)。沒帶照舊回最早的那一位。
+        """
         phone = request.query_params.get("phone", "").strip()
         if not phone:
             return Response(
                 {"detail": "phone 為必填參數"}, status=status.HTTP_400_BAD_REQUEST
             )
+        if request.query_params.get("many") == "1":
+            qs = self.get_queryset().filter(phone=phone).order_by("created_at", "id")
+            return Response({"count": qs.count(), "results": self.get_serializer(qs[:10], many=True).data})
         obj = (
             self.get_queryset().filter(phone=phone).order_by("created_at").first()
         )

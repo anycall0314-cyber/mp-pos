@@ -8462,3 +8462,13 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   min-height: 32px;
   padding: 2px 12px;
 }
+
+/* 同一支電話好幾位會員:點名字(components/SamePhonePick.tsx) */
+.same-phone {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.same-phone .btn { min-height: 36px; }
+.same-phone-who { font-weight: 600; }

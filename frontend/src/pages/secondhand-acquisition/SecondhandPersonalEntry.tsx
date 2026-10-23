@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import {
-  lookupMember,
+  lookupMembers,
   usePaymentMethods,
   useSaveMember,
   useSecondhandAcquisition,
@@ -16,6 +16,7 @@ import type {
   Product,
   Warehouse,
 } from "@/api/types";
+import { SamePhonePick } from "@/components/SamePhonePick";
 import { Banner } from "@/components/Banner";
 import { openLabelPrint } from "@/components/labels/openLabelPrint";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
@@ -57,8 +58,10 @@ export function SecondhandPersonalEntry() {
   const [memberPhone, setMemberPhone] = useState("");
   const [member, setMember] = useState<Member | null>(null);
   const [memberStatus, setMemberStatus] = useState<
-    "idle" | "checking" | "found" | "not_found"
+    "idle" | "checking" | "found" | "not_found" | "pick"
   >("idle");
+  // 同一支電話好幾位(家人共用):列出來讓人點,不替人挑(全站檢視 E2)
+  const [samePhone, setSamePhone] = useState<Member[]>([]);
   const [showCreateMember, setShowCreateMember] = useState(false);
   const [newMember, setNewMember] = useState<{
     name: string;
@@ -155,14 +158,31 @@ export function SecondhandPersonalEntry() {
       return;
     }
     setMemberStatus("checking");
-    const m = await lookupMember(phone);
-    if (m) {
-      setMember(m);
-      setMemberStatus("found");
+    setSamePhone([]);
+    const found = await lookupMembers(phone);
+    if (found.length === 1) {
+      pickMember(found[0]);
+    } else if (found.length > 1) {
+      setMember(null);
+      setSamePhone(found);
+      setMemberStatus("pick");
     } else {
       setMember(null);
       setMemberStatus("not_found");
     }
+  }
+
+  function pickMember(m: Member) {
+    setMember(m);
+    setSamePhone([]);
+    setMemberStatus("found");
+  }
+
+  /** 都不是 / 換人:這支電話底下沒有這個人(未登錄,新增) */
+  function notThisMember() {
+    setMember(null);
+    setSamePhone([]);
+    setMemberStatus("not_found");
   }
 
   async function handleCreateMember() {
@@ -269,9 +289,14 @@ export function SecondhandPersonalEntry() {
                 </span>
               )}
               {memberStatus === "found" && member && (
-                <span className="member-tag" style={{ color: "var(--success-text-soft)" }}>
-                  會員:{member.name} ({member.code})
-                </span>
+                <>
+                  <span className="member-tag" style={{ color: "var(--success-text-soft)" }}>
+                    會員:{member.name}
+                  </span>
+                  <button type="button" className="btn" onClick={notThisMember}>
+                    換人
+                  </button>
+                </>
               )}
               {memberStatus === "not_found" && (
                 <button
@@ -283,6 +308,9 @@ export function SecondhandPersonalEntry() {
                 </button>
               )}
             </div>
+            {memberStatus === "pick" && (
+              <SamePhonePick members={samePhone} onPick={pickMember} onNone={notThisMember} />
+            )}
           </Field>
           <Field label="門市" required>
             <ComboBox<Warehouse>

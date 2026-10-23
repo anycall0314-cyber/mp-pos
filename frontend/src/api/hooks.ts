@@ -1220,6 +1220,23 @@ export async function lookupMember(phone: string): Promise<Member | null> {
   }
 }
 
+/**
+ * 同一支電話的每一位會員(最早建的在前,最多 10 位;2026-10-23 全站檢視 E2:家人共用一支電話)。
+ * 一位都沒有、或查不到(斷線)回空的。
+ */
+export async function lookupMembers(phone: string): Promise<Member[]> {
+  try {
+    const r = await api<{ count: number; results: Member[] } | Member>(
+      `/members/lookup/?phone=${encodeURIComponent(phone)}&many=1`,
+    );
+    // 伺服器還是舊版(更新到一半)會只回一位:當成只找到這一位
+    if ("results" in r && Array.isArray(r.results)) return r.results;
+    return "id" in r ? [r] : [];
+  } catch {
+    return [];
+  }
+}
+
 export interface MemberLastPrice {
   unit_price: string;
   doc_date: string;

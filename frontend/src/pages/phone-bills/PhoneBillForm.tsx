@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import {
-  lookupMember,
+  lookupMembers,
   useSaveMember,
   useSavePhoneBill,
 } from "@/api/hooks";
@@ -15,6 +15,7 @@ import {
   useDefaultHandledBy,
   useDefaultWarehouse,
 } from "@/auth/AuthContext";
+import { SamePhonePick } from "@/components/SamePhonePick";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
@@ -54,7 +55,7 @@ function emptyState(): FormState {
   };
 }
 
-type MemberStatus = "idle" | "checking" | "found" | "not_found";
+type MemberStatus = "idle" | "checking" | "found" | "not_found" | "pick";
 
 export function PhoneBillForm({ open, onClose }: Props) {
   const save = useSavePhoneBill();
@@ -74,6 +75,8 @@ export function PhoneBillForm({ open, onClose }: Props) {
   >(null);
   const [member, setMember] = useState<Member | null>(null);
   const [memberStatus, setMemberStatus] = useState<MemberStatus>("idle");
+  // 同一支電話好幾位(家人共用):列出來讓人點,不替人挑(全站檢視 E2;以前自動帶最早那一位的身分證)
+  const [samePhone, setSamePhone] = useState<Member[]>([]);
   const [showCreateMember, setShowCreateMember] = useState(false);
   const [newMember, setNewMember] = useState({ name: "", national_id: "" });
 
@@ -139,18 +142,35 @@ export function PhoneBillForm({ open, onClose }: Props) {
       return;
     }
     setMemberStatus("checking");
-    const m = await lookupMember(phone);
-    if (m) {
-      setMember(m);
-      setMemberStatus("found");
-      // 會員身分證自動帶入(如果會員主檔有存)
-      if (m.national_id && !state.id_no.trim()) {
-        patch("id_no", m.national_id);
-      }
+    setSamePhone([]);
+    const found = await lookupMembers(phone);
+    if (found.length === 1) {
+      chooseMember(found[0]);
+    } else if (found.length > 1) {
+      setMember(null);
+      setSamePhone(found);
+      setMemberStatus("pick");
     } else {
       setMember(null);
       setMemberStatus("not_found");
     }
+  }
+
+  function chooseMember(m: Member) {
+    setMember(m);
+    setSamePhone([]);
+    setMemberStatus("found");
+    // 會員身分證自動帶入(如果會員主檔有存)
+    if (m.national_id && !state.id_no.trim()) {
+      patch("id_no", m.national_id);
+    }
+  }
+
+  /** 都不是 / 換人:這支電話底下沒有這個人(可以新增或不需要) */
+  function notThisMember() {
+    setMember(null);
+    setSamePhone([]);
+    setMemberStatus("not_found");
   }
 
   async function handleCreateMember() {
@@ -200,6 +220,10 @@ export function PhoneBillForm({ open, onClose }: Props) {
     }
     if (!state.handled_by) {
       setError("請選經手人");
+      return;
+    }
+    if (memberStatus === "pick") {
+      setError("先點是哪一位會員");
       return;
     }
     setConfirming(true);
@@ -427,9 +451,14 @@ export function PhoneBillForm({ open, onClose }: Props) {
                 </span>
               )}
               {memberStatus === "found" && member && (
-                <span style={{ color: "var(--success-text-soft)", fontSize: 14 }}>
-                  會員:{member.name} ({member.code})
-                </span>
+                <>
+                  <span style={{ color: "var(--success-text-soft)", fontSize: 14 }}>
+                    會員:{member.name}
+                  </span>
+                  <button type="button" className="btn" onClick={notThisMember}>
+                    換人
+                  </button>
+                </>
               )}
               {memberStatus === "not_found" && (
                 <>
@@ -450,6 +479,9 @@ export function PhoneBillForm({ open, onClose }: Props) {
                 </>
               )}
             </div>
+            {memberStatus === "pick" && (
+              <SamePhonePick members={samePhone} onPick={chooseMember} onNone={notThisMember} />
+            )}
           </Field>
           <Field label="金額" required>
             <MoneyInput
