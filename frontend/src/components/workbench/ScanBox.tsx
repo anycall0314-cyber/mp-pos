@@ -110,6 +110,11 @@ interface Props<T> {
   disabled?: boolean;
   autoFocus?: boolean;
   inputRef?: RefObject<HTMLInputElement>;
+  /**
+   * false = 只收碼、打字時不列商品下拉(盤點的手機格:刷的是序號,不是找商品)。
+   * 碼照樣排隊、刷完立刻清空,沒刷進去的照樣記在「沒加入」;頁面的 `onScan` 要自己回 true 或一句話。
+   */
+  menu?: boolean;
 }
 
 /** 下拉出現多久之後按 Enter,才算「人看到了才按的」 */
@@ -145,6 +150,7 @@ export function ScanBox<T>({
   disabled,
   autoFocus,
   inputRef,
+  menu = true,
 }: Props<T>) {
   /** 人正在看某一筆的照片:游標離開輸入框,下拉先不要收(回來要接著找) */
   const peeking = useRef(false);
@@ -312,6 +318,7 @@ export function ScanBox<T>({
 
   function runSearch(kw: string) {
     window.clearTimeout(timer.current);
+    if (!menu) return;
     const my = ++seq.current;
     timer.current = window.setTimeout(async () => {
       try {

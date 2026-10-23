@@ -532,6 +532,8 @@ export function InventoryQueryPage() {
               if (e.key === "Enter" && !noStore) {
                 e.preventDefault();
                 apply();
+                // 查完整段反白:條碼槍下一槍直接取代,不會接在後面變成一長串(全站檢視 B6)
+                e.currentTarget.select();
               }
             }}
           />

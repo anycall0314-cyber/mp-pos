@@ -27,6 +27,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.catalog.models import Category, Product
+from apps.core.money import round_money
 from apps.identity.normalize import normalize_serial
 from apps.tenants.models import Tenant
 
@@ -448,8 +449,10 @@ def _new_units(count, extras):
             continue
         if not isinstance(pid, int) or isinstance(pid, bool):
             raise CountError(f"{row.code}:品號不對")
+        price = _amount(d.get("unit_price"), f"{row.code} 的售價", required=False)
+        # 售價一律整數元(全站檢視 B5;成本照舊到分)
         plans.append((row, pid, _amount(d.get("unit_cost"), f"{row.code} 的成本"),
-                      _amount(d.get("unit_price"), f"{row.code} 的售價", required=False)))
+                      None if price is None else round_money(price)))
     return plans
 
 

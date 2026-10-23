@@ -74,7 +74,7 @@ test("分頁與按鈕字數一樣;入口在商品庫存那一排", () => {
 
 test("已換貨:設備一定要刷回來的那一台(紅隊:不刷就按,換了新機帳上還是舊序號);配件填數量", () => {
   const page = read("../pages/inventory/VendorExchangesPage.tsx");
-  assert.match(page, /if \(row\.kind === "serial" && !value\) return;/);
+  assert.match(page, /if \(row\.kind === "serial" && !value\) return false;/);
   assert.match(page, /const body = row\.kind === "serial" \? \{ code: value \} : value \? \{ qty: Number\(value\) \} : \{\};/);
   assert.match(page, /path: `\$\{row\.id\}\/done\/`, body \}/);
   assert.match(page, /placeholder=\{r\.kind === "serial" \? "刷回來的那一台" : String\(r\.qty - r\.back_qty\)\}/);

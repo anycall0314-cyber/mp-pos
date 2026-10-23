@@ -8,10 +8,12 @@ import { searchProducts } from "@/api/search";
 import { useCan } from "@/auth/AuthContext";
 import { Banner, errorMessageOf } from "@/components/Banner";
 import { ComboBox, type ComboOption } from "@/components/ComboBox";
+import { MoneyInput } from "@/components/MoneyInput";
 import { usePhotoPeek } from "@/components/photos/PhotoName";
 import { Toolbar } from "@/components/Toolbar";
 import { ArmButton } from "@/components/workbench/ArmButton";
-import { ScanBox, type ScanBoxApi, type ScanOption } from "@/components/workbench/ScanBox";
+import { ScanBox, type ScanBoxApi, type ScanOption, type ScanVerdict } from "@/components/workbench/ScanBox";
+import { apiErrorText } from "@/components/workbench/errors";
 import { toast } from "@/components/workbench/toast";
 import { rememberCode } from "@/components/rememberBarcode";
 import { isNegative } from "@/lib/fixedReports";
@@ -77,7 +79,6 @@ export function StockCountPage() {
   const id = Number(useParams().id);
   const { data: detail, isLoading, isError, error, refetch } = useStockCount(id);
   const run = useStockCountDo(id);
-  const [code, setCode] = useState("");
   /** 配件那一格選到、還沒記下的商品。另外留一份當下的(`accessoryNow`):掃碼框排隊處理完、送出前要馬上讀,不能等畫面重畫(複審 P1) */
   const [accessory, setAccessoryState] = useState<Product | null>(null);
   const accessoryNow = useRef<Product | null>(null);
@@ -107,6 +108,8 @@ export function StockCountPage() {
   const scanRef = useRef<HTMLInputElement>(null);
   const qtyRef = useRef<HTMLInputElement>(null);
   const scanApi = useRef<ScanBoxApi | null>(null);
+  /** 手機那一格的掃碼框(只收碼;見下面 scanPhone) */
+  const phoneApi = useRef<ScanBoxApi | null>(null);
   /**
    * 刷到系統還沒有的配件(全站檢視 B3;10-14 owner「盤點時多出來的當場建」):
    * 有商品建檔權限的 → 「建立」:先找有沒有建過 → 用那一款 / 建新的 → 選起來、游標到數量(跟進貨單同一套)。
@@ -153,14 +156,18 @@ export function StockCountPage() {
     return run.mutateAsync({ path, body, method }).catch(() => undefined);
   };
 
-  async function scan() {
-    const text = code.trim();
-    if (!text) return;
-    const done = await call("scans/", { code: text });
-    if (done) {
-      setCode("");
+  /**
+   * 手機那一格(全站檢視 B6):用工作台的掃碼框、只收碼 —— 刷完立刻清空、連刷照順序排隊;
+   * 沒刷進去的(斷線、伺服器擋下)記在那一格底下的「沒加入」,不會留在框裡被下一槍接在後面。
+   */
+  async function scanPhone(kw: string): Promise<ScanVerdict> {
+    try {
+      await run.mutateAsync({ path: "scans/", body: { code: kw }, method: "POST" });
       // 剛刷的那一台在手機那一頁的最上面
       setTab("scans");
+      return true;
+    } catch (e) {
+      return apiErrorText(e);
     }
   }
 
@@ -326,8 +333,13 @@ export function StockCountPage() {
   async function submit() {
     // 等掃碼框排隊的碼處理完,再讀「現在」選著的(不是按下去那一刻畫面上的)
     await scanApi.current?.idle();
+    await phoneApi.current?.idle();
     const pending = accessoryNow.current;
-    const blocked = scanApi.current?.blocker() ?? (pending ? `「${pending.name}」還沒記下` : null);
+    const phoneLeft = phoneApi.current?.blocker();
+    const blocked =
+      scanApi.current?.blocker() ??
+      (phoneLeft ? `手機那一格:${phoneLeft}` : null) ??
+      (pending ? `「${pending.name}」還沒記下` : null);
     if (blocked) {
       setNote(blocked);
       return;
@@ -393,16 +405,15 @@ export function StockCountPage() {
 
       {counting && (
         <div className="list-filterbar sr-filter">
-          <label>
+          <label className="sc-phone-scan">
             手機
-            <input
-              type="text"
-              value={code}
+            <ScanBox<never>
+              apiRef={phoneApi}
+              menu={false}
               placeholder="刷序號"
-              onChange={(e) => setCode(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.nativeEvent.isComposing) void scan();
-              }}
+              search={async () => []}
+              onPick={() => undefined}
+              onScan={scanPhone}
             />
           </label>
           <label>
@@ -794,8 +805,8 @@ export function StockCountPage() {
                           <td className="num">
                             {reviewing ? (
                               edit.product?.unit && (
-                                <input type="text" inputMode="numeric" className="sc-adjust" value={edit.price} disabled={edit.skipped}
-                                  onChange={(e) => change({ price: e.target.value })} />
+                                <MoneyInput min={0} className="sc-adjust" value={edit.price} disabled={edit.skipped}
+                                  onChange={(v) => change({ price: v })} />
                               )
                             ) : r.unit_price !== null ? money(r.unit_price) : ""}
                           </td>

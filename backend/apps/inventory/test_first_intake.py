@@ -133,7 +133,8 @@ class ApproveTests(_Intake):
         self.ok(self.act(count, "approve", extras={
             rows[NEW_IMEI]["id"]: {"product": self.a17.id, "unit_cost": "7050"},
             rows[NEW_IMEI2]["id"]: {"product": self.a17.id, "unit_cost": "7150"},
-            rows[USED_IMEI]["id"]: {"product": self.used.id, "unit_cost": "15500", "unit_price": "18900"},
+            # 售價收成整數元(全站檢視 B5:以前 18900.5 照存成小數);成本照舊到分
+            rows[USED_IMEI]["id"]: {"product": self.used.id, "unit_cost": "15500.40", "unit_price": "18900.5"},
         }))
         new = ProductSerial.objects.get(tenant=self.c.tenant, serial_no=NEW_IMEI)
         self.assertEqual((new.product, new.warehouse, new.status, new.purchase_unit_cost),
@@ -142,7 +143,7 @@ class ApproveTests(_Intake):
         self.assertEqual(self.a17.weighted_avg_cost, Decimal("7100"))       # 兩台平均
         used = ProductSerial.objects.get(tenant=self.c.tenant, serial_no=USED_IMEI)
         self.assertEqual((used.purchase_unit_cost, used.custom_unit_price, used.battery_health, used.condition_note),
-                         (Decimal("15500"), Decimal("18900"), 78, "舊系統:中古/IP13P/256G/78%/白/W"))
+                         (Decimal("15500.40"), Decimal("18901"), 78, "舊系統:中古/IP13P/256G/78%/白/W"))
         moves = StockMovement.objects.filter(tenant=self.c.tenant, ref_doc_type="stock_count", ref_doc_id=count["id"])
         self.assertEqual(sorted((m.serial.serial_no, m.movement_type, m.to_warehouse_id) for m in moves), sorted(
             (code, StockMovement.MovementType.ADJUST, self.w1.id) for code in (NEW_IMEI, NEW_IMEI2, USED_IMEI)))

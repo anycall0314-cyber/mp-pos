@@ -72,6 +72,8 @@ export function VendorExchangesPage() {
     } catch (e) {
       setFound(null);
       toast(errorMessageOf(e), "err");
+      // 沒查到:整段反白,下一槍直接取代(全站檢視 B6:以前字留著、下一槍接在後面)
+      window.setTimeout(() => codeRef.current?.select(), 0);
     } finally {
       setLooking(false);
     }
@@ -118,19 +120,21 @@ export function VendorExchangesPage() {
     }
   }
 
-  async function back(row: VendorExchangeRow) {
-    if (run.isPending) return;
+  async function back(row: VendorExchangeRow): Promise<boolean> {
+    if (run.isPending) return false;
     const value = backValue.trim();
     // 設備:一定要刷回來的那一台(紅隊);配件:回來幾個,空的 = 剩下的全部
-    if (row.kind === "serial" && !value) return;
+    if (row.kind === "serial" && !value) return false;
     const body = row.kind === "serial" ? { code: value } : value ? { qty: Number(value) } : {};
     try {
       const done = await run.mutateAsync({ path: `${row.id}/done/`, body });
       toast(`${done.product.name} ${done.status === "pending" ? `回來 ${done.back_qty} 個` : resultText(done)}`, "ok");
       setBackOf(null);
       setBackValue("");
+      return true;
     } catch (e) {
       toast(errorMessageOf(e), "err");
+      return false;
     }
   }
 
@@ -295,7 +299,13 @@ export function VendorExchangesPage() {
                         placeholder={r.kind === "serial" ? "刷回來的那一台" : String(r.qty - r.back_qty)}
                         onChange={(e) => setBackValue(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.nativeEvent.isComposing) void back(r);
+                          if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                            // 沒收成:整段反白,下一槍直接取代(全站檢視 B6)
+                            const el = e.currentTarget;
+                            void back(r).then((ok) => {
+                              if (!ok) el.select();
+                            });
+                          }
                           if (e.key === "Escape") setBackOf(null);
                         }}
                       />

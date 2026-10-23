@@ -258,7 +258,11 @@ test("新記的在最上面;核准畫面寫手機刷完了沒", () => {
   assert.equal(phonesDoneText({ status: "approved", phones_done: false }), "手機沒表明刷完");
   const page = read("../pages/inventory/StockCountPage.tsx");
   // 剛刷 / 剛記的切到那一頁;沒勾刷完的送出只提醒
-  assert.match(page, /setCode\(""\);\s*\/\/[^\n]*\n\s*setTab\("scans"\);/);
+  assert.match(page, /\/\/[^\n]*\n\s*setTab\("scans"\);\s*return true;/);
+  // 手機那一格是工作台的掃碼框、只收碼(全站檢視 B6:刷完立刻清空、連刷排隊、沒刷進的記在「沒加入」,送出前要處理)
+  assert.match(page, /<ScanBox<never>[\s\S]{0,120}menu=\{false\}[\s\S]{0,160}onScan=\{scanPhone\}/);
+  assert.match(page, /await phoneApi\.current\?\.idle\(\);/);
+  assert.match(page, /phoneLeft \? `手機那一格:\$\{phoneLeft\}` : null/);
   assert.match(page, /setQty\(""\);\s*setTab\("lines"\);/);
   assert.match(page, /armedLabel=\{phonesDone \? undefined : "手機沒勾刷完,仍可送出"\}/);
   assert.match(page, /newestFirst\(detail\.scan_rows\)\.map/);
