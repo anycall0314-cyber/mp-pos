@@ -27,6 +27,8 @@ interface Props {
   busy?: boolean;
   /** 點縮圖 / 品名看照片與規格。不給就只顯示文字 */
   onPeek?: (t: PeekTarget) => void;
+  /** 不寫庫存(盤點裡開的:盲盤) */
+  hideStock?: boolean;
 }
 
 /**
@@ -39,11 +41,13 @@ function CandidateRow({
   onUseExisting,
   onPeek,
   busy,
+  hideStock,
 }: {
   c: DuplicateCandidate;
   onUseExisting?: (c: DuplicateCandidate) => void;
   onPeek?: (t: PeekTarget) => void;
   busy: boolean;
+  hideStock: boolean;
 }) {
   const scope = stockScope(useCurrentUser()?.profile);
   const query = useQuery({
@@ -72,7 +76,7 @@ function CandidateRow({
           {[
             c.sku,
             c.category_name,
-            detail ? `庫存 ${detail.stock_qty ?? 0}` : "",
+            detail && !hideStock ? `庫存 ${detail.stock_qty ?? 0}` : "",
             ...c.reasons,
             ...c.differences,
           ]
@@ -106,6 +110,7 @@ export function DuplicatePanel({
   onProceed,
   busy = false,
   onPeek,
+  hideStock = false,
 }: Props) {
   const hard = dup.kind === "identifier";
   // 按「儲存」的時候人通常在表單下面,面板出現在上面會看不到
@@ -125,6 +130,7 @@ export function DuplicatePanel({
           onUseExisting={onUseExisting}
           onPeek={onPeek}
           busy={busy}
+          hideStock={hideStock}
         />
       ))}
       {!hard && (

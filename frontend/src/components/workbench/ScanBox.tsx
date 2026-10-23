@@ -96,6 +96,9 @@ interface Props<T> {
    * 頁面把商品加進明細之後呼叫 `apiRef.added(kw, entry)`;人取消了就什麼都不用做(字與那一筆都還在)。
    */
   onCreate?: (kw: string, entry: Missed | null) => void;
+  /** 「建立」那兩個入口上的字(盤點:沒有商品建檔權限的帳號是「先記下」—— 先記碼與數量,有權限的人再指定) */
+  createLabel?: string;
+  createRowLabel?: string;
   /** 頁面拿來問「還有沒有碼在處理」「有沒有碼沒加進去」 */
   apiRef?: MutableRefObject<ScanBoxApi | null>;
   disabled?: boolean;
@@ -130,6 +133,8 @@ export function ScanBox<T>({
   resetKey,
   onPeek,
   onCreate,
+  createLabel = "建立",
+  createRowLabel = "建立商品",
   apiRef,
   disabled,
   autoFocus,
@@ -643,7 +648,7 @@ export function ScanBox<T>({
                   startCreate();
                 }}
               >
-                {items.length > 0 ? "都不是,建立商品" : "建立商品"}
+                {items.length > 0 ? `都不是,${createRowLabel}` : createRowLabel}
               </div>
             )}
           </div>
@@ -673,7 +678,7 @@ export function ScanBox<T>({
                   disabled={disabled}
                   onClick={(e) => createFromMissed(m, e.currentTarget)}
                 >
-                  建立
+                  {createLabel}
                 </button>
               )}
             </span>

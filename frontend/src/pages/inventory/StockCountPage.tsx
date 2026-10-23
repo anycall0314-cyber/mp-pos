@@ -1,15 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
+import { api } from "@/api/client";
 import { useStockCount, useStockCountDo } from "@/api/hooks";
 import type { Product } from "@/api/types";
 import { searchProducts } from "@/api/search";
+import { useCan } from "@/auth/AuthContext";
 import { Banner, errorMessageOf } from "@/components/Banner";
 import { ComboBox, type ComboOption } from "@/components/ComboBox";
+import { usePhotoPeek } from "@/components/photos/PhotoName";
 import { Toolbar } from "@/components/Toolbar";
 import { ArmButton } from "@/components/workbench/ArmButton";
 import { ScanBox, type ScanBoxApi, type ScanOption } from "@/components/workbench/ScanBox";
+import { toast } from "@/components/workbench/toast";
 import { isNegative } from "@/lib/fixedReports";
+import { tripBox, tripSettles } from "@/lib/purchasePrefill";
+import type { Missed } from "@/lib/scanMissed";
+import { FindFirstPanel } from "@/pages/products/FindFirstPanel";
+import { ProductForm } from "@/pages/products/ProductForm";
 import { qrMatrix, qrPath } from "@/lib/qr";
 import { money } from "@/lib/money";
 import {
@@ -17,20 +25,26 @@ import {
   approveBody,
   assignProduct,
   countedQty,
+  countTabs,
+  currentTab,
   extraText,
   missingText,
   movedHint,
   newEditOf,
   newGroups,
+  newestFirst,
   newResult,
+  notCountable,
   phoneCountUrl,
   phoneStatusText,
+  phonesDoneText,
   pickProblem,
   progressText,
   recordedQty,
   sameCode,
   scopeText,
   signed,
+  type CountTab,
   type CountUnknown,
   type LineEdit,
   type MissingEdit,
@@ -87,15 +101,43 @@ export function StockCountPage() {
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [assignTo, setAssignTo] = useState<{ id: number | ""; option: ComboOption<Product> | null }>({ id: "", option: null });
   const [note, setNote] = useState("");
+  /** 看哪一張表(一次只顯示一張;人沒選過 = 第一個有東西的) */
+  const [tab, setTab] = useState<CountTab | null>(null);
   const scanRef = useRef<HTMLInputElement>(null);
   const qtyRef = useRef<HTMLInputElement>(null);
   const scanApi = useRef<ScanBoxApi | null>(null);
-  // 選到配件:游標到數量、整格反白(這張單記過的話先放原本的數量,直接打就換掉)
+  /**
+   * 刷到系統還沒有的配件(全站檢視 B3;10-14 owner「盤點時多出來的當場建」):
+   * 有商品建檔權限的 → 「建立」:先找有沒有建過 → 用那一款 / 建新的 → 選起來、游標到數量(跟進貨單同一套)。
+   * 沒有的 → 「先記下」:打數量記成沒對到的碼,有權限的人在「沒對到碼」指定 / 建立(紅隊:不讓現場店員建主檔,也不讓那個碼卡住整張單)。
+   */
+  const canBuild = useCan("edit_products");
+  const trip = useRef(tripBox<Missed>()).current;
+  /** 從「沒對到碼」那一列按的「建立」:找到 / 建好的指定給那一筆(不是選起來打數量) */
+  const unknownTarget = useRef<number | null>(null);
+  const [finding, setFinding] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [formUsed, setFormUsed] = useState(false);
+  const [formPrefill, setFormPrefill] = useState<{ name: string; barcode: string } | null>(null);
+  const [noting, setNotingState] = useState<{ kw: string; entry: Missed | null } | null>(null);
+  const notingNow = useRef<{ kw: string; entry: Missed | null } | null>(null);
+  const setNoting = (n: { kw: string; entry: Missed | null } | null) => {
+    notingNow.current = n;
+    setNotingState(n);
+  };
+  /** 同一次記錄只送一次(複審 P0:先記下是累加的,回應回來之前連按兩次 Enter 會記兩次) */
+  const saving = useRef(false);
+  const overlay = useRef(false);
+  overlay.current = finding !== null || formOpen;
+  const peek = usePhotoPeek(() => {
+    if (!overlay.current) scanApi.current?.resume();
+  });
+  // 選到配件(或先記下的碼):游標到數量、整格反白(這張單記過的話先放原本的數量,直接打就換掉)
   useEffect(() => {
-    if (!accessory) return;
+    if (!accessory && !noting) return;
     qtyRef.current?.focus();
     qtyRef.current?.select();
-  }, [accessory]);
+  }, [accessory, noting]);
 
   if (isLoading) return <div className="page"><div className="md-empty">載入中…</div></div>;
   if (isError || !detail) return <div className="page"><Banner kind="error" message={errorMessageOf(error)} /></div>;
@@ -113,10 +155,40 @@ export function StockCountPage() {
     const text = code.trim();
     if (!text) return;
     const done = await call("scans/", { code: text });
-    if (done) setCode("");
+    if (done) {
+      setCode("");
+      // 剛刷的那一台在手機那一頁的最上面
+      setTab("scans");
+    }
   }
 
   async function saveLine() {
+    if (saving.current) return;
+    saving.current = true;
+    try {
+      await saveLineOnce();
+    } finally {
+      saving.current = false;
+    }
+  }
+  async function saveLineOnce() {
+    const noted = notingNow.current;
+    if (noted) {
+      const n = countedQty(qty);
+      if (n === null || n < 1) {
+        setNote("先打數量");
+        return;
+      }
+      const done = await call("unknowns/", { code: noted.kw, qty: n });
+      if (done) {
+        scanApi.current?.added(noted.kw, noted.entry);
+        setNoting(null);
+        setQty("");
+        setTab("unknowns");
+        scanRef.current?.focus();
+      }
+      return;
+    }
     const item = accessoryNow.current;
     if (!item) return;
     const n = countedQty(qty);
@@ -132,6 +204,7 @@ export function StockCountPage() {
     if (done) {
       setAccessory(null);
       setQty("");
+      setTab("lines");
       scanRef.current?.focus();
       return;
     }
@@ -182,6 +255,72 @@ export function StockCountPage() {
     return null;
   }
 
+  /** 游標回刷碼格(選著配件 / 先記下的碼時留在數量那一格) */
+  function focusScan() {
+    window.setTimeout(() => {
+      if (!accessoryNow.current && !notingNow.current) scanRef.current?.focus();
+    }, 0);
+  }
+
+  /** 等掃碼框還在處理的碼做完;那一筆「沒加入」已經不在了(被加進去了)就不用做 */
+  async function settled(entry: Missed | null): Promise<boolean> {
+    await scanApi.current?.idle();
+    return !entry || (scanApi.current?.missed() ?? []).some((m) => m.id === entry.id);
+  }
+
+  async function startCreate(kw: string, entry: Missed | null) {
+    if (!(await settled(entry))) return;
+    unknownTarget.current = null;
+    trip.start(kw, entry);
+    setFinding(kw);
+  }
+
+  async function startNote(kw: string, entry: Missed | null) {
+    if (!(await settled(entry))) return;
+    const pending = accessoryNow.current;
+    if (pending) {
+      setNote(`「${pending.name}」還沒記下`);
+      return;
+    }
+    setNoting({ kw, entry });
+    setQty("");
+  }
+
+  function createForUnknown(u: CountUnknown) {
+    trip.drop();
+    unknownTarget.current = u.id;
+    setFinding(u.code);
+  }
+
+  /** 這一趟是誰開始的:在人按下去的那一刻就拿走(晚回來的查詢不能算到下一趟上;表單關掉時會清掉) */
+  function capture() {
+    const target = unknownTarget.current;
+    unknownTarget.current = null;
+    return { target, from: target === null ? trip.take() : null };
+  }
+
+  /** 找到 / 建好的配件:從「沒對到碼」來的指定給那一筆;從刷碼來的選起來打數量(跟從下拉挑到它一樣) */
+  async function bring(p: Product, ctx = capture()) {
+    const { target, from } = ctx;
+    const why = notCountable(p);
+    if (target !== null) {
+      if (why) {
+        toast(why, "err", { ms: 6000 });
+        return;
+      }
+      await call(`unknowns/${target}/`, { product: p.id });
+      setTab("unknowns");
+      return;
+    }
+    if (!from) return;
+    const problem = why ?? pickAccessory({ key: p.id, code: p.sku, label: p.name, payload: p });
+    if (problem) {
+      toast(problem, "err", { ms: 6000 });
+      return;
+    }
+    if (tripSettles(from, p)) scanApi.current?.added(from.kw, from.entry);
+  }
+
   async function submit() {
     // 等掃碼框排隊的碼處理完,再讀「現在」選著的(不是按下去那一刻畫面上的)
     await scanApi.current?.idle();
@@ -204,6 +343,8 @@ export function StockCountPage() {
     await call("approve/", body);
   }
 
+  const tabs = countTabs(detail);
+  const shown = currentTab(tabs, tab);
   const lineEdit = (rowId: number, diff: number): LineEdit => lineEdits[rowId] ?? { adjust: String(diff), skipped: false, reason: "" };
   const missingEdit = (rowId: number): MissingEdit => missingEdits[rowId] ?? { skipped: false, reason: "" };
   const newRows = detail.new_rows ?? [];
@@ -235,12 +376,15 @@ export function StockCountPage() {
             </Link>
             {(counting || reviewing) && <ArmButton label="作廢" className="btn" onConfirm={() => call("void/")} />}
             {reviewing && <ArmButton label="退回" className="btn" onConfirm={() => call("return/")} />}
-            {reviewing && <ArmButton label="核准" className="btn primary" onConfirm={approve} />}
+            {/* 送出時沒表明手機刷完:沒刷到的手機不算少。核准前再確認一次(紅隊) */}
+            {reviewing && (
+              <ArmButton label="核准" armedLabel={detail.phones_done ? undefined : "手機沒表明,再按一次核准"} className="btn primary" onConfirm={approve} />
+            )}
           </>
         }
       />
       <div className="ex-period">
-        {detail.warehouse.name}　{scopeText(detail)}　{detail.status_label}　{progressText(detail)}
+        {detail.warehouse.name}　{scopeText(detail)}　{detail.status_label}　{progressText(detail)}　{phonesDoneText(detail)}
       </div>
       {run.isError && <Banner kind="error" message={errorMessageOf(run.error)} />}
       {note && <Banner kind="error" message={note} />}
@@ -307,12 +451,23 @@ export function StockCountPage() {
               search={searchAccessories}
               isExact={(o, q) => sameCode(o.payload, q)}
               onPick={pickAccessory}
+              onCreate={canBuild ? startCreate : startNote}
+              createLabel={canBuild ? "建立" : "先記下"}
+              createRowLabel={canBuild ? "建立商品" : "先記下這個碼"}
             />
           </label>
           {accessory && (
             <span className="sr-only-one">
               {accessory.sku} {accessory.name}
               <button type="button" aria-label="清掉" onClick={() => setAccessory(null)}>
+                ×
+              </button>
+            </span>
+          )}
+          {noting && (
+            <span className="sr-only-one">
+              {noting.kw} 先記下
+              <button type="button" aria-label="清掉" onClick={() => setNoting(null)}>
                 ×
               </button>
             </span>
@@ -330,11 +485,12 @@ export function StockCountPage() {
               }}
             />
           </label>
-          <button className="btn" type="button" disabled={!accessory || countedQty(qty) === null || run.isPending} onClick={() => void saveLine()}>
+          <button className="btn" type="button" disabled={(!accessory && !noting) || countedQty(qty) === null || run.isPending} onClick={() => void saveLine()}>
             記下
           </button>
           <span className="sc-submit">
-            <ArmButton label="送出" className="btn primary" onConfirm={submit} />
+            {/* 沒勾「手機全部刷完」:沒刷到的手機不會算少(是沒盤)。只提醒、不擋 */}
+            <ArmButton label="送出" armedLabel={phonesDone ? undefined : "手機沒勾刷完,仍可送出"} className="btn primary" onConfirm={submit} />
           </span>
         </div>
       )}
@@ -350,9 +506,19 @@ export function StockCountPage() {
         </div>
       )}
 
+      {tabs.length > 0 && (
+        <div className="ia-tabs sc-tabs">
+          {tabs.map((t) => (
+            <button key={t.key} type="button" className={`ia-tab${shown === t.key ? " active" : ""}`} onClick={() => setTab(t.key)}>
+              {t.label}
+              {t.count > 0 && <span className={t.alert ? "ia-tab-badge" : "ia-tab-badge plain"}>{t.count}</span>}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="report-table sr-table">
-        {detail.line_rows.length === 0 && detail.scan_rows.length === 0 && <div className="md-empty">還沒有盤任何東西</div>}
-        {(detail.unknown_rows ?? []).length > 0 && (
+        {shown === null && <div className="md-empty">還沒有盤任何東西</div>}
+        {shown === "unknowns" && (
           <table className="report-grid sc-unknowns">
             <thead>
               <tr>
@@ -383,6 +549,11 @@ export function StockCountPage() {
                         <button className="btn" type="button" disabled={!unknownPick[u.id] || run.isPending} onClick={() => void resolveUnknown(u, false)}>
                           指定
                         </button>
+                        {canBuild && (
+                          <button className="btn" type="button" disabled={run.isPending} onClick={() => createForUnknown(u)}>
+                            建立
+                          </button>
+                        )}
                         <input type="text" maxLength={100} placeholder="原因" value={unknownReason[u.id] ?? ""}
                           onChange={(e) => setUnknownReason((all) => ({ ...all, [u.id]: e.target.value }))} />
                         <button className="btn" type="button" disabled={!(unknownReason[u.id] ?? "").trim() || run.isPending} onClick={() => void resolveUnknown(u, true)}>
@@ -396,7 +567,9 @@ export function StockCountPage() {
             </tbody>
           </table>
         )}
-        {detail.line_rows.length > 0 && (
+        {shown === "lines" && (detail.line_rows.length === 0 ? (
+          <div className="md-empty">還沒有記任何配件</div>
+        ) : (
           <table className="report-grid">
             <thead>
               <tr>
@@ -414,7 +587,7 @@ export function StockCountPage() {
               </tr>
             </thead>
             <tbody>
-              {detail.line_rows.map((r) => {
+              {newestFirst(detail.line_rows).map((r) => {
                 const edit = lineEdit(r.id, r.diff ?? 0);
                 const change = (next: Partial<LineEdit>) => setLineEdits((all) => ({ ...all, [r.id]: { ...edit, ...next } }));
                 return (
@@ -458,11 +631,10 @@ export function StockCountPage() {
               })}
             </tbody>
           </table>
-        )}
-      </div>
-
-      {detail.scan_rows.length > 0 && (
-        <div className="report-table sr-table">
+        ))}
+        {shown === "scans" && (detail.scan_rows.length === 0 ? (
+          <div className="md-empty">還沒有刷任何手機</div>
+        ) : (
           <table className="report-grid">
             <thead>
               <tr>
@@ -472,7 +644,7 @@ export function StockCountPage() {
               </tr>
             </thead>
             <tbody>
-              {detail.scan_rows.map((s) => (
+              {newestFirst(detail.scan_rows).map((s) => (
                 <tr key={s.id} className="report-row">
                   <td>{s.code}</td>
                   <td>{s.known ? s.name : s.name || "不認得"}</td>
@@ -487,11 +659,8 @@ export function StockCountPage() {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {(detail.vendor_rows?.length ?? 0) > 0 && (
-        <div className="report-table sr-table">
+        ))}
+        {shown === "vendor" && (
           <table className="report-grid">
             <thead>
               <tr>
@@ -512,11 +681,8 @@ export function StockCountPage() {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {detail.manager && (detail.missing_rows?.length ?? 0) > 0 && (
-        <div className="report-table sr-table">
+        )}
+        {shown === "missing" && (
           <table className="report-grid">
             <thead>
               <tr>
@@ -557,102 +723,98 @@ export function StockCountPage() {
               })}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {detail.manager && newRows.length > 0 && (submitted || approved) && (
-        <div className="report-table sr-table">
-          {reviewing && (
-            <div className="list-filterbar sr-filter">
-              <label>
-                品號
-                <ComboBox<Product>
-                  value={assignTo.id}
-                  selectedOption={assignTo.option}
-                  onChange={(pid, opt) => setAssignTo({ id: pid, option: opt ?? null })}
-                  fetchOptions={async (q) => (await searchProducts(q, { activeOnly: true })).filter((o) => o.payload?.requires_serial)}
-                  placeholder="品名"
-                />
-              </label>
-              <button className="btn" type="button" disabled={!assignTo.option || picked.size === 0} onClick={assign}>
-                指定 {picked.size || ""}
-              </button>
-            </div>
-          )}
-          <table className="report-grid">
-            <thead>
-              <tr>
-                {reviewing && <th />}
-                <th>新入庫</th>
-                <th>舊品名</th>
-                <th>品號</th>
-                <th className="num">成本</th>
-                <th className="num">售價</th>
-                <th>{reviewing ? "不入" : "結果"}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {newGroups(newRows).map((g) => {
-                const ids = g.rows.map((r) => r.id);
-                const all = ids.every((one) => picked.has(one));
-                return [
-                  <tr key={`g-${g.key}`} className="report-row sc-group">
-                    {reviewing && (
-                      <td>
-                        <input type="checkbox" checked={all} aria-label={g.label} onChange={() => togglePick(ids, !all)} />
-                      </td>
-                    )}
-                    <td colSpan={6}>
-                      {g.label} {g.rows.length}
-                    </td>
-                  </tr>,
-                  ...g.rows.map((r) => {
-                    const edit = newEditOf(r, newEdits);
-                    const change = (next: Partial<NewEdit>) => setNewEdits((all2) => ({ ...all2, [r.id]: { ...edit, ...next } }));
-                    return (
-                      <tr key={r.id} className={picked.has(r.id) ? "report-row vo-picked" : "report-row"}>
-                        {reviewing && (
-                          <td>
-                            <input type="checkbox" checked={picked.has(r.id)} aria-label={r.code} onChange={(e) => togglePick([r.id], e.target.checked)} />
-                          </td>
-                        )}
-                        <td>{r.code}</td>
-                        <td>{r.old_name}</td>
-                        <td>{(reviewing ? edit.product : r.product)?.name ?? "—"}</td>
-                        <td className="num">
-                          {reviewing ? (
-                            <input type="text" inputMode="decimal" className="sc-adjust" value={edit.cost} disabled={edit.skipped || !edit.product}
-                              onChange={(e) => change({ cost: e.target.value })} />
-                          ) : r.unit_cost !== null ? money(r.unit_cost) : ""}
-                        </td>
-                        <td className="num">
-                          {reviewing ? (
-                            edit.product?.unit && (
-                              <input type="text" inputMode="numeric" className="sc-adjust" value={edit.price} disabled={edit.skipped}
-                                onChange={(e) => change({ price: e.target.value })} />
-                            )
-                          ) : r.unit_price !== null ? money(r.unit_price) : ""}
-                        </td>
+        )}
+        {shown === "new" && (
+          <>
+            {reviewing && (
+              <div className="list-filterbar sr-filter">
+                <label>
+                  品號
+                  <ComboBox<Product>
+                    value={assignTo.id}
+                    selectedOption={assignTo.option}
+                    onChange={(pid, opt) => setAssignTo({ id: pid, option: opt ?? null })}
+                    fetchOptions={async (q) => (await searchProducts(q, { activeOnly: true })).filter((o) => o.payload?.requires_serial)}
+                    placeholder="品名"
+                  />
+                </label>
+                <button className="btn" type="button" disabled={!assignTo.option || picked.size === 0} onClick={assign}>
+                  指定 {picked.size || ""}
+                </button>
+              </div>
+            )}
+            <table className="report-grid">
+              <thead>
+                <tr>
+                  {reviewing && <th />}
+                  <th>新入庫</th>
+                  <th>舊品名</th>
+                  <th>品號</th>
+                  <th className="num">成本</th>
+                  <th className="num">售價</th>
+                  <th>{reviewing ? "不入" : "結果"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {newGroups(newRows).map((g) => {
+                  const ids = g.rows.map((r) => r.id);
+                  const all = ids.every((one) => picked.has(one));
+                  return [
+                    <tr key={`g-${g.key}`} className="report-row sc-group">
+                      {reviewing && (
                         <td>
-                          {reviewing ? (
-                            <input type="checkbox" checked={edit.skipped || !edit.product} disabled={!edit.product}
-                              onChange={(e) => change({ skipped: e.target.checked })} />
-                          ) : (
-                            newResult(r)
-                          )}
+                          <input type="checkbox" checked={all} aria-label={g.label} onChange={() => togglePick(ids, !all)} />
                         </td>
-                      </tr>
-                    );
-                  }),
-                ];
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {detail.manager && (detail.extra_rows?.length ?? 0) > 0 && (
-        <div className="report-table sr-table">
+                      )}
+                      <td colSpan={6}>
+                        {g.label} {g.rows.length}
+                      </td>
+                    </tr>,
+                    ...g.rows.map((r) => {
+                      const edit = newEditOf(r, newEdits);
+                      const change = (next: Partial<NewEdit>) => setNewEdits((all2) => ({ ...all2, [r.id]: { ...edit, ...next } }));
+                      return (
+                        <tr key={r.id} className={picked.has(r.id) ? "report-row vo-picked" : "report-row"}>
+                          {reviewing && (
+                            <td>
+                              <input type="checkbox" checked={picked.has(r.id)} aria-label={r.code} onChange={(e) => togglePick([r.id], e.target.checked)} />
+                            </td>
+                          )}
+                          <td>{r.code}</td>
+                          <td>{r.old_name}</td>
+                          <td>{(reviewing ? edit.product : r.product)?.name ?? "—"}</td>
+                          <td className="num">
+                            {reviewing ? (
+                              <input type="text" inputMode="decimal" className="sc-adjust" value={edit.cost} disabled={edit.skipped || !edit.product}
+                                onChange={(e) => change({ cost: e.target.value })} />
+                            ) : r.unit_cost !== null ? money(r.unit_cost) : ""}
+                          </td>
+                          <td className="num">
+                            {reviewing ? (
+                              edit.product?.unit && (
+                                <input type="text" inputMode="numeric" className="sc-adjust" value={edit.price} disabled={edit.skipped}
+                                  onChange={(e) => change({ price: e.target.value })} />
+                              )
+                            ) : r.unit_price !== null ? money(r.unit_price) : ""}
+                          </td>
+                          <td>
+                            {reviewing ? (
+                              <input type="checkbox" checked={edit.skipped || !edit.product} disabled={!edit.product}
+                                onChange={(e) => change({ skipped: e.target.checked })} />
+                            ) : (
+                              newResult(r)
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    }),
+                  ];
+                })}
+              </tbody>
+            </table>
+          </>
+        )}
+        {shown === "extra" && (
           <table className="report-grid">
             <thead>
               <tr>
@@ -669,8 +831,91 @@ export function StockCountPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        )}
+        {shown === "uncounted" && (
+          <table className="report-grid">
+            <thead>
+              <tr>
+                <th>品號</th>
+                <th>品名</th>
+                <th className="num">帳上</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(detail.uncounted_rows ?? []).map((u) => (
+                <tr key={u.product.id} className="report-row">
+                  <td>{u.product.sku}</td>
+                  <td>{u.product.name}</td>
+                  <td className="num">{u.book_qty}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <FindFirstPanel
+        open={finding !== null}
+        initialText={finding ?? ""}
+        // 盤點單裡沒有地方「過去看」:停用的也是「使用這款」,按了由這一頁講
+        inactiveLabel="使用這款"
+        // 盲盤:候選不寫帳上數量(複審 P1)
+        hideStock
+        peeking={peek.isOpen}
+        onPeek={peek.open}
+        onClose={() => {
+          trip.drop();
+          unknownTarget.current = null;
+          setFinding(null);
+          focusScan();
+        }}
+        onUse={(p) => {
+          setFinding(null);
+          void bring(p);
+          focusScan();
+        }}
+        onCreate={(kind, prefill) => {
+          if (kind === "phone") {
+            toast("手機在「手機」那一格刷序號", "err", { ms: 6000 });
+            return;
+          }
+          setFinding(null);
+          setFormPrefill(prefill);
+          setFormUsed(true);
+          setFormOpen(true);
+        }}
+      />
+      {formUsed && (
+        <ProductForm
+          open={formOpen}
+          initial={null}
+          prefill={formPrefill}
+          // 這一頁的草稿自己一格,不跟商品管理、進貨共用
+          draftKey="modal-draft:product-form-stocktake"
+          hideStock
+          onDraftLoaded={() => trip.detach()}
+          onPhoneWizard={() => toast("手機在「手機」那一格刷序號", "err", { ms: 6000 })}
+          onPeek={peek.open}
+          peeking={peek.isOpen}
+          onClose={() => {
+            // 存好 / 選了既有的:那一趟在前面已經拿走了;人按取消:這一趟不算了
+            trip.drop();
+            unknownTarget.current = null;
+            setFormOpen(false);
+            focusScan();
+          }}
+          onSaved={(p) => void bring(p)}
+          onUseExisting={(id, remembered) => {
+            if (remembered) toast(remembered.text, remembered.tone, { ms: 6000 });
+            // 表單接著就關掉(會清掉這一趟):現在就拿走,查回來再用
+            const ctx = capture();
+            api<Product>(`/products/${id}/`).then(
+              (p) => bring(p, ctx),
+              (e) => toast(errorMessageOf(e), "err", { ms: 6000 }),
+            );
+          }}
+        />
       )}
+      {peek.panel}
     </div>
   );
 }

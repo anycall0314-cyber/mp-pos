@@ -358,6 +358,8 @@ test("候選的說明:庫存 0 也寫出來;沒有的欄位不留空的分隔", 
   assert.equal(rowWhy(r), "庫存 0 / 機型相符、品牌相符 / 顏色不同");
   assert.equal(rowFacts(row(6)), "P6");
   assert.equal(rowWhy(row(6, { stock_qty: null })), "庫存 0");
+  // 盤點裡開的(盲盤):不寫庫存
+  assert.equal(rowWhy(r, true), "機型相符、品牌相符 / 顏色不同");
   assert.equal(rowWhy(row(6, { stock_qty: 12 })), "庫存 12");
 });
 

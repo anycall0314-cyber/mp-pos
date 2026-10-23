@@ -136,7 +136,14 @@ export interface CountDetail extends CountSummary {
   missing_rows?: CountMissing[];
   extra_rows?: CountExtra[];
   new_rows?: CountNew[];
+  /** 帳上有、這張單沒盤到的配件(只有管理員;盤點中與待核准):只列出來,不自動調 */
+  uncounted_rows?: CountUncounted[];
   amounts?: { lines: string; phones: string; total: string };
+}
+
+export interface CountUncounted {
+  product: { id: number; sku: string; name: string };
+  book_qty: number;
 }
 
 /** 舊系統清單上有、新系統還沒入庫的(管理員;沒有成本)。 */
@@ -381,4 +388,75 @@ export function phoneCountUrl(origin: string, token: string): string {
 /** 還沒處理的沒對到的碼有幾個(有的話不能送出)。 */
 export function unknownLeft(rows: Pick<CountUnknown, "resolved">[] | undefined): number {
   return (rows ?? []).filter((r) => !r.resolved).length;
+}
+
+/** 開新盤點預設哪一家門市(全站檢視 B4):上次選的(還在、還啟用)→ 帳號的預設門市 → 空的(要人選)。 */
+export function defaultCountStore(
+  stores: { id: number; is_active: boolean }[],
+  remembered: number | null,
+  own: number | null,
+): number | "" {
+  const usable = (id: number | null): id is number => id !== null && stores.some((s) => s.id === id && s.is_active);
+  if (usable(remembered)) return remembered;
+  if (usable(own)) return own;
+  return "";
+}
+
+/**
+ * 盤點單一次只顯示一張表、上面用分頁切(全站檢視 B1:以前幾張表疊在一頁、各自在小框裡捲,門市的螢幕看不到剛刷的那一台)。
+ * 名稱一律四個字(同一排字數一樣)。
+ */
+export type CountTab = "lines" | "scans" | "unknowns" | "vendor" | "missing" | "new" | "extra" | "uncounted";
+const TAB_LABELS: Record<CountTab, string> = {
+  lines: "配件數量",
+  scans: "手機序號",
+  unknowns: "沒對到碼",
+  vendor: "廠商換貨",
+  missing: "少的序號",
+  new: "首次入庫",
+  extra: "多刷的碼",
+  uncounted: "沒盤配件",
+};
+
+const ALERT_TABS = new Set<CountTab>(["unknowns", "missing", "extra", "uncounted"]);
+
+/** 這張單現在有哪幾個分頁:有東西的才出現;配件、手機在盤點中一直在(要有地方看剛記的)。 */
+export function countTabs(
+  d: Pick<CountDetail, "status" | "manager" | "line_rows" | "scan_rows" | "unknown_rows" | "vendor_rows"
+    | "missing_rows" | "new_rows" | "extra_rows" | "uncounted_rows">,
+): { key: CountTab; label: string; count: number; alert: boolean }[] {
+  const counting = d.status === "counting";
+  const reviewed = d.status === "submitted" || d.status === "approved";
+  const all: [CountTab, number, boolean][] = [
+    ["lines", d.line_rows.length, counting || d.line_rows.length > 0],
+    ["scans", d.scan_rows.length, counting || d.scan_rows.length > 0],
+    ["unknowns", d.unknown_rows?.length ?? 0, (d.unknown_rows?.length ?? 0) > 0],
+    ["vendor", d.vendor_rows?.length ?? 0, (d.vendor_rows?.length ?? 0) > 0],
+    ["missing", d.missing_rows?.length ?? 0, d.manager && (d.missing_rows?.length ?? 0) > 0],
+    ["new", d.new_rows?.length ?? 0, d.manager && reviewed && (d.new_rows?.length ?? 0) > 0],
+    ["extra", d.extra_rows?.length ?? 0, d.manager && (d.extra_rows?.length ?? 0) > 0],
+    ["uncounted", d.uncounted_rows?.length ?? 0, d.manager && (d.uncounted_rows?.length ?? 0) > 0],
+  ];
+  // 要人處理 / 注意的才用紅色的數字(配件、手機、換貨中、首次入庫只是筆數)
+  return all.filter(([, , shown]) => shown).map(([key, count]) => ({ key, label: TAB_LABELS[key], count, alert: ALERT_TABS.has(key) }));
+}
+
+/** 現在看哪一個分頁:人選的那一個還在就是它,不在了(那張表變空)就第一個。 */
+export function currentTab(tabs: { key: CountTab }[], chosen: CountTab | null): CountTab | null {
+  if (chosen && tabs.some((t) => t.key === chosen)) return chosen;
+  return tabs[0]?.key ?? null;
+}
+
+/** 新記的在最上面(跟工作台一樣):配件照記下的時間、手機照刷的順序,都是新的在前。 */
+export function newestFirst<T extends { id: number; counted_at?: string }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    if (a.counted_at && b.counted_at && a.counted_at !== b.counted_at) return a.counted_at < b.counted_at ? 1 : -1;
+    return b.id - a.id;
+  });
+}
+
+/** 核准畫面上「手機刷完了沒」(送出時店員表明的;沒表明 = 沒刷到的手機不算少,是沒盤) */
+export function phonesDoneText(d: Pick<CountDetail, "status" | "phones_done">): string {
+  if (d.status !== "submitted" && d.status !== "approved") return "";
+  return d.phones_done ? "手機已刷完" : "手機沒表明刷完";
 }

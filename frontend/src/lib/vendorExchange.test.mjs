@@ -106,7 +106,9 @@ test("開單刷到換貨中的那一台:先講、旁邊「已換貨」,按了才
 
 test("盤點單列出這家門市換貨中的(不用刷,但不會從表上消失)", () => {
   const page = read("../pages/inventory/StockCountPage.tsx");
-  assert.match(page, /\{\(detail\.vendor_rows\?\.length \?\? 0\) > 0 && \(/);
+  assert.match(page, /\{shown === "vendor" && \(/);
+  // 分頁:有換貨中的才出現(誰都看得到)
+  assert.match(read("./stockCount.ts"), /\["vendor", d\.vendor_rows\?\.length \?\? 0, \(d\.vendor_rows\?\.length \?\? 0\) > 0\]/);
   assert.match(page, /<th>換貨中的序號<\/th>/);
   // 盤的人也看得到(不是只有管理員)
   assert.doesNotMatch(page, /detail\.manager && \(detail\.vendor_rows/);

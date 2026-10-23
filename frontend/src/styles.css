@@ -3505,6 +3505,15 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   background: rgba(255, 255, 255, 0.25);
   color: white;
 }
+/* 只是筆數、不用處理的(盤點單的配件、手機…):灰的,不用紅色嚇人 */
+.ia-tab-badge.plain {
+  background: rgba(148, 163, 184, 0.2);
+  color: var(--text-dim);
+}
+.ia-tab.active .ia-tab-badge.plain {
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+}
 .ia-tab-badge-warn {
   background: rgba(251, 191, 36, 0.2);
   color: var(--warn-text);
@@ -7921,6 +7930,8 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 
 /* ── 庫存三張(進銷存表 / 異動查詢 / 序號查詢):篩選一排、表格吃掉剩下的高度、最下面翻頁 ── */
 .sr-page .report-table.sr-table { flex: 1; min-height: 0; height: auto; overflow: auto; }
+/* 盤點單:一次一張表,上面的分頁(全站檢視 B1) */
+.sr-page .sc-tabs { flex: none; margin: 4px 0; }
 .sr-table.sr-busy { opacity: 0.6; }
 /* 發票明細:作廢的整列淡掉(金額不算進合計);待查的狀態那一格標出來 */
 .sr-table tr.inv-void td { color: var(--text-dim); }

@@ -294,12 +294,18 @@ def unknown_key(code: str) -> str:
     return normalize_serial(code)
 
 
-def tally_unknown(count, code, label):
-    """手機在「配件」模式刷到系統不認得的碼:記一次(同一個碼刷幾次記幾次)。回 (那一筆, 改之前, 改之後)。"""
+UNKNOWN_MAX = 99999
+
+
+def tally_unknown(count, code, label, n=1):
+    """手機在「配件」模式刷到系統不認得的碼:記一次(同一個碼刷幾次記幾次)。回 (那一筆, 改之前, 改之後)。
+    電腦上「先記下」(全站檢視 B3:刷到還沒建的配件、這個帳號不能建商品)一次加 n 個;有商品建檔權限的人之後指定 / 建立。"""
     code = str(code or "").strip()
     key = unknown_key(code)
     if not key or len(code) > 80:
         raise CountError("這不是有效的碼")
+    if not isinstance(n, int) or isinstance(n, bool) or not 1 <= n <= UNKNOWN_MAX:
+        raise CountError("數量要是 1 以上的整數")
     with transaction.atomic():
         _locked(count, S.COUNTING)
         row = StockCountUnknown.objects.select_for_update().filter(count=count, code_key=key).first()
@@ -308,7 +314,7 @@ def tally_unknown(count, code, label):
         if row.resolved_at:
             raise CountError(f"{code} 已經在電腦上處理過了")
         before = row.times
-        row.times, row.last_label = before + 1, label[:20]
+        row.times, row.last_label = before + n, label[:20]
         row.save(update_fields=["times", "last_label", "updated_at"])
         return row, before, row.times
 
@@ -656,15 +662,31 @@ def found(count, missing_id, user):
         return m
 
 
-def left_to_count(count) -> int:
-    """帳上有數量、在這張單範圍裡、還沒輸入的配件有幾樣(只給數字;盤的人看不到帳上是幾個)。"""
+def _not_counted(count):
+    """帳上有數量、在這張單範圍裡、還沒輸入的配件(庫存餘額的那幾列)。"""
     stocked = StockBalance.objects.filter(
         tenant=count.tenant, warehouse=count.warehouse, qty__gt=0,
         product__requires_serial=False, product__is_virtual=False)
     scope = scope_ids(count)
     if scope:
         stocked = stocked.filter(product__category_id__in=scope)
-    return stocked.exclude(product_id__in=count.lines.values("product_id")).count()
+    return stocked.exclude(product_id__in=count.lines.values("product_id"))
+
+
+def left_to_count(count) -> int:
+    """帳上有數量、在這張單範圍裡、還沒輸入的配件有幾樣(只給數字;盤的人看不到帳上是幾個)。"""
+    return _not_counted(count).count()
+
+
+UNCOUNTED_MAX = 1000
+
+
+def uncounted(count) -> list:
+    """同上,一樣一樣列出來給管理員看(全站檢視 B2:以前管理員核准時看不到哪些帳上有、沒人盤,整櫃沒盤也照樣核准)。
+    **只列出來,核准時不會自動調成 0**:沒盤到的照舊不動(要的話退回讓盤的人補打 0)。帳上數量是現在的。"""
+    rows = _not_counted(count).select_related("product").order_by("product__sku")[:UNCOUNTED_MAX]
+    return [{"product": {"id": b.product_id, "sku": b.product.sku, "name": b.product.name}, "book_qty": b.qty}
+            for b in rows]
 
 
 def moved_since_start(count, lines):

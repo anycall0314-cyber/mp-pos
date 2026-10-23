@@ -153,6 +153,50 @@ class FlowTests(_Count):
         self.assertEqual(self.detail(count, self.c.clerk)["left"], 0)
 
 
+class ReviewHelpTests(_Count):
+    """全站檢視 B2 / B3:核准時看得到沒盤到的配件;刷到還沒建的配件可以先記下數量。"""
+
+    def test_uncounted_accessories_are_listed_for_the_manager_only_after_submitting(self):
+        other = Product.objects.create(tenant=self.c.tenant, category=self.c.cat_case, name="甲 另一款皮套",
+                                       requires_serial=False, list_price=200)
+        StockBalance.objects.create(tenant=self.c.tenant, product=other, warehouse=self.w1, qty=3, weighted_avg_cost=50)
+        count = self.open()
+        self.ok(self.line(count, 10))
+        # 盤的時候誰都看不到這張清單(紅隊:看得到會照清單找、照帳打)
+        self.assertNotIn("uncounted_rows", self.detail(count, self.c.clerk))
+        self.assertNotIn("uncounted_rows", self.detail(count))
+        self.ok(self.act(count, "submit", self.c.clerk, phones_done=True))
+        self.assertNotIn("uncounted_rows", self.detail(count, self.c.clerk))
+        rows = self.detail(count)["uncounted_rows"]
+        self.assertEqual([(r["product"]["id"], r["book_qty"]) for r in rows], [(other.id, 3)])
+        # 只列出來:核准不會把沒盤到的調成 0
+        self.ok(self.act(count, "approve", lines=[], missing=[]))
+        self.assertEqual(self.stock(product=other), 3)
+        self.assertNotIn("uncounted_rows", self.detail(count))
+
+    def test_a_code_not_in_the_system_can_be_noted_with_a_quantity(self):
+        count = self.open()
+        url = f"{URL}{count['id']}/unknowns/"
+        out = self.ok(self.c.clerk.post(url, {"code": "OLD-0001", "qty": 5}, format="json"))
+        self.assertEqual([(u["code"], u["times"], u["resolved"]) for u in out["unknown_rows"]], [("OLD-0001", 5, False)])
+        out = self.ok(self.c.clerk.post(url, {"code": "old-0001", "qty": 2}, format="json"))     # 同一個碼累加
+        self.assertEqual(out["unknown_rows"][0]["times"], 7)
+        for bad in (0, -1, "3", 1.5, True, None, 100000):
+            self.ok(self.c.clerk.post(url, {"code": "OLD-0002", "qty": bad}, format="json"), 400)
+        # 系統裡有的不用先記
+        self.assertIn("直接選它", self.ok(self.c.clerk.post(url, {"code": self.case.sku, "qty": 1}, format="json"), 400)["detail"])
+        self.assertIn("手機", self.ok(self.c.clerk.post(url, {"code": "甲IMEI1", "qty": 1}, format="json"), 400)["detail"])
+        # 還沒處理的照舊不能送出;有權限的人指定之後才行(先記的數量算進那個配件)
+        self.assertIn("沒對到", self.ok(self.act(count, "submit", self.c.clerk), 400)["detail"])
+        unknown = out["unknown_rows"][0]["id"]
+        self.ok(self.c.admin.post(f"{URL}{count['id']}/unknowns/{unknown}/", {"product": self.case.id}, format="json"))
+        boss = self.detail(count)
+        self.assertEqual([(r["product"]["id"], r["counted_qty"]) for r in boss["line_rows"]], [(self.case.id, 7)])
+        self.ok(self.act(count, "submit", self.c.clerk, phones_done=True))
+        # 送出之後不能再記
+        self.ok(self.c.clerk.post(url, {"code": "OLD-0003", "qty": 1}, format="json"), 400)
+
+
 class SellingGoesOnTests(_Count):
     """盤點中可以繼續開單(owner 的第三條)。"""
 

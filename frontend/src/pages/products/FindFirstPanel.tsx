@@ -39,6 +39,8 @@ interface Props {
   initialText?: string;
   /** 從單據裡開的:這張單的廠商(它的料號 / 叫法也找) */
   from?: { supplierId?: number | "" };
+  /** 不寫庫存(盤點裡開的:盲盤,盤的人不能看到帳上數量) */
+  hideStock?: boolean;
   /** 已停用的那一列按鈕上的字。商品管理是「查看這款」(過去看、管理員可以恢復);單據裡沒有地方可以「過去看」,由頁面決定怎麼講 */
   inactiveLabel?: string;
 }
@@ -57,6 +59,7 @@ export function FindFirstPanel({
   initialText,
   from,
   inactiveLabel = "查看這款",
+  hideStock = false,
 }: Props) {
   const scope = stockScope(useCurrentUser()?.profile);
   const [input, setInput] = useState("");
@@ -220,7 +223,7 @@ export function FindFirstPanel({
                   {!p.is_active && <span className="intake-inactive-tag">已停用</span>}
                 </div>
                 <div className="ff-row-sub">{rowFacts(row)}</div>
-                <div className="ff-row-sub">{rowWhy(row)}</div>
+                <div className="ff-row-sub">{rowWhy(row, hideStock)}</div>
               </div>
               <button
                 type="button"

@@ -6,9 +6,10 @@ import test from "node:test";
 import {
   amountCards, approveBody, assignProduct, countedQty, extraText, missingText, movedHint, newEditOf, newGroups, newResult,
   notCountable, oldStoresText, phoneCountUrl, phonesLive, phoneStatusText, pickProblem, plainAmount, progressText, recordedQty, sameCode,
-  scopeText, signed, unknownLeft,
+  scopeText, signed, unknownLeft, defaultCountStore, countTabs, currentTab, newestFirst, phonesDoneText,
 } from "./stockCount.ts";
 
+const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
 const line = { id: 5, product: { id: 9, sku: "LC-0001", name: "皮套" }, counted_qty: 8, counted_at: "", moved_out: 0, moved_in: 0 };
 
 test("範圍:沒挑類別 = 全部", () => {
@@ -171,7 +172,7 @@ test("頁面:配件那一格用掃碼框(完全相同才自動選)、選好跳�
   assert.match(page, /await scanApi\.current\?\.idle\(\);[\s\S]{0,120}const pending = accessoryNow\.current;/);
   assert.ok(page.includes("pickProblem(accessoryNow.current, o.payload)"), "選下一個之前要看還沒記下的那一個");
   assert.ok(page.includes("const item = accessoryNow.current;"), "記下用當下選著的那一個");
-  assert.match(page, /<ArmButton label="送出" className="btn primary" onConfirm=\{submit\} \/>/);
+  assert.match(page, /<ArmButton label="送出" armedLabel=\{phonesDone \? undefined : "手機沒勾刷完,仍可送出"\} className="btn primary" onConfirm=\{submit\} \/>/);
 });
 
 test("頁面:帳上數量只照伺服器給的畫(沒給就沒有那幾欄)、核准要按兩下、要有這一項權限才進得來", () => {
@@ -212,4 +213,87 @@ test("頁面:存數量帶選到那一刻看到的數字;沒存成照最新的重
   assert.ok(page.includes("call(`unknowns/${row.id}/`, skip ? { skip: true, reason } : { product: product!.id })"));
   const hooks = readFileSync(new URL("../api/hooks.ts", import.meta.url), "utf8");
   assert.ok(hooks.includes("refetchInterval: (query) => (phonesLive(query.state.data) ? 4000 : false)"));
+});
+
+test("開新盤點預設的門市:上次選的(還在、還啟用)→ 帳號的門市 → 要人選", () => {
+  const stores = [{ id: 1, is_active: true }, { id: 2, is_active: true }, { id: 3, is_active: false }];
+  assert.equal(defaultCountStore(stores, 2, 1), 2);
+  assert.equal(defaultCountStore(stores, 3, 1), 1);       // 上次選的停用了
+  assert.equal(defaultCountStore(stores, 9, 1), 1);       // 上次選的不見了
+  assert.equal(defaultCountStore(stores, null, 2), 2);
+  assert.equal(defaultCountStore(stores, null, null), "");
+  assert.equal(defaultCountStore(stores, null, 3), "");
+  const page = read("../pages/inventory/StockCountsPage.tsx");
+  assert.ok(!page.includes("StoreField"), "開盤點的門市用一般下拉,不用要打字搜尋的那一種");
+  assert.match(page, /defaultCountStore\(stores, readStore\(\), own\.id\)/);
+  assert.match(page, /\{storeId === "" && <option value="">請選<\/option>\}/);
+});
+
+test("盤點單一次一張表:有東西的才有分頁,配件、手機在盤點中一直在;名稱都是四個字", () => {
+  const base = { status: "counting", manager: false, line_rows: [], scan_rows: [] };
+  assert.deepEqual(countTabs(base).map((t) => t.key), ["lines", "scans"]);
+  const busy = { ...base, unknown_rows: [{}], vendor_rows: [{}], missing_rows: [{}], extra_rows: [{}], uncounted_rows: [{}], new_rows: [{}] };
+  // 盤的人看不到少的、多的、沒盤的(盲盤)
+  assert.deepEqual(countTabs(busy).map((t) => t.key), ["lines", "scans", "unknowns", "vendor"]);
+  // 管理員:首次入庫只在送出之後
+  assert.deepEqual(countTabs({ ...busy, manager: true }).map((t) => t.key), ["lines", "scans", "unknowns", "vendor", "missing", "extra", "uncounted"]);
+  const review = countTabs({ ...busy, manager: true, status: "submitted", scan_rows: [{}, {}] });
+  assert.deepEqual(review.map((t) => t.key), ["scans", "unknowns", "vendor", "missing", "new", "extra", "uncounted"]);
+  assert.equal(review[0].count, 2);
+  for (const t of review) assert.equal([...t.label].length, 4, t.label);
+  // 紅色的數字只給要處理 / 注意的
+  assert.deepEqual(review.filter((t) => t.alert).map((t) => t.key), ["unknowns", "missing", "extra", "uncounted"]);
+  // 選的那一個不見了就第一個
+  assert.equal(currentTab(review, "missing"), "missing");
+  assert.equal(currentTab(review, "lines"), "scans");
+  assert.equal(currentTab([], "lines"), null);
+});
+
+test("新記的在最上面;核准畫面寫手機刷完了沒", () => {
+  const rows = [{ id: 1, counted_at: "2026-11-30T10:00" }, { id: 2, counted_at: "2026-11-30T09:00" }, { id: 3, counted_at: "2026-11-30T11:00" }];
+  assert.deepEqual(newestFirst(rows).map((r) => r.id), [3, 1, 2]);
+  assert.deepEqual(newestFirst([{ id: 1 }, { id: 5 }, { id: 3 }]).map((r) => r.id), [5, 3, 1]);
+  assert.equal(phonesDoneText({ status: "counting", phones_done: false }), "");
+  assert.equal(phonesDoneText({ status: "submitted", phones_done: true }), "手機已刷完");
+  assert.equal(phonesDoneText({ status: "approved", phones_done: false }), "手機沒表明刷完");
+  const page = read("../pages/inventory/StockCountPage.tsx");
+  // 剛刷 / 剛記的切到那一頁;沒勾刷完的送出只提醒
+  assert.match(page, /setCode\(""\);\s*\/\/[^\n]*\n\s*setTab\("scans"\);/);
+  assert.match(page, /setQty\(""\);\s*setTab\("lines"\);/);
+  assert.match(page, /armedLabel=\{phonesDone \? undefined : "手機沒勾刷完,仍可送出"\}/);
+  assert.match(page, /newestFirst\(detail\.scan_rows\)\.map/);
+  assert.match(page, /newestFirst\(detail\.line_rows\)\.map/);
+});
+
+test("刷到還沒建的配件:有商品建檔權限的「建立」(先找、選起來打數量),沒有的「先記下」碼與數量;核准前沒表明手機刷完再確認一次", () => {
+  const page = read("../pages/inventory/StockCountPage.tsx");
+  assert.match(page, /onCreate=\{canBuild \? startCreate : startNote\}/);
+  assert.match(page, /createLabel=\{canBuild \? "建立" : "先記下"\}/);
+  assert.match(page, /const canBuild = useCan\("edit_products"\);/);
+  // 先記下:打數量記成沒對到的碼,記好劃掉那一筆「沒加入」
+  assert.match(page, /call\("unknowns\/", \{ code: noted\.kw, qty: n \}\);\s*if \(done\) \{\s*scanApi\.current\?\.added\(noted\.kw, noted\.entry\);/);
+  // 沒對到碼那一列的「建立」只給有權限的人;找到 / 建好的指定給那一筆
+  assert.match(page, /\{canBuild && \(\s*<button className="btn" type="button" disabled=\{run\.isPending\} onClick=\{\(\) => createForUnknown\(u\)\}>/);
+  assert.match(page, /await call\(`unknowns\/\$\{target\}\/`, \{ product: p\.id \}\);/);
+  // 「就是這個」查回來之前表單就關了:這一趟要在按下去那一刻拿走
+  assert.match(page, /const ctx = capture\(\);\s*api<Product>\(`\/products\/\$\{id\}\/`\)\.then\(\s*\(p\) => bring\(p, ctx\)/);
+  // 有序號 / 虛擬的不能當配件
+  assert.match(page, /const why = notCountable\(p\);/);
+  assert.match(page, /armedLabel=\{detail\.phones_done \? undefined : "手機沒表明,再按一次核准"\}/);
+  const box = read("../components/workbench/ScanBox.tsx");
+  assert.match(box, /createLabel = "建立",\s*createRowLabel = "建立商品",/);
+});
+
+test("複審:先記下連按兩次只送一次;盤點裡開的先找 / 可能已經建過不寫庫存(盲盤)", () => {
+  const page = read("../pages/inventory/StockCountPage.tsx");
+  assert.match(page, /async function saveLine\(\) \{\s*if \(saving\.current\) return;\s*saving\.current = true;/);
+  // 鎖要在提早 return 之前宣告(hooks 規則)
+  assert.ok(page.indexOf("const saving = useRef(false);") < page.indexOf("if (isLoading) return"));
+  assert.match(page, /inactiveLabel="使用這款"\s*\/\/[^\n]*\n\s*hideStock/);
+  assert.match(page, /draftKey="modal-draft:product-form-stocktake"\s*hideStock/);
+  const ff = read("../pages/products/FindFirstPanel.tsx");
+  assert.match(ff, /rowWhy\(row, hideStock\)/);
+  const dup = read("../pages/products/DuplicatePanel.tsx");
+  assert.match(dup, /detail && !hideStock \? `庫存/);
+  assert.match(read("../pages/products/ProductForm.tsx"), /hideStock=\{hideStock\}/);
 });

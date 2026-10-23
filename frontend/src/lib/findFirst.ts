@@ -251,10 +251,13 @@ export function rowFacts(row: FoundRow): string {
   return [p.sku, p.category_name, p.spec].filter(Boolean).join(" / ");
 }
 
-/** 候選第三行:庫存(0 也寫出來) / 為什麼找到 / 哪裡不同 */
-export function rowWhy(row: FoundRow): string {
+/**
+ * 候選第三行:庫存(0 也寫出來) / 為什麼找到 / 哪裡不同。
+ * `hideStock` = 盤點裡開的(盲盤:盤的人不能看到帳上數量;複審 P1),庫存不寫。
+ */
+export function rowWhy(row: FoundRow, hideStock = false): string {
   return [
-    `庫存 ${row.product.stock_qty ?? 0}`,
+    hideStock ? "" : `庫存 ${row.product.stock_qty ?? 0}`,
     row.reasons.join("、"),
     row.differences.join(";"),
   ]

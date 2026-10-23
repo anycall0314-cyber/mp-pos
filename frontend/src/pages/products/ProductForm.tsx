@@ -125,6 +125,8 @@ interface ProductFormProps {
    * 真的要走的時候,頁面在離開前呼叫 `beforeLeave`(把表單打好的存成草稿、結束手機配對);不走就不要呼叫。
    */
   onPhoneWizard?: (beforeLeave: () => void) => void;
+  /** 「可能已經建過」的候選不寫庫存(盤點裡開的:盲盤) */
+  hideStock?: boolean;
 }
 
 interface FormState {
@@ -317,6 +319,7 @@ export function ProductForm({
   draftKey = DRAFT_KEY,
   onDraftLoaded,
   onPhoneWizard,
+  hideStock = false,
   asPage = false,
 }: ProductFormProps) {
   // 防重複:後端說「可能已經建過」時的候選,以及使用者寫的差異
@@ -853,6 +856,7 @@ export function ProductForm({
             onProceed={() => submit()}
             busy={busy || saveProduct.isPending || rememberPhrase.isPending}
             onPeek={onPeek}
+            hideStock={hideStock}
           />
           {!isEdit && (
             <label className="checkbox dup-remember">

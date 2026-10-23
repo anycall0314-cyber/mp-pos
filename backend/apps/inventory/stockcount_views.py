@@ -8,7 +8,7 @@
 """
 from decimal import Decimal
 
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.views.decorators.cache import never_cache
@@ -27,6 +27,7 @@ from apps.tenants import abilities
 from apps.tenants.permissions import is_tenant_admin
 
 from . import stockcount, stockcount_phone
+from .identifiers import find_serial_ids
 from .models import ProductSerial, StockBalance, StockCount, StockCountPhone, VendorExchange, Warehouse
 
 S = StockCount.Status
@@ -92,6 +93,9 @@ def _detail(count, user):
     out = _summary(count, len(lines), len(scans))
     out["manager"] = manager
     out["left"] = stockcount.left_to_count(count) if count.status == S.COUNTING else 0
+    # 帳上有、這張單沒盤到的配件:只有管理員(盲盤)、只在待核准(紅隊:盤的時候看得到清單,會照清單找、照帳打);只列出來、不自動調
+    if manager and count.status == S.SUBMITTED:
+        out["uncounted_rows"] = stockcount.uncounted(count)
     costs = {}
     if manager:
         costs = dict(StockBalance.objects.filter(
@@ -267,6 +271,27 @@ def stock_count_phone(request, pk, phone_id):
     abilities.require(request.user, abilities.STOCK_COUNT)
     count = _get(request, pk)
     stockcount_phone.end(count, phone_id)
+    return Response(_detail(count, request.user))
+
+
+@api_view(["POST"])
+def stock_count_unknowns(request, pk):
+    """電腦:刷到系統還沒有的配件、這個帳號不能建商品 → 先記成沒對到的碼 {code, qty}(全站檢視 B3;紅隊:不讓現場店員建主檔,
+    也不讓那個碼卡住整張單)。有商品建檔權限的人之後在「沒對到碼」指定 / 建立;還沒處理的照舊不能送出。"""
+    abilities.require(request.user, abilities.STOCK_COUNT)
+    count = _get(request, pk)
+    data = request.data if isinstance(request.data, dict) else {}
+    code = str(data.get("code") or "").strip()
+    # 系統裡已經有的碼不用先記:直接選它(配件)、或到手機那一格刷(設備)
+    hit = Product.objects.filter(tenant=request.tenant).filter(Q(barcode__iexact=code) | Q(sku__iexact=code)).first() if code else None
+    if hit is not None:
+        return _bad(f"這個碼是「{hit.name}」,直接選它")
+    if code and find_serial_ids(request.tenant, code):
+        return _bad("這是手機的碼,請在手機那一格刷")
+    try:
+        stockcount.tally_unknown(count, code, _name(request.user), n=data.get("qty"))
+    except stockcount.CountError as exc:
+        return _bad(exc)
     return Response(_detail(count, request.user))
 
 
