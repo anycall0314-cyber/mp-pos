@@ -6,6 +6,8 @@ import { Banner } from "@/components/Banner";
 import { PaneBack } from "@/components/PaneBack";
 import { Toolbar } from "@/components/Toolbar";
 import { errorText } from "@/lib/errorText";
+import { useDraftForm } from "@/hooks/useDraftForm";
+import { LEAVE_TEXT } from "@/lib/draftGuard";
 
 type Selection = { kind: "person"; id: number } | { kind: "new" } | null;
 
@@ -41,7 +43,6 @@ export function SalesPersonsPage() {
 
   const [query, setQuery] = useState("");
   const [selection, setSelection] = useState<Selection>(null);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
 
@@ -66,21 +67,21 @@ export function SalesPersonsPage() {
     return people.find((s) => s.id === selection.id) ?? null;
   }, [selection, people]);
 
+  // 只在換了一筆時重填;改過沒存,點別筆 / 新增 / 取消 / × 要按兩次(全站檢視 V01;規則在 lib/draftGuard.ts)
+  const formKey = selection?.kind === "person" ? `p${selection.id}` : selection?.kind === "new" ? "new" : null;
+  const draft = useDraftForm<FormState>(
+    EMPTY_FORM,
+    formKey,
+    () => (selection?.kind === "person" ? (selected ? toForm(selected) : null) : EMPTY_FORM),
+    [selected],
+  );
+  const form = draft.form;
+  const patch = draft.patch;
   useEffect(() => {
-    if (selection?.kind === "person" && selected) {
-      setForm(toForm(selected));
-      setError(null);
-      setSavedFlash(false);
-    } else if (selection?.kind === "new") {
-      setForm(EMPTY_FORM);
-      setError(null);
-      setSavedFlash(false);
-    }
-  }, [selection, selected]);
-
-  function patch<K extends keyof FormState>(k: K, v: FormState[K]) {
-    setForm((f) => ({ ...f, [k]: v }));
-  }
+    if (formKey === null) return;
+    setError(null);
+    setSavedFlash(false);
+  }, [formKey]);
 
   async function handleSave() {
     const code = form.code.trim().toUpperCase();
@@ -106,6 +107,7 @@ export function SalesPersonsPage() {
       setError(null);
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
+      draft.saved(`p${saved.id}`, toForm(saved));
       setSelection({ kind: "person", id: saved.id });
     } catch (e) {
       // 欄位錯誤只留中文那幾句、不露欄位名(全站檢視 G2;規則在 lib/errorText.ts)
@@ -121,13 +123,18 @@ export function SalesPersonsPage() {
       <Toolbar
         title="業務員"
         actions={
-          <button className="btn primary" onClick={() => setSelection({ kind: "new" })}>
-            新增業務員
+          <button
+            className={draft.armed("new") ? "btn primary armed" : "btn primary"}
+            onClick={() => {
+              if (selection?.kind !== "new") draft.leave("new", () => setSelection({ kind: "new" }));
+            }}
+          >
+            {draft.armed("new") ? "再按一次新增" : "新增業務員"}
           </button>
         }
       />
 
-      <div className={isEditing || isNew ? "pc-layout" : "pc-layout list-only"}>
+      <div className={isEditing || isNew ? "pc-layout pane-page" : "pc-layout pane-page list-only"}>
         <aside className="pc-master" style={{ gridTemplateRows: "1fr" }}>
           <section className="pc-section">
             <div className="pc-section-header">
@@ -165,7 +172,10 @@ export function SalesPersonsPage() {
                     {filtered.map((s) => (
                       <tr
                         key={s.id}
-                        onClick={() => setSelection({ kind: "person", id: s.id })}
+                        onClick={() => {
+                          if (selection?.kind === "person" && selection.id === s.id) return;
+                          draft.leave(`row:${s.id}`, () => setSelection({ kind: "person", id: s.id }));
+                        }}
                         className={
                           selection?.kind === "person" && selection.id === s.id
                             ? "selected"
@@ -199,10 +209,12 @@ export function SalesPersonsPage() {
         </aside>
 
         <div className="pc-detail">
-          <PaneBack open={isEditing || isNew} onClose={() => setSelection(null)} disabled={save.isPending} />
+          <PaneBack open={isEditing || isNew} onClose={() => draft.leave("close", () => setSelection(null))} disabled={save.isPending} />
 
-          {(isEditing || isNew) && (
+          {(isEditing || isNew) && !draft.ready && <div className="md-empty" style={{ marginTop: 40 }}>載入中…</div>}
+          {draft.ready && (
             <div className="pc-detail-body">
+              {draft.warning && <div className="pc-detail-warn"><Banner kind="info" message={LEAVE_TEXT} /></div>}
               <h3 className="pc-detail-title">
                 {isNew ? "新增業務員" : `業務員 · ${selected?.code} ${selected?.name}`}
               </h3>
@@ -273,11 +285,11 @@ export function SalesPersonsPage() {
                   {save.isPending ? "儲存中…" : "儲存"}
                 </button>
                 <button
-                  className="btn"
-                  onClick={() => setSelection(null)}
+                  className={draft.armed("close") ? "btn armed" : "btn"}
+                  onClick={() => draft.leave("close", () => setSelection(null))}
                   disabled={save.isPending}
                 >
-                  取消
+                  {draft.armed("close") ? "再按一次取消" : "取消"}
                 </button>
               </div>
             </div>

@@ -7,6 +7,8 @@ import { PaneBack } from "@/components/PaneBack";
 import { Toolbar } from "@/components/Toolbar";
 import { useReorder } from "@/hooks/useReorder";
 import { errorText } from "@/lib/errorText";
+import { useDraftForm } from "@/hooks/useDraftForm";
+import { LEAVE_TEXT } from "@/lib/draftGuard";
 
 type Selection =
   | { kind: "supplier"; id: number }
@@ -54,7 +56,6 @@ export function SuppliersPage() {
 
   const [query, setQuery] = useState("");
   const [selection, setSelection] = useState<Selection>(null);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [flashMsg, setFlashMsg] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
@@ -91,25 +92,24 @@ export function SuppliersPage() {
     return suppliers.find((s) => s.id === selection.id) ?? null;
   }, [selection, suppliers]);
 
-  // 選到一筆 → 載入表單;切到新增 → 清空
+  // 選到一筆 → 載入表單;切到新增 → 清空。只在換了一筆時重填;改過沒存,點別筆 / 新增 / 取消 / × 要按兩次(全站檢視 V01)
+  const formKey = selection?.kind === "supplier" ? `s${selection.id}` : selection?.kind === "new" ? "new" : null;
+  const draft = useDraftForm<FormState>(
+    EMPTY_FORM,
+    formKey,
+    () => (selection?.kind === "supplier" ? (selectedSupplier ? toForm(selectedSupplier) : null) : EMPTY_FORM),
+    [selectedSupplier],
+  );
+  const form = draft.form;
+  const patch = draft.patch;
   useEffect(() => {
-    if (selection?.kind === "supplier" && selectedSupplier) {
-      setForm(toForm(selectedSupplier));
-      setError(null);
-      setFlashMsg(null);
-    } else if (selection?.kind === "new") {
-      setForm(EMPTY_FORM);
-      setError(null);
-      setFlashMsg(null);
-    }
-  }, [selection, selectedSupplier]);
-
-  function patch<K extends keyof FormState>(k: K, v: FormState[K]) {
-    setForm((f) => ({ ...f, [k]: v }));
-  }
+    if (formKey === null) return;
+    setError(null);
+    setFlashMsg(null);
+  }, [formKey]);
 
   function startNew() {
-    setSelection({ kind: "new" });
+    if (selection?.kind !== "new") draft.leave("new", () => setSelection({ kind: "new" }));
   }
 
   async function save() {
@@ -137,10 +137,11 @@ export function SuppliersPage() {
       setError(null);
       if (isCreate) {
         // 連續新增:清空表單、維持新增模式,讓使用者可直接輸入下一筆
-        setForm(EMPTY_FORM);
+        draft.saved("new", EMPTY_FORM);
         setFlashMsg(`已新增「${saved.name}」(${saved.code}),可繼續輸入下一筆`);
       } else {
         setFlashMsg("已儲存");
+        draft.saved(`s${saved.id}`, toForm(saved));
         setSelection({ kind: "supplier", id: saved.id });
       }
       setTimeout(() => setFlashMsg(null), 2500);
@@ -158,13 +159,13 @@ export function SuppliersPage() {
       <Toolbar
         title="廠商"
         actions={
-          <button className="btn primary" onClick={startNew}>
-            新增廠商
+          <button className={draft.armed("new") ? "btn primary armed" : "btn primary"} onClick={startNew}>
+            {draft.armed("new") ? "再按一次新增" : "新增廠商"}
           </button>
         }
       />
 
-      <div className={isEditing || isNew ? "pc-layout" : "pc-layout list-only"}>
+      <div className={isEditing || isNew ? "pc-layout pane-page" : "pc-layout pane-page list-only"}>
         <aside className="pc-master" style={{ gridTemplateRows: "1fr" }}>
           <section className="pc-section">
             <div className="pc-section-header">
@@ -246,9 +247,10 @@ export function SuppliersPage() {
                             setDraggingId(null);
                             setDragOverId(null);
                           }}
-                          onClick={() =>
-                            setSelection({ kind: "supplier", id: s.id })
-                          }
+                          onClick={() => {
+                            if (selection?.kind === "supplier" && selection.id === s.id) return;
+                            draft.leave(`row:${s.id}`, () => setSelection({ kind: "supplier", id: s.id }));
+                          }}
                           className={[
                             selection?.kind === "supplier" &&
                             selection.id === s.id
@@ -304,10 +306,12 @@ export function SuppliersPage() {
         </aside>
 
         <div className="pc-detail">
-          <PaneBack open={isEditing || isNew} onClose={() => setSelection(null)} disabled={saveSupplier.isPending} />
+          <PaneBack open={isEditing || isNew} onClose={() => draft.leave("close", () => setSelection(null))} disabled={saveSupplier.isPending} />
 
-          {(isEditing || isNew) && (
+          {(isEditing || isNew) && !draft.ready && <div className="md-empty" style={{ marginTop: 40 }}>載入中…</div>}
+          {draft.ready && (
             <div className="pc-detail-body">
+              {draft.warning && <div className="pc-detail-warn"><Banner kind="info" message={LEAVE_TEXT} /></div>}
               <h3 className="pc-detail-title">
                 {isNew
                   ? "新增廠商"
@@ -419,11 +423,11 @@ export function SuppliersPage() {
                   {saveSupplier.isPending ? "儲存中…" : "儲存"}
                 </button>
                 <button
-                  className="btn"
-                  onClick={() => setSelection(null)}
+                  className={draft.armed("close") ? "btn armed" : "btn"}
+                  onClick={() => draft.leave("close", () => setSelection(null))}
                   disabled={saveSupplier.isPending}
                 >
-                  取消
+                  {draft.armed("close") ? "再按一次取消" : "取消"}
                 </button>
               </div>
             </div>

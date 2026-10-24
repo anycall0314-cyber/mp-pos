@@ -145,7 +145,23 @@ test("零件範本:點別份 / 新增 / 取消都走兩段式;讀進來、存好
   assert.match(src, /leave\("close", \(\) => \{/);
   assert.match(src, /const dirty = editing !== null && changed\(editing, base\);/);
   // setEditing 只剩編輯中的修改;換一份一律走 load(同時記基準)
-  const loads = src.match(/\bload\((toEditing\(first\)|emptyEditing\(\)|toEditing\(t\)|original \? toEditing\(original\) : null|null|toEditing\(saved\))\)/g);
-  assert.equal(loads?.length, 7);
+  // 新增、點一份、回清單(× / 取消)、存好、刪掉;不再自動選第一份(V01:先看清單)
+  const loads = src.match(/\bload\((emptyEditing\(\)|toEditing\(t\)|null|toEditing\(saved\))\)/g);
+  assert.equal(loads?.length, 5);
   assert.doesNotMatch(src, /setEditing\((toEditing|emptyEditing|null)/);
+});
+
+test("廠商、業務員頁也一樣(全站檢視 V01):只在換一筆時重填、點別筆 / 新增 / 取消 / × 走兩段式", () => {
+  for (const [path, key] of [["../pages/suppliers/SuppliersPage.tsx", "supplier"], ["../pages/sales-persons/SalesPersonsPage.tsx", "person"]]) {
+    const src = read(path);
+    assert.match(src, /const draft = useDraftForm<FormState>\(/, path);
+    assert.match(src, /draft\.leave\(`row:\$\{s\.id\}`, \(\) => setSelection\(\{ kind: "/, path);
+    assert.ok(src.includes(`draft.leave("new", () => setSelection({ kind: "new" }))`), path);
+    assert.equal(src.match(/draft\.leave\("close", \(\) => setSelection\(null\)\)/g)?.length, 2, path); // 取消、×
+    assert.match(src, /\{draft\.ready && \(/, path);
+    assert.ok(!src.includes("setForm("), path);
+    assert.ok(src.includes(`kind: "${key}"`), path);
+  }
+  const hook = read("../hooks/useDraftForm.ts");
+  assert.match(hook, /const next = syncDraft\(draft, formKey, load\);/);
 });

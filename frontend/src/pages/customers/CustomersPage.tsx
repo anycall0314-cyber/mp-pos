@@ -284,7 +284,7 @@ export function CustomersPage() {
         </div>
       </div>
 
-      <div className={isEditing || isNew ? "pc-layout" : "pc-layout list-only"}>
+      <div className={isEditing || isNew ? "pc-layout pane-page" : "pc-layout pane-page list-only"}>
         <aside className="pc-master" style={{ gridTemplateRows: "1fr" }}>
           <section className="pc-section">
             <div className="pc-section-header">

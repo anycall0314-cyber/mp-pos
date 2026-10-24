@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { openPaneAtTop, trackListScroll } from "./paneScroll.ts";
+import { keepListBody, openPaneAtTop, trackListScroll } from "./paneScroll.ts";
 
 function fakeWindow() {
   const win = {
@@ -71,11 +71,13 @@ test("五個主檔頁與進貨匯入窄畫面都有回清單的 ×;樣式在窄�
   };
   for (const [path, open] of Object.entries(pages)) {
     const src = read(path);
-    assert.match(src, /className=\{[^}]*"pc-layout"/, path);
-    // 來源頁改過沒存要按兩次(全站檢視 R02),× 一樣走那一條
+    assert.match(src, /className=\{[^}]*"pc-layout( pane-page)?"/, path);
+    // 改過沒存要按兩次(全站檢視 R02 / V01),× 一樣走那一條;會員、商品照舊直接收
     const close = path.includes("CustomersPage")
       ? `<PaneBack open={${open}} onClose={() => leave("close", () => setSelection(null))}`
-      : `<PaneBack open={${open}} onClose={() => setSelection(null)}`;
+      : /Suppliers|SalesPersons/.test(path)
+        ? `<PaneBack open={${open}} onClose={() => draft.leave("close", () => setSelection(null))}`
+        : `<PaneBack open={${open}} onClose={() => setSelection(null)}`;
     assert.ok(src.includes(close), path);
   }
   const intake = read("../pages/intake/IntakePage.tsx");
@@ -105,4 +107,42 @@ test("進貨匯入單項核對:存修正、存序號、駁回沒成功要寫在�
   }
   // 不自動跳下一行:選哪一行只有點清單、建批次 / 換批次會動
   assert.equal(src.match(/setSelectedItemId\(/g)?.length, 5);
+});
+
+test("電腦上清單是那一塊自己捲:清單被藏起來(整頁的主檔頁)才在回來時捲回去;一直看得到(商品左右兩欄)不動", () => {
+  const win = fakeWindow();
+  const body = { scrollTop: 400 };
+  const listAt = { current: 0 };
+  const stop = trackListScroll(win, body, listAt); // 清單那一塊也照樣記
+  assert.equal(listAt.current, 400);
+  stop();
+  body.scrollTop = 0; // 藏起來位置歸零
+  keepListBody(win, body, listAt.current, true, () => true)();
+  win.paint();
+  assert.equal(body.scrollTop, 400);
+  body.scrollTop = 120; // 左右兩欄:看詳情時捲過清單
+  keepListBody(win, body, 400, false, () => true)();
+  win.paint();
+  assert.equal(body.scrollTop, 120);
+});
+
+test("電腦上也整頁的主檔頁(全站檢視 V01):來源、廠商、業務員、品牌系列、零件範本;會員、商品照舊左右兩欄", () => {
+  for (const path of ["../pages/customers/CustomersPage.tsx", "../pages/suppliers/SuppliersPage.tsx", "../pages/sales-persons/SalesPersonsPage.tsx"]) {
+    assert.ok(read(path).includes('? "pc-layout pane-page" : "pc-layout pane-page list-only"'), path);
+  }
+  for (const path of ["../pages/members/MembersPage.tsx", "../pages/products/ProductsPage.tsx"]) {
+    assert.ok(!read(path).includes("pane-page"), path);
+  }
+  for (const path of ["../pages/products/BrandSeriesPage.tsx", "../pages/products/PartTemplatesPage.tsx"]) {
+    const src = read(path);
+    assert.ok(src.includes('<div className="entry-body pane-page"'), path);
+    assert.ok(src.includes('<div className="pt-list-grid">'), path);
+    assert.ok(!/預設選第一筆|setSelectedBrandId\(brands\.data!\[0\]\.id\)/.test(src), path); // 不再自動選第一個:先看清單
+  }
+  assert.match(read("../pages/products/BrandSeriesPage.tsx"), /<PaneBack open onClose=\{backToBrands\} \/>/);
+  assert.match(read("../pages/products/PartTemplatesPage.tsx"), /<PaneBack open onClose=\{cancel\} disabled=\{save\.isPending\} \/>/);
+  const css = read("../styles.css");
+  assert.match(css, /\.pc-layout\.pane-page:not\(\.list-only\) > \.pc-master \{ display: none; \}/);
+  assert.match(css, /\.pane-page \.pc-pane-back \{\n  display: flex;/);
+  assert.match(read("../components/PaneBack.tsx"), /return keepListBody\(window, body, bodyAt\.current, hidden, \(\) => !leaving\.current\);/);
 });

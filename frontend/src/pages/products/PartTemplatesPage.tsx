@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   useDeletePartTemplate,
@@ -13,6 +13,7 @@ import { Toolbar } from "@/components/Toolbar";
 import { MoneyInput } from "@/components/MoneyInput";
 import { errorText } from "@/lib/errorText";
 import { changed, leaveArmed, leaveDraft, LEAVE_TEXT } from "@/lib/draftGuard";
+import { PaneBack } from "@/components/PaneBack";
 
 /**
  * 「快速加入」常用零件 — 點一下加一列並自動帶入名稱與代碼。
@@ -298,15 +299,6 @@ export function PartTemplatesPage() {
     leaveDraft(dirty, leaveArm, target, go);
   }
 
-  // 預設選第一筆,讓右邊不會空著
-  useEffect(() => {
-    if (!editing && (list.data?.length ?? 0) > 0 && selectedId === null) {
-      const first = list.data![0];
-      setSelectedId(first.id);
-      load(toEditing(first));
-    }
-  }, [list.data]);
-
   function startNew() {
     leave("new", () => {
       setSelectedId(null);
@@ -394,17 +386,11 @@ export function PartTemplatesPage() {
     });
   }
 
+  /** 回範本清單(× 與「取消」;全站檢視 V01:清單佔滿 → 點一份整頁編輯)。改過沒存要按兩次 */
   function cancel() {
-    // 若編輯既有範本 → 還原成最後一次從後端載入的狀態
-    // 若是新增 → 清空回到「未編輯」
     leave("close", () => {
-      if (editing?.id) {
-        const original = (list.data ?? []).find((t) => t.id === editing.id);
-        load(original ? toEditing(original) : null);
-      } else {
-        load(null);
-        setSelectedId(null);
-      }
+      load(null);
+      setSelectedId(null);
       setError(null);
     });
   }
@@ -480,16 +466,10 @@ export function PartTemplatesPage() {
           </button>
         }
       />
-      <div className="entry-body" style={{ display: "flex", gap: 16 }}>
-        {/* ─── 左:範本列表 ─── */}
-        <div
-          style={{
-            width: 260,
-            flex: "0 0 260px",
-            borderRight: "1px solid var(--border)",
-            paddingRight: 12,
-          }}
-        >
+      <div className="entry-body pane-page" style={{ display: "flex", gap: 16 }}>
+        {/* ─── 範本清單(沒在編輯時佔滿整頁;全站檢視 V01) ─── */}
+        {!editing && (
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
               fontSize: 14,
@@ -505,6 +485,7 @@ export function PartTemplatesPage() {
               尚未建立範本
             </div>
           )}
+          <div className="pt-list-grid">
           {(list.data ?? []).map((t) => (
             <button
               key={t.id}
@@ -523,21 +504,15 @@ export function PartTemplatesPage() {
               </div>
             </button>
           ))}
+          </div>
         </div>
+        )}
 
-        {/* ─── 右:詳情 ─── */}
+        {/* ─── 編輯一份(整頁;× 回範本清單) ─── */}
+        {editing && (
         <div style={{ flex: 1, minWidth: 0 }}>
-          {!editing ? (
-            <div
-              style={{
-                padding: 40,
-                textAlign: "center",
-                color: "var(--text-dim)",
-              }}
-            >
-              左側選一個範本,或按「新增範本」
-            </div>
-          ) : (
+          <PaneBack open onClose={cancel} disabled={save.isPending} />
+          {(
             <>
               {leaveArm.armed && <div className="pc-detail-warn"><Banner kind="info" message={LEAVE_TEXT} /></div>}
               {error && <Banner kind="error" message={error} />}
@@ -883,6 +858,7 @@ export function PartTemplatesPage() {
             </>
           )}
         </div>
+        )}
       </div>
     </div>
   );

@@ -15,8 +15,12 @@ interface Win {
   requestAnimationFrame(fn: () => void): number;
 }
 
-/** 清單開著時:現在的位置先記一次,之後每捲一次記一次。回傳停止記的函式。 */
-export function trackListScroll(win: Win, page: Page, store: { current: number }): () => void {
+/** 清單開著時:現在的位置先記一次,之後每捲一次記一次。回傳停止記的函式。`win` 可以是整頁(window)或清單那一塊自己 */
+export function trackListScroll(
+  win: Pick<Win, "addEventListener" | "removeEventListener">,
+  page: Page,
+  store: { current: number },
+): () => void {
   const keep = () => {
     store.current = page.scrollTop;
   };
@@ -42,6 +46,25 @@ export function openPaneAtTop(
   return () => {
     win.requestAnimationFrame(() => {
       if (stillHere()) page.scrollTop = kept;
+    });
+  };
+}
+
+/**
+ * 電腦上清單是那一塊自己捲(不是整頁):打開那一筆時清單被藏起來(電腦也整頁的主檔頁),藏起來位置會歸零,
+ * 回清單時(下一格畫面)捲回 `kept`。清單一直看得到(商品頁左右兩欄)就不動 —— 人可能在看詳情時捲過清單(全站檢視 V01)。
+ */
+export function keepListBody(
+  win: Pick<Win, "requestAnimationFrame">,
+  body: Page,
+  kept: number,
+  hidden: boolean,
+  stillHere: () => boolean,
+): () => void {
+  return () => {
+    if (!hidden) return;
+    win.requestAnimationFrame(() => {
+      if (stillHere()) body.scrollTop = kept;
     });
   };
 }

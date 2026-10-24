@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   useBrands,
@@ -17,6 +17,8 @@ import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { BrandSeriesImportModal } from "./BrandSeriesImportModal";
 import { errorText } from "@/lib/errorText";
+import { PaneBack } from "@/components/PaneBack";
+import { changed, leaveDraft, LEAVE_TEXT } from "@/lib/draftGuard";
 
 interface EditingBrand {
   id?: number;
@@ -66,16 +68,46 @@ export function BrandSeriesPage() {
   const saveSeries = useSavePhoneSeries();
   const delSeries = useDeletePhoneSeries();
 
-  useEffect(() => {
-    if (selectedBrandId == null && (brands.data?.length ?? 0) > 0) {
-      setSelectedBrandId(brands.data![0].id);
-    }
-  }, [brands.data]);
-
-  const [editingBrand, setEditingBrand] = useState<EditingBrand | null>(null);
-  const [editingSeries, setEditingSeries] = useState<EditingSeries | null>(
+  const [editingBrand, setEditingBrandState] = useState<EditingBrand | null>(null);
+  const [editingSeries, setEditingSeriesState] = useState<EditingSeries | null>(
     null,
   );
+  // 逐層進入(全站檢視 V01):品牌清單佔滿 → 點品牌整頁是它的系列,× 回品牌清單。
+  // 品牌 / 系列那一塊表單改過還沒存,× 或點別的品牌要按兩次(規則在 lib/draftGuard.ts);base = 打開那一刻的樣子
+  const [brandBase, setBrandBase] = useState<EditingBrand | null>(null);
+  const [seriesBase, setSeriesBase] = useState<EditingSeries | null>(null);
+  const leaveArm = useArm();
+  /** 打開 / 收起一塊表單(同時記下打開那一刻的樣子) */
+  function setEditingBrand(b: EditingBrand | null) {
+    setEditingBrandState(b);
+    setBrandBase(b);
+  }
+  function setEditingSeries(x: EditingSeries | null) {
+    setEditingSeriesState(x);
+    setSeriesBase(x);
+  }
+  const formDirty =
+    (editingBrand !== null && changed(editingBrand, brandBase)) ||
+    (editingSeries !== null && changed(editingSeries, seriesBase));
+  function leave(target: string, go: () => void) {
+    leaveDraft(formDirty, leaveArm, target, go);
+  }
+  function openBrand(id: number) {
+    leave(`brand:${id}`, () => {
+      setEditingBrand(null);
+      setEditingSeries(null);
+      setMergeInto(null);
+      setSelectedBrandId(id);
+    });
+  }
+  function backToBrands() {
+    leave("close", () => {
+      setEditingBrand(null);
+      setEditingSeries(null);
+      setMergeInto(null);
+      setSelectedBrandId(null);
+    });
+  }
   const [error, setError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
@@ -196,6 +228,84 @@ export function BrandSeriesPage() {
     }
   }
 
+  // 品牌那一塊表單:沒選品牌時(新增)放在品牌清單上面,選了品牌時(編輯)放在系列上面
+  const brandForm = editingBrand && (
+        <div className="pf-inline-modal" style={{ marginBottom: 16 }}>
+          <div className="pf-inline-modal-title">
+            {editingBrand.id ? "編輯品牌" : "新增品牌"}
+          </div>
+          <div
+            className="pf-inline-modal-body"
+            style={{ flexWrap: "wrap", gap: 8 }}
+          >
+            <input
+              placeholder="中文名稱(例:三星)"
+              value={editingBrand.name_zh}
+              onChange={(e) =>
+                setEditingBrandState({ ...editingBrand, name_zh: e.target.value })
+              }
+              style={{ flex: "1 1 160px" }}
+            />
+            <input
+              placeholder="英文名稱(例:Samsung)"
+              value={editingBrand.name_en}
+              onChange={(e) =>
+                setEditingBrandState({ ...editingBrand, name_en: e.target.value })
+              }
+              style={{ flex: "1 1 160px" }}
+            />
+            <input
+              type="number"
+              min={0}
+              value={editingBrand.sort_order}
+              onChange={(e) =>
+                setEditingBrandState({
+                  ...editingBrand,
+                  sort_order: Number(e.target.value) || 0,
+                })
+              }
+              style={{ flex: "0 0 80px" }}
+              title="排序"
+            />
+            <label
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 14,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={editingBrand.is_active}
+                onChange={(e) =>
+                  setEditingBrandState({
+                    ...editingBrand,
+                    is_active: e.target.checked,
+                  })
+                }
+              />
+              啟用
+            </label>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setEditingBrand(null)}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={submitBrand}
+              disabled={saveBrand.isPending}
+            >
+              {saveBrand.isPending ? "儲存中…" : "儲存"}
+            </button>
+          </div>
+        </div>
+  );
+
   return (
     <div className="page">
       <Toolbar
@@ -230,16 +340,12 @@ export function BrandSeriesPage() {
           {importSuccess}
         </div>
       )}
-      <div className="entry-body" style={{ display: "flex", gap: 16 }}>
-        {/* 左:品牌列表 */}
-        <div
-          style={{
-            width: 300,
-            flex: "0 0 300px",
-            borderRight: "1px solid var(--border)",
-            paddingRight: 12,
-          }}
-        >
+      <div className="entry-body pane-page" style={{ display: "flex", gap: 16 }}>
+        {/* 左:品牌列表(沒選品牌時佔滿整頁;全站檢視 V01 逐層進入) */}
+        {!selectedBrand && (
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {error && <Banner kind="error" message={error} />}
+          {editingBrand && brandForm}
           <div
             style={{
               fontSize: 14,
@@ -255,6 +361,7 @@ export function BrandSeriesPage() {
               尚未建立任何品牌
             </div>
           )}
+          <div className="pt-list-grid">
           {(brands.data ?? []).map((b) => (
             <button
               key={b.id}
@@ -262,10 +369,7 @@ export function BrandSeriesPage() {
               className={
                 "pt-list-item" + (b.id === selectedBrandId ? " selected" : "")
               }
-              onClick={() => {
-                setSelectedBrandId(b.id);
-                setMergeInto(null);
-              }}
+              onClick={() => openBrand(b.id)}
             >
               <div className="pt-list-name">
                 {b.name}
@@ -278,102 +382,20 @@ export function BrandSeriesPage() {
               </div>
             </button>
           ))}
+          </div>
         </div>
+        )}
 
-        {/* 右:系列管理 */}
+        {/* 右:選到的品牌的系列管理(整頁;× 回品牌清單) */}
+        {selectedBrand && (
         <div style={{ flex: 1, minWidth: 0 }}>
+          <PaneBack open onClose={backToBrands} />
+          {leaveArm.armed && <div className="pc-detail-warn"><Banner kind="info" message={LEAVE_TEXT} /></div>}
           {error && <Banner kind="error" message={error} />}
-
-          {/* 品牌編輯 inline */}
-          {editingBrand && (
-            <div className="pf-inline-modal" style={{ marginBottom: 16 }}>
-              <div className="pf-inline-modal-title">
-                {editingBrand.id ? "編輯品牌" : "新增品牌"}
-              </div>
-              <div
-                className="pf-inline-modal-body"
-                style={{ flexWrap: "wrap", gap: 8 }}
-              >
-                <input
-                  placeholder="中文名稱(例:三星)"
-                  value={editingBrand.name_zh}
-                  onChange={(e) =>
-                    setEditingBrand({ ...editingBrand, name_zh: e.target.value })
-                  }
-                  style={{ flex: "1 1 160px" }}
-                />
-                <input
-                  placeholder="英文名稱(例:Samsung)"
-                  value={editingBrand.name_en}
-                  onChange={(e) =>
-                    setEditingBrand({ ...editingBrand, name_en: e.target.value })
-                  }
-                  style={{ flex: "1 1 160px" }}
-                />
-                <input
-                  type="number"
-                  min={0}
-                  value={editingBrand.sort_order}
-                  onChange={(e) =>
-                    setEditingBrand({
-                      ...editingBrand,
-                      sort_order: Number(e.target.value) || 0,
-                    })
-                  }
-                  style={{ flex: "0 0 80px" }}
-                  title="排序"
-                />
-                <label
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                    fontSize: 14,
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={editingBrand.is_active}
-                    onChange={(e) =>
-                      setEditingBrand({
-                        ...editingBrand,
-                        is_active: e.target.checked,
-                      })
-                    }
-                  />
-                  啟用
-                </label>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => setEditingBrand(null)}
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  className="btn primary"
-                  onClick={submitBrand}
-                  disabled={saveBrand.isPending}
-                >
-                  {saveBrand.isPending ? "儲存中…" : "儲存"}
-                </button>
-              </div>
-            </div>
-          )}
+          {editingBrand && brandForm}
 
           {/* 系列列表 */}
-          {!selectedBrand ? (
-            <div
-              style={{
-                padding: 40,
-                textAlign: "center",
-                color: "var(--text-dim)",
-              }}
-            >
-              左側選一個品牌,或先按「新增品牌」
-            </div>
-          ) : (
+          {(
             <>
               <div
                 style={{
@@ -471,7 +493,7 @@ export function BrandSeriesPage() {
                       placeholder="名稱(例:Galaxy S / iPhone)"
                       value={editingSeries.name}
                       onChange={(e) =>
-                        setEditingSeries({
+                        setEditingSeriesState({
                           ...editingSeries,
                           name: e.target.value,
                         })
@@ -481,7 +503,7 @@ export function BrandSeriesPage() {
                     <select
                       value={editingSeries.product_type ?? ""}
                       onChange={(e) =>
-                        setEditingSeries({
+                        setEditingSeriesState({
                           ...editingSeries,
                           product_type: e.target.value
                             ? Number(e.target.value)
@@ -505,7 +527,7 @@ export function BrandSeriesPage() {
                       min={0}
                       value={editingSeries.sort_order}
                       onChange={(e) =>
-                        setEditingSeries({
+                        setEditingSeriesState({
                           ...editingSeries,
                           sort_order: Number(e.target.value) || 0,
                         })
@@ -525,7 +547,7 @@ export function BrandSeriesPage() {
                         type="checkbox"
                         checked={editingSeries.is_active}
                         onChange={(e) =>
-                          setEditingSeries({
+                          setEditingSeriesState({
                             ...editingSeries,
                             is_active: e.target.checked,
                           })
@@ -631,6 +653,7 @@ export function BrandSeriesPage() {
             </>
           )}
         </div>
+        )}
       </div>
 
       {canImport && (
