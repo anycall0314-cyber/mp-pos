@@ -15,9 +15,7 @@ import {
   useDefaultWarehouse,
 } from "@/auth/AuthContext";
 import { SamePhonePick } from "@/components/SamePhonePick";
-import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
-import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
 import { MoneyInput } from "@/components/MoneyInput";
 import { SavedStrip } from "@/components/SavedStrip";
@@ -29,9 +27,13 @@ import { maskIdNo } from "./mask";
 import { errorText } from "@/lib/errorText";
 import { localToday } from "@/lib/dates";
 
+/** 整頁的代收工作區(全站檢視 V04;以前是右邊滑出的抽屜,新增會員再疊一層) */
 interface Props {
   open: boolean;
+  /** 回清單 */
   onClose: () => void;
+  /** 今天已代收幾筆、多少錢(紅隊:整頁之後看不到清單,同一支電話十分鐘前收過要看得出來) */
+  todayStats?: { count: number; amount: number } | null;
 }
 
 interface FormState {
@@ -79,7 +81,7 @@ function openReceipt(id: number): boolean {
   );
 }
 
-export function PhoneBillForm({ open, onClose }: Props) {
+export function PhoneBillForm({ open, onClose, todayStats }: Props) {
   const save = useSavePhoneBill();
   const voidBill = useVoidPhoneBill();
   const saveMember = useSaveMember();
@@ -103,7 +105,8 @@ export function PhoneBillForm({ open, onClose }: Props) {
   // 同一支電話好幾位(家人共用):列出來讓人點,不替人挑(全站檢視 E2;以前自動帶最早那一位的身分證)
   const [samePhone, setSamePhone] = useState<Member[]>([]);
   const [showCreateMember, setShowCreateMember] = useState(false);
-  const [newMember, setNewMember] = useState({ name: "", national_id: "" });
+  // 新增會員只填姓名;身分證用代收那一格(紅隊:兩格會各打各的,收據印到另一個)
+  const [newMember, setNewMember] = useState({ name: "" });
 
   const [error, setError] = useState<string | null>(null);
   const [last, setLast] = useState<LastSaved | null>(null);
@@ -139,8 +142,8 @@ export function PhoneBillForm({ open, onClose }: Props) {
     setMember(null);
     setMemberStatus("idle");
     setShowCreateMember(false);
-    setNewMember({ name: "", national_id: "" });
-    // 一打開游標在電話(抽屜滑出來之後)
+    setNewMember({ name: "" });
+    // 一打開游標在電話
     const t = window.setTimeout(() => phoneRef.current?.focus(), 50);
     return () => window.clearTimeout(t);
   }, [
@@ -168,16 +171,31 @@ export function PhoneBillForm({ open, onClose }: Props) {
     writeKey(CARRIER_KEY, String(id));
   }
 
+  /** 這支電話查過了(電話沒改就不再查):離開電話格(點「換人」、新增會員的姓名格拿到游標)會再觸發一次,
+   *  以前會把剛換掉的會員與身分證又帶回來(Codex P0 重現時查到的) */
+  const lookedUp = useRef<string | null>(null);
   async function handlePhoneLookup() {
     const phone = state.phone_no.trim();
     if (!phone) {
       setMember(null);
       setMemberStatus("idle");
+      lookedUp.current = null;
       return;
     }
+    if (lookedUp.current === phone) return;
     setMemberStatus("checking");
     setSamePhone([]);
-    const found = await lookupMembers(phone);
+    let found: Member[];
+    try {
+      found = await lookupMembers(phone);
+    } catch {
+      // 沒查成:下次離開電話格或按 Enter 再查
+      lookedUp.current = null;
+      setMemberStatus("idle");
+      return;
+    }
+    // 查到人才記「查過了」:查無(或沒連上 —— lookupMembers 沒連上也回空的)下次離開電話格會再查,不會誤建重複的會員(Codex 第二輪)
+    if (found.length > 0) lookedUp.current = phone;
     if (found.length === 1) {
       chooseMember(found[0]);
     } else if (found.length > 1) {
@@ -190,6 +208,16 @@ export function PhoneBillForm({ open, onClose }: Props) {
     }
   }
 
+  /** 身分證格是從哪一位會員自動帶進來的(人沒改過):換人 / 改電話時要一起清掉,不然新增的會員會存成上一位的(Codex P0) */
+  const autoId = useRef<string | null>(null);
+  function dropAutoId() {
+    if (autoId.current !== null) {
+      const auto = autoId.current;
+      setState((s) => (s.id_no === auto ? { ...s, id_no: "" } : s));
+      autoId.current = null;
+    }
+  }
+
   function chooseMember(m: Member) {
     setMember(m);
     setSamePhone([]);
@@ -197,6 +225,7 @@ export function PhoneBillForm({ open, onClose }: Props) {
     // 會員身分證自動帶入(如果會員主檔有存)
     if (m.national_id && !state.id_no.trim()) {
       patch("id_no", m.national_id);
+      autoId.current = m.national_id;
     }
   }
 
@@ -205,16 +234,20 @@ export function PhoneBillForm({ open, onClose }: Props) {
     setMember(null);
     setSamePhone([]);
     setMemberStatus("not_found");
+    dropAutoId();
   }
 
+  // 姓名格連按 Enter 只建一次(Codex P0:建立鈕會變灰,Enter 擋不到)
+  const creatingRef = useRef(false);
   async function handleCreateMember() {
     const phone = state.phone_no.trim();
-    if (!newMember.name.trim()) return;
+    if (!newMember.name.trim() || creatingRef.current) return;
+    creatingRef.current = true;
     try {
       const created = await saveMember.mutateAsync({
         phone,
         name: newMember.name.trim(),
-        national_id: newMember.national_id.trim() || undefined,
+        national_id: state.id_no.trim() || undefined,
       });
       setMember(created);
       setMemberStatus("found");
@@ -222,9 +255,11 @@ export function PhoneBillForm({ open, onClose }: Props) {
       if (created.national_id && !state.id_no.trim()) {
         patch("id_no", created.national_id);
       }
-      setNewMember({ name: "", national_id: "" });
+      setNewMember({ name: "" });
     } catch (e) {
       setError(`新增會員失敗:${errorText(e)}`);
+    } finally {
+      creatingRef.current = false;
     }
   }
 
@@ -267,6 +302,8 @@ export function PhoneBillForm({ open, onClose }: Props) {
       setLast({ id: created.id, no: created.no, phone, amount: amountInt, printed, voided: false });
       // 連續記下一筆:門市、電信業者、經手人留著;電話、金額、身分證清掉(下一位客人不會看到上一位的)
       setState((s) => ({ ...s, phone_no: "", amount: "", id_no: "", doc_date: today() }));
+      autoId.current = null;
+      lookedUp.current = null;
       setMember(null);
       setMemberStatus("idle");
       setSamePhone([]);
@@ -289,27 +326,18 @@ export function PhoneBillForm({ open, onClose }: Props) {
   }
 
   return (
-    <Drawer
-      open={open}
-      title="新增代收話費"
-      onClose={onClose}
-      footer={
-        <>
-          <button className="btn" onClick={onClose} type="button">
-            關閉
-          </button>
-          <button
-            className="btn primary"
-            onClick={() => void saveAndPrint()}
-            type="button"
-            disabled={save.isPending}
-          >
-            {save.isPending ? "儲存中…" : "儲存並列印"}
-          </button>
-        </>
-      }
-    >
-      {error && <Banner kind="error" message={error} />}
+    <>
+    <div className="entry-body pb-page">
+      <div className="pb-head">
+        <button className="btn" onClick={onClose} type="button">
+          回清單
+        </button>
+        {todayStats && (
+          <span className="pb-today">
+            今天<b>{todayStats.count}</b>筆<b>${money(todayStats.amount)}</b>
+          </span>
+        )}
+      </div>
       {last && (
         <SavedStrip
           tone={last.voided ? "void" : last.printed ? "ok" : "warn"}
@@ -343,7 +371,7 @@ export function PhoneBillForm({ open, onClose }: Props) {
       )}
 
       {/* 按 Enter 不存(要人按「儲存並列印」) */}
-      <form onSubmit={(e: FormEvent) => e.preventDefault()}>
+      <form className="pb-form" onSubmit={(e: FormEvent) => e.preventDefault()}>
           <Field label="日期" required>
             <input
               type="date"
@@ -393,9 +421,14 @@ export function PhoneBillForm({ open, onClose }: Props) {
                 value={state.phone_no}
                 onChange={(e) => {
                   patch("phone_no", e.target.value);
+                  lookedUp.current = null;
+                  // 改了電話:打到一半的新增會員收掉(Codex 第二輪:姓名會跟另一支電話查到的身分證混在一起建)
+                  setShowCreateMember(false);
+                  setNewMember({ name: "" });
                   if (memberStatus !== "idle") {
                     setMemberStatus("idle");
                     setMember(null);
+                    dropAutoId();
                   }
                 }}
                 onBlur={handlePhoneLookup}
@@ -447,6 +480,37 @@ export function PhoneBillForm({ open, onClose }: Props) {
             {memberStatus === "pick" && (
               <SamePhonePick members={samePhone} onPick={chooseMember} onNone={notThisMember} />
             )}
+            {/* 新增會員在電話下面展開(以前疊一層抽屜蓋住電話與金額);建好回到這一筆,已打的金額、電信都不動 */}
+            {showCreateMember && (
+              <div className="pb-newmember">
+                <input
+                  value={newMember.name}
+                  autoFocus
+                  placeholder="會員姓名"
+                  aria-label="會員姓名"
+                  maxLength={120}
+                  disabled={saveMember.isPending}
+                  onChange={(e) => setNewMember({ name: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      void handleCreateMember();
+                    }
+                  }}
+                />
+                <button
+                  className="btn primary"
+                  type="button"
+                  onClick={() => void handleCreateMember()}
+                  disabled={saveMember.isPending || !newMember.name.trim()}
+                >
+                  {saveMember.isPending ? "建立中" : "建立"}
+                </button>
+                <button className="btn" type="button" onClick={() => setShowCreateMember(false)}>
+                  取消
+                </button>
+              </div>
+            )}
           </Field>
           <Field label="金額" required>
             <MoneyInput
@@ -488,54 +552,20 @@ export function PhoneBillForm({ open, onClose }: Props) {
           </Field>
         </form>
 
-      <Drawer
-        open={showCreateMember}
-        title={`新增會員 (${state.phone_no.trim()})`}
-        onClose={() => setShowCreateMember(false)}
-        width={420}
-        footer={
-          <>
-            <button
-              className="btn"
-              type="button"
-              onClick={() => setShowCreateMember(false)}
-            >
-              取消
-            </button>
-            <button
-              className="btn primary"
-              type="button"
-              onClick={handleCreateMember}
-              disabled={saveMember.isPending || !newMember.name.trim()}
-            >
-              {saveMember.isPending ? "儲存中…" : "建立並使用"}
-            </button>
-          </>
-        }
+    </div>
+
+    {/* 最下面固定一條:儲存並列印(一步存、Enter 不存、連按只送一次照舊) */}
+    <div className="entry-footer pb-footer">
+      {error && <span className="sr-footer-err">{error}</span>}
+      <button
+        className="btn primary checkout-cta"
+        onClick={() => void saveAndPrint()}
+        type="button"
+        disabled={save.isPending}
       >
-        <Field label="電話">
-          <input value={state.phone_no.trim()} disabled />
-        </Field>
-        <Field label="姓名" required>
-          <input
-            value={newMember.name}
-            autoFocus
-            onChange={(e) =>
-              setNewMember((s) => ({ ...s, name: e.target.value }))
-            }
-            maxLength={120}
-          />
-        </Field>
-        <Field label="身分證字號">
-          <input
-            value={newMember.national_id}
-            onChange={(e) =>
-              setNewMember((s) => ({ ...s, national_id: e.target.value }))
-            }
-            maxLength={20}
-          />
-        </Field>
-      </Drawer>
-    </Drawer>
+        {save.isPending ? "儲存中…" : "儲存並列印"}
+      </button>
+    </div>
+    </>
   );
 }

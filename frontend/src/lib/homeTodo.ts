@@ -57,7 +57,7 @@ export interface TodoSource {
 /** 首頁的主要快捷:名字是動作、字數一樣 */
 export const QUICK_ACTIONS = [
   { to: "/sales/new", label: "開銷貨單" },
-  { to: "/telecom/billing", label: "代收話費" },
+  { to: "/telecom/billing?new=1", label: "代收話費" }, // 直接打開代收工作區(全站檢視 V04)
   { to: "/inventory", label: "查詢庫存" },
   { to: "/repairs/new", label: "維修收件" },
 ] as const;

@@ -20,7 +20,7 @@ for (const [name, path] of Object.entries(FORMS)) {
     assert.match(src, /if \(busyRef\.current\) return;\s*const why = problem\(\);/);
     assert.match(src, /busyRef\.current = true;/);
     assert.match(src, /finally \{\s*busyRef\.current = false;/);
-    assert.match(src, /<form onSubmit=\{\(e: FormEvent\) => e\.preventDefault\(\)\}>/);
+    assert.match(src, /<form (className="pb-form" )?onSubmit=\{\(e: FormEvent\) => e\.preventDefault\(\)\}>/);
   });
 }
 
@@ -56,4 +56,39 @@ test("雜支、現金調整:清單沒有「編輯」、表單只能新增、存�
     assert.ok(!hooks.includes(`\`/${path}/\${id}/\``), path);
     assert.ok(hooks.includes(`const url = "/${path}/";`), path);
   }
+});
+
+// 全站檢視 V04:代收話費改成整頁工作區
+test("代收話費整頁:回清單、今天幾筆多少、新增會員在電話下面展開(只填姓名,身分證用代收那一格)、不需要還在、最下面儲存並列印", () => {
+  const src = read(FORMS.代收話費);
+  assert.ok(!src.includes("<Drawer"), "不再是抽屜、也不疊第二層");
+  assert.match(src, /今天<b>\{todayStats\.count\}<\/b>筆<b>\$\{money\(todayStats\.amount\)\}<\/b>/);
+  assert.match(src, /\{showCreateMember && \(\s*<div className="pb-newmember">/);
+  assert.match(src, /national_id: state\.id_no\.trim\(\) \|\| undefined,/);
+  assert.ok(!src.includes("newMember.national_id"));
+  assert.match(src, /不需要/);
+  assert.match(src, /<div className="entry-footer pb-footer">/);
+  // 連續記:門市、電信、經手人留著,只清電話、金額、身分證
+  assert.match(src, /setState\(\(s\) => \(\{ \.\.\.s, phone_no: "", amount: "", id_no: "", doc_date: today\(\) \}\)\);/);
+  const page = read("../pages/phone-bills/PhoneBillsPage.tsx");
+  assert.match(page, /useState\(\(\) => searchParams\.get\("new"\) === "1"\)/);
+  assert.match(read("./homeTodo.ts"), /\{ to: "\/telecom\/billing\?new=1", label: "代收話費" \}/);
+});
+
+test("代收話費新增會員(Codex P0 兩條):換人 / 改電話清掉從上一位帶進來的身分證;姓名格連按 Enter 只建一次", () => {
+  const src = read(FORMS.代收話費);
+  assert.match(src, /function notThisMember\(\) \{[\s\S]*?dropAutoId\(\);\s*\}/);
+  assert.match(src, /setMember\(null\);\s*dropAutoId\(\);/); // 改電話
+  assert.match(src, /setState\(\(s\) => \(s\.id_no === auto \? \{ \.\.\.s, id_no: "" \} : s\)\);/); // 人改過的不清
+  assert.match(src, /if \(!newMember\.name\.trim\(\) \|\| creatingRef\.current\) return;\s*creatingRef\.current = true;/);
+  assert.match(src, /finally \{\s*creatingRef\.current = false;/);
+});
+
+test("代收話費:同一支電話查過就不再重查(離開電話格會再觸發,以前把剛換掉的會員與身分證又帶回來);改電話、存好、沒查成才重查", () => {
+  const src = read(FORMS.代收話費);
+  assert.match(src, /if \(lookedUp\.current === phone\) return;/);
+  assert.match(src, /if \(found\.length > 0\) lookedUp\.current = phone;/); // 查無 / 沒連上不記,下次再查
+  assert.match(src, /setShowCreateMember\(false\);\s*setNewMember\(\{ name: "" \}\);/); // 改電話收掉新增會員
+  assert.match(src, /patch\("phone_no", e\.target\.value\);\s*lookedUp\.current = null;/);
+  assert.match(src, /catch \{\s*\/\/ 沒查成:下次離開電話格或按 Enter 再查\s*lookedUp\.current = null;/);
 });

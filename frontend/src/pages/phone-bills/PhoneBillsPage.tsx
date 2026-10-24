@@ -1,5 +1,6 @@
 import { useCan } from "@/auth/AuthContext";
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { usePhoneBills, useVoidPhoneBill } from "@/api/hooks";
 import type { PhoneBillCollection } from "@/api/types";
@@ -28,7 +29,14 @@ export function PhoneBillsPage() {
   const voidMutation = useVoidPhoneBill();
   // 員工帳號的權限(作廢其他單):關掉的人沒有這顆(伺服器也會擋)
   const canVoid = useCan("void_others");
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  // 新增代收是整頁的工作區(全站檢視 V04);首頁「代收話費」帶 ?new=1 直接打開
+  const [searchParams] = useSearchParams();
+  const [creating, setCreating] = useState(() => searchParams.get("new") === "1");
+  const todayQ = usePhoneBills({ from: localDay(), to: localDay() });
+  const todayStats = useMemo(() => {
+    const rows = (todayQ.data ?? []).filter((r) => !r.is_void);
+    return todayQ.data ? { count: rows.length, amount: rows.reduce((sum, r) => sum + roundInt(r.amount), 0) } : null;
+  }, [todayQ.data]);
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -174,6 +182,15 @@ export function PhoneBillsPage() {
     },
   ];
 
+  if (creating) {
+    return (
+      <div className="page">
+        <Toolbar title="代收話費" />
+        <PhoneBillForm open onClose={() => setCreating(false)} todayStats={todayStats} />
+      </div>
+    );
+  }
+
   return (
     <div className="page">
       <Toolbar
@@ -181,7 +198,7 @@ export function PhoneBillsPage() {
         actions={
           <button
             className="btn primary"
-            onClick={() => setDrawerOpen(true)}
+            onClick={() => setCreating(true)}
           >
             新增代收
           </button>
@@ -246,10 +263,6 @@ export function PhoneBillsPage() {
           emptyText={(data ?? []).length === 0 ? "這段期間沒有代收話費" : `查無符合「${query}」的紀錄`}
         />
       )}
-      <PhoneBillForm
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-      />
     </div>
   );
 }
