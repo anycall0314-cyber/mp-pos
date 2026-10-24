@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSuppliers, useSaveSupplier } from "@/api/hooks";
 import type { Supplier } from "@/api/types";
 import { Banner } from "@/components/Banner";
+import { PaneBack } from "@/components/PaneBack";
 import { Toolbar } from "@/components/Toolbar";
 import { useReorder } from "@/hooks/useReorder";
 import { errorText } from "@/lib/errorText";
@@ -303,6 +304,7 @@ export function SuppliersPage() {
         </aside>
 
         <div className="pc-detail">
+          <PaneBack open={isEditing || isNew} onClose={() => setSelection(null)} disabled={saveSupplier.isPending} />
 
           {(isEditing || isNew) && (
             <div className="pc-detail-body">

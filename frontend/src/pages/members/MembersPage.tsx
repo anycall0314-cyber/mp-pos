@@ -8,6 +8,7 @@ import {
 } from "@/api/hooks";
 import type { Customer, Member } from "@/api/types";
 import { Banner } from "@/components/Banner";
+import { PaneBack } from "@/components/PaneBack";
 import { SourcePicker } from "@/components/SourcePicker";
 import { Toolbar } from "@/components/Toolbar";
 import { byId, cutNote } from "@/lib/listAll";
@@ -270,6 +271,7 @@ export function MembersPage() {
         </aside>
 
         <div className="pc-detail">
+          <PaneBack open={isEditing || isNew} onClose={() => setSelection(null)} disabled={save.isPending} />
 
           {/* 那一位還沒讀到之前不給表單:上一位的資料還在格子裡,按儲存會存到這一位身上 */}
           {isEditing && !selected && (

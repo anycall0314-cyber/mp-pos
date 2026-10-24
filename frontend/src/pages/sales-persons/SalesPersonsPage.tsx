@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSalesPersons, useSaveSalesPerson } from "@/api/hooks";
 import type { SalesPerson } from "@/api/types";
 import { Banner } from "@/components/Banner";
+import { PaneBack } from "@/components/PaneBack";
 import { Toolbar } from "@/components/Toolbar";
 import { errorText } from "@/lib/errorText";
 
@@ -198,6 +199,7 @@ export function SalesPersonsPage() {
         </aside>
 
         <div className="pc-detail">
+          <PaneBack open={isEditing || isNew} onClose={() => setSelection(null)} disabled={save.isPending} />
 
           {(isEditing || isNew) && (
             <div className="pc-detail-body">

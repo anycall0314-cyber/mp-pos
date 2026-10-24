@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useCustomers, useOrdersOf, useOrderSummary, useSaveCustomer, useSalesDefaultSource, useSaveSalesDefaultSource } from "@/api/hooks";
 import type { Customer, CustomerKind } from "@/api/types";
 import { Banner } from "@/components/Banner";
+import { PaneBack } from "@/components/PaneBack";
 import { SourcePicker } from "@/components/SourcePicker";
 import { useCurrentUser } from "@/auth/AuthContext";
 import { Toolbar } from "@/components/Toolbar";
@@ -335,6 +336,7 @@ export function CustomersPage() {
         </aside>
 
         <div className="pc-detail">
+          <PaneBack open={isEditing || isNew} onClose={() => setSelection(null)} disabled={save.isPending} />
 
           {(isEditing || isNew) && (
             <div className="pc-detail-body">

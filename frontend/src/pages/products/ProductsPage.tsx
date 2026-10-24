@@ -16,6 +16,7 @@ import {
 import { api } from "@/api/client";
 import type { Category, CategoryKind, Product, SharePart, TreeProduct } from "@/api/types";
 import { Banner } from "@/components/Banner";
+import { PaneBack } from "@/components/PaneBack";
 import { Toolbar } from "@/components/Toolbar";
 import { MoreMenu } from "@/components/workbench/MoreMenu";
 import { useReorder } from "@/hooks/useReorder";
@@ -758,6 +759,7 @@ export function ProductsPage() {
 
         {/* ─── 右側面板 ─── */}
         <main className="pc-detail">
+          <PaneBack open={!!selection} onClose={() => setSelection(null)} />
           {selection?.kind === "model" && (
             <ModelSkuPanel
               modelKey={selection.key}

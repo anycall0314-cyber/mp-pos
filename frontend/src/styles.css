@@ -8461,6 +8461,27 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 }
 .pc-layout.list-only > .pc-detail { display: none; }
 
+/* 窄畫面:主檔頁選了一筆,右邊那一塊整頁換掉清單、最上面「×」回清單(全站檢視 R01;components/PaneBack.tsx)。
+ * 清單只是藏起來(元件沒卸掉,搜尋還在);整頁捲到哪由 PaneBack 記住、回清單時捲回去 */
+.pc-pane-back { display: none; }
+@media (max-width: 768px) {
+  .pc-layout:not(.list-only):not(.solo) { grid-template-columns: minmax(0, 1fr); }
+  .pc-layout:not(.list-only):not(.solo) > .pc-master { display: none; }
+  .pc-layout:not(.list-only):not(.solo) > .pc-detail { min-width: 0; }
+  .pc-pane-back {
+    display: flex;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .pc-detail-body { padding: 12px; }
+  .pc-detail-body dl { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
+  .pc-detail-body dt { margin-top: 8px; }
+  .pc-detail-body dd input:not([type="checkbox"]):not([type="radio"]) { max-width: 100%; }
+}
+
 /* 名單那一列最後的「編輯」(會員頁:點名字只看消費紀錄,要改資料按這顆) */
 .pc-list-table .pc-row-edit {
   min-height: 32px;
