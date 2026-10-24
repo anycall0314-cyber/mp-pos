@@ -6,7 +6,7 @@ import { Banner } from "@/components/Banner";
 import { errorText } from "@/lib/errorText";
 
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, notice } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [username, setUsername] = useState("");
@@ -58,6 +58,7 @@ export function LoginPage() {
           MP POS · 登入
         </div>
 
+        {notice && !error && <Banner kind="info" message={notice} />}
         {error && <Banner kind="error" message={error} />}
 
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>

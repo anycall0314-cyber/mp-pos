@@ -457,3 +457,34 @@ class UserProfile(TimestampedModel):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+class SignInPlace(models.Model):
+    """這個帳號現在在哪一個位置登入(owner 2026-10-24:「同一時間只允許同一帳號登入一個位置,登入新位置,自動踢掉舊位置」)。
+
+    位置 = 一個瀏覽器:畫面第一次打開時自己產生一個記號存在瀏覽器裡,分頁之間共用、關掉再開還在。
+    同一個位置再登入拿回同一把 token,不踢;換一個位置登入,舊的 token 作廢(規則在 apps/tenants/sign_in.py)。
+    """
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, primary_key=True, on_delete=models.CASCADE,
+        related_name="sign_in_place",
+    )
+    device = models.CharField("位置記號", max_length=64, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "登入位置"
+        verbose_name_plural = "登入位置"
+
+
+class SignedOutElsewhere(models.Model):
+    """被別處登入作廢的 token(只存雜湊):舊位置下一次操作看得到「帳號已在別處登入」。留 14 天。"""
+
+    digest = models.CharField(max_length=64, primary_key=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = "被別處登入作廢的登入"
+        verbose_name_plural = "被別處登入作廢的登入"

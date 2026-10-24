@@ -8,7 +8,7 @@ from django.http import HttpResponse
 from django.urls import NoReverseMatch, reverse
 from rest_framework import status
 from rest_framework.authentication import TokenAuthentication
-from rest_framework.exceptions import APIException, PermissionDenied
+from rest_framework.exceptions import APIException, AuthenticationFailed, PermissionDenied
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from .models import TenantMaintenance
@@ -72,6 +72,17 @@ class BlocksCompanyUnderMaintenance(BasePermission):
 
 
 class MaintenanceAwareTokenAuthentication(TokenAuthentication):
+    def authenticate_credentials(self, key):
+        try:
+            return super().authenticate_credentials(key)
+        except AuthenticationFailed:
+            # 同一個帳號在別處登入,這把被作廢了:講原因,畫面才不會以為壞掉(apps/tenants/sign_in.py)
+            from apps.tenants.sign_in import ELSEWHERE_CODE, ELSEWHERE_TEXT, signed_out_elsewhere
+
+            if signed_out_elsewhere(key):
+                raise AuthenticationFailed({"detail": ELSEWHERE_TEXT, "code": ELSEWHERE_CODE})
+            raise
+
     def authenticate(self, request):
         result = super().authenticate(request)
         if result is None:

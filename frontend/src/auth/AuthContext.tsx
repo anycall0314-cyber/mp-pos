@@ -1,5 +1,6 @@
 import { type AbilityKey, can } from "@/lib/abilities";
 import { attachIdleLogout } from "@/lib/idleLogout";
+import { attachSignInCheck } from "@/lib/signInPlace";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   createContext,
@@ -10,12 +11,14 @@ import {
   useState,
 } from "react";
 
-import { api, authEvents, getToken, setToken } from "@/api/client";
+import { api, authEvents, deviceId, getToken, setToken } from "@/api/client";
 import type { CurrentUser, LoginResponse } from "@/api/types";
 
 interface AuthState {
   user: CurrentUser | null;
   loading: boolean;
+  /** 被登出的原因(帳號在別處登入);登入頁顯示,登入成功就收掉 */
+  notice: string | null;
   login: (username: string, password: string) => Promise<CurrentUser>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -27,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const token = getToken();
@@ -50,9 +54,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   // client.ts 收到 401 會 emit 'unauthorized' → 這裡清空 user 觸發路由 guard 跳 login
+  // 帳號在別處登入的那一句留著給登入頁(之後沒帶 token 的 401 不會把它蓋掉;登入成功才收)
   useEffect(() => {
-    function onUnauth() {
+    function onUnauth(e: Event) {
       setUser(null);
+      const said = (e as CustomEvent<{ notice?: string | null }>).detail?.notice;
+      if (said) setNotice(said);
     }
     authEvents.addEventListener("unauthorized", onUnauth);
     return () => authEvents.removeEventListener("unauthorized", onUnauth);
@@ -70,15 +77,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [user, qc]);
 
+  // 同一個帳號在別處登入,這一台的鑰匙就作廢了:畫面開著也要自己跳回登入頁,不等人按(lib/signInPlace.ts)。
+  // 只是問一下,回來的資料不用;401 由 client.ts 照常處理。
+  useEffect(() => {
+    if (!user) return;
+    return attachSignInCheck(window, document, () => {
+      api("/auth/me/").catch(() => {});
+    });
+  }, [user]);
+
   const login = useCallback(
     async (username: string, password: string) => {
       // 換帳號前先把上一位的資料清乾淨,避免新帳號看到舊資料
       qc.clear();
       const res = await api<LoginResponse>("/auth/login/", {
         method: "POST",
-        body: JSON.stringify({ username, password }),
+        // 這個瀏覽器的記號:同一個瀏覽器再登入拿回同一把,換位置登入舊的作廢(backend/apps/tenants/sign_in.py)
+        body: JSON.stringify({ username, password, device: deviceId() }),
       });
       setToken(res.token);
+      setNotice(null);
       setUser(res.user);
       return res.user;
     },
@@ -93,11 +111,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setToken(null);
     setUser(null);
+    setNotice(null);
     qc.clear();
   }, [qc]);
 
   return (
-    <AuthCtx.Provider value={{ user, loading, login, logout, refresh }}>
+    <AuthCtx.Provider value={{ user, loading, notice, login, logout, refresh }}>
       {children}
     </AuthCtx.Provider>
   );

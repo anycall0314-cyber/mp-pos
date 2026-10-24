@@ -1,4 +1,5 @@
 import { httpErrorText } from "@/lib/errorText";
+import { elsewhereNotice, readDeviceId } from "@/lib/signInPlace";
 
 import type { DuplicateBody } from "./types";
 
@@ -37,6 +38,25 @@ export function setToken(token: string | null) {
   }
 }
 
+function makeDeviceId(): string {
+  const c = globalThis.crypto;
+  if (typeof c.randomUUID === "function") return c.randomUUID();
+  const bytes = new Uint8Array(16);
+  c.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** 這個瀏覽器的位置記號(同一帳號同時只能在一個位置登入;規則在 lib/signInPlace.ts)。登出不清。 */
+export function deviceId(): string {
+  let store: Storage | null = null;
+  try {
+    store = localStorage;
+  } catch {
+    store = null;
+  }
+  return readDeviceId(store, makeDeviceId);
+}
+
 /** 同一個人換了一把新 token(自己改密碼之後):不算換登入狀態,還在排隊的背景工作照送 */
 export function swapToken(token: string) {
   try {
@@ -72,6 +92,7 @@ export function asDuplicate(e: unknown): DuplicateBody | null {
 
 // 收到 401 時通知 AuthContext 清掉 token 並導去 login。
 // 用 EventTarget 避免 client.ts 直接 import React 元件。
+// 事件的 detail 帶 { notice }:帳號在別處登入時是伺服器給的那一句(登入頁顯示),其他的 401 是 null。
 export const authEvents = new EventTarget();
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -97,7 +118,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     }
     if (res.status === 401) {
       setToken(null);
-      authEvents.dispatchEvent(new Event("unauthorized"));
+      authEvents.dispatchEvent(new CustomEvent("unauthorized", { detail: { notice: elsewhereNotice(body) } }));
     }
     // 給人看的一句中文(lib/errorText.ts;以前沒有 detail 時是「400 Bad Request」)
     throw new ApiHttpError(res.status, body, httpErrorText(res.status, body));

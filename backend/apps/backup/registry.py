@@ -108,6 +108,8 @@ REGISTRY: dict[str, Entry] = {
     "auth.Permission": Entry(EXCLUDED, "平台層級權限,不屬於任何公司"),
     "authtoken.Token": Entry(EXCLUDED, "登入憑證;舊 token 不能因為還原重新生效"),
     "authtoken.TokenProxy": Entry(EXCLUDED, "同上(同一張表)"),
+    "tenants.SignInPlace": Entry(EXCLUDED, "帳號現在在哪個瀏覽器登入,是當下的狀態"),
+    "tenants.SignedOutElsewhere": Entry(EXCLUDED, "被別處登入作廢的 token 雜湊,只留兩週"),
     "admin.LogEntry": Entry(EXCLUDED, "Django 後台操作紀錄,平台層級"),
     "contenttypes.ContentType": Entry(EXCLUDED, "框架內部"),
     "sessions.Session": Entry(EXCLUDED, "登入 session,不可還原"),

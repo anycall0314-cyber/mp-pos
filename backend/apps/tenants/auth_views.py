@@ -7,7 +7,7 @@
 - /account/password/ POST 自己改密碼(要打對目前的密碼)→ 換一把新 token 回去
   (不放在 /auth/ 底下:/auth/ 不受公司維護鎖管,還原到一半不該改帳號)
 
-token 走 DRF authtoken。一帳號一 token,登出即作廢。
+token 走 DRF authtoken。一帳號一 token,登出即作廢;換一個位置登入,舊位置的作廢(sign_in.py)。
 """
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
@@ -23,6 +23,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from . import abilities
+from .sign_in import clean_device, sign_in
 
 
 def _serialize_user(user: User) -> dict:
@@ -88,7 +89,9 @@ def login(request):
             {"detail": "此帳號已停用"},
             status=status.HTTP_403_FORBIDDEN,
         )
-    token, _created = Token.objects.get_or_create(user=user)
+    # 同一個帳號同一時間只能在一個位置登入:換位置登入,舊的那一把作廢(apps/tenants/sign_in.py)
+    data = request.data if hasattr(request.data, "get") else {}
+    token = sign_in(user, clean_device(data.get("device")))
     return Response({"token": token.key, "user": _serialize_user(user)})
 
 
