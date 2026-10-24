@@ -27,16 +27,19 @@ export function StoreField({
   value,
   onChange,
   lockable = true,
+  hideLabel = false,
 }: {
   value: Picked<Warehouse>;
   onChange: (next: Picked<Warehouse>) => void;
   /** false = 這一頁不照門市鎖(序號查詢跟庫存查詢一樣各門市都看得到) */
   lockable?: boolean;
+  /** 「門市」兩個字不顯示(念給讀螢幕的聽);下拉本身寫著「全部門市」/ 店名。條件排擠不下一排時用(進貨明細) */
+  hideLabel?: boolean;
 }) {
   const store = useDefaultWarehouse();
   return (
     <label>
-      門市
+      {hideLabel ? <span className="visually-hidden">門市</span> : "門市"}
       {lockable && store.locked ? (
         <input value={store.name || "(未設定)"} disabled />
       ) : (

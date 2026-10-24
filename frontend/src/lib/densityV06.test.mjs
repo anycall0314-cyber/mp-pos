@@ -80,3 +80,19 @@ test("V06c 改了沒重查:比內容不比寫法;頁面查完才收、匯出在�
   assert.equal((page.match(/onClick=\{exportCsv\}/g) ?? []).length, 1, "匯出只在摘要那一排");
   assert.match(css, /\.ex-summary \.sd-summary-card \{ display: flex; align-items: baseline;/);
 });
+
+test("V06d 進貨明細:只有類別收到第二排,廠商留在第一排;清除、已套用、匯出都含收起來的類別;第一排欄名念得到", () => {
+  const page = read("../pages/purchases/PurchaseLinesPage.tsx");
+  const first = page.slice(page.indexOf('<div className="list-filterbar sr-filter pl-filter">'), page.indexOf("{more && ("));
+  assert.match(first, /<span className="visually-hidden">廠商<\/span>\n\s+<ComboBox<Supplier>/, "廠商在第一排");
+  assert.match(first, /<StoreField value=\{store\} onChange=\{setStore\} hideLabel \/>/);
+  assert.match(first, /<PeriodQuick/);
+  assert.doesNotMatch(first, /CategoryField/);
+  for (const name of ["起日", "迄日", "廠商", "商品"]) assert.match(first, new RegExp(`<span className="visually-hidden">${name}</span>`));
+  assert.match(page, /\{more && \(\n\s+<div className="list-filterbar sr-filter">\n\s+<CategoryField value=\{category\} onChange=\{setCategory\} \/>/);
+  assert.match(page, /applied\.category !== "" && cond\("類別", appliedCategory\.option\?\.label\)/, "已套用那一排列出類別");
+  assert.match(page, /function clearAll\(\) \{[\s\S]*?setCategory\(NOT_PICKED\);[\s\S]*?category: ""/, "清除連收起來的類別一起清");
+  assert.match(page, /fetchPurchaseLinesExport\(applied\)/, "匯出照已套用的(含類別)");
+  assert.match(css, /\.visually-hidden \{\n  position: absolute;/);
+  assert.match(read("../pages/inventory/stockReportParts.tsx"), /\{hideLabel \? <span className="visually-hidden">門市<\/span> : "門市"\}/);
+});

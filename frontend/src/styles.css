@@ -6020,6 +6020,11 @@ input.rp-inline-money.failed {
 
 /* 報表的快速鈕:今天、昨天、本月、上月(components/PeriodQuick;全站檢視 E10) */
 .period-quick { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+/* 看不到、讀螢幕的念得到(欄名不顯示的那幾格) */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 
 /* 剛存好的那一筆(代收話費、雜支連續記;components/SavedStrip) */
 .saved-strip {
@@ -8170,6 +8175,10 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   width: 200px;
 }
 .sr-filter label { white-space: nowrap; }
+/* 進貨明細:第一排在 1366 寬要擠成一排(全站檢視 V06d);欄名念給讀螢幕的聽、不顯示 */
+.pl-filter input[type="text"] { width: 150px; }
+.pl-filter input[type="date"] { width: 136px; }
+.pl-range { display: inline-flex; align-items: center; gap: 4px; color: var(--text-dim); }
 .sr-filter input:disabled { opacity: 0.7; }
 /* 異動查詢:從進銷存表帶過來、鎖在那一個商品上 */
 .sr-only-one {

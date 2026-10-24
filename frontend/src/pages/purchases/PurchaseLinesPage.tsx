@@ -45,6 +45,9 @@ export function PurchaseLinesPage() {
   const [supplier, setSupplier] = useState<Picked<Supplier>>(NOT_PICKED);
   const [category, setCategory] = useState<Picked<Category>>(NOT_PICKED);
   const [search, setSearch] = useState("");
+  // 第一排在 1366 寬擠成一排(全站檢視 V06d):只有類別收到第二排(按「類別」才出來);紅隊:廠商留在第一排 ——
+  // 老闆對錢靠它,收起來最容易沒看到還掛著上一個人的廠商。第一排的欄名念給讀螢幕的聽、不顯示(框裡寫著是什麼)
+  const [more, setMore] = useState(false);
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
   const [exportNote, setExportNote] = useState("");
@@ -122,29 +125,31 @@ export function PurchaseLinesPage() {
           </button>
         }
       />
-      <div className="list-filterbar sr-filter">
+      <div className="list-filterbar sr-filter pl-filter">
+        <span className="pl-range">
+          <label>
+            <span className="visually-hidden">起日</span>
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </label>
+          ~
+          <label>
+            <span className="visually-hidden">迄日</span>
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </label>
+        </span>
+        <StoreField value={store} onChange={setStore} hideLabel />
         <label>
-          起日
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-        </label>
-        <label>
-          迄日
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-        </label>
-        <StoreField value={store} onChange={setStore} />
-        <label>
-          廠商
+          <span className="visually-hidden">廠商</span>
           <ComboBox<Supplier>
             value={supplier.id}
             selectedOption={supplier.option}
             onChange={(id, opt) => setSupplier({ id, option: opt ?? null })}
             fetchOptions={searchSuppliers}
-            placeholder="全部"
+            placeholder="全部廠商"
           />
         </label>
-        <CategoryField value={category} onChange={setCategory} />
         <label>
-          商品
+          <span className="visually-hidden">商品</span>
           <input
             type="text"
             value={search}
@@ -165,7 +170,15 @@ export function PurchaseLinesPage() {
         <button className="btn primary" type="button" disabled={!ready} onClick={() => apply()}>
           查詢
         </button>
+        <button className="btn" type="button" aria-expanded={more} onClick={() => setMore(!more)}>
+          類別
+        </button>
       </div>
+      {more && (
+        <div className="list-filterbar sr-filter">
+          <CategoryField value={category} onChange={setCategory} />
+        </div>
+      )}
       <AppliedFilters items={appliedItems} onClear={clearAll} />
       {isError && <Banner kind="error" message={errorMessageOf(error)} />}
       {exportNote && <Banner kind="error" message={exportNote} />}
