@@ -7127,6 +7127,10 @@ span.wb-chip.cat > .pin { color: #f59e0b; }
 span.wb-chip.cat.on > .pin { color: #fde68a; }
 .wb-table th.sortable { cursor: pointer; user-select: none; }
 .wb-table tr.total > td { background: var(--wb-head); font-weight: 600; }
+/* 庫存查詢:表頭黏在上面、本頁合計黏在下面(全站檢視 V06a)。overflow: clip 不擋黏住(hidden 會) */
+.wb-table.inv-sticky { overflow: clip; }
+.wb-table.inv-sticky thead th { position: sticky; top: -14px; z-index: 2; } /* -14 / -28 = .wb 的上下留白,貼齊看得到的邊 */
+.wb-table.inv-sticky tr.total > td { position: sticky; bottom: -28px; z-index: 1; border-top: 1px solid var(--wb-line); }
 .wb-inv-stores { display: flex; gap: 28px; flex-wrap: wrap; }
 .wb-inv-store { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .wb-inv-unit { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; font-size: var(--font-secondary); }

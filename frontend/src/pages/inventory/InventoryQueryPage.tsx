@@ -772,7 +772,8 @@ export function InventoryQueryPage() {
         )}
 
         {ready && !isMobile && (
-          <table className="wb-table">
+          // 表頭黏住、本頁合計黏在底部(全站檢視 V06a:往下捲看不到欄名、合計在最後一列)
+          <table className="wb-table inv-sticky">
             <thead>
               <tr>
                 <th>品號</th>
