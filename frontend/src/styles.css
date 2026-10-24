@@ -4222,6 +4222,39 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
 }
 .wb-unpaid { font-size: var(--font-meta); color: var(--text-dim); }
 .re-grid-intake { grid-template-columns: minmax(0, 1fr); max-width: 880px; }
+/* 既有的維修單也單欄(全站檢視 V02):右邊那一疊(費用明細、個人毛利、備註)接在維修內容後面,不再黏在旁邊 */
+.re-grid-single { grid-template-columns: minmax(0, 1fr); }
+.re-grid-single .re-col-side { position: static; }
+/* 最上面一條:誰的、什麼機型、狀態到哪(橫著放,一直在最上面) */
+.re-topbar {
+  position: sticky;
+  top: -16px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+}
+.re-topbar-who { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.re-topbar-who b { font-size: var(--font-section); }
+.re-topbar-who span { color: var(--text-dim); }
+.re-stepper-top { flex: 1 1 420px; padding: 6px 0 2px; }
+/* 「完成」只在最下面那一條按 */
+.re-step.re-step-final { cursor: default; }
+/* 最下面那一條 */
+.re-footer { flex-wrap: wrap; row-gap: 6px; }
+.re-footer-field { display: inline-flex; align-items: center; gap: 6px; color: var(--text-dim); }
+.re-footer-field input { width: 120px; }
+.re-diff.neg b { color: var(--danger-text); }
+details.re-personal > summary { cursor: pointer; list-style: revert; }
+/* 手機:整頁一起捲,上面那條不黏住(換行後很高,黏住會吃掉三分之一個畫面);最下面那一條跟在內容後面 */
+@media (max-width: 768px) {
+  .re-topbar { position: static; }
+}
 .re-serial-none { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--text-dim); font-size: var(--font-secondary); }
 .re-col-main {
   display: flex;

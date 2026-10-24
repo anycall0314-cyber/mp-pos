@@ -47,7 +47,7 @@ import { Toolbar } from "@/components/Toolbar";
 import { MoneyInput } from "@/components/MoneyInput";
 import { localDay } from "@/lib/fixedReports";
 import { intakeProblem, makeSubmitGate, paidNeedsMethod, phoneForNewMember } from "@/lib/repairIntake";
-import { intStr, money } from "@/lib/money";
+import { intStr, money, roundInt } from "@/lib/money";
 import { marginFormula, personalSplit, repairMargin } from "@/lib/repairMargin";
 import { RepairHistoryModal } from "./RepairHistoryModal";
 import { UnlockPatternInput } from "./UnlockPatternInput";
@@ -624,6 +624,9 @@ function RepairEntryForm() {
   }
 
   const steps = mode === "external" ? STEPS_EXTERNAL : STEPS_IN_HOUSE;
+  // 最下面那一條的報價:自修 = 實際報價;委外 = 委外預估(收據上印給客人的也是這個)
+  const quoteShown = roundInt(mode === "in_house" ? finalQuote : extEst);
+  const paidDiff = roundInt(customerPaid) - quoteShown;
   const currentStepIdx = steps.findIndex((s) => s.value === status);
 
   return (
@@ -702,6 +705,37 @@ function RepairEntryForm() {
 
         {/* 完成之後整張鎖住(全站檢視 E5:以前寫「欄位為唯讀」,格子其實還能打字) */}
         <fieldset className="re-lock" disabled={isLocked}>
+        {/* 既有的單:最上面一條是誰的、什麼機型、狀態到哪(全站檢視 V02:以前狀態在右邊卡片最下面、常常要捲才看得到)。
+            這一排只能往前推到待取件;「完成」只在最下面那一條(要先選收款方式、按兩下、先存整張) */}
+        {!intake && isEdit && (
+          <section className="re-topbar">
+            <div className="re-topbar-who">
+              <b>{customerName || "—"}</b>
+              {customerPhone && <span>{customerPhone}</span>}
+              <span>{modelName || "—"}</span>
+            </div>
+            <div className="re-stepper re-stepper-top">
+              {steps.map((s, i) => {
+                const isCurrent = i === currentStepIdx;
+                const isPast = i < currentStepIdx;
+                const isDone = s.value === "completed";
+                return (
+                  <button
+                    key={s.value}
+                    type="button"
+                    className={"re-step" + (isCurrent ? " current" : "") + (isPast ? " past" : "") + (isDone ? " re-step-final" : "")}
+                    onClick={isDone ? undefined : () => changeStatus(s.value)}
+                    disabled={isDone}
+                    title={isDone ? undefined : `切換到 ${s.label}`}
+                  >
+                    <span className="re-step-dot">{i + 1}</span>
+                    <span className="re-step-label">{s.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
         {/* 保固狀態 banner */}
         {warrantyStatus && (
           <div
@@ -790,8 +824,8 @@ function RepairEntryForm() {
           </label>
         </div>
 
-        {/* 左右兩欄 */}
-        <div className={intake ? "re-grid re-grid-intake" : "re-grid"}>
+        {/* 收件:單欄;既有的單也單欄(全站檢視 V02),費用明細、個人毛利、備註接在維修內容後面 */}
+        <div className={intake ? "re-grid re-grid-intake" : "re-grid re-grid-single"}>
           {/* ─── 左欄 60% ─── */}
           <div className="re-col-main">
             {/* 第一區:基本資料 */}
@@ -1296,7 +1330,7 @@ function RepairEntryForm() {
           <aside className="re-col-side">
             {/* 費用摘要卡 */}
             <section className="re-card re-summary">
-              <div className="re-card-title">費用摘要</div>
+              <div className="re-card-title">費用明細</div>
               <div className="re-summary-list">
                 {mode === "in_house" ? (
                   <>
@@ -1344,47 +1378,16 @@ function RepairEntryForm() {
                     </div>
                   </>
                 )}
-                <div className="re-summary-row re-summary-hero">
-                  <span>實付金額</span>
-                  <MoneyInput
-                    min="0"
-                    value={customerPaid}
-                    onChange={setCustomerPaid}
-                    className="re-summary-input re-summary-input-hero"
-                  />
-                </div>
-                <div className="re-summary-row">
-                  <span>收款方式</span>
-                  <select
-                    value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value ? Number(e.target.value) : "")}
-                  >
-                    <option value="">請選</option>
-                    {paymentMethods.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="re-summary-row re-summary-margin">
-                  <span>預估毛利</span>
-                  <b style={{ color: margin < 0 ? "var(--danger-text)" : "var(--success-text)" }}>
-                    ${money(margin)}
-                  </b>
-                </div>
-                <div className="re-summary-formula re-summary-margin-formula">
-                  {marginFormula({ mode, salesPerson, technician })}
-                </div>
               </div>
             </section>
 
             {/* 個人毛利分解(按公式即時算) */}
-            <section className="re-card re-personal">
-              <div className="re-card-title">
+            {/* 個人毛利收起來,按一下才開(紅隊:那一塊數字正對著客人) */}
+            <details className="re-card re-personal">
+              <summary className="re-card-title">
                 個人毛利分解
                 <span className="re-personal-kind">{breakdownKindLabel}</span>
-              </div>
+              </summary>
               <div className="re-personal-row">
                 <span>
                   收件人
@@ -1437,38 +1440,7 @@ function RepairEntryForm() {
                 {personalBreakdown.kind === "internal_transfer" &&
                   "收件 = 實付 − 內部結算價;維修人員 = 內部結算價 − 零件成本"}
               </div>
-            </section>
-
-            {/* 狀態步驟條(僅 isEdit) */}
-            {isEdit && (
-              <section className="re-card">
-                <div className="re-card-title">維修狀態</div>
-                <div className="re-stepper">
-                  {steps.map((s, i) => {
-                    const isCurrent = i === currentStepIdx;
-                    const isPast = i < currentStepIdx;
-                    return (
-                      <button
-                        key={s.value}
-                        type="button"
-                        className={
-                          "re-step" +
-                          (isCurrent ? " current" : "") +
-                          (isPast ? " past" : "")
-                        }
-                        onClick={() => changeStatus(s.value)}
-                        title={`切換到 ${s.label}`}
-                      >
-                        <span className="re-step-dot">{i + 1}</span>
-                        <span className="re-step-label">
-                          {s.value === "completed" && arm.armed === "complete" ? "再按一次完成" : s.label}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
+            </details>
 
             {/* 備註 */}
             <section className="re-card">
@@ -1486,6 +1458,61 @@ function RepairEntryForm() {
         </div>
         </fieldset>
       </div>
+
+      {/* 最下面固定一條:報價、實付、差額、收款方式、預估毛利、完成(全站檢視 V02;紅隊:報價與實付要同時看得到) */}
+      {!intake && isEdit && (
+        <div className="entry-footer re-footer">
+          {error && <span className="sr-footer-err">{error}</span>}
+          <div className="entry-summary">
+            <span>
+              報價<b>${money(quoteShown)}</b>
+            </span>
+            <label className="re-footer-field">
+              實付
+              <MoneyInput
+                min="0"
+                value={customerPaid}
+                onChange={setCustomerPaid}
+                className="re-summary-input re-summary-input-hero"
+                disabled={isLocked}
+                aria-label="實付金額"
+              />
+            </label>
+            <span className={paidDiff < 0 ? "re-diff neg" : "re-diff"}>
+              差額<b>{paidDiff < 0 ? "−" : "+"}${money(Math.abs(paidDiff))}</b>
+            </span>
+            <label className="re-footer-field">
+              收款方式
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value ? Number(e.target.value) : "")}
+                disabled={isLocked}
+                aria-label="收款方式"
+              >
+                <option value="">請選</option>
+                {paymentMethods.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span title={marginFormula({ mode, salesPerson, technician })}>
+              預估毛利<b style={{ color: margin < 0 ? "var(--danger-text)" : "var(--success-text)" }}>${money(margin)}</b>
+            </span>
+          </div>
+          {!isLocked && (
+            <button
+              type="button"
+              className={arm.armed === "complete" ? "btn primary armed checkout-cta" : "btn primary checkout-cta"}
+              onClick={() => changeStatus("completed")}
+              disabled={submitting || save.isPending || complete.isPending || notLoaded}
+            >
+              {arm.armed === "complete" ? "再按一次完成" : "完成"}
+            </button>
+          )}
+        </div>
+      )}
 
       <RepairHistoryModal
         open={historyOpen}
