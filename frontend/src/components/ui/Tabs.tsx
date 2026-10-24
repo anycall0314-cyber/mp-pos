@@ -13,6 +13,8 @@ export interface TabItem<K extends string> {
   label: ReactNode;
   /** 分頁旁邊的小字(數量、「還沒儲存」);是狀態,不能按 */
   note?: ReactNode;
+  /** 小字要提醒時的顏色:alert = 要處理(紅字)、warn = 建議看一下(黃字);不給就是灰字 */
+  noteTone?: "alert" | "warn";
   disabled?: boolean;
 }
 
@@ -59,7 +61,7 @@ export function Tabs<K extends string>({
           }}
         >
           {t.label}
-          {t.note !== undefined && t.note !== null && t.note !== false && <span className="ui-tab-note">{t.note}</span>}
+          {t.note !== undefined && t.note !== null && t.note !== false && <span className={cx("ui-tab-note", t.noteTone)}>{t.note}</span>}
         </button>
       ))}
     </div>

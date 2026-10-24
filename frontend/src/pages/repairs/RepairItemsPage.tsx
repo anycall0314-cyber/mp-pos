@@ -7,7 +7,7 @@ import {
 } from "@/api/hooks";
 import { searchProducts } from "@/api/search";
 import type { Product, RepairItem } from "@/api/types";
-import { useArm } from "@/components/workbench/useArm";
+import { ArmButton } from "@/components/workbench/ArmButton";
 import { toast } from "@/components/workbench/toast";
 import { Banner } from "@/components/Banner";
 import { ComboBox } from "@/components/ComboBox";
@@ -41,7 +41,6 @@ const EMPTY = {
 
 export function RepairItemsPage() {
   // 刪除 / 套用這類按錯代價大的:再按一次才做(全站檢視 G1:不跳瀏覽器的確認框)
-  const arm = useArm();
   const items = useRepairItems();
   const save = useSaveRepairItem();
   const del = useDeleteRepairItem();
@@ -100,7 +99,6 @@ export function RepairItemsPage() {
   }
 
   async function handleDelete(it: RepairItem) {
-    if (!arm.confirm(`del:${it.id}`)) return;
     try {
       await del.mutateAsync(it.id);
     } catch (e) {
@@ -113,7 +111,7 @@ export function RepairItemsPage() {
       <Toolbar
         title="維修項目設定"
         actions={
-          <button className="btn primary" onClick={openNew}>
+          <button className="btn" onClick={openNew}>
             新增項目
           </button>
         }
@@ -152,12 +150,8 @@ export function RepairItemsPage() {
                 <button className="btn" onClick={() => openEdit(it)}>
                   編輯
                 </button>
-                <button
-                  className="btn danger"
-                  onClick={() => handleDelete(it)}
-                >
-                  {arm.armed === `del:${it.id}` ? "再按一次刪除" : "刪除"}
-                </button>
+                {/* 兩段式、黃色提示、刪除中不能再按(全站控制項 T05:以前刪除中還能再開一輪確認) */}
+                <ArmButton label="刪除" className="btn danger" pendingLabel="刪除中…" onConfirm={() => handleDelete(it)} />
               </div>
             </div>
           ))}

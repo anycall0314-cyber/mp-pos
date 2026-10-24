@@ -2,6 +2,7 @@ import { useEffect } from "react";
 
 import { useRepairHistoryByPhone } from "@/api/hooks";
 import type { RepairHistoryItem } from "@/api/types";
+import { IconButton } from "@/components/ui";
 
 interface Props {
   open: boolean;
@@ -31,9 +32,9 @@ export function RepairHistoryModal({ open, phone, onClose, onPick }: Props) {
       >
         <div className="modal-title">
           歷史維修紀錄 · 電話 {phone || "(未填)"}
-          <button type="button" className="rh-close" onClick={onClose}>
+          <IconButton className="rh-close" label="關閉維修歷史" onClick={onClose}>
             ×
-          </button>
+          </IconButton>
         </div>
         <div className="modal-body rh-body">
           {!phone && (

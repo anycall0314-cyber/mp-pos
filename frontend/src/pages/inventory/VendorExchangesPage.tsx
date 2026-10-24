@@ -5,6 +5,7 @@ import { lookupVendorExchange, useSuppliers, useVendorExchangeDo, useVendorExcha
 import { useCurrentUser } from "@/auth/AuthContext";
 import { Banner, errorMessageOf } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { Tabs } from "@/components/ui";
 import { ArmButton } from "@/components/workbench/ArmButton";
 import { toast } from "@/components/workbench/toast";
 import { money } from "@/lib/money";
@@ -148,21 +149,18 @@ export function VendorExchangesPage() {
   return (
     <div className="page sr-page">
       <Toolbar title="廠商換貨">
-        <div className="ia-tabs">
-          {EXCHANGE_TABS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              className={`ia-tab${tab === t.key ? " active" : ""}`}
-              onClick={() => setTab(t.key)}
-            >
-              {t.label}
-              {t.key === "pending" && (pending.data?.count ?? 0) > 0 && (
-                <span className="ia-tab-badge">{pending.data?.count}</span>
-              )}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          id="vx"
+          label="廠商換貨"
+          items={EXCHANGE_TABS.map((t) => ({
+            key: t.key,
+            label: t.label,
+            note: t.key === "pending" && (pending.data?.count ?? 0) > 0 ? pending.data?.count : undefined,
+            noteTone: "alert" as const,
+          }))}
+          value={tab}
+          onChange={setTab}
+        />
       </Toolbar>
 
       <div className="list-filterbar sr-filter">
@@ -253,7 +251,7 @@ export function VendorExchangesPage() {
       </div>
 
       {list.isError && <Banner kind="error" message={errorMessageOf(list.error)} />}
-      <div className="report-table sr-table">
+      <div className="report-table sr-table" role="tabpanel" id={`vx-panel-${tab}`} aria-labelledby={`vx-tab-${tab}`}>
         {list.isLoading && <div className="md-empty">載入中…</div>}
         {list.data && rows.length === 0 && (
           <div className="md-empty">{tab === "pending" ? "沒有在廠商換貨的" : "還沒有處理過的"}</div>

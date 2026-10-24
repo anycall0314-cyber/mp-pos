@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { downloadCsv } from "@/components/downloadCsv";
+import { ChoiceGroup } from "@/components/ui";
 import { toast } from "@/components/workbench/toast";
 import { localDay } from "@/lib/fixedReports";
 import { collectPages, exportFileName, exportIfComplete, stockMatrixTable } from "@/lib/reportExports";
@@ -542,18 +543,14 @@ export function InventoryQueryPage() {
         <div className="wb-field">
           <label>門市{noStore ? "(至少選一家)" : ""}</label>
           <div className="wb-chips" style={{ minHeight: 44 }}>
-            {allWarehouses.map((w) => (
-              <button
-                key={w.id}
-                type="button"
-                className={`wb-chip cat${
-                  selectedWarehouseIds.has(w.id) ? " on" : ""
-                }`}
-                onClick={() => toggleWarehouse(w.id)}
-              >
-                {w.name}
-              </button>
-            ))}
+            {/* 要看哪幾家門市:可以同時選好幾家(全站控制項 B2:按下 / 放開的選項) */}
+            <ChoiceGroup
+              multiple
+              label="要看的門市"
+              value={[...selectedWarehouseIds]}
+              onChange={(id) => toggleWarehouse(id)}
+              options={allWarehouses.map((w) => ({ value: w.id, label: w.name }))}
+            />
             {allWarehouses.length > 1 &&
               selectedWarehouseIds.size < allWarehouses.length && (
                 <button
@@ -591,7 +588,7 @@ export function InventoryQueryPage() {
         <div style={{ minHeight: 44, display: "flex", gap: 10, alignItems: "center" }}>
           <button
             type="button"
-            className="wb-btn blue"
+            className="wb-btn"
             onClick={() => apply()}
             disabled={noStore}
           >
@@ -627,10 +624,13 @@ export function InventoryQueryPage() {
                 const on = selectedCategories.some((x) => x.id === c.id);
                 const pinned = pins.some((x) => x.id === c.id);
                 return (
-                  <span key={c.id} className={`wb-chip cat${on ? " on" : ""}`}>
+                  // 選中靠名稱那一顆的 aria-pressed(樣式也看它),星號是另一個動作(全站控制項 B2)
+                  <span key={c.id} className="wb-chip cat">
                     <button
                       type="button"
                       className="pin"
+                      aria-label={pinned ? `${c.label} 取消常用` : `${c.label} 釘成常用`}
+                      aria-pressed={pinned}
                       title={pinned ? "取消常用" : "釘成常用"}
                       onClick={() => togglePin(c)}
                     >
@@ -639,6 +639,7 @@ export function InventoryQueryPage() {
                     <button
                       type="button"
                       className="name"
+                      aria-pressed={on}
                       onClick={() => toggleCategory(c)}
                     >
                       {c.label}

@@ -8,6 +8,8 @@ interface Props {
   className?: string;
   disabled?: boolean;
   title?: string;
+  /** 第二下之後、還在做的時候顯示的字(沒給就是「處理中…」);按鈕這段時間不能按、帶 aria-busy(全站控制項 T05) */
+  pendingLabel?: string;
 }
 
 /** 第一次按之後這麼久以內的第二下不算(滑鼠連點兩下不是「看過之後再按一次」) */
@@ -25,6 +27,7 @@ export function ArmButton({
   className = "wb-btn",
   disabled,
   title,
+  pendingLabel = "處理中…",
 }: Props) {
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -71,10 +74,11 @@ export function ArmButton({
       type="button"
       className={`${className}${armed ? " armed" : ""}`}
       disabled={disabled || busy}
+      aria-busy={busy || undefined}
       onClick={click}
       title={title}
     >
-      {armed ? (armedLabel ?? `再按一次${label}`) : label}
+      {busy ? pendingLabel : armed ? (armedLabel ?? `再按一次${label}`) : label}
     </button>
   );
 }

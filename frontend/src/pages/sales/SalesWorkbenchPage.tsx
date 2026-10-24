@@ -48,6 +48,7 @@ import { memberPrefill, memberSource, nameLooksScanned, sourceAfterMemberChange,
 import { sameCardNo, sameMember } from "@/lib/exactPick";
 import { taxMethodFor } from "@/lib/invoiceTracks";
 import { Drawer } from "@/components/Drawer";
+import { ChoiceGroup } from "@/components/ui";
 import { MoneyInput } from "@/components/MoneyInput";
 import { ArmButton } from "@/components/workbench/ArmButton";
 import { apiErrorText } from "@/components/workbench/errors";
@@ -2137,18 +2138,16 @@ export function SalesWorkbenchPage() {
                         <span className="wb-badge bad">這家門市沒有在庫</span>
                       ) : (
                         <div className="wb-chips">
-                          {pickedUnits.map((u) => (
-                            <button
-                              type="button"
-                              key={u.id}
-                              className="wb-chip on"
-                              title={`${codesLabel(u)}(點一下取消)`}
-                              disabled={locked}
-                              onClick={() => toggleUnit(l.key, u.id)}
-                            >
-                              {tailOf(u)}
-                            </button>
-                          ))}
+                          {/* 選了的那幾台(按一下取消;全站控制項 B2:按下 / 放開的選項,不用藍底) */}
+                          <ChoiceGroup
+                            multiple
+                            size="sm"
+                            label={`${p.name} 選了的設備`}
+                            value={l.picked}
+                            disabled={locked}
+                            onChange={(id) => toggleUnit(l.key, id)}
+                            options={pickedUnits.map((u) => ({ value: u.id, label: tailOf(u), title: `${codesLabel(u)}(點一下取消)` }))}
+                          />
                           {/* 沒有別台可以挑(一般序號商品、在庫的都選了)就不放這顆 */}
                           {(l.picked.length === 0 ||
                             openLine === l.key ||
@@ -2247,23 +2246,20 @@ export function SalesWorkbenchPage() {
                     >
                       <td colSpan={6}>
                         {showUnits && (
-                          <div className="wb-chips">
-                            {units.map((u) => (
-                              <button
-                                type="button"
-                                key={u.id}
-                                className={`wb-chip${l.picked.includes(u.id) ? " on" : ""}`}
-                                title={
-                                  codesLabel(u) +
-                                  (u.price ? ` · 售價 ${money(u.price)}` : "")
-                                }
-                                disabled={locked}
-                                onClick={() => toggleUnit(l.key, u.id)}
-                              >
-                                {tailOf(u)}
-                              </button>
-                            ))}
-                          </div>
+                          <ChoiceGroup
+                            multiple
+                            size="sm"
+                            label={`${p.name} 在庫的設備`}
+                            className="wb-chips"
+                            value={l.picked}
+                            disabled={locked}
+                            onChange={(id) => toggleUnit(l.key, id)}
+                            options={units.map((u) => ({
+                              value: u.id,
+                              label: tailOf(u),
+                              title: codesLabel(u) + (u.price ? ` · 售價 ${money(u.price)}` : ""),
+                            }))}
+                          />
                         )}
                         {telecom && (
                           <div className="ws-tel">
@@ -2775,19 +2771,14 @@ export function SalesWorkbenchPage() {
                 )}
               </div>
               {!split && (
-                <div className="wb-chips">
-                  {paymentMethods.map((m) => (
-                    <button
-                      type="button"
-                      key={m.code}
-                      className={`wb-chip pay${m.code === chosenMethod ? " on" : ""}`}
-                      disabled={locked}
-                      onClick={() => setPayMethod(m.code)}
-                    >
-                      {m.name}
-                    </button>
-                  ))}
-                </div>
+                // 付款方式單選(全站控制項 B2:選中用中性淺底、radiogroup;選了不會結帳)
+                <ChoiceGroup
+                  label="付款方式"
+                  value={chosenMethod || null}
+                  disabled={locked}
+                  onChange={(code) => setPayMethod(code)}
+                  options={paymentMethods.map((m) => ({ value: m.code, label: m.name }))}
+                />
               )}
               {split &&
                 paymentMethods.map((m) => (

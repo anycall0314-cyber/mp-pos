@@ -17,6 +17,7 @@ import {
 import { SamePhonePick } from "@/components/SamePhonePick";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Field } from "@/components/Field";
+import { ChoiceGroup } from "@/components/ui";
 import { MoneyInput } from "@/components/MoneyInput";
 import { SavedStrip } from "@/components/SavedStrip";
 import { ArmButton } from "@/components/workbench/ArmButton";
@@ -400,18 +401,13 @@ export function PhoneBillForm({ open, onClose, todayStats }: Props) {
             )}
           </Field>
           <Field label="電信業者" required>
-            <div className="wb-chips">
-              {carriers.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  className={`wb-chip pay${state.carrier === c.id ? " on" : ""}`}
-                  onClick={() => chooseCarrier(c.id)}
-                >
-                  {c.name}
-                </button>
-              ))}
-            </div>
+            {/* 電信業者單選(全站控制項 B2:radiogroup、選中中性淺底) */}
+            <ChoiceGroup
+              label="電信業者"
+              value={state.carrier || null}
+              onChange={(id) => chooseCarrier(id)}
+              options={carriers.map((c) => ({ value: c.id, label: c.name }))}
+            />
           </Field>
           <Field label="電話號碼" required>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>

@@ -6,5 +6,7 @@ export { Button, type ButtonProps } from "./Button";
 export { IconButton, type IconButtonProps } from "./IconButton";
 export { Tabs, TabPanel, type TabItem } from "./Tabs";
 export { SegmentedControl, type SegmentOption } from "./SegmentedControl";
+export { ChoiceGroup, type ChoiceOption } from "./ChoiceGroup";
+export { GroupCheckbox, type GroupCheckboxProps } from "./GroupCheckbox";
 export { StatusBadge } from "./StatusBadge";
 export { ToolbarField, ControlBar } from "./ToolbarField";

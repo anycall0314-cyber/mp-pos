@@ -237,6 +237,7 @@ export function PurchaseProductPickerModal({
                       <td>
                         <input
                           type="checkbox"
+                          aria-label={`選取 ${r.product.name}`}
                           checked={r.selected}
                           disabled={!r.product.is_active}
                           onChange={(e) =>

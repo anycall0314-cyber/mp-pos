@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { Toolbar } from "@/components/Toolbar";
-import { Button, ControlBar, IconButton, SegmentedControl, StatusBadge, TabPanel, Tabs, ToolbarField } from "@/components/ui";
+import { Button, ChoiceGroup, ControlBar, GroupCheckbox, IconButton, SegmentedControl, StatusBadge, TabPanel, Tabs, ToolbarField } from "@/components/ui";
 import { ArmButton } from "@/components/workbench/ArmButton";
 
 /**
@@ -14,6 +14,10 @@ export function ControlsShowcasePage() {
   const [store, setStore] = useState("");
   const [returnOnly, setReturnOnly] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [pay, setPay] = useState<string | null>("cash");
+  const [stores, setStores] = useState<number[]>([1]);
+  const [picked, setPicked] = useState<number[]>([1]);
+  const toggle = (list: number[], v: number) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
   return (
     <div className="page">
       <Toolbar title="共用控制項" />
@@ -63,7 +67,7 @@ export function ControlsShowcasePage() {
             items={[
               { key: "order", label: "叫貨" },
               { key: "log", label: "紀錄", note: "3" },
-              { key: "map", label: "對照" },
+              { key: "map", label: "對照", note: "2", noteTone: "alert" },
             ]}
           />
           <TabPanel id="dev-tabs" k="order" active={tab === "order"}>
@@ -102,6 +106,54 @@ export function ControlsShowcasePage() {
             </label>
             <Button>查詢</Button>
           </ControlBar>
+        </section>
+        <section>
+          <h3>直接點的選項 ChoiceGroup(單選 / 多選)</h3>
+          <div className="dev-row">
+            <ChoiceGroup
+              label="付款方式"
+              value={pay}
+              onChange={setPay}
+              options={[
+                { value: "cash", label: "現金" },
+                { value: "card", label: "刷卡" },
+                { value: "line", label: "LINE Pay" },
+                { value: "off", label: "停用的", disabled: true },
+              ]}
+            />
+          </div>
+          <div className="dev-row">
+            <ChoiceGroup
+              multiple
+              label="要看的門市"
+              value={stores}
+              onChange={(v) => setStores((l) => toggle(l, v))}
+              options={[
+                { value: 1, label: "湳雅店" },
+                { value: 2, label: "民生店" },
+                { value: 3, label: "巨城店" },
+              ]}
+            />
+            <ChoiceGroup
+              multiple
+              size="sm"
+              label="挑設備"
+              value={picked}
+              onChange={(v) => setPicked((l) => toggle(l, v))}
+              options={[1, 2, 3].map((v) => ({ value: v, label: `…12${v}4`, title: `序號尾碼 12${v}4` }))}
+            />
+          </div>
+          <div className="dev-row">
+            <label className="ui-tf">
+              <GroupCheckbox
+                picked={picked.length}
+                total={3}
+                aria-label="全選 挑設備"
+                onChange={() => setPicked(picked.length === 3 ? [] : [1, 2, 3])}
+              />
+              <span>全選(選一部分是半選)</span>
+            </label>
+          </div>
         </section>
         <section>
           <h3>狀態 StatusBadge(不能按)</h3>

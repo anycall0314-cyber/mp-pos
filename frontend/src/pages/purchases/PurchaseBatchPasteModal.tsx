@@ -396,7 +396,7 @@ PH-000023\t1\t29000\t356121234567000`}
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((r) => {
+                    {rows.map((r, i) => {
                       const statusBadge =
                         r.matchStatus === "exact"
                           ? null
@@ -440,6 +440,7 @@ PH-000023\t1\t29000\t356121234567000`}
                           <td>
                             <input
                               type="checkbox"
+                              aria-label={`選取第 ${i + 1} 列 ${r.rawProductText}`}
                               checked={r.selected}
                               disabled={!r.productOption}
                               onChange={(e) =>

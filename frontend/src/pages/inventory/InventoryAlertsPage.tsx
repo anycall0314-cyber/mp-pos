@@ -8,6 +8,7 @@ import type {
   InventoryAlertRow,
 } from "@/api/types";
 import { Toolbar } from "@/components/Toolbar";
+import { TabPanel, Tabs } from "@/components/ui";
 import { AppliedFilters } from "@/components/AppliedFilters";
 import { useStoreParam } from "@/hooks/useStoreParam";
 import { appliedList, cond } from "@/lib/appliedFilters";
@@ -38,37 +39,30 @@ export function InventoryAlertsPage() {
   return (
     <div className="page">
       <Toolbar title="庫存警示">
-        <div className="ia-tabs">
-          <button
-            type="button"
-            className={`ia-tab${tab === "alerts" ? " active" : ""}`}
-            onClick={() => setTab("alerts")}
-          >
-            補貨警示
-            {alerts.data && alerts.data.counts.total > 0 && (
-              <span className="ia-tab-badge">
-                {alerts.data.counts.total}
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
-            className={`ia-tab${tab === "clearance" ? " active" : ""}`}
-            onClick={() => setTab("clearance")}
-          >
-            清倉壓力
-            {clearance.data && clearance.data.counts.recommend_discount > 0 && (
-              <span className="ia-tab-badge ia-tab-badge-warn">
-                {clearance.data.counts.recommend_discount}
-              </span>
-            )}
-          </button>
-        </div>
+        <Tabs
+          id="ia"
+          label="庫存警示"
+          items={[
+            { key: "alerts", label: "補貨警示", note: alerts.data && alerts.data.counts.total > 0 ? alerts.data.counts.total : undefined, noteTone: "alert" },
+            {
+              key: "clearance",
+              label: "清倉壓力",
+              note: clearance.data && clearance.data.counts.recommend_discount > 0 ? clearance.data.counts.recommend_discount : undefined,
+              noteTone: "warn",
+            },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
       </Toolbar>
       {tab === "alerts" && <AppliedFilters items={appliedList([cond("門市", store.name)])} onClear={store.clear} />}
 
-      {tab === "alerts" && <AlertsPanel warehouse={store.id} />}
-      {tab === "clearance" && <ClearancePanel />}
+      <TabPanel id="ia" k="alerts" active={tab === "alerts"}>
+        {tab === "alerts" && <AlertsPanel warehouse={store.id} />}
+      </TabPanel>
+      <TabPanel id="ia" k="clearance" active={tab === "clearance"}>
+        {tab === "clearance" && <ClearancePanel />}
+      </TabPanel>
     </div>
   );
 }
@@ -191,7 +185,7 @@ function AlertRow({ row }: { row: InventoryAlertRow }) {
       </div>
       <div className="ia-row-actions">
         {/* 帶著這個商品去(全站檢視 B11:以前只開一張空白進貨單 / 商品管理首頁,要重找) */}
-        <Link to={`/purchases/new?add=${row.id}`} className="btn primary ia-row-btn">
+        <Link to={`/purchases/new?add=${row.id}`} className="btn ia-row-btn">
           去進貨
         </Link>
         <Link to={`/products?selected=${row.id}`} className="btn ia-row-btn">
@@ -296,7 +290,7 @@ function ClearanceRow({
         </div>
       </div>
       <div className="ia-row-actions">
-        <Link to={`/products?selected=${row.id}`} className="btn primary ia-row-btn">
+        <Link to={`/products?selected=${row.id}`} className="btn ia-row-btn">
           調整售價
         </Link>
       </div>

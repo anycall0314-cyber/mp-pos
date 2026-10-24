@@ -11,6 +11,7 @@ import { ComboBox, type ComboOption } from "@/components/ComboBox";
 import { MoneyInput } from "@/components/MoneyInput";
 import { usePhotoPeek } from "@/components/photos/PhotoName";
 import { Toolbar } from "@/components/Toolbar";
+import { GroupCheckbox, Tabs } from "@/components/ui";
 import { ArmButton } from "@/components/workbench/ArmButton";
 import { ScanBox, type ScanBoxApi, type ScanOption, type ScanVerdict } from "@/components/workbench/ScanBox";
 import { apiErrorText } from "@/components/workbench/errors";
@@ -409,7 +410,7 @@ export function StockCountPage() {
             <Link className="btn" to="/inventory/stocktake">
               返回
             </Link>
-            {(counting || reviewing) && <ArmButton label="作廢" className="btn" onConfirm={() => call("void/")} />}
+            {(counting || reviewing) && <ArmButton label="作廢" className="btn danger" onConfirm={() => call("void/")} />}
             {reviewing && <ArmButton label="退回" className="btn" onConfirm={() => call("return/")} />}
             {/* 送出時沒表明手機刷完:沒刷到的手機不算少。核准前再確認一次(紅隊) */}
             {reviewing && (
@@ -542,16 +543,21 @@ export function StockCountPage() {
       )}
 
       {tabs.length > 0 && (
-        <div className="ia-tabs sc-tabs">
-          {tabs.map((t) => (
-            <button key={t.key} type="button" className={`ia-tab${shown === t.key ? " active" : ""}`} onClick={() => setTab(t.key)}>
-              {t.label}
-              {t.count > 0 && <span className={t.alert ? "ia-tab-badge" : "ia-tab-badge plain"}>{t.count}</span>}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          id="sc"
+          label="盤點內容"
+          className="sc-tabs"
+          items={tabs.map((t) => ({ key: t.key, label: t.label, note: t.count > 0 ? t.count : undefined, noteTone: t.alert ? "alert" : undefined }))}
+          value={shown ?? tabs[0].key}
+          onChange={setTab}
+        />
       )}
-      <div className="report-table sr-table">
+      <div
+        className="report-table sr-table"
+        role={shown ? "tabpanel" : undefined}
+        id={shown ? `sc-panel-${shown}` : undefined}
+        aria-labelledby={shown ? `sc-tab-${shown}` : undefined}
+      >
         {shown === null && <div className="md-empty">還沒有盤任何東西</div>}
         {shown === "unknowns" && (
           <table className="report-grid sc-unknowns">
@@ -793,12 +799,13 @@ export function StockCountPage() {
               <tbody>
                 {newGroups(newRows).map((g) => {
                   const ids = g.rows.map((r) => r.id);
-                  const all = ids.every((one) => picked.has(one));
+                  const pickedHere = ids.filter((one) => picked.has(one)).length;
+                  const all = ids.length > 0 && pickedHere === ids.length;
                   return [
                     <tr key={`g-${g.key}`} className="report-row sc-group">
                       {reviewing && (
                         <td>
-                          <input type="checkbox" checked={all} aria-label={g.label} onChange={() => togglePick(ids, !all)} />
+                          <GroupCheckbox picked={pickedHere} total={ids.length} aria-label={`全選 ${g.label}`} onChange={() => togglePick(ids, !all)} />
                         </td>
                       )}
                       <td colSpan={6}>
