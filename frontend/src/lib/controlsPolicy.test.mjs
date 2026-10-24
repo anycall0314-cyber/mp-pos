@@ -30,6 +30,54 @@ test("會攔:頁面自製藍按鈕(inline 外觀)、沒有名稱的 ×、用主�
   assert.equal(found.filter((r) => r === "icon-no-name").length, 2, "× 與只有圖示的按鈕都要攔");
 });
 
+test("也會攔(淡色複查找到的漏網寫法):variant 依狀態切 primary、「選中 && primary」、同一排兩顆主要按鈕、膠囊鈕依狀態變色", () => {
+  const bad = `
+    export function P({ sel, setSel }) {
+      return (
+        <div>
+          <Button variant={sel === "a" ? "primary" : "default"} onClick={() => setSel("a")}>甲</Button>
+          <button className={cx("btn", sel === "b" && "primary")} onClick={() => setSel("b")}>乙</button>
+          <div className="row">
+            <button className="btn primary">儲存</button>
+            <Button variant="primary">送出</Button>
+          </div>
+          <button className={\`wb-chip\${sel === "c" ? " on" : ""}\`} onClick={() => setSel("c")}>丙</button>
+        </div>
+      );
+    }`;
+  const found = rules(scanSource("pages/x/Q.tsx", bad));
+  assert.equal(found.filter((r) => r === "primary-as-state").length, 2, `variant 與 && 各一(攔到的:${found.join(", ")})`);
+  assert.ok(found.includes("multiple-primary"), "同一排兩顆主要按鈕");
+  assert.ok(found.includes("chip-as-state"), "wb-chip on");
+  // 反例:一排只有一顆主要按鈕、選中用 SegmentedControl,不攔
+  const ok = `
+    export function P({ sel, setSel }) {
+      return (
+        <div className="row">
+          <Button>取消</Button>
+          <Button variant="primary">儲存</Button>
+          <SegmentedControl label="方式" value={sel} onChange={setSel} options={[]} />
+        </div>
+      );
+    }`;
+  assert.deepEqual(scanSource("pages/x/Q.tsx", ok), []);
+});
+
+test("共用外觀契約(淡色):主要按鈕不是鮮藍實心白字、單選列選中不借表格選取色、工具列欄位跟頁面同底", () => {
+  const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+  const rule = (sel) => parseCss(css).filter((r) => r.selector.split(",").map((x) => x.trim()).includes(sel));
+  const decl = (sel, prop) => rule(sel).flatMap((r) => r.decls).filter(([p]) => p === prop).map(([, v]) => v);
+  for (const sel of [".btn.primary", ':root[data-theme="light"] .btn.primary']) {
+    const bg = decl(sel, "background");
+    const color = decl(sel, "color");
+    assert.ok(bg.length > 0 && bg.every((v) => v === "var(--primary-bg)"), `${sel} 的底是 --primary-bg(現在:${bg})`);
+    assert.ok(color.every((v) => v === "var(--primary-text)" && !/#fff/i.test(v)), `${sel} 的字是 --primary-text(現在:${color})`);
+  }
+  assert.ok(!decl('.ui-seg-item[aria-checked="true"]', "background").some((v) => /row-selected|accent/.test(v)), "單選列選中用控制項自己的中性色");
+  assert.deepEqual(decl(".ui-toolbar .ui-tf select", "background"), ["var(--ctl-bg)"]);
+  assert.match(css, /--ctl-bg: transparent;/);
+});
+
 test("不攔:用共用元件、有名稱的圖示按鈕、純排版的 style、有角色與 tabIndex 的可點容器;共用層自己不算", () => {
   const good = `
     export function P({ tab, setTab }) {

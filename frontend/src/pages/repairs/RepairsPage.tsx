@@ -201,7 +201,8 @@ export function RepairsPage() {
       <Toolbar
         title="維修單"
         actions={
-          <Link to="/repairs/new" className="btn primary">
+          // 進入建單是一般動作,不是這一頁的主要動作(淡色複查:鮮藍實心太搶)
+          <Link to="/repairs/new" className="btn">
             建立維修單
           </Link>
         }

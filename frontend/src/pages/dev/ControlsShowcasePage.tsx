@@ -2,10 +2,11 @@ import { useState } from "react";
 
 import { Toolbar } from "@/components/Toolbar";
 import { Button, ControlBar, IconButton, SegmentedControl, StatusBadge, TabPanel, Tabs, ToolbarField } from "@/components/ui";
+import { ArmButton } from "@/components/workbench/ArmButton";
 
 /**
  * 共用控制項展示頁(只在開發模式掛路由;docs/ui-controls.md §6「已在元件展示頁找到同類範例」)。
- * 每一種用途列出 一般 / 選中 / 停用 / 處理中 / 錯誤;切明暗主題、改視窗寬度都在這一頁看。不連後端、不寫任何資料。
+ * 每一種用途列出 一般 / 選中 / 停用 / 處理中 / 再按一次(作廢按一下)/ 錯誤;切明暗主題、改視窗寬度都在這一頁看。不連後端、不寫任何資料。
  */
 export function ControlsShowcasePage() {
   const [tab, setTab] = useState<"order" | "log" | "map">("order");
@@ -38,6 +39,7 @@ export function ControlsShowcasePage() {
             >
               儲存
             </Button>
+            <ArmButton label="作廢" className="btn danger" onConfirm={() => undefined} />
           </div>
         </section>
         <section>

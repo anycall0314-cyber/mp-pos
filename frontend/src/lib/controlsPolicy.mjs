@@ -3,7 +3,7 @@
 // 新的違規讓 controlsPolicy.test.mjs 變紅。
 //
 // 重產基線:node src/lib/controlsPolicy.mjs --write-baseline —— 只在「搬掉了舊寫法、基線要跟著變少」時用,
-// 提交前看 diff 必須只有刪除;不可以拿來放行新寫法。
+// 提交前看 diff 必須只有刪除;不可以拿來放行新寫法。例外只有「新加一條規則」:現有的命中記進基線一次,diff 只能是那一條規則的新增。
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -69,27 +69,59 @@ export function scanSource(file, src) {
       if (isButton && !named && (ICON_TEXT.test(text) || onlyIcons)) add("icon-no-name", n, tag, className, text);
       // 3. 舊的分頁樣式(遷移前的藍底小分頁)
       if (LEGACY_TAB.test(className)) add("legacy-tab", n, tag, className, text);
-      // 4. 用主要按鈕的藍底表示「選中」
-      if (attrs.className && attrs.className !== true) {
+      // 4. 用主要按鈕表示「選中」:className / variant 依狀態切換 primary(三元式,或 `選中 && "primary"`)
+      for (const key of ["className", "variant"]) {
+        if (!attrs[key] || attrs[key] === true) continue;
         let hit = false;
+        const lit = (c) => (ts.isStringLiteral(c) || ts.isNoSubstitutionTemplateLiteral(c) ? c.text : null);
         const walk = (c) => {
           if (ts.isConditionalExpression(c)) {
-            const a = ts.isStringLiteral(c.whenTrue) || ts.isNoSubstitutionTemplateLiteral(c.whenTrue) ? c.whenTrue.text : null;
-            const b = ts.isStringLiteral(c.whenFalse) || ts.isNoSubstitutionTemplateLiteral(c.whenFalse) ? c.whenFalse.text : null;
+            const a = lit(c.whenTrue);
+            const b = lit(c.whenFalse);
             if (a !== null && b !== null) {
               const strip = (s) => squash(s.replace(/\bprimary\b/g, ""));
-              if (/\bprimary\b/.test(a) !== /\bprimary\b/.test(b) && strip(a) === strip(b)) hit = true;
+              if (/\bprimary\b/.test(a) !== /\bprimary\b/.test(b) && (key === "variant" || strip(a) === strip(b))) hit = true;
             }
+          }
+          if (ts.isBinaryExpression(c) && c.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+            const r = lit(c.right);
+            if (r !== null && /\bprimary\b/.test(r)) hit = true;
           }
           ts.forEachChild(c, walk);
         };
-        walk(attrs.className);
-        if (hit) add("primary-as-state", n, tag, className, text);
+        walk(attrs[key]);
+        if (hit) {
+          add("primary-as-state", n, tag, className || attrText("variant"), text);
+          break;
+        }
       }
       // 5. 不是按鈕卻可以點,也沒有角色、鍵盤到不了
       if (clickable && !("role" in attrs) && !("tabIndex" in attrs)) add("clickable-noninteractive", n, tag, className, text);
       // 6. 在頁面複製一份開關外觀
       if (/\btoggle-switch\b/.test(className)) add("copied-switch", n, tag, className, text);
+      // 7. 舊的膠囊鈕依狀態變色(wb-chip on / vo-chip active):選中要用 SegmentedControl / Tabs
+      if (/\b(wb-chip|vo-chip)\b/.test(className) && /\?|&&/.test(className)) add("chip-as-state", n, tag, className, text);
+    }
+    // 8. 同一排(同一個父元素底下)兩顆以上主要按鈕:一個工作區至多一個強調動作
+    if (ts.isJsxElement(n)) {
+      const primaries = n.children.filter((c) => {
+        const el = ts.isJsxElement(c) ? c.openingElement : ts.isJsxSelfClosingElement(c) ? c : null;
+        if (!el) return false;
+        let yes = false;
+        for (const a of el.attributes.properties) {
+          if (!ts.isJsxAttribute(a) || !a.initializer) continue;
+          const name = a.name.getText(tree);
+          const v = a.initializer.getText(tree);
+          if (name === "variant" && /^"primary"$/.test(v)) yes = true;
+          if (name === "className" && /^["'`]/.test(v) && (/\b(btn|wb-btn)\b[^"'`]*\bprimary\b|\bprimary\b[^"'`]*\b(btn|wb-btn)\b/.test(v) || /\bwb-btn\b[^"'`]*\b(go|blue)\b/.test(v))) yes = true;
+        }
+        return yes;
+      });
+      if (primaries.length >= 2) {
+        const open = n.openingElement;
+        const cls = open.attributes.properties.find((a) => ts.isJsxAttribute(a) && a.name.getText(tree) === "className");
+        add("multiple-primary", open, open.tagName.getText(tree), cls && cls.initializer ? cls.initializer.getText(tree) : "", primaries.map((c) => squash(c.getText(tree)).slice(0, 20)).join(" / "));
+      }
     }
     ts.forEachChild(n, visit);
   }

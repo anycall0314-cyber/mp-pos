@@ -97,7 +97,7 @@
 
 後端 `backend/apps/`:`core`(租戶基底、金額、只給管理員的欄位、業務員成本、分頁、冪等)· `tenants`(公司、帳號、權限 abilities、登入、系統設定主檔、平台後台)· `catalog`(商品、類別、品況、機型、型號庫、usage、shop_terms)· `identity`(別名、叫法比對、防重複、待確認入庫)· `inventory`(門市、序號、異動、標籤、flows / reports、盤點、廠商換貨)· `parties`(廠商、來源、會員、業務員、電信、方案、SIM)· `purchasing` · `sales`(銷貨、銷退、合約、佣金、日報、WP-103)· `transfers` · `cash`(雜支、現金調整、代收話費、營業日報)· `repairs` · `backup` · `legacy` · `ledger`(快照與對帳)· `analytics`(報表語意層)· `vendor_orders`(廠商叫貨、kcimos)· `trade`(批發)· `photos`。
 
-前端 `frontend/src/`:`api/`(client、hooks、search、types)· `components/`(ComboBox、Drawer、MoneyInput、shell/、workbench/、labels/、photos/)· `pages/<模組>/` · `lib/`(畫面規則 + 同名測試)· `auth/` · `hooks/` · `nav.ts` · `App.tsx` · `styles.css`(字級、尺寸、顏色都用變數;全站按鈕只有 `btn` / `wb-btn` 一套,主要按鈕藍色)。
+前端 `frontend/src/`:`api/`(client、hooks、search、types)· `components/`(ComboBox、Drawer、MoneyInput、shell/、workbench/、labels/、photos/)· `pages/<模組>/` · `lib/`(畫面規則 + 同名測試)· `auth/` · `hooks/` · `nav.ts` · `App.tsx` · `styles.css`(字級、尺寸、顏色都用變數;全站按鈕只有 `btn` / `wb-btn` 一套,主要按鈕是淡色(藍字、淡藍細框、淡底;2026-10-25),控制項顏色用 `--ctl-*` / `--primary-*`)。
 
 ## 慣例
 
