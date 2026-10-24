@@ -574,7 +574,8 @@ export function BulkEditProductsModal({
         </div>
 
         <div className="modal-actions">
-          <button className="btn" onClick={onClose}>
+          {/* 送出中不給取消(關掉不會取消已經送出去的;全站控制項 F04) */}
+          <button className="btn" type="button" onClick={onClose} disabled={save.isPending}>
             取消
           </button>
           <button

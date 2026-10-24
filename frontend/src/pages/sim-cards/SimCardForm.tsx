@@ -145,9 +145,10 @@ export function SimCardForm({ open, initial, onClose }: Props) {
       open={open}
       title={isEdit ? `編輯卡片 ${initial?.card_no}` : "新增 SIM 卡"}
       onClose={onClose}
+      busy={saveCard.isPending}
       footer={
         <>
-          <button className="btn" onClick={onClose} type="button">
+          <button className="btn" onClick={onClose} type="button" disabled={saveCard.isPending}>
             取消
           </button>
           <button

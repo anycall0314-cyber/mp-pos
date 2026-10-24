@@ -163,9 +163,10 @@ export function TelecomPlanForm({ open, initial, onClose }: Props) {
       open={open}
       title={isEdit ? `編輯方案 ${initial?.name}` : "新增電信方案"}
       onClose={onClose}
+      busy={savePlan.isPending}
       footer={
         <>
-          <button className="btn" onClick={onClose} type="button">
+          <button className="btn" onClick={onClose} type="button" disabled={savePlan.isPending}>
             取消
           </button>
           <button

@@ -281,9 +281,11 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
         </div>
 
         <div className="modal-actions">
+          {/* 送出中不給取消(關掉不會取消已經送出去的;全站控制項 F04) */}
           <button
             type="button"
             className="btn"
+            disabled={importMut.isPending}
             onClick={() => {
               reset();
               onClose();

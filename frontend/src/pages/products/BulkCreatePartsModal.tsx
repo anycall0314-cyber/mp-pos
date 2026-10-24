@@ -529,13 +529,15 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
         </div>
 
         <div className="modal-actions bcp-actions">
-          <button type="button" className="btn" onClick={onClose}>
+          {/* 送出中不給取消 / 上一步(關掉不會取消已經送出去的;全站控制項 F04) */}
+          <button type="button" className="btn" onClick={onClose} disabled={bulkCreate.isPending || preview.isPending}>
             {step === 4 ? "完成" : "取消"}
           </button>
           {step > 1 && step < 4 && (
             <button
               type="button"
               className="btn"
+              disabled={bulkCreate.isPending || preview.isPending}
               onClick={() => setStep(step - 1)}
             >
               上一步
