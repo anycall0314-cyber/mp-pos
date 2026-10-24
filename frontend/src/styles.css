@@ -5905,6 +5905,10 @@ input.rp-inline-money.failed {
   color: #1f2937;
 }
 
+/* 商品表單:類別帶出來的商品性質與庫存記法,主畫面上看得到(「更多」收著也一樣;全站檢視 D3 紅隊) */
+.pf-mode { font-size: var(--font-secondary); color: var(--text-dim); margin: -4px 0 4px; }
+.pf-cat { min-width: 0; }
+
 /* 剛存好的那一筆(代收話費、雜支連續記;components/SavedStrip) */
 .saved-strip {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;

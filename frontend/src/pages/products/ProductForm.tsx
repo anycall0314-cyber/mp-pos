@@ -58,6 +58,8 @@ import {
 import { useCurrentUser } from "@/auth/AuthContext";
 import {
   defaultRequiresSerial,
+  natureLabel,
+  natureOfCategoryKind,
   phoneNeedsWizard as needsWizard,
   serialMemoryFromDraft,
   stockModeLabel,
@@ -105,6 +107,9 @@ interface ProductFormProps {
     barcode?: string;
     /** 整頁「再建一個」:沿用上一筆的類別 */
     category?: { id: number; label: string; secondary?: string };
+    /** 整頁「再建一個」:沿用上一筆的商品性質與廠牌(紅隊:一天建幾十個配件,類別、廠牌要留) */
+    accessory_type?: AccessoryType;
+    brand?: number | "";
   } | null;
   /** 「可能已經建過」的候選點了看照片與規格(面板由頁面放,要疊在這張表單上面) */
   onPeek?: (t: PeekTarget) => void;
@@ -172,6 +177,8 @@ interface FormState {
   photo_draft: PhotoStored | null;
   /** 人自己改過「需追蹤序號」(之後換商品性質不再替他改)。表單自己記的,跟著草稿走、不送出去 */
   serial_touched: boolean;
+  /** 人自己在「更多」選過商品性質(之後換類別不再替他改;全站檢視 D3)。同上:跟著草稿走、不送出去(複審 P1) */
+  nature_touched: boolean;
   /** 勾「虛擬商品 / 中古機」之前「需追蹤序號」是什麼(取消時要回得去)。同上 */
   serial_before_pin: boolean | null;
   /**
@@ -220,11 +227,28 @@ const EMPTY: FormState = {
   staff_cost_value: "",
   photo_draft: null,
   serial_touched: false,
+  nature_touched: false,
   serial_before_pin: null,
   phone_here: false,
   fits_auto: [],
   fits_removed: [],
 };
+
+/** 收在「更多」裡的欄位(伺服器退回這幾格的錯誤時把「更多」打開) */
+const MORE_FIELDS = new Set([
+  "warehouse_type",
+  "accessory_type",
+  "spec",
+  "staff_cost_mode",
+  "staff_cost_value",
+  "lifecycle_status",
+  "telecom_carrier",
+  "requires_serial",
+  "is_secondhand",
+  "allows_telecom_line",
+  "allows_commission",
+  "is_active",
+]);
 
 function withPrefill(
   base: FormState,
@@ -232,11 +256,13 @@ function withPrefill(
   given: ProductFormProps["prefill"],
 ): FormState {
   if (initial || !given) return base;
+  const withKind = given.accessory_type ? withNature(base, given.accessory_type, false) : base;
   return {
-    ...base,
+    ...withKind,
     ...(given.name ? { name: given.name } : {}),
     ...(given.barcode ? { barcode: given.barcode } : {}),
     ...(given.category ? { category: given.category.id } : {}),
+    ...(given.brand ? { brand: given.brand } : {}),
   };
 }
 
@@ -277,6 +303,7 @@ function toState(p: Product | null | undefined): FormState {
     staff_cost_value: valueInput(p.staff_cost_mode, p.staff_cost_value),
     photo_draft: null,
     serial_touched: false,
+    nature_touched: false,
     serial_before_pin: null,
     phone_here: false,
     fits_auto: [],
@@ -344,6 +371,10 @@ export function ProductForm({
   });
   /** 按了「建立並選用」但沒填名稱:那一格標紅 */
   const [newCategoryMissing, setNewCategoryMissing] = useState(false);
+  /** 「更多」打開沒(少用的欄位;存檔被擋在裡面的格子時自己打開) */
+  const [moreOpen, setMoreOpen] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const [closePromptOpen, setClosePromptOpen] = useState(false);
   const baselineRef = useRef<FormState>(withPrefill(toState(initial), initial, prefill));
 
@@ -459,10 +490,24 @@ export function ProductForm({
       setShowNewCategory(false);
       setNewCategory({ name: "", sort_order: "", kind: "" });
       setNewCategoryMissing(false);
+      setMoreOpen(false);
       setClosePromptOpen(false);
       genTouchedRef.current = !!initial?.generation;
+      // 新增:游標停在第一個沒填的必填格(品名;先找那一步帶了品名就到類別)。編輯不搶游標(全站檢視 D3)
+      if (!initial) {
+        const t = window.setTimeout(() => {
+          if (!base.name.trim()) nameRef.current?.focus();
+          else if (!base.category) formRef.current?.querySelector<HTMLInputElement>(".pf-cat input")?.focus();
+        }, 60);
+        return () => window.clearTimeout(t);
+      }
     }
   }, [open, initial]);
+
+  // 存檔被擋在「更多」裡的格子:自己打開,不然人看不到哪裡錯
+  useEffect(() => {
+    if (Object.keys(fieldErrors).some((k) => MORE_FIELDS.has(k))) setMoreOpen(true);
+  }, [fieldErrors]);
 
   // 主機:品名變動時,若使用者未手動改 generation,自動從品名末碼擷取數字。
   // 主機欄位還沒打開(新增時還沒按「留在這裡建立」)就不填:那時候人看不到這一格,不能在背後替他寫東西
@@ -554,6 +599,23 @@ export function ProductForm({
     }));
   }
 
+  /** 人在「更多」裡按商品性質 */
+  function changeNatureByHand(next: AccessoryType) {
+    changeNature(next);
+    patch("nature_touched", true);
+  }
+
+  /**
+   * 選了類別:商品性質照類別主檔的種類帶(全站檢視 D3;規則 `natureOfCategoryKind`)。
+   * 人自己選過商品性質、零件倉、或編輯時這個商品已經用過(庫存屬性鎖住)就不動。編輯時只有人換了類別才會走到這裡。
+   */
+  function followCategory(kind: string | null | undefined) {
+    const next = natureOfCategoryKind(kind);
+    if (!next || state.nature_touched || state.warehouse_type !== "product") return;
+    if (isEdit && flagsLocked) return;
+    if (next !== state.accessory_type) changeNature(next);
+  }
+
   /** 換倉別(商品倉 / 零件倉):零件一律按數量 */
   function changeWarehouse(next: WarehouseType) {
     setState((s) => withWarehouse(s, next, isEdit));
@@ -595,6 +657,7 @@ export function ProductForm({
       const c = await saveCategory.mutateAsync(payload);
       patch("category", c.id);
       setCategoryOption({ id: c.id, label: c.name, secondary: "" });
+      followCategory(newCategory.kind);
       setShowNewCategory(false);
       setNewCategory({ name: "", sort_order: "", kind: "" });
     } catch (e) {
@@ -930,34 +993,10 @@ export function ProductForm({
           </div>
         </div>
       )}
-      <form onSubmit={submit} className="pf-compact">
-        <Field
-          label="倉別"
-          required
-          hint="商品倉=銷貨用,零件倉=維修用(隱藏建議售價;可選擇對外調貨同行)"
-        >
-          <div className="pf-tabs">
-            <button
-              type="button"
-              className={`pf-tab${state.warehouse_type === "product" ? " active" : ""}`}
-              onClick={() => changeWarehouse("product")}
-            >
-              商品倉
-              <span className="pf-tab-sub">銷貨用</span>
-            </button>
-            <button
-              type="button"
-              className={`pf-tab${state.warehouse_type === "parts" ? " active" : ""}`}
-              onClick={() => changeWarehouse("parts")}
-            >
-              零件倉
-              <span className="pf-tab-sub">維修用</span>
-            </button>
-          </div>
-        </Field>
-
+      <form ref={formRef} onSubmit={submit} className="pf-compact">
         <Field label="品名" required error={fieldErrors.name}>
           <input
+            ref={nameRef}
             value={state.name}
             onChange={(e) => patch("name", e.target.value)}
           />
@@ -1005,42 +1044,83 @@ export function ProductForm({
           </>
         )}
 
-        {state.warehouse_type === "product" && (
-        <>
-        <Field
-          label="商品性質"
-          required
-          error={fieldErrors.accessory_type}
-          hint={`庫存:${stockModeLabel(state.requires_serial)}`}
-        >
-          <div className="pf-tabs">
+        <Field label="類別" required error={fieldErrors.category}>
+          <div style={{ display: "flex", gap: 6 }}>
+            <div className="pf-cat" style={{ flex: 1 }}>
+              <ComboBox<Category>
+                value={state.category}
+                selectedOption={categoryOption}
+                onChange={(id, opt) => {
+                  patch("category", id);
+                  setCategoryOption(opt ?? null);
+                  followCategory(opt?.payload?.kind);
+                }}
+                fetchOptions={searchCategories}
+                placeholder="搜尋類別"
+              />
+            </div>
             <button
               type="button"
-              className={`pf-tab${state.accessory_type === "none" ? " active" : ""}`}
-              onClick={() => changeNature("none")}
+              className="btn"
+              onClick={() => setShowNewCategory((v) => !v)}
             >
-              主機
-              <span className="pf-tab-sub">手機 / 平板本體</span>
-            </button>
-            <button
-              type="button"
-              className={`pf-tab${state.accessory_type === "phone_specific" ? " active" : ""}`}
-              onClick={() => changeNature("phone_specific")}
-            >
-              機型配件
-              <span className="pf-tab-sub">手機殼 / 保護貼</span>
-            </button>
-            <button
-              type="button"
-              className={`pf-tab${state.accessory_type === "universal" ? " active" : ""}`}
-              onClick={() => changeNature("universal")}
-            >
-              通用配件
-              <span className="pf-tab-sub">充電線 / 耳機</span>
+              {showNewCategory ? "取消" : "新類別"}
             </button>
           </div>
         </Field>
 
+        {showNewCategory && (
+          <div className="fieldset">
+            <legend>新增類別</legend>
+            <div className="field-row">
+              <Field label="類別名稱" required error={newCategoryMissing ? "要填類別名稱" : undefined}>
+                <input
+                  value={newCategory.name}
+                  autoFocus
+                  onChange={(e) => {
+                    setNewCategory((s) => ({ ...s, name: e.target.value }));
+                    setNewCategoryMissing(false);
+                  }}
+                />
+              </Field>
+              <Field label="排序(留空自動)">
+                <input
+                  type="number"
+                  step="1"
+                  value={newCategory.sort_order}
+                  onChange={(e) =>
+                    setNewCategory((s) => ({
+                      ...s,
+                      sort_order: e.target.value,
+                    }))
+                  }
+                  placeholder="自動"
+                />
+              </Field>
+              <Field label="類型" required>
+                <KindPicker value={newCategory.kind} onChange={(kind) => setNewCategory((s) => ({ ...s, kind }))} />
+              </Field>
+            </div>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={handleCreateCategory}
+              disabled={saveCategory.isPending}
+            >
+              建立並選用
+            </button>
+          </div>
+        )}
+
+        {state.warehouse_type === "product" && (
+          <div className="pf-mode">
+            {natureLabel(state.accessory_type)} · 庫存{stockModeLabel(state.requires_serial)}
+            {state.is_secondhand ? " · 中古機" : ""}
+          </div>
+        )}
+
+        {state.warehouse_type === "product" && (
+        <>
         {phoneNeedsWizard && (
           <div className="pf-guide">
             <span>手機 / 平板</span>
@@ -1312,73 +1392,6 @@ export function ProductForm({
         </>
         )}
 
-        <Field label="類別" required error={fieldErrors.category}>
-          <div style={{ display: "flex", gap: 6 }}>
-            <div style={{ flex: 1 }}>
-              <ComboBox<Category>
-                value={state.category}
-                selectedOption={categoryOption}
-                onChange={(id, opt) => {
-                  patch("category", id);
-                  setCategoryOption(opt ?? null);
-                }}
-                fetchOptions={searchCategories}
-                placeholder="搜尋類別"
-              />
-            </div>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setShowNewCategory((v) => !v)}
-            >
-              {showNewCategory ? "取消" : "+ 新類別"}
-            </button>
-          </div>
-        </Field>
-
-        {showNewCategory && (
-          <div className="fieldset">
-            <legend>新增類別</legend>
-            <div className="field-row">
-              <Field label="類別名稱" required error={newCategoryMissing ? "要填類別名稱" : undefined}>
-                <input
-                  value={newCategory.name}
-                  autoFocus
-                  onChange={(e) => {
-                    setNewCategory((s) => ({ ...s, name: e.target.value }));
-                    setNewCategoryMissing(false);
-                  }}
-                />
-              </Field>
-              <Field label="排序(留空自動)">
-                <input
-                  type="number"
-                  step="1"
-                  value={newCategory.sort_order}
-                  onChange={(e) =>
-                    setNewCategory((s) => ({
-                      ...s,
-                      sort_order: e.target.value,
-                    }))
-                  }
-                  placeholder="自動"
-                />
-              </Field>
-              <Field label="類型" required>
-                <KindPicker value={newCategory.kind} onChange={(kind) => setNewCategory((s) => ({ ...s, kind }))} />
-              </Field>
-            </div>
-            <button
-              type="button"
-              className="btn primary"
-              onClick={handleCreateCategory}
-              disabled={saveCategory.isPending}
-            >
-              建立並選用
-            </button>
-          </div>
-        )}
-
         {state.accessory_type !== "none" && state.category && (
           <MakerField
             category={(allCategories.data ?? []).find((c) => c.id === state.category) ?? null}
@@ -1449,13 +1462,6 @@ export function ProductForm({
           </Field>
         )}
 
-        <Field label="規格" error={fieldErrors.spec}>
-          <input
-            value={state.spec}
-            onChange={(e) => patch("spec", e.target.value)}
-          />
-        </Field>
-
         <div className="field-row">
           <Field label="條碼" error={fieldErrors.barcode}>
             <input
@@ -1472,6 +1478,88 @@ export function ProductForm({
             </Field>
           )}
         </div>
+
+        <PhotoSection
+          photos={photos}
+          productName={state.name}
+          sku={initial?.sku}
+          disabled={busy || saveProduct.isPending}
+        />
+
+        {/* 少用的收在「更多」(全站檢視 D3:以前建一個配件畫面上 11 格加 5 個勾);每一格都有預設,存檔被擋在這裡面會自己打開 */}
+        <details
+          className="pf-details"
+          open={moreOpen}
+          onToggle={(e) => setMoreOpen((e.currentTarget as HTMLDetailsElement).open)}
+        >
+          <summary>更多</summary>
+          <div className="pf-details-body">
+        <Field
+          label="倉別"
+          required
+          hint="商品倉=銷貨用,零件倉=維修用(隱藏建議售價;可選擇對外調貨同行)"
+        >
+          <div className="pf-tabs">
+            <button
+              type="button"
+              className={`pf-tab${state.warehouse_type === "product" ? " active" : ""}`}
+              onClick={() => changeWarehouse("product")}
+            >
+              商品倉
+              <span className="pf-tab-sub">銷貨用</span>
+            </button>
+            <button
+              type="button"
+              className={`pf-tab${state.warehouse_type === "parts" ? " active" : ""}`}
+              onClick={() => changeWarehouse("parts")}
+            >
+              零件倉
+              <span className="pf-tab-sub">維修用</span>
+            </button>
+          </div>
+        </Field>
+
+        {state.warehouse_type === "product" && (
+        <Field
+          label="商品性質"
+          required
+          error={fieldErrors.accessory_type}
+        >
+          <div className="pf-tabs">
+            <button
+              type="button"
+              className={`pf-tab${state.accessory_type === "none" ? " active" : ""}`}
+              onClick={() => changeNatureByHand("none")}
+            >
+              主機
+              <span className="pf-tab-sub">手機 / 平板本體</span>
+            </button>
+            <button
+              type="button"
+              className={`pf-tab${state.accessory_type === "phone_specific" ? " active" : ""}`}
+              onClick={() => changeNatureByHand("phone_specific")}
+            >
+              機型配件
+              <span className="pf-tab-sub">手機殼 / 保護貼</span>
+            </button>
+            <button
+              type="button"
+              className={`pf-tab${state.accessory_type === "universal" ? " active" : ""}`}
+              onClick={() => changeNatureByHand("universal")}
+            >
+              通用配件
+              <span className="pf-tab-sub">充電線 / 耳機</span>
+            </button>
+          </div>
+        </Field>
+        )}
+
+        <Field label="規格" error={fieldErrors.spec}>
+          <input
+            value={state.spec}
+            onChange={(e) => patch("spec", e.target.value)}
+          />
+        </Field>
 
         {canSetStaff && staffCostApplies(state) && (
           <div className="field-row">
@@ -1502,13 +1590,6 @@ export function ProductForm({
           </div>
         )}
 
-        <PhotoSection
-          photos={photos}
-          productName={state.name}
-          sku={initial?.sku}
-          disabled={busy || saveProduct.isPending}
-        />
-
         <Field
           label="販售狀態"
           error={fieldErrors.lifecycle_status}
@@ -1527,9 +1608,6 @@ export function ProductForm({
           </select>
         </Field>
 
-        <details className="pf-details" open>
-          <summary>屬性</summary>
-          <div className="pf-details-body">
             {flagsLocked && (
               <div className="pf-lock-note">
                 已經用過({usage.data?.reasons.join("、")}):需追蹤序號、中古機、虛擬商品不能改。

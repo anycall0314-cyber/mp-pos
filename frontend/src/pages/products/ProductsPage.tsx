@@ -1,4 +1,5 @@
 import { useCan } from "@/auth/AuthContext";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -22,6 +23,7 @@ import { cutNote } from "@/lib/listAll";
 import { isProductCode } from "@/lib/deviceCodes";
 import { money } from "@/lib/money";
 import { newProductUrl } from "@/lib/productFormUrl";
+import { isProductSavedMessage, openInNewTab } from "@/lib/productTabs";
 import { purchaseLinkFor } from "@/lib/purchasePrefill";
 import { canSetStaffCost, ruleText, staffCostApplies } from "@/lib/staffCost";
 
@@ -104,6 +106,7 @@ const BATCH_TOOLS: { key: BatchTool; label: string; title: string }[] = [
 
 export function ProductsPage() {
   const nav = useNavigate();
+  const queryClient = useQueryClient();
   // ─── 商品搜尋
   // 預設顯示「近期新增 10 筆」(按建立時間倒序);有搜尋字才用搜尋
   const [productQuery, setProductQuery] = useState("");
@@ -284,8 +287,13 @@ export function ProductsPage() {
     alsoRefresh: [["products"]],
   });
 
+  /** 新增手機型號:跟新增商品一樣另開分頁;瀏覽器擋住就在這一頁換頁(全站檢視 D4) */
+  function openPhoneWizard() {
+    if (!openInNewTab("/products/new-phone-model")) nav("/products/new-phone-model");
+  }
+
   function openBatchTool(key: BatchTool) {
-    if (key === "phone") nav("/products/new-phone-model");
+    if (key === "phone") openPhoneWizard();
     else if (key === "accessory") setAccessoryExpanderOpen(true);
     else if (key === "parts") setBulkPartsOpen(true);
     else setImportOpen(true);
@@ -299,6 +307,18 @@ export function ProductsPage() {
     setDetailTab("basic");
     setSelection({ kind: "product", id: p.id });
   }
+
+  // 另開的分頁(新增商品、新增手機型號)存好了:清單重抓、選到那一筆(全站檢視 D4;只認同一個網站送來的)
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.origin !== window.location.origin || !isProductSavedMessage(e.data)) return;
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+      if (e.data.id !== null) api<Product>(`/products/${e.data.id}/`).then(showProduct).catch(() => undefined);
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 整頁新增 / 編輯存好回來帶著 `?selected=商品編號`(SPEC-005):選到那一筆,網址清掉(重新整理不會一直跳回去)
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1081,7 +1101,7 @@ export function ProductsPage() {
         onCreate={(kind, prefill) => {
           setFindOpen(false);
           if (kind === "phone") {
-            nav("/products/new-phone-model");
+            openPhoneWizard();
             return;
           }
           // 另開一個分頁建(SPEC-005):這一頁照樣能查庫存、看別的商品

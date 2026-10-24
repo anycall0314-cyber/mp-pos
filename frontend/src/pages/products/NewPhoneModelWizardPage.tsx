@@ -28,6 +28,7 @@ import { hasRealReason } from "./DuplicatePanel";
 import { defaultConditionIds } from "@/lib/productDefaults";
 import { purchaseLinkFor } from "@/lib/purchasePrefill";
 import { errorText } from "@/lib/errorText";
+import { backToOpener, tellOpener } from "@/lib/productTabs";
 
 /**
  * 「新增手機型號」3 步 wizard。
@@ -399,6 +400,7 @@ export function NewPhoneModelWizardPage() {
     try {
       const res = await create.mutateAsync(body);
       setCreated(res);
+      tellOpener(null);       // 原本那一頁(商品管理)的清單同時更新
     } catch (e) {
       setError(errorText(e));
     }
@@ -424,7 +426,9 @@ export function NewPhoneModelWizardPage() {
           <button
             type="button"
             className="btn"
-            onClick={() => nav("/products")}
+            onClick={() => {
+              if (!backToOpener(null)) nav("/products");
+            }}
           >
             返回商品列表
           </button>
@@ -1082,7 +1086,9 @@ export function NewPhoneModelWizardPage() {
                   >
                     再建機型
                   </button>
-                  <button type="button" className="btn" onClick={() => nav("/products")}>
+                  <button type="button" className="btn" onClick={() => {
+              if (!backToOpener(null)) nav("/products");
+            }}>
                     商品列表
                   </button>
                   {/* 建好品號的下一步多半是進貨:帶著這次建的品項去進貨開單頁。

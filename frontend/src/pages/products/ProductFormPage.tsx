@@ -7,6 +7,7 @@ import { Toolbar } from "@/components/Toolbar";
 import { usePhotoPeek } from "@/components/photos/PhotoName";
 import { toast } from "@/components/workbench/toast";
 import { prefillFromParams } from "@/lib/productFormUrl";
+import { backToOpener, tellOpener } from "@/lib/productTabs";
 import { purchaseLinkFor } from "@/lib/purchasePrefill";
 import { ProductForm } from "./ProductForm";
 
@@ -30,7 +31,12 @@ export function ProductFormPage() {
   const [saved, setSaved] = useState<Product | null>(null);
   // 「再建一個」:表單重新開一次(沿用上一筆的類別)
   const [round, setRound] = useState(0);
-  const [nextCategory, setNextCategory] = useState<{ id: number; label: string; secondary?: string } | null>(null);
+  // 「再建一個」沿用上一筆的類別、商品性質、廠牌(紅隊:一天建幾十個配件,這幾格要留;品名、條碼、售價、相容機型清掉)
+  const [nextCategory, setNextCategory] = useState<{
+    category: { id: number; label: string; secondary?: string };
+    accessory_type: Product["accessory_type"];
+    brand: number | "";
+  } | null>(null);
   const prefill = useMemo(
     () =>
       editId
@@ -38,7 +44,11 @@ export function ProductFormPage() {
         : round === 0
           ? prefillFromParams(params)
           : nextCategory
-            ? { category: nextCategory }
+            ? {
+                category: nextCategory.category,
+                accessory_type: nextCategory.accessory_type ?? undefined,
+                brand: nextCategory.brand,
+              }
             : null,
     [editId, round, params, nextCategory],
   );
@@ -94,7 +104,13 @@ export function ProductFormPage() {
                 className="btn primary"
                 onClick={() => {
                   setNextCategory(
-                    saved.category ? { id: saved.category, label: saved.category_name, secondary: "" } : null,
+                    saved.category
+                      ? {
+                          category: { id: saved.category, label: saved.category_name, secondary: "" },
+                          accessory_type: saved.accessory_type,
+                          brand: saved.brand ?? "",
+                        }
+                      : null,
                   );
                   setSaved(null);
                   setRound((r) => r + 1);
@@ -107,7 +123,13 @@ export function ProductFormPage() {
                   去開進貨
                 </button>
               )}
-              <button type="button" className="btn" onClick={() => backToList(saved.id)}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  if (!backToOpener(saved.id)) backToList(saved.id);
+                }}
+              >
                 回商品頁
               </button>
             </div>
@@ -134,6 +156,8 @@ export function ProductFormPage() {
             backToList(p.id);
             return;
           }
+          // 原本那一頁(商品管理)的清單同時更新、選到這一筆;這一頁留著「再建一個 / 去開進貨 / 回商品頁」
+          tellOpener(p.id);
           setSaved(p);
         }}
         onUseExisting={(existing, note) => {

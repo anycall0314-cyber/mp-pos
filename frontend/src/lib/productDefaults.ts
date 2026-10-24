@@ -201,6 +201,22 @@ export function phoneNeedsWizard(s: {
   return !s.isEdit && s.warehouse === "product" && s.nature === "none" && !s.stayHere;
 }
 
+/**
+ * 類別的種類 → 商品性質(全站檢視 D3:選了類別不用再選一次商品性質)。
+ * 照類別主檔上的種類(主機 / 配件 / 一般),不看類別名稱;沒有種類的不帶。
+ */
+export function natureOfCategoryKind(kind: string | null | undefined): ProductNature | null {
+  if (kind === "device") return "none";
+  if (kind === "accessory") return "phone_specific";
+  if (kind === "general") return "universal";
+  return null;
+}
+
+/** 商品性質講給人看的名字 */
+export function natureLabel(nature: ProductNature): string {
+  return nature === "none" ? "主機" : nature === "phone_specific" ? "機型配件" : "通用配件";
+}
+
 /** 庫存怎麼記,講給人看的那一句(跟「需追蹤序號」那一格同一件事) */
 export function stockModeLabel(requiresSerial: boolean): string {
   return requiresSerial ? "逐件記序號" : "按數量";

@@ -14,6 +14,8 @@ import {
   withPin,
   withSerialByHand,
   withWarehouse,
+  natureOfCategoryKind,
+  natureLabel,
 } from "./productDefaults.ts";
 
 /** 一張剛打開的新增表單(預設是商品倉的機型配件、按數量) */
@@ -235,4 +237,13 @@ test("停用的「全新」不選;沒有全新就都不勾", () => {
   assert.deepEqual(defaultConditionIds([cond(1, { is_active: false }), cond(5)]), [5]);
   assert.deepEqual(defaultConditionIds([cond(2, { tracks_unit_condition: true }), cond(3, { is_secondhand: true })]), []);
   assert.deepEqual(defaultConditionIds([]), []);
+});
+
+test("類別的種類帶商品性質(主機 → 主機、配件 → 機型配件、一般 → 通用配件);沒有種類不帶", () => {
+  assert.equal(natureOfCategoryKind("device"), "none");
+  assert.equal(natureOfCategoryKind("accessory"), "phone_specific");
+  assert.equal(natureOfCategoryKind("general"), "universal");
+  assert.equal(natureOfCategoryKind(""), null);
+  assert.equal(natureOfCategoryKind(undefined), null);
+  assert.deepEqual(["none", "phone_specific", "universal"].map(natureLabel), ["主機", "機型配件", "通用配件"]);
 });
