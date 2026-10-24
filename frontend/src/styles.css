@@ -6292,6 +6292,12 @@ input.rp-inline-money.failed {
   flex-wrap: wrap;
 }
 .intake-batchmeta { color: var(--text-dim); font-size: var(--font-secondary); }
+/* 進貨匯入(全站檢視 V06e):門市標粗(貨進錯店是這頁最會出的錯);明細合計跟單據總額並排,差的標出來 */
+.intake-batchmeta b { color: var(--text); }
+.intake-batchmeta { flex: 1 1 120px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.intake-batchbar > select { max-width: 220px; }
+.intake-sum { font-size: var(--font-secondary); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.intake-gap { margin-left: 8px; color: var(--warn-text); font-weight: 600; }
 
 .intake-commit-ok {
   display: flex;
@@ -6433,7 +6439,8 @@ tr.selected .intake-badge { filter: none; }
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 10px 0;
+  margin: 6px 0;
+  padding: 0 16px;
   flex-wrap: wrap;
 }
 .intake-doc-thumb {
@@ -6443,7 +6450,7 @@ tr.selected .intake-badge { filter: none; }
   overflow: hidden;
   line-height: 0;
 }
-.intake-doc-thumb img { height: 96px; width: auto; display: block; object-fit: cover; }
+.intake-doc-thumb img { height: 48px; width: auto; display: block; object-fit: cover; } /* 縮小但留在畫面上(紅隊:收成一行字就不會對著看) */
 .intake-ocrconf { margin: 8px 0; font-size: var(--font-secondary); color: var(--text-dim); }
 .intake-ocrconf.low { color: #ff8080; }
 

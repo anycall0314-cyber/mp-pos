@@ -40,7 +40,8 @@ import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
 import { Toolbar } from "@/components/Toolbar";
 import { MoneyInput } from "@/components/MoneyInput";
-import { intStr } from "@/lib/money";
+import { intStr, money } from "@/lib/money";
+import { linesTotal, totalGap } from "@/lib/intakeTotal";
 import { errorText } from "@/lib/errorText";
 
 const STATUS_META: Record<IntakeMatchStatus, { label: string; cls: string }> = {
@@ -105,6 +106,11 @@ export function IntakePage() {
   const [warehouseId, setWarehouseId] = useState<number | "">("");
   const [vendorDocNo, setVendorDocNo] = useState("");
   const [formError, setFormError] = useState("");
+  // 選到批次就把建立區收起來,只留「新增批次」(全站檢視 V06e;紅隊:辨識失敗不收、批次那一排看得到門市 / 廠商 / 單號)
+  const [creating, setCreating] = useState(false);
+  const showCreate = !batch || creating;
+  const lines = linesTotal(batch?.items ?? []);
+  const gap = totalGap(batch?.document_total ?? null, lines);
 
   const warehouses = useWarehouses();
   const createIntake = useCreateIntake();
@@ -133,6 +139,7 @@ export function IntakePage() {
       });
       setSelectedBatchId(b.id);
       setSelectedItemId(b.items[0]?.id ?? null);
+      setCreating(false);
       setRawText("");
       setVendorDocNo("");
       setCommitMsg(null);
@@ -152,6 +159,7 @@ export function IntakePage() {
       });
       setSelectedBatchId(b.id);
       setSelectedItemId(b.items[0]?.id ?? null);
+      setCreating(false);
       setCommitMsg(null);
       setCommitErr("");
     } catch (e) {
@@ -177,82 +185,84 @@ export function IntakePage() {
     <div className="page">
       <Toolbar title="進貨匯入" />
 
-      <div className="intake-create">
-        {formError && <Banner kind="error" message={formError} />}
-        <textarea
-          className="intake-textarea"
-          value={rawText}
-          onChange={(e) => setRawText(e.target.value)}
-          placeholder={
-            "貼上進貨單內容,一行一項,例:\niPhone 15 Pro 256 黑 x2 @35000 序號=356..1,356..2\n保護貼 x10 @50"
-          }
-          rows={4}
-        />
-        <div className="intake-create-row">
-          <div className="intake-create-field">
-            <span className="intake-label">廠商(選填)</span>
-            <ComboBox
-              value={supplierId}
-              onChange={(id) => setSupplierId(id)}
-              fetchOptions={searchSuppliers}
-              placeholder="選廠商"
-            />
-          </div>
-          <div className="intake-create-field">
-            <span className="intake-label">門市(選填)</span>
-            <select
-              value={warehouseId}
-              onChange={(e) =>
-                setWarehouseId(e.target.value ? Number(e.target.value) : "")
-              }
-            >
-              <option value="">未指定</option>
-              {(warehouses.data ?? []).map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="intake-create-field">
-            <span className="intake-label">廠商單號(選填)</span>
-            <input
-              value={vendorDocNo}
-              onChange={(e) => setVendorDocNo(e.target.value)}
-              placeholder="防重複匯入"
-            />
-          </div>
-          <button
-            className="btn primary"
-            onClick={submitIntake}
-            disabled={createIntake.isPending}
-          >
-            送出識別
-          </button>
-          <button
-            className="btn"
-            onClick={() => fileRef.current?.click()}
-            disabled={createIntakeOcr.isPending}
-            title="拍照 / 選一張進貨單照片,自動讀成明細"
-          >
-            {createIntakeOcr.isPending ? "讀圖中…" : "上傳照片"}
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*,application/pdf"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void uploadPhoto(f);
-              e.target.value = "";
-            }}
+      {showCreate && (
+        <div className="intake-create">
+          {formError && <Banner kind="error" message={formError} />}
+          <textarea
+            className="intake-textarea"
+            value={rawText}
+            onChange={(e) => setRawText(e.target.value)}
+            placeholder={
+              "貼上進貨單內容,一行一項,例:\niPhone 15 Pro 256 黑 x2 @35000 序號=356..1,356..2\n保護貼 x10 @50"
+            }
+            rows={4}
           />
+          <div className="intake-create-row">
+            <div className="intake-create-field">
+              <span className="intake-label">廠商(選填)</span>
+              <ComboBox
+                value={supplierId}
+                onChange={(id) => setSupplierId(id)}
+                fetchOptions={searchSuppliers}
+                placeholder="選廠商"
+              />
+            </div>
+            <div className="intake-create-field">
+              <span className="intake-label">門市(選填)</span>
+              <select
+                value={warehouseId}
+                onChange={(e) =>
+                  setWarehouseId(e.target.value ? Number(e.target.value) : "")
+                }
+              >
+                <option value="">未指定</option>
+                {(warehouses.data ?? []).map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="intake-create-field">
+              <span className="intake-label">廠商單號(選填)</span>
+              <input
+                value={vendorDocNo}
+                onChange={(e) => setVendorDocNo(e.target.value)}
+                placeholder="防重複匯入"
+              />
+            </div>
+            <button
+              className="btn primary"
+              onClick={submitIntake}
+              disabled={createIntake.isPending}
+            >
+              送出識別
+            </button>
+            <button
+              className="btn"
+              onClick={() => fileRef.current?.click()}
+              disabled={createIntakeOcr.isPending}
+              title="拍照 / 選一張進貨單照片,自動讀成明細"
+            >
+              {createIntakeOcr.isPending ? "讀圖中…" : "上傳照片"}
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*,application/pdf"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void uploadPhoto(f);
+                e.target.value = "";
+              }}
+            />
+          </div>
+          <div className="intake-hint">
+            貼文字或上傳照片都可;上傳的進貨單會存原圖、自動讀成明細後進待確認區(廠商 / 倉沿用上方選擇)。
+          </div>
         </div>
-        <div className="intake-hint">
-          貼文字或上傳照片都可;上傳的進貨單會存原圖、自動讀成明細後進待確認區(廠商 / 倉沿用上方選擇)。
-        </div>
-      </div>
+      )}
 
       <div className="intake-batchbar">
         <span className="intake-label">批次</span>
@@ -261,6 +271,7 @@ export function IntakePage() {
           onChange={(e) => {
             setSelectedBatchId(e.target.value ? Number(e.target.value) : null);
             setSelectedItemId(null);
+            setCreating(false);
             setCommitMsg(null);
             setCommitErr("");
           }}
@@ -274,11 +285,20 @@ export function IntakePage() {
           ))}
         </select>
         {batch && (
+          <button className="btn" type="button" aria-expanded={creating} onClick={() => setCreating(!creating)}>
+            {creating ? "先不新增" : "新增批次"}
+          </button>
+        )}
+        {batch && (
           <>
-            <span className="intake-batchmeta">
-              {batch.supplier_name || "未指定廠商"} /{" "}
-              {batch.warehouse_name || "未指定倉"} ·{" "}
-              {BATCH_STATUS_LABEL[batch.status]}
+            {/* 過帳時要看得到貨進哪一家、哪一家廠商、哪一張單(紅隊:建立區收起來之後門市不能跟著不見) */}
+            {/* 狀態已經寫在批次下拉裡;太長時只截後面(門市在最前面),過帳留在這一排(紅隊:過帳不換位置) */}
+            <span
+              className="intake-batchmeta"
+              title={`門市 ${batch.warehouse_name || "未指定"}　廠商 ${batch.supplier_name || "未指定"}　單號 ${batch.vendor_doc_no || "未填"}`}
+            >
+              <b>門市 {batch.warehouse_name || "未指定"}</b>　廠商 {batch.supplier_name || "未指定"}　單號{" "}
+              {batch.vendor_doc_no || "未填"}
             </span>
             <label className="intake-taxpick">
               稅別
@@ -319,6 +339,11 @@ export function IntakePage() {
                 }}
               />
             </label>
+            {/* 明細合計跟單據總額並排;差超過 1 元標出來(過帳時伺服器照樣擋) */}
+            <span className="intake-sum">
+              明細合計 {money(lines)}
+              {gap !== null && <span className="intake-gap">差 {money(gap)}</span>}
+            </span>
             <button
               className="btn primary"
               onClick={commit}

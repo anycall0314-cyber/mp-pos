@@ -96,3 +96,27 @@ test("V06d 進貨明細:只有類別收到第二排,廠商留在第一排;清除
   assert.match(css, /\.visually-hidden \{\n  position: absolute;/);
   assert.match(read("../pages/inventory/stockReportParts.tsx"), /\{hideLabel \? <span className="visually-hidden">門市<\/span> : "門市"\}/);
 });
+
+test("V06e 進貨匯入:選到批次才收建立區;批次那一排看得到門市 / 廠商 / 單號、過帳不換排;縮圖留著;明細合計跟單據總額並排", async () => {
+  const { linesTotal, totalGap } = await import("./intakeTotal.ts");
+  const items = [
+    { match_status: "resolved", effective_unit_price: "50.00", effective_qty: 2 },
+    { match_status: "needs_review", effective_unit_price: "50", effective_qty: 3 },
+    { match_status: "rejected", effective_unit_price: "999", effective_qty: 1 },
+  ];
+  assert.equal(linesTotal(items), 250, "駁回的不算,還沒確認的先算(跟過帳時伺服器核對的同一個算法)");
+  assert.equal(totalGap("300", 250), 50);
+  assert.equal(totalGap("250.5", 250), null, "差在 1 元以內不標(伺服器的容差)");
+  assert.equal(totalGap(null, 250), null, "沒填單據總額不標");
+  const page = read("../pages/intake/IntakePage.tsx");
+  assert.match(page, /const showCreate = !batch \|\| creating;/, "沒選到批次(含讀不到)照舊展開");
+  assert.match(page, /\{showCreate && \(\n\s+<div className="intake-create">/);
+  // 辨識失敗不收:只有成功才 setCreating(false)
+  const submit = page.slice(page.indexOf("async function submitIntake"), page.indexOf("async function uploadPhoto"));
+  assert.ok(submit.indexOf("setCreating(false)") > submit.indexOf("await createIntake.mutateAsync") && submit.indexOf("setCreating(false)") < submit.indexOf("catch"));
+  assert.match(page, /\{creating \? "先不新增" : "新增批次"\}/);
+  assert.match(page, /<b>門市 \{batch\.warehouse_name \|\| "未指定"\}<\/b>　廠商 \{batch\.supplier_name \|\| "未指定"\}　單號\{" "\}\n\s+\{batch\.vendor_doc_no \|\| "未填"\}/);
+  assert.match(page, /明細合計 \{money\(lines\)\}/);
+  assert.match(css, /\.intake-batchmeta \{ flex: 1 1 120px; min-width: 0; overflow: hidden; text-overflow: ellipsis;/, "太長時截門市後面的字、過帳不被擠到下一排");
+  assert.match(css, /\.intake-doc-thumb img \{ height: 48px;/, "縮小但不收成文字");
+});
