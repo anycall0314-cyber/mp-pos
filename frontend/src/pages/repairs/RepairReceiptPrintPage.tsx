@@ -37,8 +37,8 @@ export function RepairReceiptPrintPage() {
   }
 
   const o = data;
+  // 自修 / 委外不印(owner 2026-10-24:「不需要給客戶知道」);返修與保固照印
   const typeLabels: string[] = [];
-  if (o.mode_label) typeLabels.push(o.mode_label);
   if (o.is_return_visit) {
     if (o.warranty_info?.status === "within") {
       typeLabels.push("返修 · 保固有效");

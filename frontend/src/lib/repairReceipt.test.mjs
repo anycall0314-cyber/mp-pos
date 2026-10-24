@@ -38,3 +38,9 @@ test("一聯放得下:上面排緊(四欄一排、維修內容兩欄)、故障�
   for (const sign of ["客戶簽名", "經手人", "日期"]) assert.ok(page.includes(`<div className="rr-sign-label">${sign}</div>`), sign);
   assert.equal((page.match(/^  "/gm) ?? []).length, 8); // 八條注意事項,文字不動(owner 10-23:條款不用改)
 });
+
+test("自修 / 委外不印在收據上(owner 2026-10-24:不需要給客戶知道);返修照印", () => {
+  assert.ok(!page.includes("mode_label"));
+  assert.ok(!/自修|委外/.test(page.replace(/\/\/.*$/gm, "")));
+  assert.match(page, /typeLabels\.push\("返修 · 保固有效"\)/);
+});
