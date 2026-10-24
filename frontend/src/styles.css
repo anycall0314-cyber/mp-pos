@@ -8382,6 +8382,10 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .pc-gone { margin-top: 30vh; text-align: center; line-height: 1.7; padding-inline: 8px; }
 /* 盤點:手機盤點那一排(稱呼、產生 QR Code、每一支手機)與沒對到的碼 */
 .sc-phone-btn { margin-left: auto; }
+/* 手機配對收起來時:「已配對 N 台」在按鈕左邊;電腦抓不到新資料寫「連線中斷」(全站檢視 V06b) */
+.sc-paired { margin-left: auto; align-self: center; font-weight: 600; }
+.sc-paired + .sc-phone-btn { margin-left: 0; }
+.sc-paired.stale { color: var(--danger-text); }
 .sc-phones { align-items: center; }
 .sc-qr { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
 .sc-phone { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; }

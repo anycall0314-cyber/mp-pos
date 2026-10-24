@@ -98,7 +98,8 @@ export interface CountNew {
 export interface CountPhone {
   id: number;
   label: string;
-  status: "waiting" | "expired" | "connected" | "idle" | "ended";
+  /** lost = 那一頁 30 秒沒回報(關掉了、沒網路);回報了就回到 connected */
+  status: "waiting" | "expired" | "connected" | "lost" | "idle" | "ended";
 }
 
 /** 手機在「配件」模式刷到、系統不認得的碼:要指定配件或寫原因不入,才能送出 */
@@ -369,14 +370,28 @@ export function recordedQty(rows: Pick<CountLine, "product" | "counted_qty">[], 
 }
 
 
-/** 有沒有手機在走動盤點(等掃 / 連著):有的話盤點單要一直重抓,手機刷進來的數量才看得到。 */
+/** 有沒有手機在走動盤點(等掃 / 連著 / 斷線還會回來):有的話盤點單要一直重抓,手機刷進來的數量才看得到。 */
 export function phonesLive(detail: Pick<CountDetail, "phones" | "status"> | undefined): boolean {
-  return !!detail && detail.status === "counting" && (detail.phones ?? []).some((p) => p.status === "waiting" || p.status === "connected");
+  return !!detail && detail.status === "counting" && (detail.phones ?? []).some((p) => p.status === "waiting" || p.status === "connected" || p.status === "lost");
+}
+
+/** 電腦這邊多久沒抓到新的盤點單,就不再相信畫面上的手機狀態(每 4 秒抓一次,漏三次) */
+export const PHONE_STALE_MS = 15000;
+
+/**
+ * 手機配對收起來時那一排寫什麼(全站檢視 V06b,紅隊三種狀態):
+ * 有連著的 → 「已配對 N 台」(N = 現在真的連著的,斷線、閒置、等掃的不算);一台都沒有 → 不寫(按鈕「手機盤點」本身就是沒配對);
+ * 電腦這邊好一陣子沒抓到新資料 → 「連線中斷」(不沿用舊的 N)。
+ */
+export function pairedText(phones: Pick<CountPhone, "status">[] | undefined, stale: boolean): string {
+  if (stale) return "連線中斷";
+  const n = (phones ?? []).filter((p) => p.status === "connected").length;
+  return n > 0 ? `已配對 ${n} 台` : "";
 }
 
 /** 一支手機的狀態寫成字。 */
 export function phoneStatusText(status: CountPhone["status"]): string {
-  return { waiting: "等掃", expired: "過期", connected: "連著", idle: "閒置", ended: "結束" }[status];
+  return { waiting: "等掃", expired: "過期", connected: "連著", lost: "斷線", idle: "閒置", ended: "結束" }[status];
 }
 
 /** 手機掃的網址:憑證放在 # 後面(不會進伺服器的紀錄,也不會被帶到別的網站)。 */

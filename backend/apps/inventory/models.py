@@ -610,6 +610,8 @@ class StockCountPhone(TenantOwnedModel):
     device_hash = models.CharField("手機識別雜湊", max_length=64, blank=True)
     paired_at = models.DateTimeField("手機連上時間", null=True, blank=True)
     device_active_at = models.DateTimeField("手機最後動作時間", null=True, blank=True)
+    # 手機那一頁開著就每 10 秒回報一次(全站檢視 V06b):電腦上「已配對 N 台」只算最近還有回報的,關掉 / 斷線的不算
+    seen_at = models.DateTimeField("手機最後回報時間", null=True, blank=True)
     ended_at = models.DateTimeField("結束時間", null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, related_name="+", null=True, blank=True, verbose_name="發 QR Code 的人")

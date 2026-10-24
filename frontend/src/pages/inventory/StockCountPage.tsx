@@ -39,8 +39,11 @@ import {
   newResult,
   notCountable,
   phoneCountUrl,
+  pairedText,
+  PHONE_STALE_MS,
   phoneStatusText,
   phonesDoneText,
+  phonesLive,
   pickProblem,
   progressText,
   recordedQty,
@@ -77,7 +80,7 @@ function PairQr({ text }: { text: string }) {
  */
 export function StockCountPage() {
   const id = Number(useParams().id);
-  const { data: detail, isLoading, isError, error, refetch } = useStockCount(id);
+  const { data: detail, isLoading, error, refetch, dataUpdatedAt } = useStockCount(id);
   const run = useStockCountDo(id);
   /** 配件那一格選到、還沒記下的商品。另外留一份當下的(`accessoryNow`):掃碼框排隊處理完、送出前要馬上讀,不能等畫面重畫(複審 P1) */
   const [accessory, setAccessoryState] = useState<Product | null>(null);
@@ -94,6 +97,23 @@ export function StockCountPage() {
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [phoneLabel, setPhoneLabel] = useState("");
   const [pair, setPair] = useState<{ id: number; label: string; token: string } | null>(null);
+  // 剛發的 QR Code 被手機掃了 → 收起來,只留「已配對 N 台」(全站檢視 V06b,紅隊:沒配上之前 QR 照開)
+  const pairStatus = pair ? detail?.phones?.find((p) => p.id === pair.id)?.status : undefined;
+  useEffect(() => {
+    if (pairStatus !== "connected") return;
+    setPhoneOpen(false);
+    setPair(null);
+  }, [pairStatus]);
+  // 有手機在盤:每 5 秒看一次上次抓到盤點單是多久以前,抓不到了就不沿用舊的「已配對 N 台」(紅隊)
+  const live = phonesLive(detail);
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (!live) return;
+    const t = window.setInterval(() => setClock(Date.now()), 5000);
+    return () => window.clearInterval(t);
+  }, [live]);
+  const stale = live && clock - dataUpdatedAt > PHONE_STALE_MS;
+  const paired = pairedText(detail?.phones, stale);
   // 沒對到的碼:每一筆要指定的配件、不入的原因
   const [unknownPick, setUnknownPick] = useState<Record<number, ComboOption<Product> | undefined>>({});
   const [unknownReason, setUnknownReason] = useState<Record<number, string>>({});
@@ -145,7 +165,8 @@ export function StockCountPage() {
   }, [accessory, noting]);
 
   if (isLoading) return <div className="page"><div className="md-empty">載入中…</div></div>;
-  if (isError || !detail) return <div className="page"><Banner kind="error" message={errorMessageOf(error)} /></div>;
+  // 重抓失敗(手機在盤時每 4 秒抓一次,斷一下網路就會)不換成整頁錯誤:畫面、打到一半的、沒加入的碼都留著,右上寫「連線中斷」(全站檢視 V06b)
+  if (!detail) return <div className="page"><Banner kind="error" message={errorMessageOf(error)} /></div>;
 
   const counting = detail.status === "counting";
   const submitted = detail.status === "submitted";
@@ -420,6 +441,7 @@ export function StockCountPage() {
             <input type="checkbox" checked={phonesDone} onChange={(e) => setPhonesDone(e.target.checked)} />
             手機全部刷完
           </label>
+          {paired && <span className={stale ? "sc-paired stale" : "sc-paired"}>{paired}</span>}
           <button className="btn sc-phone-btn" type="button" aria-expanded={phoneOpen} onClick={() => setPhoneOpen((v) => !v)}>
             手機盤點
           </button>

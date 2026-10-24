@@ -5,6 +5,7 @@ owner 定的三件:電腦的盤點單按「手機盤點」產生 QR Code、手�
 
 - 一個 QR Code 一支手機:綁第一支掃到的手機(手機自己產生的識別,只存雜湊);要幾支就按幾次。憑證只存雜湊、放在網址 `#` 後面。
   3 分鐘沒人掃失效;手機 30 分鐘沒動作、或連上超過 12 小時就結束;盤點單送出 / 作廢、電腦按「結束」也結束。
+  手機那一頁開著每 10 秒回報一次(`seen_at`);30 秒沒回報,電腦上顯示「斷線」、不算在「已配對 N 台」(全站檢視 V06b)。
 - 憑證只能對**這一張盤點單**刷碼、看自己刷了什麼與那個品項大家合起來數到幾個 —— **看不到帳上數量**(盲盤),不能送出、核准、作廢。
 - 發 QR Code 要寫稱呼(紅隊:出事問得到人);手機刷的每一下記在 `StockCountTap`(稱呼、時間、從幾個變幾個)。
 - 刷到的碼:配件的品號 / 條碼(含已確認的條碼別名)→ 那個配件 +1;機器(序號、舊系統清單上的那一台)→ 記那一台(`stockcount.scan`);
@@ -35,6 +36,7 @@ T = StockCountTap.Kind
 PAIR_TTL = timedelta(minutes=3)        # QR Code 多久沒人掃就失效
 DEVICE_IDLE = timedelta(minutes=30)    # 手機多久沒刷就結束(走動盤點會停下來數一堆)
 DEVICE_MAX = timedelta(hours=12)       # 一次配對最長多久
+DEVICE_LOST = timedelta(seconds=30)    # 手機那一頁每 10 秒回報一次;多久沒回報算斷線(只是顯示,手機回來照樣能刷)
 MAX_ACTIVE = 10                        # 一張盤點單同時最多幾支手機
 MAX_TAPS = 20000                       # 一次配對最多刷幾下(擋拿到憑證一直灌)
 MAX_PILE = 9999                        # 「這一堆幾個」最多
@@ -54,7 +56,7 @@ def _hash(text: str) -> str:
 
 
 def status_of(phone: StockCountPhone, now=None) -> str:
-    """waiting 等手機掃 / expired QR 過期了沒人掃 / connected 手機連著 / idle 太久沒刷 / ended 結束了。"""
+    """waiting 等手機掃 / expired QR 過期了沒人掃 / connected 手機連著 / lost 最近沒回報(關掉了、斷線)/ idle 太久沒刷 / ended 結束了。"""
     now = now or timezone.now()
     if phone.ended_at or phone.count.status != S.COUNTING:
         return "ended"
@@ -64,6 +66,8 @@ def status_of(phone: StockCountPhone, now=None) -> str:
         return "idle"
     if phone.device_active_at and now - phone.device_active_at > DEVICE_IDLE:
         return "idle"
+    if phone.seen_at and now - phone.seen_at > DEVICE_LOST:
+        return "lost"
     return "connected"
 
 
@@ -82,7 +86,7 @@ def start(count, user, label) -> tuple[StockCountPhone, str]:
             stockcount._locked(count, S.COUNTING)
         except stockcount.CountError as exc:
             raise PhoneError(str(exc)) from None
-        live = [p for p in count.phones.filter(ended_at__isnull=True) if status_of(p, now) in ("waiting", "connected")]
+        live = [p for p in count.phones.filter(ended_at__isnull=True) if status_of(p, now) in ("waiting", "connected", "lost")]
         if len(live) >= MAX_ACTIVE:
             raise PhoneError(f"一張盤點單同時最多 {MAX_ACTIVE} 支手機,先結束用不到的")
         phone = StockCountPhone.objects.create(
@@ -116,13 +120,15 @@ def session(token: str, device: str, claim=False) -> StockCountPhone:
                 raise PhoneError("請重新掃描 QR Code", "gone")
             if now > phone.pair_expires_at:
                 raise PhoneError("QR Code 過期了,請在電腦再按一次「手機盤點」", "expired")
-            phone.device_hash, phone.paired_at, phone.device_active_at = _hash(device), now, now
-            phone.save(update_fields=["device_hash", "paired_at", "device_active_at", "updated_at"])
+            phone.device_hash, phone.paired_at, phone.device_active_at, phone.seen_at = _hash(device), now, now, now
+            phone.save(update_fields=["device_hash", "paired_at", "device_active_at", "seen_at", "updated_at"])
             return phone
         if phone.device_hash != _hash(device):
             raise PhoneError("這個 QR Code 已經有另一支手機在用。要換手機,請在電腦再按一次「手機盤點」", "taken")
         if status_of(phone, now) == "idle":
             raise PhoneError("太久沒有刷,已經結束。請在電腦再按一次「手機盤點」", "expired")
+        phone.seen_at = now
+        phone.save(update_fields=["seen_at"])
         return phone
 
 
@@ -133,8 +139,8 @@ def _still(phone_pk: int, device: str) -> StockCountPhone:
         raise PhoneError("這支手機的盤點已經結束。要再盤,請在電腦按「手機盤點」再掃一次", "gone")
     if status_of(phone) == "idle":
         raise PhoneError("太久沒有刷,已經結束。請在電腦再按一次「手機盤點」", "expired")
-    phone.device_active_at = timezone.now()
-    phone.save(update_fields=["device_active_at", "updated_at"])
+    phone.device_active_at = phone.seen_at = timezone.now()
+    phone.save(update_fields=["device_active_at", "seen_at", "updated_at"])
     return phone
 
 

@@ -93,6 +93,27 @@ class PairTests(_Phone):
         with self.assertRaisesMessage(stockcount_phone.PhoneError, "一張盤點單同時最多 10 支手機"):
             stockcount_phone.start(self.count, self.c.clerk_user, "多一個")
 
+    def test_a_phone_that_stops_checking_in_shows_as_lost_and_comes_back_when_it_does(self):
+        """全站檢視 V06b(紅隊):電腦上「已配對 N 台」只算現在真的還連著的。手機那一頁每 10 秒回報一次,
+        30 秒沒回報 = 斷線(關掉了、沒網路);回報了就回來,照樣能刷。斷線的還佔一個名額(回來還能用)。"""
+        phone, token, device = self.pair()
+        status = lambda: stockcount_phone.status_of(StockCountPhone.objects.get(pk=phone.pk))
+        self.assertEqual(status(), "connected")
+        StockCountPhone.objects.filter(pk=phone.pk).update(seen_at=timezone.now() - timedelta(seconds=31))
+        self.assertEqual(status(), "lost")
+        r = self.c.clerk.get(f"{URL}{self.count.id}/")
+        self.assertEqual([(p["label"], p["status"]) for p in r.json()["phones"]], [("小王", "lost")])
+        stockcount_phone.session(token, device)                            # 那一頁回報(看狀態)
+        self.assertEqual(status(), "connected")
+        StockCountPhone.objects.filter(pk=phone.pk).update(seen_at=timezone.now() - timedelta(seconds=31))
+        self.tap(phone, device, CASE_CODE)                                 # 斷線的手機回來直接刷:記得到,也算回來了
+        self.assertEqual((self.line_qty(), status()), (1, "connected"))
+        StockCountPhone.objects.filter(pk=phone.pk).update(seen_at=timezone.now() - timedelta(seconds=31))
+        for i in range(stockcount_phone.MAX_ACTIVE - 1):
+            stockcount_phone.start(self.count, self.c.clerk_user, f"人{i}")
+        with self.assertRaisesMessage(stockcount_phone.PhoneError, "一張盤點單同時最多 10 支手機"):
+            stockcount_phone.start(self.count, self.c.clerk_user, "多一個")
+
 
 class TapTests(_Phone):
     def test_each_scan_of_an_accessory_adds_one_and_phones_add_up(self):
