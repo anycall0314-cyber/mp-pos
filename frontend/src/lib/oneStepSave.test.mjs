@@ -37,3 +37,23 @@ test("雜支存完:付款方式回到現金、經手人回到登入的人(紅隊
   assert.match(src, /payment_method: defaultCash\?\.id \?\? s\.payment_method,/);
   assert.match(src, /handled_by: defaultHandledBy\.id \|\| s\.handled_by,/);
 });
+
+// owner 2026-10-24:「雜支、現金調整改成不能修改、記錯只能作廢再重記」(伺服器也不收修改:cash/test_no_edit.py)
+test("雜支、現金調整:清單沒有「編輯」、表單只能新增、存檔只送新增", () => {
+  const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
+  for (const page of ["../pages/cash/PettyExpensesPage.tsx", "../pages/cash/CashAdjustmentsPage.tsx"]) {
+    const src = read(page);
+    assert.ok(!src.includes("編輯"), page);
+    assert.ok(!src.includes("drawerInitial"), page);
+    assert.match(src, /label="作廢"/, page); // 作廢照舊
+  }
+  for (const form of ["../pages/cash/PettyExpenseForm.tsx", "../pages/cash/CashAdjustmentForm.tsx"]) {
+    const src = read(form);
+    assert.ok(!/initial|isEdit|編輯/.test(src.replace(/initialState/g, "")), form);
+  }
+  const hooks = read("../api/hooks.ts");
+  for (const path of ["petty-expenses", "cash-adjustments"]) {
+    assert.ok(!hooks.includes(`\`/${path}/\${id}/\``), path);
+    assert.ok(hooks.includes(`const url = "/${path}/";`), path);
+  }
+});

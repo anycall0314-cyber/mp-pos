@@ -435,10 +435,10 @@ export const usePettyExpenses = (range: DateRangeFilter) =>
 export function useSavePettyExpense() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: Partial<PettyExpense> & { id?: number }) => {
-      const { id, ...body } = payload;
-      const method = id ? "PATCH" : "POST";
-      const url = id ? `/petty-expenses/${id}/` : "/petty-expenses/";
+    // 只能新增:記錯了作廢再重記,伺服器也不收修改(owner 2026-10-24)
+    mutationFn: (body: Partial<PettyExpense>) => {
+      const method = "POST";
+      const url = "/petty-expenses/";
       return api<PettyExpense>(url, {
         method,
         body: JSON.stringify(body),
@@ -600,10 +600,10 @@ export const useCashAdjustments = (range: DateRangeFilter) =>
 export function useSaveCashAdjustment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: Partial<CashAdjustment> & { id?: number }) => {
-      const { id, ...body } = payload;
-      const method = id ? "PATCH" : "POST";
-      const url = id ? `/cash-adjustments/${id}/` : "/cash-adjustments/";
+    // 只能新增:記錯了作廢再重記,伺服器也不收修改(owner 2026-10-24)
+    mutationFn: (body: Partial<CashAdjustment>) => {
+      const method = "POST";
+      const url = "/cash-adjustments/";
       return api<CashAdjustment>(url, {
         method,
         body: JSON.stringify(body),

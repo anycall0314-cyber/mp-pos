@@ -30,11 +30,8 @@ export function PettyExpensesPage() {
   const voidMutation = useVoidPettyExpense();
   // 員工帳號的權限(作廢其他單):關掉的人沒有這顆(伺服器也會擋)
   const canVoid = useCan("void_others");
-  const canWrite = useCan("cash_ops");                // 新增 / 修改要「雜支調整」
+  const canWrite = useCan("cash_ops");                // 新增要「雜支調整」(不能修改:記錯了作廢再重記,owner 2026-10-24)
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerInitial, setDrawerInitial] = useState<PettyExpense | null>(
-    null,
-  );
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -149,17 +146,6 @@ export function PettyExpensesPage() {
           </dl>
           {!r.is_void && (
             <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-              {canWrite && (
-                <button
-                  className="btn primary"
-                  onClick={() => {
-                    setDrawerInitial(r);
-                    setDrawerOpen(true);
-                  }}
-                >
-                  編輯
-                </button>
-              )}
               {canVoid && (
                 <ArmButton
                   // 換一張單就重來:不能沿用上一張「已按一下」(複審 P1)
@@ -185,10 +171,7 @@ export function PettyExpensesPage() {
           canWrite ? (
             <button
               className="btn primary"
-              onClick={() => {
-                setDrawerInitial(null);
-                setDrawerOpen(true);
-              }}
+              onClick={() => setDrawerOpen(true)}
             >
               新增雜支
             </button>
@@ -256,7 +239,6 @@ export function PettyExpensesPage() {
       )}
       <PettyExpenseForm
         open={drawerOpen}
-        initial={drawerInitial}
         onClose={() => setDrawerOpen(false)}
       />
     </div>

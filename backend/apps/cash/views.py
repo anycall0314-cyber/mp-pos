@@ -24,8 +24,13 @@ from .serializers import (
 )
 
 
+# 雜支、現金調整存好就不能改(owner 2026-10-24);PUT 與 PATCH 都走 update
+NO_EDIT_PETTY = "雜支單不能修改,記錯了請作廢再重記"
+NO_EDIT_ADJUST = "現金調整不能修改,記錯了請作廢再重記"
+
+
 class PettyExpenseViewSet(abilities.WritesNeed, WarehouseScopedMixin, viewsets.ModelViewSet):
-    needs_ability = abilities.CASH_OPS      # 員工帳號的權限:新增 / 修改要有「雜支調整」
+    needs_ability = abilities.CASH_OPS      # 員工帳號的權限:新增要有「雜支調整」
     ability_exempt = ("void",)              # 作廢看的是「作廢其他單」
     serializer_class = PettyExpenseSerializer
     search_fields = ["no", "payee", "note"]
@@ -48,6 +53,10 @@ class PettyExpenseViewSet(abilities.WritesNeed, WarehouseScopedMixin, viewsets.M
     def perform_create(self, serializer):
         self.check_create_warehouse(serializer)
         serializer.save(tenant=self.request.tenant)
+
+    def update(self, request, *args, **kwargs):
+        # 不能修改(owner 2026-10-24:「雜支、現金調整改成不能修改、記錯只能作廢再重記」;改了不留紀錄、會改到過去的營業日報)
+        return Response({"detail": NO_EDIT_PETTY}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def destroy(self, request, *args, **kwargs):
         # 單據不刪除、只作廢(刪掉的話帳上就沒有這一筆、也沒有紀錄;被關掉「作廢其他單」的人也不能改用刪的)
@@ -91,11 +100,11 @@ class PhoneBillCollectionViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         # 單據不刪除、只作廢(刪掉的話帳上就沒有這一筆、也沒有紀錄;被關掉「作廢其他單」的人也不能改用刪的)
-        return Response({"detail": "現金調整不能刪除,請用作廢"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        return Response({"detail": "代收話費單不能刪除,請用作廢"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
     @action(detail=True, methods=["post"])
     def void(self, request, pk=None):
-        abilities.require(request.user, abilities.VOID_OTHERS)      # 作廢現金調整
+        abilities.require(request.user, abilities.VOID_OTHERS)      # 作廢代收話費
         obj = self.get_object()
         if obj.is_void:
             return Response(
@@ -107,7 +116,7 @@ class PhoneBillCollectionViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
 
 
 class CashAdjustmentViewSet(abilities.WritesNeed, WarehouseScopedMixin, viewsets.ModelViewSet):
-    needs_ability = abilities.CASH_OPS      # 員工帳號的權限:新增 / 修改要有「雜支調整」
+    needs_ability = abilities.CASH_OPS      # 員工帳號的權限:新增要有「雜支調整」
     ability_exempt = ("void",)              # 作廢看的是「作廢其他單」
     serializer_class = CashAdjustmentSerializer
     search_fields = ["no", "note"]
@@ -131,13 +140,17 @@ class CashAdjustmentViewSet(abilities.WritesNeed, WarehouseScopedMixin, viewsets
         self.check_create_warehouse(serializer)
         serializer.save(tenant=self.request.tenant)
 
+    def update(self, request, *args, **kwargs):
+        # 不能修改(owner 2026-10-24,同雜支):記錯了作廢再重記
+        return Response({"detail": NO_EDIT_ADJUST}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
     def destroy(self, request, *args, **kwargs):
         # 單據不刪除、只作廢(刪掉的話帳上就沒有這一筆、也沒有紀錄;被關掉「作廢其他單」的人也不能改用刪的)
-        return Response({"detail": "代收話費單不能刪除,請用作廢"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        return Response({"detail": "現金調整不能刪除,請用作廢"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
     @action(detail=True, methods=["post"])
     def void(self, request, pk=None):
-        abilities.require(request.user, abilities.VOID_OTHERS)      # 作廢代收話費
+        abilities.require(request.user, abilities.VOID_OTHERS)      # 作廢現金調整
         obj = self.get_object()
         if obj.is_void:
             return Response(

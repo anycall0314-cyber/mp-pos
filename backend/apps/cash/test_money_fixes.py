@@ -80,7 +80,7 @@ class CashAdjustmentReasonTests(TestCase):
         for direction in ("in", "out"):
             self.assertEqual(self.post("adjustment", direction).status_code, 201)
             self.assertEqual(self.post("other", direction).status_code, 201)
-        # 改既有的一筆也一樣擋
+        # 改既有的一筆:2026-10-24 起根本不能修改(owner:記錯只能作廢再重記),方向照舊
         made = self.post("deposit", "out").json()
         r = self.c.admin.patch(f"{ADJ}{made['id']}/", {"direction": "in"}, format="json")
-        self.assertEqual(r.status_code, 400, r.content.decode())
+        self.assertEqual(r.status_code, 405, r.content.decode())

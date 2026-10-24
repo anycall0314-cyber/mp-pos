@@ -3,7 +3,6 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useSaveCashAdjustment } from "@/api/hooks";
 import { searchSalesPersons, searchWarehouses } from "@/api/search";
 import type {
-  CashAdjustment,
   CashAdjustmentDirection,
   CashAdjustmentReason,
 } from "@/api/types";
@@ -18,13 +17,12 @@ import { Field } from "@/components/Field";
 import { MoneyInput } from "@/components/MoneyInput";
 import { toast } from "@/components/workbench/toast";
 import { directionOfReason } from "@/lib/cashAdjust";
-import { keepOrInt, money } from "@/lib/money";
+import { intStr, money } from "@/lib/money";
 import { errorText } from "@/lib/errorText";
 import { localToday } from "@/lib/dates";
 
 interface Props {
   open: boolean;
-  initial?: CashAdjustment | null;
   onClose: () => void;
 }
 
@@ -78,19 +76,8 @@ function emptyState(): FormState {
   };
 }
 
-function toState(a: CashAdjustment): FormState {
-  return {
-    warehouse: a.warehouse,
-    doc_date: a.doc_date,
-    direction: a.direction,
-    reason: a.reason,
-    amount: String(a.amount),
-    handled_by: a.handled_by ?? "",
-    note: a.note,
-  };
-}
-
-export function CashAdjustmentForm({ open, initial, onClose }: Props) {
+/** 只能新增:記錯了作廢再重記,不能修改(owner 2026-10-24) */
+export function CashAdjustmentForm({ open, onClose }: Props) {
   const save = useSaveCashAdjustment();
   const defaultWarehouse = useDefaultWarehouse();
   const defaultHandledBy = useDefaultHandledBy();
@@ -108,23 +95,7 @@ export function CashAdjustmentForm({ open, initial, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
     setError(null);
-    if (initial) {
-      setState(toState(initial));
-      setWarehouseOption({
-        id: initial.warehouse,
-        label: initial.warehouse_name,
-        secondary: initial.warehouse_code,
-      });
-      setHandledByOption(
-        initial.handled_by
-          ? {
-              id: initial.handled_by,
-              label: initial.handled_by_name,
-              secondary: initial.handled_by_code,
-            }
-          : null,
-      );
-    } else {
+    {
       const initialState = emptyState();
       if (defaultWarehouse.id) {
         initialState.warehouse = defaultWarehouse.id;
@@ -150,15 +121,12 @@ export function CashAdjustmentForm({ open, initial, onClose }: Props) {
     }
   }, [
     open,
-    initial,
     defaultWarehouse.id,
     defaultWarehouse.name,
     defaultHandledBy.id,
     defaultHandledBy.name,
     defaultHandledBy.code,
   ]);
-
-  const isEdit = !!initial?.id;
 
   function patch<K extends keyof FormState>(k: K, v: FormState[K]) {
     setState((s) => ({ ...s, [k]: v }));
@@ -188,12 +156,11 @@ export function CashAdjustmentForm({ open, initial, onClose }: Props) {
     setError(null);
     try {
       const saved = await save.mutateAsync({
-        id: initial?.id,
         warehouse: state.warehouse as number,
         doc_date: state.doc_date,
         direction: state.direction,
         reason: state.reason,
-        amount: keepOrInt(state.amount, initial?.amount),
+        amount: intStr(state.amount, "0"),
         handled_by: (state.handled_by as number) || null,
         note: state.note.trim(),
       });
@@ -213,12 +180,12 @@ export function CashAdjustmentForm({ open, initial, onClose }: Props) {
   return (
     <Drawer
       open={open}
-      title={isEdit ? `編輯現金調整 ${initial?.no}` : "新增現金調整"}
+      title="新增現金調整"
       onClose={onClose}
       footer={
         <>
           <button className="btn" onClick={onClose} type="button">
-            {isEdit ? "取消" : "關閉"}
+            關閉
           </button>
           <button
             className="btn primary"

@@ -69,7 +69,7 @@ ABILITIES = [
     Ability(REMEMBER_BARCODE, "記住條碼", "商品", "刷到不認得的條碼,用這款時記到商品上;預設不開", opt_in=True),
     Ability(PURCHASE, "進貨入庫", "進貨與帳務", "進貨單、進貨匯入、中古的廠商收購"),
     Ability(SECONDHAND_BUY, "中古收購", "進貨與帳務", "跟客人收購二手機"),
-    Ability(CASH_OPS, "雜支調整", "進貨與帳務", "新增、修改雜支與現金調整"),
+    Ability(CASH_OPS, "雜支調整", "進貨與帳務", "新增雜支與現金調整"),  # 存好不能改,記錯作廢重記(2026-10-24)
     Ability(VIEW_BUSINESS_DAILY, "營業日報", "進貨與帳務", "看營業日報"),
     # 跟供應商的下單系統叫貨(會花到這家門市在廠商那邊的額度);金鑰只有管理員能設,不在這個勾裡
     Ability(VENDOR_ORDER, "廠商叫貨", "進貨與帳務", "送出叫貨單;看得到進價"),

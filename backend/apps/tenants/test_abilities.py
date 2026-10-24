@@ -272,14 +272,14 @@ class BlockingTests(_Shop):
         self.assertEqual(self.stock(), 9)
 
     def test_the_void_flag_cannot_be_set_by_editing(self):
-        """被關掉的人不能靠「編輯」把單改成作廢(那一格只有作廢的動作能動)。"""
+        """被關掉的人不能靠「編輯」把單改成作廢 —— 2026-10-24 起雜支根本不能修改(owner:記錯只能作廢再重記)。"""
         expense = PettyExpense.objects.create(tenant=self.t, warehouse=self.c.wh, amount=Decimal("100"),
                                               payment_method=self.c.cash)
         self.turn_off("void_others")
         r = self.c.clerk.patch(f"/api/v1/petty-expenses/{expense.id}/", {"is_void": True, "note": "改備註"}, format="json")
-        self.assertEqual(r.status_code, 200, r.content.decode())
+        self.assertEqual(r.status_code, 405, r.content.decode())
         expense.refresh_from_db()
-        self.assertEqual((expense.is_void, expense.note), (False, "改備註"))
+        self.assertEqual((expense.is_void, expense.note), (False, ""))
 
     def test_everything_else_is_untouched(self):
         """關掉全部四項的店員:開單、看單照舊。"""
@@ -454,13 +454,13 @@ class SecondBatchTests(_Shop):
         self.assertEqual(self.c.clerk.get("/api/v1/cash-adjustments/").status_code, 200)
         # 作廢是另一項(作廢其他單):沒被關就照舊可以作廢
         self.assertEqual(self.c.clerk.post(f"/api/v1/petty-expenses/{kept.id}/void/", {}, format="json").status_code, 200)
-        # 關的是別項:新增、修改照舊
+        # 關的是別項:新增照舊;修改一律不行(2026-10-24 owner:記錯只能作廢再重記)
         self.turn_off(*[k for k in ALL if k != "cash_ops"])
         r = self.c.clerk.post("/api/v1/petty-expenses/", expense, format="json")
         self.assertEqual(r.status_code, 201, r.content.decode())
         r = self.c.clerk.post("/api/v1/cash-adjustments/", adjust, format="json")
         self.assertEqual(r.status_code, 201, r.content.decode())
-        self.assertEqual(self.c.clerk.patch(f"/api/v1/cash-adjustments/{kept_adj.id}/", {"note": "補備註"}, format="json").status_code, 200)
+        self.assertEqual(self.c.clerk.patch(f"/api/v1/cash-adjustments/{kept_adj.id}/", {"note": "補備註"}, format="json").status_code, 405)
 
     # ── 營業日報
     def test_the_daily_cash_report(self):

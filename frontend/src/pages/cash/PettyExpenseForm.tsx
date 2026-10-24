@@ -6,7 +6,7 @@ import {
   useVoidPettyExpense,
 } from "@/api/hooks";
 import { searchSalesPersons, searchWarehouses } from "@/api/search";
-import type { PettyExpense, PettyExpenseCategory } from "@/api/types";
+import type { PettyExpenseCategory } from "@/api/types";
 import {
   useCan,
   useDefaultHandledBy,
@@ -19,13 +19,13 @@ import { Field } from "@/components/Field";
 import { MoneyInput } from "@/components/MoneyInput";
 import { SavedStrip } from "@/components/SavedStrip";
 import { ArmButton } from "@/components/workbench/ArmButton";
-import { keepOrInt, money } from "@/lib/money";
+import { intStr, money } from "@/lib/money";
 import { errorText } from "@/lib/errorText";
 import { localToday } from "@/lib/dates";
 
+/** 只能新增:記錯了作廢再重記,不能修改(owner 2026-10-24) */
 interface Props {
   open: boolean;
-  initial?: PettyExpense | null;
   onClose: () => void;
 }
 
@@ -63,19 +63,6 @@ function emptyState(): FormState {
   };
 }
 
-function toState(e: PettyExpense): FormState {
-  return {
-    warehouse: e.warehouse,
-    doc_date: e.doc_date,
-    category: e.category,
-    amount: String(e.amount),
-    payment_method: e.payment_method,
-    payee: e.payee,
-    handled_by: e.handled_by ?? "",
-    note: e.note,
-  };
-}
-
 const CATEGORY_LABEL: Record<PettyExpenseCategory, string> = {
   rent: "房租",
   utility: "水電網路",
@@ -84,7 +71,7 @@ const CATEGORY_LABEL: Record<PettyExpenseCategory, string> = {
   other: "其他",
 };
 
-export function PettyExpenseForm({ open, initial, onClose }: Props) {
+export function PettyExpenseForm({ open, onClose }: Props) {
   const save = useSavePettyExpense();
   const voidExpense = useVoidPettyExpense();
   const canVoid = useCan("void_others");
@@ -107,28 +94,12 @@ export function PettyExpenseForm({ open, initial, onClose }: Props) {
   // 剛存好的那一筆(全站檢視 E8:一步存好,記錯了馬上作廢)
   const [last, setLast] = useState<{ id: number; text: string; no: string; voided: boolean } | null>(null);
 
-  // 開啟 drawer 時根據 initial 載入或重置
+  // 開啟 drawer 時重置(只能新增)
   useEffect(() => {
     if (!open) return;
     setError(null);
     setLast(null);
-    if (initial) {
-      setState(toState(initial));
-      setWarehouseOption({
-        id: initial.warehouse,
-        label: initial.warehouse_name,
-        secondary: initial.warehouse_code,
-      });
-      setHandledByOption(
-        initial.handled_by
-          ? {
-              id: initial.handled_by,
-              label: initial.handled_by_name,
-              secondary: initial.handled_by_code,
-            }
-          : null,
-      );
-    } else {
+    {
       const initialState: FormState = {
         ...emptyState(),
         payment_method: defaultCash?.id ?? "",
@@ -158,7 +129,6 @@ export function PettyExpenseForm({ open, initial, onClose }: Props) {
     }
   }, [
     open,
-    initial,
     defaultCash?.id,
     defaultWarehouse.id,
     defaultWarehouse.name,
@@ -166,8 +136,6 @@ export function PettyExpenseForm({ open, initial, onClose }: Props) {
     defaultHandledBy.name,
     defaultHandledBy.code,
   ]);
-
-  const isEdit = !!initial?.id;
 
   function patch<K extends keyof FormState>(k: K, v: FormState[K]) {
     setState((s) => ({ ...s, [k]: v }));
@@ -195,20 +163,15 @@ export function PettyExpenseForm({ open, initial, onClose }: Props) {
     setError(null);
     try {
       const saved = await save.mutateAsync({
-        id: initial?.id,
         warehouse: state.warehouse as number,
         doc_date: state.doc_date,
         category: state.category,
-        amount: keepOrInt(state.amount, initial?.amount),
+        amount: intStr(state.amount, "0"),
         payment_method: state.payment_method as number,
         payee: state.payee.trim(),
         handled_by: (state.handled_by as number) || null,
         note: state.note.trim(),
       });
-      if (isEdit) {
-        onClose();
-        return;
-      }
       setLast({
         id: saved.id,
         no: saved.no,
@@ -253,12 +216,12 @@ export function PettyExpenseForm({ open, initial, onClose }: Props) {
   return (
     <Drawer
       open={open}
-      title={isEdit ? `編輯雜支 ${initial?.no}` : "新增雜支"}
+      title="新增雜支"
       onClose={onClose}
       footer={
         <>
           <button className="btn" onClick={onClose} type="button">
-            {isEdit ? "取消" : "關閉"}
+            關閉
           </button>
           <button
             className="btn primary"
