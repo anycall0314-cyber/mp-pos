@@ -1469,6 +1469,63 @@ class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
             )
         return Response({"updated": len(updated_ids), "ids": updated_ids})
 
+    @action(detail=False, methods=["get"], url_path="device-library")
+    def device_library(self, request):
+        """從平台型號庫找一支(全站檢視 D10:新增手機型號先從型號庫選,不再自己拆品牌系列世代)。
+        `?search=` 每個字都要對到品牌或型號;最多 30 支。每一支帶這家公司已經建了幾個品項(0 = 還沒建)。"""
+        from . import device_expand
+
+        words = (request.query_params.get("search") or "").split()
+        if not words or len("".join(words)) < 2:
+            return Response({"results": []})
+        qs = DeviceModel.objects.filter(is_active=True)
+        for w in words:
+            qs = qs.filter(Q(name__icontains=w) | Q(brand__icontains=w))
+        devices = list(qs.order_by("-launched", "brand", "name")[:30])
+        tenant = request.tenant
+        linked = {pm.device_uid: pm.id for pm in PhoneModel.objects.for_tenant(tenant).filter(
+            device_uid__in=[d.uid for d in devices])}
+        built = dict(Product.objects.for_tenant(tenant).filter(phone_model_id__in=linked.values())
+                     .values_list("phone_model_id").annotate(n=Count("id")))
+        return Response({"results": [{
+            "uid": d.uid,
+            "brand": d.brand,
+            "name": d.name,
+            "category": d.get_category_display(),
+            "launched": d.launched,
+            "capacities": [c for c in device_expand.capacities_for(d) if c],
+            "colors": device_expand.colors_for(d),
+            "built": built.get(linked.get(d.uid), 0),
+        } for d in devices]})
+
+    @action(detail=False, methods=["post"], url_path="device-library/build")
+    def device_library_build(self, request):
+        """把型號庫的一支建成這家公司的品號(規則跟每天自動建品號同一套:`device_expand.expand`,只展開這一支)。
+        `{uid, preview}`:preview = 只算會建哪些(不寫任何東西)。這家公司已經對到這一支 → 400(只能去看,不再建第二套)。
+        要有「商品建檔」(這個 viewset 的 `needs_ability`)。"""
+        from . import device_expand
+
+        uid = str(request.data.get("uid") or "")
+        preview = bool(request.data.get("preview"))
+        device = DeviceModel.objects.filter(uid=uid, is_active=True).first()
+        if device is None:
+            return Response({"detail": "型號庫沒有這支"}, status=status.HTTP_404_NOT_FOUND)
+        tenant = request.tenant
+        if PhoneModel.objects.for_tenant(tenant).filter(device_uid=uid).exists():
+            return Response({"detail": "這支已經建了,去看就好"}, status=status.HTTP_400_BAD_REQUEST)
+        report = device_expand.expand(tenant, uids=[uid], confirm=not preview)
+        if report.problems:
+            return Response({"detail": ";".join(report.problems)}, status=status.HTTP_400_BAD_REQUEST)
+        pm = PhoneModel.objects.for_tenant(tenant).filter(device_uid=uid).first()
+        return Response({
+            "preview": preview,
+            "model_name": device.name,
+            "created": report.created,
+            "total": sum(report.created.values()),
+            "linked": report.linked,
+            "phone_model": pm.id if pm and not preview else None,
+        })
+
     @action(detail=False, methods=["post"], url_path="create-phone-model")
     def create_phone_model(self, request):
         """新增手機型號 — 一次建好「狀態 × 容量 × 顏色」主機 SKU + 配件 placeholder + 維修零件 SKU。

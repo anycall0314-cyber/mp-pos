@@ -305,9 +305,12 @@ class _One:
                 if clash is not None:
                     # 已經對到別支、名稱卻只差空白:建下去就是同一個名字兩個機型,先不建
                     raise ExpandError(f"名稱跟公司的「{clash.name}」只差空白,它已經對到型號庫另一支")
+        # 公司這個機型已經有的「容量 × 顏色 × 品況」:品名被人改過(加了「公司貨」之類)也算有,不再建一個同規格的(複審 P1)
+        have_specs: set = set()
         if pm is not None:
             brand, series, generation, suffix, model_name = pm.brand, pm.series, pm.generation, pm.model_suffix, pm.name
             have = Product.objects.for_tenant(tenant).filter(phone_model=pm, requires_serial=not qty)
+            have_specs = set(have.values_list("capacity", "color", "condition_id"))
             have = list((have if qty else have.exclude(capacity="")).values_list("capacity", "color"))
         else:
             brand = _brand(tenant, d.brand) if confirm else None
@@ -331,7 +334,7 @@ class _One:
             for cap in caps:
                 for col in cols:
                     name = " ".join(x for x in (model_name, cap, col, cond.name) if x)
-                    if bare_name(name) not in self.existing_names:
+                    if bare_name(name) not in self.existing_names and (cap, col, cond.id) not in have_specs:
                         todo.append((cond, cap, col, name))
         if pm is None and not todo:
             return

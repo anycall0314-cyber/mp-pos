@@ -8,6 +8,8 @@ import { PRODUCT_SAVED_MSG, isProductSavedMessage } from "./productTabs.ts";
 test("只認得自己的訊息:型別對、編號是數字或 null", () => {
   assert.equal(isProductSavedMessage({ type: PRODUCT_SAVED_MSG, id: 3 }), true);
   assert.equal(isProductSavedMessage({ type: PRODUCT_SAVED_MSG, id: null }), true);
+  assert.equal(isProductSavedMessage({ type: PRODUCT_SAVED_MSG, id: null, find: "iPhone 17 Pro" }), true);
+  assert.equal(isProductSavedMessage({ type: PRODUCT_SAVED_MSG, id: null, find: 3 }), false);
   assert.equal(isProductSavedMessage({ type: PRODUCT_SAVED_MSG, id: "3" }), false);
   assert.equal(isProductSavedMessage({ type: "other", id: 3 }), false);
   assert.equal(isProductSavedMessage(null), false);

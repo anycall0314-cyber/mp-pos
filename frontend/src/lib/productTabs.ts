@@ -8,6 +8,8 @@ export interface ProductSavedMessage {
   type: typeof PRODUCT_SAVED_MSG;
   /** 選到這一筆;null = 只把清單重抓(手機型號一次建好幾個) */
   id: number | null;
+  /** 商品管理搜這幾個字(新增手機型號的「去看」:看那一支的品項) */
+  find?: string;
 }
 
 function productsOpener(): Window | null {
@@ -22,17 +24,17 @@ function productsOpener(): Window | null {
 }
 
 /** 告訴原本那一頁(商品管理)剛建好了什麼;沒有那一頁回 false */
-export function tellOpener(id: number | null): boolean {
+export function tellOpener(id: number | null, find?: string): boolean {
   const o = productsOpener();
   if (!o) return false;
-  const msg: ProductSavedMessage = { type: PRODUCT_SAVED_MSG, id };
+  const msg: ProductSavedMessage = { type: PRODUCT_SAVED_MSG, id, ...(find ? { find } : {}) };
   o.postMessage(msg, window.location.origin);
   return true;
 }
 
 /** 回到原本那一頁並關掉這一頁;沒有那一頁回 false(呼叫的人自己換頁) */
-export function backToOpener(id: number | null): boolean {
-  if (!tellOpener(id)) return false;
+export function backToOpener(id: number | null, find?: string): boolean {
+  if (!tellOpener(id, find)) return false;
   try {
     (window.opener as Window).focus();
   } catch {
@@ -47,7 +49,8 @@ export function isProductSavedMessage(data: unknown): data is ProductSavedMessag
     typeof data === "object" &&
     data !== null &&
     (data as { type?: unknown }).type === PRODUCT_SAVED_MSG &&
-    ((data as { id?: unknown }).id === null || typeof (data as { id?: unknown }).id === "number")
+    ((data as { id?: unknown }).id === null || typeof (data as { id?: unknown }).id === "number") &&
+    ((data as { find?: unknown }).find === undefined || typeof (data as { find?: unknown }).find === "string")
   );
 }
 

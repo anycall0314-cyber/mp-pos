@@ -29,6 +29,7 @@ import { defaultConditionIds } from "@/lib/productDefaults";
 import { purchaseLinkFor } from "@/lib/purchasePrefill";
 import { errorText } from "@/lib/errorText";
 import { backToOpener, tellOpener } from "@/lib/productTabs";
+import { DeviceLibraryStep } from "./DeviceLibraryStep";
 
 /**
  * 「新增手機型號」3 步 wizard。
@@ -260,6 +261,9 @@ const INITIAL: WizardState = {
 export function NewPhoneModelWizardPage() {
   const nav = useNavigate();
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  // 先從型號庫找(全站檢視 D10);型號庫沒有的才手動建立(下面原本那三步)
+  const [mode, setMode] = useState<"library" | "manual">("library");
+  const [libraryDone, setLibraryDone] = useState<string | null>(null);
   const [state, setState] = useState<WizardState>(INITIAL);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<PhoneModelBundleResult | null>(null);
@@ -436,6 +440,39 @@ export function NewPhoneModelWizardPage() {
       />
 
       <div className="entry-body">
+        {mode === "library" && !libraryDone && (
+          <DeviceLibraryStep
+            onManual={() => setMode("manual")}
+            onLook={(name) => {
+              if (!backToOpener(null, name)) nav(`/products?find=${encodeURIComponent(name)}`);
+            }}
+            onDone={(name) => {
+              setLibraryDone(name);
+              tellOpener(null, name);     // 原本那一頁(商品管理)清單同時更新、搜這一支
+            }}
+          />
+        )}
+        {mode === "library" && libraryDone && (
+          <div className="form-card">
+            <div className="section-head">已建立「{libraryDone}」</div>
+            <div className="dl-acts">
+              <button
+                type="button"
+                className="btn primary"
+                onClick={() => {
+                  if (!backToOpener(null, libraryDone)) nav(`/products?find=${encodeURIComponent(libraryDone)}`);
+                }}
+              >
+                去看品項
+              </button>
+              <button type="button" className="btn" onClick={() => setLibraryDone(null)}>
+                再建一支
+              </button>
+            </div>
+          </div>
+        )}
+        {mode === "manual" && (
+        <>
         <Stepper step={step} />
 
         {error && <Banner kind="error" message={error} />}
@@ -445,9 +482,6 @@ export function NewPhoneModelWizardPage() {
           <div className="form-card">
             <div className="section-head">
               基本資料
-              <span className="section-head-meta">
-                先告訴系統「這是什麼機型 / 套用哪個範本」
-              </span>
             </div>
 
             <div className="form-row-2col">
@@ -543,10 +577,6 @@ export function NewPhoneModelWizardPage() {
                     </option>
                   ))}
               </select>
-              <div className="form-field-hint">
-                範本會自動帶入容量 / 顏色 / 配件類別 / 零件清單,下一步可再微調。
-                範本管理在「庫存 → 零件範本管理」。
-              </div>
             </div>
 
             <div style={{ marginTop: 14 }}>
@@ -1119,6 +1149,8 @@ export function NewPhoneModelWizardPage() {
               </>
             )}
           </div>
+        )}
+        </>
         )}
       </div>
     </div>

@@ -314,15 +314,30 @@ export function ProductsPage() {
       if (e.origin !== window.location.origin || !isProductSavedMessage(e.data)) return;
       void queryClient.invalidateQueries({ queryKey: ["products"] });
       if (e.data.id !== null) api<Product>(`/products/${e.data.id}/`).then(showProduct).catch(() => undefined);
+      else if (e.data.find) findProducts(e.data.find);
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** 商品清單搜這幾個字(新增手機型號的「去看」) */
+  function findProducts(text: string) {
+    setProductQuery(text);
+    setAppliedProductQuery(text);
+    setLeftTab("products");
+  }
+
   // 整頁新增 / 編輯存好回來帶著 `?selected=商品編號`(SPEC-005):選到那一筆,網址清掉(重新整理不會一直跳回去)
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedParam = searchParams.get("selected");
+  const findParam = searchParams.get("find");
+  useEffect(() => {
+    if (!findParam) return;
+    setSearchParams({}, { replace: true });
+    findProducts(findParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [findParam]);
   useEffect(() => {
     if (!selectedParam || !/^\d+$/.test(selectedParam)) return;
     setSearchParams({}, { replace: true });
