@@ -17,7 +17,7 @@ import { useVendorStatement } from "@/api/trade";
 import type { VendorLinkRow, VendorOrder, VendorOutsideOrder } from "@/api/types";
 import { useCan, useCurrentUser, useDefaultWarehouse } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
-import { Drawer } from "@/components/Drawer";
+import { PaneForm } from "@/components/PaneForm";
 import { Toolbar } from "@/components/Toolbar";
 import { ControlBar, StatusBadge, Tabs, ToolbarField } from "@/components/ui";
 import { apiErrorText } from "@/components/workbench/errors";
@@ -378,6 +378,121 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
 
   return (
     <>
+      {/* 確認叫貨:整頁換掉購物車(不是抽屜;owner 2026-10-25 不要 modal);購物車留著不卸 */}
+      {confirming && (
+        <PaneForm
+          title={`跟${link.provider_label}叫貨`}
+          onBack={() => !sending && setConfirming(false)}
+          backLabel="返回"
+          busy={sending}
+          footer={
+            <>
+              <button type="button" className="btn primary" disabled={sending || sum.lines.length === 0} onClick={send}>
+                {sending ? "送出中…" : "送出叫貨"}
+              </button>
+            </>
+          }
+        >
+          {refused && <Banner kind="error" message={refused} />}
+          <table className="report-grid vo-confirm">
+            <tbody>
+              {sum.lines.map((l) => (
+                <tr key={l.row.key}>
+                  <td className="vo-name">
+                    {storeTitle(l.row)}
+                    {/* 廠商那邊是哪一項、一包幾個:同一個店內商品的兩種包裝要分得出來 */}
+                    <div className="vo-sub">{vendorSide(l.row)}</div>
+                  </td>
+                  <td className="num">{packsText(l.packs, l.pieces, l.row.unit)}</td>
+                  <td className="num">{money(l.amount)}</td>
+                </tr>
+              ))}
+              <tr className="vo-confirm-total">
+                <td>{manual ? "參考貨款" : "貨款(不含運費)"}</td>
+                <td className="num">{packsText(sum.packs, sum.pieces, totalUnit)}</td>
+                <td className="num">
+                  <b>${money(sum.amount)}</b>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div className="vo-form">
+            {/* 平台內的同行:付款方式是對方跟這家講好的那一種(對方定的),這裡不選 */}
+            {!link.platform && (
+              <label>
+                付款方式
+                <select
+                  value={payment}
+                  disabled={sending}
+                  onChange={(e) => setDraft({ ...draftRef.current, payment_method: e.target.value })}
+                >
+                  {link.choices.payment_method.map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label>
+              取貨方式
+              <select
+                value={delivery}
+                disabled={sending}
+                onChange={(e) => setDraft({ ...draftRef.current, delivery_method: e.target.value })}
+              >
+                {link.choices.delivery_method.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+            <label className="vo-form-wide">
+              備註
+              <input
+                value={draft.note}
+                maxLength={200}
+                disabled={sending}
+                onChange={(e) => setDraft({ ...draftRef.current, note: e.target.value })}
+              />
+            </label>
+          </div>
+          <dl className="vo-facts">
+            {delivery === "宅配" && (
+              <>
+                <dt>收件</dt>
+                <dd>
+                  {link.ship_name}　{link.ship_phone}
+                  <br />
+                  {link.ship_address}
+                </dd>
+              </>
+            )}
+            {!manual && !link.platform && (
+              <>
+                <dt>發票</dt>
+                <dd>
+                  {link.invoice_type}
+                  {link.invoice_type === "公司" && `　${link.buyer_tax_id}　${link.buyer_name}`}
+                </dd>
+              </>
+            )}
+            {manual && link.contact && (
+              <>
+                <dt>聯絡</dt>
+                <dd>{link.contact}</dd>
+              </>
+            )}
+          </dl>
+          <div className="vo-warn">
+            {manual
+              ? `成立後要自己把叫貨內容傳給${link.provider_label}`
+              : link.platform
+                ? "對方出貨之前可以在紀錄取消"
+                : link.sandbox === true
+                  ? `測試金鑰:這張是測試單,${link.provider_label}不會出貨`
+                  : "送出後不能在這裡修改或取消"}
+          </div>
+        </PaneForm>
+      )}
+      <div className="pane-list" hidden={confirming}>
       {draft.pending && (
         <div className="vo-pending" role="alert">
           <span>上一張送出去了,不確定有沒有成立。再送一次不會變成兩張。</span>
@@ -541,130 +656,22 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
         </button>
       </div>
 
-      <Drawer
-        open={confirming}
-        title={`跟${link.provider_label}叫貨`}
-        onClose={() => !sending && setConfirming(false)}
-        lockBackdrop={sending}
-        width={520}
-        footer={
-          <>
-            <button type="button" className="btn" disabled={sending} onClick={() => setConfirming(false)}>
-              返回
-            </button>
-            <button type="button" className="btn primary" disabled={sending || sum.lines.length === 0} onClick={send}>
-              {sending ? "送出中…" : "送出叫貨"}
-            </button>
-          </>
-        }
-      >
-        {refused && <Banner kind="error" message={refused} />}
-        <table className="report-grid vo-confirm">
-          <tbody>
-            {sum.lines.map((l) => (
-              <tr key={l.row.key}>
-                <td className="vo-name">
-                  {storeTitle(l.row)}
-                  {/* 廠商那邊是哪一項、一包幾個:同一個店內商品的兩種包裝要分得出來 */}
-                  <div className="vo-sub">{vendorSide(l.row)}</div>
-                </td>
-                <td className="num">{packsText(l.packs, l.pieces, l.row.unit)}</td>
-                <td className="num">{money(l.amount)}</td>
-              </tr>
-            ))}
-            <tr className="vo-confirm-total">
-              <td>{manual ? "參考貨款" : "貨款(不含運費)"}</td>
-              <td className="num">{packsText(sum.packs, sum.pieces, totalUnit)}</td>
-              <td className="num">
-                <b>${money(sum.amount)}</b>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div className="vo-form">
-          {/* 平台內的同行:付款方式是對方跟這家講好的那一種(對方定的),這裡不選 */}
-          {!link.platform && (
-            <label>
-              付款方式
-              <select
-                value={payment}
-                disabled={sending}
-                onChange={(e) => setDraft({ ...draftRef.current, payment_method: e.target.value })}
-              >
-                {link.choices.payment_method.map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
-            </label>
-          )}
-          <label>
-            取貨方式
-            <select
-              value={delivery}
-              disabled={sending}
-              onChange={(e) => setDraft({ ...draftRef.current, delivery_method: e.target.value })}
-            >
-              {link.choices.delivery_method.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </label>
-          <label className="vo-form-wide">
-            備註
-            <input
-              value={draft.note}
-              maxLength={200}
-              disabled={sending}
-              onChange={(e) => setDraft({ ...draftRef.current, note: e.target.value })}
-            />
-          </label>
-        </div>
-        <dl className="vo-facts">
-          {delivery === "宅配" && (
-            <>
-              <dt>收件</dt>
-              <dd>
-                {link.ship_name}　{link.ship_phone}
-                <br />
-                {link.ship_address}
-              </dd>
-            </>
-          )}
-          {!manual && !link.platform && (
-            <>
-              <dt>發票</dt>
-              <dd>
-                {link.invoice_type}
-                {link.invoice_type === "公司" && `　${link.buyer_tax_id}　${link.buyer_name}`}
-              </dd>
-            </>
-          )}
-          {manual && link.contact && (
-            <>
-              <dt>聯絡</dt>
-              <dd>{link.contact}</dd>
-            </>
-          )}
-        </dl>
-        <div className="vo-warn">
-          {manual
-            ? `成立後要自己把叫貨內容傳給${link.provider_label}`
-            : link.platform
-              ? "對方出貨之前可以在紀錄取消"
-              : link.sandbox === true
-                ? `測試金鑰:這張是測試單,${link.provider_label}不會出貨`
-                : "送出後不能在這裡修改或取消"}
-        </div>
-      </Drawer>
+      </div>
     </>
   );
 }
 
 /** 對帳單(賣家算的):跟這家往來到現在,出過貨的每一張單出了多少、收了多少、還欠多少。 */
-function StatementDrawer({ link, onClose }: { link: VendorLinkRow; onClose: () => void }) {
+/** 對帳單:整頁(不是抽屜) */
+function StatementPage({ link, onClose }: { link: VendorLinkRow; onClose: () => void }) {
   const state = useVendorStatement(link.warehouse, link.provider, true);
   return (
-    <Drawer open title={`對帳單 ${link.provider_label}`} onClose={onClose} width={640}>
+    <PaneForm
+      title={`對帳單 ${link.provider_label}`}
+      onBack={onClose}
+      footer={null}
+      wide
+    >
       {state.isLoading && <div className="md-empty">載入中…</div>}
       {state.isError && <div className="md-empty">{apiErrorText(state.error)}</div>}
       {state.data && (
@@ -704,7 +711,7 @@ function StatementDrawer({ link, onClose }: { link: VendorLinkRow; onClose: () =
           </tbody>
         </table>
       )}
-    </Drawer>
+    </PaneForm>
   );
 }
 
@@ -921,6 +928,13 @@ function HistoryTab({ link, openFirst }: { link: VendorLinkRow; openFirst: numbe
 
   return (
     <>
+      {/* 對帳單、到貨入庫:整頁換掉紀錄(不是抽屜;owner 2026-10-25 不要 modal);紀錄留著不卸 */}
+      {statement && <StatementPage link={link} onClose={() => setStatement(false)} />}
+      {receiving && !receiving.manual && <ReceiveDrawer key={receiving.id} order={receiving} onClose={() => setReceiving(null)} />}
+      {receiving && receiving.manual && (
+        <ManualReceiveDrawer key={receiving.id} order={receiving} onClose={() => setReceiving(null)} />
+      )}
+      <div className="pane-list" hidden={statement || !!receiving}>
       <div className="list-filterbar">
         {/* 半自動的廠商沒有系統可以問:進度是人記的 */}
         {!link.manual && (
@@ -1185,11 +1199,7 @@ function HistoryTab({ link, openFirst }: { link: VendorLinkRow; openFirst: numbe
           </>
         )}
       </div>
-      {statement && <StatementDrawer link={link} onClose={() => setStatement(false)} />}
-      {receiving && !receiving.manual && <ReceiveDrawer key={receiving.id} order={receiving} onClose={() => setReceiving(null)} />}
-      {receiving && receiving.manual && (
-        <ManualReceiveDrawer key={receiving.id} order={receiving} onClose={() => setReceiving(null)} />
-      )}
+      </div>
     </>
   );
 }

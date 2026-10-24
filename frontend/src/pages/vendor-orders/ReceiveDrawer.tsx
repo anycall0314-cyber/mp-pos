@@ -6,7 +6,7 @@ import { searchProducts } from "@/api/search";
 import type { VendorOrder } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox } from "@/components/ComboBox";
-import { Drawer } from "@/components/Drawer";
+import { PaneForm } from "@/components/PaneForm";
 import { apiErrorText } from "@/components/workbench/errors";
 import { QtyInput } from "@/components/workbench/QtyInput";
 import { MoneyInput } from "@/components/MoneyInput";
@@ -186,12 +186,11 @@ export function ReceiveDrawer({ order, onClose }: { order: VendorOrder; onClose:
   }
 
   return (
-    <Drawer
-      open
+    <PaneForm
       title={`到貨入庫 ${order.vendor_order_no}`}
-      onClose={() => !busy && onClose()}
-      lockBackdrop
-      width={760}
+      onBack={() => !busy && onClose()}
+      busy={busy}
+      wide
       footer={
         <>
           <button type="button" className="btn" disabled={locked || !draft} onClick={noteOnly}>
@@ -327,6 +326,6 @@ export function ReceiveDrawer({ order, onClose }: { order: VendorOrder; onClose:
           </div>
         </>
       )}
-    </Drawer>
+    </PaneForm>
   );
 }

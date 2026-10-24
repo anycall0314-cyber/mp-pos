@@ -12,7 +12,7 @@ import {
 } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
-import { Drawer } from "@/components/Drawer";
+import { PaneForm } from "@/components/PaneForm";
 import { Field } from "@/components/Field";
 import { MoneyInput } from "@/components/MoneyInput";
 import { toast } from "@/components/workbench/toast";
@@ -177,16 +177,15 @@ export function CashAdjustmentForm({ open, onClose }: Props) {
     }
   }
 
+  // 整頁(不是抽屜;owner 2026-10-25 不要 modal):清單頁沒在新增時不畫
+  if (!open) return null;
   return (
-    <Drawer
-      open={open}
+    <PaneForm
       title="新增現金調整"
-      onClose={onClose}
+      onBack={onClose}
+      busy={save.isPending}
       footer={
         <>
-          <button className="btn" onClick={onClose} type="button">
-            關閉
-          </button>
           <button
             className="btn primary"
             onClick={() => void doSave()}
@@ -290,6 +289,6 @@ export function CashAdjustmentForm({ open, onClose }: Props) {
             />
           </Field>
         </form>
-    </Drawer>
+    </PaneForm>
   );
 }

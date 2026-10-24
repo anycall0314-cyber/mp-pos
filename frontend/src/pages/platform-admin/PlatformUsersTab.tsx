@@ -10,7 +10,7 @@ import {
 import type { PlatformUser, UserRole } from "@/api/types";
 import { toast } from "@/components/workbench/toast";
 import { Banner } from "@/components/Banner";
-import { Drawer } from "@/components/Drawer";
+import { PaneForm } from "@/components/PaneForm";
 import { Field } from "@/components/Field";
 import { errorText } from "@/lib/errorText";
 import { CellMark } from "@/components/CellMark";
@@ -126,6 +126,169 @@ export function PlatformUsersTab() {
 
   return (
     <div>
+      {createOpen && (
+        <PaneForm
+          title="新增用戶"
+          onBack={() => setCreateOpen(false)}
+          busy={save.isPending}
+          footer={
+            <>
+              <button
+                className="btn primary"
+                type="button"
+                onClick={submit}
+                disabled={save.isPending}
+              >
+                {save.isPending ? "儲存中…" : "建立"}
+              </button>
+            </>
+          }
+        >
+          {error && <Banner kind="error" message={error} />}
+          <form onSubmit={submit}>
+            <Field label="帳號" required>
+              <input
+                value={form.username}
+                onChange={(e) =>
+                  setForm((s) => ({ ...s, username: e.target.value }))
+                }
+                placeholder="登入用,英數字"
+                autoFocus
+              />
+            </Field>
+            <Field label="密碼" required>
+              <input
+                type="text"
+                value={form.password}
+                onChange={(e) =>
+                  setForm((s) => ({ ...s, password: e.target.value }))
+                }
+                placeholder="至少 6 碼,告訴使用者後請他自行修改"
+              />
+            </Field>
+            <Field label="姓名">
+              <input
+                value={form.first_name}
+                onChange={(e) =>
+                  setForm((s) => ({ ...s, first_name: e.target.value }))
+                }
+                placeholder="顯示用名稱"
+              />
+            </Field>
+            <Field label="角色" required>
+              <select
+                value={form.role}
+                onChange={(e) =>
+                  setForm((s) => ({
+                    ...s,
+                    role: e.target.value as UserRole,
+                    is_warehouse_locked: e.target.value === "tenant_user",
+                  }))
+                }
+              >
+                {ROLE_OPTIONS.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {form.role !== "platform_admin" && (
+              <>
+                <Field label="所屬經銷商" required>
+                  <select
+                    value={form.tenant}
+                    onChange={(e) =>
+                      setForm((s) => ({
+                        ...s,
+                        tenant: e.target.value ? Number(e.target.value) : "",
+                        default_warehouse: "",
+                      }))
+                    }
+                  >
+                    <option value="">— 請選 —</option>
+                    {(tenants.data ?? []).map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="預設倉(店員必填)">
+                  <select
+                    value={form.default_warehouse}
+                    onChange={(e) =>
+                      setForm((s) => ({
+                        ...s,
+                        default_warehouse: e.target.value
+                          ? Number(e.target.value)
+                          : "",
+                      }))
+                    }
+                    disabled={!form.tenant}
+                  >
+                    <option value="">
+                      {form.tenant ? "— 請選 —" : "(請先選經銷商)"}
+                    </option>
+                    {filteredWarehouses.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.code} {w.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                {form.role === "tenant_user" && (
+                  <Field label="">
+                    <label style={{ fontSize: 14 }}>
+                      <input
+                        type="checkbox"
+                        checked={form.is_warehouse_locked}
+                        onChange={(e) =>
+                          setForm((s) => ({
+                            ...s,
+                            is_warehouse_locked: e.target.checked,
+                          }))
+                        }
+                      />{" "}
+                      鎖定門市(只能操作自己倉的資料)
+                    </label>
+                  </Field>
+                )}
+                <Field label="">
+                  <label style={{ fontSize: 14 }}>
+                    <input
+                      type="checkbox"
+                      checked={form.create_sales_person}
+                      onChange={(e) =>
+                        setForm((s) => ({
+                          ...s,
+                          create_sales_person: e.target.checked,
+                        }))
+                      }
+                    />{" "}
+                    同步建立業務員主檔(銷貨單 / 經手人會用到)
+                  </label>
+                </Field>
+                {form.create_sales_person && (
+                  <Field label="業務員代號(留空=帳號)">
+                    <input
+                      value={form.sales_person_code}
+                      onChange={(e) =>
+                        setForm((s) => ({
+                          ...s,
+                          sales_person_code: e.target.value,
+                        }))
+                      }
+                      placeholder={form.username || "預設用帳號"}
+                    />
+                  </Field>
+                )}
+              </>
+            )}
+          </form>
+        </PaneForm>
+      )}
+      <div className="pane-list" hidden={createOpen}>
       <div
         style={{
           marginBottom: 12,
@@ -253,175 +416,7 @@ export function PlatformUsersTab() {
           </tbody>
         </table>
       )}
-
-      <Drawer
-        open={createOpen}
-        title="新增用戶"
-        onClose={() => setCreateOpen(false)}
-        width={480}
-        footer={
-          <>
-            <button
-              className="btn"
-              type="button"
-              onClick={() => setCreateOpen(false)}
-            >
-              取消
-            </button>
-            <button
-              className="btn primary"
-              type="button"
-              onClick={submit}
-              disabled={save.isPending}
-            >
-              {save.isPending ? "儲存中…" : "建立"}
-            </button>
-          </>
-        }
-      >
-        {error && <Banner kind="error" message={error} />}
-        <form onSubmit={submit}>
-          <Field label="帳號" required>
-            <input
-              value={form.username}
-              onChange={(e) =>
-                setForm((s) => ({ ...s, username: e.target.value }))
-              }
-              placeholder="登入用,英數字"
-              autoFocus
-            />
-          </Field>
-          <Field label="密碼" required>
-            <input
-              type="text"
-              value={form.password}
-              onChange={(e) =>
-                setForm((s) => ({ ...s, password: e.target.value }))
-              }
-              placeholder="至少 6 碼,告訴使用者後請他自行修改"
-            />
-          </Field>
-          <Field label="姓名">
-            <input
-              value={form.first_name}
-              onChange={(e) =>
-                setForm((s) => ({ ...s, first_name: e.target.value }))
-              }
-              placeholder="顯示用名稱"
-            />
-          </Field>
-          <Field label="角色" required>
-            <select
-              value={form.role}
-              onChange={(e) =>
-                setForm((s) => ({
-                  ...s,
-                  role: e.target.value as UserRole,
-                  is_warehouse_locked: e.target.value === "tenant_user",
-                }))
-              }
-            >
-              {ROLE_OPTIONS.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          {form.role !== "platform_admin" && (
-            <>
-              <Field label="所屬經銷商" required>
-                <select
-                  value={form.tenant}
-                  onChange={(e) =>
-                    setForm((s) => ({
-                      ...s,
-                      tenant: e.target.value ? Number(e.target.value) : "",
-                      default_warehouse: "",
-                    }))
-                  }
-                >
-                  <option value="">— 請選 —</option>
-                  {(tenants.data ?? []).map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="預設倉(店員必填)">
-                <select
-                  value={form.default_warehouse}
-                  onChange={(e) =>
-                    setForm((s) => ({
-                      ...s,
-                      default_warehouse: e.target.value
-                        ? Number(e.target.value)
-                        : "",
-                    }))
-                  }
-                  disabled={!form.tenant}
-                >
-                  <option value="">
-                    {form.tenant ? "— 請選 —" : "(請先選經銷商)"}
-                  </option>
-                  {filteredWarehouses.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.code} {w.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              {form.role === "tenant_user" && (
-                <Field label="">
-                  <label style={{ fontSize: 14 }}>
-                    <input
-                      type="checkbox"
-                      checked={form.is_warehouse_locked}
-                      onChange={(e) =>
-                        setForm((s) => ({
-                          ...s,
-                          is_warehouse_locked: e.target.checked,
-                        }))
-                      }
-                    />{" "}
-                    鎖定門市(只能操作自己倉的資料)
-                  </label>
-                </Field>
-              )}
-              <Field label="">
-                <label style={{ fontSize: 14 }}>
-                  <input
-                    type="checkbox"
-                    checked={form.create_sales_person}
-                    onChange={(e) =>
-                      setForm((s) => ({
-                        ...s,
-                        create_sales_person: e.target.checked,
-                      }))
-                    }
-                  />{" "}
-                  同步建立業務員主檔(銷貨單 / 經手人會用到)
-                </label>
-              </Field>
-              {form.create_sales_person && (
-                <Field label="業務員代號(留空=帳號)">
-                  <input
-                    value={form.sales_person_code}
-                    onChange={(e) =>
-                      setForm((s) => ({
-                        ...s,
-                        sales_person_code: e.target.value,
-                      }))
-                    }
-                    placeholder={form.username || "預設用帳號"}
-                  />
-                </Field>
-              )}
-            </>
-          )}
-        </form>
-      </Drawer>
+      </div>
     </div>
   );
 }

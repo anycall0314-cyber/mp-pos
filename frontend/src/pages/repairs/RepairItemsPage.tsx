@@ -11,7 +11,7 @@ import { ArmButton } from "@/components/workbench/ArmButton";
 import { toast } from "@/components/workbench/toast";
 import { Banner } from "@/components/Banner";
 import { ComboBox } from "@/components/ComboBox";
-import { Drawer } from "@/components/Drawer";
+import { PaneForm } from "@/components/PaneForm";
 import { Checkbox, Field } from "@/components/Field";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { Toolbar } from "@/components/Toolbar";
@@ -111,11 +111,195 @@ export function RepairItemsPage() {
       <Toolbar
         title="維修項目設定"
         actions={
-          <button className="btn" onClick={openNew}>
-            新增項目
-          </button>
+          !drawerOpen && (
+            <button className="btn" onClick={openNew}>
+              新增項目
+            </button>
+          )
         }
       />
+      {/* 新增 / 編輯:整頁換掉清單(不是抽屜;owner 2026-10-25 不要 modal) */}
+      {drawerOpen && (
+        <PaneForm
+          title={editId ? "編輯維修項目" : "新增維修項目"}
+          onBack={() => setDrawerOpen(false)}
+          busy={save.isPending}
+          footer={
+            <>
+              <button
+                className="btn primary"
+                onClick={submit}
+                disabled={save.isPending || !form.name}
+              >
+                {save.isPending ? "儲存中…" : "儲存"}
+              </button>
+            </>
+          }
+        >
+          {error && <Banner kind="error" message={error} />}
+          <Field label="項目名稱" required>
+            <input
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="例:螢幕更換 / 電池更換"
+            />
+          </Field>
+          <Field label="預設工資" hint="自修建議報價 = 零件成本 + 工資">
+            <MoneyInput
+              min="0"
+              value={form.default_labor_fee}
+              onChange={(v) =>
+                setForm({ ...form, default_labor_fee: v })
+              }
+            />
+          </Field>
+
+          <Field
+            label="適用機型"
+            hint="選機型 = 這個機型的每一種容量顏色都算"
+          >
+            <PhoneModelPicker
+              onPick={(m) => {
+                if (form.model_keys.some((x) => x.model_key === m.model_key)) return;
+                setForm({
+                  ...form,
+                  model_keys: [
+                    ...form.model_keys,
+                    { model_key: m.model_key, model_name: m.model_name },
+                  ],
+                });
+              }}
+              placeholder="搜尋機型加入…"
+            />
+            {form.model_keys.length > 0 && (
+              <div className="inv-chip-row" style={{ padding: "6px 0 0", background: "transparent", border: 0 }}>
+                {form.model_keys.map((m) => (
+                  <button
+                    key={m.model_key}
+                    type="button"
+                    className="inv-chip"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        model_keys: form.model_keys.filter(
+                          (x) => x.model_key !== m.model_key,
+                        ),
+                      })
+                    }
+                  >
+                    {m.model_name}
+                    <span className="inv-chip-x">×</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </Field>
+
+          <Field
+            label="預設零件清單"
+            hint="只能挑零件倉的商品;建立維修單時自動帶入這些零件"
+          >
+            <ComboBox<Product>
+              value=""
+              selectedOption={null}
+              onChange={(_id, opt) => {
+                if (!opt) return;
+                if (
+                  form.parts.some((p) => p.part_product === opt.id) ||
+                  opt.payload?.warehouse_type !== "parts"
+                ) {
+                  // 已加 或 不是零件 → 無視
+                  if (opt.payload?.warehouse_type !== "parts") {
+                    toast("只能選擇零件倉的商品", "err");
+                  }
+                  return;
+                }
+                setForm({
+                  ...form,
+                  parts: [
+                    ...form.parts,
+                    {
+                      part_product: opt.id,
+                      part_name: opt.label,
+                      part_sku: opt.payload?.sku ?? "",
+                      default_qty: 1,
+                    },
+                  ],
+                });
+              }}
+              fetchOptions={(q) => searchProducts(q, { activeOnly: true })}
+              placeholder="搜尋零件加入…"
+            />
+            {form.parts.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <table className="line-table" style={{ width: "100%" }}>
+                  <thead>
+                    <tr>
+                      <th>零件</th>
+                      <th style={{ width: 90 }}>數量</th>
+                      <th style={{ width: 60 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {form.parts.map((p, idx) => (
+                      <tr key={p.part_product}>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{p.part_name}</div>
+                          <div style={{ fontSize: 14, color: "var(--text-dim)" }}>
+                            {p.part_sku}
+                          </div>
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={p.default_qty}
+                            onChange={(e) => {
+                              const newParts = [...form.parts];
+                              newParts[idx] = {
+                                ...p,
+                                default_qty: Math.max(
+                                  1,
+                                  Number(e.target.value) || 1,
+                                ),
+                              };
+                              setForm({ ...form, parts: newParts });
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <button
+                            className="btn danger"
+                            onClick={() =>
+                              setForm({
+                                ...form,
+                                parts: form.parts.filter(
+                                  (x) => x.part_product !== p.part_product,
+                                ),
+                              })
+                            }
+                          >
+                            刪除
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Field>
+
+          <Checkbox
+            checked={form.is_active}
+            onChange={(v) => setForm({ ...form, is_active: v })}
+            label="啟用"
+            hint="關閉後不會出現在維修單建單頁的選項中"
+          />
+        </PaneForm>
+      )}
+      <div className="pane-list" hidden={drawerOpen}>
       <div className="entry-body" style={{ padding: 16 }}>
         {items.isLoading && <div className="md-empty">載入中…</div>}
         {!items.isLoading && (items.data?.length ?? 0) === 0 && (
@@ -158,187 +342,7 @@ export function RepairItemsPage() {
         </div>
       </div>
 
-      <Drawer
-        open={drawerOpen}
-        title={editId ? "編輯維修項目" : "新增維修項目"}
-        onClose={() => setDrawerOpen(false)}
-        footer={
-          <>
-            <button className="btn" onClick={() => setDrawerOpen(false)}>
-              取消
-            </button>
-            <button
-              className="btn primary"
-              onClick={submit}
-              disabled={save.isPending || !form.name}
-            >
-              {save.isPending ? "儲存中…" : "儲存"}
-            </button>
-          </>
-        }
-      >
-        {error && <Banner kind="error" message={error} />}
-        <Field label="項目名稱" required>
-          <input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="例:螢幕更換 / 電池更換"
-          />
-        </Field>
-        <Field label="預設工資" hint="自修建議報價 = 零件成本 + 工資">
-          <MoneyInput
-            min="0"
-            value={form.default_labor_fee}
-            onChange={(v) =>
-              setForm({ ...form, default_labor_fee: v })
-            }
-          />
-        </Field>
-
-        <Field
-          label="適用機型"
-          hint="選機型 = 這個機型的每一種容量顏色都算"
-        >
-          <PhoneModelPicker
-            onPick={(m) => {
-              if (form.model_keys.some((x) => x.model_key === m.model_key)) return;
-              setForm({
-                ...form,
-                model_keys: [
-                  ...form.model_keys,
-                  { model_key: m.model_key, model_name: m.model_name },
-                ],
-              });
-            }}
-            placeholder="搜尋機型加入…"
-          />
-          {form.model_keys.length > 0 && (
-            <div className="inv-chip-row" style={{ padding: "6px 0 0", background: "transparent", border: 0 }}>
-              {form.model_keys.map((m) => (
-                <button
-                  key={m.model_key}
-                  type="button"
-                  className="inv-chip"
-                  onClick={() =>
-                    setForm({
-                      ...form,
-                      model_keys: form.model_keys.filter(
-                        (x) => x.model_key !== m.model_key,
-                      ),
-                    })
-                  }
-                >
-                  {m.model_name}
-                  <span className="inv-chip-x">×</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </Field>
-
-        <Field
-          label="預設零件清單"
-          hint="只能挑零件倉的商品;建立維修單時自動帶入這些零件"
-        >
-          <ComboBox<Product>
-            value=""
-            selectedOption={null}
-            onChange={(_id, opt) => {
-              if (!opt) return;
-              if (
-                form.parts.some((p) => p.part_product === opt.id) ||
-                opt.payload?.warehouse_type !== "parts"
-              ) {
-                // 已加 或 不是零件 → 無視
-                if (opt.payload?.warehouse_type !== "parts") {
-                  toast("只能選擇零件倉的商品", "err");
-                }
-                return;
-              }
-              setForm({
-                ...form,
-                parts: [
-                  ...form.parts,
-                  {
-                    part_product: opt.id,
-                    part_name: opt.label,
-                    part_sku: opt.payload?.sku ?? "",
-                    default_qty: 1,
-                  },
-                ],
-              });
-            }}
-            fetchOptions={(q) => searchProducts(q, { activeOnly: true })}
-            placeholder="搜尋零件加入…"
-          />
-          {form.parts.length > 0 && (
-            <div style={{ marginTop: 8 }}>
-              <table className="line-table" style={{ width: "100%" }}>
-                <thead>
-                  <tr>
-                    <th>零件</th>
-                    <th style={{ width: 90 }}>數量</th>
-                    <th style={{ width: 60 }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {form.parts.map((p, idx) => (
-                    <tr key={p.part_product}>
-                      <td>
-                        <div style={{ fontWeight: 600 }}>{p.part_name}</div>
-                        <div style={{ fontSize: 14, color: "var(--text-dim)" }}>
-                          {p.part_sku}
-                        </div>
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min="1"
-                          step="1"
-                          value={p.default_qty}
-                          onChange={(e) => {
-                            const newParts = [...form.parts];
-                            newParts[idx] = {
-                              ...p,
-                              default_qty: Math.max(
-                                1,
-                                Number(e.target.value) || 1,
-                              ),
-                            };
-                            setForm({ ...form, parts: newParts });
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <button
-                          className="btn danger"
-                          onClick={() =>
-                            setForm({
-                              ...form,
-                              parts: form.parts.filter(
-                                (x) => x.part_product !== p.part_product,
-                              ),
-                            })
-                          }
-                        >
-                          刪除
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Field>
-
-        <Checkbox
-          checked={form.is_active}
-          onChange={(v) => setForm({ ...form, is_active: v })}
-          label="啟用"
-          hint="關閉後不會出現在維修單建單頁的選項中"
-        />
-      </Drawer>
+      </div>
     </div>
   );
 }

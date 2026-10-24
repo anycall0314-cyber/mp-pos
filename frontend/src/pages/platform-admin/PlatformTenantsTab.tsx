@@ -5,7 +5,7 @@ import {
   useSavePlatformTenant,
 } from "@/api/hooks";
 import { Banner } from "@/components/Banner";
-import { Drawer } from "@/components/Drawer";
+import { PaneForm } from "@/components/PaneForm";
 import { Field } from "@/components/Field";
 import { errorText } from "@/lib/errorText";
 import { CellMark } from "@/components/CellMark";
@@ -40,6 +40,49 @@ export function PlatformTenantsTab() {
 
   return (
     <div>
+      {drawerOpen && (
+        <PaneForm
+          title="新增經銷商"
+          onBack={() => setDrawerOpen(false)}
+          busy={save.isPending}
+          footer={
+            <>
+              <button
+                className="btn primary"
+                type="button"
+                onClick={submit}
+                disabled={save.isPending || !form.code || !form.name}
+              >
+                {save.isPending ? "儲存中…" : "建立"}
+              </button>
+            </>
+          }
+        >
+          {error && <Banner kind="error" message={error} />}
+          <form onSubmit={submit}>
+            <Field label="代碼" required>
+              <input
+                value={form.code}
+                onChange={(e) =>
+                  setForm((s) => ({ ...s, code: e.target.value }))
+                }
+                placeholder="例:dealer-a (建立後不可改)"
+                autoFocus
+              />
+            </Field>
+            <Field label="名稱" required>
+              <input
+                value={form.name}
+                onChange={(e) =>
+                  setForm((s) => ({ ...s, name: e.target.value }))
+                }
+                placeholder="例:經銷商A 通訊行"
+              />
+            </Field>
+          </form>
+        </PaneForm>
+      )}
+      <div className="pane-list" hidden={drawerOpen}>
       <div
         style={{
           marginBottom: 12,
@@ -137,55 +180,7 @@ export function PlatformTenantsTab() {
           </tbody>
         </table>
       )}
-
-      <Drawer
-        open={drawerOpen}
-        title="新增經銷商"
-        onClose={() => setDrawerOpen(false)}
-        width={420}
-        footer={
-          <>
-            <button
-              className="btn"
-              type="button"
-              onClick={() => setDrawerOpen(false)}
-            >
-              取消
-            </button>
-            <button
-              className="btn primary"
-              type="button"
-              onClick={submit}
-              disabled={save.isPending || !form.code || !form.name}
-            >
-              {save.isPending ? "儲存中…" : "建立"}
-            </button>
-          </>
-        }
-      >
-        {error && <Banner kind="error" message={error} />}
-        <form onSubmit={submit}>
-          <Field label="代碼" required>
-            <input
-              value={form.code}
-              onChange={(e) =>
-                setForm((s) => ({ ...s, code: e.target.value }))
-              }
-              placeholder="例:dealer-a (建立後不可改)"
-              autoFocus
-            />
-          </Field>
-          <Field label="名稱" required>
-            <input
-              value={form.name}
-              onChange={(e) =>
-                setForm((s) => ({ ...s, name: e.target.value }))
-              }
-              placeholder="例:經銷商A 通訊行"
-            />
-          </Field>
-        </form>
-      </Drawer>
+      </div>
     </div>
   );
 }

@@ -164,7 +164,7 @@ export function CashAdjustmentsPage() {
       <Toolbar
         title="現金調整"
         actions={
-          canWrite ? (
+          canWrite && !drawerOpen ? (
             <button
               className="btn"
               onClick={() => setDrawerOpen(true)}
@@ -186,6 +186,11 @@ export function CashAdjustmentsPage() {
           </b>
         </span>
       </Toolbar>
+      <CashAdjustmentForm
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+      />
+      <div className="pane-list" hidden={drawerOpen}>
       <div className="list-filterbar">
         <label>
           起日
@@ -238,10 +243,7 @@ export function CashAdjustmentsPage() {
           emptyText={(data ?? []).length === 0 ? "這段期間沒有現金調整" : `查無符合「${query}」的調整`}
         />
       )}
-      <CashAdjustmentForm
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-      />
+      </div>
     </div>
   );
 }

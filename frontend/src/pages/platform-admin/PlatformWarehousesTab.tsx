@@ -6,7 +6,7 @@ import {
   useSavePlatformWarehouse,
 } from "@/api/hooks";
 import { Banner } from "@/components/Banner";
-import { Drawer } from "@/components/Drawer";
+import { PaneForm } from "@/components/PaneForm";
 import { Field } from "@/components/Field";
 import { errorText } from "@/lib/errorText";
 import { CellMark } from "@/components/CellMark";
@@ -70,6 +70,86 @@ export function PlatformWarehousesTab() {
 
   return (
     <div>
+      {drawerOpen && (
+        <PaneForm
+          title="新增門市"
+          onBack={() => setDrawerOpen(false)}
+          busy={save.isPending}
+          footer={
+            <>
+              <button
+                className="btn primary"
+                type="button"
+                onClick={submit}
+                disabled={
+                  save.isPending || !form.tenant || !form.code || !form.name
+                }
+              >
+                {save.isPending ? "儲存中…" : "建立"}
+              </button>
+            </>
+          }
+        >
+          {error && <Banner kind="error" message={error} />}
+          <form onSubmit={submit}>
+            <Field label="經銷商" required>
+              <select
+                value={form.tenant}
+                onChange={(e) =>
+                  setForm((s) => ({
+                    ...s,
+                    tenant: e.target.value ? Number(e.target.value) : "",
+                  }))
+                }
+              >
+                <option value="">— 請選 —</option>
+                {(tenants.data ?? []).map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="代碼" required>
+              <input
+                value={form.code}
+                onChange={(e) =>
+                  setForm((s) => ({ ...s, code: e.target.value }))
+                }
+                placeholder="例:W01 (建立後不可改)"
+              />
+            </Field>
+            <Field label="名稱" required>
+              <input
+                value={form.name}
+                onChange={(e) =>
+                  setForm((s) => ({ ...s, name: e.target.value }))
+                }
+                placeholder="例:民生店"
+              />
+            </Field>
+            <Field label="地址">
+              <input
+                value={form.address}
+                onChange={(e) =>
+                  setForm((s) => ({ ...s, address: e.target.value }))
+                }
+                placeholder="收據抬頭顯示用"
+              />
+            </Field>
+            <Field label="電話">
+              <input
+                value={form.phone}
+                onChange={(e) =>
+                  setForm((s) => ({ ...s, phone: e.target.value }))
+                }
+                placeholder="例:04-12345678"
+              />
+            </Field>
+          </form>
+        </PaneForm>
+      )}
+      <div className="pane-list" hidden={drawerOpen}>
       <div
         style={{
           marginBottom: 12,
@@ -189,92 +269,7 @@ export function PlatformWarehousesTab() {
           </tbody>
         </table>
       )}
-
-      <Drawer
-        open={drawerOpen}
-        title="新增門市"
-        onClose={() => setDrawerOpen(false)}
-        width={480}
-        footer={
-          <>
-            <button
-              className="btn"
-              type="button"
-              onClick={() => setDrawerOpen(false)}
-            >
-              取消
-            </button>
-            <button
-              className="btn primary"
-              type="button"
-              onClick={submit}
-              disabled={
-                save.isPending || !form.tenant || !form.code || !form.name
-              }
-            >
-              {save.isPending ? "儲存中…" : "建立"}
-            </button>
-          </>
-        }
-      >
-        {error && <Banner kind="error" message={error} />}
-        <form onSubmit={submit}>
-          <Field label="經銷商" required>
-            <select
-              value={form.tenant}
-              onChange={(e) =>
-                setForm((s) => ({
-                  ...s,
-                  tenant: e.target.value ? Number(e.target.value) : "",
-                }))
-              }
-            >
-              <option value="">— 請選 —</option>
-              {(tenants.data ?? []).map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="代碼" required>
-            <input
-              value={form.code}
-              onChange={(e) =>
-                setForm((s) => ({ ...s, code: e.target.value }))
-              }
-              placeholder="例:W01 (建立後不可改)"
-            />
-          </Field>
-          <Field label="名稱" required>
-            <input
-              value={form.name}
-              onChange={(e) =>
-                setForm((s) => ({ ...s, name: e.target.value }))
-              }
-              placeholder="例:民生店"
-            />
-          </Field>
-          <Field label="地址">
-            <input
-              value={form.address}
-              onChange={(e) =>
-                setForm((s) => ({ ...s, address: e.target.value }))
-              }
-              placeholder="收據抬頭顯示用"
-            />
-          </Field>
-          <Field label="電話">
-            <input
-              value={form.phone}
-              onChange={(e) =>
-                setForm((s) => ({ ...s, phone: e.target.value }))
-              }
-              placeholder="例:04-12345678"
-            />
-          </Field>
-        </form>
-      </Drawer>
+      </div>
     </div>
   );
 }

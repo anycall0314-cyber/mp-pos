@@ -1529,6 +1529,7 @@ button { font-family: inherit; }
 .pane-form-head { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
 .pane-form-title { margin: 0; font-size: var(--font-section); font-weight: 600; }
 .pane-form-body { max-width: 720px; }
+.pane-form-body.wide { max-width: none; }
 .pane-form-facts { display: grid; grid-template-columns: 120px 1fr; row-gap: 6px; column-gap: 16px; margin: 12px 0 0; color: var(--text-dim); }
 .pane-form-facts dd { margin: 0; color: var(--text); }
 .pane-form-footer { justify-content: flex-end; }

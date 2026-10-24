@@ -168,7 +168,7 @@ export function PettyExpensesPage() {
       <Toolbar
         title="店頭雜支"
         actions={
-          canWrite ? (
+          canWrite && !drawerOpen ? (
             <button
               className="btn"
               onClick={() => setDrawerOpen(true)}
@@ -185,6 +185,11 @@ export function PettyExpensesPage() {
           </b>
         </span>
       </Toolbar>
+      <PettyExpenseForm
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+      />
+      <div className="pane-list" hidden={drawerOpen}>
       <div className="list-filterbar">
         <label>
           起日
@@ -237,10 +242,7 @@ export function PettyExpensesPage() {
           emptyText={(data ?? []).length === 0 ? "這段期間沒有雜支" : `查無符合「${query}」的雜支`}
         />
       )}
-      <PettyExpenseForm
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-      />
+      </div>
     </div>
   );
 }

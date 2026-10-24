@@ -12,7 +12,7 @@ import {
 } from "@/api/hooks";
 import type { PlatformVendor, PlatformVendorCategory, PlatformVendorItem, VendorItemImport } from "@/api/types";
 import { Banner } from "@/components/Banner";
-import { Drawer } from "@/components/Drawer";
+import { PaneForm } from "@/components/PaneForm";
 import { Field } from "@/components/Field";
 import { apiErrorText } from "@/components/workbench/errors";
 import { toast } from "@/components/workbench/toast";
@@ -39,6 +39,17 @@ export function PlatformVendorsTab() {
 
   return (
     <div>
+      {editing && (
+        <VendorForm
+          key={editing === "new" ? "new" : editing.id}
+          vendor={editing === "new" ? null : editing}
+          categories={cats}
+          protocols={vendors.data?.protocols ?? []}
+          onClose={() => setEditing(null)}
+        />
+      )}
+      {pricing && <PriceListPage key={pricing.id} vendor={pricing} onClose={() => setPricing(null)} />}
+      <div className="pane-list" hidden={!!editing || !!pricing}>
       <CategoryBlock rows={cats} loading={categories.isLoading} />
 
       <div className="pv-head">
@@ -100,16 +111,7 @@ export function PlatformVendorsTab() {
           </tbody>
         </table>
       )}
-      {editing && (
-        <VendorDrawer
-          key={editing === "new" ? "new" : editing.id}
-          vendor={editing === "new" ? null : editing}
-          categories={cats}
-          protocols={vendors.data?.protocols ?? []}
-          onClose={() => setEditing(null)}
-        />
-      )}
-      {pricing && <PriceListDrawer key={pricing.id} vendor={pricing} onClose={() => setPricing(null)} />}
+      </div>
     </div>
   );
 }
@@ -202,7 +204,8 @@ function CategoryBlock({ rows, loading }: { rows: PlatformVendorCategory[]; load
   );
 }
 
-function VendorDrawer({
+/** 新增 / 修改廠商:整頁(不是抽屜;owner 2026-10-25 不要 modal) */
+function VendorForm({
   vendor,
   categories,
   protocols,
@@ -260,17 +263,12 @@ function VendorDrawer({
   }
 
   return (
-    <Drawer
-      open
+    <PaneForm
       title={vendor ? `修改 ${vendor.name}` : "新增廠商"}
-      onClose={onClose}
-      lockBackdrop
-      width={480}
+      onBack={onClose}
+      busy={save.isPending}
       footer={
         <>
-          <button className="btn" type="button" onClick={onClose}>
-            取消
-          </button>
           <button className="btn primary" type="button" disabled={save.isPending || !name.trim() || (!manual && !base.trim()) || (!vendor && !code.trim())} onClick={submit}>
             {save.isPending ? "儲存中…" : "儲存"}
           </button>
@@ -364,7 +362,7 @@ function VendorDrawer({
           <option value="off">已停用</option>
         </select>
       </Field>
-    </Drawer>
+    </PaneForm>
   );
 }
 
@@ -400,7 +398,8 @@ function Cell({
  * 半自動廠商的價目表:這家廠商賣什麼、一包幾個、參考單價。所有店家看到同一份。
  * 料號建了不能改(各家門市的叫貨單與對照靠它認);不賣了就停用。可以從 Excel 整批貼上(先預覽、確認才存)。
  */
-function PriceListDrawer({ vendor, onClose }: { vendor: PlatformVendor; onClose: () => void }) {
+/** 手動接單廠商的價目表:整頁(不是抽屜) */
+function PriceListPage({ vendor, onClose }: { vendor: PlatformVendor; onClose: () => void }) {
   const items = usePlatformVendorItems(vendor.id);
   const save = useSavePlatformVendorItem(vendor.id);
   const paste = useImportPlatformVendorItems(vendor.id);
@@ -452,7 +451,12 @@ function PriceListDrawer({ vendor, onClose }: { vendor: PlatformVendor; onClose:
   }
 
   return (
-    <Drawer open title={`${vendor.name} 價目表`} onClose={onClose} width={860}>
+    <PaneForm
+      title={`${vendor.name} 價目表`}
+      onBack={onClose}
+      footer={null}
+      wide
+    >
       {items.isLoading && <div className="md-empty">載入中…</div>}
       {items.isError && <Banner kind="error" message={apiErrorText(items.error)} />}
       {items.data && (
@@ -586,6 +590,6 @@ function PriceListDrawer({ vendor, onClose }: { vendor: PlatformVendor; onClose:
           </tbody>
         </table>
       )}
-    </Drawer>
+    </PaneForm>
   );
 }
