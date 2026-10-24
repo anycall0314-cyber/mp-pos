@@ -8,6 +8,7 @@ import { Toolbar } from "@/components/Toolbar";
 
 import { sha256File } from "./sha256";
 import { errorText } from "@/lib/errorText";
+import { RESTORE_STEPS, restoreStep } from "@/lib/adminViews";
 
 /**
  * 設定 → 備份與還原(公司管理員)
@@ -301,6 +302,12 @@ export function BackupPage() {
   const loadError = overview.error ?? jobs.error ?? restores.error;
   const working = jobRows.some((j) => j.status === "queued" || j.status === "running");
   const keyReady = !!ov?.key.exists && ov.key.readable;
+  const stepNow = restoreStep({
+    pending: !!pending,
+    confirmReady: !!pending && confirmText.trim() === pending.confirm_word,
+    maintenance: !!ov?.maintenance.active,
+    restoring,
+  });
 
   return (
     <div className="page">
@@ -437,6 +444,17 @@ export function BackupPage() {
 
         <section className="backup-card">
           <div className="section-head">還原</div>
+          {/* 只標現在在哪一步,不加「下一步」;第 4 步就是下面的暫停與紀錄(全站檢視 L03) */}
+          <ol className="restore-steps" aria-label="還原步驟">
+            {RESTORE_STEPS.map((label, i) => {
+              const n = i + 1;
+              return (
+                <li key={label} className={n < stepNow ? "done" : n === stepNow ? "now" : undefined} aria-current={n === stepNow ? "step" : undefined}>
+                  {n} {label}
+                </li>
+              );
+            })}
+          </ol>
           {ov?.maintenance.can_cancel && ov.maintenance.restore_job != null && (
             <div className="backup-report">
               <div className="backup-sub">已排入還原,全公司暫停操作</div>

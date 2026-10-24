@@ -492,7 +492,11 @@ function ExceptionsTab() {
               {e.documents} / {e.items}
             </dd>
           </dl>
-          <div className="legacy-raw">{e.rows_json}</div>
+          {/* 原始資料收起來、可以展開,內容不截不改(全站檢視 L03;差額、筆數、結案留在外面) */}
+          <details className="legacy-raw-box">
+            <summary>原始資料</summary>
+            <div className="legacy-raw">{e.rows_json}</div>
+          </details>
           {e.status === "open" ? (
             <div className="legacy-pick">
               <textarea

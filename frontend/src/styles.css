@@ -6579,6 +6579,14 @@ tr.selected .intake-badge { filter: none; }
 .ledger-table td { vertical-align: top; }
 .ledger-table th.num, .ledger-table td.num { text-align: right; }
 .ledger-info { color: var(--text-dim); }
+/* 全站檢視 L03:對帳有不一致時一致的收起來;還原四步只標在哪;舊系統原始資料可展開 */
+.ledger-fold td { padding-top: 6px; padding-bottom: 6px; }
+.restore-steps { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0 0 10px; padding: 0; font-size: var(--font-secondary); }
+.restore-steps li { padding: 2px 10px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-dim); }
+.restore-steps li.done { color: var(--text); }
+.restore-steps li.now { color: var(--text); border-color: var(--accent); font-weight: 600; }
+.legacy-raw-box { margin: 6px 0; }
+.legacy-raw-box > summary { cursor: pointer; color: var(--text-dim); font-size: var(--font-secondary); }
 
 /* 銷退單明細(整張退,唯讀) */
 .sr-lines { width: 100%; }

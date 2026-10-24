@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { useLedgerChecks } from "@/api/hooks";
 import type { LedgerCheckResult } from "@/api/types";
 import { useCurrentUser } from "@/auth/AuthContext";
@@ -5,6 +7,7 @@ import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { money } from "@/lib/money";
 import { errorText } from "@/lib/errorText";
+import { splitChecks } from "@/lib/adminViews";
 
 /**
  * 設定 → 每日對帳(公司管理員)
@@ -28,6 +31,8 @@ export function LedgerChecksPage() {
   const role = useCurrentUser()?.profile?.role;
   const isAdmin = role === "tenant_admin";
   const { data, error } = useLedgerChecks();
+  // 有不一致時一致的收起來(全站檢視 L03);按一下全部列出
+  const [showAll, setShowAll] = useState(false);
 
   if (!isAdmin) {
     return (
@@ -86,25 +91,43 @@ export function LedgerChecksPage() {
                 </tr>
               </thead>
               <tbody>
-                {latest.results.map((r) => {
-                  const v = verdict(r);
+                {(() => {
+                  const { shown, folded } = splitChecks(latest.results);
+                  const row = (r: LedgerCheckResult) => {
+                    const v = verdict(r);
+                    return (
+                      <tr key={r.key}>
+                        <td>
+                          {r.label}
+                          {r.detail && <div className="backup-sub">{r.detail}</div>}
+                          {!r.ok &&
+                            r.samples.map((s) => (
+                              <div key={s} className="backup-sub">
+                                {s}
+                              </div>
+                            ))}
+                        </td>
+                        <td className={v.className}>{v.text}</td>
+                        <td className="num">{r.count ? r.count.toLocaleString() : ""}</td>
+                      </tr>
+                    );
+                  };
                   return (
-                    <tr key={r.key}>
-                      <td>
-                        {r.label}
-                        {r.detail && <div className="backup-sub">{r.detail}</div>}
-                        {!r.ok &&
-                          r.samples.map((s) => (
-                            <div key={s} className="backup-sub">
-                              {s}
-                            </div>
-                          ))}
-                      </td>
-                      <td className={v.className}>{v.text}</td>
-                      <td className="num">{r.count ? r.count.toLocaleString() : ""}</td>
-                    </tr>
+                    <>
+                      {shown.map(row)}
+                      {folded.length > 0 && (
+                        <tr className="ledger-fold">
+                          <td colSpan={3}>
+                            <button type="button" className="wb-link" aria-expanded={showAll} onClick={() => setShowAll(!showAll)}>
+                              其餘 {folded.length} 項一致
+                            </button>
+                          </td>
+                        </tr>
+                      )}
+                      {showAll && folded.map(row)}
+                    </>
                   );
-                })}
+                })()}
               </tbody>
             </table>
           </section>
