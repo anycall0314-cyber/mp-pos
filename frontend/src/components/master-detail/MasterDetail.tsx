@@ -116,6 +116,8 @@ export function MasterDetail<T>({
                       setSelectedKey(k);
                     }}
                     onKeyDown={(e) => {
+                      // 只管停在列本身的按鍵:列裡的勾選、輸入框、按鈕按空白 / Enter / 方向鍵照它們自己的(全站控制項 F02)
+                      if (e.target !== e.currentTarget) return;
                       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                         e.preventDefault();
                         const next = stepKey(keys, k, e.key === "ArrowDown" ? 1 : -1);

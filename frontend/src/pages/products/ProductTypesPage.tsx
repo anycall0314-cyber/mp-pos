@@ -523,6 +523,8 @@ export function ProductTypesPage() {
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
+                  // 卡片裡的刪除鈕按 Enter / 空白只做刪除那一顆的事,不同時打開編輯(全站控制項 F02)
+                  if (e.target !== e.currentTarget) return;
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     startEdit(t);

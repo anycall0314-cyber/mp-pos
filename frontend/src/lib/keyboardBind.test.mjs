@@ -30,6 +30,9 @@ test("清單方向鍵換列到頭停住;整張清單只有一個 Tab 停點;鍵�
   assert.equal(stepKey([], 1, 1), null);
   const md = read("../components/master-detail/MasterDetail.tsx");
   assert.match(md, /tabIndex=\{k === tabStop \? 0 : -1\}/);
+  // 列裡的勾選 / 輸入框 / 按鈕的按鍵不歸列管(全站控制項 F02:電信方案勾選按空白會變成打開詳細)
+  assert.match(md, /onKeyDown=\{\(e\) => \{\n\s+\/\/[^\n]*\n\s+if \(e\.target !== e\.currentTarget\) return;/);
+  assert.match(read("../pages/products/ProductTypesPage.tsx"), /onKeyDown=\{\(e\) => \{\n\s+\/\/[^\n]*\n\s+if \(e\.target !== e\.currentTarget\) return;\n\s+if \(e\.key === "Enter" \|\| e\.key === " "\)/);
   assert.match(md, /returnTo\.current = keyOpened\.current !== null && e\.detail === 0 \? keyOpened\.current : null;/, "滑鼠按 × 不搬游標(紅隊)");
   assert.match(md, /onClick=\{\(\) => \{\n\s+keyOpened\.current = null;\n\s+setSelectedKey\(k\);/, "滑鼠點列打開的不算鍵盤打開");
 });
