@@ -10,6 +10,7 @@ import {
   useDeleteReport,
   useSavedReports,
   useSaveReport,
+  useWarehouses,
 } from "@/api/hooks";
 import type {
   AnalyticsCatalog,
@@ -21,9 +22,10 @@ import type {
   AnalyticsValue,
   SavedReport,
 } from "@/api/types";
-import { useCurrentUser, useDefaultWarehouse } from "@/auth/AuthContext";
+import { useCurrentUser } from "@/auth/AuthContext";
 import { Banner, errorMessageOf } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { recapParts, sameQuery } from "@/lib/exploreRecap";
 import { intStr, money } from "@/lib/money";
 
 /**
@@ -119,6 +121,15 @@ export function ExploreReportPage() {
 
   const query = useAnalyticsQuery(applied);
   const result = query.data;
+  // 查完收成一行(全站檢視 V06c):按查詢 / 打開存的報表 → 結果回來才收;查失敗不收(條件還要改)
+  const [builderOpen, setBuilderOpen] = useState(true);
+  const collapseNext = useRef(false);
+  useEffect(() => {
+    if (!collapseNext.current || query.isFetching) return;
+    collapseNext.current = false;
+    if (query.isSuccess) setBuilderOpen(false);
+  }, [applied, query.isFetching, query.isSuccess, query.dataUpdatedAt]);
+  const warehouses = useWarehouses().data;
 
   const allowed = useMemo(
     () => (catalog ? allowedDims(catalog, measures) : []),
@@ -145,6 +156,7 @@ export function ExploreReportPage() {
 
   function run(spec: AnalyticsSpec = buildSpec()) {
     setNotice(null);
+    collapseNext.current = true;
     if (JSON.stringify(spec) === JSON.stringify(applied)) query.refetch();
     else setApplied(spec);
   }
@@ -223,6 +235,7 @@ export function ExploreReportPage() {
     setCompare(s.compare ?? "");
     setSort(s.sort ?? "");
     setLoaded(report);
+    collapseNext.current = true;
     setApplied({ ...s });
     setNotice(
       report.missing.length
@@ -333,189 +346,206 @@ export function ExploreReportPage() {
         }
       />
 
-      <div className="ex-builder">
-        <div className="ex-line">
-          <span className="ex-line-label">期間</span>
-          <select className="ex-select" value={preset} onChange={(e) => setPreset(e.target.value)}>
-            {catalog.presets.map((p) => (
-              <option key={p.key} value={p.key}>
-                {p.label}
-              </option>
-            ))}
-            <option value={CUSTOM}>自訂</option>
-          </select>
-          {preset === CUSTOM && (
-            <>
-              <input
-                type="date"
-                className="ex-date"
-                aria-label="起日"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-              />
-              <input
-                type="date"
-                className="ex-date"
-                aria-label="迄日"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-              />
-            </>
-          )}
-          <select
-            className="ex-select"
-            aria-label="比較"
-            value={hasDate ? "" : compare}
-            disabled={hasDate}
-            onChange={(e) => setCompare(e.target.value)}
-          >
-            {COMPARES.map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="ex-line">
-          <span className="ex-line-label">指標</span>
-          {measures.map((key) => (
-            <span key={key} className="ex-chip">
-              {catalog.measures.find((m) => m.key === key)?.label ?? key}
-              <button
-                type="button"
-                aria-label="移除"
-                onClick={() => changeMeasures(measures.filter((m) => m !== key))}
-              >
-                ×
-              </button>
-            </span>
-          ))}
-          {measures.length < catalog.limits.measures && (
-            <select
-              className="ex-select ex-add"
-              value=""
-              onChange={(e) => e.target.value && changeMeasures([...measures, e.target.value])}
-            >
-              <option value="">加指標</option>
-              {catalog.groups.map((group) => {
-                const items = unpicked.filter((m) => m.group === group);
-                if (items.length === 0) return null;
-                return (
-                  <optgroup key={group} label={group}>
-                    {items.map((m) => (
-                      <option key={m.key} value={m.key}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                );
-              })}
+      {builderOpen && (
+        <div className="ex-builder">
+          <div className="ex-line">
+            <span className="ex-line-label">期間</span>
+            <select className="ex-select" value={preset} onChange={(e) => setPreset(e.target.value)}>
+              {catalog.presets.map((p) => (
+                <option key={p.key} value={p.key}>
+                  {p.label}
+                </option>
+              ))}
+              <option value={CUSTOM}>自訂</option>
             </select>
-          )}
-        </div>
-
-        <div className="ex-line">
-          <span className="ex-line-label">分組</span>
-          {[...dims, ""].slice(0, catalog.limits.dimensions).map((current, index) => (
+            {preset === CUSTOM && (
+              <>
+                <input
+                  type="date"
+                  className="ex-date"
+                  aria-label="起日"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                />
+                <input
+                  type="date"
+                  className="ex-date"
+                  aria-label="迄日"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                />
+              </>
+            )}
             <select
-              key={index}
               className="ex-select"
-              value={current}
-              onChange={(e) => changeDim(index, e.target.value)}
+              aria-label="比較"
+              value={hasDate ? "" : compare}
+              disabled={hasDate}
+              onChange={(e) => setCompare(e.target.value)}
             >
-              <option value="">{current ? "不分" : "加分組"}</option>
-              {allowed
-                .filter((key) => key === current || !dims.includes(key))
-                .map((key) => (
+              {COMPARES.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="ex-line">
+            <span className="ex-line-label">指標</span>
+            {measures.map((key) => (
+              <span key={key} className="ex-chip">
+                {catalog.measures.find((m) => m.key === key)?.label ?? key}
+                <button
+                  type="button"
+                  aria-label="移除"
+                  onClick={() => changeMeasures(measures.filter((m) => m !== key))}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {measures.length < catalog.limits.measures && (
+              <select
+                className="ex-select ex-add"
+                value=""
+                onChange={(e) => e.target.value && changeMeasures([...measures, e.target.value])}
+              >
+                <option value="">加指標</option>
+                {catalog.groups.map((group) => {
+                  const items = unpicked.filter((m) => m.group === group);
+                  if (items.length === 0) return null;
+                  return (
+                    <optgroup key={group} label={group}>
+                      {items.map((m) => (
+                        <option key={m.key} value={m.key}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
+              </select>
+            )}
+          </div>
+
+          <div className="ex-line">
+            <span className="ex-line-label">分組</span>
+            {[...dims, ""].slice(0, catalog.limits.dimensions).map((current, index) => (
+              <select
+                key={index}
+                className="ex-select"
+                value={current}
+                onChange={(e) => changeDim(index, e.target.value)}
+              >
+                <option value="">{current ? "不分" : "加分組"}</option>
+                {allowed
+                  .filter((key) => key === current || !dims.includes(key))
+                  .map((key) => (
+                    <option key={key} value={key}>
+                      {dimLabel(key)}
+                    </option>
+                  ))}
+              </select>
+            ))}
+            {hasDate && (
+              <select
+                className="ex-select"
+                aria-label="日期單位"
+                value={grain}
+                onChange={(e) => setGrain(e.target.value)}
+              >
+                {catalog.grains.map((g) => (
+                  <option key={g.key} value={g.key}>
+                    按{g.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div className="ex-line">
+            <span className="ex-line-label">條件</span>
+            {Object.entries(filters).map(([key, opts]) => (
+              <span key={key} className="ex-chip">
+                <button type="button" className="ex-chip-text" onClick={() => setEditingFilter(key)}>
+                  {dimLabel(key)}:{opts.map((o) => o.label).join("、")}
+                </button>
+                <button
+                  type="button"
+                  aria-label="移除"
+                  onClick={() =>
+                    setFilters((prev) =>
+                      Object.fromEntries(Object.entries(prev).filter(([k]) => k !== key)),
+                    )
+                  }
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {filterable.length > 0 && (
+              <select
+                className="ex-select ex-add"
+                value=""
+                onChange={(e) => e.target.value && setEditingFilter(e.target.value)}
+              >
+                <option value="">加條件</option>
+                {filterable.map((key) => (
                   <option key={key} value={key}>
                     {dimLabel(key)}
                   </option>
                 ))}
-            </select>
-          ))}
-          {hasDate && (
-            <select
-              className="ex-select"
-              aria-label="日期單位"
-              value={grain}
-              onChange={(e) => setGrain(e.target.value)}
-            >
-              {catalog.grains.map((g) => (
-                <option key={g.key} value={g.key}>
-                  按{g.label}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+              </select>
+            )}
+          </div>
 
-        <div className="ex-line">
-          <span className="ex-line-label">條件</span>
-          {Object.entries(filters).map(([key, opts]) => (
-            <span key={key} className="ex-chip">
-              <button type="button" className="ex-chip-text" onClick={() => setEditingFilter(key)}>
-                {dimLabel(key)}:{opts.map((o) => o.label).join("、")}
-              </button>
-              <button
-                type="button"
-                aria-label="移除"
-                onClick={() =>
-                  setFilters((prev) =>
-                    Object.fromEntries(Object.entries(prev).filter(([k]) => k !== key)),
-                  )
-                }
-              >
-                ×
-              </button>
-            </span>
-          ))}
-          {filterable.length > 0 && (
-            <select
-              className="ex-select ex-add"
-              value=""
-              onChange={(e) => e.target.value && setEditingFilter(e.target.value)}
+          <div className="ex-line ex-actions">
+            <button
+              type="button"
+              className="btn primary"
+              onClick={() => run()}
+              disabled={measures.length === 0}
             >
-              <option value="">加條件</option>
-              {filterable.map((key) => (
-                <option key={key} value={key}>
-                  {dimLabel(key)}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-
-        <div className="ex-line ex-actions">
-          <button
-            type="button"
-            className="btn primary"
-            onClick={() => run()}
-            disabled={measures.length === 0}
-          >
-            查詢
-          </button>
-          <button type="button" className="btn" onClick={reset}>
-            清除
-          </button>
-          <button type="button" className="btn" onClick={exportCsv} disabled={!result}>
-            匯出
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setSaving(true)}
-            disabled={measures.length === 0}
-          >
-            存檔
-          </button>
-          {loaded?.editable && (
-            <button type="button" className="btn danger" onClick={removeLoaded}>
-              {arm.armed === `del:${loaded.id}` ? "再按一次刪除" : "刪除"}
+              查詢
             </button>
-          )}
+            <button type="button" className="btn" onClick={reset}>
+              清除
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setSaving(true)}
+              disabled={measures.length === 0}
+            >
+              存檔
+            </button>
+            {loaded?.editable && (
+              <button type="button" className="btn danger" onClick={removeLoaded}>
+                {arm.armed === `del:${loaded.id}` ? "再按一次刪除" : "刪除"}
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* 這一次查的是什麼(只用伺服器回來的寫);上面改了還沒查 → 尚未重查(紅隊) */}
+      {result && !query.error && (
+        <div className="ex-recap">
+          <span className="ex-recap-text">
+            {recapParts(result, (warehouses ?? []).map((w) => w.name)).join("　")}
+          </span>
+          {!sameQuery(buildSpec(), applied) && <span className="ex-recap-stale">尚未重查</span>}
+          <span className="ex-recap-actions">
+            <button type="button" className="btn" aria-expanded={builderOpen} onClick={() => setBuilderOpen((v) => !v)}>
+              {builderOpen ? "收起" : "修改"}
+            </button>
+            <button type="button" className="btn" onClick={exportCsv}>
+              匯出
+            </button>
+          </span>
+        </div>
+      )}
 
       <div className="ex-result">
         {reportsError && (
@@ -581,19 +611,10 @@ function ResultView({
 }) {
   const { columns, applied } = result;
   const comparing = !!applied.compare;
-  // 鎖在門市的帳號伺服器只算自己那一家(不管條件怎麼選):講出來,不要讓人以為是全公司
-  const store = useDefaultWarehouse();
   const mark = (key: string) => (sort === key ? " ▲" : sort === `-${key}` ? " ▼" : "");
 
   return (
     <>
-      <div className="ex-period">
-        {applied.period.from} ~ {applied.period.to}
-        {applied.compare_period &&
-          `　對比 ${applied.compare_period.from} ~ ${applied.compare_period.to}`}
-        {store.locked && `　只算${store.name || "自己門市"}`}
-      </div>
-
       <div className="sd-summary ex-summary">
         {columns.measures.map((m) => {
           const delta = comparing

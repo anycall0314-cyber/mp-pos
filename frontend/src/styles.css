@@ -6694,6 +6694,26 @@ tr.selected .intake-badge { filter: none; }
   font-variant-numeric: tabular-nums;
 }
 .ex-summary { background: transparent; border-bottom: none; }
+/* 自訂分析查完收成一行、指標卡壓成一排(全站檢視 V06c):摘要不截字(第三個分組也要看得到),按鈕靠右 */
+.ex-recap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 6px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.ex-recap-text { flex: 1 1 320px; min-width: 0; }
+.ex-recap-stale { color: var(--warn-text); font-weight: 600; }
+.ex-recap-actions { display: inline-flex; gap: 6px; margin-left: auto; }
+.ex-summary { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 16px; }
+.ex-summary .sd-summary-card { display: flex; align-items: baseline; gap: 8px; padding: 4px 10px; }
+.ex-summary .sd-summary-card-label { margin-bottom: 0; }
+.ex-summary .sd-summary-card-value { font-size: var(--font-body); }
+.ex-summary .ex-delta { margin-top: 0; }
 .ex-delta {
   margin-top: 4px;
   font-size: var(--font-secondary);
