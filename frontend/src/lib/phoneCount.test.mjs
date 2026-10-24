@@ -67,3 +67,19 @@ test("頁面:不登入的路由、憑證在 # 後面、讀條碼的核心檔放�
   // 伺服器說好了、內容沒傳完:當成斷線(用同一個編號重送)
   assert.ok(api.includes('if (res.ok) throw new CountPhoneError("連不上,請確認手機網路後再試", "network");'));
 });
+
+test("按結束(全站控制項 F01):還沒確定的先重送、還在送的等它做完、伺服器確定結束才算;結束中刷到的不收", () => {
+  const page = readFileSync(new URL("../pages/inventory/PhoneCountPage.tsx", import.meta.url), "utf8");
+  const fin = page.slice(page.indexOf("async function finish()"), page.indexOf("if (problem?.gone)"));
+  assert.match(fin, /if \(unsure\(\)\) return;\n\s+finishing\.current = true;/, "還沒確定的那幾下要先重送");
+  assert.ok(fin.indexOf("await queue.current;") > 0 && fin.indexOf("await queue.current;") < fin.indexOf("finishPhoneCount("), "等排隊的送完才結束");
+  assert.match(fin, /\["gone", "expired", "taken"\]\.includes\(e\.code\)/, "本來就結束了才算結束,斷線不算");
+  assert.match(fin, /沒有結束成功,請再按一次結束/);
+  assert.match(fin, /if \(refused\.current !== refusedBefore\) return;/, "等的時候有一下被退回就不結束(複審 P0)");
+  assert.ok(fin.indexOf("setProblem(") > fin.indexOf("finishPhoneCount("), "伺服器回答之後才換成盤完了");
+  assert.match(page, /if \(finishing\.current\) \{\n\s+setNote\(\{ ok: false, text: "正在結束,這一下沒有記" \}\);/);
+  // 伺服器回的「已結束」不是刷了什麼:要用專門的那一支,不然成功會被當成斷線
+  const api = readFileSync(new URL("../api/countPhone.ts", import.meta.url), "utf8");
+  assert.match(api, /export async function finishPhoneCount\(token: string, device: string\): Promise<void> \{\n\s+await call\(token, device, "finish"\);/);
+  assert.doesNotMatch(page, /countPhoneCall\(token, device, "finish"\)/);
+});

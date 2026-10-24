@@ -25,9 +25,28 @@ const BASE = import.meta.env.VITE_API_BASE || "/api/v1";
 export async function countPhoneCall(
   token: string,
   device: string,
-  action: "claim" | "state" | "tap" | "pile" | "undo" | "finish",
+  action: "claim" | "state" | "tap" | "pile" | "undo",
   body?: { code?: string; mode?: "accessory" | "phone"; n?: number; op?: string; target?: number },
 ): Promise<PhoneCountState> {
+  const data = await call(token, device, action, body);
+  if (!data || !Array.isArray((data as { taps?: unknown }).taps)) throw new CountPhoneError("連不上,請確認手機網路後再試", "network");
+  return data as unknown as PhoneCountState;
+}
+
+/**
+ * 手機自己按「結束」(全站控制項 F01)。伺服器回的是「已結束」一句話、不是刷了什麼,
+ * 不能用上面那一支(會把成功當成斷線)。丟出錯誤 = 沒結束成功(gone / expired / taken = 本來就結束了)。
+ */
+export async function finishPhoneCount(token: string, device: string): Promise<void> {
+  await call(token, device, "finish");
+}
+
+async function call(
+  token: string,
+  device: string,
+  action: "claim" | "state" | "tap" | "pile" | "undo" | "finish",
+  body?: { code?: string; mode?: "accessory" | "phone"; n?: number; op?: string; target?: number },
+): Promise<Record<string, unknown> | null> {
   let res: Response;
   try {
     res = await fetch(`${BASE}/count-phone/${action}/`, {
@@ -50,6 +69,5 @@ export async function countPhoneCall(
   if (!res.ok) {
     throw new CountPhoneError(String(data?.detail ?? "沒有成功,請再試一次"), String(data?.code ?? (res.status >= 500 ? "network" : "refused")));
   }
-  if (!data || !Array.isArray((data as { taps?: unknown }).taps)) throw new CountPhoneError("連不上,請確認手機網路後再試", "network");
-  return data as unknown as PhoneCountState;
+  return data;
 }

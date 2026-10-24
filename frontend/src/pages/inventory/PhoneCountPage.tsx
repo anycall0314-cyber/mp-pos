@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import wasmUrl from "zxing-wasm/reader/zxing_reader.wasm?url";
 
-import { countPhoneCall, CountPhoneError, type PhoneCountState } from "@/api/countPhone";
+import { countPhoneCall, finishPhoneCount, CountPhoneError, type PhoneCountState } from "@/api/countPhone";
 import { newId } from "@/lib/newId";
 import { BARCODE_FORMATS, createScanGate, pileQty, tapText } from "@/lib/phoneCount";
 import { errorText } from "@/lib/errorText";
@@ -95,6 +95,11 @@ export function PhoneCountPage() {
   const audio = useRef<AudioContext | null>(null);
   const goneRef = useRef(false);
   goneRef.current = !!problem?.gone;
+  /** 按了「結束」、還在等前面的送完 / 等伺服器回答(這段時間刷到的不收,不然會跟結束搶先後) */
+  const finishing = useRef(false);
+  const [ending, setEnding] = useState(false);
+  /** 被伺服器退回的動作有幾下(結束等前面送完時,中間有一下被退回就不結束、留著那句錯誤;複審 P0) */
+  const refused = useRef(0);
 
   function feedback(ok: boolean) {
     try {
@@ -156,6 +161,11 @@ export function PhoneCountPage() {
 
   function submitJob(job: Job) {
     if (goneRef.current) return;
+    if (finishing.current) {
+      setNote({ ok: false, text: "正在結束,這一下沒有記" });
+      feedback(false);
+      return;
+    }
     enqueue(async () => {
       // 前面有還沒確定的動作:這一個排在它後面、等按「重送」一起照順序送(複審第二輪 P0:不能超車,收回會收到別的那一下)
       // 重送時也一樣:前一下又沒送到,後面的就跟著排回去,不會自己先送出去
@@ -178,6 +188,7 @@ export function PhoneCountPage() {
           setNote({ ok: false, text: "連不上,剛剛那一下還不確定" });
           feedback(false);
         } else {
+          refused.current += 1;
           fail(e);
         }
       } finally {
@@ -295,14 +306,44 @@ export function PhoneCountPage() {
 
   useEffect(() => () => stopCamera(), []);
 
+  /**
+   * 結束這支手機(全站控制項 F01):結束之後這次配對就送不進去了,所以
+   * 還沒確定的那幾下要先重送;還在送 / 排隊的等它們做完;伺服器確定結束了才換成「盤完了」,
+   * 斷線之類沒結束成功的留在原畫面、可以再按一次。只結束這支手機,不送出整張盤點單。
+   */
   async function finish() {
-    stopCamera();
+    if (finishing.current) return;
+    const unsure = () => {
+      if (pendingNow.current.length === 0) return false;
+      setNote({ ok: false, text: `還沒確定 ${pendingNow.current.length} 下,先按重送再結束` });
+      feedback(false);
+      return true;
+    };
+    if (unsure()) return;
+    finishing.current = true;
+    setEnding(true);
+    const refusedBefore = refused.current;
     try {
-      await countPhoneCall(token, device, "finish");
-    } catch {
-      /* 已經結束了也一樣 */
+      await queue.current;
+      if (unsure()) return;
+      // 等的時候前面有一下被退回(例:要改刷 IMEI):那一台沒記到,不結束、留著那句錯誤讓人處理
+      if (refused.current !== refusedBefore) return;
+      try {
+        await finishPhoneCount(token, device);
+      } catch (e) {
+        // 已經結束了(電腦按了結束、單子送出了)也一樣是結束;其他的是沒結束成功
+        if (!(e instanceof CountPhoneError && ["gone", "expired", "taken"].includes(e.code))) {
+          setNote({ ok: false, text: "沒有結束成功,請再按一次結束" });
+          feedback(false);
+          return;
+        }
+      }
+      stopCamera();
+      setProblem({ text: "這支手機盤完了。要再盤,請在電腦按「手機盤點」再掃一次", gone: true });
+    } finally {
+      finishing.current = false;
+      setEnding(false);
     }
-    setProblem({ text: "這支手機盤完了。要再盤,請在電腦按「手機盤點」再掃一次", gone: true });
   }
 
   if (problem?.gone) {
@@ -334,8 +375,8 @@ export function PhoneCountPage() {
           {info.no} {info.warehouse}
           <span className="pc-who">{info.label}</span>
         </div>
-        <button type="button" className="pc-btn" onClick={() => void finish()}>
-          結束
+        <button type="button" className="pc-btn" disabled={ending} onClick={() => void finish()}>
+          {ending ? "結束中" : "結束"}
         </button>
       </div>
       <div className="pc-modes" role="group" aria-label="刷到不認得的碼時">
