@@ -19,6 +19,7 @@ import { useCan, useCurrentUser, useDefaultWarehouse } from "@/auth/AuthContext"
 import { Banner } from "@/components/Banner";
 import { Drawer } from "@/components/Drawer";
 import { Toolbar } from "@/components/Toolbar";
+import { ControlBar, StatusBadge, Tabs, ToolbarField } from "@/components/ui";
 import { apiErrorText } from "@/components/workbench/errors";
 import { ArmButton } from "@/components/workbench/ArmButton";
 import { QtyInput } from "@/components/workbench/QtyInput";
@@ -129,7 +130,8 @@ export function VendorOrdersPage() {
   const tabs = useMemo(() => categoryTabs(links.data?.categories ?? [], options), [links.data, options]);
   const [category, setCategory] = useState<number | null>(null);
   const [wanted, setWanted] = useState<string | null>(null);
-  const shown = inCategory(options, tabs.some((c) => c.id === category) ? category : null);
+  const shownCategory = tabs.some((c) => c.id === category) ? category : null;
+  const shown = inCategory(options, shownCategory);
   // 還在這一排裡就不換(換類別不會換廠商、也不會換購物車);沒選過就用這家門市上次停的那一家
   const provider = pickVendor(shown, wanted ?? readLastVendor(warehouse));
   const link = rows.find((r) => r.warehouse === warehouse && r.provider === provider) ?? null;
@@ -146,74 +148,67 @@ export function VendorOrdersPage() {
 
   return (
     <div className="page vo-page">
+      {/* 換工作區用文字 + 底線的分頁;門市、廠商分類、廠商是帶欄名的工具列;未開通 / 已停用 / 限管理是狀態標籤(全站控制項 B1) */}
       <Toolbar title="廠商叫貨">
-        <div className="tab-switcher" role="tablist" aria-label="廠商叫貨">
-          {pageTabs(canOrder).map((t) => (
-            <button
-              key={t.value}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.value}
-              className={`tab-switcher-item${tab === t.value ? " active" : ""}`}
-              onClick={() => setTab(t.value)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        {!store.locked && stores.length > 1 && (
-          <select
-            aria-label="門市"
-            value={warehouse ?? ""}
-            onChange={(e) => {
-              setPicked(Number(e.target.value));
-              setWanted(null);
-            }}
-          >
-            {stores.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-              </option>
-            ))}
-          </select>
-        )}
-        {link && <span className="vo-vendor">{link.provider_label}</span>}
-        {link?.sandbox === true && <span className="vo-test">測試金鑰</span>}
+        <Tabs
+          id="vo"
+          label="廠商叫貨"
+          items={pageTabs(canOrder).map((t) => ({ key: t.value, label: t.label }))}
+          value={tab}
+          onChange={setTab}
+          className="vo-tabs"
+        />
       </Toolbar>
-      {showPicker(options) && (
-        <div className="vo-pick">
-          {tabs.length > 0 && (
-            <div className="vo-pick-row" role="tablist" aria-label="類別">
-              {[{ id: null as number | null, name: "全部" }, ...tabs].map((c) => (
-                <button
-                  key={c.id ?? "all"}
-                  type="button"
-                  role="tab"
-                  aria-selected={category === c.id}
-                  className={`vo-chip${category === c.id ? " active" : ""}`}
-                  onClick={() => setCategory(c.id)}
-                >
-                  {c.name}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="vo-pick-row" role="tablist" aria-label="廠商">
-            {shown.map((o) => (
-              <button
-                key={o.provider}
-                type="button"
-                role="tab"
-                aria-selected={o.provider === provider}
-                className={`vo-chip vo-chip-vendor${o.provider === provider ? " active" : ""}${o.blocked ? " off" : ""}`}
-                onClick={() => choose(o.provider)}
+      {((!store.locked && stores.length > 1) || showPicker(options) || link) && (
+        <ControlBar className="vo-pick" label="叫貨對象">
+          {!store.locked && stores.length > 1 && (
+            <ToolbarField label="門市">
+              <select
+                value={warehouse ?? ""}
+                onChange={(e) => {
+                  setPicked(Number(e.target.value));
+                  setWanted(null);
+                }}
               >
-                {o.label}
-                {o.blocked && <span className="vo-chip-why">{o.blocked}</span>}
-              </button>
-            ))}
-          </div>
-        </div>
+                {stores.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+            </ToolbarField>
+          )}
+          {showPicker(options) && tabs.length > 0 && (
+            // 廠商分類只用來篩廠商(不是商品分類);換分類時原本的廠商還在清單裡就不換、購物車也不換
+            <ToolbarField label="廠商分類">
+              <select value={shownCategory ?? ""} onChange={(e) => setCategory(e.target.value === "" ? null : Number(e.target.value))}>
+                <option value="">全部</option>
+                {tabs.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </ToolbarField>
+          )}
+          {showPicker(options) ? (
+            // 被限制的廠商照樣選得到(選了看原因),不一律停用
+            <ToolbarField label="廠商">
+              <select value={provider ?? ""} onChange={(e) => choose(e.target.value)}>
+                {shown.map((o) => (
+                  <option key={o.provider} value={o.provider}>
+                    {o.label}
+                    {o.blocked ? `(${o.blocked})` : ""}
+                  </option>
+                ))}
+              </select>
+            </ToolbarField>
+          ) : (
+            link && <span className="vo-vendor">{link.provider_label}</span>
+          )}
+          {blocked && <StatusBadge tone={blocked === "已停用" ? "danger" : "warn"}>{blocked}</StatusBadge>}
+          {link?.sandbox === true && <StatusBadge tone="info">測試金鑰</StatusBadge>}
+        </ControlBar>
       )}
       {links.isLoading && <div className="md-empty">載入中…</div>}
       {links.isError && <div className="md-empty">{apiErrorText(links.error)}</div>}

@@ -19,6 +19,7 @@ import { useCurrentUser } from "@/auth/AuthContext";
 import { Banner } from "@/components/Banner";
 import { ComboBox, type ComboOption } from "@/components/ComboBox";
 import { Toolbar } from "@/components/Toolbar";
+import { ControlBar, TabPanel, Tabs, ToolbarField } from "@/components/ui";
 import { errorText } from "@/lib/errorText";
 
 /**
@@ -57,22 +58,13 @@ export function LegacyMappingPage() {
     <div className="page">
       <Toolbar title="歐睿對照" />
       <div className="entry-body legacy-page">
-        <div className="legacy-tabs">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              className={`btn ${tab === t.key ? "primary" : ""}`}
-              onClick={() => setTab(t.key)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        {tab === "members" && <MembersTab />}
-        {(tab === "stores" || tab === "products" || tab === "salespersons") && (
-          <MapsTab kind={tab} />
-        )}
-        {tab === "exceptions" && <ExceptionsTab />}
+        {/* 換工作區(全站控制項 B1):文字 + 底線的分頁;換頁不確認對照、不結案。「待核」是案件工作區,不是未對照的篩選 */}
+        <Tabs id="legacy" label="歐睿對照" items={TABS} value={tab} onChange={setTab} className="legacy-tabbar" />
+        <TabPanel id="legacy" k={tab} active>
+          {tab === "members" && <MembersTab />}
+          {(tab === "stores" || tab === "products" || tab === "salespersons") && <MapsTab kind={tab} />}
+          {tab === "exceptions" && <ExceptionsTab />}
+        </TabPanel>
       </div>
     </div>
   );
@@ -144,29 +136,33 @@ function MembersTab() {
     <>
       {error && <Banner kind="error" message={error} />}
       {list.error && <Banner kind="error" message={`讀取失敗:${String(list.error)}`} />}
-      <div className="legacy-toolbar">
-        <input
-          placeholder="舊編號 / 姓名 / 電話"
-          value={q}
-          onChange={(e) => {
-            setQ(e.target.value);
-            setPage(1);
-          }}
-        />
-        <StatusFilter
-          value={status}
-          onChange={(v) => {
-            setStatus(v);
-            setPage(1);
-          }}
-        />
+      <ControlBar className="legacy-toolbar" label="會員對照篩選">
+        <ToolbarField label="搜尋">
+          <input
+            placeholder="舊編號 / 姓名 / 電話"
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value);
+              setPage(1);
+            }}
+          />
+        </ToolbarField>
+        <ToolbarField label="對照">
+          <StatusFilter
+            value={status}
+            onChange={(v) => {
+              setStatus(v);
+              setPage(1);
+            }}
+          />
+        </ToolbarField>
         {s && (
           <span className="legacy-sub">
             共 {s.total} · 已對照 {s.confirmed} · 未對照 {s.unmapped}
             {s.open_exceptions > 0 && ` · 待核 ${s.open_exceptions}`}
           </span>
         )}
-      </div>
+      </ControlBar>
       <table className="line-table">
         <thead>
           <tr>
@@ -321,28 +317,32 @@ function MapsTab({ kind }: { kind: LegacyMapKind }) {
     <>
       {error && <Banner kind="error" message={error} />}
       {list.error && <Banner kind="error" message={`讀取失敗:${String(list.error)}`} />}
-      <div className="legacy-toolbar">
-        <input
-          placeholder={kind === "products" ? "舊品號 / 品名" : "舊代號"}
-          value={q}
-          onChange={(e) => {
-            setQ(e.target.value);
-            setPage(1);
-          }}
-        />
-        <StatusFilter
-          value={status}
-          onChange={(v) => {
-            setStatus(v);
-            setPage(1);
-          }}
-        />
+      <ControlBar className="legacy-toolbar" label="對照篩選">
+        <ToolbarField label="搜尋">
+          <input
+            placeholder={kind === "products" ? "舊品號 / 品名" : "舊代號"}
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value);
+              setPage(1);
+            }}
+          />
+        </ToolbarField>
+        <ToolbarField label="對照">
+          <StatusFilter
+            value={status}
+            onChange={(v) => {
+              setStatus(v);
+              setPage(1);
+            }}
+          />
+        </ToolbarField>
         {s && (
           <span className="legacy-sub">
             共 {s.total} · 已對照 {s.confirmed} · 未對照 {s.unmapped}
           </span>
         )}
-      </div>
+      </ControlBar>
       <table className="line-table">
         <thead>
           <tr>

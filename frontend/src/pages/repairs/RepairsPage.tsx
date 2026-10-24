@@ -10,11 +10,19 @@ import { AppliedFilters } from "@/components/AppliedFilters";
 import { MoneyInput } from "@/components/MoneyInput";
 import { apiErrorText } from "@/components/workbench/errors";
 import { Toolbar } from "@/components/Toolbar";
+import { ControlBar, SegmentedControl, ToolbarField } from "@/components/ui";
 import { useStoreParam } from "@/hooks/useStoreParam";
 import { appliedList, cond } from "@/lib/appliedFilters";
 import { localDay } from "@/lib/fixedReports";
 import { type InlinePhase, needsSave, phaseText, takeServerValue } from "@/lib/inlineSave";
 import { intStr, money } from "@/lib/money";
+
+/** 維修方式:三個、名稱短、互斥 → 單選列(docs/ui-controls.md §1);值跟伺服器的 mode 參數一樣("" = 全部) */
+const MODE_OPTIONS: { value: "" | "in_house" | "external"; label: string }[] = [
+  { value: "", label: "全部" },
+  { value: "in_house", label: "自修" },
+  { value: "external", label: "委外" },
+];
 
 const STATUS_OPTIONS = [
   // 預設只看還沒完成的(全站檢視 E4:以前連完成的都列,取機時要在一長串裡找)
@@ -153,7 +161,7 @@ export function RepairsPage() {
   const [search, setSearch] = useState("");
   const canVoid = useCan("void_others");
   const voidRepair = useVoidRepairOrder();
-  const [mode, setMode] = useState("");
+  const [mode, setMode] = useState<"" | "in_house" | "external">("");
   const [returnVisitOnly, setReturnVisitOnly] = useState(false);
   const [overdue, setOverdue] = useState<"" | "1" | "external">(() => {
     const v = params.get("overdue");
@@ -198,9 +206,9 @@ export function RepairsPage() {
           </Link>
         }
       />
-      <div className="list-filterbar">
-        <label>
-          搜尋
+      {/* 篩選列(全站控制項 B1):欄名 + 控制項;維修方式三個用單選列,返修 / 逾期可以同時勾。搜尋按 Enter 才查、其他即時套用(照舊) */}
+      <ControlBar className="list-filterbar" label="維修單篩選">
+        <ToolbarField label="搜尋">
           <input
             type="text"
             value={searchDraft}
@@ -213,9 +221,8 @@ export function RepairsPage() {
               }
             }}
           />
-        </label>
-        <label>
-          狀態
+        </ToolbarField>
+        <ToolbarField label="狀態">
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
             {STATUS_OPTIONS.map((o) => (
               <option key={o.v} value={o.v}>
@@ -223,34 +230,20 @@ export function RepairsPage() {
               </option>
             ))}
           </select>
+        </ToolbarField>
+        <SegmentedControl
+          label="維修方式"
+          value={mode}
+          onChange={setMode}
+          options={MODE_OPTIONS}
+        />
+        <label className="ui-tf">
+          <input type="checkbox" checked={returnVisitOnly} onChange={(e) => setReturnVisitOnly(e.target.checked)} />
+          <span>只看返修</span>
         </label>
-        <label>
-          維修方式
-          <select value={mode} onChange={(e) => setMode(e.target.value)}>
-            <option value="">全部</option>
-            <option value="in_house">自修</option>
-            <option value="external">委外</option>
-          </select>
-        </label>
-        <label
-          style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-        >
-          <input
-            type="checkbox"
-            checked={returnVisitOnly}
-            onChange={(e) => setReturnVisitOnly(e.target.checked)}
-          />
-          僅看返修
-        </label>
-        <label
-          style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-        >
-          <input
-            type="checkbox"
-            checked={!!overdue}
-            onChange={(e) => setOverdue(e.target.checked ? "1" : "")}
-          />
-          僅看逾期
+        <label className="ui-tf">
+          <input type="checkbox" checked={!!overdue} onChange={(e) => setOverdue(e.target.checked ? "1" : "")} />
+          <span>只看逾期</span>
         </label>
         <span className="list-filterbar-count">
           {rows.length} 筆
@@ -260,7 +253,7 @@ export function RepairsPage() {
             </span>
           )}
         </span>
-      </div>
+      </ControlBar>
 
       <AppliedFilters
         items={appliedList([

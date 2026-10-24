@@ -517,11 +517,12 @@ button { font-family: inherit; }
 /* 鍵盤焦點:看得見、跟「選中」分開(滑鼠點不出框) */
 .btn:focus-visible,
 .wb-btn:focus-visible,
-.ui-icon-btn:focus-visible,
-.ui-tab:focus-visible {
+.ui-icon-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* 分頁列會橫捲(overflow),框畫在外面會被切掉上下:畫在裡面 */
+.ui-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .btn.ui-btn-text { background: transparent; border-color: transparent; color: var(--accent); }
 .btn.ui-btn-text:hover { background: var(--row-hover); }
 /* 日間主題的 .btn 白底灰框規則比較具體,文字型要再寫一次才蓋得過 */
@@ -6704,8 +6705,10 @@ tr.selected .intake-badge { filter: none; }
 .legacy-doc-modal td:nth-child(6) { white-space: nowrap; }
 .legacy-doc-modal .modal-body { overflow-x: auto; }
 .legacy-page { max-width: 1100px; }
-.legacy-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
-.legacy-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.legacy-tabbar { margin-bottom: 12px; }
+/* 廠商叫貨:分頁放在頁首那一排裡,不再畫一條底線(頁首本身有) */
+.vo-tabs { border-bottom: 0; align-self: stretch; align-items: flex-end; }
+.legacy-toolbar { margin-bottom: 8px; }
 .legacy-toolbar input { width: 220px; max-width: 100%; }
 .legacy-actions { white-space: nowrap; text-align: right; }
 .legacy-actions .btn + .btn { margin-left: 6px; }
@@ -8028,6 +8031,8 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   border-bottom: 1px solid var(--border);
 }
 .vo-pick-row { display: flex; flex-wrap: wrap; gap: 6px; }
+/* 廠商叫貨的工具列(全站控制項 B1):橫排;批發頁的 .vo-pick 照舊直排 */
+.vo-pick.ui-toolbar { flex-direction: row; align-items: center; gap: 8px 12px; }
 .vo-chip {
   min-height: var(--control-height);
   padding: 0 14px;
