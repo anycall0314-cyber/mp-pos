@@ -112,7 +112,7 @@
 
 - 繁體中文回應、UI 一律繁中;**禁用 emoji**。
 - 先規劃再實作(大改動先列範圍 / 取捨再動工);「跟 XXX 一樣的模式」照 `docs/ui-patterns.md` 與既有頁面。
-- 新增 / 修改按鈕、分頁、篩選、開關先讀 `docs/ui-controls.md`:依用途用共用元件與 token,不再另造頁面樣式;元件尚未遷移時沿用既有共用入口並登記。自動守門尚待計劃第一批實作,不能把文件規範當成測試已攔截。
+- 新增 / 修改按鈕、分頁、篩選、開關先讀 `docs/ui-controls.md`:依用途用共用元件與 token,不再另造頁面樣式;共用元件在 `@/components/ui`(Button / IconButton / Tabs / SegmentedControl / StatusBadge / ToolbarField);`controlsPolicy.test.mjs` 擋新的違規(現有的在 `controlsBaseline.json`,只能減少),但部署腳本還沒跑測試。
 - owner 非工程師:不直接寫 git,要求提交才動;提交就一起推 GitHub;測試站測完審完可以直接部署,**正式站要 owner 明確授權**;不直接改 `.env` 之類底層設定,問過再改。
 - 回報要短。文件寫規則、不寫日記:原話、日期、複審第幾輪抓到什麼放 `docs/decisions.md`。
 

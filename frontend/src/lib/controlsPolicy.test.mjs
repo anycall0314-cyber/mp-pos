@@ -1,0 +1,73 @@
+// 全站控制項的自動檢查(docs/ui-controls.md §7;規則在 controlsPolicy.mjs)。跑法:npm test。
+// 新寫的頁面另外造按鈕 / 分頁 / 開關外觀會變紅;現有的記在 controlsBaseline.json,只能減少。
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+import { BASELINE, parseCss, scanAll, scanCss, scanSource, tally } from "./controlsPolicy.mjs";
+
+const rules = (vs) => vs.map((v) => v.rule).sort();
+
+test("會攔:頁面自製藍按鈕(inline 外觀)、沒有名稱的 ×、用主要按鈕藍底表示選中、舊分頁樣式、可點的 div、複製開關", () => {
+  const bad = `
+    export function P({ tab, setTab }) {
+      return (
+        <div>
+          <button style={{ background: "#2563eb", color: "#fff", padding: 12 }}>送出</button>
+          <button onClick={() => setTab(null)}>×</button>
+          <button className={tab === "a" ? "btn primary" : "btn"} onClick={() => setTab("a")}>甲</button>
+          <div className="tab-switcher"><button className="tab-switcher-item">乙</button></div>
+          <div onClick={() => setTab("b")}>丙</div>
+          <label className="toggle-switch"><input type="checkbox" /></label>
+          <button><CloseIcon /></button>
+        </div>
+      );
+    }`;
+  const found = rules(scanSource("pages/x/P.tsx", bad));
+  for (const r of ["inline-look", "icon-no-name", "primary-as-state", "legacy-tab", "clickable-noninteractive", "copied-switch"]) {
+    assert.ok(found.includes(r), `應該攔到 ${r}(攔到的:${found.join(", ")})`);
+  }
+  assert.equal(found.filter((r) => r === "icon-no-name").length, 2, "× 與只有圖示的按鈕都要攔");
+});
+
+test("不攔:用共用元件、有名稱的圖示按鈕、純排版的 style、有角色與 tabIndex 的可點容器;共用層自己不算", () => {
+  const good = `
+    export function P({ tab, setTab }) {
+      return (
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button variant="primary">送出</Button>
+          <IconButton label="關閉維修歷史">×</IconButton>
+          <button aria-label="移除第 2 筆商品">×</button>
+          <button style={{ width: 120 }}>寬一點</button>
+          <Tabs id="t" label="叫貨" items={[]} value="a" onChange={setTab} />
+          <tr role="button" tabIndex={0} onClick={() => setTab("x")}><td>列</td></tr>
+        </div>
+      );
+    }`;
+  assert.deepEqual(scanSource("pages/x/P.tsx", good), []);
+  assert.deepEqual(scanSource("components/ui/Button.tsx", `<button style={{ background: "red" }}>x</button>`), [], "共用層定義外觀是對的");
+});
+
+test("CSS:頁面另外改控制項外觀、拿掉焦點框會攔;純排版、共用層、focus-visible 不攔", () => {
+  const css = `
+    .page-x .btn { border-radius: 12px; }
+    .vo-chip-btn { background: #333; padding: 2px; }
+    .x-input:focus { outline: none; }
+    .layout { display: flex; gap: 8px; }
+    .btn.primary { background: var(--accent-fill); }
+    .ui-tab[aria-selected="true"] { color: var(--text); }
+    .ui-tab:focus-visible { outline: 2px solid var(--accent); }
+    @media (pointer: coarse) { .other-btn { min-height: 44px; } }`;
+  const found = scanCss("x.css", css);
+  assert.deepEqual(rules(found), ["css-control-look", "css-control-look", "css-control-look", "css-outline-none"]);
+  assert.ok(found.some((v) => v.fp.includes(".other-btn")), "@media 裡的也看");
+  assert.equal(parseCss(".a{color:red}\n/* .b{color:blue} */\n.c{gap:1px}").length, 2, "註解裡的不算");
+});
+
+test("現在的程式:沒有比基線多出來的違規(新寫法用共用元件;搬掉舊寫法後重產基線,diff 只能是刪除)", () => {
+  const now = tally(scanAll());
+  const base = JSON.parse(readFileSync(BASELINE, "utf8"));
+  const extra = Object.entries(now).filter(([fp, n]) => n > (base[fp] ?? 0)).map(([fp, n]) => `${fp}(現在 ${n},基線 ${base[fp] ?? 0})`);
+  assert.deepEqual(extra, [], `新的控制項違規(照 docs/ui-controls.md 改用 components/ui):\n${extra.join("\n")}`);
+  assert.ok(!Object.keys(base).some((fp) => /\|components\/ui\/|\|pages\/dev\//.test(fp)), "共用層不放進基線");
+});

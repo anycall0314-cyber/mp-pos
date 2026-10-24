@@ -38,6 +38,7 @@ import { LabelPrintPage } from "@/pages/labels/LabelPrintPage";
 import { BusinessDailyReportPage } from "@/pages/reports/BusinessDailyReport";
 import { CommissionLinesPage } from "@/pages/reports/CommissionLinesPage";
 import { ExploreReportPage } from "@/pages/reports/ExploreReportPage";
+import { ControlsShowcasePage } from "@/pages/dev/ControlsShowcasePage";
 import { FixedReportPage } from "@/pages/reports/FixedReportPage";
 import { StockCountPage } from "@/pages/inventory/StockCountPage";
 import { StockCountsPage } from "@/pages/inventory/StockCountsPage";
@@ -338,6 +339,8 @@ export function App() {
           <Route path="/settings/backup" element={<BackupPage />} />
           <Route path="/settings/legacy" element={<LegacyMappingPage />} />
           <Route path="/settings/ledger" element={<LedgerChecksPage />} />
+          {/* 共用控制項展示頁:只在開發模式(docs/ui-controls.md) */}
+          {import.meta.env.DEV && <Route path="/dev/controls" element={<ControlsShowcasePage />} />}
           <Route
             path="/platform/admin"
             element={

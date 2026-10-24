@@ -72,7 +72,7 @@
 
 ## 5. 共用實作的邊界
 
-現有 `Field`、`Checkbox`、`ComboBox`、`StoreSelect`、`ArmButton`、`useArm`、`AppliedFilters`、`PeriodQuick`、`ModuleBar`、`EyeToggle` 優先沿用。新共用層建議放 `frontend/src/components/ui/`，實際檔名由第一批實作定下後全站沿用：
+現有 `Field`、`Checkbox`、`ComboBox`、`StoreSelect`、`ArmButton`、`useArm`、`AppliedFilters`、`PeriodQuick`、`ModuleBar`、`EyeToggle` 優先沿用。新共用層在 `frontend/src/components/ui/`(2026-10-25 B0 建立,從 `@/components/ui` 拿;展示頁 `/dev/controls` 只在開發模式):`Button`(variant default / primary / danger / text、size md / sm / lg、pending)、`IconButton`(`label` 必填)、`Tabs` + `TabPanel`、`SegmentedControl`、`StatusBadge`、`ToolbarField` + `ControlBar`(查詢 / 工作對象工具列,桌面滑鼠 40px、觸控 44px);外觀只在 `styles.css` 的「共用控制項」那一段。即時存的格子用 `hooks/useCellSaves` + `components/CellMark`。以下是各元件的邊界:
 
 1. `Button`／`IconButton`：variant、size、pending、disabled、type、名稱；不處理業務 API。
 2. `Tabs`／`SegmentedControl`：將換工作區與改條件分開，不能讓一個 tab class 同時代表兩種語意。
@@ -86,7 +86,7 @@
 
 ## 6. 新增控制項的必經檢查
 
-以下是每次新增／改動都要遵守的規則；自動守門需依修改計劃第一批補上，**目前不能宣稱已有自動攔截**。
+以下是每次新增／改動都要遵守的規則。自動守門 `frontend/src/lib/controlsPolicy.test.mjs` 跟著 `npm test` 跑(下一節);它擋得到的有限,其餘照這張清單自己檢查。**部署腳本還沒跑測試**(`ops/deploy-test.sh` / `deploy.sh` 只 build),不能說部署前一定攔得到。
 
 - [ ] 能對應第 1 節的一個用途；已在元件展示頁找到同類範例。
 - [ ] 使用共用元件／既有相容入口；沒有新增頁面專屬 Button、Tabs、Switch 或顏色／尺寸覆寫。
@@ -99,7 +99,7 @@
 
 ## 7. 自動守門的目標
 
-- `controlsPolicy.test.mjs`：使用 TypeScript AST 掃描新的 JSX 控制項及動態 class／style；共用層外新寫原生 button、複製 switch、非原生 onClick 容器、缺名稱的圖示動作列為檢查項。不能只用 `className="..."` 正規表示式判定。
+- `controlsPolicy.test.mjs`(已建,規則在 `controlsPolicy.mjs`):TypeScript 語法樹掃 JSX —— 按鈕 / 可點容器的 inline 外觀、沒有名稱的圖示按鈕、舊分頁樣式(`tab-switcher` / `ia-tab` / `pf-tab` / `md-detail-tabs`)、用 `primary` 表示選中、不是按鈕卻可點又沒角色、複製開關;小型 CSS 解析掃 `styles.css` —— 共用層以外改控制項外觀、`:focus` 拿掉焦點框沒有 `:focus-visible` 替代。現有的記在 `controlsBaseline.json`(指紋 = 規則 + 檔案 + 標籤 + class + 字,不看行號),新的變紅;搬掉舊寫法後 `node src/lib/controlsPolicy.mjs --write-baseline`,diff 只能是刪除。
 - `controls-style-policy`：檢查共用層外對外觀 token 的覆寫；token、例外與 print/mobile 邊界有明確名單。CSS 必須解析選擇器與宣告，避免把純排版誤判成另造按鈕。
 - 以目前盤點建立基線；舊違規只能減少，新違規不能靠重產基線放行。識別用路徑＋控制用途／結構指紋，行號只是定位，不以移動行號洗掉違規。
 - 單元／元件行為測試：Tabs 鍵盤、Switch 失敗回復、pending 防重送、IconButton 名稱、表單 submit、列內輸入不被攔截。
