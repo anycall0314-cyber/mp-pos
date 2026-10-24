@@ -8,6 +8,9 @@ import type {
   InventoryAlertRow,
 } from "@/api/types";
 import { Toolbar } from "@/components/Toolbar";
+import { AppliedFilters } from "@/components/AppliedFilters";
+import { useStoreParam } from "@/hooks/useStoreParam";
+import { appliedList, cond } from "@/lib/appliedFilters";
 import { errorText } from "@/lib/errorText";
 
 const SEVERITY_LABEL: Record<AlertSeverity, string> = {
@@ -27,7 +30,9 @@ type Tab = "alerts" | "clearance";
 
 export function InventoryAlertsPage() {
   const [tab, setTab] = useState<Tab>("alerts");
-  const alerts = useInventoryAlerts();
+  // 首頁「庫存量不足」選了門市帶 ?warehouse= 過來:補貨警示只看那一家(跟首頁的數字同一個算法;全站檢視 R06)
+  const store = useStoreParam();
+  const alerts = useInventoryAlerts(store.id);
   const clearance = useClearancePressure();
 
   return (
@@ -60,15 +65,16 @@ export function InventoryAlertsPage() {
           </button>
         </div>
       </Toolbar>
+      {tab === "alerts" && <AppliedFilters items={appliedList([cond("門市", store.name)])} onClear={store.clear} />}
 
-      {tab === "alerts" && <AlertsPanel />}
+      {tab === "alerts" && <AlertsPanel warehouse={store.id} />}
       {tab === "clearance" && <ClearancePanel />}
     </div>
   );
 }
 
-function AlertsPanel() {
-  const { data, isLoading, isError, error } = useInventoryAlerts();
+function AlertsPanel({ warehouse }: { warehouse: number | null }) {
+  const { data, isLoading, isError, error } = useInventoryAlerts(warehouse);
   const counts = data?.counts;
   const rows = data?.rows ?? [];
 

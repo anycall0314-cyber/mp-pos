@@ -10,6 +10,7 @@ import { AppliedFilters } from "@/components/AppliedFilters";
 import { MoneyInput } from "@/components/MoneyInput";
 import { apiErrorText } from "@/components/workbench/errors";
 import { Toolbar } from "@/components/Toolbar";
+import { useStoreParam } from "@/hooks/useStoreParam";
 import { appliedList, cond } from "@/lib/appliedFilters";
 import { localDay } from "@/lib/fixedReports";
 import { type InlinePhase, needsSave, phaseText, takeServerValue } from "@/lib/inlineSave";
@@ -158,11 +159,14 @@ export function RepairsPage() {
     const v = params.get("overdue");
     return v === "1" || v === "external" ? v : "";
   });
+  // 首頁選了門市帶過來(?warehouse=):只看那一家(全站檢視 R06)
+  const store = useStoreParam();
   const { data, isLoading, isError, error } = useRepairOrders({
     open: status === "open",
     status: status === "open" ? "" : status,
     mode,
     search,
+    warehouse: store.id,
   });
   const all = data ?? [];
   const today = localDay();
@@ -265,8 +269,10 @@ export function RepairsPage() {
           cond("方式", mode && (mode === "external" ? "委外" : "自修")),
           returnVisitOnly && cond("只看", "返修"),
           !!overdue && cond("只看", overdue === "external" ? "委外逾期" : "逾期"),
+          cond("門市", store.name),
         ])}
         onClear={() => {
+          store.clear();
           setStatus("open");
           setSearch("");
           setSearchDraft("");

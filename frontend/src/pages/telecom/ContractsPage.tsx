@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useSearchParams } from "react-router-dom";
 
 import { listContracts, type ContractRow, type ContractTab, type FollowStatus } from "@/api/contracts";
 import { useCarriers, useContractFollowUp, useContracts, useWarehouses } from "@/api/hooks";
@@ -8,6 +8,8 @@ import { downloadCsv } from "@/components/downloadCsv";
 import { apiErrorText } from "@/components/workbench/errors";
 import { toast } from "@/components/workbench/toast";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useStoreParam } from "@/hooks/useStoreParam";
+import { STORE_PARAM, storeIdFrom } from "@/lib/storeParam";
 import {
   cursorOf,
   hasNextPage,
@@ -95,7 +97,17 @@ export function ContractsPage() {
 
   const [tab, setTab] = useState<ContractTab>("pending");
   const [range, setRange] = useState("");
-  const [warehouse, setWarehouse] = useState<number | "">("");
+  // 首頁「合約待聯絡」選了門市帶 ?warehouse= 過來:門市先選好那一家(全站檢視 R06);沒有這一家 / 停用的當沒帶
+  const [searchParams] = useSearchParams();
+  const urlStore = useStoreParam();
+  const [startStore] = useState(() => storeIdFrom(searchParams.get(STORE_PARAM)));
+  const [warehouse, setWarehouse] = useState<number | "">(startStore ?? "");
+  useEffect(() => {
+    const list = warehouses.data;
+    if (startStore === null || !list || list.some((x) => x.id === startStore && x.is_active)) return;
+    setWarehouse((w) => (w === startStore ? "" : w));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [warehouses.data]);
   const [carrier, setCarrier] = useState<number | "">("");
   const [typed, setTyped] = useState("");
   const [search, setSearch] = useState("");
@@ -378,7 +390,10 @@ export function ContractsPage() {
           <select
             value={warehouse}
             aria-label="門市"
-            onChange={(e) => setWarehouse(e.target.value ? Number(e.target.value) : "")}
+            onChange={(e) => {
+              setWarehouse(e.target.value ? Number(e.target.value) : "");
+              urlStore.clear();
+            }}
           >
             <option value="">全部門市</option>
             {(warehouses.data ?? []).map((w) => (

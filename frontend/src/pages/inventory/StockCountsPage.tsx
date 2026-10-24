@@ -5,6 +5,7 @@ import { useOldUnitsLeft, useOpenStockCount, useStockCounts, useWarehouses } fro
 import type { Category } from "@/api/types";
 import { useCurrentUser, useDefaultWarehouse } from "@/auth/AuthContext";
 import { AppliedFilters } from "@/components/AppliedFilters";
+import { useStoreParam } from "@/hooks/useStoreParam";
 import { Banner, errorMessageOf } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { appliedList, cond } from "@/lib/appliedFilters";
@@ -42,7 +43,11 @@ export function StockCountsPage() {
   // 今日總覽點「盤點待核准」過來帶 ?status=submitted
   const [params] = useSearchParams();
   const [onlySubmitted, setOnlySubmitted] = useState(() => params.get("status") === "submitted");
-  const data = onlySubmitted ? allCounts?.filter((c) => c.status === "submitted") : allCounts;
+  // 首頁選了門市帶 ?warehouse= 過來:只列那一家的(伺服器那一份最多 200 張,這裡照門市挑;全站檢視 R06)
+  const listStore = useStoreParam();
+  const data = allCounts?.filter(
+    (c) => (!onlySubmitted || c.status === "submitted") && (listStore.id === null || c.warehouse.id === listStore.id),
+  );
   const open = useOpenStockCount();
   const manager = isManager(useCurrentUser()?.profile?.role);
   const left = useOldUnitsLeft(manager);
@@ -98,7 +103,13 @@ export function StockCountsPage() {
           只看待核准
         </label>
       </div>
-      <AppliedFilters items={appliedList([onlySubmitted && cond("只看", "待核准")])} onClear={() => setOnlySubmitted(false)} />
+      <AppliedFilters
+        items={appliedList([onlySubmitted && cond("只看", "待核准"), cond("門市", listStore.name)])}
+        onClear={() => {
+          setOnlySubmitted(false);
+          listStore.clear();
+        }}
+      />
       {open.isError && <Banner kind="error" message={errorMessageOf(open.error)} />}
       {isError && <Banner kind="error" message={errorMessageOf(error)} />}
       <div className="report-table sr-table">

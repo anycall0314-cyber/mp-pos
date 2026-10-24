@@ -40,8 +40,10 @@ export function HomePage() {
   const today = summary.data?.today;
   const yesterday = summary.data?.yesterday;
   const recent = summary.data?.recent_sales ?? [];
-  const todo = todoGroups(summary.data, who);
-  const notice = noticeGroups(summary.data, who);
+  // 待辦 / 注意的連結帶著現在看的那一家(鎖門市 = 自己那一家;沒鎖 = 選的那一家,全公司不帶;全站檢視 R06)
+  const linkStore = locked ? (user?.profile?.default_warehouse_id ?? null) : store;
+  const todo = todoGroups(summary.data, who, linkStore);
+  const notice = noticeGroups(summary.data, who, linkStore);
 
   const scopeName = locked
     ? user?.profile?.default_warehouse_name || summary.data?.warehouse_name || ""

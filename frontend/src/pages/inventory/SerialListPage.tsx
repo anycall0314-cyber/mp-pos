@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { fetchSerialReportExport, useReleaseReturned, useSerialReport } from "@/api/hooks";
@@ -13,6 +13,8 @@ import { Banner, errorMessageOf } from "@/components/Banner";
 import { ComboBox } from "@/components/ComboBox";
 import { SerialHistoryModal } from "@/components/SerialHistoryModal";
 import { Toolbar } from "@/components/Toolbar";
+import { useStoreParam } from "@/hooks/useStoreParam";
+import { STORE_PARAM, storeIdFrom } from "@/lib/storeParam";
 import { localDay } from "@/lib/fixedReports";
 import { exportFileName, exportIfComplete } from "@/lib/reportExports";
 import {
@@ -41,11 +43,14 @@ export function SerialListPage() {
   const startStatus = SERIAL_STATUS_CHOICES.some((c) => c.key === params.get("status"))
     ? (params.get("status") as string)
     : "store";
+  // 首頁選了門市帶 ?warehouse= 進來:先選好那一家(這一頁本來就不照帳號鎖店,照樣可以改成別家;全站檢視 R06)
+  const urlStore = useStoreParam({ lockable: false });
+  const startStore = storeIdFrom(params.get(STORE_PARAM));
   const canRelease = useCan("release_returned");
   const release = useReleaseReturned();
   const [applied, setApplied] = useState<SerialFilter>(() => ({
     statuses: statusesOf(startStatus),
-    warehouse: "",
+    warehouse: startStore ?? "",
     supplier: "",
     receivedFrom: "",
     receivedTo: "",
@@ -71,6 +76,18 @@ export function SerialListPage() {
   const [appliedStatus, setAppliedStatus] = useState(startStatus);
   const [appliedSupplier, setAppliedSupplier] = useState<Picked<Supplier>>(NOT_PICKED);
   const storeName = useStoreName(appliedStore, false);
+  // 帶進來的那一家:門市清單回來才知道名字(框與「已套用的條件」要寫名字);沒有這一家 / 停用的就當沒帶
+  useEffect(() => {
+    if (startStore === null) return;
+    if (urlStore.id === startStore && urlStore.name && store.id === "" && appliedStore.id === "") {
+      const picked = { id: startStore, option: { id: startStore, label: urlStore.name } };
+      setStore(picked);
+      setAppliedStore(picked);
+    } else if (urlStore.id === null) {
+      setApplied((a) => (a.warehouse === startStore ? { ...a, warehouse: "" } : a));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlStore.id, urlStore.name]);
 
   const draft: SerialFilter = {
     statuses: statusesOf(status),
@@ -109,6 +126,7 @@ export function SerialListPage() {
   ]);
 
   function clearAll() {
+    urlStore.clear();
     setStatus("store");
     setStore(NOT_PICKED);
     setSupplier(NOT_PICKED);

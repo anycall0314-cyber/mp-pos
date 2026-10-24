@@ -32,6 +32,7 @@ import {
 } from "@/components/workbench/ScanBox";
 import { toast } from "@/components/workbench/toast";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useStoreParam } from "@/hooks/useStoreParam";
 import { codesLabel, isProductCode, normalizeCode } from "@/lib/deviceCodes";
 
 /**
@@ -934,13 +935,16 @@ export function TransferWorkbenchPage() {
   }
 
   // ── 最近調撥 ─────────────────────────────────────────
+  // 首頁「調撥待入庫」選了門市:只看調進那一家的(跟首頁的數字同一個算法;全站檢視 R06)
+  const toStore = useStoreParam();
   const recentQ = useTransferOrders({
     status: onlyPending ? "dispatched" : undefined,
     doc_date_gte: day || undefined,
     doc_date_lte: day || undefined,
+    to_warehouse: toStore.id,
   });
-  // 待入庫的張數不受上面的篩選影響
-  const pendingQ = useTransferOrders({ status: "dispatched" });
+  // 待入庫的張數不受上面的篩選影響(門市照樣跟著)
+  const pendingQ = useTransferOrders({ status: "dispatched", to_warehouse: toStore.id });
   const pendingCount = (pendingQ.data ?? []).filter((t) => !t.is_void).length;
   // 從別頁指定的那一張,或剛才入庫沒成功的那一張:不在清單裡也要列出來
   const focusQ = useTransferOrder(focusId ?? pinnedId);
@@ -1344,13 +1348,15 @@ export function TransferWorkbenchPage() {
           title="只看這一天"
           onChange={(e) => setDay(e.target.value)}
         />
-        {(day || onlyPending) && (
+        {toStore.id !== null && <span className="applied-chip">調進:{toStore.name || "…"}</span>}
+        {(day || onlyPending || toStore.id !== null) && (
           <button
             type="button"
             className="wb-btn small"
             onClick={() => {
               setDay("");
               setOnlyPending(false);
+              toStore.clear();
             }}
           >
             清除條件

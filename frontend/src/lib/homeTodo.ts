@@ -10,6 +10,7 @@
  * 這一份只決定「有哪幾組、點了去哪、誰看得到」;數字由伺服器 `home-summary` 給。
  */
 import { isManager, matchForUser, type NavRole } from "../nav.ts";
+import { withStore } from "./storeParam.ts";
 
 export interface HomeItem {
   key: string;
@@ -85,35 +86,41 @@ function days(n: number): string {
   return n >= 1 ? ` ${n} 天` : "";
 }
 
-/** 按下去就做得完的事;數字是 0、或這個帳號去不了那一頁的不列。名稱一律 5 個字(一排並列字數一樣) */
-export function todoGroups(s: TodoSource | undefined, who: NavRole): HomeGroup[] {
+/**
+ * 按下去就做得完的事;數字是 0、或這個帳號去不了那一頁的不列。名稱一律 5 個字(一排並列字數一樣)。
+ * `store` = 首頁現在看的那一家(全公司 = null):整組的連結帶過去,目的頁照那一家查(全站檢視 R06)。
+ * 「匯入待確認」不帶:那一頁沒有門市條件(也不是一張清單,是選批次),數字可能比打開看到的少 —— 記在 COMPLETED。
+ */
+export function todoGroups(s: TodoSource | undefined, who: NavRole, store: number | null = null): HomeGroup[] {
   if (!s) return [];
   const t = s.transfers_pending;
   const pickup = s.repair_alerts?.pickup;
   const rows = [
-    group("transfers", "調撥待入庫", t?.count, "/transfers?pending=1",
+    group("transfers", "調撥待入庫", t?.count, withStore("/transfers?pending=1", store),
       (t?.items ?? []).map((x) => ({ key: `t${x.id}`, to: `/transfers/${x.id}`, title: join(x.no, `${x.from_name} → ${x.to_name}`), sub: days(x.days).trim() || undefined }))),
-    group("pickup", "維修待取件", pickup?.count, "/repairs?status=ready_pickup",
+    group("pickup", "維修待取件", pickup?.count, withStore("/repairs?status=ready_pickup", store),
       (pickup?.items ?? []).map((x) => ({ key: `p${x.id}`, to: `/repairs/${x.id}`, title: join(x.customer_name || x.no, x.host_model_name), sub: days(x.ready_days).trim() || undefined }))),
-    group("returns", "退回待確認", s.returns_pending, "/serials?status=returned"),
+    group("returns", "退回待確認", s.returns_pending, withStore("/serials?status=returned", store)),
     group("intake", "匯入待確認", s.intake_open, "/intake"),
-    ...(isManager(who.role) ? [group("counts", "盤點待核准", s.counts_pending, "/inventory/stocktake?status=submitted")] : []),
+    ...(isManager(who.role)
+      ? [group("counts", "盤點待核准", s.counts_pending, withStore("/inventory/stocktake?status=submitted", store))]
+      : []),
   ];
   return rows.filter((g) => g.count > 0 && reachable(g.to, who));
 }
 
-/** 給管店的人看的(不是這一班按一下就清得掉的) */
-export function noticeGroups(s: TodoSource | undefined, who: NavRole): HomeGroup[] {
+/** 給管店的人看的(不是這一班按一下就清得掉的);`store` 同上 */
+export function noticeGroups(s: TodoSource | undefined, who: NavRole, store: number | null = null): HomeGroup[] {
   if (!s) return [];
   const r = s.repair_alerts;
   const rows = [
-    group("overdue", "維修單逾期", r?.overdue_repairs?.count, "/repairs?overdue=1",
+    group("overdue", "維修單逾期", r?.overdue_repairs?.count, withStore("/repairs?overdue=1", store),
       (r?.overdue_repairs?.items ?? []).map((x) => ({ key: `o${x.id}`, to: `/repairs/${x.id}`, title: join(x.no, x.customer_name), sub: `逾期${days(x.overdue_days)}` }))),
-    group("external", "委外單逾期", r?.overdue_external?.count, "/repairs?overdue=external",
+    group("external", "委外單逾期", r?.overdue_external?.count, withStore("/repairs?overdue=external", store),
       (r?.overdue_external?.items ?? []).map((x) => ({ key: `e${x.id}`, to: `/repairs/${x.id}`, title: join(x.no, x.vendor_name), sub: `逾期${days(x.overdue_days)}` }))),
-    group("contracts", "合約待聯絡", s.contracts_pending, "/telecom/expiries"),
-    group("low", "庫存量不足", s.low_stock?.count, "/inventory/alerts",
-      (s.low_stock?.items ?? []).map((x) => ({ key: `l${x.id}`, to: "/inventory/alerts", title: x.name, sub: `剩 ${x.qty}` }))),
+    group("contracts", "合約待聯絡", s.contracts_pending, withStore("/telecom/expiries", store)),
+    group("low", "庫存量不足", s.low_stock?.count, withStore("/inventory/alerts", store),
+      (s.low_stock?.items ?? []).map((x) => ({ key: `l${x.id}`, to: withStore("/inventory/alerts", store), title: x.name, sub: `剩 ${x.qty}` }))),
   ];
   return rows.filter((g) => g.count > 0 && reachable(g.to, who));
 }

@@ -557,10 +557,11 @@ export const useTrending = (limit = 6) =>
   });
 
 // 庫存警示:依商品狀態 + 關聯主機 推論觸發原因
-export const useInventoryAlerts = () =>
+export const useInventoryAlerts = (warehouse?: number | null) =>
   useQuery({
-    queryKey: ["inventory-alerts"],
-    queryFn: () => api<InventoryAlertsResponse>("/inventory-alerts/"),
+    // 首頁選了門市帶過來:只看那一家(全站檢視 R06);沒帶 = 跟以前一樣(鎖門市的帳號伺服器照舊只給自己那一家)
+    queryKey: ["inventory-alerts", warehouse ?? null],
+    queryFn: () => api<InventoryAlertsResponse>(warehouse ? `/inventory-alerts/?warehouse=${warehouse}` : "/inventory-alerts/"),
     refetchInterval: 60000,
   });
 
@@ -1589,12 +1590,15 @@ export const useTransferOrders = (params?: {
   doc_date_gte?: string;
   doc_date_lte?: string;
   status?: string;
+  /** 只看調進這一家的(首頁「調撥待入庫」選了門市帶過來;全站檢視 R06) */
+  to_warehouse?: number | null;
 }) => {
   const qs = new URLSearchParams();
   qs.set("page_size", "100");
   if (params?.doc_date_gte) qs.set("doc_date__gte", params.doc_date_gte);
   if (params?.doc_date_lte) qs.set("doc_date__lte", params.doc_date_lte);
   if (params?.status) qs.set("status", params.status);
+  if (params?.to_warehouse) qs.set("to_warehouse", String(params.to_warehouse));
   return useQuery({
     queryKey: ["transfer-orders", qs.toString()],
     // 選了日期或狀態(待入庫幾張要數全部)= 整份;都沒選 = 最近的
@@ -1863,9 +1867,12 @@ export const useRepairOrders = (params?: {
   mode?: string;
   date_from?: string;
   date_to?: string;
+  /** 只看這一家(首頁選了門市帶過來;全站檢視 R06) */
+  warehouse?: number | null;
 }) => {
   const q = new URLSearchParams();
   if (params?.open) q.set("open", "1");
+  if (params?.warehouse) q.set("warehouse", String(params.warehouse));
   if (params?.status) q.set("status", params.status);
   if (params?.mode) q.set("mode", params.mode);
   if (params?.search) q.set("search", params.search);
