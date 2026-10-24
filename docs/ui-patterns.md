@@ -425,6 +425,7 @@
 ## 不跳瀏覽器的視窗;錯誤訊息一律中文一句(2026-10-23,全站檢視 G1 / G2)
 
 - 作廢、刪除、完成、會清掉內容的切換:用兩段式 —— 一顆獨立按鈕用 `components/workbench/ArmButton`,切換分頁 / 狀態節點這種用 `components/workbench/useArm`(`if (!arm.confirm(key)) return;`、按鈕字 `arm.armed === key ? "再按一次…" : "…"`)。4 秒內再按一次才做,半秒內的第二下不算。
+- 主檔頁編到一半沒存(2026-10-24 全站檢視 R02;`lib/draftGuard.ts`,來源頁、零件範本頁):表單只在**換了一筆**時重新填(`syncDraft`;背景重新讀到、換左邊分類都不動正在打的字,那一筆還沒讀到不給表單);點別筆、新增、取消、× 用 `leaveDraft` —— 沒改過直接做,改過第一下只標起來(表單上面一句「還沒儲存,再按一次放棄」、按鈕換「再按一次…」),同一個目標再按一次才做。不自動儲存;存失敗還是算改過。新的主檔表單照這一套。
 - **不用 `confirm(` / `alert(` / `prompt(`**(`lib/noBrowserDialogs.test.mjs` 會掃;唯一例外是平台管理員重設密碼)。成功 / 失敗用 `toast`,表單的錯誤寫在表單上。
 - 錯誤訊息一律走 `lib/errorText.ts`(`errorMessageOf`、`apiErrorText` 都是它):連不上 =「連不上伺服器,請再試一次」、伺服器出錯 =「系統忙碌,請再試一次」、欄位錯誤只留中文那一句、常見欄位前面加中文欄名(`FIELD_LABELS`),不露英文欄位名。**頁面不要自己 `JSON.stringify(e.body)`、`${欄位}:${訊息}`。**
 

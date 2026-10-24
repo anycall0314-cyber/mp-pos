@@ -12,6 +12,7 @@ import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { MoneyInput } from "@/components/MoneyInput";
 import { errorText } from "@/lib/errorText";
+import { changed, leaveArmed, leaveDraft, LEAVE_TEXT } from "@/lib/draftGuard";
 
 /**
  * 「快速加入」常用零件 — 點一下加一列並自動帶入名稱與代碼。
@@ -284,26 +285,43 @@ export function PartTemplatesPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [editing, setEditing] = useState<EditingTemplate | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 改到一半沒存:點別份 / 新增 / 取消要按兩次(全站檢視 R02;規則在 lib/draftGuard.ts)。base = 讀進來或存好那一刻的樣子
+  const [base, setBase] = useState<EditingTemplate | null>(null);
+  const leaveArm = useArm();
+  const dirty = editing !== null && changed(editing, base);
+  function load(t: EditingTemplate | null) {
+    setEditing(t);
+    setBase(t);
+    leaveArm.reset();
+  }
+  function leave(target: string, go: () => void) {
+    leaveDraft(dirty, leaveArm, target, go);
+  }
 
   // 預設選第一筆,讓右邊不會空著
   useEffect(() => {
     if (!editing && (list.data?.length ?? 0) > 0 && selectedId === null) {
       const first = list.data![0];
       setSelectedId(first.id);
-      setEditing(toEditing(first));
+      load(toEditing(first));
     }
   }, [list.data]);
 
   function startNew() {
-    setSelectedId(null);
-    setEditing(emptyEditing());
-    setError(null);
+    leave("new", () => {
+      setSelectedId(null);
+      load(emptyEditing());
+      setError(null);
+    });
   }
 
   function pick(t: PartTemplate) {
-    setSelectedId(t.id);
-    setEditing(toEditing(t));
-    setError(null);
+    if (t.id === selectedId && editing?.id === t.id) return;
+    leave(`row:${t.id}`, () => {
+      setSelectedId(t.id);
+      load(toEditing(t));
+      setError(null);
+    });
   }
 
   function patch<K extends keyof EditingTemplate>(
@@ -379,14 +397,16 @@ export function PartTemplatesPage() {
   function cancel() {
     // 若編輯既有範本 → 還原成最後一次從後端載入的狀態
     // 若是新增 → 清空回到「未編輯」
-    if (editing?.id) {
-      const original = (list.data ?? []).find((t) => t.id === editing.id);
-      setEditing(original ? toEditing(original) : null);
-    } else {
-      setEditing(null);
-      setSelectedId(null);
-    }
-    setError(null);
+    leave("close", () => {
+      if (editing?.id) {
+        const original = (list.data ?? []).find((t) => t.id === editing.id);
+        load(original ? toEditing(original) : null);
+      } else {
+        load(null);
+        setSelectedId(null);
+      }
+      setError(null);
+    });
   }
 
   async function submit() {
@@ -433,7 +453,7 @@ export function PartTemplatesPage() {
       };
       const saved = await save.mutateAsync(body);
       setSelectedId(saved.id);
-      setEditing(toEditing(saved));
+      load(toEditing(saved));
     } catch (e) {
       setError(errorText(e));
     }
@@ -443,7 +463,7 @@ export function PartTemplatesPage() {
     if (!editing?.id) return;
     try {
       await del.mutateAsync(editing.id);
-      setEditing(null);
+      load(null);
       setSelectedId(null);
     } catch (e) {
       setError(errorText(e));
@@ -455,8 +475,8 @@ export function PartTemplatesPage() {
       <Toolbar
         title="零件範本"
         actions={
-          <button className="btn primary" onClick={startNew}>
-            新增範本
+          <button className={leaveArmed(leaveArm.armed, "new") ? "btn primary armed" : "btn primary"} onClick={startNew}>
+            {leaveArmed(leaveArm.armed, "new") ? "再按一次新增" : "新增範本"}
           </button>
         }
       />
@@ -519,6 +539,7 @@ export function PartTemplatesPage() {
             </div>
           ) : (
             <>
+              {leaveArm.armed && <div className="pc-detail-warn"><Banner kind="info" message={LEAVE_TEXT} /></div>}
               {error && <Banner kind="error" message={error} />}
 
               {/* ─── 套用常用範本 ─── */}
@@ -847,8 +868,8 @@ export function PartTemplatesPage() {
                     <ArmButton key={editing.id} label="刪除範本" className="btn danger" onConfirm={handleDelete} />
                   </span>
                 ) : null}
-                <button type="button" className="btn" onClick={cancel}>
-                  取消
+                <button type="button" className={leaveArmed(leaveArm.armed, "close") ? "btn armed" : "btn"} onClick={cancel}>
+                  {leaveArmed(leaveArm.armed, "close") ? "再按一次取消" : "取消"}
                 </button>
                 <button
                   type="button"

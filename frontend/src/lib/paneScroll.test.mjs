@@ -65,7 +65,11 @@ test("五個主檔頁窄畫面都有回清單的 ×;樣式在窄畫面把清單�
   for (const [path, open] of Object.entries(pages)) {
     const src = read(path);
     assert.match(src, /className=\{[^}]*"pc-layout"/, path);
-    assert.ok(src.includes(`<PaneBack open={${open}} onClose={() => setSelection(null)}`), path);
+    // 來源頁改過沒存要按兩次(全站檢視 R02),× 一樣走那一條
+    const close = path.includes("CustomersPage")
+      ? `<PaneBack open={${open}} onClose={() => leave("close", () => setSelection(null))}`
+      : `<PaneBack open={${open}} onClose={() => setSelection(null)}`;
+    assert.ok(src.includes(close), path);
   }
   const css = read("../styles.css");
   const narrow = css.slice(css.indexOf(".pc-pane-back { display: none; }"));

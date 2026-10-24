@@ -11,6 +11,8 @@ import { Toolbar } from "@/components/Toolbar";
 import { cutNote } from "@/lib/listAll";
 import { money } from "@/lib/money";
 import { errorText } from "@/lib/errorText";
+import { emptyDraft, isDirty, leaveArmed, leaveDraft, LEAVE_TEXT, savedDraft, syncDraft, type Draft } from "@/lib/draftGuard";
+import { useArm } from "@/components/workbench/useArm";
 
 const CUSTOMER_KINDS: { value: CustomerKind; label: string }[] = [
   { value: "channel", label: "通路" },
@@ -92,7 +94,10 @@ export function CustomersPage() {
     const n = sel ? Number(sel) : NaN;
     return Number.isFinite(n) ? { kind: "customer", id: n } : null;
   });
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  // 編到一半沒存的不被背景刷新、換分類蓋掉;點別筆 / 新增 / 取消要按兩次(全站檢視 R02;規則在 lib/draftGuard.ts)
+  const [draft, setDraft] = useState<Draft<FormState>>(() => emptyDraft(EMPTY_FORM));
+  const form = draft.form;
+  const leaveArm = useArm();
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
 
@@ -145,20 +150,26 @@ export function CustomersPage() {
     return customers.find((c) => c.id === selection.id) ?? null;
   }, [selection, customers]);
 
+  const formKey = selection?.kind === "customer" ? `c${selection.id}` : selection?.kind === "new" ? "new" : null;
   useEffect(() => {
-    if (selection?.kind === "customer" && selected) {
-      setForm(toForm(selected));
+    const next = syncDraft(draft, formKey, () => {
+      if (selection?.kind === "customer") return selected ? toForm(selected) : null;
+      return { ...EMPTY_FORM, kind: tab === "all" ? "channel" : tab };
+    });
+    if (!next) return;
+    setDraft(next);
+    if (next.key !== null) {
       setError(null);
       setSavedFlash(false);
-    } else if (selection?.kind === "new") {
-      setForm({
-        ...EMPTY_FORM,
-        kind: tab === "all" ? "channel" : tab,
-      });
-      setError(null);
-      setSavedFlash(false);
+      leaveArm.reset();
     }
-  }, [selection, selected, tab]);
+  }, [formKey, selected]);
+  const formReady = formKey !== null && draft.key === formKey;
+  const dirty = isDirty(draft);
+  /** 會丟掉沒存內容的操作(點別筆、新增、取消、×) */
+  function leave(target: string, go: () => void) {
+    leaveDraft(dirty, leaveArm, target, go);
+  }
 
   const customerId = selection?.kind === "customer" ? selection.id : null;
   const who = customerId ? { customer: customerId } : undefined;
@@ -175,7 +186,7 @@ export function CustomersPage() {
   const ordersCut = cutNote(orders.data, "只列最近", "張");
 
   function patch<K extends keyof FormState>(k: K, v: FormState[K]) {
-    setForm((f) => ({ ...f, [k]: v }));
+    setDraft((d) => ({ ...d, form: { ...d.form, [k]: v } }));
   }
 
   function selectTab(next: TabKey) {
@@ -204,6 +215,7 @@ export function CustomersPage() {
     if (selection?.kind === "customer") payload.id = selection.id;
     try {
       const saved = await save.mutateAsync(payload);
+      setDraft(savedDraft(`c${saved.id}`, toForm(saved)));
       setError(null);
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
@@ -223,10 +235,12 @@ export function CustomersPage() {
         title="來源"
         actions={
           <button
-            className="btn primary"
-            onClick={() => setSelection({ kind: "new" })}
+            className={leaveArmed(leaveArm.armed, "new") ? "btn primary armed" : "btn primary"}
+            onClick={() => {
+              if (!isNew) leave("new", () => setSelection({ kind: "new" }));
+            }}
           >
-            新增來源
+            {leaveArmed(leaveArm.armed, "new") ? "再按一次新增" : "新增來源"}
           </button>
         }
       />
@@ -307,7 +321,10 @@ export function CustomersPage() {
                     {filtered.map((c) => (
                       <tr
                         key={c.id}
-                        onClick={() => setSelection({ kind: "customer", id: c.id })}
+                        onClick={() => {
+                          if (selection?.kind === "customer" && selection.id === c.id) return;
+                          leave(`row:${c.id}`, () => setSelection({ kind: "customer", id: c.id }));
+                        }}
                         className={
                           selection?.kind === "customer" && selection.id === c.id
                             ? "selected"
@@ -336,10 +353,14 @@ export function CustomersPage() {
         </aside>
 
         <div className="pc-detail">
-          <PaneBack open={isEditing || isNew} onClose={() => setSelection(null)} disabled={save.isPending} />
+          <PaneBack open={isEditing || isNew} onClose={() => leave("close", () => setSelection(null))} disabled={save.isPending} />
 
-          {(isEditing || isNew) && (
+          {(isEditing || isNew) && !formReady && (
+            <div className="md-empty" style={{ marginTop: 40 }}>載入中…</div>
+          )}
+          {formReady && (
             <div className="pc-detail-body">
+              {leaveArm.armed && <div className="pc-detail-warn"><Banner kind="info" message={LEAVE_TEXT} /></div>}
               <h3 className="pc-detail-title">
                 {isNew ? "新增來源" : `來源 · ${selected?.name}`}
               </h3>
@@ -432,11 +453,11 @@ export function CustomersPage() {
                   {save.isPending ? "儲存中…" : "儲存"}
                 </button>
                 <button
-                  className="btn"
-                  onClick={() => setSelection(null)}
+                  className={leaveArmed(leaveArm.armed, "close") ? "btn armed" : "btn"}
+                  onClick={() => leave("close", () => setSelection(null))}
                   disabled={save.isPending}
                 >
-                  取消
+                  {leaveArmed(leaveArm.armed, "close") ? "再按一次取消" : "取消"}
                 </button>
               </div>
 
