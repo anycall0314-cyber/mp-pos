@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { isTabPage, isWorkspacePath, NavMatch } from "@/nav";
 
@@ -20,6 +20,7 @@ export function ModuleBar({
 }) {
   const [open, setOpen] = useState(false);
   const toolsRef = useRef<HTMLDivElement>(null);
+  const nav = useNavigate();
 
   // 點別的地方 / 按 Esc 把選單收起來
   useEffect(() => {
@@ -54,8 +55,33 @@ export function ModuleBar({
   // 進到開單 / 維修單這種子頁就收起來,把高度留給明細
   if (module.tabs.length <= 1 && !inTools && pathname !== page.to) return null;
 
+  // 分頁多(統計分析 11 個、商品庫存 8 個):窄螢幕改成一顆下拉,不要疊成好幾排才看到內容(全站檢視 G6)
+  const many = module.tabs.length > 3;
+  const inTabs = module.tabs.some((p) => p.to === page.to);
+
   return (
-    <div className="module-bar">
+    <div className={`module-bar${many ? " many" : ""}`}>
+      {many && (
+        <select
+          className="module-select"
+          aria-label={`${module.label}的頁面`}
+          value={inTabs ? page.to : ""}
+          onChange={(e) => {
+            if (e.target.value) nav(e.target.value);
+          }}
+        >
+          {!inTabs && (
+            <option value="" disabled>
+              {page.label}
+            </option>
+          )}
+          {module.tabs.map((p) => (
+            <option key={p.to} value={p.to}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+      )}
       <nav className="module-tabs" aria-label={`${module.label}的頁面`}>
         {module.tabs.map((p) => {
           const active = p.to === page.to;

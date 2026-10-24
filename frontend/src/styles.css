@@ -325,7 +325,11 @@ button { font-family: inherit; }
 @media (max-width: 900px) {
   .module-bar { flex-wrap: wrap; }
   .module-tab { min-height: 44px; }
+  /* 分頁多的入口:窄螢幕改成一顆下拉(全站檢視 G6:統計分析 11 個分頁,字放大後疊成四排才看到報表) */
+  .module-bar.many .module-tabs { display: none; }
+  .module-bar.many .module-select { display: block; }
 }
+.module-select { display: none; align-self: center; min-width: 9em; margin: 4px 0; }
 .module-tools-btn {
   min-height: 36px;
   padding: 0 var(--btn-pad-x);
