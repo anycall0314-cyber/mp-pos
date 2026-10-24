@@ -180,7 +180,8 @@ test("頁面:兩顆匯出字數一樣、彙總表走同一套匯出;「上期」
   const page = readFileSync(new URL("../pages/reports/InvoiceListPage.tsx", import.meta.url), "utf8");
   assert.match(page, />\s*匯出明細\s*</);
   assert.match(page, />\s*匯出彙總\s*</);
-  assert.match(page, />\s*本月\s*<\/button>\s*<button[\s\S]*?lastPeriod\(\)[\s\S]*?>\s*上期\s*</);
+  // 全站檢視 E10:快速鈕換成共用的今天 / 昨天 / 本月 / 上月,「上期」(兩個月一期)接在旁邊,按了直接查
+  assert.match(page, /<PeriodQuick[\s\S]*?\/>\s*<button[\s\S]*?lastPeriod\(\)[\s\S]*?apply\(period\);[\s\S]*?>\s*上期\s*</);
   assert.ok(page.includes("exportIfComplete({ count: rows },"));
   assert.ok(page.includes("summaryTable(got, storeName, madeAtText())"));
   const hooks = readFileSync(new URL("../api/hooks.ts", import.meta.url), "utf8");

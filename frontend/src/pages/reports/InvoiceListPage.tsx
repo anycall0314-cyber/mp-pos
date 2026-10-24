@@ -29,6 +29,7 @@ import {
   useStoreName,
   type Picked,
 } from "@/pages/inventory/stockReportParts";
+import { PeriodQuick } from "@/components/PeriodQuick";
 
 /**
  * 發票明細:有發票號碼的銷貨單一張一列(照號碼排)。作廢、待查的照樣列。
@@ -64,9 +65,10 @@ export function InvoiceListPage() {
   const rows = data?.results ?? [];
   const choices = data?.choices;
 
-  function apply() {
-    if (!ready) return;
-    setApplied({ from, to, by, warehouse: store.id, form, state, search });
+  function apply(over?: { from: string; to: string }) {
+    if (!over && !ready) return;
+    const range = over ?? { from, to };
+    setApplied({ ...range, by, warehouse: store.id, form, state, search });
     setAppliedStore(store);
     setPage(1);
     setExportNote("");
@@ -208,16 +210,13 @@ export function InvoiceListPage() {
             }}
           />
         </label>
-        <button
-          className="btn"
-          type="button"
-          onClick={() => {
-            setFrom(monthStart());
-            setTo(localDay());
+        <PeriodQuick
+          onPick={(f, t) => {
+            setFrom(f);
+            setTo(t);
+            apply({ from: f, to: t });
           }}
-        >
-          本月
-        </button>
+        />
         <button
           className="btn"
           type="button"
@@ -225,11 +224,12 @@ export function InvoiceListPage() {
             const period = lastPeriod();
             setFrom(period.from);
             setTo(period.to);
+            apply(period);
           }}
         >
           上期
         </button>
-        <button className="btn primary" type="button" disabled={!ready} onClick={apply}>
+        <button className="btn primary" type="button" disabled={!ready} onClick={() => apply()}>
           查詢
         </button>
       </div>

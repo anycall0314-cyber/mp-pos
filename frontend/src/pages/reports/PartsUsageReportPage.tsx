@@ -5,6 +5,7 @@ import { usePartsUsageReport } from "@/api/hooks";
 import { Toolbar } from "@/components/Toolbar";
 import { money } from "@/lib/money";
 import { localToday } from "@/lib/dates";
+import { PeriodQuick } from "@/components/PeriodQuick";
 
 function firstOfMonth(): string {
   const d = new Date();
@@ -47,7 +48,14 @@ export function PartsUsageReportPage() {
 
   return (
     <div className="page">
-      <Toolbar title="零件耗用" />
+      <Toolbar
+        title="零件耗用"
+        actions={
+          <button className="btn" type="button" onClick={exportCsv} disabled={!rows.length}>
+            匯出
+          </button>
+        }
+      />
       <div className="list-filterbar">
         <label>
           起日
@@ -65,30 +73,19 @@ export function PartsUsageReportPage() {
             onChange={(e) => setTo(e.target.value)}
           />
         </label>
-        <button
-          className="btn"
-          type="button"
-          onClick={() => {
-            setFrom(firstOfMonth());
-            setTo(today());
+        <PeriodQuick
+          onPick={(f, t) => {
+            setFrom(f);
+            setTo(t);
+            setApplied({ from: f, to: t });
           }}
-        >
-          本月
-        </button>
+        />
         <button
           className="btn primary"
           type="button"
           onClick={() => setApplied({ from, to })}
         >
           查詢
-        </button>
-        <button
-          className="btn"
-          type="button"
-          onClick={exportCsv}
-          disabled={!rows.length}
-        >
-          轉 Excel
         </button>
       </div>
 

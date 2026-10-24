@@ -29,6 +29,7 @@ import {
   useStoreName,
   type Picked,
 } from "./stockReportParts";
+import { PeriodQuick } from "@/components/PeriodQuick";
 
 /** 從進銷存表點品名帶過來的條件(放在瀏覽紀錄裡,重新整理還在)。 */
 interface CarriedIn {
@@ -78,10 +79,11 @@ export function StockMovesPage() {
   const ready = rangeReady({ from, to });
   const rows = data?.results ?? [];
 
-  function apply() {
-    if (!ready) return;
+  function apply(over?: { from: string; to: string }) {
+    if (!over && !ready) return;
+    const range = over ?? { from, to };
     setApplied({
-      from, to, warehouse: store.id, kind, category: category.id,
+      ...range, warehouse: store.id, kind, category: category.id,
       search: only ? "" : search, product: only ? only.id : "",
     });
     setAppliedStore(store);
@@ -190,17 +192,14 @@ export function StockMovesPage() {
             />
           )}
         </label>
-        <button
-          className="btn"
-          type="button"
-          onClick={() => {
-            setFrom(monthStart());
-            setTo(localDay());
+        <PeriodQuick
+          onPick={(f, t) => {
+            setFrom(f);
+            setTo(t);
+            apply({ from: f, to: t });
           }}
-        >
-          本月
-        </button>
-        <button className="btn primary" type="button" disabled={!ready} onClick={apply}>
+        />
+        <button className="btn primary" type="button" disabled={!ready} onClick={() => apply()}>
           查詢
         </button>
       </div>

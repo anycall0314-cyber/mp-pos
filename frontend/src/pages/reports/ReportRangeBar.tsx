@@ -1,13 +1,13 @@
 import { useState } from "react";
 
-import type { Warehouse } from "@/api/types";
-import { searchWarehouses } from "@/api/search";
 import { useDefaultWarehouse } from "@/auth/AuthContext";
-import { ComboBox, type ComboOption } from "@/components/ComboBox";
-import { localDay, monthStart, rangeReady, type ReportRange } from "@/lib/fixedReports";
+import { PeriodQuick } from "@/components/PeriodQuick";
+import { StoreSelect } from "@/components/StoreSelect";
+import { rangeReady, type ReportRange } from "@/lib/fixedReports";
 
 /**
- * 固定報表上面那一排:起日、迄日、門市、(開通統計)期間看哪一種日期、(商品排行)照什麼分。按「查詢」才送;兩個下拉一選就換。
+ * 固定報表上面那一排:起日、迄日、快速鈕(今天、昨天、本月、上月;按了直接查)、門市(一般下拉)、(開通統計)期間看哪一種日期、
+ * (商品排行)照什麼分。改起訖日、門市按「查詢」才送;兩個下拉一選就換(全站檢視 E10 照銷貨日報統一)。
  * 鎖在門市的帳號門市那一格是自己那一家、不能改 —— 伺服器本來就只算那一家。
  */
 export function ReportRangeBar({
@@ -27,8 +27,18 @@ export function ReportRangeBar({
   const [from, setFrom] = useState(applied.from);
   const [to, setTo] = useState(applied.to);
   const [warehouse, setWarehouse] = useState<number | "">(applied.warehouse ?? "");
-  const [warehouseOpt, setWarehouseOpt] = useState<ComboOption<Warehouse> | null>(null);
+  const [warehouseName, setWarehouseName] = useState(applied.warehouseName ?? "");
   const ready = rangeReady({ from, to });
+
+  /** 送出(快速鈕按了直接查;起訖日在這裡帶進來) */
+  function submit(range: { from: string; to: string }) {
+    onApply({
+      ...applied,
+      ...range,
+      warehouse,
+      warehouseName: store.locked ? store.name : warehouse === "" ? "" : warehouseName,
+    });
+  }
 
   return (
     <div className="list-filterbar">
@@ -45,15 +55,12 @@ export function ReportRangeBar({
         {store.locked ? (
           <input value={store.name || "(未設定)"} disabled />
         ) : (
-          <ComboBox<Warehouse>
+          <StoreSelect
             value={warehouse}
-            selectedOption={warehouseOpt}
-            onChange={(id, opt) => {
+            onChange={(id, name) => {
               setWarehouse(id);
-              setWarehouseOpt(opt ?? null);
+              setWarehouseName(name);
             }}
-            fetchOptions={searchWarehouses}
-            placeholder="全部"
           />
         )}
       </label>
@@ -87,30 +94,14 @@ export function ReportRangeBar({
           </select>
         </label>
       )}
-      <button
-        className="btn"
-        type="button"
-        onClick={() => {
-          setFrom(monthStart());
-          setTo(localDay());
+      <PeriodQuick
+        onPick={(f, t) => {
+          setFrom(f);
+          setTo(t);
+          submit({ from: f, to: t });
         }}
-      >
-        本月
-      </button>
-      <button
-        className="btn primary"
-        type="button"
-        disabled={!ready}
-        onClick={() =>
-          onApply({
-            ...applied,
-            from,
-            to,
-            warehouse,
-            warehouseName: store.locked ? store.name : warehouse === "" ? "" : (warehouseOpt?.label ?? ""),
-          })
-        }
-      >
+      />
+      <button className="btn primary" type="button" disabled={!ready} onClick={() => submit({ from, to })}>
         查詢
       </button>
     </div>

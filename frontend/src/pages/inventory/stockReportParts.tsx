@@ -1,7 +1,8 @@
 import type { Category, Warehouse } from "@/api/types";
-import { searchCategories, searchWarehouses } from "@/api/search";
+import { searchCategories } from "@/api/search";
 import { useDefaultWarehouse } from "@/auth/AuthContext";
 import { ComboBox, type ComboOption } from "@/components/ComboBox";
+import { StoreSelect } from "@/components/StoreSelect";
 
 /** 下拉選到的那一筆(編號 + 顯示用的那一列)。空的 = 沒選。 */
 export interface Picked<T> {
@@ -39,12 +40,10 @@ export function StoreField({
       {lockable && store.locked ? (
         <input value={store.name || "(未設定)"} disabled />
       ) : (
-        <ComboBox<Warehouse>
+        // 一般下拉(全站檢視 E10:以前要打字搜尋)
+        <StoreSelect
           value={value.id}
-          selectedOption={value.option}
-          onChange={(id, opt) => onChange({ id, option: opt ?? null })}
-          fetchOptions={searchWarehouses}
-          placeholder="全部"
+          onChange={(id, name) => onChange(id === "" ? NOT_PICKED : { id, option: { id, label: name, secondary: "" } })}
         />
       )}
     </label>

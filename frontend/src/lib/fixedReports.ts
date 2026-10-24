@@ -39,6 +39,35 @@ export function monthStart(now: Date = new Date()): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
 }
 
+/** 報表上面那一組快速鈕(全站檢視 E10:各頁一樣是今天、昨天、本月、上月) */
+export type QuickRange = "today" | "yesterday" | "month" | "lastMonth";
+export const QUICK_RANGES: { key: QuickRange; label: string }[] = [
+  { key: "today", label: "今天" },
+  { key: "yesterday", label: "昨天" },
+  { key: "month", label: "本月" },
+  { key: "lastMonth", label: "上月" },
+];
+
+/** 快速鈕的起訖日(照這台電腦的日期) */
+export function quickRange(kind: QuickRange, now: Date = new Date()): { from: string; to: string } {
+  const today = localDay(now);
+  if (kind === "today") return { from: today, to: today };
+  if (kind === "yesterday") {
+    const y = localDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+    return { from: y, to: y };
+  }
+  if (kind === "month") return { from: monthStart(now), to: today };
+  const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const last = new Date(now.getFullYear(), now.getMonth(), 0);
+  return { from: localDay(first), to: localDay(last) };
+}
+
+/** 往前 / 往後幾天(營業日報的前一天、後一天) */
+export function shiftDay(day: string, days: number): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return localDay(new Date(y, m - 1, d + days));
+}
+
 export interface ReportRange {
   from: string;
   to: string;

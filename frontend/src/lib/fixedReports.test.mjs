@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
-  FIXED_REPORTS, cellText, exportTitle, isNegative, localDay, monthStart, rangeQuery, rangeReady,
+  FIXED_REPORTS, cellText, exportTitle, isNegative, localDay, monthStart, quickRange, rangeQuery, rangeReady, shiftDay,
 } from "./fixedReports.ts";
 
 test("今天與月初用的是這台電腦的日期,不是世界時間", () => {
@@ -124,3 +124,20 @@ test("期間可以改看別的日期(開通統計:上線日):選了才送;下拉
   const hooks = readFileSync(new URL("../api/hooks.ts", import.meta.url), "utf8");
   assert.ok(hooks.includes("`/analytics/presets/${key}/?${rangeQuery(range)}&export=1`"));     // 匯出跟畫面用同一份條件(含日期)
 });
+
+test("快速鈕:今天、昨天、本月、上月(跨月、跨年、閏年)", () => {
+  const at = new Date(2026, 2, 1, 7, 30);           // 2026-03-01 早上 7:30(台灣早上 8 點前也算當天)
+  assert.deepEqual(quickRange("today", at), { from: "2026-03-01", to: "2026-03-01" });
+  assert.deepEqual(quickRange("yesterday", at), { from: "2026-02-28", to: "2026-02-28" });
+  assert.deepEqual(quickRange("month", at), { from: "2026-03-01", to: "2026-03-01" });
+  assert.deepEqual(quickRange("lastMonth", at), { from: "2026-02-01", to: "2026-02-28" });
+  assert.deepEqual(quickRange("lastMonth", new Date(2024, 2, 15)), { from: "2024-02-01", to: "2024-02-29" });
+  assert.deepEqual(quickRange("lastMonth", new Date(2026, 0, 10)), { from: "2025-12-01", to: "2025-12-31" });
+  assert.deepEqual(quickRange("yesterday", new Date(2026, 0, 1)), { from: "2025-12-31", to: "2025-12-31" });
+});
+
+test("前一天、後一天", () => {
+  assert.equal(shiftDay("2026-03-01", -1), "2026-02-28");
+  assert.equal(shiftDay("2025-12-31", 1), "2026-01-01");
+});
+

@@ -5,7 +5,6 @@ import {
   searchCustomers,
   searchMembers,
   searchSalesPersons,
-  searchWarehouses,
 } from "@/api/search";
 import { useDefaultWarehouse } from "@/auth/AuthContext";
 import type { Customer, Member, SalesPerson, Warehouse } from "@/api/types";
@@ -37,6 +36,8 @@ import {
 import { downloadCsv } from "@/components/downloadCsv";
 import { exportFileName, exportIfComplete } from "@/lib/reportExports";
 import { errorText } from "@/lib/errorText";
+import { PeriodQuick } from "@/components/PeriodQuick";
+import { StoreSelect } from "@/components/StoreSelect";
 
 /** 這台電腦的今天(不用世界時間:台灣早上八點以前會變成昨天)。 */
 function today(): string {
@@ -118,12 +119,11 @@ export function SalesDailyReportPage() {
   // 日期要兩個都有、而且起日不晚於迄日才查(不然請求不會送,畫面會像是「查無資料」)
   const ready = rangeReady({ from, to });
 
-  function runQuery() {
-    if (!ready) return;
+  function runQuery(over?: { from: string; to: string }) {
+    if (!over && !ready) return;
     setAppliedStoreName(warehouseOpt?.label ?? "");
     setApplied({
-      from,
-      to,
+      ...(over ?? { from, to }),
       warehouse,
       sales_person: salesPerson,
       customer,
@@ -179,7 +179,7 @@ export function SalesDailyReportPage() {
             disabled={nothing || !!cut}
             title={cut || undefined}
           >
-            轉 Excel
+            匯出
           </button>
         }
       >
@@ -255,37 +255,14 @@ export function SalesDailyReportPage() {
         </div>
 
         <div className="sd-filter-group sd-filter-quick">
-          <button
-            className="btn"
-            type="button"
-            onClick={() => {
-              const t = today();
-              setFrom(t);
+          {/* 今天、昨天、本月、上月,按了直接查(全站檢視 E10:各報表同一組) */}
+          <PeriodQuick
+            onPick={(f, t) => {
+              setFrom(f);
               setTo(t);
+              runQuery({ from: f, to: t });
             }}
-          >
-            今天
-          </button>
-          <button
-            className="btn"
-            type="button"
-            onClick={() => {
-              setFrom(daysAgo(6));
-              setTo(today());
-            }}
-          >
-            七天
-          </button>
-          <button
-            className="btn"
-            type="button"
-            onClick={() => {
-              setFrom(`${today().slice(0, 8)}01`);
-              setTo(today());
-            }}
-          >
-            本月
-          </button>
+          />
         </div>
 
         <div className="sd-filter-group sd-filter-people">
@@ -298,15 +275,12 @@ export function SalesDailyReportPage() {
                 title="此帳號鎖定於此門市"
               />
             ) : (
-              <ComboBox<Warehouse>
+              <StoreSelect
                 value={warehouse}
-                selectedOption={warehouseOpt}
-                onChange={(id, opt) => {
+                onChange={(id, name) => {
                   setWarehouse(id);
-                  setWarehouseOpt(opt ?? null);
+                  setWarehouseOpt(id === "" ? null : { id, label: name, secondary: "" });
                 }}
-                fetchOptions={searchWarehouses}
-                placeholder="全部門市"
               />
             )}
           </label>
@@ -374,7 +348,7 @@ export function SalesDailyReportPage() {
           <button
             type="button"
             className="btn primary"
-            onClick={runQuery}
+            onClick={() => runQuery()}
             disabled={!ready}
             title={ready ? undefined : "起日不能晚於迄日"}
           >

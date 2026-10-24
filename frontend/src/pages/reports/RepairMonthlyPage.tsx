@@ -24,6 +24,7 @@ import {
   useStoreName,
   type Picked,
 } from "@/pages/inventory/stockReportParts";
+import { PeriodQuick } from "@/components/PeriodQuick";
 
 /**
  * 維修月報:期間內完工的維修單 —— 合計、每個人分到多少、逐筆。
@@ -51,9 +52,10 @@ export function RepairMonthlyPage() {
   const rows = data?.results ?? [];
   const ways = data?.choices.way;
 
-  function apply() {
-    if (!ready) return;
-    setApplied({ from, to, warehouse: store.id, way });
+  function apply(over?: { from: string; to: string }) {
+    if (!over && !ready) return;
+    const range = over ?? { from, to };
+    setApplied({ ...range, warehouse: store.id, way });
     setAppliedStore(store);
     setPage(1);
     setExportNote("");
@@ -112,17 +114,14 @@ export function RepairMonthlyPage() {
             </select>
           </label>
         )}
-        <button
-          className="btn"
-          type="button"
-          onClick={() => {
-            setFrom(monthStart());
-            setTo(localDay());
+        <PeriodQuick
+          onPick={(f, t) => {
+            setFrom(f);
+            setTo(t);
+            apply({ from: f, to: t });
           }}
-        >
-          本月
-        </button>
-        <button className="btn primary" type="button" disabled={!ready} onClick={apply}>
+        />
+        <button className="btn primary" type="button" disabled={!ready} onClick={() => apply()}>
           查詢
         </button>
       </div>

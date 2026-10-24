@@ -28,6 +28,7 @@ import {
   useStoreName,
   type Picked,
 } from "./stockReportParts";
+import { PeriodQuick } from "@/components/PeriodQuick";
 
 /**
  * 進銷存表:一段期間每個商品的 期初、進貨、銷貨、銷退、調入、調出、領用、調整、期末(只有數量)。
@@ -62,9 +63,10 @@ export function StockFlowPage() {
   // 超過一次列得出來的商品數:不給只有一部分的檔
   const tooMany = tooManyToExport(rows.length, data?.truncated);
 
-  function apply() {
-    if (!ready) return;
-    setApplied({ from, to, warehouse: store.id, category: category.id, search, moved });
+  function apply(over?: { from: string; to: string }) {
+    if (!over && !ready) return;
+    const range = over ?? { from, to };
+    setApplied({ ...range, warehouse: store.id, category: category.id, search, moved });
     setAppliedStore(store);
     setAppliedCategory(category);
     setPage(1);
@@ -148,17 +150,14 @@ export function StockFlowPage() {
           <input type="checkbox" checked={moved} onChange={(e) => setMoved(e.target.checked)} />
           只看有進出
         </label>
-        <button
-          className="btn"
-          type="button"
-          onClick={() => {
-            setFrom(monthStart());
-            setTo(localDay());
+        <PeriodQuick
+          onPick={(f, t) => {
+            setFrom(f);
+            setTo(t);
+            apply({ from: f, to: t });
           }}
-        >
-          本月
-        </button>
-        <button className="btn primary" type="button" disabled={!ready} onClick={apply}>
+        />
+        <button className="btn primary" type="button" disabled={!ready} onClick={() => apply()}>
           查詢
         </button>
       </div>

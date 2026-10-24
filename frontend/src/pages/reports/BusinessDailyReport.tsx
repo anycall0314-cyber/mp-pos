@@ -9,6 +9,7 @@ import { useDefaultWarehouse } from "@/auth/AuthContext";
 import { Toolbar } from "@/components/Toolbar";
 import { intStr, money } from "@/lib/money";
 import { localToday } from "@/lib/dates";
+import { shiftDay } from "@/lib/fixedReports";
 
 const today = localToday;
 
@@ -249,12 +250,12 @@ export function BusinessDailyReportPage() {
             onClick={exportCsv}
             disabled={!report}
           >
-            匯出 CSV
+            匯出
           </button>
         }
       >
         <label style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
-          門市:
+          門市
           <select
             value={warehouse}
             onChange={(e) =>
@@ -263,19 +264,31 @@ export function BusinessDailyReportPage() {
           >
             {warehouses.map((w) => (
               <option key={w.id} value={w.id}>
-                {w.code} {w.name}
+                {w.name}
               </option>
             ))}
           </select>
         </label>
         <label style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
-          日期:
+          日期
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
           />
         </label>
+        {/* 前一天、後一天(全站檢視 E10:看昨天的日報以前要點日曆) */}
+        <button type="button" className="btn" onClick={() => setDate((d) => shiftDay(d, -1))}>
+          前一天
+        </button>
+        <button
+          type="button"
+          className="btn"
+          disabled={date >= today()}
+          onClick={() => setDate((d) => shiftDay(d, 1))}
+        >
+          後一天
+        </button>
       </Toolbar>
 
       <div className="entry-body" style={{ padding: 16 }}>

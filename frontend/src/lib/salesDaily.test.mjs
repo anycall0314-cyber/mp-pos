@@ -182,7 +182,7 @@ test("銷貨日報那一頁用的是新的資料來源、算法在這一個檔",
   assert.ok(page.includes("dailyTotals(activeOrders)"));
   // 日期不對(起日晚於迄日)時不能按查詢:不然請求不會送、畫面卻寫「查無資料」
   assert.ok(page.includes("disabled={!ready}"));
-  assert.ok(page.includes("if (!ready) return;"));
+  assert.ok(page.includes("if (!over && !ready) return;"));   // 快速鈕帶自己的起訖日(全站檢視 E10)
   // 舊的那一支(拿銷貨單清單、要求一頁 500 張,伺服器其實只給 50 張)拿掉了,不能再被別的頁面拿去用
   const hooks = readFileSync(new URL("../api/hooks.ts", import.meta.url), "utf8");
   assert.ok(!hooks.includes("useSalesDailyReport"));

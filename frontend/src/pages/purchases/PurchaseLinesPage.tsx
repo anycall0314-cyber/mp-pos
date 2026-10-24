@@ -23,6 +23,7 @@ import {
   useStoreName,
   type Picked,
 } from "@/pages/inventory/stockReportParts";
+import { PeriodQuick } from "@/components/PeriodQuick";
 
 /**
  * 進貨明細:進貨單的每一行一列(新的在前面)。不列作廢的進貨單。
@@ -56,9 +57,10 @@ export function PurchaseLinesPage() {
   const ready = rangeReady({ from, to });
   const rows = data?.results ?? [];
 
-  function apply() {
-    if (!ready) return;
-    setApplied({ from, to, warehouse: store.id, supplier: supplier.id, category: category.id, search });
+  function apply(over?: { from: string; to: string }) {
+    if (!over && !ready) return;
+    const range = over ?? { from, to };
+    setApplied({ ...range, warehouse: store.id, supplier: supplier.id, category: category.id, search });
     setAppliedStore(store);
     setAppliedSupplier(supplier);
     setAppliedCategory(category);
@@ -153,17 +155,14 @@ export function PurchaseLinesPage() {
             }}
           />
         </label>
-        <button
-          className="btn"
-          type="button"
-          onClick={() => {
-            setFrom(monthStart());
-            setTo(localDay());
+        <PeriodQuick
+          onPick={(f, t) => {
+            setFrom(f);
+            setTo(t);
+            apply({ from: f, to: t });
           }}
-        >
-          本月
-        </button>
-        <button className="btn primary" type="button" disabled={!ready} onClick={apply}>
+        />
+        <button className="btn primary" type="button" disabled={!ready} onClick={() => apply()}>
           查詢
         </button>
       </div>
