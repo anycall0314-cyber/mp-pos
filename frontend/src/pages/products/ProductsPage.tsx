@@ -1,7 +1,7 @@
 import { useCan } from "@/auth/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   useCategories,
@@ -24,6 +24,7 @@ import { cutNote } from "@/lib/listAll";
 import { isProductCode } from "@/lib/deviceCodes";
 import { money } from "@/lib/money";
 import { newProductUrl } from "@/lib/productFormUrl";
+import { readListSnapshot, saveListSnapshot, type ProductListSnapshot } from "@/lib/productListReturn";
 import { isProductSavedMessage, openInNewTab } from "@/lib/productTabs";
 import { purchaseLinkFor } from "@/lib/purchasePrefill";
 import { canSetStaffCost, ruleText, staffCostApplies } from "@/lib/staffCost";
@@ -108,10 +109,13 @@ const BATCH_TOOLS: { key: BatchTool; label: string; title: string }[] = [
 export function ProductsPage() {
   const nav = useNavigate();
   const queryClient = useQueryClient();
+  // 整頁編輯改完 / 按上一頁回來:清單照按編輯當下的樣子擺回去(全站檢視 R07;規則在 lib/productListReturn.ts)
+  const location = useLocation();
+  const [back] = useState(() => readListSnapshot(sessionStore(), location.key));
   // ─── 商品搜尋
   // 預設顯示「近期新增 10 筆」(按建立時間倒序);有搜尋字才用搜尋
-  const [productQuery, setProductQuery] = useState("");
-  const [appliedProductQuery, setAppliedProductQuery] = useState("");
+  const [productQuery, setProductQuery] = useState(back?.productQuery ?? "");
+  const [appliedProductQuery, setAppliedProductQuery] = useState(back?.appliedProductQuery ?? "");
   const isSearching = appliedProductQuery.length > 0;
   const productsTop = useProductList(
     isSearching
@@ -124,10 +128,10 @@ export function ProductsPage() {
   const productsResult = { ...productsTop, data: productsTop.data?.rows };
   const productsCut = isSearching ? cutNote(productsTop.data, "只列前", "筆") : "";
   // 刷條碼 / 打品號剛好對到一筆(完全相同):直接選它(全站檢視 D2)
-  const autoPicked = useRef("");
+  const autoPicked = useRef(back?.appliedProductQuery ?? "");
 
   // ─── 類別搜尋(類別本來就少,一次撈完前端過濾)
-  const [categoryQuery, setCategoryQuery] = useState("");
+  const [categoryQuery, setCategoryQuery] = useState(back?.categoryQuery ?? "");
   const categoriesResult = useCategories();
   const sortedCategories = useMemo(() => {
     const list = categoriesResult.data ?? [];
@@ -145,15 +149,31 @@ export function ProductsPage() {
   }, [sortedCategories, categoryQuery]);
 
   // ─── 選擇與右側面板
-  const [selection, setSelection] = useState<Selection>(null);
+  const [selection, setSelection] = useState<Selection>((back?.selection as Selection | undefined) ?? null);
   /** 點清單上的小縮圖看照片與規格 */
   const peek = usePhotoPeek();
   // 左側欄頁籤:商品列表 / 機型 / 類別管理
   const [leftTab, setLeftTab] = useState<"products" | "models" | "categories">(
-    "products",
+    back?.leftTab ?? "products",
   );
   // 右側商品詳情頁籤:基本 vs 別名
-  const [detailTab, setDetailTab] = useState<"basic" | "aliases">("basic");
+  const [detailTab, setDetailTab] = useState<"basic" | "aliases">(back?.detailTab ?? "basic");
+  /** 分類瀏覽走到哪一層、商品清單捲到哪(按編輯時一起記下來) */
+  const browseAt = useRef<TreeAt | undefined>((back?.browseAt as TreeAt | null | undefined) ?? undefined);
+  const listBody = useRef<HTMLDivElement>(null);
+  const scrolledBack = useRef(!back);
+  function listSnapshot(): ProductListSnapshot {
+    return {
+      leftTab,
+      productQuery,
+      appliedProductQuery,
+      categoryQuery,
+      selection,
+      detailTab,
+      browseAt: browseAt.current,
+      listScroll: listBody.current?.scrollTop ?? 0,
+    };
+  }
 
   const listedProduct = useMemo(() => {
     if (selection?.kind !== "product") return null;
@@ -358,6 +378,13 @@ export function ProductsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productsTop.data, appliedProductQuery]);
 
+  // 編輯完回來:清單畫出來之後捲回原來的位置(只做一次)
+  useLayoutEffect(() => {
+    if (scrolledBack.current || !back || !productsTop.data || !listBody.current) return;
+    scrolledBack.current = true;
+    listBody.current.scrollTop = back.listScroll;
+  }, [productsTop.data, back]);
+
   function runProductSearch() {
     setAppliedProductQuery(productQuery.trim());
   }
@@ -523,7 +550,7 @@ export function ProductsPage() {
                 </button>
               )}
             </div>
-            <div className="pc-section-body">
+            <div className="pc-section-body" ref={listBody}>
               {productsResult.isLoading && (
                 <div className="md-empty">
                   {isSearching ? "搜尋中…" : "載入中…"}
@@ -645,6 +672,10 @@ export function ProductsPage() {
           {/* ─── 機型區(一機型一列,右側展開看底下全新/中古 SKU) ─── */}
           {leftTab === "models" && (
             <CategoryBrowser
+              initialAt={browseAt.current}
+              onAt={(at) => {
+                browseAt.current = at;
+              }}
               selectedKey={selection?.kind === "model" ? selection.key : null}
               selectedProductId={selection?.kind === "product" ? selection.id : null}
               onPickModel={(key, name) => setSelection({ kind: "model", key, name })}
@@ -859,7 +890,12 @@ export function ProductsPage() {
                   <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
                     {canEdit && (
                       // 整頁編輯(SPEC-005):同一個分頁打開;要另開分頁的人按住 Cmd 點
-                      <Link className="btn primary" to={`/products/${selectedProduct.id}/edit`}>
+                      <Link
+                        className="btn primary"
+                        to={`/products/${selectedProduct.id}/edit`}
+                        state={{ listKey: location.key }}
+                        onClick={() => saveListSnapshot(sessionStore(), location.key, listSnapshot())}
+                      >
                         編輯
                       </Link>
                     )}
@@ -1276,17 +1312,26 @@ interface TreeAt {
 /** 分類瀏覽:類別 → 品牌(中項)→ 型號 → 商品(owner 2026-10-16;規則在 backend/apps/catalog/tree.py)。
  *  主機的型號點下去右邊列容量顏色品況;配件可切「依手機」(手機品牌 → 機型 → 照配件廠牌分組)/「依廠牌」 */
 function CategoryBrowser({
+  initialAt,
+  onAt,
   selectedKey,
   selectedProductId,
   onPickModel,
   onPickProduct,
 }: {
+  /** 編輯完回來:走回原來那一層(全站檢視 R07) */
+  initialAt?: TreeAt;
+  onAt?: (at: TreeAt) => void;
   selectedKey: string | null;
   selectedProductId: number | null;
   onPickModel: (key: string, name: string) => void;
   onPickProduct: (id: number) => void;
 }) {
-  const [at, setAt] = useState<TreeAt>({ mode: "phone" });
+  const [at, setAtState] = useState<TreeAt>(initialAt ?? { mode: "phone" });
+  function setAt(next: TreeAt) {
+    setAtState(next);
+    onAt?.(next);
+  }
   const cat = at.category;
   const mode = cat?.kind === "accessory" ? at.mode : cat?.kind === "general" ? "maker" : undefined;
   const level = useCategoryTree({
@@ -1516,4 +1561,13 @@ function ModelSkuPanel({
       ))}
     </div>
   );
+}
+
+/** 這個分頁的暫存(瀏覽器不給用就當沒有) */
+function sessionStore(): Storage | null {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { useProduct } from "@/api/hooks";
 import type { Product } from "@/api/types";
@@ -7,6 +7,7 @@ import { Toolbar } from "@/components/Toolbar";
 import { usePhotoPeek } from "@/components/photos/PhotoName";
 import { toast } from "@/components/workbench/toast";
 import { prefillFromParams } from "@/lib/productFormUrl";
+import { returnTarget } from "@/lib/productListReturn";
 import { backToOpener, tellOpener } from "@/lib/productTabs";
 import { purchaseLinkFor } from "@/lib/purchasePrefill";
 import { ProductForm } from "./ProductForm";
@@ -55,7 +56,17 @@ export function ProductFormPage() {
 
   // 表單存好(或改用既有的)之後還會叫一次「關閉」:那一次不算人按取消,不能把分頁關掉
   const done = useRef(false);
-  const backToList = (selected?: number) => nav(selected ? `/products?selected=${selected}` : "/products");
+  // 從商品管理點「編輯」進來的(帶著那一頁的鑰匙):存好 / 取消回上一頁,清單照原樣(全站檢視 R07);直接打網址進來的去商品頁選到這一筆
+  const location = useLocation();
+  const backToList = (selected?: number) => {
+    const to = returnTarget(
+      (location.state as { listKey?: unknown } | null)?.listKey,
+      (window.history.state as { idx?: unknown } | null)?.idx,
+      selected,
+    );
+    if (to === -1) nav(-1);
+    else nav(to);
+  };
   // 從商品頁另開的分頁:取消就關掉這一頁(回到原本那一頁);直接打網址進來的回商品頁
   const leave = () => {
     if (done.current) {
@@ -163,7 +174,8 @@ export function ProductFormPage() {
         onUseExisting={(existing, note) => {
           done.current = true;
           if (note) toast(note.text, note.tone, { ms: 6000 });
-          backToList(existing);
+          // 改用另一個既有商品:去商品頁選到那一個(不是回原本的清單)
+          nav(`/products?selected=${existing}`);
         }}
       />
       {peek.panel}
