@@ -5398,7 +5398,7 @@ input.rp-inline-money.failed {
 .rr-section {
   flex: 1 1 0;
   min-height: 0;
-  padding: 8mm 10mm;
+  padding: 6mm 10mm;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -5453,17 +5453,12 @@ input.rp-inline-money.failed {
 }
 .rr-tag {
   display: inline-block;
-  margin-top: 1mm;
-  padding: 1px 8px;
+  margin-left: 2mm;
+  vertical-align: 1px;
+  padding: 0 6px;
   border: 1px solid #111;
   border-radius: 3px;
   font-size: 8pt;
-}
-.rr-meta-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 9pt;
-  margin-bottom: 2mm;
 }
 .rr-info-grid {
   display: grid;
@@ -5485,9 +5480,28 @@ input.rp-inline-money.failed {
 }
 .rr-info-multiline {
   font-weight: 400;
-  min-height: 18px;
+  min-height: 14px;
   white-space: pre-wrap;
   font-size: 9pt;
+  /* 寫很長也最多兩行(一聯的高度是固定的,再多會把簽名擠出去;完整的在系統裡) */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+/* 會員、電話、收件日期、預計完修一排;機型、序號一排(全站排緊:2026-10-24 簽名壓到注意事項) */
+.rr-info-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.rr-span-2 { grid-column: span 2; }
+.rr-span-all { grid-column: 1 / -1; }
+/* 維修內容:項目與預估報價並排 */
+.rr-info-repair { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: end; margin-bottom: 0; }
+.rr-repair-item {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 .rr-section-box {
   border: 1px solid #111;
@@ -5509,8 +5523,8 @@ input.rp-inline-money.failed {
 }
 .rr-terms {
   margin: 1mm 0;
-  flex: 1 1 auto;
-  min-height: 0;
+  /* 不可以被壓扁:以前內容太高時這一塊縮小、條款文字跑出框外,簽名那一排疊在上面 */
+  flex: 0 0 auto;
 }
 .rr-terms-title {
   font-weight: 700;
@@ -5536,6 +5550,7 @@ input.rp-inline-money.failed {
 }
 .rr-sign {
   margin-top: auto;
+  flex: 0 0 auto;
   padding-top: 2mm;
   border-top: 1px solid #999;
 }

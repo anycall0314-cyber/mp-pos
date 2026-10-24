@@ -68,34 +68,26 @@ export function RepairReceiptPrintPage() {
   function renderSection(label: string) {
     return (
       <section className="rr-section">
+        {/* 一聯只有半張 A4:上面的資料排緊一點,注意事項不被壓扁、簽名那一排固定在最下面(以前內容太高時簽名壓在第 3、4、8 條上) */}
         <header className="rr-header">
           <div className="rr-store">
             <div className="rr-store-name">{o.warehouse_name}</div>
-            {o.warehouse_address && (
-              <div className="rr-store-meta">{o.warehouse_address}</div>
-            )}
-            {o.warehouse_phone && (
-              <div className="rr-store-meta">電話 {o.warehouse_phone}</div>
+            {(o.warehouse_address || o.warehouse_phone) && (
+              <div className="rr-store-meta">
+                {[o.warehouse_address, o.warehouse_phone && `電話 ${o.warehouse_phone}`].filter(Boolean).join("　")}
+              </div>
             )}
           </div>
           <div className="rr-title">
-            <div className="rr-title-main">維修單 · {label}</div>
+            <div className="rr-title-main">
+              維修單 · {label}
+              {titleSuffix && <span className="rr-tag">{titleSuffix}</span>}
+            </div>
             <div className="rr-no">{o.no}</div>
-            {titleSuffix && <div className="rr-tag">{titleSuffix}</div>}
           </div>
         </header>
 
-        <div className="rr-meta-row">
-          <span>
-            收件日期:<b>{o.received_date}</b>
-          </span>
-          <span>
-            預計完修:
-            <b>{o.expected_complete_date || "—"}</b>
-          </span>
-        </div>
-
-        <div className="rr-info-grid">
+        <div className="rr-info-grid rr-info-4">
           <div>
             <div className="rr-info-label">會員</div>
             <div className="rr-info-val">{o.customer_name}</div>
@@ -103,6 +95,14 @@ export function RepairReceiptPrintPage() {
           <div>
             <div className="rr-info-label">聯絡電話</div>
             <div className="rr-info-val">{o.customer_phone || "—"}</div>
+          </div>
+          <div>
+            <div className="rr-info-label">收件日期</div>
+            <div className="rr-info-val">{o.received_date}</div>
+          </div>
+          <div>
+            <div className="rr-info-label">預計完修</div>
+            <div className="rr-info-val">{o.expected_complete_date || "—"}</div>
           </div>
           <div>
             <div className="rr-info-label">機型</div>
@@ -113,12 +113,12 @@ export function RepairReceiptPrintPage() {
             <div className="rr-info-val">{o.device_serial || (o.serial_unavailable ? "取不到(開不了機)" : "—")}</div>
           </div>
           {o.accessories && (
-            <div style={{ gridColumn: "1 / -1" }}>
+            <div className="rr-span-2">
               <div className="rr-info-label">隨機配件</div>
               <div className="rr-info-val">{o.accessories}</div>
             </div>
           )}
-          <div style={{ gridColumn: "1 / -1" }}>
+          <div className="rr-span-all">
             <div className="rr-info-label">故障描述</div>
             <div className="rr-info-val rr-info-multiline">
               {o.defect_description || "—"}
@@ -128,10 +128,10 @@ export function RepairReceiptPrintPage() {
 
         <div className="rr-section-box">
           <div className="rr-section-box-title">維修內容</div>
-          <div className="rr-info-grid">
-            <div style={{ gridColumn: "1 / -1" }}>
+          <div className="rr-info-grid rr-info-repair">
+            <div>
               <div className="rr-info-label">項目</div>
-              <div className="rr-info-val">
+              <div className="rr-info-val rr-repair-item">
                 {repairItemDisplay || "—"}
               </div>
             </div>
