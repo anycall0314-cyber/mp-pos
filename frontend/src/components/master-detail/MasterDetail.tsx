@@ -1,4 +1,6 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
+
+import { stepKey } from "@/lib/keyboardBind";
 
 export interface MasterColumn<T> {
   key: string;
@@ -54,11 +56,24 @@ export function MasterDetail<T>({
 }: MasterDetailProps<T>) {
   const [selectedKey, setSelectedKey] = useState<string | number | null>(null);
   const [activeTab, setActiveTab] = useState<string>(tabs[0]?.key ?? "");
+  // 鍵盤(全站檢視 L04,紅隊):整張清單只停一次 Tab(停在選到的、上次停的、或第一列),方向鍵換列、Enter 打開;
+  // 用鍵盤打開的,關掉右邊時游標回到那一列;滑鼠按 × 關的不搬游標
+  const rowEls = useRef(new Map<string | number, HTMLTableRowElement>());
+  const [focusKey, setFocusKey] = useState<string | number | null>(null);
+  const keyOpened = useRef<string | number | null>(null);
+  const returnTo = useRef<string | number | null>(null);
+  useEffect(() => {
+    if (selectedKey !== null || returnTo.current === null) return;
+    rowEls.current.get(returnTo.current)?.focus();
+    returnTo.current = null;
+  }, [selectedKey]);
 
   const selectedRow = rows.find((r) => rowKey(r) === selectedKey) ?? null;
   const currentActions = selectedRow && actions ? actions(selectedRow) : [];
   const currentTab = tabs.find((t) => t.key === activeTab) ?? tabs[0];
   const shown = selectedRow ? columns.filter((c) => !c.side) : columns;
+  const keys = rows.map(rowKey);
+  const tabStop = focusKey !== null && keys.includes(focusKey) ? focusKey : selectedRow ? selectedKey : (keys[0] ?? null);
 
   // 沒選任何一筆:清單佔滿整個寬度、不開右邊(UI 改善計劃 UI-07:不留一大塊空白寫「從左側選擇…」)。
   // 選了一筆:電腦是左右兩欄;手機(窄畫面)整頁換成那一筆,右上「×」回清單(`md-show-detail` 只在窄畫面有作用)
@@ -88,8 +103,29 @@ export function MasterDetail<T>({
                 return (
                   <tr
                     key={k}
+                    ref={(el) => {
+                      if (el) rowEls.current.set(k, el);
+                      else rowEls.current.delete(k);
+                    }}
                     className={k === selectedKey ? "selected" : undefined}
-                    onClick={() => setSelectedKey(k)}
+                    tabIndex={k === tabStop ? 0 : -1}
+                    aria-selected={k === selectedKey}
+                    onFocus={() => setFocusKey(k)}
+                    onClick={() => {
+                      keyOpened.current = null;
+                      setSelectedKey(k);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                        e.preventDefault();
+                        const next = stepKey(keys, k, e.key === "ArrowDown" ? 1 : -1);
+                        if (next !== null) rowEls.current.get(next)?.focus();
+                      } else if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        keyOpened.current = k;
+                        setSelectedKey(k);
+                      }
+                    }}
                   >
                     {shown.map((c) => (
                       <td key={c.key}>{c.render(row)}</td>
@@ -120,7 +156,18 @@ export function MasterDetail<T>({
               {t.label}
             </button>
           ))}
-          <button type="button" className="md-detail-close" aria-label="收起" title="收起" onClick={() => setSelectedKey(null)}>
+          <button
+            type="button"
+            className="md-detail-close"
+            aria-label="收起"
+            title="收起"
+            onClick={(e) => {
+              // 用鍵盤打開、也用鍵盤關(Enter / 空白鍵按 ×:detail 是 0)的才回到那一列
+              returnTo.current = keyOpened.current !== null && e.detail === 0 ? keyOpened.current : null;
+              keyOpened.current = null;
+              setSelectedKey(null);
+            }}
+          >
             ×
           </button>
         </div>
