@@ -33,6 +33,7 @@ import {
 import { toast } from "@/components/workbench/toast";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useStoreParam } from "@/hooks/useStoreParam";
+import { scannedOnList } from "@/lib/transferView";
 import { codesLabel, isProductCode, normalizeCode } from "@/lib/deviceCodes";
 
 /**
@@ -267,6 +268,13 @@ export function TransferWorkbenchPage() {
   const [notices, setNotices] = useState<{ id: number; text: string }[]>([]);
   /** 一定要出現在最近調撥裡的那一張(入庫沒成功的新單;不管清單現在篩什麼日期) */
   const [pinnedId, setPinnedId] = useState<number | null>(null);
+  /**
+   * 一進來先看清單(待入庫在最上面),按「新增調撥」才是開單的工作台(全站檢視 V03;紅隊:收貨那家一進來是要入庫)。
+   * /transfers/new 或從進貨單整張調撥過來(?from_po=)直接開工作台。回清單時刷到一半的明細留著,再按新增調撥接著刷。
+   */
+  const [view, setView] = useState<"list" | "new">(() => (id === "new" || fromPo ? "new" : "list"));
+  /** 剛建立的那一張(工作台上面寫著,連開好幾張時看得到上一張成立了) */
+  const [lastCreated, setLastCreated] = useState<{ id: number; no: string } | null>(null);
 
   const scanRef = useRef<HTMLInputElement>(null);
   /**
@@ -774,6 +782,7 @@ export function TransferWorkbenchPage() {
     sent: Set<string>,
     wantConfirm: boolean,
   ) {
+    setLastCreated({ id: created.id, no: created.no });
     // 只拿掉送出去的那幾行:送出這段時間才處理完的碼還留著
     commit((ls) => ls.filter((l) => !sent.has(l.key)));
     setNote("");
@@ -934,6 +943,39 @@ export function TransferWorkbenchPage() {
     scanRef.current?.focus();
   }
 
+  // 送出那一下刷碼框暫時鎖住、游標會掉;送完(解鎖)就放回刷碼框,連開下一張直接刷(紅隊:送貨店一天開好幾張)
+  useEffect(() => {
+    if (!busy && view === "new") scanRef.current?.focus();
+  }, [busy, view]);
+
+  /** 打開工作台(刷碼框拿到游標) */
+  function openNew() {
+    setView("new");
+    requestAnimationFrame(() => scanRef.current?.focus());
+  }
+
+  // 站在清單頁刷條碼:沒有刷碼框可以收,講一句(紅隊:不能裝作有吃到)。輸入框裡打字不算
+  useEffect(() => {
+    if (view !== "list") return;
+    let buf = "";
+    let started = 0;
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      const now = Date.now();
+      if (e.key === "Enter") {
+        if (scannedOnList(buf, now - started)) toast("要調撥請先按「新增調撥」", "err");
+        buf = "";
+        return;
+      }
+      if (e.key.length !== 1) return;
+      if (!buf) started = now;
+      buf += e.key;
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [view]);
+
   // ── 最近調撥 ─────────────────────────────────────────
   // 首頁「調撥待入庫」選了門市:只看調進那一家的(跟首頁的數字同一個算法;全站檢視 R06)
   const toStore = useStoreParam();
@@ -1085,6 +1127,19 @@ export function TransferWorkbenchPage() {
 
   return (
     <div className="wb">
+      {/* 回清單時工作台只是藏起來、不卸掉:刷碼框裡打到一半的字與「沒加入」那一排都在(Codex P0:卸掉的話回來送出會漏掉那一項) */}
+      <div hidden={view !== "new"}>
+      <div className="wb-newbar">
+        <button type="button" className="wb-btn" onClick={() => setView("list")}>
+          回清單
+        </button>
+        {pendingCount > 0 && (
+          <button type="button" className="wb-link" onClick={() => { setOnlyPending(true); setView("list"); }}>
+            待入庫 <span className="wb-badge warn">{pendingCount}</span>
+          </button>
+        )}
+        {lastCreated && <span className="wb-dim">剛建立 {lastCreated.no}</span>}
+      </div>
       <div className="wb-card">
         <div className="wb-row">
           <div className="wb-field">
@@ -1328,7 +1383,18 @@ export function TransferWorkbenchPage() {
           })}
         </tbody>
       </table>
+      </div>
 
+      {view === "list" && (
+      <>
+      {notices.map((n) => (
+        <div key={n.id} className="wb-warn err wb-inv-hit">
+          <span>{n.text}</span>
+          <button type="button" className="wb-link" onClick={() => settle(n.id)}>
+            知道了
+          </button>
+        </div>
+      ))}
       <div className="wb-section">
         <h3>最近調撥</h3>
         <label className="wb-check" style={{ paddingBottom: 0 }}>
@@ -1362,6 +1428,10 @@ export function TransferWorkbenchPage() {
             清除條件
           </button>
         )}
+        <button type="button" className="wb-btn primary wb-new-btn" onClick={openNew}>
+          新增調撥
+          {lines.length > 0 && <span className="wb-badge">{lines.length}</span>}
+        </button>
       </div>
 
       {recentQ.isError && (
@@ -1489,6 +1559,8 @@ export function TransferWorkbenchPage() {
             看更多
           </button>
         </div>
+      )}
+      </>
       )}
     </div>
   );

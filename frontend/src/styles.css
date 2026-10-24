@@ -4221,6 +4221,9 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   align-items: flex-start;
 }
 .wb-unpaid { font-size: var(--font-meta); color: var(--text-dim); }
+/* 調撥工作台上面那一排:回清單、待入庫幾張、剛建立的單號(全站檢視 V03) */
+.wb-newbar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+.wb-section .wb-new-btn { margin-left: auto; }
 .re-grid-intake { grid-template-columns: minmax(0, 1fr); max-width: 880px; }
 /* 既有的維修單也單欄(全站檢視 V02):右邊那一疊(費用明細、個人毛利、備註)接在維修內容後面,不再黏在旁邊 */
 .re-grid-single { grid-template-columns: minmax(0, 1fr); }
