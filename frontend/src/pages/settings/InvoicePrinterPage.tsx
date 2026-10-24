@@ -146,6 +146,7 @@ export function InvoicePrinterPage() {
               <button
                 className="btn"
                 type="button"
+                aria-label="上面空少一行"
                 disabled={setup.top <= 0}
                 onClick={() => change({ ...setup, top: clampTop(setup.top - 1) })}
               >
@@ -155,6 +156,7 @@ export function InvoicePrinterPage() {
               <button
                 className="btn"
                 type="button"
+                aria-label="上面空多一行"
                 disabled={setup.top >= PRINTER_SETUP.topMax}
                 onClick={() => change({ ...setup, top: clampTop(setup.top + 1) })}
               >

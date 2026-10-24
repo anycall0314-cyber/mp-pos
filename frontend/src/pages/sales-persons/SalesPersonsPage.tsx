@@ -124,7 +124,7 @@ export function SalesPersonsPage() {
         title="業務員"
         actions={
           <button
-            className={draft.armed("new") ? "btn primary armed" : "btn primary"}
+            className={draft.armed("new") ? "btn armed" : "btn"}
             onClick={() => {
               if (selection?.kind !== "new") draft.leave("new", () => setSelection({ kind: "new" }));
             }}

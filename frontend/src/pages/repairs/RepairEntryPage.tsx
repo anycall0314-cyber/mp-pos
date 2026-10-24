@@ -42,6 +42,7 @@ import { useArm } from "@/components/workbench/useArm";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Field } from "@/components/Field";
+import { ChoiceGroup } from "@/components/ui";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { Toolbar } from "@/components/Toolbar";
 import { MoneyInput } from "@/components/MoneyInput";
@@ -764,24 +765,17 @@ function RepairEntryForm() {
         {/* 頂部:維修方式 segmented + 返修勾選 */}
         <div className="re-mode-bar">
           {!intake && (
-            <>
-              <button
-                type="button"
-                className={`pf-tab${mode === "in_house" ? " active" : ""}`}
-                onClick={() => tryChangeMode("in_house")}
-              >
-                自修
-                <span className="pf-tab-sub">{arm.armed === "mode:in_house" ? "再按一次,內容會清掉" : "店內處理"}</span>
-              </button>
-              <button
-                type="button"
-                className={`pf-tab${mode === "external" ? " active" : ""}`}
-                onClick={() => tryChangeMode("external")}
-              >
-                委外
-                <span className="pf-tab-sub">{arm.armed === "mode:external" ? "再按一次,內容會清掉" : "送外廠"}</span>
-              </button>
-            </>
+            // 維修方式單選(全站控制項 MC-06);有內容時換方式要再按一次(小字變「再按一次,內容會清掉」)
+            <ChoiceGroup
+              label="維修方式"
+              layout="fill"
+              value={mode}
+              onChange={(v) => tryChangeMode(v)}
+              options={[
+                { value: "in_house", label: "自修", sub: arm.armed === "mode:in_house" ? "再按一次,內容會清掉" : "店內處理" },
+                { value: "external", label: "委外", sub: arm.armed === "mode:external" ? "再按一次,內容會清掉" : "送外廠" },
+              ]}
+            />
           )}
           <label className="re-return-toggle">
             <input
@@ -1067,25 +1061,16 @@ function RepairEntryForm() {
                   }
                 >
                   <div className="re-unlock-bar">
-                    {(
-                      [
-                        ["password", "密碼"],
-                        ["pattern", "圖形鎖"],
-                        ["none", "無"],
-                      ] as const
-                    ).map(([v, label]) => (
-                      <button
-                        key={v}
-                        type="button"
-                        className={
-                          "pf-tab pf-tab-mini" +
-                          (unlockMethod === v ? " active" : "")
-                        }
-                        onClick={() => setUnlockMethod(v)}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                    <ChoiceGroup
+                      label="解鎖方式"
+                      value={unlockMethod || null}
+                      onChange={setUnlockMethod}
+                      options={[
+                        { value: "password", label: "密碼" },
+                        { value: "pattern", label: "圖形鎖" },
+                        { value: "none", label: "無" },
+                      ]}
+                    />
                   </div>
                   {unlockMethod === "password" && (
                     <input

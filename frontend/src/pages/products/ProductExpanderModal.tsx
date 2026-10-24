@@ -15,6 +15,7 @@ import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { DraftBanner } from "@/components/DraftBanner";
 import { Checkbox, Field } from "@/components/Field";
+import { ChoiceGroup, IconButton } from "@/components/ui";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { useModalDraft } from "@/hooks/useModalDraft";
 import { MoneyInput } from "@/components/MoneyInput";
@@ -418,8 +419,12 @@ export function ProductExpanderModal({
             required
             hint={`庫存:${stockModeLabel(requiresSerial)}`}
           >
-            <div className="pf-tabs" style={isAccessoryMode ? { gridTemplateColumns: "1fr 1fr" } : undefined}>
-              {(
+            <ChoiceGroup
+              label="商品性質"
+              layout="fill"
+              value={accessoryType}
+              onChange={(v) => changeAccessoryType(v)}
+              options={(
                 [
                   ["none", "主機", "手機 / 平板"],
                   ["phone_specific", "機型配件", "殼 / 保護貼"],
@@ -428,18 +433,8 @@ export function ProductExpanderModal({
               )
                 // 多款展開不能建主機(全站檢視 D8):手機照平台型號庫,走「手機型號」
                 .filter(([v]) => !(isAccessoryMode && v === "none"))
-                .map(([v, label, sub]) => (
-                <button
-                  key={v}
-                  type="button"
-                  className={`pf-tab${accessoryType === v ? " active" : ""}`}
-                  onClick={() => changeAccessoryType(v)}
-                >
-                  {label}
-                  <span className="pf-tab-sub">{sub}</span>
-                </button>
-              ))}
-            </div>
+                .map(([v, label, sub]) => ({ value: v, label, sub }))}
+            />
           </Field>
 
           <Field label="型號名稱" required>
@@ -563,8 +558,9 @@ export function ProductExpanderModal({
                       style={{ cursor: "default" }}
                     >
                       {name}
-                      <button
-                        type="button"
+                      <IconButton
+                        className="compact"
+                        label={`移除 ${name}`}
                         onClick={() =>
                           setCompat((prev) => {
                             const next = new Map(prev);
@@ -572,20 +568,9 @@ export function ProductExpanderModal({
                             return next;
                           })
                         }
-                        style={{
-                          marginLeft: 6,
-                          background: "transparent",
-                          border: 0,
-                          color: "inherit",
-                          cursor: "pointer",
-                          fontSize: 16,
-                          padding: 0,
-                          lineHeight: 1,
-                        }}
-                        title="移除"
                       >
                         ×
-                      </button>
+                      </IconButton>
                     </span>
                   ))}
                   <span style={{ alignSelf: "center", fontSize: 14, color: "var(--text-dim)" }}>

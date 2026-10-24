@@ -23,6 +23,7 @@ import { Banner } from "@/components/Banner";
 import { InvoiceJumpDialog } from "@/components/invoice/InvoiceJumpDialog";
 import { openLabelPrint } from "@/components/labels/openLabelPrint";
 import { Toolbar } from "@/components/Toolbar";
+import { TabPanel, Tabs } from "@/components/ui";
 import { apiErrorText } from "@/components/workbench/errors";
 import { toast } from "@/components/workbench/toast";
 import { can } from "@/lib/abilities";
@@ -262,23 +263,16 @@ export function SettingsPage() {
   return (
     <div className="page">
       <Toolbar title="系統設定" />
-      <div className="tab-switcher settings-tabs" role="tablist" aria-label="系統設定">
-        {SETTINGS_TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.key}
-            className={`tab-switcher-item${tab === t.key ? " active" : ""}`}
-            onClick={() => pickTab(t.key)}
-          >
-            {t.label}
-            {unsaved[t.key] && <span className="settings-unsaved">還沒儲存</span>}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        id="st"
+        label="系統設定"
+        className="settings-tabs"
+        items={SETTINGS_TABS.map((t) => ({ key: t.key, label: t.label, note: unsaved[t.key] ? "還沒儲存" : undefined, noteTone: "warn" as const }))}
+        value={tab}
+        onChange={pickTab}
+      />
       <div className="entry-body">
-        <div role="tabpanel" hidden={tab !== "general"}>
+        <TabPanel id="st" k="general" active={tab === "general"}>
           <h3 style={{ marginTop: 0 }}>維修</h3>
           <p style={{ color: "var(--text-dim)", fontSize: 14 }}>
             返修保固天數:自原維修單完修日起算,在此範圍內視為保固有效。
@@ -429,8 +423,8 @@ export function SettingsPage() {
               列印測試標籤
             </button>
           </div>
-        </div>
-        <div role="tabpanel" hidden={tab !== "stores"}>
+        </TabPanel>
+        <TabPanel id="st" k="stores" active={tab === "stores"}>
           <h3 style={{ marginTop: 0 }}>門市</h3>
           <p style={{ color: "var(--text-dim)", fontSize: 14 }}>
             門市地址 / 電話會印在收據(代收話費等)上。代碼 / 名稱請聯絡管理員調整。
@@ -503,9 +497,9 @@ export function SettingsPage() {
               </tbody>
             </table>
           )}
-        </div>
+        </TabPanel>
         {/* 發票:字軌在上面、類型在下面(紅隊:開單送進來的是要新增字軌) */}
-        <div role="tabpanel" hidden={tab !== "invoice"}>
+        <TabPanel id="st" k="invoice" active={tab === "invoice"}>
           <h3 style={{ marginTop: 0 }}>發票字軌</h3>
           <p style={{ color: "var(--text-dim)", fontSize: 14 }}>
             一間門市、一期一條。開單只取自己門市當期的字軌。
@@ -844,8 +838,8 @@ export function SettingsPage() {
               </tbody>
             </table>
           )}
-        </div>
-        <div role="tabpanel" hidden={tab !== "payment"}>
+        </TabPanel>
+        <TabPanel id="st" k="payment" active={tab === "payment"}>
           <h3 style={{ marginTop: 0 }}>付款方式</h3>
           <p style={{ color: "var(--text-dim)", fontSize: 14 }}>
             結帳時可選的付款通路。分類:
@@ -1054,7 +1048,7 @@ export function SettingsPage() {
               </tbody>
             </table>
           )}
-        </div>
+        </TabPanel>
       </div>
       {/* 版本(2026-10-23 從今日總覽搬來;UI 改善計劃 UI-10:技術資訊不放在工作的第一頁) */}
       <div className="settings-version">版本 {__APP_VERSION__}</div>

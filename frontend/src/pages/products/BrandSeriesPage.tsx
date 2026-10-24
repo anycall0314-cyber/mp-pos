@@ -322,7 +322,7 @@ export function BrandSeriesPage() {
                 匯入 CSV / Excel
               </button>
             )}
-            <button className="btn primary" onClick={startNewBrand}>
+            <button className="btn" onClick={startNewBrand}>
               新增品牌
             </button>
           </>
@@ -429,14 +429,14 @@ export function BrandSeriesPage() {
                 )}
                 <button
                   type="button"
-                  className="btn danger"
+                  className={`btn danger${arm.armed === `brand:${selectedBrand.id}` ? " armed" : ""}`}
                   onClick={() => handleDeleteBrand(selectedBrand)}
                 >
                   {arm.armed === `brand:${selectedBrand.id}` ? "再按一次刪除" : "刪除品牌"}
                 </button>
                 <button
                   type="button"
-                  className="btn primary"
+                  className="btn"
                   onClick={startNewSeries}
                 >
                   新增系列
@@ -638,7 +638,7 @@ export function BrandSeriesPage() {
                           </button>
                           <button
                             type="button"
-                            className="btn danger"
+                            className={`btn danger${arm.armed === `series:${s.id}` ? " armed" : ""}`}
                             onClick={() => handleDeleteSeries(s)}
                             style={{ marginLeft: 4 }}
                           >

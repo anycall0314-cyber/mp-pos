@@ -34,6 +34,7 @@ import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Toolbar } from "@/components/Toolbar";
 import { Checkbox, Field } from "@/components/Field";
+import { ChoiceGroup } from "@/components/ui";
 
 import { PhotoSection } from "@/components/photos/PhotoSection";
 import type { PeekTarget } from "@/components/photos/ProductPhotoPanel";
@@ -1499,24 +1500,16 @@ export function ProductForm({
           required
           hint="商品倉=銷貨用,零件倉=維修用(隱藏建議售價;可選擇對外調貨同行)"
         >
-          <div className="pf-tabs">
-            <button
-              type="button"
-              className={`pf-tab${state.warehouse_type === "product" ? " active" : ""}`}
-              onClick={() => changeWarehouse("product")}
-            >
-              商品倉
-              <span className="pf-tab-sub">銷貨用</span>
-            </button>
-            <button
-              type="button"
-              className={`pf-tab${state.warehouse_type === "parts" ? " active" : ""}`}
-              onClick={() => changeWarehouse("parts")}
-            >
-              零件倉
-              <span className="pf-tab-sub">維修用</span>
-            </button>
-          </div>
+          <ChoiceGroup
+            label="倉別"
+            layout="fill"
+            value={state.warehouse_type}
+            onChange={(v) => changeWarehouse(v)}
+            options={[
+              { value: "product", label: "商品倉", sub: "銷貨用" },
+              { value: "parts", label: "零件倉", sub: "維修用" },
+            ]}
+          />
         </Field>
 
         {state.warehouse_type === "product" && (
@@ -1525,32 +1518,17 @@ export function ProductForm({
           required
           error={fieldErrors.accessory_type}
         >
-          <div className="pf-tabs">
-            <button
-              type="button"
-              className={`pf-tab${state.accessory_type === "none" ? " active" : ""}`}
-              onClick={() => changeNatureByHand("none")}
-            >
-              主機
-              <span className="pf-tab-sub">手機 / 平板本體</span>
-            </button>
-            <button
-              type="button"
-              className={`pf-tab${state.accessory_type === "phone_specific" ? " active" : ""}`}
-              onClick={() => changeNatureByHand("phone_specific")}
-            >
-              機型配件
-              <span className="pf-tab-sub">手機殼 / 保護貼</span>
-            </button>
-            <button
-              type="button"
-              className={`pf-tab${state.accessory_type === "universal" ? " active" : ""}`}
-              onClick={() => changeNatureByHand("universal")}
-            >
-              通用配件
-              <span className="pf-tab-sub">充電線 / 耳機</span>
-            </button>
-          </div>
+          <ChoiceGroup
+            label="商品性質"
+            layout="fill"
+            value={state.accessory_type}
+            onChange={(v) => changeNatureByHand(v)}
+            options={[
+              { value: "none", label: "主機", sub: "手機 / 平板本體" },
+              { value: "phone_specific", label: "機型配件", sub: "手機殼 / 保護貼" },
+              { value: "universal", label: "通用配件", sub: "充電線 / 耳機" },
+            ]}
+          />
         </Field>
         )}
 

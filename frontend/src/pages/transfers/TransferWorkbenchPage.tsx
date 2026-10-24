@@ -23,6 +23,7 @@ import type {
   TransferOrder,
 } from "@/api/types";
 import { useCan, useDefaultWarehouse } from "@/auth/AuthContext";
+import { ChoiceGroup } from "@/components/ui";
 import { ArmButton } from "@/components/workbench/ArmButton";
 import { apiErrorText } from "@/components/workbench/errors";
 import {
@@ -1341,6 +1342,7 @@ export function TransferWorkbenchPage() {
                     type="button"
                     className="wb-x"
                     title="移除"
+                    aria-label={`移除 ${l.name}`}
                     disabled={busy}
                     onClick={() => removeLine(l.key)}
                   >
@@ -1360,18 +1362,16 @@ export function TransferWorkbenchPage() {
                     <span className="wb-badge bad">調出門市沒有在庫</span>
                   ) : (
                     <div className="wb-chips">
-                      {l.units.map((u) => (
-                        <button
-                          type="button"
-                          key={u.id}
-                          className={`wb-chip${l.picked.includes(u.id) ? " on" : ""}`}
-                          title={codesLabel(u)}
-                          disabled={busy}
-                          onClick={() => toggleUnit(l.key, u.id)}
-                        >
-                          {tails.get(u.id)}
-                        </button>
-                      ))}
+                      {/* 挑哪幾台(全站控制項 B2:按下 / 放開的選項,不用藍底) */}
+                      <ChoiceGroup
+                        multiple
+                        size="sm"
+                        label={`${l.name} 要調的設備`}
+                        value={l.picked}
+                        disabled={busy}
+                        onChange={(id) => toggleUnit(l.key, id)}
+                        options={l.units.map((u) => ({ value: u.id, label: tails.get(u.id) ?? "", title: codesLabel(u) }))}
+                      />
                       <span className="wb-chip-count">
                         {l.picked.length}/{l.units.length}
                       </span>

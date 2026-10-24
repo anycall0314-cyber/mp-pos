@@ -14,6 +14,7 @@ import {
 } from "@/api/hooks";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { IconButton } from "@/components/ui";
 import { MoneyInput } from "@/components/MoneyInput";
 import { money } from "@/lib/money";
 import {
@@ -93,23 +94,9 @@ function ChipInput({
           }}
         >
           {v}
-          <button
-            type="button"
-            onClick={() => onChange(value.filter((_, j) => j !== i))}
-            aria-label={`移除 ${v}`}
-            style={{
-              background: "transparent",
-              border: 0,
-              color: "inherit",
-              cursor: "pointer",
-              fontSize: 16,
-              lineHeight: 1,
-              padding: 0,
-              marginLeft: 2,
-            }}
-          >
+          <IconButton className="compact" label={`移除 ${v}`} onClick={() => onChange(value.filter((_, j) => j !== i))}>
             ×
-          </button>
+          </IconButton>
         </span>
       ))}
       <input

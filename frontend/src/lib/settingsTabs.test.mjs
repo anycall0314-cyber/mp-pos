@@ -33,9 +33,11 @@ test("自動存的格子:存檔中 / 沒存成時照剛改的值顯示,已存照
 
 test("頁面:分頁只是藏起來(打到一半的留著)、還沒儲存標在分頁上、發票頁字軌在上;開單與功能搜尋直接開那一頁", () => {
   const page = read("../pages/settings/SettingsPage.tsx");
-  for (const k of ["general", "stores", "invoice", "payment"]) assert.match(page, new RegExp(`<div role="tabpanel" hidden=\\{tab !== "${k}"\\}>`));
-  assert.match(page, /\{unsaved\[t\.key\] && <span className="settings-unsaved">還沒儲存<\/span>\}/);
-  const inv = page.slice(page.indexOf('hidden={tab !== "invoice"}'), page.indexOf('hidden={tab !== "payment"}'));
+  // 共用 TabPanel 只是 hidden(全站控制項 B2b):打到一半的留著
+  for (const k of ["general", "stores", "invoice", "payment"]) assert.match(page, new RegExp(`<TabPanel id="st" k="${k}" active=\\{tab === "${k}"\\}>`));
+  assert.match(read("../components/ui/Tabs.tsx"), /hidden=\{!active\}/);
+  assert.match(page, /note: unsaved\[t\.key\] \? "還沒儲存" : undefined, noteTone: "warn" as const/);
+  const inv = page.slice(page.indexOf('k="invoice" active'), page.indexOf('k="payment" active'));
   assert.ok(inv.indexOf(">發票字軌</h3>") < inv.indexOf(">發票類型</h3>"));
   assert.doesNotMatch(page, /\.mutate\(\{ id: (w|t|p)\.id/, "自動存的格子一律經過 cell.save(看得到已存 / 沒存成)");
   assert.match(page, /<CellMark cell=\{cell\} k=\{`t\$\{t\.id\}:tax`\} \/>/, "帶入課稅別也標狀態(複審 P0)");

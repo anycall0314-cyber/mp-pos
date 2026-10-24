@@ -108,7 +108,7 @@ export function ConditionsPage() {
       <Toolbar
         title="商品品況"
         actions={
-          <button className="btn primary" onClick={startNew}>
+          <button className="btn" onClick={startNew}>
             新增品況
           </button>
         }
@@ -177,7 +177,7 @@ export function ConditionsPage() {
             </div>
 
             <div className="form-field" style={{ marginTop: 18 }}>
-              <label className="toggle-switch">
+              <label className="checkbox">
                 <input
                   type="checkbox"
                   checked={editing.is_secondhand}
@@ -192,8 +192,7 @@ export function ConditionsPage() {
                     })
                   }
                 />
-                <span className="toggle-track" />
-                視為中古機
+                <span>視為中古機</span>
               </label>
               <div className="form-field-hint">
                 每隻獨立成本。名稱含「中古」會自動勾起來
@@ -201,7 +200,8 @@ export function ConditionsPage() {
             </div>
 
             <div className="form-field">
-              <label className="toggle-switch">
+              {/* 中古機必開:勾選框停用、看起來就是不能按,理由寫在下面(全站控制項 MC-08) */}
+              <label className={editing.is_secondhand ? "checkbox disabled" : "checkbox"}>
                 <input
                   type="checkbox"
                   checked={editing.tracks_unit_condition}
@@ -213,8 +213,7 @@ export function ConditionsPage() {
                     })
                   }
                 />
-                <span className="toggle-track" />
-                逐台記機況
+                <span>逐台記機況</span>
               </label>
               <div className="form-field-hint">
                 {editing.is_secondhand
@@ -224,7 +223,7 @@ export function ConditionsPage() {
             </div>
 
             <div className="form-field">
-              <label className="toggle-switch">
+              <label className="checkbox">
                 <input
                   type="checkbox"
                   checked={editing.is_active}
@@ -232,8 +231,7 @@ export function ConditionsPage() {
                     setEditing({ ...editing, is_active: e.target.checked })
                   }
                 />
-                <span className="toggle-track" />
-                啟用
+                <span>啟用</span>
               </label>
               <div className="form-field-hint">
                 停用後新增手機型號時不能選。
@@ -358,7 +356,7 @@ export function ConditionsPage() {
                     </button>
                     <button
                       type="button"
-                      className="btn danger"
+                      className={`btn danger${arm.armed === `del:${c.id}` ? " armed" : ""}`}
                       onClick={() => handleDelete(c)}
                       style={{ marginLeft: 4 }}
                     >

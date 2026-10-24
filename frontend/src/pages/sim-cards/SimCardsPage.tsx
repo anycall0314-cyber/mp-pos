@@ -114,7 +114,7 @@ export function SimCardsPage() {
         title="SIM 卡"
         actions={
           <button
-            className="btn primary"
+            className="btn"
             onClick={() => {
               setDrawerInitial(null);
               setDrawerOpen(true);

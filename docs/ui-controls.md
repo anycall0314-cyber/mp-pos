@@ -72,7 +72,7 @@
 
 ## 5. 共用實作的邊界
 
-現有 `Field`、`Checkbox`、`ComboBox`、`StoreSelect`、`ArmButton`、`useArm`、`AppliedFilters`、`PeriodQuick`、`ModuleBar`、`EyeToggle` 優先沿用。新共用層在 `frontend/src/components/ui/`(2026-10-25 B0 建立,從 `@/components/ui` 拿;展示頁 `/dev/controls` 只在開發模式):`Button`(variant default / primary / danger / text、size md / sm / lg、pending)、`IconButton`(`label` 必填)、`Tabs` + `TabPanel`(分頁旁小字 `note`,要處理的 `noteTone="alert"` 紅字、建議看 `"warn"` 黃字)、`SegmentedControl`、`ChoiceGroup`(直接點的選項:單選 radiogroup / `multiple` 多選按下放開;付款方式、電信業者、門市、挑設備)、`GroupCheckbox`(群組全選,一部分是半選)、`StatusBadge`、`ToolbarField` + `ControlBar`(查詢 / 工作對象工具列,桌面滑鼠 40px、觸控 44px);外觀只在 `styles.css` 的「共用控制項」那一段。即時存的格子用 `hooks/useCellSaves` + `components/CellMark`。以下是各元件的邊界:
+現有 `Field`、`Checkbox`、`ComboBox`、`StoreSelect`、`ArmButton`、`useArm`、`AppliedFilters`、`PeriodQuick`、`ModuleBar`、`EyeToggle` 優先沿用。新共用層在 `frontend/src/components/ui/`(2026-10-25 B0 建立,從 `@/components/ui` 拿;展示頁 `/dev/controls` 只在開發模式):`Button`(variant default / primary / danger / text、size md / sm / lg、pending)、`IconButton`(`label` 必填;小標籤裡的 × 用 `className="compact"`,觸控範圍往外放大;危險用 `danger`、兩段確認用 `armed`)、`Tabs` + `TabPanel`(內容沒辦法包 TabPanel 時 `panels={false}`;分頁旁小字 `note`,要處理的 `noteTone="alert"` 紅字、建議看 `"warn"` 黃字)、`SegmentedControl`、`ChoiceGroup`(直接點的選項:單選 radiogroup / `multiple` 多選按下放開;付款方式、電信業者、門市、挑設備;選項可帶小字 `sub`,表單裡的二選一 / 三選一用 `layout="fill"` 等寬排、窄螢幕一個一行、緊湊商品表單小字收起)、`GroupCheckbox`(群組全選,一部分是半選)、`StatusBadge`、`ToolbarField` + `ControlBar`(查詢 / 工作對象工具列,桌面滑鼠 40px、觸控 44px);外觀只在 `styles.css` 的「共用控制項」那一段。即時存的格子用 `hooks/useCellSaves` + `components/CellMark`。以下是各元件的邊界:
 
 1. `Button`／`IconButton`：variant、size、pending、disabled、type、名稱；不處理業務 API。
 2. `Tabs`／`SegmentedControl`：將換工作區與改條件分開，不能讓一個 tab class 同時代表兩種語意。

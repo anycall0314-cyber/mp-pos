@@ -8,6 +8,7 @@ import { PaneBack } from "@/components/PaneBack";
 import { SourcePicker } from "@/components/SourcePicker";
 import { useCurrentUser } from "@/auth/AuthContext";
 import { Toolbar } from "@/components/Toolbar";
+import { ChoiceGroup } from "@/components/ui";
 import { cutNote } from "@/lib/listAll";
 import { money } from "@/lib/money";
 import { errorText } from "@/lib/errorText";
@@ -235,7 +236,7 @@ export function CustomersPage() {
         title="來源"
         actions={
           <button
-            className={leaveArmed(leaveArm.armed, "new") ? "btn primary armed" : "btn primary"}
+            className={leaveArmed(leaveArm.armed, "new") ? "btn armed" : "btn"}
             onClick={() => {
               if (!isNew) leave("new", () => setSelection({ kind: "new" }));
             }}
@@ -251,37 +252,17 @@ export function CustomersPage() {
           {!manager && <span className="muted">由管理員設定</span>}
         </div>
         {error && <Banner kind="error" message={error} />}
-        <div className="tab-switcher">
-          {TABS.map((t) => {
-            const count =
-              t.key === "all"
-                ? customers.length
-                : customers.filter((c) => c.kind === t.key).length;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                className={
-                  t.key === tab
-                    ? "tab-switcher-item active"
-                    : "tab-switcher-item"
-                }
-                onClick={() => selectTab(t.key)}
-              >
-                {t.label}
-                <span
-                  style={{
-                    marginLeft: 6,
-                    opacity: 0.7,
-                    fontSize: 14,
-                  }}
-                >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        {/* 來源分類是篩選清單(全站控制項 MC-06):單選列,數量是旁邊的小字 */}
+        <ChoiceGroup
+          label="來源分類"
+          value={tab}
+          onChange={(k) => selectTab(k)}
+          options={TABS.map((t) => ({
+            value: t.key,
+            label: t.label,
+            sub: t.key === "all" ? customers.length : customers.filter((c) => c.kind === t.key).length,
+          }))}
+        />
       </div>
 
       <div className={isEditing || isNew ? "pc-layout pane-page" : "pc-layout pane-page list-only"}>

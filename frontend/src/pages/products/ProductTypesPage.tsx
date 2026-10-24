@@ -10,6 +10,7 @@ import { useArm } from "@/components/workbench/useArm";
 import { toast } from "@/components/workbench/toast";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { ChoiceGroup, IconButton } from "@/components/ui";
 import { errorText } from "@/lib/errorText";
 
 /**
@@ -153,23 +154,6 @@ const TrashIcon = () => (
   </svg>
 );
 
-const GripIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="currentColor"
-    aria-hidden="true"
-  >
-    <circle cx="9" cy="6" r="1.5" />
-    <circle cx="15" cy="6" r="1.5" />
-    <circle cx="9" cy="12" r="1.5" />
-    <circle cx="15" cy="12" r="1.5" />
-    <circle cx="9" cy="18" r="1.5" />
-    <circle cx="15" cy="18" r="1.5" />
-  </svg>
-);
-
 interface Editing {
   id?: number;
   code: string;
@@ -295,14 +279,14 @@ export function ProductTypesPage() {
           <>
             <button
               type="button"
-              className="btn"
+              className={`btn${arm.armed === "bulk" ? " armed" : ""}`}
               onClick={bulkCreateAll}
               disabled={bulkBusy}
               title="把常用的 8 種類型一次建好(已存在的會略過)"
             >
               {bulkBusy ? "建立中…" : arm.armed === "bulk" ? "再按一次建立" : "一鍵建立全部常用類型"}
             </button>
-            <button className="btn primary" onClick={() => startNew()}>
+            <button className="btn" onClick={() => startNew()}>
               新增類型
             </button>
           </>
@@ -338,21 +322,18 @@ export function ProductTypesPage() {
             {/* 常用類型膠囊 */}
             <div className="form-field">
               <div className="form-field-label">常用類型 — 點一下自動帶入</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {PRESETS.map((p) => (
-                  <button
-                    key={p.code}
-                    type="button"
-                    className={
-                      "pill" +
-                      (currentPresetMatch?.code === p.code ? " selected" : "")
-                    }
-                    onClick={() => applyChip(p)}
-                  >
-                    {p.name}
-                  </button>
-                ))}
-              </div>
+              {/* 按一下帶入;跟現在填的一樣的那一顆是按下的樣子(全站控制項 MC-10:不再借 .pill) */}
+              <ChoiceGroup
+                multiple
+                size="sm"
+                label="常用類型"
+                value={currentPresetMatch ? [currentPresetMatch.code] : []}
+                onChange={(code) => {
+                  const p = PRESETS.find((x) => x.code === code);
+                  if (p) applyChip(p);
+                }}
+                options={PRESETS.map((p) => ({ value: p.code, label: p.name }))}
+              />
             </div>
 
             {/* 類型名稱 */}
@@ -412,9 +393,9 @@ export function ProductTypesPage() {
               </div>
             </div>
 
-            {/* 啟用 toggle */}
+            {/* 啟用(按儲存才生效,所以是勾選框不是開關) */}
             <div className="form-field" style={{ marginTop: 18 }}>
-              <label className="toggle-switch">
+              <label className="checkbox">
                 <input
                   type="checkbox"
                   checked={editing.is_active}
@@ -422,8 +403,7 @@ export function ProductTypesPage() {
                     setEditing({ ...editing, is_active: e.target.checked })
                   }
                 />
-                <span className="toggle-track" />
-                啟用
+                <span>啟用</span>
               </label>
               <div className="form-field-hint">
                 停用後新增系列時這個類型不會出現在下拉選單
@@ -469,7 +449,7 @@ export function ProductTypesPage() {
               className="section-head-meta"
               style={{ marginLeft: "auto", fontSize: 14 }}
             >
-              依排序欄位顯示;之後可拖曳卡片調整順序
+              依排序欄位顯示
             </span>
           )}
         </div>
@@ -494,7 +474,7 @@ export function ProductTypesPage() {
             >
               <button
                 type="button"
-                className="btn primary btn-save"
+                className={`btn primary btn-save${arm.armed === "bulk" ? " armed" : ""}`}
                 onClick={bulkCreateAll}
                 disabled={bulkBusy}
               >
@@ -532,14 +512,6 @@ export function ProductTypesPage() {
                 }}
                 title="點一下編輯此類型"
               >
-                <span
-                  className="type-card-drag"
-                  aria-hidden="true"
-                  title="拖曳調整順序(尚未啟用)"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <GripIcon />
-                </span>
                 <div className="type-card-icon">
                   <TypeIcon code={t.code} name={t.name} />
                 </div>
@@ -566,23 +538,21 @@ export function ProductTypesPage() {
                   )}
                 </div>
                 <span className="type-card-sort">#{t.sort_order}</span>
-                <button
-                  type="button"
+                <IconButton
                   style={{
                     position: "absolute",
-                    bottom: 8,
-                    left: 8,
+                    top: 8,
+                    right: 8,
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleDelete(t);
                   }}
-                  aria-label={arm.armed === `del:${t.id}` ? "再按一次刪除" : "刪除"}
-                  title={arm.armed === `del:${t.id}` ? "再按一次刪除" : "刪除此類型"}
-                  className={arm.armed === `del:${t.id}` ? "icon-btn icon-btn-danger armed" : "icon-btn icon-btn-danger"}
+                  label={arm.armed === `del:${t.id}` ? `再按一次刪除 ${t.name}` : `刪除 ${t.name}`}
+                  className={arm.armed === `del:${t.id}` ? "danger armed" : "danger"}
                 >
                   <TrashIcon />
-                </button>
+                </IconButton>
               </div>
             ))}
           </div>

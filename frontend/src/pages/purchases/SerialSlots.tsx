@@ -267,6 +267,7 @@ export function SerialSlots({
                     type="button"
                     className="wb-x"
                     title="拿掉這一台"
+                    aria-label={`拿掉第 ${i + 1} 台`}
                     disabled={disabled}
                     onClick={() => onRemoveUnit(i)}
                   >

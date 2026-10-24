@@ -10,6 +10,7 @@ import { useArm } from "@/components/workbench/useArm";
 import { ArmButton } from "@/components/workbench/ArmButton";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { IconButton } from "@/components/ui";
 import { MoneyInput } from "@/components/MoneyInput";
 import { errorText } from "@/lib/errorText";
 import { changed, leaveArmed, leaveDraft, LEAVE_TEXT } from "@/lib/draftGuard";
@@ -206,23 +207,9 @@ function ChipInput({
           }}
         >
           {v}
-          <button
-            type="button"
-            onClick={() => onChange(value.filter((_, j) => j !== i))}
-            aria-label={`移除 ${v}`}
-            style={{
-              background: "transparent",
-              border: 0,
-              color: "inherit",
-              cursor: "pointer",
-              fontSize: 16,
-              lineHeight: 1,
-              padding: 0,
-              marginLeft: 2,
-            }}
-          >
+          <IconButton className="compact" label={`移除 ${v}`} onClick={() => onChange(value.filter((_, j) => j !== i))}>
             ×
-          </button>
+          </IconButton>
         </span>
       ))}
       <input
@@ -461,7 +448,7 @@ export function PartTemplatesPage() {
       <Toolbar
         title="零件範本"
         actions={
-          <button className={leaveArmed(leaveArm.armed, "new") ? "btn primary armed" : "btn primary"} onClick={startNew}>
+          <button className={leaveArmed(leaveArm.armed, "new") ? "btn armed" : "btn"} onClick={startNew}>
             {leaveArmed(leaveArm.armed, "new") ? "再按一次新增" : "新增範本"}
           </button>
         }
@@ -539,7 +526,7 @@ export function PartTemplatesPage() {
                     <button
                       key={k}
                       type="button"
-                      className="pill pill-strong"
+                      className={`btn small${arm.armed === `preset:${editing.id ?? "new"}:${k}` ? " armed" : ""}`}
                       onClick={() =>
                         applyPreset(k as keyof typeof PRESET_TEMPLATES)
                       }
@@ -603,7 +590,7 @@ export function PartTemplatesPage() {
                     />
                   </div>
                   <label
-                    className="toggle-switch"
+                    className="checkbox"
                     style={{ paddingTop: 28 }}
                     title="停用後,此範本不會出現在『零件批次』選單"
                   >
@@ -612,8 +599,7 @@ export function PartTemplatesPage() {
                       checked={editing.is_active}
                       onChange={(e) => patch("is_active", e.target.checked)}
                     />
-                    <span className="toggle-track" />
-                    啟用
+                    <span>啟用</span>
                   </label>
                 </div>
               </div>
@@ -699,7 +685,7 @@ export function PartTemplatesPage() {
                     <button
                       key={p.code}
                       type="button"
-                      className="pill"
+                      className="btn small"
                       onClick={() => addItem({ name: p.name, code: p.code })}
                     >
                       + {p.name}
@@ -791,12 +777,10 @@ export function PartTemplatesPage() {
                         />
                       </td>
                       <td style={{ textAlign: "center" }}>
-                        <button
-                          type="button"
-                          className="icon-btn icon-btn-danger"
+                        <IconButton
+                          className="danger"
                           onClick={() => removeItem(idx)}
-                          aria-label="刪除"
-                          title="刪除此列"
+                          label={`刪除 ${it.name || `第 ${idx + 1} 列`}`}
                         >
                           <svg
                             width="16"
@@ -813,7 +797,7 @@ export function PartTemplatesPage() {
                             <path d="M10 11v6M14 11v6" />
                             <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
                           </svg>
-                        </button>
+                        </IconButton>
                       </td>
                     </tr>
                   ))}

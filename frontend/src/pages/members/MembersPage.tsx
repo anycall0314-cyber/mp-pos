@@ -170,7 +170,7 @@ export function MembersPage() {
         title="會員管理"
         actions={
           <button
-            className="btn primary"
+            className="btn"
             onClick={() => setSelection({ kind: "new" })}
           >
             新增會員

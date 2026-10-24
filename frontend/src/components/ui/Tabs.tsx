@@ -15,6 +15,8 @@ export interface TabItem<K extends string> {
   note?: ReactNode;
   /** 小字要提醒時的顏色:alert = 要處理(紅字)、warn = 建議看一下(黃字);不給就是灰字 */
   noteTone?: "alert" | "warn";
+  /** 滑鼠停上去的補充 */
+  title?: string;
   disabled?: boolean;
 }
 
@@ -25,6 +27,7 @@ export function Tabs<K extends string>({
   value,
   onChange,
   className,
+  panels = true,
 }: {
   id: string;
   label: string;
@@ -32,6 +35,8 @@ export function Tabs<K extends string>({
   value: K;
   onChange: (key: K) => void;
   className?: string;
+  /** 內容沒辦法包一層 TabPanel 時(版面靠直接子元素排)給 false:不帶 aria-controls,免得指到不存在的地方 */
+  panels?: boolean;
 }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const at = items.findIndex((t) => t.key === value);
@@ -46,7 +51,8 @@ export function Tabs<K extends string>({
           type="button"
           role="tab"
           id={`${id}-tab-${t.key}`}
-          aria-controls={`${id}-panel-${t.key}`}
+          aria-controls={panels ? `${id}-panel-${t.key}` : undefined}
+          title={t.title}
           aria-selected={t.key === value}
           tabIndex={t.key === value || (at < 0 && i === 0) ? 0 : -1}
           disabled={t.disabled}

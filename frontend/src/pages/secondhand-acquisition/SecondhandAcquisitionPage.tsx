@@ -4,6 +4,7 @@ import { useState } from "react";
 import { openPurchaseLabels } from "@/components/labels/openLabelPrint";
 import { Banner } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
+import { Tabs } from "@/components/ui";
 
 import { PurchaseWorkbenchPage } from "../purchases/PurchaseWorkbenchPage";
 import { SecondhandPersonalEntry } from "./SecondhandPersonalEntry";
@@ -56,25 +57,18 @@ export function SecondhandAcquisitionPage() {
       <Toolbar
         title="中古收購"
         actions={
-          <div className="tab-switcher" role="tablist" aria-label="收購來源">
-            {tabs.map((t) => (
-              <button
-                key={t.value}
-                type="button"
-                role="tab"
-                aria-selected={tab === t.value}
-                className={`tab-switcher-item${tab === t.value ? " active" : ""}`}
-                onClick={() => {
-                  setTab(t.value);
-                  // 切 tab 時清掉前一個 tab 的成功訊息
-                  setVendorDone(null);
-                }}
-                title={t.hint}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            id="sh"
+            label="收購來源"
+            items={tabs.map((t) => ({ key: t.value, label: t.label, title: t.hint }))}
+            panels={false}
+            value={tab ?? tabs[0]?.value ?? "personal"}
+            onChange={(k) => {
+              setTab(k);
+              // 切 tab 時清掉前一個 tab 的成功訊息
+              setVendorDone(null);
+            }}
+          />
         }
       />
       {tab === null ? (

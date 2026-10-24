@@ -18,6 +18,7 @@ import type { Category, CategoryKind, Product, SharePart, TreeProduct } from "@/
 import { Banner } from "@/components/Banner";
 import { PaneBack } from "@/components/PaneBack";
 import { Toolbar } from "@/components/Toolbar";
+import { ChoiceGroup, SegmentedControl, Tabs } from "@/components/ui";
 import { MoreMenu } from "@/components/workbench/MoreMenu";
 import { useReorder } from "@/hooks/useReorder";
 import { cutNote } from "@/lib/listAll";
@@ -452,14 +453,14 @@ export function ProductsPage() {
               </MoreMenu>
               )}
               {canEdit && (
-                <button className="btn primary" onClick={() => setFindOpen(true)}>
+                <button className="btn" onClick={() => setFindOpen(true)}>
                   新增商品
                 </button>
               )}
             </>
           ) : (
             <button
-              className="btn primary"
+              className="btn"
               onClick={startCreatingCategory}
             >
               新增類別
@@ -467,44 +468,20 @@ export function ProductsPage() {
           )
         }
       >
-        <div className="tab-switcher">
-          <button
-            type="button"
-            className={
-              leftTab === "products"
-                ? "tab-switcher-item active"
-                : "tab-switcher-item"
-            }
-            onClick={() => setLeftTab("products")}
-          >
-            商品列表
-          </button>
-          <button
-            type="button"
-            className={
-              leftTab === "models"
-                ? "tab-switcher-item active"
-                : "tab-switcher-item"
-            }
-            onClick={() => {
-              setLeftTab("models");
-              setSelection(null);
-            }}
-          >
-            分類瀏覽
-          </button>
-          <button
-            type="button"
-            className={
-              leftTab === "categories"
-                ? "tab-switcher-item active"
-                : "tab-switcher-item"
-            }
-            onClick={() => setLeftTab("categories")}
-          >
-            類別管理
-          </button>
-        </div>
+        <Tabs
+          id="pc"
+          label="商品"
+          items={[
+            { key: "products", label: "商品列表" },
+            { key: "models", label: "分類瀏覽" },
+            { key: "categories", label: "類別管理" },
+          ]}
+          value={leftTab}
+          onChange={(k) => {
+            setLeftTab(k);
+            if (k === "models") setSelection(null);
+          }}
+        />
       </Toolbar>
       {bulkResult && (
         <div
@@ -523,6 +500,9 @@ export function ProductsPage() {
         <aside
           className="pc-master"
           style={{ gridTemplateRows: "1fr" }}
+          role="tabpanel"
+          id={`pc-panel-${leftTab}`}
+          aria-labelledby={`pc-tab-${leftTab}`}
         >
           {/* ─── 商品區 ─── */}
           {leftTab === "products" && (
@@ -541,7 +521,7 @@ export function ProductsPage() {
                 placeholder="品名 / 條碼"
                 autoFocus
               />
-              <button className="btn primary" onClick={runProductSearch}>
+              <button className="btn" onClick={runProductSearch}>
                 搜尋
               </button>
               {appliedProductQuery && (
@@ -805,28 +785,18 @@ export function ProductsPage() {
           {selectedProduct && (
             <div className="pc-detail-body">
               <h3 className="pc-detail-title">{selectedProduct.name}</h3>
-              <div className="tab-switcher" style={{ marginBottom: 12 }}>
-                <button
-                  className={
-                    detailTab === "basic"
-                      ? "tab-switcher-item active"
-                      : "tab-switcher-item"
-                  }
-                  onClick={() => setDetailTab("basic")}
-                >
-                  基本
-                </button>
-                <button
-                  className={
-                    detailTab === "aliases"
-                      ? "tab-switcher-item active"
-                      : "tab-switcher-item"
-                  }
-                  onClick={() => setDetailTab("aliases")}
-                >
-                  別名
-                </button>
-              </div>
+              <Tabs
+                id="pcd"
+                label={`${selectedProduct.name} 的資料`}
+                className="pc-detail-tabs"
+                items={[
+                  { key: "basic", label: "基本" },
+                  { key: "aliases", label: "別名" },
+                ]}
+                value={detailTab}
+                onChange={setDetailTab}
+              />
+              <div role="tabpanel" id={`pcd-panel-${detailTab}`} aria-labelledby={`pcd-tab-${detailTab}`}>
 
               {detailTab === "basic" && (
                 <>
@@ -915,6 +885,7 @@ export function ProductsPage() {
               {detailTab === "aliases" && (
                 <ProductAliasesPanel productId={selectedProduct.id} />
               )}
+              </div>
             </div>
           )}
 
@@ -1111,18 +1082,12 @@ export function ProductsPage() {
                   <>
                     <dt>配件共用</dt>
                     <dd>
-                      <div className="tab-switcher">
-                        {SHARE_OPTIONS.map((o) => (
-                          <button
-                            key={o.key}
-                            type="button"
-                            className={catEdit.shares === o.key ? "tab-switcher-item active" : "tab-switcher-item"}
-                            onClick={() => setCatEdit((s) => ({ ...s, shares: o.key }))}
-                          >
-                            {o.label}
-                          </button>
-                        ))}
-                      </div>
+                      <ChoiceGroup
+                        label="配件共用"
+                        value={catEdit.shares}
+                        onChange={(shares) => setCatEdit((st) => ({ ...st, shares }))}
+                        options={SHARE_OPTIONS.map((o) => ({ value: o.key, label: o.label }))}
+                      />
                     </dd>
                   </>
                 )}
@@ -1382,18 +1347,15 @@ function CategoryBrowser({
       </div>
       {cat?.kind === "accessory" && (
         <div className="mb-groups">
-          <div className="tab-switcher">
-            {(["phone", "maker"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                className={at.mode === m ? "tab-switcher-item active" : "tab-switcher-item"}
-                onClick={() => setAt({ mode: m, category: cat })}
-              >
-                {m === "phone" ? "依手機" : "依廠牌"}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            label="配件怎麼找"
+            value={at.mode}
+            onChange={(m) => setAt({ mode: m, category: cat })}
+            options={[
+              { value: "phone", label: "依手機" },
+              { value: "maker", label: "依廠牌" },
+            ]}
+          />
         </div>
       )}
       <div className="pc-section-body">

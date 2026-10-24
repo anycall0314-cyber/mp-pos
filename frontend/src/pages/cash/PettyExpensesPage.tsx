@@ -170,7 +170,7 @@ export function PettyExpensesPage() {
         actions={
           canWrite ? (
             <button
-              className="btn primary"
+              className="btn"
               onClick={() => setDrawerOpen(true)}
             >
               新增雜支

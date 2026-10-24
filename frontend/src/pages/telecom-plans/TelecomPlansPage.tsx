@@ -428,7 +428,7 @@ export function TelecomPlansPage() {
               批次新增
             </button>
             <button
-              className="btn primary"
+              className="btn"
               onClick={() => {
                 setDrawerInitial(null);
                 setDrawerOpen(true);
@@ -464,7 +464,7 @@ export function TelecomPlansPage() {
           </button>
           <span style={{ color: "var(--text-dim)" }}>|</span>
           <button
-            className="btn"
+            className={`btn${arm.armed === `batch:上架:${selKey}` ? " armed" : ""}`}
             type="button"
             onClick={() => patchSelected({ is_active: true }, "上架")}
             disabled={batchPending}
@@ -472,7 +472,7 @@ export function TelecomPlansPage() {
             {arm.armed === `batch:上架:${selKey}` ? `再按一次上架 ${selectedIds.size} 筆` : "批次上架"}
           </button>
           <button
-            className="btn"
+            className={`btn${arm.armed === `batch:下架:${selKey}` ? " armed" : ""}`}
             type="button"
             onClick={() => patchSelected({ is_active: false }, "下架")}
             disabled={batchPending}

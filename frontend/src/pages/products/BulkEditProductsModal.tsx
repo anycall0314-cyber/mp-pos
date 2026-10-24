@@ -9,6 +9,7 @@ import { ApiHttpError } from "@/api/client";
 import type { Brand, PhoneSeries } from "@/api/types";
 import { useArm } from "@/components/workbench/useArm";
 import { Banner } from "@/components/Banner";
+import { ChoiceGroup, IconButton, SegmentedControl } from "@/components/ui";
 import { DraftBanner } from "@/components/DraftBanner";
 import { PhoneModelPicker } from "@/components/PhoneModelPicker";
 import { useModalDraft } from "@/hooks/useModalDraft";
@@ -335,26 +336,17 @@ export function BulkEditProductsModal({
             </label>
             {enKind && (
               <div className="be-section-body">
-                <div className="pf-tabs">
-                  {(
-                    [
-                      ["none", "主機"],
-                      ["phone_specific", "機型配件"],
-                      ["universal", "通用配件"],
-                    ] as const
-                  ).map(([v, label]) => (
-                    <button
-                      key={v}
-                      type="button"
-                      className={
-                        "pf-tab" + (accessoryType === v ? " active" : "")
-                      }
-                      onClick={() => setAccessoryType(v)}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+                <ChoiceGroup
+                  label="商品性質"
+                  layout="fill"
+                  value={accessoryType}
+                  onChange={setAccessoryType}
+                  options={[
+                    { value: "none", label: "主機" },
+                    { value: "phone_specific", label: "機型配件" },
+                    { value: "universal", label: "通用配件" },
+                  ]}
+                />
               </div>
             )}
           </section>
@@ -402,18 +394,12 @@ export function BulkEditProductsModal({
                 {ATTRS.map(([key, label]) => (
                   <div key={key} className="be-tri">
                     <span>{label}</span>
-                    <div className="pf-tabs">
-                      {TRI_CHOICES.map(([v, text]) => (
-                        <button
-                          key={v}
-                          type="button"
-                          className={"pf-tab" + (attrs[key] === v ? " active" : "")}
-                          onClick={() => setAttrs((a) => ({ ...a, [key]: v }))}
-                        >
-                          {text}
-                        </button>
-                      ))}
-                    </div>
+                    <SegmentedControl
+                      label={label}
+                      value={attrs[key]}
+                      onChange={(v) => setAttrs((a) => ({ ...a, [key]: v }))}
+                      options={TRI_CHOICES.map(([v, text]) => ({ value: v, label: text }))}
+                    />
                   </div>
                 ))}
               </div>
@@ -531,8 +517,9 @@ export function BulkEditProductsModal({
                         style={{ cursor: "default" }}
                       >
                         {name}
-                        <button
-                          type="button"
+                        <IconButton
+                          className="compact"
+                          label={`移除 ${name}`}
                           onClick={() =>
                             setCompat((prev) => {
                               const next = new Map(prev);
@@ -540,20 +527,9 @@ export function BulkEditProductsModal({
                               return next;
                             })
                           }
-                          style={{
-                            marginLeft: 6,
-                            background: "transparent",
-                            border: 0,
-                            color: "inherit",
-                            cursor: "pointer",
-                            fontSize: 16,
-                            padding: 0,
-                            lineHeight: 1,
-                          }}
-                          title="移除"
                         >
                           ×
-                        </button>
+                        </IconButton>
                       </span>
                     ))}
                   </div>
@@ -579,9 +555,10 @@ export function BulkEditProductsModal({
             取消
           </button>
           <button
-            className="btn primary"
+            className={`btn primary${arm.armed === "apply" ? " armed" : ""}`}
             onClick={submit}
             disabled={save.isPending}
+            aria-busy={save.isPending || undefined}
           >
             {save.isPending
               ? "套用中…"

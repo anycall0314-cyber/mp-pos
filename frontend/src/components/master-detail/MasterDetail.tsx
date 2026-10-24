@@ -1,5 +1,6 @@
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useId, useRef, useState } from "react";
 
+import { IconButton, Tabs } from "@/components/ui";
 import { stepKey } from "@/lib/keyboardBind";
 
 export interface MasterColumn<T> {
@@ -56,6 +57,7 @@ export function MasterDetail<T>({
 }: MasterDetailProps<T>) {
   const [selectedKey, setSelectedKey] = useState<string | number | null>(null);
   const [activeTab, setActiveTab] = useState<string>(tabs[0]?.key ?? "");
+  const tabsId = `md${useId().replace(/:/g, "")}`;
   // 鍵盤(全站檢視 L04,紅隊):整張清單只停一次 Tab(停在選到的、上次停的、或第一列),方向鍵換列、Enter 打開;
   // 用鍵盤打開的,關掉右邊時游標回到那一列;滑鼠按 × 關的不搬游標
   const rowEls = useRef(new Map<string | number, HTMLTableRowElement>());
@@ -148,21 +150,18 @@ export function MasterDetail<T>({
       </section>
       {selectedRow && (
       <section className="md-detail">
-        <div className="md-detail-tabs">
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              className={t.key === currentTab?.key ? "active" : undefined}
-              onClick={() => setActiveTab(t.key)}
-            >
-              {t.label}
-            </button>
-          ))}
-          <button
-            type="button"
+        <div className="md-detail-head">
+          {/* 明細的幾個分頁用共用 Tabs(全站控制項 MC-06);× 是另一個動作 */}
+          <Tabs
+            id={tabsId}
+            label="明細"
+            items={tabs.map((t) => ({ key: t.key, label: t.label }))}
+            value={currentTab?.key ?? ""}
+            onChange={setActiveTab}
+          />
+          <IconButton
             className="md-detail-close"
-            aria-label="收起"
-            title="收起"
+            label="收起明細"
             onClick={(e) => {
               // 用鍵盤打開、也用鍵盤關(Enter / 空白鍵按 ×:detail 是 0)的才回到那一列
               returnTo.current = keyOpened.current !== null && e.detail === 0 ? keyOpened.current : null;
@@ -171,9 +170,16 @@ export function MasterDetail<T>({
             }}
           >
             ×
-          </button>
+          </IconButton>
         </div>
-        <div className="md-detail-body">{currentTab ? currentTab.render(selectedRow) : null}</div>
+        <div
+          className="md-detail-body"
+          role={currentTab ? "tabpanel" : undefined}
+          id={currentTab ? `${tabsId}-panel-${currentTab.key}` : undefined}
+          aria-labelledby={currentTab ? `${tabsId}-tab-${currentTab.key}` : undefined}
+        >
+          {currentTab ? currentTab.render(selectedRow) : null}
+        </div>
         <div className="md-detail-footer">
           {currentActions.map((a) => (
             <button key={a.key} className={a.primary ? "primary" : undefined} onClick={a.onClick}>

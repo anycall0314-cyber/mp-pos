@@ -159,7 +159,7 @@ export function SuppliersPage() {
       <Toolbar
         title="廠商"
         actions={
-          <button className={draft.armed("new") ? "btn primary armed" : "btn primary"} onClick={startNew}>
+          <button className={draft.armed("new") ? "btn armed" : "btn"} onClick={startNew}>
             {draft.armed("new") ? "再按一次新增" : "新增廠商"}
           </button>
         }

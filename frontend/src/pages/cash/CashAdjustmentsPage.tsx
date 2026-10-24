@@ -166,7 +166,7 @@ export function CashAdjustmentsPage() {
         actions={
           canWrite ? (
             <button
-              className="btn primary"
+              className="btn"
               onClick={() => setDrawerOpen(true)}
             >
               新增調整

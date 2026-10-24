@@ -32,7 +32,7 @@ test("元件契約:按鈕預設 type=button、處理中不能按;圖示按鈕一
   assert.match(tabs, /role="tab"/);
   assert.match(tabs, /aria-selected=\{t\.key === value\}/);
   assert.match(tabs, /tabIndex=\{t\.key === value \|\| \(at < 0 && i === 0\) \? 0 : -1\}/);
-  assert.match(tabs, /aria-controls=\{`\$\{id\}-panel-\$\{t\.key\}`\}/);
+  assert.match(tabs, /aria-controls=\{panels \? `\$\{id\}-panel-\$\{t\.key\}` : undefined\}/);
   const seg = read("../components/ui/SegmentedControl.tsx");
   assert.match(seg, /role="radiogroup"/);
   assert.match(seg, /aria-checked=\{o\.value === value\}/);

@@ -14,6 +14,8 @@ export interface ChoiceOption<V extends string | number> {
   label: ReactNode;
   /** 滑鼠停上去的補充(例:序號全碼、售價);不能取代 label */
   title?: string;
+  /** 名稱下面的小字(例:「銷貨用」「手機殼 / 保護貼」);緊湊表單裡會收起來 */
+  sub?: ReactNode;
   disabled?: boolean;
 }
 
@@ -22,18 +24,20 @@ interface Common<V extends string | number> {
   options: ChoiceOption<V>[];
   disabled?: boolean;
   size?: "md" | "sm";
+  /** fill = 等寬排滿一列(表單裡的二選一 / 三選一,窄螢幕一個一行);預設照字的寬度排 */
+  layout?: "wrap" | "fill";
   className?: string;
 }
 type Single<V extends string | number> = Common<V> & { multiple?: false; value: V | null; onChange: (value: V) => void };
 type Multi<V extends string | number> = Common<V> & { multiple: true; value: V[]; onChange: (value: V) => void };
 
 export function ChoiceGroup<V extends string | number>(props: Single<V> | Multi<V>) {
-  const { label, options, disabled, size = "md", className } = props;
+  const { label, options, disabled, size = "md", layout = "wrap", className } = props;
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const on = (v: V) => (props.multiple ? props.value.includes(v) : props.value === v);
   const at = options.findIndex((o) => on(o.value));
   return (
-    <div role={props.multiple ? "group" : "radiogroup"} aria-label={label} className={cx("ui-choices", className)}>
+    <div role={props.multiple ? "group" : "radiogroup"} aria-label={label} className={cx("ui-choices", layout === "fill" && "fill", className)}>
       {options.map((o, i) => (
         <button
           key={String(o.value)}
@@ -61,6 +65,7 @@ export function ChoiceGroup<V extends string | number>(props: Single<V> | Multi<
           onClick={() => props.onChange(o.value)}
         >
           {o.label}
+          {o.sub !== undefined && o.sub !== null && <span className="ui-choice-sub">{o.sub}</span>}
         </button>
       ))}
     </div>

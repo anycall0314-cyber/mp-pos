@@ -5,6 +5,7 @@ import { listContracts, type ContractRow, type ContractTab, type FollowStatus } 
 import { useCarriers, useContractFollowUp, useContracts, useWarehouses } from "@/api/hooks";
 import { useCurrentUser, useDefaultWarehouse } from "@/auth/AuthContext";
 import { downloadCsv } from "@/components/downloadCsv";
+import { ChoiceGroup } from "@/components/ui";
 import { apiErrorText } from "@/components/workbench/errors";
 import { toast } from "@/components/workbench/toast";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -343,27 +344,20 @@ export function ContractsPage() {
   return (
     <div className="wb">
       <div className="wb-section ws-list-bar ct-bar">
-        <div className="wb-chips">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              className={`wb-chip cat${tab === t.key ? " on" : ""}`}
-              onClick={() => {
-                // 再點一次同一個分頁 = 把標完的那幾列收掉、重抓現在的名單
-                if (t.key === tab) {
-                  reload();
-                } else {
-                  setTab(t.key);
-                  forget();
-                }
-              }}
-            >
-              {t.label}
-              {data ? ` ${data.counts[t.key]}` : ""}
-            </button>
-          ))}
-        </div>
+        {/* 名單分類是篩選(全站控制項 MC-06):單選列;再點一次同一個 = 把標完的那幾列收掉、重抓現在的名單 */}
+        <ChoiceGroup
+          label="名單分類"
+          value={tab}
+          onChange={(k) => {
+            if (k === tab) {
+              reload();
+            } else {
+              setTab(k);
+              forget();
+            }
+          }}
+          options={TABS.map((t) => ({ value: t.key, label: t.label, sub: data ? data.counts[t.key] : undefined }))}
+        />
         <span className="ws-grow" />
         {tab === "pending" && (
           <select value={range} aria-label="看到多遠" onChange={(e) => setRange(e.target.value)}>

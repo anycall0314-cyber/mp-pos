@@ -5,6 +5,7 @@ import { searchCategories } from "@/api/search";
 import type { Category } from "@/api/types";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Checkbox, Field } from "@/components/Field";
+import { ChoiceGroup, SegmentedControl } from "@/components/ui";
 import { money } from "@/lib/money";
 import { parsePaste, previewBlocker, templateCsv, type SerialChoice } from "@/lib/productImport";
 import { errorText } from "@/lib/errorText";
@@ -134,26 +135,19 @@ export function ProductImportModal({ open, onClose, onImported }: Props) {
                 </Field>
               </div>
               <Field label="庫存" required>
-                <div className="pf-tabs pi-serial">
-                  {(
-                    [
-                      ["qty", "按數量"],
-                      ["serial", "逐件記序號"],
-                    ] as const
-                  ).map(([v, label]) => (
-                    <button
-                      key={v}
-                      type="button"
-                      className={`pf-tab${serial === v ? " active" : ""}`}
-                      onClick={() => {
-                        setSerial(v);
-                        edited();
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+                <ChoiceGroup
+                  label="庫存"
+                  layout="fill"
+                  value={serial || null}
+                  onChange={(v) => {
+                    setSerial(v);
+                    edited();
+                  }}
+                  options={[
+                    { value: "qty", label: "按數量" },
+                    { value: "serial", label: "逐件記序號" },
+                  ]}
+                />
               </Field>
               <Checkbox
                 checked={commission}
@@ -163,25 +157,19 @@ export function ProductImportModal({ open, onClose, onImported }: Props) {
                 }}
                 label="可有業務員佣金"
               />
-              <div className="tab-switcher pi-source">
-                {(
-                  [
-                    ["paste", "貼上表格"],
-                    ["file", "選擇檔案"],
-                  ] as const
-                ).map(([v, label]) => (
-                  <button
-                    key={v}
-                    type="button"
-                    className={source === v ? "tab-switcher-item active" : "tab-switcher-item"}
-                    onClick={() => {
-                      setSource(v);
-                      edited();
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
+              <div className="pi-source">
+                <SegmentedControl
+                  label="表格從哪裡來"
+                  value={source}
+                  onChange={(v) => {
+                    setSource(v);
+                    edited();
+                  }}
+                  options={[
+                    { value: "paste", label: "貼上表格" },
+                    { value: "file", label: "選擇檔案" },
+                  ]}
+                />
                 <button type="button" className="btn pi-template" onClick={downloadTemplate}>
                   下載範例檔
                 </button>

@@ -502,7 +502,9 @@ button { font-family: inherit; }
 .wb-btn.armed,
 .wb-btn.go.armed,
 .wb-btn.danger.armed,
-.wb-btn.armed:hover {
+.wb-btn.armed:hover,
+.ui-icon-btn.armed,
+.ui-icon-btn.armed:hover {
   background: var(--wb-amber-soft, rgba(245, 158, 11, 0.18));
   border-color: var(--warn-text-amber);
   color: var(--warn-text-amber);
@@ -562,7 +564,14 @@ button { font-family: inherit; }
 }
 .ui-icon-btn:hover { background: var(--ctl-hover); color: var(--text); }
 .ui-icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.ui-icon-btn.danger:hover { color: var(--danger-text); background: var(--danger-bg, var(--ctl-hover)); }
 @media (pointer: coarse) { .ui-icon-btn { min-width: 44px; min-height: 44px; } }
+/* 小標籤裡的 ×(相容機型、規格值):看起來跟字一樣大,觸控時點擊範圍往外放大、不把標籤撐大 */
+.ui-icon-btn.compact { min-width: 20px; min-height: 20px; padding: 0; margin-left: 4px; color: inherit; font-size: var(--font-body); position: relative; }
+@media (pointer: coarse) {
+  .ui-icon-btn.compact { min-width: 20px; min-height: 20px; }
+  .ui-icon-btn.compact::after { content: ""; position: absolute; inset: -12px; }
+}
 /* 分頁:文字 + 底線(換工作區);選中的有 aria-selected */
 .ui-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; }
 .ui-tab {
@@ -605,6 +614,18 @@ button { font-family: inherit; }
 .ui-choice:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ui-choice:disabled { opacity: 0.55; cursor: not-allowed; }
 @media (pointer: coarse) { .ui-choice.sm { min-height: 44px; } }
+.ui-choices.fill { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
+.ui-choices.fill .ui-choice { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px 8px; white-space: normal; }
+.ui-choice-sub { font-size: var(--font-secondary); font-weight: 400; color: var(--text-dim); }
+.ui-choices:not(.fill) .ui-choice-sub { margin-left: 6px; }
+@media (max-width: 768px) {
+  .ui-choices.fill { grid-template-columns: 1fr; }
+  .ui-choices.fill .ui-choice { flex-direction: row; justify-content: space-between; padding: 6px 14px; }
+}
+/* 緊湊商品表單:跟輸入框一樣高、小字收起來 */
+.pf-compact .ui-choices.fill { gap: 4px; }
+.pf-compact .ui-choices.fill .ui-choice { min-height: 34px; padding: 0 10px; font-size: var(--font-secondary); }
+.pf-compact .ui-choice-sub { display: none; }
 /* 狀態標籤:純顯示、不能按 */
 .ui-badge {
   display: inline-flex; align-items: center; padding: 0 6px; border-radius: 4px;
@@ -1661,18 +1682,11 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
   min-width: 0;
 }
-.md-detail-tabs {
-  display: flex; gap: 0;
+.md-detail-head {
+  display: flex; align-items: center; gap: 0;
   border-bottom: 1px solid var(--border);
 }
-.md-detail-tabs button {
-  background: transparent; color: var(--text-dim);
-  border: 0; border-bottom: 2px solid transparent;
-  padding: 8px 14px; cursor: pointer;
-}
-.md-detail-tabs button.active {
-  color: var(--text); border-bottom-color: var(--accent);
-}
+.md-detail-head > .ui-tabs { flex: 1; border-bottom: 0; }
 .md-detail-body { padding: 16px; overflow: auto; }
 .md-detail-body dl {
   display: grid;
@@ -2109,39 +2123,9 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   font-size: var(--font-body);
 }
 
-/* ─── Toolbar 內的 tab 切換器(中古入庫:個人 / 廠商) ─── */
-/* 舊的頁內小分頁(遷移前;B2~B4 逐頁改成 Tabs / SegmentedControl)。庫存警示、盤點、廠商換貨的 .ia-tab 已改成 Tabs、樣式已刪(B2a)。 */
-.tab-switcher {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.tab-switcher-item {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  min-height: 36px;
-  padding: 0 12px;
-  background: var(--panel-2);
-  color: var(--text-dim);
-  border: 1px solid var(--border);
-  border-radius: var(--btn-radius);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: var(--font-secondary);
-  line-height: 1.5;
-  white-space: nowrap;
-}
-.tab-switcher-item:hover { background: var(--row-hover); color: var(--text); }
-/* 舊的頁內小分頁(遷移前;B2~B4 逐頁改成 Tabs / SegmentedControl):先換成淡色 —— 中性淺底、字重,不再鮮藍實心白字(2026-10-25) */
-.tab-switcher-item.active {
-  background: var(--ctl-selected);
-  border-color: var(--ctl-border-strong);
-  color: var(--text);
-  font-weight: 600;
-}
-/* 系統設定分四頁、分頁上標「還沒儲存」;自動存的格子旁邊「已存 / 沒存成 重送」(全站檢視 L02) */
+/* 系統設定分四頁(共用 Tabs,「還沒儲存」是分頁旁黃字);自動存的格子旁邊「已存 / 沒存成 重送」(全站檢視 L02) */
 .settings-tabs { margin: 8px 16px 0; }
-.settings-unsaved { font-size: var(--font-meta); font-weight: 600; color: var(--warn-text); }
-.tab-switcher-item.active .settings-unsaved { color: var(--warn-text); }
+
 .cell-mark { margin-left: 6px; font-size: var(--font-secondary); white-space: nowrap; color: var(--text-dim); }
 .cell-mark.saved { color: var(--success-text); }
 button.cell-mark.failed { background: none; border: 0; padding: 0; font: inherit; font-size: var(--font-secondary); color: var(--danger-text); cursor: pointer; text-decoration: underline; }
@@ -3717,7 +3701,7 @@ button.cell-mark.failed { background: none; border: 0; padding: 0; font: inherit
 /* ─────────────────────────────────────────────────────────
  * 商品表單緊湊版(套用在 ProductForm 內,改抽屜內部所有間距/分群/segmented)
  *  - 欄位間距 24 → 12;標籤與輸入框 → 4;input 高度統一 34px
- *  - .pf-tabs / fieldset 收緊
+ *  - 單選列(ui-choices) / fieldset 收緊
  *  - 群組以 1px 細線分隔
  * ───────────────────────────────────────────────────────── */
 .pf-compact .field {
@@ -3760,34 +3744,6 @@ button.cell-mark.failed { background: none; border: 0; padding: 0; font: inherit
   gap: 10px;
   margin-bottom: 12px;
 }
-/* 商品性質 / 倉別 segmented 改緊湊單行,高度 34 跟輸入框齊 */
-.pf-compact .pf-tabs {
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-  gap: 0;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  overflow: hidden;
-}
-.pf-compact .pf-tab {
-  flex-direction: row;
-  justify-content: center;
-  padding: 0 10px;
-  height: 34px;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  border-right: 1px solid var(--border);
-  font-size: var(--font-secondary);
-  font-weight: 500;
-}
-.pf-compact .pf-tab:last-child { border-right: 0; }
-.pf-compact .pf-tab.active {
-  background: var(--ctl-selected);
-  color: var(--text);
-  font-weight: 600;
-}
-.pf-compact .pf-tab .pf-tab-sub { display: none; }
 /* details 折疊區塊 */
 .pf-compact .pf-details {
   border-top: 1px solid var(--border);
@@ -3814,62 +3770,9 @@ button.cell-mark.failed { background: none; border: 0; padding: 0; font: inherit
   font-size: var(--font-secondary);
 }
 
-/* 商品表單:性質 tabs(品名下方),3 顆滿版按鈕 */
-.pf-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 6px;
-}
-.pf-tab {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 10px 8px;
-  background: var(--panel-2);
-  border: 2px solid var(--border);
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--text);
-  font-size: var(--font-body);
-  font-weight: 600;
-  transition: border-color 0.1s, background 0.1s;
-}
-.pf-tab:hover {
-  background: var(--row-hover);
-}
-.pf-tab.active {
-  border-color: var(--accent);
-  background: var(--panel-2);
-  color: var(--accent);
-}
-.pf-tab-sub {
-  font-size: var(--font-secondary);
-  font-weight: 400;
-  color: var(--text-dim);
-}
-.pf-tab.active .pf-tab-sub {
-  color: var(--accent);
-  opacity: 0.85;
-}
 .pf-chip-status {
   font-size: var(--font-secondary);
   opacity: 0.8;
-}
-
-@media (max-width: 768px) {
-  .pf-tabs {
-    grid-template-columns: 1fr;
-    gap: 4px;
-  }
-  .pf-tab {
-    flex-direction: row;
-    justify-content: space-between;
-    padding: 10px 14px;
-  }
-  .pf-tab-sub {
-    font-size: var(--font-secondary);
-  }
 }
 
 /* 商品相容性 Modal */
@@ -3971,13 +3874,8 @@ button.cell-mark.failed { background: none; border: 0; padding: 0; font: inherit
   color: var(--text-dim);
   font-size: var(--font-secondary);
 }
-/* 匯入表格(全站檢視 D7 / D8):庫存兩個選一個、貼上 / 選檔案切換、範例檔靠右 */
-.pi-serial {
-  grid-template-columns: 1fr 1fr;
-}
-.pi-serial .pf-tab {
-  padding: 8px;
-}
+/* 匯入表格(全站檢視 D7 / D8):貼上 / 選檔案切換、範例檔靠右 */
+
 .pi-source {
   display: flex;
   align-items: center;
@@ -4323,6 +4221,7 @@ button.cell-mark.failed { background: none; border: 0; padding: 0; font: inherit
   border: 1px solid var(--border);
   border-radius: 6px;
 }
+.re-mode-bar > .ui-choices { grid-column: 1 / -1; }
 .re-grid {
   display: grid;
   grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
@@ -4831,12 +4730,7 @@ details.re-personal > summary { cursor: pointer; list-style: revert; }
   margin-bottom: 8px;
   flex-wrap: wrap;
 }
-.pf-tab-mini {
-  flex: 0 0 auto;
-  padding: 6px 18px;
-  font-size: var(--font-secondary);
-  min-width: 80px;
-}
+
 .re-unlock-pw {
   max-width: 280px;
 }
@@ -5239,12 +5133,7 @@ details.re-personal > summary { cursor: pointer; list-style: revert; }
   min-width: 8em;
   font-size: var(--font-secondary);
 }
-.be-tri .pf-tabs {
-  min-width: 15em;
-}
-.be-tri .pf-tab {
-  padding: 6px 12px;
-}
+
 .be-grid3 {
   display: grid !important;
   grid-template-columns: repeat(3, 1fr);
@@ -5826,7 +5715,8 @@ input.rp-inline-money.failed {
   opacity: 0.5;
 }
 :root[data-theme="light"] .btn.armed,
-:root[data-theme="light"] .wb-btn.armed {
+:root[data-theme="light"] .wb-btn.armed,
+:root[data-theme="light"] .ui-icon-btn.armed {
   background: #fef3c7;
   border-color: #92400e;
   color: #92400e;
@@ -5899,104 +5789,8 @@ input.rp-inline-money.failed {
   background: #f9fafb;
 }
 
-/* ─── 通用元件:膠囊鈕 / 開關 / 提示問號 / 圖示鈕 / 虛線新增列
+/* ─── 通用元件:提示問號 / 虛線新增列(圖示鈕改用共用 IconButton)
        (零件範本管理頁主用,其他頁面也可共用)─── */
-
-/* 膠囊鈕(套用範本 / 快速加入零件)*/
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 12px;
-  background: var(--panel-2);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: var(--font-secondary);
-  cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease;
-}
-.pill:hover {
-  background: var(--row-hover);
-  border-color: var(--text-dim);
-}
-.pill.pill-strong {
-  background: rgba(79, 140, 255, 0.12);
-  border-color: rgba(79, 140, 255, 0.35);
-  color: var(--accent);
-}
-.pill.pill-strong:hover {
-  background: rgba(79, 140, 255, 0.2);
-  border-color: rgba(79, 140, 255, 0.55);
-}
-:root[data-theme="light"] .pill {
-  background: #ffffff;
-}
-:root[data-theme="light"] .pill:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
-}
-:root[data-theme="light"] .pill.pill-strong {
-  background: #eef2ff;
-  color: #4338ca;
-  border-color: #c7d2fe;
-}
-:root[data-theme="light"] .pill.pill-strong:hover {
-  background: #e0e7ff;
-  border-color: #818cf8;
-}
-
-/* Toggle 開關 */
-.toggle-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  user-select: none;
-  font-size: var(--font-body);
-}
-.toggle-switch input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-.toggle-track {
-  position: relative;
-  width: 36px;
-  height: 20px;
-  background: #6b7280;
-  border-radius: 12px;
-  transition: background 0.18s ease;
-  flex-shrink: 0;
-}
-.toggle-track::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  background: #ffffff;
-  border-radius: 50%;
-  transition: left 0.18s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-}
-.toggle-switch input:checked + .toggle-track {
-  background: var(--accent-fill);
-}
-.toggle-switch input:checked + .toggle-track::after {
-  left: 18px;
-}
-.toggle-switch input:focus-visible + .toggle-track {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-:root[data-theme="light"] .toggle-track {
-  background: #d1d5db;
-}
-:root[data-theme="light"] .toggle-switch input:checked + .toggle-track {
-  background: #2962ff;
-}
 
 /* 問號提示(hover 顯示說明)*/
 .info-tip {
@@ -6044,36 +5838,6 @@ input.rp-inline-money.failed {
 }
 .info-tip:hover::after {
   opacity: 1;
-}
-
-/* 圖示按鈕(垃圾桶等,hover 才顯色)*/
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease,
-    border-color 0.12s ease;
-}
-.icon-btn:hover {
-  background: var(--row-hover);
-  color: var(--text);
-}
-.icon-btn.icon-btn-danger:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.25);
-}
-:root[data-theme="light"] .icon-btn.icon-btn-danger:hover {
-  background: #fef2f2;
-  color: #dc2626;
-  border-color: #fecaca;
 }
 
 /* 全寬虛線「+ 加一項」 */
@@ -6286,19 +6050,6 @@ input.rp-inline-money.failed {
   background: #fef3c7;
   color: #b45309;
 }
-.type-card-drag {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  color: var(--text-dim);
-  opacity: 0;
-  cursor: grab;
-  transition: opacity 0.15s ease;
-  display: inline-flex;
-}
-.type-card:hover .type-card-drag {
-  opacity: 0.5;
-}
 .type-card-sort {
   position: absolute;
   bottom: 8px;
@@ -6348,7 +6099,6 @@ input.rp-inline-money.failed {
   border-color: #6366f1;
   box-shadow: 0 1px 3px rgba(99, 102, 241, 0.12);
 }
-
 
 /* ─────────────────────────────────────────────────────────
  * 商品識別 / 待確認入庫(apps.identity)
@@ -7287,7 +7037,6 @@ span.wb-chip.cat:has(> .name[aria-pressed="true"]) { background: var(--ctl-selec
 .wb-pager { display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 10px; }
 .wb-xfer-card-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 
-
 /* ── 進貨開單頁的零件 ── */
 .wb-chip-count.bad { color: var(--wb-red); font-weight: 600; }
 button.wb-chip-count { background: none; border: 0; font: inherit; font-size: var(--font-secondary); cursor: pointer; }
@@ -7916,6 +7665,7 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
   font-size: 1rem;
 }
 .pc-detail-body .ph-panel-strip, .pc-detail-body .ph-empty { margin: 0 0 12px; }
+.pc-detail-tabs { margin-bottom: 12px; }
 
 /* ── 合約到期(門號合約快到期的名單) ── */
 .ct-bar { flex-wrap: wrap; row-gap: 8px; }
@@ -8022,7 +7772,6 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .pw-actions { display: flex; justify-content: flex-end; }
 .staff-note { color: var(--text-dim); font-size: var(--fs-sub); font-weight: 400; }
 .staff-table tr.staff-off td { opacity: 0.55; }
-
 
 /* ─────────────────────────────────────────────────────────
  * 廠商叫貨(膜總裁):商品清單填包數、最下面固定合計與主要按鈕;叫貨串接設定
@@ -8398,7 +8147,6 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .sc-submit { margin-left: auto; }
 /* 第一次入庫:舊品名分組的那一列 */
 .sc-group td { font-weight: 600; color: var(--text-dim, inherit); }
-
 
 /* ─────────────────────────────────────────────────────────
  * 批發單(賣家):待出貨一張單一塊、直接刷機;中古機上架;同行帳
