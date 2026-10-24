@@ -4,10 +4,10 @@ import { useAllSimCards } from "@/api/hooks";
 import type { SimCard, SimCardStatus } from "@/api/types";
 import { AppliedFilters } from "@/components/AppliedFilters";
 import { Toolbar } from "@/components/Toolbar";
+import { Banner } from "@/components/Banner";
 import {
   MasterDetail,
   MasterColumn,
-  DetailTab,
 } from "@/components/master-detail/MasterDetail";
 import { money } from "@/lib/money";
 import { appliedList, cond } from "@/lib/appliedFilters";
@@ -49,81 +49,40 @@ export function SimCardsPage() {
   const [status, setStatus] = useState<SimCardStatus | "">("");
   const rows = useMemo(() => filterSimCards(data ?? [], query, status), [data, query, status]);
   const statusLabel = SIM_STATUSES.find((s) => s.value === status)?.label ?? "";
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerInitial, setDrawerInitial] = useState<SimCard | null>(null);
-
-  const tabs: DetailTab<SimCard>[] = [
-    {
-      key: "basic",
-      label: "基本",
-      render: (r) => (
-        <div>
-          <dl>
-            <dt>卡號</dt>
-            <dd>{r.card_no}</dd>
-            <dt>廠商</dt>
-            <dd>
-              {r.vendor_code} {r.vendor_name}
-            </dd>
-            <dt>押金</dt>
-            <dd>{money(r.deposit)}</dd>
-            <dt>狀態</dt>
-            <dd>{r.status_label}</dd>
-            <dt>押金歸還</dt>
-            <dd>{r.deposit_refunded ? "已歸還" : "未歸還"}</dd>
-            <dt>出卡時間</dt>
-            <dd>
-              {r.issued_at
-                ? r.issued_at.slice(0, 16).replace("T", " ")
-                : "—"}
-            </dd>
-            <dt>開通時間</dt>
-            <dd>
-              {r.activated_at
-                ? r.activated_at.slice(0, 16).replace("T", " ")
-                : "—"}
-            </dd>
-            <dt>退回時間</dt>
-            <dd>
-              {r.returned_at
-                ? r.returned_at.slice(0, 16).replace("T", " ")
-                : "—"}
-            </dd>
-            <dt>備註</dt>
-            <dd>{r.note || "—"}</dd>
-          </dl>
-          <div style={{ marginTop: 12 }}>
-            <button
-              className="btn primary"
-              onClick={() => {
-                setDrawerInitial(r);
-                setDrawerOpen(true);
-              }}
-            >
-              編輯
-            </button>
-          </div>
-        </div>
-      ),
-    },
-  ];
+  // 新增 / 編輯:整頁換成表單(owner 2026-10-25 不要 modal);清單留著不卸下,回來時搜尋、捲動位置都還在
+  const [editing, setEditing] = useState<{ card: SimCard | null } | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
 
   return (
     <div className="page">
       <Toolbar
         title="SIM 卡"
         actions={
-          <button
-            className="btn"
-            onClick={() => {
-              setDrawerInitial(null);
-              setDrawerOpen(true);
-            }}
-          >
-            新增卡片
-          </button>
+          !editing && (
+            <button
+              className="btn"
+              onClick={() => {
+                setFlash(null);
+                setEditing({ card: null });
+              }}
+            >
+              新增卡片
+            </button>
+          )
         }
       />
+      {editing && (
+        <SimCardForm
+          key={editing.card?.id ?? "new"}
+          initial={editing.card}
+          onClose={(saved) => {
+            setEditing(null);
+            setFlash(saved ?? null);
+          }}
+        />
+      )}
+      <div className="pane-list" hidden={!!editing}>
+      {flash && <Banner kind="success" message={flash} />}
       <div className="list-filterbar">
         <label>
           狀態
@@ -158,18 +117,18 @@ export function SimCardsPage() {
           rows={rows}
           columns={columns}
           rowKey={(r) => r.id}
-          tabs={tabs}
+          tabs={[]}
           searchPlaceholder={SIM_SEARCH_PLACEHOLDER}
           onSearch={setQuery}
           searchValue={query}
           emptyText={(data ?? []).length === 0 ? "還沒有 SIM 卡" : "查無符合的卡片"}
+          onOpen={(r) => {
+            setFlash(null);
+            setEditing({ card: r });
+          }}
         />
       )}
-      <SimCardForm
-        open={drawerOpen}
-        initial={drawerInitial}
-        onClose={() => setDrawerOpen(false)}
-      />
+      </div>
     </div>
   );
 }

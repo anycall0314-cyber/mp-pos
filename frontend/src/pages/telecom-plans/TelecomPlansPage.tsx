@@ -19,7 +19,7 @@ import { intStr, money } from "@/lib/money";
 import { isManager } from "@/lib/roles";
 import { MoneyInput } from "@/components/MoneyInput";
 
-import { BulkAddTelecomPlansModal } from "./BulkAddTelecomPlansModal";
+import { BulkAddTelecomPlans } from "./BulkAddTelecomPlans";
 import { TelecomPlanForm } from "./TelecomPlanForm";
 import { errorText } from "@/lib/errorText";
 
@@ -37,10 +37,13 @@ export function TelecomPlansPage() {
   const savePlan = useSaveTelecomPlan();
   // 方案(含佣金)只有管理員能改:店員看得到,但沒有會改資料的按鈕與輸入框(伺服器也會擋)
   const canEdit = isManager(useCurrentUser()?.profile?.role);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerInitial, setDrawerInitial] = useState<TelecomPlan | null>(null);
-  const [bulkOpen, setBulkOpen] = useState(false);
+  // 新增 / 編輯 / 批次新增:整頁換掉清單(owner 2026-10-25 不要 modal);清單留著不卸下,回來時搜尋、勾選、捲動都還在
+  const [view, setView] = useState<{ kind: "edit"; plan: TelecomPlan } | { kind: "new" } | { kind: "bulk" } | null>(null);
   const [bulkResult, setBulkResult] = useState<string | null>(null);
+  function flashResult(text: string) {
+    setBulkResult(text);
+    window.setTimeout(() => setBulkResult(null), 4000);
+  }
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   // inline 佣金編輯暫存:key=plan.id, value=輸入中字串。
@@ -410,19 +413,6 @@ export function TelecomPlansPage() {
             <dt>狀態</dt>
             <dd>{r.is_active ? "啟用" : "停用"}</dd>
           </dl>
-          {canEdit && (
-            <div style={{ marginTop: 12 }}>
-              <button
-                className="btn primary"
-                onClick={() => {
-                  setDrawerInitial(r);
-                  setDrawerOpen(true);
-                }}
-              >
-                編輯
-              </button>
-            </div>
-          )}
         </div>
       ),
     },
@@ -433,22 +423,36 @@ export function TelecomPlansPage() {
       <Toolbar
         title="電信方案"
         actions={
-          canEdit && <>
-            <button className="btn" onClick={() => setBulkOpen(true)}>
+          canEdit && !view && <>
+            <button className="btn" onClick={() => setView({ kind: "bulk" })}>
               批次新增
             </button>
-            <button
-              className="btn"
-              onClick={() => {
-                setDrawerInitial(null);
-                setDrawerOpen(true);
-              }}
-            >
+            <button className="btn" onClick={() => setView({ kind: "new" })}>
               新增方案
             </button>
           </>
         }
       />
+      {canEdit && (view?.kind === "edit" || view?.kind === "new") && (
+        <TelecomPlanForm
+          key={view.kind === "edit" ? view.plan.id : "new"}
+          initial={view.kind === "edit" ? view.plan : null}
+          onClose={(saved) => {
+            setView(null);
+            if (saved) flashResult(saved);
+          }}
+        />
+      )}
+      {canEdit && view?.kind === "bulk" && (
+        <BulkAddTelecomPlans
+          onClose={() => setView(null)}
+          onSuccess={(count) => {
+            setView(null);
+            flashResult(`成功建立 ${count} 筆方案`);
+          }}
+        />
+      )}
+      <div className="pane-list" hidden={!!view}>
 
       {/* 批次操作工具列(僅 上/下架);佣金已改為列表 inline 直接編輯 */}
       {canEdit && selectedIds.size > 0 && (
@@ -521,26 +525,10 @@ export function TelecomPlansPage() {
           searchPlaceholder="搜尋 專案名稱 / 電信商 / 月租 / 綁約"
           onSearch={setQuery}
           emptyText={(data ?? []).length === 0 ? "還沒有方案" : `查無符合「${query}」的方案`}
+          onOpen={canEdit ? (r) => setView({ kind: "edit", plan: r }) : undefined}
         />
       )}
-      {canEdit && (
-        <>
-          <TelecomPlanForm
-            open={drawerOpen}
-            initial={drawerInitial}
-            onClose={() => setDrawerOpen(false)}
-          />
-          <BulkAddTelecomPlansModal
-            open={bulkOpen}
-            onClose={() => setBulkOpen(false)}
-            onSuccess={(count) => {
-              setBulkOpen(false);
-              setBulkResult(`成功建立 ${count} 筆方案`);
-              setTimeout(() => setBulkResult(null), 4000);
-            }}
-          />
-        </>
-      )}
+      </div>
     </div>
   );
 }

@@ -49,7 +49,6 @@
  "clickable-noninteractive|pages/sales/SalesListPage.tsx|tr|{`clickable${t.is_void ? \" void\" : \"\"}${ createdId === t.id ? \" flash\" : \"\" }`}|": 1,
  "clickable-noninteractive|pages/sales/SalesPage.tsx|tr|{sr.is_void ? \"row-void\" : undefined}|": 1,
  "clickable-noninteractive|pages/suppliers/SuppliersPage.tsx|tr|{[ selection?.kind === \"supplier\" && selection.id === s.id ? \"selected\" : \"\", draggingId === s.id ? \"row-dragging\" : \"\", dragOverId === s.id && draggingId !== s.id ? \"row-drag-over\" : \"\", ] .filter(Boolean) .join(\" \")}|": 1,
- "clickable-noninteractive|pages/telecom-plans/BulkAddTelecomPlansModal.tsx|div|\"modal-overlay\"|": 1,
  "clickable-noninteractive|pages/telecom/ContractsPage.tsx|div|\"ct-detail\"|{r.follow && ( <div className=\"wb-dim wb": 1,
  "clickable-noninteractive|pages/telecom/ContractsPage.tsx|div|{`wb-card wb-inv-card${done(r) ? \" ct-done\" : \"\"}`}|{(r.follow?.note || unsaved(r)) && ( <di": 1,
  "clickable-noninteractive|pages/telecom/ContractsPage.tsx|tr|{`clickable${done(r) ? \" ct-done\" : \"\"}`}|": 1,

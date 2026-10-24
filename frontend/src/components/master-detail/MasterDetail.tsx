@@ -42,6 +42,8 @@ interface MasterDetailProps<T> {
   searchValue?: string;
   /** 清單是空的時候,清單裡寫的那一句(例:「這段期間沒有雜支」「查無符合「x」的雜支」) */
   emptyText?: string;
+  /** 有給 = 點一列(或停在列上按 Enter / 空白)整頁打開那一筆,不開右邊那一塊(電信方案、SIM 卡;owner 不要 modal) */
+  onOpen?: (row: T) => void;
 }
 
 export function MasterDetail<T>({
@@ -54,6 +56,7 @@ export function MasterDetail<T>({
   onSearch,
   searchValue,
   emptyText = "沒有資料",
+  onOpen,
 }: MasterDetailProps<T>) {
   const [selectedKey, setSelectedKey] = useState<string | number | null>(null);
   const [activeTab, setActiveTab] = useState<string>(tabs[0]?.key ?? "");
@@ -114,6 +117,7 @@ export function MasterDetail<T>({
                     aria-selected={k === selectedKey}
                     onFocus={() => setFocusKey(k)}
                     onClick={() => {
+                      if (onOpen) return onOpen(row);
                       keyOpened.current = null;
                       setSelectedKey(k);
                     }}
@@ -126,6 +130,7 @@ export function MasterDetail<T>({
                         if (next !== null) rowEls.current.get(next)?.focus();
                       } else if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
+                        if (onOpen) return onOpen(row);
                         keyOpened.current = k;
                         setSelectedKey(k);
                       }

@@ -17,8 +17,9 @@ test("SIM 卡、電信方案表單送出中鎖住抽屜與取消;商品批次視
   for (const [p, m] of [["../pages/sim-cards/SimCardForm.tsx", "saveCard"], ["../pages/telecom-plans/TelecomPlanForm.tsx", "savePlan"]]) {
     const s = read(p);
     assert.match(s, new RegExp(`busy=\\{${m}\\.isPending\\}`), p);
-    assert.match(s, new RegExp(`type="button" disabled=\\{${m}\\.isPending\\}>\\n\\s+取消`), p);
   }
+  // 整頁表單(owner 2026-10-25 不要 modal):送出中「回清單」不能按
+  assert.match(read("../components/PaneForm.tsx"), /onClick=\{onBack\} disabled=\{busy\}/);
   assert.match(read("../pages/products/BulkCreatePartsModal.tsx"), /disabled=\{bulkCreate\.isPending \|\| preview\.isPending\}\n\s+onClick=\{\(\) => setStep\(step - 1\)\}/);
   assert.match(read("../pages/products/ProductExpanderModal.tsx"), /onClick=\{onClose\} disabled=\{mutation\.isPending\}>\n\s+取消/);
   assert.match(read("../pages/products/BulkEditProductsModal.tsx"), /onClick=\{onClose\} disabled=\{save\.isPending\}>\n\s+取消/);

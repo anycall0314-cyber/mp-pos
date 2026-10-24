@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 
 import { ApiHttpError } from "@/api/client";
 import { useSaveCarrier, useSaveTelecomPlan } from "@/api/hooks";
@@ -6,15 +6,18 @@ import { searchCarriers } from "@/api/search";
 import type { Carrier, TelecomPlan, TelecomPlanKind } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
-import { Drawer } from "@/components/Drawer";
+import { PaneForm } from "@/components/PaneForm";
+import { useArm } from "@/components/workbench/useArm";
+import { changed, leaveArmed, leaveDraft } from "@/lib/draftGuard";
 import { Checkbox, Field } from "@/components/Field";
 import { MoneyInput } from "@/components/MoneyInput";
 import { errorText } from "@/lib/errorText";
 
 interface Props {
-  open: boolean;
-  initial?: TelecomPlan | null;
-  onClose: () => void;
+  /** 編輯哪一個方案;null = 新增 */
+  initial: TelecomPlan | null;
+  /** 回清單(編輯存好也回清單,帶一句給清單顯示) */
+  onClose: (saved?: string) => void;
 }
 
 interface FormState {
@@ -64,36 +67,29 @@ function toState(p?: TelecomPlan | null): FormState {
   };
 }
 
-export function TelecomPlanForm({ open, initial, onClose }: Props) {
-  const [state, setState] = useState<FormState>(toState(initial));
-  const [carrierOption, setCarrierOption] =
-    useState<ComboOption<Carrier> | null>(null);
+/** 電信方案的新增 / 編輯整頁(不是抽屜;owner 2026-10-25 不要 modal)。新增存好留在這一頁:
+ *  名稱、月租、佣金、備註清掉,電信商、綁約、類型、啟用留著接著打下一個;編輯存好回清單。 */
+export function TelecomPlanForm({ initial, onClose }: Props) {
+  const [state, setState] = useState<FormState>(() => toState(initial));
+  const [base, setBase] = useState<FormState>(() => toState(initial));
+  const [carrierOption, setCarrierOption] = useState<ComboOption<Carrier> | null>(() =>
+    initial?.carrier ? { id: initial.carrier, label: initial.carrier_name, secondary: initial.carrier_code } : null,
+  );
   const [error, setError] = useState<string | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [showNewCarrier, setShowNewCarrier] = useState(false);
   const [newCarrier, setNewCarrier] = useState({ code: "", name: "" });
+  const nameRef = useRef<HTMLInputElement>(null);
+  const arm = useArm();
 
   const saveCarrier = useSaveCarrier();
   const savePlan = useSaveTelecomPlan();
+  const dirty = changed(state, base);
 
-  useEffect(() => {
-    if (open) {
-      setState(toState(initial));
-      setCarrierOption(
-        initial?.carrier
-          ? {
-              id: initial.carrier,
-              label: initial.carrier_name,
-              secondary: initial.carrier_code,
-            }
-          : null,
-      );
-      setError(null);
-      setFieldErrors({});
-      setShowNewCarrier(false);
-      setNewCarrier({ code: "", name: "" });
-    }
-  }, [open, initial]);
+  function back() {
+    leaveDraft(dirty, arm, "back", () => onClose());
+  }
 
   const isEdit = !!initial?.id;
 
@@ -117,6 +113,7 @@ export function TelecomPlanForm({ open, initial, onClose }: Props) {
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setFlash(null);
     setFieldErrors({});
     if (!state.name) {
       setFieldErrors({ name: ["請填專案名稱"] });
@@ -127,7 +124,7 @@ export function TelecomPlanForm({ open, initial, onClose }: Props) {
       return;
     }
     try {
-      await savePlan.mutateAsync({
+      const saved = await savePlan.mutateAsync({
         id: initial?.id,
         name: state.name,
         carrier: state.carrier as number,
@@ -140,7 +137,15 @@ export function TelecomPlanForm({ open, initial, onClose }: Props) {
         note: state.note,
         is_active: state.is_active,
       });
-      onClose();
+      if (isEdit) {
+        onClose(`已儲存 ${saved.name}`);
+        return;
+      }
+      const next = { ...state, name: "", monthly_fee: "0", commission: "0", company_commission: "", note: "" };
+      setState(next);
+      setBase(next);
+      setFlash(`已新增 ${saved.name},可以接著打下一個`);
+      nameRef.current?.focus();
     } catch (e) {
       if (e instanceof ApiHttpError && e.body && typeof e.body === "object") {
         const body = e.body as Record<string, string[] | string>;
@@ -159,31 +164,24 @@ export function TelecomPlanForm({ open, initial, onClose }: Props) {
   }
 
   return (
-    <Drawer
-      open={open}
+    <PaneForm
       title={isEdit ? `編輯方案 ${initial?.name}` : "新增電信方案"}
-      onClose={onClose}
+      onBack={back}
+      leaveArmed={leaveArmed(arm.armed, "back")}
       busy={savePlan.isPending}
       footer={
-        <>
-          <button className="btn" onClick={onClose} type="button" disabled={savePlan.isPending}>
-            取消
-          </button>
-          <button
-            className="btn primary"
-            onClick={submit}
-            type="button"
-            disabled={savePlan.isPending}
-          >
-            {savePlan.isPending ? "儲存中…" : "儲存"}
-          </button>
-        </>
+        <button className="btn primary" onClick={submit} type="button" disabled={savePlan.isPending}>
+          {savePlan.isPending ? "儲存中…" : "儲存"}
+        </button>
       }
     >
+      {flash && <Banner kind="success" message={flash} />}
       {error && <Banner kind="error" message={error} />}
       <form onSubmit={submit}>
         <Field label="專案名稱" required error={fieldErrors.name}>
           <input
+            ref={nameRef}
+            autoFocus={!isEdit}
             value={state.name}
             onChange={(e) => patch("name", e.target.value)}
           />
@@ -304,6 +302,6 @@ export function TelecomPlanForm({ open, initial, onClose }: Props) {
           label="啟用"
         />
       </form>
-    </Drawer>
+    </PaneForm>
   );
 }

@@ -1522,6 +1522,16 @@ button { font-family: inherit; }
 .pb-page { padding-top: 8px; }
 .pb-footer { justify-content: flex-end; }
 .pb-head { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+/* 主檔新增 / 編輯整頁(PaneForm;電信方案、SIM 卡,owner 2026-10-25 不要 modal):清單整頁換成表單,清單那一塊留著不卸(`pane-list` 藏起來) */
+.pane-list { display: contents; }
+.pane-list[hidden] { display: none; }
+.pane-form { padding-top: 8px; }
+.pane-form-head { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+.pane-form-title { margin: 0; font-size: var(--font-section); font-weight: 600; }
+.pane-form-body { max-width: 720px; }
+.pane-form-facts { display: grid; grid-template-columns: 120px 1fr; row-gap: 6px; column-gap: 16px; margin: 12px 0 0; color: var(--text-dim); }
+.pane-form-facts dd { margin: 0; color: var(--text); }
+.pane-form-footer { justify-content: flex-end; }
 .pb-today { color: var(--text-dim); }
 .pb-today b { color: var(--text); margin: 0 4px; font-variant-numeric: tabular-nums; }
 .pb-form { max-width: 720px; }

@@ -29,7 +29,6 @@ test("抽屜與各個彈窗:role=dialog + aria-modal + 標題當名字 + 焦點�
     "../pages/products/BulkCreatePartsModal.tsx",
     "../pages/products/BulkEditProductsModal.tsx",
     "../pages/repairs/RepairHistoryModal.tsx",
-    "../pages/telecom-plans/BulkAddTelecomPlansModal.tsx",
   ]) {
     const src = read(p);
     assert.match(src, /const dlg = useDialogFocus\((open|true)\);/, p);

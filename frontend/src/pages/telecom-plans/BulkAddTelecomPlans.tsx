@@ -14,10 +14,11 @@ import { Field } from "@/components/Field";
 import { MoneyInput } from "@/components/MoneyInput";
 import { intStr } from "@/lib/money";
 import { errorText } from "@/lib/errorText";
-import { useDialogFocus } from "@/hooks/useDialogFocus";
+import { PaneForm } from "@/components/PaneForm";
+import { useArm } from "@/components/workbench/useArm";
+import { leaveArmed, leaveDraft } from "@/lib/draftGuard";
 
 interface Props {
-  open: boolean;
   onClose: () => void;
   onSuccess: (count: number) => void;
 }
@@ -44,7 +45,9 @@ function splitList(s: string): string[] {
     .filter(Boolean);
 }
 
-export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
+/** 方案展開新增:整頁(不是彈窗;owner 2026-10-25 不要 modal)。打過東西按「回清單」要按兩次。 */
+export function BulkAddTelecomPlans({ onClose, onSuccess }: Props) {
+  const arm = useArm();
   const [carrier, setCarrier] = useState<number | "">("");
   const [carrierOption, setCarrierOption] =
     useState<ComboOption<Carrier> | null>(null);
@@ -152,9 +155,14 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
     );
   }
 
+  // 打過任何東西(前綴、月租、綁約、批次佣金、電信商)就算沒存
+  const dirty = !!(namePrefix.trim() || feesText.trim() || monthsText.trim() || bulkCommission.trim() || carrier !== "");
+
   function handleClose() {
-    reset();
-    onClose();
+    leaveDraft(dirty, arm, "back", () => {
+      reset();
+      onClose();
+    });
   }
 
   // 一鍵套用三家常見電信商前綴(輔助)
@@ -216,30 +224,29 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
     }
   }
 
-  // 名字、打開時游標進來、Tab 不跑到背後、關掉回到原按鈕(全站控制項 MC-03)
-  const dlg = useDialogFocus(open);
-  if (!open) return null;
-
   const list = combos.length > 0 ? combos : previewCombos;
   const selectedCount = combos.filter((c) => c.selected).length;
 
   return (
-    <div className="modal-overlay" onClick={handleClose}>
-      <div
-        className="modal-card expander-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={dlg.titleId}
-        ref={dlg.ref}
-        tabIndex={-1}
-        onKeyDown={dlg.onKeyDown}
-      >
-        <div className="modal-title" id={dlg.titleId}>方案展開新增</div>
-
+    <PaneForm
+      title="方案展開新增"
+      onBack={handleClose}
+      leaveArmed={leaveArmed(arm.armed, "back")}
+      busy={bulk.isPending}
+      footer={
+        <button
+          className="btn primary"
+          type="button"
+          onClick={submit}
+          disabled={bulk.isPending || selectedCount === 0}
+        >
+          {bulk.isPending ? "建立中…" : `建立 ${selectedCount} 筆`}
+        </button>
+      }
+    >
         {error && <Banner kind="error" message={error} />}
 
-        <div className="modal-body">
+        <div>
           <div
             style={{
               display: "flex",
@@ -487,25 +494,6 @@ export function BulkAddTelecomPlansModal({ open, onClose, onSuccess }: Props) {
           )}
         </div>
 
-        <div className="modal-actions">
-          <button
-            className="btn"
-            type="button"
-            onClick={handleClose}
-            disabled={bulk.isPending}
-          >
-            取消
-          </button>
-          <button
-            className="btn primary"
-            type="button"
-            onClick={submit}
-            disabled={bulk.isPending || selectedCount === 0}
-          >
-            {bulk.isPending ? "建立中…" : `建立 ${selectedCount} 筆`}
-          </button>
-        </div>
-      </div>
-    </div>
+    </PaneForm>
   );
 }

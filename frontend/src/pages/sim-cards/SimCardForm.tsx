@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 
 import { ApiHttpError } from "@/api/client";
 import { useSaveCarrier, useSaveSimCard } from "@/api/hooks";
@@ -7,15 +7,18 @@ import type { Carrier, SimCard, SimCardStatus } from "@/api/types";
 import { SIM_STATUSES } from "@/lib/simCardSearch";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
-import { Drawer } from "@/components/Drawer";
+import { PaneForm } from "@/components/PaneForm";
+import { useArm } from "@/components/workbench/useArm";
+import { changed, leaveArmed, leaveDraft } from "@/lib/draftGuard";
 import { Checkbox, Field } from "@/components/Field";
 import { MoneyInput } from "@/components/MoneyInput";
 import { errorText } from "@/lib/errorText";
 
 interface Props {
-  open: boolean;
-  initial?: SimCard | null;
-  onClose: () => void;
+  /** 編輯哪一張;null = 新增 */
+  initial: SimCard | null;
+  /** 回清單(編輯存好也回清單,帶一句給清單顯示) */
+  onClose: (saved?: string) => void;
 }
 
 interface FormState {
@@ -50,36 +53,30 @@ function toState(c?: SimCard | null): FormState {
   };
 }
 
-export function SimCardForm({ open, initial, onClose }: Props) {
-  const [state, setState] = useState<FormState>(toState(initial));
-  const [vendorOption, setVendorOption] =
-    useState<ComboOption<Carrier> | null>(null);
+/** SIM 卡的新增 / 編輯整頁(不是抽屜;owner 2026-10-25 不要 modal)。新增存好留在這一頁、清掉卡號與備註,
+ *  廠商、押金、狀態留著接著刷下一張;編輯存好回清單。 */
+export function SimCardForm({ initial, onClose }: Props) {
+  const [state, setState] = useState<FormState>(() => toState(initial));
+  // 改過沒存:跟這個比(新增存好後換成留著的那一份)
+  const [base, setBase] = useState<FormState>(() => toState(initial));
+  const [vendorOption, setVendorOption] = useState<ComboOption<Carrier> | null>(() =>
+    initial?.vendor ? { id: initial.vendor, label: initial.vendor_name, secondary: initial.vendor_code } : null,
+  );
   const [error, setError] = useState<string | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [showNewVendor, setShowNewVendor] = useState(false);
   const [newVendor, setNewVendor] = useState({ code: "", name: "" });
+  const cardRef = useRef<HTMLInputElement>(null);
+  const arm = useArm();
 
   const saveCarrier = useSaveCarrier();
   const saveCard = useSaveSimCard();
+  const dirty = changed(state, base);
 
-  useEffect(() => {
-    if (open) {
-      setState(toState(initial));
-      setVendorOption(
-        initial?.vendor
-          ? {
-              id: initial.vendor,
-              label: initial.vendor_name,
-              secondary: initial.vendor_code,
-            }
-          : null,
-      );
-      setError(null);
-      setFieldErrors({});
-      setShowNewVendor(false);
-      setNewVendor({ code: "", name: "" });
-    }
-  }, [open, initial]);
+  function back() {
+    leaveDraft(dirty, arm, "back", () => onClose());
+  }
 
   const isEdit = !!initial?.id;
 
@@ -103,6 +100,7 @@ export function SimCardForm({ open, initial, onClose }: Props) {
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setFlash(null);
     setFieldErrors({});
     if (!state.card_no) {
       setFieldErrors({ card_no: ["請填卡號"] });
@@ -113,7 +111,7 @@ export function SimCardForm({ open, initial, onClose }: Props) {
       return;
     }
     try {
-      await saveCard.mutateAsync({
+      const saved = await saveCard.mutateAsync({
         id: initial?.id,
         card_no: state.card_no,
         vendor: state.vendor as number,
@@ -122,7 +120,16 @@ export function SimCardForm({ open, initial, onClose }: Props) {
         status: state.status,
         note: state.note,
       });
-      onClose();
+      if (isEdit) {
+        onClose(`已儲存 ${saved.card_no}`);
+        return;
+      }
+      // 連續新增:卡號、備註清掉,其他留著;游標回卡號
+      const next = { ...state, card_no: "", note: "" };
+      setState(next);
+      setBase(next);
+      setFlash(`已新增 ${saved.card_no},可以接著刷下一張`);
+      cardRef.current?.focus();
     } catch (e) {
       if (e instanceof ApiHttpError && e.body && typeof e.body === "object") {
         const body = e.body as Record<string, string[] | string>;
@@ -141,31 +148,24 @@ export function SimCardForm({ open, initial, onClose }: Props) {
   }
 
   return (
-    <Drawer
-      open={open}
+    <PaneForm
       title={isEdit ? `編輯卡片 ${initial?.card_no}` : "新增 SIM 卡"}
-      onClose={onClose}
+      onBack={back}
+      leaveArmed={leaveArmed(arm.armed, "back")}
       busy={saveCard.isPending}
       footer={
-        <>
-          <button className="btn" onClick={onClose} type="button" disabled={saveCard.isPending}>
-            取消
-          </button>
-          <button
-            className="btn primary"
-            onClick={submit}
-            type="button"
-            disabled={saveCard.isPending}
-          >
-            {saveCard.isPending ? "儲存中…" : "儲存"}
-          </button>
-        </>
+        <button className="btn primary" onClick={submit} type="button" disabled={saveCard.isPending}>
+          {saveCard.isPending ? "儲存中…" : "儲存"}
+        </button>
       }
     >
+      {flash && <Banner kind="success" message={flash} />}
       {error && <Banner kind="error" message={error} />}
       <form onSubmit={submit}>
         <Field label="卡號 (ICCID)" required error={fieldErrors.card_no}>
           <input
+            ref={cardRef}
+            autoFocus={!isEdit}
             value={state.card_no}
             onChange={(e) => patch("card_no", e.target.value)}
             maxLength={25}
@@ -260,7 +260,17 @@ export function SimCardForm({ open, initial, onClose }: Props) {
             onChange={(e) => patch("note", e.target.value)}
           />
         </Field>
+        {isEdit && initial && (
+          <dl className="pane-form-facts">
+            <dt>出卡時間</dt>
+            <dd>{initial.issued_at ? initial.issued_at.slice(0, 16).replace("T", " ") : "—"}</dd>
+            <dt>開通時間</dt>
+            <dd>{initial.activated_at ? initial.activated_at.slice(0, 16).replace("T", " ") : "—"}</dd>
+            <dt>退回時間</dt>
+            <dd>{initial.returned_at ? initial.returned_at.slice(0, 16).replace("T", " ") : "—"}</dd>
+          </dl>
+        )}
       </form>
-    </Drawer>
+    </PaneForm>
   );
 }

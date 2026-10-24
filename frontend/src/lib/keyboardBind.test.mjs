@@ -34,5 +34,5 @@ test("清單方向鍵換列到頭停住;整張清單只有一個 Tab 停點;鍵�
   assert.match(md, /onKeyDown=\{\(e\) => \{\n\s+\/\/[^\n]*\n\s+if \(e\.target !== e\.currentTarget\) return;/);
   assert.match(read("../pages/products/ProductTypesPage.tsx"), /onKeyDown=\{\(e\) => \{\n\s+\/\/[^\n]*\n\s+if \(e\.target !== e\.currentTarget\) return;\n\s+if \(e\.key === "Enter" \|\| e\.key === " "\)/);
   assert.match(md, /returnTo\.current = keyOpened\.current !== null && e\.detail === 0 \? keyOpened\.current : null;/, "滑鼠按 × 不搬游標(紅隊)");
-  assert.match(md, /onClick=\{\(\) => \{\n\s+keyOpened\.current = null;\n\s+setSelectedKey\(k\);/, "滑鼠點列打開的不算鍵盤打開");
+  assert.match(md, /onClick=\{\(\) => \{\n\s+if \(onOpen\) return onOpen\(row\);\n\s+keyOpened\.current = null;\n\s+setSelectedKey\(k\);/, "滑鼠點列打開的不算鍵盤打開(有 onOpen 的整頁打開那一筆)");
 });
