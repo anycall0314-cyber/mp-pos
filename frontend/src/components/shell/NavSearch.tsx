@@ -1,7 +1,7 @@
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { NavModule, searchNav } from "@/nav";
+import { NavModule, hitTarget, searchNav } from "@/nav";
 
 /**
  * 功能搜尋:打功能名稱(或改名前的舊名字)直接跳過去。
@@ -80,7 +80,7 @@ export function NavSearch({
       e.preventDefault();
       const hit = hits[sel] ?? hits[0];
       if (hit) {
-        go(hit.page.to);
+        go(hitTarget(hit));
       } else {
         // 找不到功能就按了 Enter:多半是條碼槍刷到這一格來了。清掉,把游標還給頁面的掃碼框,
         // 不要讓下一個碼繼續打在這裡
@@ -126,7 +126,7 @@ export function NavSearch({
               className={`nav-search-item${i === sel ? " sel" : ""}`}
               onMouseDown={(e) => {
                 e.preventDefault();
-                go(h.page.to);
+                go(hitTarget(h));
               }}
             >
               <span>{h.page.label}</span>

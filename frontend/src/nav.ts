@@ -12,6 +12,8 @@ export interface NavPage {
   label: string;
   /** 舊名稱 / 別的叫法(功能搜尋用) */
   aliases?: string[];
+  /** 打某一個叫法時直接去那一頁的哪一段(例:「發票字軌」→ 系統設定的發票那一頁;全站檢視 L02) */
+  aliasTo?: Record<string, string>;
   /** 只給公司管理員看的頁面(例:備份與還原) */
   adminOnly?: boolean;
   /** 只給管理員看的報表(公司管理員與平台管理員;店員沒有勾可以開。例:客戶排行) */
@@ -286,6 +288,14 @@ export const NAV_MODULES: NavModule[] = [
         to: "/settings",
         label: "業務設定",
         aliases: ["發票 / 付款 / 門市", "發票", "發票字軌", "發票類型", "付款方式", "門市", "保固天數"],
+        aliasTo: {
+          發票: "/settings?tab=invoice",
+          發票字軌: "/settings?tab=invoice",
+          發票類型: "/settings?tab=invoice",
+          付款方式: "/settings?tab=payment",
+          門市: "/settings?tab=stores",
+          保固天數: "/settings?tab=general",
+        },
       },
       {
         to: "/settings/backup",
@@ -436,6 +446,11 @@ export function matchForUser(pathname: string, who: NavRole): NavMatch | null {
  * 排序(按 Enter 會去第一筆,所以越確定的排越前面):
  * 頁面名稱開頭對上 → 頁面名稱包含 → 入口名稱對上(排它的預設頁)→ 舊名字開頭對上 → 舊名字包含 → 入口底下的其他頁。
  */
+/** 功能搜尋選了這一筆要去哪:靠叫法找到、那個叫法有指定的段落就去那裡,不然去那一頁 */
+export function hitTarget(hit: Pick<NavSearchHit, "page" | "via">): string {
+  return (hit.via && hit.page.aliasTo?.[hit.via]) || hit.page.to;
+}
+
 export function searchNav(query: string, modules: NavModule[]): NavSearchHit[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];

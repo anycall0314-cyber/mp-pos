@@ -162,7 +162,8 @@ test("開單頁:預覽帶門市去問;換期沒設定講是哪一期;發票號�
   // 一進開單頁就在最上面(工具列上面、不在抽屜裡),講是哪一期、不能開發票、去哪裡新增;快換期的那一條也在最上面
   const top = page.slice(0, page.indexOf('<div className="ws-tools">'));
   assert.match(top, /\{trackMissing && \(\s*<div className="wb-warn err ws-track-alert" role="alert">\s*\{peek\.why \|\| "這種發票沒有可用的字軌"\},不能開發票。/);
-  assert.match(top, /<a className="wb-link" href="\/settings" target="_blank" rel="noreferrer">\s*新增字軌\s*<\/a>/);
+  // 直接開系統設定的發票那一頁(全站檢視 L02)
+  assert.match(top, /<a className="wb-link" href="\/settings\?tab=invoice" target="_blank" rel="noreferrer">\s*新增字軌\s*<\/a>/);
   assert.match(top, /\{!trackMissing && !noInvoice && peek\.state === "ok" && peek\.upcoming && \(\s*<div className="wb-warn ws-track-alert">下一期 \{peek\.upcoming\} 的字軌還沒設定<\/div>/);
   assert.ok(top.indexOf("ws-track-alert") > top.indexOf("</header>"));       // 在頁首下面、不是藏在選單裡
   // 跳號:要有那一項權限;跳完重新問下一張

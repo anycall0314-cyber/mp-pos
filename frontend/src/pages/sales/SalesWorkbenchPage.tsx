@@ -1954,7 +1954,7 @@ export function SalesWorkbenchPage() {
         {trackMissing && (
           <div className="wb-warn err ws-track-alert" role="alert">
             {peek.why || "這種發票沒有可用的字軌"},不能開發票。換上新發票後{" "}
-            <a className="wb-link" href="/settings" target="_blank" rel="noreferrer">
+            <a className="wb-link" href="/settings?tab=invoice" target="_blank" rel="noreferrer">
               新增字軌
             </a>{" "}
             <button type="button" className="wb-link" onClick={() => setPeekTick((n) => n + 1)}>
@@ -2584,7 +2584,7 @@ export function SalesWorkbenchPage() {
               {trackMissing && (
                 <div className="wb-warn err">
                   {peek.why || "這種發票沒有可用的字軌"},結帳會被擋。{" "}
-                  <a className="wb-link" href="/settings" target="_blank" rel="noreferrer">
+                  <a className="wb-link" href="/settings?tab=invoice" target="_blank" rel="noreferrer">
                     開系統設定
                   </a>{" "}
                   <button
