@@ -162,25 +162,18 @@ export function SalesReturnEntryPage() {
                   disabled={voidMutation.isPending}
                 />
               )}
-              {isNew && canReturn && (
-                <button
-                  className="btn primary"
-                  onClick={handleSubmit}
-                  disabled={create.isPending || !rd || !!blocked}
-                >
-                  {create.isPending ? "送出中" : "整張退"}
-                </button>
-              )}
             </>
           )
         }
       />
 
+      {/* 中間捲、最下面固定一條放退款額與「整張退」(全站檢視 V05:以前退款額在明細最下面,明細一長整頁捲不下去、看不到) */}
+      <div className="entry-body sr-body">
       {error && <Banner kind="error" message={error} />}
       {!canReturn && <Banner kind="error" message="這個帳號不能開立銷退單" />}
       {isNew && blocked && <Banner kind="error" message={blocked} />}
 
-      <div style={{ padding: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>
+      <div style={{ padding: "4px 0 12px", display: "flex", gap: 12, flexWrap: "wrap" }}>
         <div>
           <label style={labelStyle}>原銷貨單 *</label>
           {isNew ? (
@@ -210,48 +203,6 @@ export function SalesReturnEntryPage() {
               <label style={labelStyle}>來源</label>
               <div>{(isNew ? rd?.customer_name : sr?.customer_name) || "(直客)"}</div>
             </div>
-            <div>
-              <label style={labelStyle}>退回倉</label>
-              <div>{isNew ? rd?.warehouse_name : sr?.warehouse_name}</div>
-            </div>
-            <div>
-              <label style={labelStyle}>退款方式 *</label>
-              {isNew && rd && rd.payment_methods.length === 0 ? (
-                <div>—</div>
-              ) : isNew && rd ? (
-                <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-                  {rd.payment_methods.map((m) => {
-                    const pm = (paymentMethodsQ.data ?? []).find((x) => x.code === m);
-                    return (
-                      <option key={m} value={m}>
-                        {pm?.name ?? m}
-                      </option>
-                    );
-                  })}
-                </select>
-              ) : (
-                <div>
-                  {(paymentMethodsQ.data ?? []).find((x) => x.code === sr?.payment_method)?.name ??
-                    (sr?.payment_method || "—")}
-                </div>
-              )}
-            </div>
-            <div>
-              <label style={labelStyle}>作廢原發票</label>
-              {isNew && rd ? (
-                <label style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
-                  <input
-                    type="checkbox"
-                    checked={voidInvoice}
-                    onChange={(e) => setVoidInvoice(e.target.checked)}
-                    disabled={rd.invoice_voided}
-                  />
-                  {rd.invoice_voided ? "(原發票已標作廢)" : "退貨同時作廢"}
-                </label>
-              ) : (
-                <div>{sr?.void_original_invoice ? "是" : "否"}</div>
-              )}
-            </div>
             <div style={{ flex: 1 }}>
               <label style={labelStyle}>備註</label>
               {isNew ? (
@@ -265,7 +216,7 @@ export function SalesReturnEntryPage() {
       </div>
 
       {lines.length > 0 && (
-        <div style={{ padding: "0 16px" }}>
+        <div>
           <h3 className="pc-detail-title">退貨明細</h3>
           <table className="md-table-inner sr-lines">
             <thead>
@@ -293,13 +244,77 @@ export function SalesReturnEntryPage() {
             </tbody>
           </table>
 
-          <div style={{ marginTop: 12, display: "flex", gap: 24, justifyContent: "flex-end" }}>
-            <span>未稅 {money(isNew ? rd?.subtotal : sr?.subtotal)}</span>
-            <span>稅 {money(isNew ? rd?.tax_amount : sr?.tax_amount)}</span>
+        </div>
+      )}
+      </div>
+
+      {(isNew ? rd : sr) && (
+        <div className="entry-footer sr-footer">
+          <div className="entry-summary">
             <span>
-              退款額 <strong>${money(isNew ? rd?.total : sr?.total)}</strong>
+              退回<b>{isNew ? rd?.warehouse_name : sr?.warehouse_name}</b>
+            </span>
+            <span>
+              退款方式
+              {isNew && rd && rd.payment_methods.length > 0 ? (
+                <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} aria-label="退款方式">
+                  {rd.payment_methods.map((m) => {
+                    const pm = (paymentMethodsQ.data ?? []).find((x) => x.code === m);
+                    return (
+                      <option key={m} value={m}>
+                        {pm?.name ?? m}
+                      </option>
+                    );
+                  })}
+                </select>
+              ) : (
+                <b>
+                  {isNew
+                    ? "—"
+                    : (paymentMethodsQ.data ?? []).find((x) => x.code === sr?.payment_method)?.name ?? (sr?.payment_method || "—")}
+                </b>
+              )}
+            </span>
+            <span>
+              {isNew && rd ? (
+                <label className="sr-void-inv">
+                  <input
+                    type="checkbox"
+                    checked={voidInvoice}
+                    onChange={(e) => setVoidInvoice(e.target.checked)}
+                    disabled={rd.invoice_voided}
+                  />
+                  {rd.invoice_voided ? "原發票已作廢" : "作廢原發票"}
+                </label>
+              ) : (
+                <>
+                  作廢原發票<b>{sr?.void_original_invoice ? "是" : "否"}</b>
+                </>
+              )}
+            </span>
+            <span>
+              未稅<b>{money(isNew ? rd?.subtotal : sr?.subtotal)}</b>
+            </span>
+            <span>
+              稅<b>{money(isNew ? rd?.tax_amount : sr?.tax_amount)}</b>
+            </span>
+            <span className="grand">
+              退款額<b>${money(isNew ? rd?.total : sr?.total)}</b>
             </span>
           </div>
+          {isNew && error && <span className="sr-footer-err">{error}</span>}
+          {/* 整張退按兩下:第一下變成「確認退款 $金額」,4 秒內再按才退(紅隊:以前按一下就退、退款額還在看不到的地方) */}
+          {isNew && canReturn && rd && (
+            <ArmButton
+              // 換原單、改退款方式或作廢原發票就重來:第一下是對「這一張、這樣退」按的(Codex P0:換單後第二下會退掉另一張)
+              key={`${originalSOId}-${paymentMethod}-${voidInvoice}`}
+              label="整張退"
+              armedLabel={`確認退款 $${money(rd.total)}`}
+              className="btn primary checkout-cta"
+              onConfirm={handleSubmit}
+              disabled={create.isPending || !!blocked}
+            />
+          )}
         </div>
       )}
     </div>

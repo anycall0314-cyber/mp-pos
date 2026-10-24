@@ -270,7 +270,15 @@ export function SecondhandPersonalEntry() {
     }
   }
 
+  // 收購金額、付款方式、IMEI / SN 缺一個,儲存鍵不能按(紅隊:錯誤寫在那一條上,不要只跳在最上面);其他的照舊按了才檢查
+  const amountOk = !!acquisitionPrice && Number(acquisitionPrice) > 0;
+  const readyToSave = amountOk && !!paymentMethod && !!(imei.trim() || sn.trim());
+  const footerProblem = error;
+  const expectedSale = roundInt(customPrice || productOption?.payload?.list_price);
+  const overSale = amountOk && expectedSale > 0 && roundInt(acquisitionPrice) > expectedSale;
+
   return (
+    <>
     <div className="entry-body">
       {success && <Banner kind="success" message={success} />}
       {savedSerial !== null && (
@@ -284,8 +292,6 @@ export function SecondhandPersonalEntry() {
           </button>
         </div>
       )}
-      {error && <Banner kind="error" message={error} />}
-
       <div className="entry-header" style={{ marginBottom: 12 }}>
         <div className="field-row-3">
           <Field label="收購來源會員 (電話)" required>
@@ -443,13 +449,6 @@ export function SecondhandPersonalEntry() {
               placeholder="照主檔"
             />
           </Field>
-          <Field label="收購金額(付給會員)" required>
-            <MoneyInput
-              value={acquisitionPrice}
-              onChange={setAcquisitionPrice}
-              placeholder="例:20000"
-            />
-          </Field>
         </div>
         {tradeOn && trade && (
           <div className="field-row-3">
@@ -474,18 +473,6 @@ export function SecondhandPersonalEntry() {
           </div>
         )}
         <div className="field-row-3">
-          <Field label="付款方式" required>
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-            >
-              {paymentMethods.map((m) => (
-                <option key={m.code} value={m.code}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-          </Field>
           <Field label="特殊狀況備註">
             <input
               value={conditionNote}
@@ -504,11 +491,30 @@ export function SecondhandPersonalEntry() {
         </div>
       </div>
 
-      <div style={{ marginTop: 12 }}>
+      </div>
+
+      {/* 最下面固定一條:收購金額、付款方式、儲存收購(全站檢視 V05;以前存檔鈕在表單最後面、要捲到底)。預計售價不放這裡(螢幕朝著客人) */}
+      <div className="entry-footer sh-footer">
+        {footerProblem && <span className="sr-footer-err">{footerProblem}</span>}
+        {!footerProblem && overSale && <span className="sh-warn">收購價高於預計售價</span>}
+        <label className="sh-footer-field">
+          收購金額
+          <MoneyInput value={acquisitionPrice} onChange={setAcquisitionPrice} placeholder="付給會員" aria-label="收購金額" />
+        </label>
+        <label className="sh-footer-field">
+          付款方式
+          <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} aria-label="付款方式">
+            {paymentMethods.map((m) => (
+              <option key={m.code} value={m.code}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <button
-          className="btn primary"
+          className="btn primary checkout-cta"
           onClick={submit}
-          disabled={acquire.isPending}
+          disabled={acquire.isPending || !readyToSave}
         >
           {acquire.isPending ? "儲存中…" : "儲存收購"}
         </button>
@@ -562,6 +568,6 @@ export function SecondhandPersonalEntry() {
           />
         </Field>
       </Drawer>
-    </div>
+    </>
   );
 }

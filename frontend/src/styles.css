@@ -1358,6 +1358,17 @@ button { font-family: inherit; }
 .entry-summary > span { color: var(--text-dim); font-size: var(--font-body); }
 .entry-summary b { color: var(--text); font-weight: 600; margin-left: 4px; font-variant-numeric: tabular-nums; }
 .entry-summary > span.grand b { font-size: var(--font-total); line-height: 1.2857; font-weight: 700; margin-left: 8px; }
+/* 銷退最下面那一條(全站檢視 V05):退回哪裡、退款方式、作廢原發票、金額、整張退 */
+.sr-body { padding-top: 8px; }
+.sr-footer { flex-wrap: wrap; row-gap: 6px; }
+.sr-footer select { margin-left: 6px; }
+.sr-void-inv { display: inline-flex; gap: 4px; align-items: center; color: var(--text); }
+.sr-footer-err { color: var(--danger-text); font-size: var(--font-body); }
+/* 個人收購最下面那一條(全站檢視 V05):收購金額、付款方式、儲存收購 */
+.sh-footer { flex-wrap: wrap; row-gap: 6px; }
+.sh-footer-field { display: inline-flex; align-items: center; gap: 6px; color: var(--text-dim); }
+.sh-footer-field input { width: 140px; }
+.sh-warn { color: var(--warn-text-orange); font-size: var(--font-body); }
 
 /* 右下角放大版「確認結帳」CTA,跟右上角結帳按鈕並存 */
 .checkout-cta {
