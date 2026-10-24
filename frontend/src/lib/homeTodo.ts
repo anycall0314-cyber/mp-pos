@@ -132,3 +132,16 @@ export function pickStore(raw: string | null, ids: number[]): number | null {
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 && ids.includes(n) ? n : null;
 }
+
+/**
+ * 首頁每一區讀資料的狀態(全站檢視 R08):第一次就沒讀到(`failed`,給重試)、讀到過之後重抓失敗(`stale`,
+ * 照樣顯示上一次讀到的、標「更新失敗」與那一份是幾點的)、讀到了(`ok`;真的是空的才寫「沒有…」)。
+ * 讀不到不能寫成「沒有回溫的商品」「今天還沒有交易」(像真的沒有)。
+ */
+export type LoadState = "loading" | "failed" | "stale" | "ok";
+
+export function loadState(q: { isLoading: boolean; isError: boolean; hasData: boolean }): LoadState {
+  if (q.hasData) return q.isError ? "stale" : "ok";
+  if (q.isError) return "failed";
+  return "loading";
+}

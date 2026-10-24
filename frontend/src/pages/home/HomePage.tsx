@@ -6,6 +6,7 @@ import { useCurrentUser } from "@/auth/AuthContext";
 import {
   type HomeGroup,
   HOME_STORE_KEY,
+  loadState,
   noticeGroups,
   pickStore,
   quickActions,
@@ -59,8 +60,11 @@ export function HomePage() {
     }
   }
 
-  const loading = summary.isLoading || !ready;
-  const failed = summary.isError && !summary.data;
+  // 第一次沒讀到 / 讀到過之後重抓失敗 / 讀到了 分開講(全站檢視 R08;規則在 lib/homeTodo.ts::loadState)
+  const sumState = ready ? loadState({ isLoading: summary.isLoading, isError: summary.isError, hasData: !!summary.data }) : "loading";
+  const loading = sumState === "loading";
+  const failed = sumState === "failed";
+  const trendState = loadState({ isLoading: trending.isLoading, isError: trending.isError, hasData: !!trending.data });
 
   return (
     <div className="page">
@@ -97,6 +101,14 @@ export function HomePage() {
       </header>
 
       <div className="hp-body">
+        {sumState === "stale" && (
+          <div className="hp-stale">
+            更新失敗,顯示 {fmtTime(new Date(summary.dataUpdatedAt))} 的資料{" "}
+            <button type="button" className="btn" onClick={() => summary.refetch()} disabled={summary.isFetching}>
+              重試
+            </button>
+          </div>
+        )}
         <nav className="hp-actions" aria-label="櫃檯動作">
           {quickActions(who).map((a) => (
             <NavLink key={a.to} to={a.to} className="hp-action">
@@ -148,6 +160,7 @@ export function HomePage() {
             </div>
             <div className="hp-panel-body">
               {loading && <div className="hp-panel-empty">載入中…</div>}
+              {failed && <RetryLine retry={() => summary.refetch()} />}
               {!loading && !failed && recent.length === 0 && (
                 <div className="hp-panel-empty">今天還沒有交易</div>
               )}
@@ -185,20 +198,18 @@ export function HomePage() {
             <div className="hp-panel-head">
               <div className="hp-panel-title">
                 銷量回溫
-                <span className="hp-panel-meta">近 14 天比近 90 天 · 全公司</span>
+                <span className="hp-panel-meta">近 14 天比近 90 天 · 全公司{trendState === "stale" ? " · 更新失敗" : ""}</span>
               </div>
               <NavLink to="/inventory" className="hp-panel-link">
                 查看庫存 →
               </NavLink>
             </div>
             <div className="hp-panel-body">
-              {trending.isLoading && (
-                <div className="hp-panel-empty">載入中…</div>
+              {trendState === "loading" && <div className="hp-panel-empty">載入中…</div>}
+              {trendState === "failed" && <RetryLine retry={() => trending.refetch()} />}
+              {trending.data && (trending.data.trending_up?.length ?? 0) === 0 && (
+                <div className="hp-panel-empty">沒有回溫的商品</div>
               )}
-              {!trending.isLoading &&
-                (trending.data?.trending_up?.length ?? 0) === 0 && (
-                  <div className="hp-panel-empty">沒有回溫的商品</div>
-                )}
               {trending.data?.trending_up?.map((it) => (
                 <TrendingRow key={`up-${it.id}`} item={it} />
               ))}
@@ -209,20 +220,18 @@ export function HomePage() {
             <div className="hp-panel-head">
               <div className="hp-panel-title">
                 銷量退燒
-                <span className="hp-panel-meta">近 14 天比近 90 天 · 全公司</span>
+                <span className="hp-panel-meta">近 14 天比近 90 天 · 全公司{trendState === "stale" ? " · 更新失敗" : ""}</span>
               </div>
               <NavLink to="/inventory" className="hp-panel-link">
                 查看庫存 →
               </NavLink>
             </div>
             <div className="hp-panel-body">
-              {trending.isLoading && (
-                <div className="hp-panel-empty">載入中…</div>
+              {trendState === "loading" && <div className="hp-panel-empty">載入中…</div>}
+              {trendState === "failed" && <RetryLine retry={() => trending.refetch()} />}
+              {trending.data && (trending.data.trending_down?.length ?? 0) === 0 && (
+                <div className="hp-panel-empty">沒有退燒的商品</div>
               )}
-              {!trending.isLoading &&
-                (trending.data?.trending_down?.length ?? 0) === 0 && (
-                  <div className="hp-panel-empty">沒有退燒的商品</div>
-                )}
               {trending.data?.trending_down?.map((it) => (
                 <TrendingRow key={`dn-${it.id}`} item={it} />
               ))}
@@ -257,15 +266,7 @@ function GroupList({
   retry: () => void;
 }) {
   if (loading) return <div className="hp-panel-empty">載入中…</div>;
-  if (failed)
-    return (
-      <div className="hp-panel-empty">
-        沒有讀到{" "}
-        <button type="button" className="btn" onClick={retry}>
-          重試
-        </button>
-      </div>
-    );
+  if (failed) return <RetryLine retry={retry} />;
   if (groups.length === 0) return <div className="hp-panel-empty">{empty}</div>;
   return (
     <div className="hp-panel-body">
@@ -283,6 +284,18 @@ function GroupList({
           ))}
         </div>
       ))}
+    </div>
+  );
+}
+
+/** 第一次就沒讀到:不寫成「沒有…」,給一顆重試 */
+function RetryLine({ retry }: { retry: () => void }) {
+  return (
+    <div className="hp-panel-empty">
+      沒有讀到{" "}
+      <button type="button" className="btn" onClick={retry}>
+        重試
+      </button>
     </div>
   );
 }

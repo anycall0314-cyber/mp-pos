@@ -1,8 +1,9 @@
 // 今日總覽的快捷與待辦(2026-10-23,UI 改善計劃 6.1)。跑法:npm test。
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { noticeGroups, pickStore, quickActions, QUICK_ACTIONS, todoGroups } from "./homeTodo.ts";
+import { loadState, noticeGroups, pickStore, quickActions, QUICK_ACTIONS, todoGroups } from "./homeTodo.ts";
 
 const clerk = { role: "tenant_user", abilities: {} };
 const boss = { role: "tenant_admin", abilities: {} };
@@ -72,4 +73,23 @@ test("首頁選的門市:看不懂、已經沒有的當成全公司", () => {
   assert.equal(pickStore("abc", [1, 3]), null);
   assert.equal(pickStore(null, [1, 3]), null);
   assert.equal(pickStore("1.5", [1, 3]), null);
+});
+
+// 全站檢視 R08:第一次沒讀到、讀到過之後重抓失敗、真的是空的,分開講
+test("每一區讀資料的狀態:沒讀到給重試、重抓失敗照樣顯示上一次的並標出來、讀到了才講有沒有", () => {
+  assert.equal(loadState({ isLoading: true, isError: false, hasData: false }), "loading");
+  assert.equal(loadState({ isLoading: false, isError: true, hasData: false }), "failed");
+  assert.equal(loadState({ isLoading: false, isError: true, hasData: true }), "stale");
+  assert.equal(loadState({ isLoading: false, isError: false, hasData: true }), "ok");
+  const page = readFileSync(new URL("../pages/home/HomePage.tsx", import.meta.url), "utf8");
+  // 趨勢讀不到不能寫「沒有回溫 / 退燒的商品」:那兩句只在讀到了、真的是空的時候
+  assert.doesNotMatch(page, /!trending\.isLoading &&/);
+  assert.equal(page.match(/\{trendState === "failed" && <RetryLine retry=\{\(\) => trending\.refetch\(\)\} \/>\}/g)?.length, 2);
+  assert.match(page, /\{trending\.data && \(trending\.data\.trending_up\?\.length \?\? 0\) === 0 && \(/);
+  assert.match(page, /\{trending\.data && \(trending\.data\.trending_down\?\.length \?\? 0\) === 0 && \(/);
+  // 最近交易沒讀到也給重試(以前什麼都不寫)
+  assert.match(page, /\{failed && <RetryLine retry=\{\(\) => summary\.refetch\(\)\} \/>\}/);
+  // 重抓失敗:最上面一句 + 那一份是幾點的 + 重試
+  assert.match(page, /\{sumState === "stale" && \(\s*<div className="hp-stale">\s*更新失敗,顯示 \{fmtTime\(new Date\(summary\.dataUpdatedAt\)\)\} 的資料/);
+  assert.doesNotMatch(page, /系統正常/);
 });
