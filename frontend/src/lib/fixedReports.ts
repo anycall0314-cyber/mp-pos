@@ -114,6 +114,46 @@ export function rangeReady(range: { from: string; to: string }): boolean {
 }
 
 /**
+ * 結果上面那一行:這一份是哪段期間、哪一家門市、(開通統計)看哪一種日期 —— 照伺服器回的那一份寫,
+ * 不照框裡寫的(框裡改了還沒查的時候,兩個會不一樣;全站檢視 R05)。
+ */
+export function resultScope(result: {
+  applied: { period: { from: string; to: string }; filters: { dimension: string; values: { label: string }[] }[] };
+  dates?: { key: string; label: string }[];
+  date?: string;
+}): string {
+  const stores = result.applied.filters.find((f) => f.dimension === "warehouse")?.values.map((v) => v.label) ?? [];
+  const parts = [`${result.applied.period.from} ~ ${result.applied.period.to}`, stores.length ? stores.join("、") : "全部門市"];
+  if (result.dates && result.dates.length > 1) {
+    const basis = result.dates.find((d) => d.key === result.date) ?? result.dates[0];
+    parts.push(basis.label);
+  }
+  return parts.join(" · ");
+}
+
+/** 報表上面那一排框裡現在寫的(還沒按查詢的也算) */
+export interface RangeDraft {
+  from: string;
+  to: string;
+  warehouse: number | "";
+  warehouseName: string;
+}
+
+/** 框裡的起訖日、門市跟畫面上那一份結果用的不一樣 = 改了還沒查(旁邊寫「還沒查詢」;全站檢視 R05) */
+export function draftPending(draft: RangeDraft, applied: ReportRange): boolean {
+  return draft.from !== applied.from || draft.to !== applied.to || draft.warehouse !== (applied.warehouse ?? "");
+}
+
+/**
+ * 分組、日期基準一選就查:連框裡改了還沒查的起訖日、門市一起查,結果跟框裡寫的永遠是同一份(全站檢視 R05:
+ * 以前只換分組、照舊的日期查,框裡寫 9/1 結果卻是 10/1)。框裡的起訖日不合法就只換那一個下拉,框裡的留著、旁邊照樣寫「還沒查詢」。
+ */
+export function switchApplied(applied: ReportRange, draft: RangeDraft, change: { by?: string; date?: string }): ReportRange {
+  if (!rangeReady(draft)) return { ...applied, ...change };
+  return { ...applied, from: draft.from, to: draft.to, warehouse: draft.warehouse, warehouseName: draft.warehouseName, ...change };
+}
+
+/**
  * 一格怎麼顯示:金額整數元(全站同一條規則)、數量照原樣、沒有值(方案當時沒設定公司佣金)寫「未設定」
  * —— 不能寫成 0:0 是「設定了 0 元」,兩個意思不一樣。
  */

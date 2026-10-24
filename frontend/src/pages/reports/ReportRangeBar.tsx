@@ -3,11 +3,12 @@ import { useState } from "react";
 import { useDefaultWarehouse } from "@/auth/AuthContext";
 import { PeriodQuick } from "@/components/PeriodQuick";
 import { StoreSelect } from "@/components/StoreSelect";
-import { rangeReady, type ReportRange } from "@/lib/fixedReports";
+import { draftPending, rangeReady, switchApplied, type ReportRange } from "@/lib/fixedReports";
 
 /**
  * 固定報表上面那一排:起日、迄日、快速鈕(今天、昨天、本月、上月;按了直接查)、門市(一般下拉)、(開通統計)期間看哪一種日期、
- * (商品排行)照什麼分。改起訖日、門市按「查詢」才送;兩個下拉一選就換(全站檢視 E10 照銷貨日報統一)。
+ * (商品排行)照什麼分。改起訖日、門市按「查詢」才送;兩個下拉一選就查(全站檢視 E10 照銷貨日報統一),
+ * 連框裡改了還沒查的起訖日、門市一起查;框裡改了還沒查,查詢鍵旁邊寫「還沒查詢」(全站檢視 R05)。
  * 鎖在門市的帳號門市那一格是自己那一家、不能改 —— 伺服器本來就只算那一家。
  */
 export function ReportRangeBar({
@@ -29,6 +30,9 @@ export function ReportRangeBar({
   const [warehouse, setWarehouse] = useState<number | "">(applied.warehouse ?? "");
   const [warehouseName, setWarehouseName] = useState(applied.warehouseName ?? "");
   const ready = rangeReady({ from, to });
+  const shownName = store.locked ? store.name : warehouse === "" ? "" : warehouseName;
+  const draft = { from, to, warehouse, warehouseName: shownName };
+  const pending = draftPending(draft, applied);
 
   /** 送出(快速鈕按了直接查;起訖日在這裡帶進來) */
   function submit(range: { from: string; to: string }) {
@@ -36,7 +40,7 @@ export function ReportRangeBar({
       ...applied,
       ...range,
       warehouse,
-      warehouseName: store.locked ? store.name : warehouse === "" ? "" : warehouseName,
+      warehouseName: shownName,
     });
   }
 
@@ -69,7 +73,7 @@ export function ReportRangeBar({
           日期
           <select
             value={applied.date || dates[0].key}
-            onChange={(e) => onApply({ ...applied, date: e.target.value })}
+            onChange={(e) => onApply(switchApplied(applied, draft, { date: e.target.value }))}
           >
             {dates.map((d) => (
               <option key={d.key} value={d.key}>
@@ -84,7 +88,7 @@ export function ReportRangeBar({
           分組
           <select
             value={applied.by || by[0].key}
-            onChange={(e) => onApply({ ...applied, by: e.target.value })}
+            onChange={(e) => onApply(switchApplied(applied, draft, { by: e.target.value }))}
           >
             {by.map((b) => (
               <option key={b.key} value={b.key}>
@@ -104,6 +108,7 @@ export function ReportRangeBar({
       <button className="btn primary" type="button" disabled={!ready} onClick={() => submit({ from, to })}>
         查詢
       </button>
+      {pending && <span className="range-pending">還沒查詢</span>}
     </div>
   );
 }

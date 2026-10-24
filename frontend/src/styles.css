@@ -1291,6 +1291,11 @@ button { font-family: inherit; }
   font-size: var(--font-body);
   flex-wrap: wrap;
 }
+/* 報表那一排:框裡改了還沒按查詢(全站檢視 R05;pages/reports/ReportRangeBar.tsx) */
+.list-filterbar .range-pending {
+  color: var(--warn-text-orange);
+  white-space: nowrap;
+}
 .list-filterbar label {
   display: inline-flex;
   align-items: center;

@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
-  FIXED_REPORTS, cellText, exportTitle, isNegative, localDay, monthStart, quickRange, rangeQuery, rangeReady, shiftDay,
+  FIXED_REPORTS, cellText, draftPending, exportTitle, isNegative, localDay, monthStart, quickRange, rangeQuery, rangeReady,
+  resultScope, shiftDay, switchApplied,
 } from "./fixedReports.ts";
 
 test("今天與月初用的是這台電腦的日期,不是世界時間", () => {
@@ -116,7 +117,8 @@ test("期間可以改看別的日期(開通統計:上線日):選了才送;下拉
   const bar = readFileSync(new URL("../pages/reports/ReportRangeBar.tsx", import.meta.url), "utf8");
   assert.match(bar, /dates && dates\.length > 1 && \(/);                              // 只有一種就不出下拉
   assert.match(bar, /value=\{applied\.date \|\| dates\[0\]\.key\}/);
-  assert.match(bar, /onApply\(\{ \.\.\.applied, date: e\.target\.value \}\)/);
+  // 選了就查;框裡改了還沒查的起訖日、門市一起查(全站檢視 R05)
+  assert.match(bar, /onApply\(switchApplied\(applied, draft, \{ date: e\.target\.value \}\)\)/);
   for (const text of [page, bar]) {
     const code = text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
     for (const word of ["開單日", "上線日"]) assert.ok(!code.includes(word), `畫面寫死了「${word}」`);
@@ -141,3 +143,53 @@ test("前一天、後一天", () => {
   assert.equal(shiftDay("2025-12-31", 1), "2026-01-01");
 });
 
+
+// 全站檢視 R05:框裡改了還沒查、切分組 / 日期基準,結果與框裡寫的要對得上
+const APPLIED = { from: "2026-10-01", to: "2026-10-24", warehouse: "", warehouseName: "", by: "product" };
+const draftOf = (over = {}) => ({ from: "2026-10-01", to: "2026-10-24", warehouse: "", warehouseName: "", ...over });
+
+test("框裡的起訖日、門市跟結果不一樣才算還沒查;分組不算(一選就查)", () => {
+  assert.equal(draftPending(draftOf(), APPLIED), false);
+  assert.equal(draftPending(draftOf({ from: "2026-09-01" }), APPLIED), true);
+  assert.equal(draftPending(draftOf({ to: "2026-10-23" }), APPLIED), true);
+  assert.equal(draftPending(draftOf({ warehouse: 2, warehouseName: "民生店" }), APPLIED), true);
+  assert.equal(draftPending(draftOf(), { from: "2026-10-01", to: "2026-10-24" }), false); // 沒有門市 = 全部
+});
+
+test("切分組 / 日期基準:連框裡改了還沒查的起訖日、門市一起查;起訖日不合法就只換那一個", () => {
+  const changed = switchApplied(APPLIED, draftOf({ from: "2026-09-01", warehouse: 1, warehouseName: "湳雅店" }), { by: "brand" });
+  assert.deepEqual(changed, { from: "2026-09-01", to: "2026-10-24", warehouse: 1, warehouseName: "湳雅店", by: "brand" });
+  assert.equal(draftPending(draftOf({ from: "2026-09-01", warehouse: 1, warehouseName: "湳雅店" }), changed), false);
+  const basis = switchApplied(APPLIED, draftOf({ to: "2026-10-20" }), { date: "start" });
+  assert.equal(basis.to, "2026-10-20");
+  assert.equal(basis.date, "start");
+  assert.equal(basis.by, "product");
+  // 起日晚於迄日:只換分組,期間照舊(框裡的留著,旁邊照樣寫還沒查詢)
+  const bad = switchApplied(APPLIED, draftOf({ from: "2026-11-01" }), { by: "category" });
+  assert.deepEqual(bad, { ...APPLIED, by: "category" });
+  assert.equal(draftPending(draftOf({ from: "2026-11-01" }), bad), true);
+});
+
+test("結果上面那一行照伺服器回的寫:期間、門市(沒選 = 全部門市)、有兩種日期才寫看哪一種", () => {
+  const period = { from: "2026-09-01", to: "2026-09-30" };
+  assert.equal(resultScope({ applied: { period, filters: [] } }), "2026-09-01 ~ 2026-09-30 · 全部門市");
+  assert.equal(
+    resultScope({ applied: { period, filters: [{ dimension: "warehouse", values: [{ label: "湳雅店" }] }] } }),
+    "2026-09-01 ~ 2026-09-30 · 湳雅店",
+  );
+  const dates = [{ key: "doc", label: "開單日" }, { key: "start", label: "上線日" }];
+  assert.equal(resultScope({ applied: { period, filters: [] }, dates, date: "start" }), "2026-09-01 ~ 2026-09-30 · 全部門市 · 上線日");
+  assert.equal(resultScope({ applied: { period, filters: [] }, dates }), "2026-09-01 ~ 2026-09-30 · 全部門市 · 開單日");
+});
+
+test("報表那一排:兩個下拉都走 switchApplied、改了沒查寫「還沒查詢」;固定報表結果那一行用 resultScope", () => {
+  const bar = readFileSync(new URL("../pages/reports/ReportRangeBar.tsx", import.meta.url), "utf8");
+  assert.match(bar, /onApply\(switchApplied\(applied, draft, \{ date: e\.target\.value \}\)\)/);
+  assert.match(bar, /onApply\(switchApplied\(applied, draft, \{ by: e\.target\.value \}\)\)/);
+  assert.doesNotMatch(bar, /onApply\(\{ \.\.\.applied, (by|date):/);
+  assert.match(bar, /\{pending && <span className="range-pending">還沒查詢<\/span>\}/);
+  const page = readFileSync(new URL("../pages/reports/FixedReportPage.tsx", import.meta.url), "utf8");
+  assert.match(page, /\{resultScope\(data\)\}/);
+  // 匯出照畫面那一份(已套用的),不是框裡還沒查的
+  assert.match(page, /fetchFixedReportAll\(report\.key, applied\)/);
+});

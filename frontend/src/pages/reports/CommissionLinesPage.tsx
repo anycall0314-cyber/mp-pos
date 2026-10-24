@@ -69,7 +69,8 @@ export function CommissionLinesPage() {
       {data && (
         <>
           <div className="ex-period">
-            {data.applied.from} ~ {data.applied.to}　已扣銷退
+            {/* 這一份是哪段期間、哪一家(data 跟 applied 是同一份查詢;全站檢視 R05) */}
+            {data.applied.from} ~ {data.applied.to} · {lock.locked ? lock.name : applied.warehouseName || "全部門市"}　已扣銷退
           </div>
           <div className="sd-summary">
             <div className="sd-summary-card">

@@ -10,6 +10,7 @@ import {
   isNegative,
   localDay,
   monthStart,
+  resultScope,
   type FixedReportPage as PageInfo,
   type ReportRange,
 } from "@/lib/fixedReports";
@@ -80,7 +81,7 @@ export function FixedReportPage({ report }: { report: PageInfo }) {
       {data && (
         <>
           <div className="ex-period">
-            {data.applied.period.from} ~ {data.applied.period.to}
+            {resultScope(data)}
             {data.note ? `　${data.note}` : ""}
             {data.pending ? `　${data.pending}` : ""}
           </div>
