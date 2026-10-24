@@ -28,6 +28,14 @@ export function MoreMenu({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
 
+  // 裡面的動作做完收起來:游標在裡面的就回到「更多」(裡面那顆不見了,游標不會掉到頁面最上面;
+  // 那個動作接著打開的視窗關掉時也回得到這裡,全站控制項 MC-03)
+  function closeFromInside() {
+    const inside = !!boxRef.current?.contains(document.activeElement);
+    setOpen(false);
+    if (inside) triggerRef.current?.focus();
+  }
+
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
@@ -63,7 +71,7 @@ export function MoreMenu({
       </button>
       {open && (
         <div className="ws-more-menu" id={panelId}>
-          {children(() => setOpen(false))}
+          {children(closeFromInside)}
         </div>
       )}
     </div>

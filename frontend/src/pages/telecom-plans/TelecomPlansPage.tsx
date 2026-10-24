@@ -23,6 +23,11 @@ import { BulkAddTelecomPlansModal } from "./BulkAddTelecomPlansModal";
 import { TelecomPlanForm } from "./TelecomPlanForm";
 import { errorText } from "@/lib/errorText";
 
+/** 列裡控制項的名字用:同名方案不少,帶電信商與月租才分得出來(全站控制項 MC-05) */
+function planName(r: TelecomPlan): string {
+  return `${r.carrier_name} ${r.name || "未命名方案"} ${money(r.monthly_fee)}`;
+}
+
 export function TelecomPlansPage() {
   // 刪除 / 套用這類按錯代價大的:再按一次才做(全站檢視 G1:不跳瀏覽器的確認框)
   const arm = useArm();
@@ -249,12 +254,14 @@ export function TelecomPlansPage() {
             onChange={(e) => toggleAllFiltered(e.target.checked)}
             onClick={(e) => e.stopPropagation()}
             title="勾選此頁全部"
+            aria-label="勾選此頁全部方案"
           />
         ),
         render: (r) => (
           <input
             type="checkbox"
             checked={selectedIds.has(r.id)}
+            aria-label={`選取 ${planName(r)}`}
             onChange={() => toggleOne(r.id)}
             onClick={(e) => e.stopPropagation()}
           />
@@ -296,6 +303,7 @@ export function TelecomPlansPage() {
               min="0"
               className="num-input"
               value={value}
+              aria-label={`${planName(r)} 的業務員佣金`}
               onChange={(v) =>
                 setEditCommission((s) => ({ ...s, [r.id]: v }))
               }
@@ -331,6 +339,7 @@ export function TelecomPlansPage() {
               className="num-input"
               value={editing ?? original}
               placeholder="未設定"
+              aria-label={`${planName(r)} 的公司佣金`}
               onChange={(v) => setEditCompany((s) => ({ ...s, [r.id]: v }))}
               onBlur={() => commitCompany(r)}
               onKeyDown={(e) => {
@@ -356,6 +365,7 @@ export function TelecomPlansPage() {
           <input
             type="checkbox"
             checked={r.is_active}
+            aria-label={`${planName(r)} 啟用`}
             onChange={(e) => commitActive(r, e.target.checked)}
             onClick={(e) => e.stopPropagation()}
             disabled={savingIds.has(r.id)}

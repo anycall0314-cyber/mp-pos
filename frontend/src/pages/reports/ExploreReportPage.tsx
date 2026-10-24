@@ -27,6 +27,7 @@ import { Banner, errorMessageOf } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
 import { recapParts, sameQuery } from "@/lib/exploreRecap";
 import { intStr, money } from "@/lib/money";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 /**
  * 報表 → 自由組合
@@ -798,6 +799,8 @@ function FilterModal({
     ...(options ?? []).filter((o) => !isPicked(o)),
   ];
 
+  // 名字、Tab 不跑到背後、關掉回到原按鈕(全站控制項 MC-03)
+  const dlg = useDialogFocus(true);
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
@@ -805,8 +808,12 @@ function FilterModal({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={dlg.titleId}
+        ref={dlg.ref}
+        tabIndex={-1}
+        onKeyDown={dlg.onKeyDown}
       >
-        <div className="modal-title">{label}</div>
+        <div className="modal-title" id={dlg.titleId}>{label}</div>
         {error && <Banner kind="error" message={errorMessageOf(error)} />}
         <div className="modal-body">
           {searchable && (
@@ -868,6 +875,8 @@ function SaveModal({
     }
   }
 
+  // 名字、Tab 不跑到背後、關掉回到原按鈕(全站控制項 MC-03)
+  const dlg = useDialogFocus(true);
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
@@ -875,8 +884,12 @@ function SaveModal({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={dlg.titleId}
+        ref={dlg.ref}
+        tabIndex={-1}
+        onKeyDown={dlg.onKeyDown}
       >
-        <div className="modal-title">{editing && !asNew ? "更新我的報表" : "存成我的報表"}</div>
+        <div className="modal-title" id={dlg.titleId}>{editing && !asNew ? "更新我的報表" : "存成我的報表"}</div>
         {error && <Banner kind="error" message={error} />}
         <div className="modal-body">
           <input

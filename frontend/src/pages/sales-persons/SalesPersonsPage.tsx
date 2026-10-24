@@ -8,6 +8,7 @@ import { Toolbar } from "@/components/Toolbar";
 import { errorText } from "@/lib/errorText";
 import { useDraftForm } from "@/hooks/useDraftForm";
 import { LEAVE_TEXT } from "@/lib/draftGuard";
+import { useDlLabels } from "@/hooks/useDlLabels";
 
 type Selection = { kind: "person"; id: number } | { kind: "new" } | null;
 
@@ -38,6 +39,8 @@ function toForm(s: SalesPerson): FormState {
 }
 
 export function SalesPersonsPage() {
+  // 編輯表單的欄名綁到輸入框(讀螢幕、點欄名進那一格;全站控制項 MC-05)
+  const dlRef = useDlLabels();
   const result = useSalesPersons();
   const save = useSaveSalesPerson();
 
@@ -220,7 +223,7 @@ export function SalesPersonsPage() {
               </h3>
               {error && <Banner kind="error" message={error} />}
               {savedFlash && <Banner kind="success" message="已儲存" />}
-              <dl>
+              <dl ref={dlRef}>
                 <dt>
                   代號 <span style={{ color: "var(--danger-text)" }}>*</span>
                 </dt>

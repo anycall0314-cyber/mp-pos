@@ -17,6 +17,7 @@ import { DraftBanner } from "@/components/DraftBanner";
 import { useModalDraft } from "@/hooks/useModalDraft";
 import { MoneyInput } from "@/components/MoneyInput";
 import { errorText } from "@/lib/errorText";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 const DRAFT_KEY = "modal-draft:bulk-create-parts";
 
@@ -205,6 +206,8 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
     selectedKeys.size * (selectedTemplate?.items.length ?? 0);
   const itemsCount = selectedTemplate?.items.length ?? 0;
 
+  // 名字、打開時游標進來、Tab 不跑到背後、關掉回到原按鈕(全站控制項 MC-03)
+  const dlg = useDialogFocus(open);
   if (!open) return null;
 
   return (
@@ -212,8 +215,14 @@ export function BulkCreatePartsModal({ open, onClose }: Props) {
       <div
         className="modal-card bcp-modal"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={dlg.titleId}
+        ref={dlg.ref}
+        tabIndex={-1}
+        onKeyDown={dlg.onKeyDown}
       >
-        <div className="modal-title">
+        <div className="modal-title" id={dlg.titleId}>
           零件批次建立 · 第 {step}/4 步
         </div>
         <div className="modal-body bcp-body">

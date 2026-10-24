@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useRepairHistoryByPhone } from "@/api/hooks";
 import type { RepairHistoryItem } from "@/api/types";
 import { IconButton } from "@/components/ui";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 interface Props {
   open: boolean;
@@ -23,14 +24,22 @@ export function RepairHistoryModal({ open, phone, onClose, onPick }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  // 名字、打開時游標進來、Tab 不跑到背後、關掉回到原按鈕(全站控制項 MC-03)
+  const dlg = useDialogFocus(open);
   if (!open) return null;
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal-card rh-modal"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={dlg.titleId}
+        ref={dlg.ref}
+        tabIndex={-1}
+        onKeyDown={dlg.onKeyDown}
       >
-        <div className="modal-title">
+        <div className="modal-title" id={dlg.titleId}>
           歷史維修紀錄 · 電話 {phone || "(未填)"}
           <IconButton className="rh-close" label="關閉維修歷史" onClick={onClose}>
             ×

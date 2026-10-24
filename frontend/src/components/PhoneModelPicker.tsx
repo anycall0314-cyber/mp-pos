@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { searchPhoneModels } from "@/api/search";
 import type { LifecycleStatus } from "@/api/types";
@@ -99,6 +99,8 @@ export function PhoneModelPicker({
     };
   }, [open, query]);
 
+  // 讀螢幕:combobox 連到清單、念反白的那一筆(全站控制項 MC-04)
+  const listId = `pm${useId().replace(/:/g, "")}`;
   const trimmed = query.trim();
   const canCreate =
     allowCreate &&
@@ -165,6 +167,11 @@ export function PhoneModelPicker({
             if (!open) setOpen(true);
           }}
           onKeyDown={onKeyDown}
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={open && choiceCount > 0 ? listId : undefined}
+          aria-autocomplete="list"
+          aria-activedescendant={open && choiceCount > 0 ? `${listId}-o${Math.min(highlight, choiceCount - 1)}` : undefined}
         />
       </div>
       {open && (
@@ -176,10 +183,11 @@ export function PhoneModelPicker({
               {allowCreate && !trimmed ? "打機型名稱" : "型號庫沒有這支"}
             </div>
           ) : (
-            <ul className="combobox-list" role="listbox">
+            <ul className="combobox-list" role="listbox" id={listId} aria-label="機型候選">
               {options.map((opt, idx) => (
                 <li
                   key={opt.model_key}
+                  id={`${listId}-o${idx}`}
                   role="option"
                   aria-selected={idx === highlight}
                   className={`combobox-option${idx === highlight ? " active" : ""}`}
@@ -203,6 +211,7 @@ export function PhoneModelPicker({
               ))}
               {canCreate && (
                   <li
+                    id={`${listId}-o${options.length}`}
                     role="option"
                     aria-selected={highlight === options.length}
                     className={`combobox-option combobox-option-create${highlight === options.length ? " active" : ""}`}

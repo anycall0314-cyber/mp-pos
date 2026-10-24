@@ -9,7 +9,7 @@ test("抽屜 busy:Escape、點遮罩、× 都不關,整個抽屜不能動", () =
   const d = read("../components/Drawer.tsx");
   assert.match(d, /if \(!open \|\| lockBackdrop \|\| busy\) return;/, "Escape");
   assert.match(d, /onClick=\{lockBackdrop \|\| busy \? undefined : onClose\}/, "遮罩");
-  assert.match(d, /aria-label="關閉" disabled=\{busy\}/, "×");
+  assert.match(d, /aria-label=\{`關閉\$\{title\}`\} disabled=\{busy\}/, "×(名稱帶抽屜標題,MC-03)");
   assert.match(d, /\{\.\.\.\(frozen \|\| busy \? \{ inert: "" \} : \{\}\)\}/);
 });
 

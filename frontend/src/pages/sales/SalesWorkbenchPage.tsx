@@ -1888,6 +1888,7 @@ export function SalesWorkbenchPage() {
               fetchOptions={searchSalesPersons}
               disabled={locked}
               placeholder="業務員"
+              ariaLabel="業務員"
             />
           </div>
           <div className="ws-f grow" data-at="customer">
@@ -1915,6 +1916,7 @@ export function SalesWorkbenchPage() {
               createNewLabel="新增會員"
               exactOnEnter={sameMember}
               placeholder="電話 / 姓名 / 公司 / 統編（可不填）"
+              ariaLabel="會員"
             />
             <button
               type="button"

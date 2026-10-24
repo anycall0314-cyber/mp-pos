@@ -3,6 +3,7 @@ import {
   ReactNode,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -39,6 +40,8 @@ interface ComboBoxProps<T = unknown> {
    * 條碼槍自帶 Enter:刷 SIM 卡選到第一筆、會員打完電話選到別人(全站檢視 A2)。不給 = 照舊選反白的那一筆。
    */
   exactOnEnter?: (opt: ComboOption<T>, query: string) => boolean;
+  /** 欄名(讀螢幕念的、清除鈕的名字);外面包 Field 的會自動用 Field 的欄名,不用給 */
+  ariaLabel?: string;
 }
 
 export function ComboBox<T = unknown>({
@@ -57,7 +60,11 @@ export function ComboBox<T = unknown>({
   onEnterAfterValue,
   autoFocus = false,
   exactOnEnter,
+  ariaLabel,
 }: ComboBoxProps<T>) {
+  // 讀螢幕:輸入框是 combobox、連到下面的清單、念出現在反白的那一筆(全站控制項 MC-04;選的規則沒動)
+  const listId = `cb${useId().replace(/:/g, "")}`;
+  const optionId = (idx: number) => `${listId}-o${idx}`;
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState<ComboOption<T>[]>([]);
@@ -233,6 +240,10 @@ export function ComboBox<T = unknown>({
       pendingEnter.current = false;
       setOpen(false);
       setQuery("");
+    } else if (e.key === "Delete" && query === "" && value !== "" && !disabled) {
+      // 鍵盤清掉已選的(清除鈕不佔 Tab 順序;沒打字時按 Delete 才算,打字中的 Delete 照常刪字)
+      e.preventDefault();
+      clearValue();
     }
   }
 
@@ -270,6 +281,13 @@ export function ComboBox<T = unknown>({
             if (!open) setOpen(true);
           }}
           onKeyDown={handleKey}
+          role="combobox"
+          aria-label={ariaLabel}
+          aria-expanded={open}
+          aria-controls={open && options.length > 0 ? listId : undefined}
+          aria-autocomplete="list"
+          aria-activedescendant={open && highlightIdx < options.length && options.length > 0 ? optionId(highlightIdx) : undefined}
+          aria-keyshortcuts={value !== "" && !disabled ? "Delete" : undefined}
         />
         {value !== "" && !disabled && (
           <button
@@ -277,7 +295,8 @@ export function ComboBox<T = unknown>({
             className="combobox-clear"
             tabIndex={-1}
             onClick={clearValue}
-            aria-label="清除"
+            aria-label={ariaLabel ? `清除${ariaLabel}` : "清除"}
+            title="清除(游標在框裡時也可以按 Delete)"
           >
             ×
           </button>
@@ -290,10 +309,11 @@ export function ComboBox<T = unknown>({
           ) : options.length === 0 ? (
             <div className="combobox-hint">{emptyHint}</div>
           ) : (
-            <ul className="combobox-list" role="listbox">
+            <ul className="combobox-list" role="listbox" id={listId} aria-label={ariaLabel ? `${ariaLabel}的候選` : "候選"}>
               {options.map((opt, idx) => (
                 <li
                   key={opt.id}
+                  id={optionId(idx)}
                   role="option"
                   aria-selected={opt.disabled ? undefined : idx === highlightIdx}
                   aria-disabled={opt.disabled || undefined}

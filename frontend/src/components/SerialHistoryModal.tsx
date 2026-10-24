@@ -5,6 +5,7 @@ import { useSerialHistory, useSetSerialCodes } from "@/api/hooks";
 import { useCurrentUser } from "@/auth/AuthContext";
 import { codesLabel, looksLikeImei, normalizeCode } from "@/lib/deviceCodes";
 import { money } from "@/lib/money";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 interface Props {
   serialId: number;
@@ -41,6 +42,8 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
     }
   }
 
+  // 名字、打開時游標進來、Tab 不跑到背後、關掉回到原按鈕(全站控制項 MC-03)
+  const dlg = useDialogFocus(true);
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
@@ -48,8 +51,12 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={dlg.titleId}
+        ref={dlg.ref}
+        tabIndex={-1}
+        onKeyDown={dlg.onKeyDown}
       >
-        <div className="modal-title">
+        <div className="modal-title" id={dlg.titleId}>
           序號履歷 {data?.serial?.serial_no ? `· ${data.serial.serial_no}` : ""}
         </div>
         <div className="modal-body">

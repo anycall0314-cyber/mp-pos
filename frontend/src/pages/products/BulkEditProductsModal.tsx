@@ -21,6 +21,7 @@ import { isManager } from "@/lib/roles";
 import { PRODUCT_MODES, ruleProblem, rulePayload, valueUnit } from "@/lib/staffCost";
 import { useCurrentUser } from "@/auth/AuthContext";
 import { errorText } from "@/lib/errorText";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 const DRAFT_KEY = "modal-draft:bulk-edit-products";
 
@@ -220,14 +221,22 @@ export function BulkEditProductsModal({
     }
   }
 
+  // 名字、打開時游標進來、Tab 不跑到背後、關掉回到原按鈕(全站控制項 MC-03)
+  const dlg = useDialogFocus(open);
   if (!open) return null;
   return (
     <div className="modal-overlay">{/* 遮罩點擊不關閉,只能用「取消」按鈕關 */}
       <div
         className="modal-card be-modal"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={dlg.titleId}
+        ref={dlg.ref}
+        tabIndex={-1}
+        onKeyDown={dlg.onKeyDown}
       >
-        <div className="modal-title">
+        <div className="modal-title" id={dlg.titleId}>
           批次修改商品 · {productIds.length} 筆
         </div>
         <div className="modal-body be-body">

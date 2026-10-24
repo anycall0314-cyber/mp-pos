@@ -14,6 +14,7 @@ import { money } from "@/lib/money";
 import { errorText } from "@/lib/errorText";
 import { emptyDraft, isDirty, leaveArmed, leaveDraft, LEAVE_TEXT, savedDraft, syncDraft, type Draft } from "@/lib/draftGuard";
 import { useArm } from "@/components/workbench/useArm";
+import { useDlLabels } from "@/hooks/useDlLabels";
 
 const CUSTOMER_KINDS: { value: CustomerKind; label: string }[] = [
   { value: "channel", label: "通路" },
@@ -73,6 +74,8 @@ function isTabKey(v: string | null): v is TabKey {
 }
 
 export function CustomersPage() {
+  // 編輯表單的欄名綁到輸入框(讀螢幕、點欄名進那一格;全站控制項 MC-05)
+  const dlRef = useDlLabels();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
@@ -248,7 +251,7 @@ export function CustomersPage() {
 
       <div style={{ padding: "8px 16px 0" }}>
         <div style={{display: "flex", alignItems: "center", gap: 12, marginBottom: 10}}>
-          <span>銷貨預設來源</span><div style={{width: 320}}><SourcePicker source={defaults.data?.customer ?? null} disabled={!manager || defaults.isLoading || defaults.isError || saveDefault.isPending} onChange={source => void changeDefault(source)} /></div>
+          <span>銷貨預設來源</span><div style={{width: 320}}><SourcePicker ariaLabel="銷貨預設來源" source={defaults.data?.customer ?? null} disabled={!manager || defaults.isLoading || defaults.isError || saveDefault.isPending} onChange={source => void changeDefault(source)} /></div>
           {!manager && <span className="muted">由管理員設定</span>}
         </div>
         {error && <Banner kind="error" message={error} />}
@@ -347,7 +350,7 @@ export function CustomersPage() {
               </h3>
               {error && <Banner kind="error" message={error} />}
               {savedFlash && <Banner kind="success" message="已儲存" />}
-              <dl>
+              <dl ref={dlRef}>
                 <dt>電話</dt>
                 <dd>
                   <input

@@ -1,5 +1,7 @@
 import { ReactNode, useEffect } from "react";
 
+import { useDialogFocus } from "@/hooks/useDialogFocus";
+
 interface DrawerProps {
   open: boolean;
   title: string;
@@ -29,6 +31,8 @@ export function Drawer({
   frozen = false,
   busy = false,
 }: DrawerProps) {
+  // 名字、打開時游標進來、Tab 不跑到背後、關掉回到原按鈕(全站控制項 MC-03)
+  const dlg = useDialogFocus<HTMLElement>(open);
   useEffect(() => {
     if (!open || lockBackdrop || busy) return;
     const onKey = (e: KeyboardEvent) => {
@@ -45,15 +49,21 @@ export function Drawer({
       onClick={lockBackdrop || busy ? undefined : onClose}
     >
       <aside
+        ref={dlg.ref}
         className="drawer"
         style={{ width }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={dlg.titleId}
+        tabIndex={-1}
+        onKeyDown={dlg.onKeyDown}
         onClick={(e) => e.stopPropagation()}
         {...(frozen || busy ? { inert: "" } : {})}
         aria-busy={busy || undefined}
       >
         <header className="drawer-header">
-          <span>{title}</span>
-          <button className="drawer-close" onClick={onClose} aria-label="關閉" disabled={busy}>
+          <span id={dlg.titleId}>{title}</span>
+          <button className="drawer-close" onClick={onClose} aria-label={`關閉${title}`} disabled={busy}>
             ×
           </button>
         </header>

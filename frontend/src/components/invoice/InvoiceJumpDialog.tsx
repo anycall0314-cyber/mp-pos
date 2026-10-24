@@ -5,6 +5,7 @@ import type { InvoiceTrack } from "@/api/types";
 import { apiErrorText } from "@/components/workbench/errors";
 import { toast } from "@/components/workbench/toast";
 import { invoiceNo, jumpPreview, jumpSummary, parseJumpInput } from "@/lib/invoiceTracks";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 /**
  * 跳號(owner 2026-10-13:發票機故障之後要能指定從幾號開始印)。
@@ -41,6 +42,8 @@ export function InvoiceJumpDialog({
     }
   }
 
+  // 名字、打開時游標進來、Tab 不跑到背後、關掉回到原按鈕(全站控制項 MC-03)
+  const dlg = useDialogFocus(true);
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
@@ -48,8 +51,12 @@ export function InvoiceJumpDialog({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={dlg.titleId}
+        ref={dlg.ref}
+        tabIndex={-1}
+        onKeyDown={dlg.onKeyDown}
       >
-        <div className="modal-title">
+        <div className="modal-title" id={dlg.titleId}>
           跳號 · {track.prefix}
           {track.warehouse_name ? ` · ${track.warehouse_name}` : ""}
         </div>

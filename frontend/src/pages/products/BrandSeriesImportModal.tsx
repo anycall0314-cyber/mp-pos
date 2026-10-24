@@ -6,6 +6,7 @@ import {
 } from "@/api/hooks";
 import { Banner } from "@/components/Banner";
 import { errorText } from "@/lib/errorText";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 interface Props {
   open: boolean;
@@ -83,6 +84,8 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
     }
   }
 
+  // 名字、打開時游標進來、Tab 不跑到背後、關掉回到原按鈕(全站控制項 MC-03)
+  const dlg = useDialogFocus(open);
   if (!open) return null;
 
   return (
@@ -92,8 +95,12 @@ export function BrandSeriesImportModal({ open, onClose, onSuccess }: Props) {
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={dlg.titleId}
+        ref={dlg.ref}
+        tabIndex={-1}
+        onKeyDown={dlg.onKeyDown}
       >
-        <div className="modal-title">匯入品牌 / 系列</div>
+        <div className="modal-title" id={dlg.titleId}>匯入品牌 / 系列</div>
         <div className="modal-body bsi-body">
           {error && <Banner kind="error" message={error} />}
 

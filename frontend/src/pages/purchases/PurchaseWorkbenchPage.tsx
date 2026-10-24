@@ -1636,6 +1636,7 @@ export function PurchaseWorkbenchPage({
               fetchOptions={searchSuppliers}
               disabled={locked}
               placeholder="代碼 / 名稱 / 統編"
+              ariaLabel="廠商"
             />
             {/* 新廠商第一次送貨:不用離開這張單(全站檢視 C6) */}
             <button

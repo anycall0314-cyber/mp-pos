@@ -16,6 +16,7 @@ import { showMemberHistory } from "@/lib/memberUrl";
 
 import { LegacyLinkCandidates } from "./LegacyLinkCandidates";
 import { errorText } from "@/lib/errorText";
+import { useDlLabels } from "@/hooks/useDlLabels";
 
 type Selection = { kind: "member"; id: number } | { kind: "new" } | null;
 
@@ -59,6 +60,8 @@ function toForm(m: Member): FormState {
 }
 
 export function MembersPage() {
+  // 編輯表單的欄名綁到輸入框(讀螢幕、點欄名進那一格;全站控制項 MC-05)
+  const dlRef = useDlLabels();
   const [searchParams, setSearchParams] = useSearchParams();
   const save = useSaveMember();
 
@@ -287,9 +290,9 @@ export function MembersPage() {
               </h3>
               {error && <Banner kind="error" message={error} />}
               {savedFlash && <Banner kind="success" message="已儲存" />}
-              <dl>
+              <dl ref={dlRef}>
                 <dt>會員類型</dt><dd><select value={form.kind} onChange={e => patch("kind", e.target.value as Member["kind"])}><option value="individual">個人</option><option value="company">公司</option></select></dd>
-                <dt>預設來源</dt><dd style={{maxWidth: 360}}><SourcePicker inherit mode={form.default_source_mode} source={form.default_customer_detail} onChange={(source, mode) => setForm(f => ({...f, default_customer_detail: source, default_source_mode: mode}))} /></dd>
+                <dt>預設來源</dt><dd style={{maxWidth: 360}}><SourcePicker ariaLabel="預設來源" inherit mode={form.default_source_mode} source={form.default_customer_detail} onChange={(source, mode) => setForm(f => ({...f, default_customer_detail: source, default_source_mode: mode}))} /></dd>
                 <dt>
                   {form.kind === "company" ? "公司名稱" : "姓名"} <span style={{ color: "var(--danger-text)" }}>*</span>
                 </dt>

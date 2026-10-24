@@ -9,6 +9,7 @@ import { useReorder } from "@/hooks/useReorder";
 import { errorText } from "@/lib/errorText";
 import { useDraftForm } from "@/hooks/useDraftForm";
 import { LEAVE_TEXT } from "@/lib/draftGuard";
+import { useDlLabels } from "@/hooks/useDlLabels";
 
 type Selection =
   | { kind: "supplier"; id: number }
@@ -51,6 +52,8 @@ function toForm(s: Supplier): FormState {
 }
 
 export function SuppliersPage() {
+  // 編輯表單的欄名綁到輸入框(讀螢幕、點欄名進那一格;全站控制項 MC-05)
+  const dlRef = useDlLabels();
   const suppliersResult = useSuppliers();
   const saveSupplier = useSaveSupplier();
 
@@ -319,7 +322,7 @@ export function SuppliersPage() {
               </h3>
               {error && <Banner kind="error" message={error} />}
               {flashMsg && <Banner kind="success" message={flashMsg} />}
-              <dl>
+              <dl ref={dlRef}>
                 {isEditing && (
                   <>
                     <dt>代碼</dt>

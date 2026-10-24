@@ -18,6 +18,7 @@ export function Field({ label, required, error, hint, children }: FieldProps) {
   const labelRef = useRef<HTMLLabelElement>(null);
   const controlRef = useRef<HTMLDivElement>(null);
   const errId = `${uid}-err`;
+  const labId = `${uid}-label`;
   useLayoutEffect(() => {
     const els = Array.from(controlRef.current?.querySelectorAll<HTMLElement>("input, select, textarea") ?? []);
     const facts: InputLike[] = els.map((el) => ({
@@ -30,6 +31,20 @@ export function Field({ label, required, error, hint, children }: FieldProps) {
     if (!lab) return;
     if (!target) {
       lab.removeAttribute("for");
+      // 這一格是唯一一個搜尋盒:用 aria-labelledby 念欄名,不綁 for(點欄名不會打開下拉,紅隊;全站控制項 MC-04)
+      const boxes = els.filter((_, i) => facts[i].inSearchBox);
+      if (boxes.length === 1 && els.length === 1) {
+        lab.id = labId;
+        const box = boxes[0];
+        if (!box.getAttribute("aria-label") && !box.getAttribute("aria-labelledby")) box.setAttribute("aria-labelledby", labId);
+        if (errMsg) {
+          box.setAttribute("aria-invalid", "true");
+          if (!box.getAttribute("aria-describedby")) box.setAttribute("aria-describedby", errId);
+        } else {
+          if (box.getAttribute("aria-invalid") === "true") box.removeAttribute("aria-invalid");
+          if (box.getAttribute("aria-describedby") === errId) box.removeAttribute("aria-describedby");
+        }
+      }
       return;
     }
     if (!target.id) target.id = `${uid}-in`;

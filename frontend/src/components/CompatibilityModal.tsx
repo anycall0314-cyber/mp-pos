@@ -1,6 +1,7 @@
 import { useProductCompatibility } from "@/api/hooks";
 import type { CompatibilityItem, DemandLabel } from "@/api/types";
 import { errorText } from "@/lib/errorText";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 interface Props {
   productId: number;
@@ -41,14 +42,21 @@ export function CompatibilityModal({
         ? `${productName} · 相容機型`
         : `${productName} · 相容性`;
 
+  // 名字、打開時游標進來、Tab 不跑到背後、關掉回到原按鈕(全站控制項 MC-03)
+  const dlg = useDialogFocus(true);
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal-card cm-modal"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
+        aria-modal="true"
+        aria-labelledby={dlg.titleId}
+        ref={dlg.ref}
+        tabIndex={-1}
+        onKeyDown={dlg.onKeyDown}
       >
-        <div className="modal-title">{title}</div>
+        <div className="modal-title" id={dlg.titleId}>{title}</div>
         <div className="modal-body">
           {isLoading && <div className="md-empty">載入中…</div>}
           {isError && <div className="md-empty">{errorText(error)}</div>}
