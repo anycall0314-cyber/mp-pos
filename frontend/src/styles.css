@@ -6210,6 +6210,10 @@ input.rp-inline-money.failed {
    只看得到表頭 / 標題,明細與候選全部被裁掉。 */
 .intake-work .md-master,
 .intake-work .md-detail { grid-template-rows: minmax(0, 1fr); }
+/* 窄畫面:上面多一條「×」回清單(components/PaneBack;全站檢視 R03) */
+@media (max-width: 768px) {
+  .intake-work.md-show-detail .md-detail { grid-template-rows: auto minmax(0, 1fr); }
+}
 
 /* 狀態徽章 */
 .intake-badge {
@@ -8452,6 +8456,7 @@ body:has(.wb.ws) .wb-toasts { bottom: 76px; }
 .pc-layout.list-only > .pc-master {
   border-right: 0;
 }
+.md-layout.list-only > .md-detail { display: none; }
 .md-table tr.md-empty-row { cursor: default; }
 .md-table tr.md-empty-row:hover td { background: transparent; }
 .md-detail-close {

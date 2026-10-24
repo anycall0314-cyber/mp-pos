@@ -26,11 +26,19 @@ export function trackListScroll(win: Win, page: Page, store: { current: number }
 }
 
 /**
- * 打開那一筆:從最上面開始看。回傳「回清單」時要做的事:等清單畫回來(下一格畫面)再捲回 `kept`;
+ * 打開那一筆:讓那一塊從頭看起。那一塊本來就在畫面上半部(主檔頁:標題下面)就捲到整頁最上面;
+ * 在比較下面(進貨匯入:上面還有建立表單)就捲到那一塊的開頭。`paneTop` = 那一塊在整頁的位置、`viewH` = 畫面高。
+ * 回傳「回清單」時要做的事:等清單畫回來(下一格畫面)再捲回 `kept`;
  * `stillHere()` 回 false(整頁換掉了)就不捲,免得把別的頁捲到清單的位置。
  */
-export function openPaneAtTop(win: Win, page: Page, kept: number, stillHere: () => boolean): () => void {
-  page.scrollTop = 0;
+export function openPaneAtTop(
+  win: Win,
+  page: Page,
+  kept: number,
+  pane: { paneTop: number; viewH: number },
+  stillHere: () => boolean,
+): () => void {
+  page.scrollTop = pane.paneTop < pane.viewH * 0.4 ? 0 : pane.paneTop;
   return () => {
     win.requestAnimationFrame(() => {
       if (stillHere()) page.scrollTop = kept;

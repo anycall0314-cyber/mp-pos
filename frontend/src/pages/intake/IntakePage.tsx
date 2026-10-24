@@ -34,6 +34,7 @@ import type {
 import { useArm } from "@/components/workbench/useArm";
 import { toast } from "@/components/workbench/toast";
 import { Banner } from "@/components/Banner";
+import { PaneBack } from "@/components/PaneBack";
 import { ComboBox } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
@@ -367,7 +368,8 @@ export function IntakePage() {
               ))}
             </div>
           )}
-          <div className={selectedItem ? "md-layout intake-work" : "md-layout intake-work list-only"}>
+          {/* 窄畫面選了一行整頁換成那一行的核對,× 回批次清單(全站檢視 R03;md-show-detail 只在窄畫面有作用) */}
+          <div className={selectedItem ? "md-layout intake-work md-show-detail" : "md-layout intake-work list-only"}>
           <section className="md-master">
             <div className="md-table">
               <table>
@@ -411,11 +413,11 @@ export function IntakePage() {
               </table>
             </div>
           </section>
-          {selectedItem && (
-            <section className="md-detail">
-              <ItemDetail key={selectedItem.id} item={selectedItem} />
-            </section>
-          )}
+          {/* 這一塊一直留著(沒選的時候藏起來):PaneBack 要在清單開著時記住捲到哪 */}
+          <section className="md-detail">
+            <PaneBack open={!!selectedItem} onClose={() => setSelectedItemId(null)} />
+            {selectedItem && <ItemDetail key={selectedItem.id} item={selectedItem} />}
+          </section>
           </div>
         </>
       ) : (
@@ -433,6 +435,16 @@ function ItemDetail({ item }: { item: IntakeItem }) {
   const role = useCurrentUser()?.profile?.role;
   const isAdmin = role === "tenant_admin" || role === "platform_admin";
   const [pickError, setPickError] = useState("");
+  // 存修正 / 存序號 / 駁回沒成功:寫在那一顆按鈕下面,打的字留著、停在這一行可以再按一次(全站檢視 R03;以前沒成功也沒有任何提示)
+  const [actError, setActError] = useState<{ at: "corr" | "units" | "reject"; text: string } | null>(null);
+  async function act(at: "corr" | "units" | "reject", run: () => Promise<unknown>) {
+    setActError(null);
+    try {
+      await run();
+    } catch (e) {
+      setActError({ at, text: errorText(e) });
+    }
+  }
   const matchItem = useMatchIntakeItem();
   const rejectItem = useRejectIntakeItem();
   const newProduct = useNewProductForIntakeItem();
@@ -472,7 +484,7 @@ function ItemDetail({ item }: { item: IntakeItem }) {
           identifiers.push({ kind: "imei2", value: u.imei2.trim() });
         return { identifiers };
       });
-    captureUnits.mutate({ id: item.id, units: payload });
+    void act("units", () => captureUnits.mutateAsync({ id: item.id, units: payload }));
   }
 
   /** 畫面上的修正跟伺服器不一致時為 true(尤其是條碼 / 料號)。 */
@@ -537,7 +549,7 @@ function ItemDetail({ item }: { item: IntakeItem }) {
   }
 
   function saveCorrection() {
-    correctItem.mutate(correctionPayload());
+    void act("corr", () => correctItem.mutateAsync(correctionPayload()));
   }
 
   const [otherProduct, setOtherProduct] = useState<number | "">("");
@@ -699,6 +711,7 @@ function ItemDetail({ item }: { item: IntakeItem }) {
         <button className="btn small" onClick={saveCorrection} disabled={busy}>
           儲存修正
         </button>
+        {actError?.at === "corr" && <Banner kind="error" message={actError.text} />}
       </div>
 
       {item.requires_serial && item.matched_product && (
@@ -737,6 +750,7 @@ function ItemDetail({ item }: { item: IntakeItem }) {
           <button className="btn small" onClick={saveUnits} disabled={busy}>
             儲存逐台序號
           </button>
+          {actError?.at === "units" && <Banner kind="error" message={actError.text} />}
         </div>
       )}
 
@@ -831,12 +845,13 @@ function ItemDetail({ item }: { item: IntakeItem }) {
           </button>
           <button
             className="btn"
-            onClick={() => rejectItem.mutate(item.id)}
+            onClick={() => void act("reject", () => rejectItem.mutateAsync(item.id))}
             disabled={busy}
           >
             駁回
           </button>
         </div>
+        {actError?.at === "reject" && <Banner kind="error" message={actError.text} />}
       </div>
 
       <Drawer
