@@ -4,6 +4,7 @@ import { ApiHttpError } from "@/api/client";
 import { useSaveCarrier, useSaveSimCard } from "@/api/hooks";
 import { searchCarriers } from "@/api/search";
 import type { Carrier, SimCard, SimCardStatus } from "@/api/types";
+import { SIM_STATUSES } from "@/lib/simCardSearch";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
@@ -26,13 +27,7 @@ interface FormState {
   note: string;
 }
 
-const STATUS_OPTIONS: { value: SimCardStatus; label: string }[] = [
-  { value: "in_stock", label: "在庫" },
-  { value: "issued", label: "已出卡" },
-  { value: "activated", label: "已開通" },
-  { value: "returned", label: "退回廠商" },
-  { value: "void", label: "作廢" },
-];
+const STATUS_OPTIONS = SIM_STATUSES;
 
 const EMPTY: FormState = {
   card_no: "",
