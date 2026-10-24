@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
-import type { CellState } from "@/lib/settingsTabs";
+import { blurAction, type CellState } from "@/lib/settingsTabs";
 
 /**
  * 自動存的格子各自的存檔狀態(全站檢視 L02)。`save(格子, 改成的值, 送出)`:
@@ -52,5 +52,11 @@ export function useCellSaves() {
   function get<V>(key: string) {
     return now.current[key] as { state: CellState; value: V } | undefined;
   }
-  return { get, save, retry, clear };
+  /** 打字的格子離開時:要送就送、改回原值就拿掉「沒存成」(規則在 `blurAction`) */
+  function blur<V>(key: string, typed: V, server: V, send: (v: V) => Promise<unknown>) {
+    const act = blurAction(typed, server, get<V>(key));
+    if (act === "clear") clear(key);
+    else if (act === "send") void save(key, typed, () => send(typed));
+  }
+  return { get, save, retry, clear, blur };
 }

@@ -8,10 +8,15 @@ import { Banner } from "@/components/Banner";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
 import { errorText } from "@/lib/errorText";
+import { CellMark } from "@/components/CellMark";
+import { useCellSaves } from "@/hooks/useCellSaves";
+import { shownValue } from "@/lib/settingsTabs";
 
 export function PlatformTenantsTab() {
   const list = usePlatformTenants();
   const save = useSavePlatformTenant();
+  // 每一格自己的「已存 / 沒存成 重送」;勾選照改成的值顯示(全站控制項 F03:存失敗不能看起來像已經改了)
+  const cell = useCellSaves();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [form, setForm] = useState({ code: "", name: "" });
   const [error, setError] = useState<string | null>(null);
@@ -91,33 +96,34 @@ export function PlatformTenantsTab() {
                 <td>
                   <input
                     defaultValue={t.name}
-                    onBlur={(e) =>
-                      e.target.value !== t.name &&
-                      save.mutate({ id: t.id, name: e.target.value })
-                    }
+                    onBlur={(e) => cell.blur(`t${t.id}:name`, e.target.value, t.name, (v) => save.mutateAsync({ id: t.id, name: v }))}
                   />
+                  <CellMark cell={cell} k={`t${t.id}:name`} />
                 </td>
                 <td className="num">{t.user_count}</td>
                 <td className="num">{t.warehouse_count}</td>
                 <td style={{ textAlign: "center" }}>
                   <input
                     type="checkbox"
-                    defaultChecked={t.is_active}
-                    onChange={(e) =>
-                      save.mutate({ id: t.id, is_active: e.target.checked })
-                    }
+                    checked={shownValue(cell.get<boolean>(`t${t.id}:active`), t.is_active)}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      void cell.save(`t${t.id}:active`, v, () => save.mutateAsync({ id: t.id, is_active: v }));
+                    }}
                   />
+                  <CellMark cell={cell} k={`t${t.id}:active`} />
                 </td>
                 <td style={{ textAlign: "center" }}>
                   <input
                     type="checkbox"
                     aria-label={`${t.name} 新機自動建品號`}
-                    checked={t.auto_device_models}
-                    disabled={save.isPending}
-                    onChange={(e) =>
-                      save.mutate({ id: t.id, auto_device_models: e.target.checked })
-                    }
+                    checked={shownValue(cell.get<boolean>(`t${t.id}:auto`), t.auto_device_models)}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      void cell.save(`t${t.id}:auto`, v, () => save.mutateAsync({ id: t.id, auto_device_models: v }));
+                    }}
                   />
+                  <CellMark cell={cell} k={`t${t.id}:auto`} />
                 </td>
               </tr>
             ))}

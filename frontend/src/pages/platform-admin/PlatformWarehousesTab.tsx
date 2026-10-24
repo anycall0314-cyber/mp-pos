@@ -9,6 +9,9 @@ import { Banner } from "@/components/Banner";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
 import { errorText } from "@/lib/errorText";
+import { CellMark } from "@/components/CellMark";
+import { useCellSaves } from "@/hooks/useCellSaves";
+import { shownValue } from "@/lib/settingsTabs";
 
 interface Form {
   tenant: number | "";
@@ -22,6 +25,8 @@ export function PlatformWarehousesTab() {
   const list = usePlatformWarehouses();
   const tenants = usePlatformTenants();
   const save = useSavePlatformWarehouse();
+  // 每一格自己的「已存 / 沒存成 重送」;勾選照改成的值顯示(全站控制項 F03:存失敗不能看起來像已經改了)
+  const cell = useCellSaves();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [form, setForm] = useState<Form>({
     tenant: "",
@@ -143,38 +148,34 @@ export function PlatformWarehousesTab() {
                 <td>
                   <input
                     defaultValue={w.name}
-                    onBlur={(e) =>
-                      e.target.value !== w.name &&
-                      save.mutate({ id: w.id, name: e.target.value })
-                    }
+                    onBlur={(e) => cell.blur(`w${w.id}:name`, e.target.value, w.name, (v) => save.mutateAsync({ id: w.id, name: v }))}
                   />
+                  <CellMark cell={cell} k={`w${w.id}:name`} />
                 </td>
                 <td>
                   <input
                     defaultValue={w.address}
-                    onBlur={(e) =>
-                      e.target.value !== w.address &&
-                      save.mutate({ id: w.id, address: e.target.value })
-                    }
+                    onBlur={(e) => cell.blur(`w${w.id}:address`, e.target.value, w.address, (v) => save.mutateAsync({ id: w.id, address: v }))}
                   />
+                  <CellMark cell={cell} k={`w${w.id}:address`} />
                 </td>
                 <td>
                   <input
                     defaultValue={w.phone}
-                    onBlur={(e) =>
-                      e.target.value !== w.phone &&
-                      save.mutate({ id: w.id, phone: e.target.value })
-                    }
+                    onBlur={(e) => cell.blur(`w${w.id}:phone`, e.target.value, w.phone, (v) => save.mutateAsync({ id: w.id, phone: v }))}
                   />
+                  <CellMark cell={cell} k={`w${w.id}:phone`} />
                 </td>
                 <td style={{ textAlign: "center" }}>
                   <input
                     type="checkbox"
-                    defaultChecked={w.is_active}
-                    onChange={(e) =>
-                      save.mutate({ id: w.id, is_active: e.target.checked })
-                    }
+                    checked={shownValue(cell.get<boolean>(`w${w.id}:active`), w.is_active)}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      void cell.save(`w${w.id}:active`, v, () => save.mutateAsync({ id: w.id, is_active: v }));
+                    }}
                   />
+                  <CellMark cell={cell} k={`w${w.id}:active`} />
                 </td>
               </tr>
             ))}

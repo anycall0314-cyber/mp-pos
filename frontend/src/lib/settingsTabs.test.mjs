@@ -44,3 +44,16 @@ test("頁面:分頁只是藏起來(打到一半的留著)、還沒儲存標在�
   assert.match(nav, /發票字軌: "\/settings\?tab=invoice"/);
   assert.match(read("../components/shell/NavSearch.tsx"), /go\(hitTarget\(hit\)\)/);
 });
+
+test("平台管理的勾選與欄位(全站控制項 F03):不再是不受控 + 存了就算;每一格標已存 / 沒存成,失敗照改成的值顯示", () => {
+  for (const f of ["PlatformTenantsTab", "PlatformUsersTab", "PlatformWarehousesTab"]) {
+    const page = read(`../pages/platform-admin/${f}.tsx`);
+    assert.doesNotMatch(page, /defaultChecked=/, `${f} 的勾選要受控`);
+    assert.doesNotMatch(page, /save\.mutate\(\{ id: (t|u|w)\.id/, `${f} 自動存的格子要經過 cell.save / cell.blur`);
+    assert.match(page, /<CellMark cell=\{cell\} k=\{`(t|u|w)\$\{(t|u|w)\.id\}:active`\} \/>/);
+  }
+  // 共用的那一份:系統設定與平台管理用同一個 CellMark、同一套離開格子的規則
+  assert.match(read("../components/CellMark.tsx"), /onClick=\{\(\) => cell\.retry\(k\)\}/);
+  assert.match(read("../hooks/useCellSaves.ts"), /const act = blurAction\(typed, server, get<V>\(key\)\);/);
+  assert.doesNotMatch(read("../pages/settings/SettingsPage.tsx"), /^function CellMark/m);
+});

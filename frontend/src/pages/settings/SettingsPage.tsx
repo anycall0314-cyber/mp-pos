@@ -44,10 +44,9 @@ import {
   valueUnit,
 } from "@/lib/staffCost";
 import { useCellSaves } from "@/hooks/useCellSaves";
+import { CellMark } from "@/components/CellMark";
 import {
   SETTINGS_TABS,
-  blurAction,
-  cellText,
   isSettingsTab,
   openingTab,
   rememberKey,
@@ -68,20 +67,6 @@ function readTab(key: string | null): string | null {
   } catch {
     return null;
   }
-}
-
-/** 自動存的那一格旁邊的「已存 / 沒存成」;沒存成可以直接按一下用同一個值重送 */
-function CellMark({ cell, k }: { cell: ReturnType<typeof useCellSaves>; k: string }) {
-  const state = cell.get(k)?.state;
-  if (!state) return null;
-  if (state === "failed") {
-    return (
-      <button type="button" className="cell-mark failed" onClick={() => cell.retry(k)}>
-        {cellText(state)} 重送
-      </button>
-    );
-  }
-  return <span className={`cell-mark ${state}`}>{cellText(state)}</span>;
 }
 
 export function SettingsPage() {
@@ -126,11 +111,6 @@ export function SettingsPage() {
   }
   // 自動存的格子各自的狀態:已存 / 沒存成(紅隊:含勾選、單選、下拉)
   const cell = useCellSaves();
-  function blurSave<V>(key: string, typed: V, server: V, send: (v: V) => Promise<unknown>) {
-    const act = blurAction(typed, server, cell.get<V>(key));
-    if (act === "clear") cell.clear(key);
-    else if (act === "send") void cell.save(key, typed, () => send(typed));
-  }
 
   const [editing, setEditing] = useState<Partial<InvoiceTrack> | null>(null);
   // 字軌表單的期別:民國年 + 那一期的第一個月(存檔時換成那一期的第一天)。沒登記期別的舊字軌兩格都是空的
@@ -485,7 +465,7 @@ export function SettingsPage() {
                         defaultValue={w.address}
                         placeholder="收據抬頭顯示用"
                         onBlur={(e) => {
-                          blurSave(`w${w.id}:address`, e.target.value, w.address, (v) => saveWarehouse.mutateAsync({ id: w.id, address: v }));
+                          cell.blur(`w${w.id}:address`, e.target.value, w.address, (v) => saveWarehouse.mutateAsync({ id: w.id, address: v }));
                         }}
                       />
                       <CellMark cell={cell} k={`w${w.id}:address`} />
@@ -495,7 +475,7 @@ export function SettingsPage() {
                         defaultValue={w.phone}
                         placeholder="例:04-12345678"
                         onBlur={(e) => {
-                          blurSave(`w${w.id}:phone`, e.target.value, w.phone, (v) => saveWarehouse.mutateAsync({ id: w.id, phone: v }));
+                          cell.blur(`w${w.id}:phone`, e.target.value, w.phone, (v) => saveWarehouse.mutateAsync({ id: w.id, phone: v }));
                         }}
                       />
                       <CellMark cell={cell} k={`w${w.id}:phone`} />
@@ -807,7 +787,7 @@ export function SettingsPage() {
                       <input
                         defaultValue={t.name}
                         onBlur={(e) => {
-                          blurSave(`t${t.id}:name`, e.target.value, t.name, (v) => saveType.mutateAsync({ id: t.id, name: v }));
+                          cell.blur(`t${t.id}:name`, e.target.value, t.name, (v) => saveType.mutateAsync({ id: t.id, name: v }));
                         }}
                       />
                       <CellMark cell={cell} k={`t${t.id}:name`} />
@@ -818,7 +798,7 @@ export function SettingsPage() {
                         className="num-input"
                         defaultValue={t.sort_order}
                         onBlur={(e) => {
-                          blurSave(`t${t.id}:sort`, Number(e.target.value), t.sort_order, (v) => saveType.mutateAsync({ id: t.id, sort_order: v }));
+                          cell.blur(`t${t.id}:sort`, Number(e.target.value), t.sort_order, (v) => saveType.mutateAsync({ id: t.id, sort_order: v }));
                         }}
                       />
                       <CellMark cell={cell} k={`t${t.id}:sort`} />

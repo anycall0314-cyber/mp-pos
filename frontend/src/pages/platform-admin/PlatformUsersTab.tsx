@@ -13,6 +13,9 @@ import { Banner } from "@/components/Banner";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
 import { errorText } from "@/lib/errorText";
+import { CellMark } from "@/components/CellMark";
+import { useCellSaves } from "@/hooks/useCellSaves";
+import { shownValue } from "@/lib/settingsTabs";
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "tenant_user", label: "店員 (鎖倉)" },
@@ -51,6 +54,8 @@ export function PlatformUsersTab() {
   const tenants = usePlatformTenants();
   const warehouses = usePlatformWarehouses();
   const save = useSavePlatformUser();
+  // 每一格自己的「已存 / 沒存成 重送」;勾選照改成的值顯示(全站控制項 F03:存失敗不能看起來像已經改了)
+  const cell = useCellSaves();
   const resetPassword = useResetPlatformUserPassword();
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -219,11 +224,13 @@ export function PlatformUsersTab() {
                 <td style={{ textAlign: "center" }}>
                   <input
                     type="checkbox"
-                    defaultChecked={u.is_active}
-                    onChange={(e) =>
-                      save.mutate({ id: u.id, is_active: e.target.checked })
-                    }
+                    checked={shownValue(cell.get<boolean>(`u${u.id}:active`), u.is_active)}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      void cell.save(`u${u.id}:active`, v, () => save.mutateAsync({ id: u.id, is_active: v }));
+                    }}
                   />
+                  <CellMark cell={cell} k={`u${u.id}:active`} />
                 </td>
                 <td>
                   <button
