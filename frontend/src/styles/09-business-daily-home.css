@@ -278,12 +278,6 @@
   line-height: 1.25;
   margin-bottom: 4px;
 }
-.hp-stat-hint {
-  font-size: var(--font-secondary);
-  color: var(--text-dim);
-}
-.hp-stat-up { color: var(--success-text); font-weight: 600; }
-.hp-stat-down { color: var(--danger-text); font-weight: 600; }
 .hp-stat-warn { color: var(--warn-text); font-weight: 600; }
 .hp-stat-muted { color: var(--text-dim); }
 
@@ -388,7 +382,7 @@
   color: #c2410c;
 }
 
-/* 比較期間這種說明放在標題下面一行(以前用 11px 硬塞在標題旁邊) */
+/* 標題下面一行(只剩「更新失敗」) */
 .hp-panel-meta {
   display: block;
   font-size: var(--font-secondary);

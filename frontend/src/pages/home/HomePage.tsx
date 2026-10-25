@@ -20,7 +20,7 @@ import { money } from "@/lib/money";
  *  - 最上面一排:門市(沒鎖門市的帳號可以選,每一區跟著同一家)· 帳號 · 日期時間
  *  - 四顆櫃檯動作(看不到那一頁的收起來)
  *  - 待辦(按下去做得完的)| 注意(給管店的人看的)
- *  - 今日營收(範圍與幾點更新)| 最近交易
+ *  - 今日營收 | 最近交易
  *  - 銷量回溫 / 退燒
  * 資料來源:GET /home-summary/(每 30 秒重抓)
  */
@@ -39,7 +39,6 @@ export function HomePage() {
   const now = useNow();
 
   const today = summary.data?.today;
-  const yesterday = summary.data?.yesterday;
   const recent = summary.data?.recent_sales ?? [];
   // 待辦 / 注意的連結帶著現在看的那一家(鎖門市 = 自己那一家;沒鎖 = 選的那一家,全公司不帶;全站檢視 R06)
   const linkStore = locked ? (user?.profile?.default_warehouse_id ?? null) : store;
@@ -135,17 +134,11 @@ export function HomePage() {
         <div className="hp-two-col">
           <section className="hp-panel">
             <div className="hp-panel-head">
-              <div className="hp-panel-title">
-                今日營收
-                <span className="hp-panel-meta">
-                  {scopeName}
-                  {summary.dataUpdatedAt ? ` · ${fmtTime(new Date(summary.dataUpdatedAt))} 更新` : ""}
-                </span>
-              </div>
+              <div className="hp-panel-title">今日營收</div>
             </div>
             <div className="hp-stat-row">
-              <StatCard label="營業額" value={summary.data ? `$${money(today?.revenue)}` : "—"} hint={pctDiff(today?.revenue, yesterday?.revenue)} />
-              <StatCard label="銷貨筆數" value={summary.data ? String(today?.sales_count ?? 0) : "—"} hint={absDiff(today?.sales_count, yesterday?.sales_count)} />
+              <StatCard label="營業額" value={summary.data ? `$${money(today?.revenue)}` : "—"} />
+              <StatCard label="銷貨筆數" value={summary.data ? String(today?.sales_count ?? 0) : "—"} />
             </div>
           </section>
 
@@ -198,7 +191,7 @@ export function HomePage() {
             <div className="hp-panel-head">
               <div className="hp-panel-title">
                 銷量回溫
-                <span className="hp-panel-meta">近 14 天比近 90 天 · 全公司{trendState === "stale" ? " · 更新失敗" : ""}</span>
+                {trendState === "stale" && <span className="hp-panel-meta">更新失敗</span>}
               </div>
               <NavLink to="/inventory" className="hp-panel-link">
                 查看庫存 →
@@ -220,7 +213,7 @@ export function HomePage() {
             <div className="hp-panel-head">
               <div className="hp-panel-title">
                 銷量退燒
-                <span className="hp-panel-meta">近 14 天比近 90 天 · 全公司{trendState === "stale" ? " · 更新失敗" : ""}</span>
+                {trendState === "stale" && <span className="hp-panel-meta">更新失敗</span>}
               </div>
               <NavLink to="/inventory" className="hp-panel-link">
                 查看庫存 →
@@ -300,20 +293,11 @@ function RetryLine({ retry }: { retry: () => void }) {
   );
 }
 
-function StatCard({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: React.ReactNode;
-}) {
+function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="hp-stat-card">
       <div className="hp-stat-label">{label}</div>
       <div className="hp-stat-value">{value}</div>
-      {hint && <div className="hp-stat-hint">{hint}</div>}
     </div>
   );
 }
@@ -360,41 +344,6 @@ function TrendingRow({ item }: { item: TrendingItem }) {
         </div>
       </div>
     </NavLink>
-  );
-}
-
-function pctDiff(today?: number, yesterday?: number): React.ReactNode {
-  if (today == null || yesterday == null) return null;
-  if (yesterday === 0) {
-    return today > 0 ? (
-      <span className="hp-stat-up">昨天沒有</span>
-    ) : (
-      "—"
-    );
-  }
-  const pct = ((today - yesterday) / yesterday) * 100;
-  if (Math.abs(pct) < 0.1) return <span>跟昨天一樣</span>;
-  const cls = pct > 0 ? "hp-stat-up" : "hp-stat-down";
-  const sign = pct > 0 ? "↑" : "↓";
-  return (
-    <span className={cls}>
-      比昨天 {sign}
-      {Math.abs(pct).toFixed(1)}%
-    </span>
-  );
-}
-
-function absDiff(today?: number, yesterday?: number): React.ReactNode {
-  if (today == null || yesterday == null) return null;
-  const d = today - yesterday;
-  if (d === 0) return <span>跟昨天一樣</span>;
-  const cls = d > 0 ? "hp-stat-up" : "hp-stat-down";
-  const sign = d > 0 ? "↑" : "↓";
-  return (
-    <span className={cls}>
-      比昨天 {sign}
-      {Math.abs(d)} 筆
-    </span>
   );
 }
 

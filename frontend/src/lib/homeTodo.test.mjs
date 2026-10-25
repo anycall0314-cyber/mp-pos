@@ -93,3 +93,9 @@ test("每一區讀資料的狀態:沒讀到給重試、重抓失敗照樣顯示�
   assert.match(page, /\{sumState === "stale" && \(\s*<div className="hp-stale">\s*更新失敗,顯示 \{fmtTime\(new Date\(summary\.dataUpdatedAt\)\)\} 的資料/);
   assert.doesNotMatch(page, /系統正常/);
 });
+
+test("今日總覽不放說明小字:範圍 / 幾點更新、跟昨天比、比較期間都拿掉,趨勢只在重抓失敗時寫「更新失敗」", () => {
+  const page = readFileSync(new URL("../pages/home/HomePage.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(page, /跟昨天一樣|比昨天|昨天沒有|近 14 天比近 90 天|` 更新`|hp-stat-hint/);
+  assert.equal(page.match(/\{trendState === "stale" && <span className="hp-panel-meta">更新失敗<\/span>\}/g)?.length, 2);
+});
