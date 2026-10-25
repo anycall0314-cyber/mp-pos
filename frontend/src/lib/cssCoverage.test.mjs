@@ -1,10 +1,11 @@
-// 畫面上用到的樣式名都還在 styles.css 裡(2026-10-24:全站按鈕統一那一批改樣式表時,連帶刪掉了工作台的表格、
+// 畫面上用到的樣式名都還在樣式表(styles.css + styles/*.css)裡(2026-10-24:全站按鈕統一那一批改樣式表時,連帶刪掉了工作台的表格、
 // 掃碼下拉、提示訊息、小標籤、開關、淺色主題的表格與輸入框等 138 條規則,測試全綠、上了測試站才發現)。
 // 做法:頁面寫死的 className="…" 裡每個名字,樣式表裡要有一條規則提到它;
 // 現在本來就沒有規則的(只是拿來標記、或靠外層的規則)列在下面,只能變少不能變多。
 // 跑法:npm test。
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readAllCss } from "./cssText.mjs";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -47,7 +48,7 @@ export function definedClasses(css) {
 }
 
 test("頁面用到的樣式名,樣式表裡都有規則(沒有的只能是原本就沒有的那幾個)", () => {
-  const defined = definedClasses(readFileSync(join(root, "styles.css"), "utf8"));
+  const defined = definedClasses(readAllCss());
   const missing = [...usedClasses(root)]
     .filter(([name]) => !defined.has(name) && !NO_RULE_YET.has(name))
     .map(([name, file]) => `${name}(${file})`);

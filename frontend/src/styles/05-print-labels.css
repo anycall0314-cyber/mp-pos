@@ -1,0 +1,190 @@
+/* ===== MP POS 樣式 05/26:商品標籤(45 × 25 兩聯)與 80mm 熱感收據 =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* 商品標籤(45 × 25 mm、上下兩聯,熱感 203 dpi;一張標籤一頁)。尺寸跟 lib/labels.ts 的 LABEL 是同一組數字(labels.test.mjs 會對)。
+   紙中間(12.5 mm)有一條撕線:上半、下半各印一份、上下對稱,條碼只有一個、跨在撕線上。
+   每一聯從紙的外緣往中間:品名 2.8 → 進貨單與售價 2.8 → 碼的字 2.3 → 條碼的一半 3.5(共 11.4 mm,離外緣 0.8、離撕線 0.3)。
+   字一律用 mm、純黑:熱感只有黑跟白,灰色的字會被印成一點一點的。
+   紙張尺寸用「有名字的頁面」(page: label):這份樣式裡別的列印頁(收據、維修單)各有自己的 @page,
+   沒有名字的 @page 會互相蓋掉(最後那一條是 A4),標籤不能被它們影響。 */
+@page label { size: 45mm 25mm; margin: 0; }
+/* 全站預設是暗色:列印時紙的底色也會是暗的。最後一張標籤底下沒被蓋到的那一條細縫,有人在列印視窗勾了「背景圖形」就會印成一條線 */
+@media print { html:has(.label-sheet) { color-scheme: light; background: #fff; } }
+.label-sheet {
+  page: label;
+  background: #fff;
+  color: #000;
+  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  line-height: 1.15;
+}
+.label-tile {
+  position: relative;
+  width: 45mm;
+  /* 比紙(25 mm)矮一點:印表機驅動回報的可印高度常常比紙小一點點,剛好 25 mm 的話溢出一條線、每一張後面就多吐一張空白的。
+     裡面的東西都是從上緣算位置的,所以撕線還是在 12.5 mm */
+  height: 24.5mm;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: #fff;
+  color: #000;
+  break-inside: avoid;
+}
+/* 第二張起,每一張之前換頁(不用「每一張之後換頁、最後一張除外」:那樣最後面多一個東西就會多吐一張空白的) */
+.label-tile + .label-tile { break-before: page; page-break-before: always; }
+/* 位置微調:這台電腦的印表機偏了多少,整張的內容就反方向推多少(列印頁把數字填在 --label-dx / --label-dy;沒有調就是 0) */
+.label-inner { position: absolute; inset: 0; transform: translate(var(--label-dx, 0mm), var(--label-dy, 0mm)); }
+.label-half { position: absolute; left: 1.5mm; right: 1.5mm; height: 11.4mm; display: flex; flex-direction: column; overflow: hidden; }
+.label-half.top { top: 0.8mm; }
+/* 下半那一聯:同樣的內容、順序倒過來(條碼那一半貼著撕線、品名在最下面) */
+.label-half.bottom { top: 12.8mm; flex-direction: column-reverse; }
+.label-name { flex: none; height: 2.8mm; font-size: 2.3mm; font-weight: 700; line-height: 2.8mm; white-space: nowrap; overflow: hidden; }
+/* 放不下時只壓寬度(比例由畫面量出來填),從左邊壓 */
+.label-name > span { display: inline-block; transform-origin: left center; }
+.label-meta { flex: none; height: 2.8mm; display: flex; align-items: baseline; gap: 1.2mm; line-height: 2.8mm; white-space: nowrap; overflow: hidden; }
+/* 小字一律粗體:熱感一個點 0.125 mm,一般粗細的 1.9 mm 小字筆畫只有一個點,橫的那一筆常印不出來(實機印出來 PO 的 P 像 F) */
+.label-src { flex: 1 1 auto; min-width: 0; overflow: hidden; font-size: 1.9mm; font-weight: 700; }
+.label-grade { flex: none; font-size: 2.2mm; font-weight: 700; }
+.label-price { flex: none; font-size: 2.8mm; font-weight: 700; }
+.label-codeline { flex: none; height: 2.3mm; display: flex; align-items: baseline; justify-content: space-between; gap: 1.5mm; line-height: 2.3mm; white-space: nowrap; overflow: hidden; }
+.label-code {
+  flex: none;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 2.1mm;
+  font-weight: 700;
+  /* pre:不折行,而且碼裡面連續的空白照原樣印(nowrap 會把兩個空白併成一個,字就跟條碼不是同一個碼了) */
+  white-space: pre;
+}
+/* 有序號的那一台:字只印末 5 碼(條碼是整支序號) */
+.label-last5 { flex: none; font-size: 1.9mm; font-weight: 700; white-space: pre; }
+.label-last5 b { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 2.4mm; font-weight: 900; letter-spacing: 0.1mm; }
+.label-nobars b { font-weight: 900; }
+.label-sku { min-width: 0; overflow: hidden; font-size: 1.9mm; font-weight: 700; }
+/* 廠商:靠右、貼在品號前面;最寬 10 mm(再寬會把 13 碼條碼字 + 品號那一行擠爆),放不下由畫面量出比例壓扁(跟品名一樣,從左邊壓) */
+.label-supplier { flex: none; max-width: 10mm; margin-left: auto; overflow: hidden; font-size: 1.9mm; font-weight: 700; white-space: nowrap; }
+.label-supplier > span { display: inline-block; transform-origin: left center; }
+.label-slot { flex: none; height: 3.5mm; }
+/* 條碼:疊在兩聯中間(位置與大小由畫面照點數算出來填) */
+.label-bars { position: absolute; display: block; z-index: 1; }
+/* 印不出條碼時,碼的字那一行連同條碼的那一半改印這個碼(可以折行;兩聯各印一份) */
+.label-nobars {
+  flex: none;
+  height: 5.8mm;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 2.4mm;
+  font-weight: 700;
+  line-height: 2.8mm;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  /* 碼裡面連續的空白照原樣印(瀏覽器預設會把兩個空白併成一個:字就跟實際的碼不一樣了) */
+  white-space: pre-wrap;
+}
+/* 很長的碼(序號最長 80 個字):字小一點,整個放得進去 */
+.label-nobars.long { font-size: 1.9mm; line-height: 1.9mm; }
+/* 測試標籤:四邊各一條 0.25 mm 的線,看有沒有哪一邊被切掉;左右各一小段線要落在撕線上。
+   用真的邊框線(陰影、背景色瀏覽器列印時可能不印);疊在上面、不佔位置,裡面的東西位置不變 */
+.label-frame::before { content: ""; position: absolute; inset: 0; border: 0.25mm solid #000; pointer-events: none; }
+.label-fold { position: absolute; top: 12.375mm; width: 4mm; border-top: 0.25mm solid #000; }
+.label-fold.l { left: 0; }
+.label-fold.r { right: 0; }
+.label-msg { padding: 20px; background: #fff; color: #000; }
+@media screen { .label-msg { min-height: 100vh; } }
+.label-msg-actions { display: flex; gap: 12px; margin-top: 16px; }
+.label-msg-actions button { min-height: 44px; padding: 0 20px; font-size: 16px; border: 1px solid #888; border-radius: 6px; background: #f3f3f3; color: #000; cursor: pointer; }
+/* 庫存查詢:配件補印時就地出現的「幾張 + 列印」 */
+.label-ask { display: inline-flex; align-items: center; gap: 6px; }
+.label-ask input { width: 5rem; min-height: 36px; padding: 0 8px; border: 1px solid var(--wb-input-border); border-radius: 6px; background: var(--wb-input); color: var(--wb-text); font: inherit; }
+/* 列印頁上面那一排(只在螢幕上):第一排是張數、列印、關閉;提醒;最下面是配件的張數(多的時候自己捲) */
+.label-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fff;
+  color: #000;
+  border-bottom: 1px solid #ccc;
+  font-size: 16px;
+}
+.label-bar-main { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.label-bar-lines { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; max-height: 30vh; overflow: auto; }
+.label-bar button { min-height: 44px; padding: 0 20px; font-size: 16px; border: 1px solid #888; border-radius: 6px; background: #f3f3f3; color: #000; cursor: pointer; }
+.label-bar button:disabled { opacity: 0.5; cursor: default; }
+.label-bar input { width: 5rem; min-height: 40px; padding: 0 8px; font-size: 16px; border: 1px solid #888; border-radius: 6px; background: #fff; color: #000; }
+.label-bar-qty { display: flex; align-items: center; gap: 6px; }
+.label-bar-name { max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.label-bar-grow { flex: 1 1 auto; }
+.label-bar-warn { color: #8a4b00; }
+.label-bar-nudge { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+@media screen {
+  /* 這一頁自己捲(外面那一層的版面不能捲):張數很多時下面的標籤、上面的按鈕都要看得到 */
+  .label-page { height: 100vh; overflow: auto; background: #e4e4e4; }
+  /* 螢幕上放大兩倍看(印出來是原寸) */
+  .label-sheet { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 12px; padding: 16px; background: #e4e4e4; }
+  .label-tile { zoom: 2; outline: 1px solid #aaa; }
+  /* 撕線在哪裡(只在螢幕上畫,不會印出來) */
+  .label-tile::after { content: ""; position: absolute; left: 0; right: 0; top: 12.5mm; border-top: 1px dashed #c4c4c4; pointer-events: none; }
+}
+
+@media print {
+  body { background: white; }
+  .topbar, .topnav, .no-print, .print-controls { display: none !important; }
+  .main, .app-shell { display: block; background: white; height: auto; }
+}
+
+/* 80mm 熱感收據列印 */
+.print-receipt {
+  width: 76mm; /* 80mm 紙扣邊距 */
+  padding: 4mm;
+  background: white;
+  color: black;
+  font-family: "Noto Sans TC", "PingFang TC", sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0 auto;
+}
+.print-receipt-header { text-align: center; margin-bottom: 8px; }
+.print-title { font-size: 15px; font-weight: 700; }
+.print-no, .print-date { font-size: 13px; }
+.print-void { color: #c00; font-weight: 700; margin-top: 4px; }
+.print-section { margin: 4px 0; }
+.print-sep { border: 0; border-top: 1px dashed #999; margin: 6px 0; }
+.print-row {
+  display: flex; justify-content: space-between;
+  padding: 1px 0; font-size: 13px;
+}
+.print-row.big { font-size: 15px; font-weight: 700; margin-top: 2px; }
+.print-items { width: 100%; border-collapse: collapse; }
+.print-items th, .print-items td {
+  padding: 2px 1px; font-size: 13px;
+  text-align: left; vertical-align: top;
+  color: black;
+}
+.print-items th { border-bottom: 1px solid #333; font-weight: 600; }
+.print-items .num { text-align: right; white-space: nowrap; }
+.print-item-name { font-weight: 600; }
+.print-item-meta { font-size: 12px; color: #555; padding-left: 4px; }
+.print-totals { margin-top: 4px; }
+.print-note { font-size: 13px; margin: 4px 0; }
+.print-footer { text-align: center; margin-top: 10px; font-size: 13px; }
+.print-footer-small { font-size: 9px; color: #888; margin-top: 4px; }
+.print-controls {
+  display: flex; gap: 8px; justify-content: center;
+  margin-top: 16px; padding-top: 8px; border-top: 1px solid #ddd;
+}
+.print-controls button {
+  padding: 6px 16px; border: 1px solid #999;
+  background: #f5f5f5; cursor: pointer; border-radius: 3px;
+}
+
+@media print {
+  body { background: white; }
+  .topbar, .topnav, .print-controls { display: none !important; }
+  .main, .app-shell { display: block; background: white; height: auto; }
+  .print-receipt { width: 76mm; padding: 0; margin: 0; }
+  @page { size: 80mm auto; margin: 2mm; }
+}
+

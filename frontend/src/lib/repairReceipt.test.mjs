@@ -1,10 +1,11 @@
 // 維修單收據(A4 直式一張兩聯)的版面:簽名那一排不能壓到注意事項(owner 2026-10-24 截圖:客戶簽名 / 經手人 / 日期疊在第 3、4、8 條上)。跑法:npm test。
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readAllCss } from "./cssText.mjs";
 import test from "node:test";
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
-const css = read("../styles.css");
+const css = readAllCss();
 const page = read("../pages/repairs/RepairReceiptPrintPage.tsx");
 
 /** 某一條規則大括號裡的內容 */

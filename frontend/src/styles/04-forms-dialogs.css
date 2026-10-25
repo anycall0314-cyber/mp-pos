@@ -1,0 +1,590 @@
+/* ===== MP POS 樣式 04/26:Drawer、表單版面、銷貨 / 進貨單頭、序號側欄、確認視窗、跳號、發票機測試頁、會員卡片 =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* Drawer */
+.drawer-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  display: flex; justify-content: flex-end;
+}
+.drawer {
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  display: grid; grid-template-rows: 44px 1fr auto;
+  height: 100%;
+}
+.drawer-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+.drawer-close {
+  background: transparent; border: 0; color: var(--text-dim);
+  font-size: 20px; cursor: pointer; line-height: 1;
+}
+.drawer-close:hover { color: var(--text); }
+.drawer-body { padding: 16px; overflow: auto; }
+.drawer-footer {
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex; justify-content: flex-end; gap: 8px;
+}
+
+/* Form */
+.field { margin-bottom: 12px; }
+.field-label {
+  display: block; margin-bottom: 4px;
+  color: var(--text-dim); font-size: var(--font-body); font-weight: 500;
+}
+.field-required { color: var(--danger-text); margin-left: 2px; }
+.field input[type="text"],
+.field input[type="number"],
+.field input[type="date"],
+.field input[type="search"],
+.field input:not([type]),
+.field select,
+.field textarea {
+  width: 100%; box-sizing: border-box;
+  min-height: var(--control-height);
+  padding: 8px 10px;
+  font-family: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border); border-radius: 3px;
+  color: var(--text);
+  font-size: var(--font-body);
+  font-family: inherit;
+}
+.field textarea { resize: vertical; min-height: 60px; }
+.field input:focus, .field select:focus, .field textarea:focus {
+  border-color: var(--accent); outline: none;
+}
+.field-hint { color: var(--text-dim); font-size: var(--font-secondary); margin-top: 3px; }
+.field-error-msg { color: var(--danger-text); font-size: var(--font-secondary); margin-top: 3px; }
+.field-error input, .field-error select, .field-error textarea {
+  border-color: var(--danger-text);
+}
+
+.checkbox { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 0; }
+.checkbox input { width: auto; }
+.checkbox-hint { color: var(--text-dim); font-size: var(--font-secondary); }
+
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+/* ─────────────────────────────────────────────────────────
+ * 表單版面通用 utility(套到任何表單頁的 form 容器)
+ *   .form-grid:auto 1/2/3 欄(響應式 by viewport)
+ *   .form-grid-span:跨整列(備註 / 描述用)
+ *   .search-input:單獨搜尋框限寬 480
+ *   .action-bar:底部按鈕列靠右 gap 8
+ * ───────────────────────────────────────────────────────── */
+.form-grid {
+  display: grid;
+  /* <768 單欄;>=768 雙欄;>=1280 三欄 */
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+@media (min-width: 768px) {
+  .form-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (min-width: 1280px) {
+  .form-grid { grid-template-columns: 1fr 1fr 1fr; }
+}
+.form-grid-span {
+  grid-column: 1 / -1;
+}
+.search-input {
+  max-width: 480px;
+  width: 100%;
+}
+.action-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 銷貨單頭:高密度 4 欄 3 排;最右欄固定放常改的 客戶 / 會員 / 業務員 */
+.sales-header-grid {
+  display: grid;
+  /* 長欄(倉/客戶/會員/業務員)寬;短欄(日期/類型)窄 */
+  grid-template-columns:
+    minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr)
+    minmax(0, 1fr) minmax(0, 1.6fr);
+  grid-template-areas:
+    "wh   date invdate invtype customer"
+    "note tax  invno   member  salesperson";
+  gap: 2px 12px;
+  align-items: start;
+}
+
+/* 進貨單頭:4 欄 2 排,長欄(供應商/入庫倉/備註)寬,短欄(日期/類型/發票)窄 */
+.purchase-header-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.6fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.4fr);
+  grid-template-areas:
+    "supplier wh      date    tax"
+    "invno    invdate payment note";
+  gap: 2px 12px;
+  align-items: start;
+}
+.purchase-header-grid .field { margin-bottom: 6px; }
+.purchase-header-grid .field-label { margin-bottom: 2px; }
+.purchase-header-grid .field input,
+.purchase-header-grid .field select {
+  padding: 3px 8px;
+  font-size: var(--font-body);
+}
+.purchase-header-grid .short-field input,
+.purchase-header-grid .short-field select {
+  max-width: 180px;
+}
+.purchase-header-grid .medium-field {
+  max-width: 280px;
+}
+.sales-header-grid .field { margin-bottom: 6px; }
+.sales-header-grid .field-label { margin-bottom: 2px; }
+.sales-header-grid .field input,
+.sales-header-grid .field select {
+  padding: 3px 8px;
+  font-size: var(--font-body);
+}
+/* 短欄位(日期/類型/發票號) input/select 不要被 grid 拉到滿 */
+.sales-header-grid .short-field input,
+.sales-header-grid .short-field select {
+  max-width: 180px;
+}
+/* 中欄(出貨倉/客戶/會員/業務員 ComboBox) 限制整個容器最大寬,
+   避免 ComboBox + 「+ 新增」按鈕 flex 一起被拉到滿 */
+.sales-header-grid .medium-field {
+  max-width: 280px;
+}
+.sales-header-grid .member-status {
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  font-size: var(--font-body);
+}
+
+.fieldset {
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 10px 14px 4px; margin-bottom: 12px;
+}
+.fieldset > legend {
+  padding: 0 6px; color: var(--text-dim); font-size: var(--font-body);
+}
+
+/* Banner */
+.banner {
+  padding: 8px 12px; border-radius: 3px; margin-bottom: 12px;
+  font-size: var(--font-body);
+}
+.banner-error { background: #3a1414; color: #ffb0b0; border: 1px solid #6b2828; }
+.banner-info { background: #14253a; color: #b0d0ff; border: 1px solid #2a4a6b; }
+.banner-success { background: #143a2a; color: #b0ffd0; border: 1px solid #2a6b4a; }
+
+/* Entry form (sales / purchase) */
+.entry-layout {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
+}
+.entry-header {
+  padding: 12px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.entry-body {
+  overflow: auto;
+  padding: 12px 16px;
+  flex: 1;
+  min-width: 0;
+  /* 表單頁寬螢幕不過度拉伸,1280 居中後兩側留白 */
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+.entry-body-split {
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* 序號側欄 */
+.serial-aside {
+  width: 320px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  background: var(--panel-2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* 中古機選到時側欄微寬,容納列表 + 下方詳細區 */
+.serial-aside-wide { width: 380px; }
+/* 每台兩格(IMEI / SN):側欄再寬一點,15 碼 IMEI 才不會被切掉 */
+.serial-aside-codes { width: 420px; }
+.serial-aside-wide.serial-aside-codes { width: 490px; }
+.serial-slot-table input.warn { border-color: var(--warn-text-amber); }
+/* 序號履歷裡補登 / 修改 IMEI、SN 的那一排 */
+.serial-codes-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 4px; }
+.serial-codes-row label { display: flex; flex-direction: column; gap: 2px; color: var(--text-dim); font-size: var(--font-secondary); }
+.serial-codes-row input {
+  width: 190px; padding: 3px 6px; height: 28px; box-sizing: border-box;
+  background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 3px; font-size: var(--font-body);
+}
+.serial-codes-row input.warn { border-color: var(--warn-text-amber); }
+.serial-codes-row input:disabled { opacity: 0.7; }
+.serial-codes-error { color: #e5484d; font-size: var(--font-secondary); }
+.serial-aside-hint.warn { color: var(--warn-text-amber); }
+.serial-pair-toggle { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: var(--font-secondary); color: var(--text-dim); }
+/* 庫存查詢:刷到的那一台現在的狀態與門市 */
+.inv-device-hits { margin: 8px 0; display: flex; flex-direction: column; gap: 4px; }
+.inv-device-hit {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--panel-2); font-size: var(--font-body);
+}
+.serial-detail-panel {
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: var(--font-body);
+}
+.serial-detail-head {
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.serial-detail-head b { color: var(--text); }
+.serial-detail-row {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+.serial-detail-row label { color: var(--text-dim); font-size: var(--font-secondary); }
+.serial-detail-row input,
+.serial-detail-row select {
+  width: 100%;
+  padding: 3px 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: var(--font-body);
+  min-height: var(--control-height);
+  box-sizing: border-box;
+}
+.serial-detail-row input:focus,
+.serial-detail-row select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.serial-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+.serial-slot-table tr.focused td {
+  background: rgba(120, 160, 220, 0.08);
+}
+.serial-slot-table tr.focused .serial-slot-no {
+  color: var(--accent);
+  font-weight: 600;
+}
+.serial-aside-header {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.serial-aside-title { font-weight: 600; font-size: var(--font-body); }
+.serial-aside-sub { color: var(--text-dim); font-size: var(--font-secondary); }
+.serial-aside-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+.serial-aside-hint {
+  padding: 16px 8px;
+  color: var(--text-dim);
+  font-size: var(--font-body);
+  text-align: center;
+}
+.serial-slot-table { width: 100%; border-collapse: collapse; font-size: var(--font-body); }
+.serial-slot-table th {
+  text-align: left;
+  color: var(--text-dim);
+  font-weight: 500;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.serial-slot-table td {
+  padding: 2px 4px;
+}
+.serial-slot-no {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--font-secondary);
+}
+.serial-slot-table input {
+  width: 100%;
+  padding: 3px 6px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: var(--font-body);
+  height: 24px;
+  box-sizing: border-box;
+}
+.serial-slot-table input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.serial-slot-table select {
+  width: 100%;
+  padding: 3px 4px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: var(--font-body);
+  height: 24px;
+  box-sizing: border-box;
+}
+.serial-slot-table.secondhand th,
+.serial-slot-table.secondhand td {
+  padding: 3px 4px;
+  vertical-align: middle;
+}
+.serial-slot-table.secondhand input.num-input {
+  text-align: right;
+}
+
+/* 確認 modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 20px 24px;
+  min-width: 380px;
+  max-width: 520px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.6);
+}
+.modal-title {
+  font-size: var(--font-section);
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+.modal-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 2px 0;
+  font-size: var(--font-body);
+  color: var(--text-dim);
+}
+.modal-row b {
+  color: var(--text);
+  font-weight: 600;
+}
+.modal-row.big {
+  font-size: var(--font-section);
+  margin-top: 4px;
+}
+.modal-row.big b {
+  color: var(--accent);
+}
+.modal-sep {
+  border-top: 1px dashed var(--border);
+  margin: 6px 0;
+}
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap; /* 手機上四顆按鈕排不下時換行,不要被推出螢幕 */
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* 付款方式很多時比螢幕高:視窗自己捲,最下面的「確認結帳」才按得到。
+   只加在結帳視窗(別的視窗裡有下拉選單,加了會被切掉) */
+.checkout-modal { min-width: 420px; max-height: calc(100dvh - 32px); overflow-y: auto; }
+.serial-list-modal { min-width: 520px; max-width: 80vw; max-height: 80vh; }
+.serial-list-modal .modal-body { max-height: 60vh; overflow-y: auto; }
+
+/* 跳號視窗(系統設定的字軌清單、開單頁的發票號碼旁邊開的是同一個;不在 .wb 底下,顏色用全站的) */
+.invoice-jump-modal { min-width: 420px; }
+.invoice-jump-modal .modal-row { align-items: center; gap: 12px; }
+.invoice-jump-modal .modal-row input { width: 220px; font-variant-numeric: tabular-nums; }
+.invoice-jump-modal .modal-row b { font-variant-numeric: tabular-nums; }
+.invoice-jump-note { margin-top: 6px; color: var(--warn-text); font-size: var(--font-secondary); }
+.invoice-jump-note.err { color: var(--danger-text); }
+/* 發票機測試頁 */
+.invoice-printer-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.invoice-printer-row label { display: flex; align-items: center; gap: 6px; }
+.invoice-printer-hint { color: var(--text-dim); font-size: var(--font-secondary); }
+.invoice-printer-preview {
+  margin-top: 12px;
+  padding: 10px 12px;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans Mono CJK TC", monospace;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.invoice-jump-log {
+  max-height: 22vh;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  font-size: var(--font-secondary);
+}
+.stock-link {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  color: var(--success-text-soft);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.stock-link:hover { color: #a0e0b0; }
+
+.bulk-add-modal { min-width: 720px; max-width: 90vw; max-height: 85vh; }
+.bulk-add-modal .modal-body { max-height: 65vh; overflow-y: auto; }
+.expander-modal { min-width: 720px; max-width: 90vw; max-height: 90vh; }
+.expander-modal .modal-body { max-height: 72vh; overflow-y: auto; }
+.batch-paste-modal { min-width: 900px; max-width: 95vw; max-height: 92vh; }
+.batch-paste-modal .modal-body { max-height: 76vh; overflow-y: auto; }
+/* 字體整體加大兩號 */
+.batch-paste-modal .modal-title { font-size: 20px; }
+.batch-paste-modal table { font-size: var(--font-body); }
+.batch-paste-modal table th { font-size: var(--font-body); }
+.batch-paste-modal input, .batch-paste-modal select { font-size: var(--font-body); }
+.picker-modal { min-width: 820px; max-width: 95vw; max-height: 90vh; }
+.picker-modal .modal-body { max-height: 76vh; overflow-y: auto; }
+.bulk-add-modal textarea {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 6px 8px;
+}
+.bulk-preview {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.bulk-preview-head {
+  padding: 6px 10px;
+  background: var(--panel);
+  font-size: var(--font-body);
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+.checkout-pay-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+.checkout-pay-row label {
+  width: 110px;
+  color: var(--text-dim);
+  font-size: var(--font-body);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.checkout-kind-tag {
+  font-size: var(--font-secondary);
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+}
+.checkout-pay-row input {
+  flex: 1;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 5px 8px;
+  font-size: var(--font-body);
+  box-sizing: border-box;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.checkout-pay-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.checkout-status {
+  margin-top: 6px;
+  text-align: right;
+  font-size: var(--font-body);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 會員詳情卡片 */
+.member-detail {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+}
+.member-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.member-row-label {
+  color: var(--text-dim);
+  font-size: var(--font-body);
+  min-width: 70px;
+}
+.member-row-value { font-size: var(--font-body); }
+
+/* 商品表單:新增時選了「主機」,帶去「新增手機型號」的那一排 */
+.pf-guide { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 4px 0 16px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
+.pf-guide-note { flex: 1 1 100%; color: var(--text-dim); font-size: var(--font-secondary); }
+

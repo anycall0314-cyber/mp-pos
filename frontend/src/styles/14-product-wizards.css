@@ -1,0 +1,513 @@
+/* ===== MP POS 樣式 14/26:ProductForm 內嵌新增、草稿 banner、品牌系列匯入、批次修改、零件 wizard、維修清單 inline 編輯、已存 / 沒存成 =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* ─── ProductForm 內嵌新增品牌 / 系列 ─── */
+.pf-inline-modal {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: rgba(96, 165, 250, 0.08);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+}
+.pf-inline-modal-title {
+  font-size: var(--font-secondary);
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.pf-inline-modal-body {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.pf-inline-modal-body input {
+  flex: 1;
+}
+
+/* ─── ProductForm 草稿 banner + 關閉前 3 選項提示 ─── */
+.pf-draft-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: var(--font-secondary);
+  color: var(--warn-text);
+  flex-wrap: wrap;
+}
+.pf-draft-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.pf-close-prompt {
+  background: var(--bg-2);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.pf-close-prompt-title {
+  font-size: var(--font-body);
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.pf-close-prompt-msg {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+.pf-close-prompt-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* ─── 品牌系列匯入 modal ─── */
+.bsi-modal {
+  width: 92vw;
+  max-width: 980px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+.bsi-body {
+  flex: 1 1 auto;
+  overflow: auto;
+}
+.bsi-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 10px 12px;
+  background: var(--bg-2);
+  border-radius: 6px;
+  margin-bottom: 10px;
+  font-size: var(--font-secondary);
+}
+.bsi-summary b { color: var(--success-text); }
+.bsi-errors {
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  background: rgba(255, 112, 112, 0.08);
+  border: 1px solid rgba(255, 112, 112, 0.3);
+  border-radius: 4px;
+}
+.bsi-preview-wrap {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.bsi-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-secondary);
+}
+.bsi-preview-table th,
+.bsi-preview-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.bsi-preview-table th {
+  background: var(--bg-2);
+  position: sticky;
+  top: 0;
+}
+.bsi-tag-new {
+  display: inline-block;
+  padding: 1px 6px;
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--success-text);
+  border-radius: 3px;
+  font-size: var(--font-secondary);
+}
+.bsi-tag-upd {
+  display: inline-block;
+  padding: 1px 6px;
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--warn-text);
+  border-radius: 3px;
+  font-size: var(--font-secondary);
+}
+
+/* ─── 商品批次修改 modal ─── */
+.be-modal {
+  width: 90vw;
+  max-width: 720px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+.be-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 4px 12px;
+}
+.be-hint {
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+  padding: 8px 0;
+}
+/* 整批被退回:哪一個商品、為什麼(一個商品一行) */
+.be-failures {
+  margin: 0 0 8px;
+  padding: 0 0 0 20px;
+  color: var(--danger-text);
+  font-size: var(--font-secondary);
+  line-height: 1.5;
+}
+.be-failures li + li {
+  margin-top: 4px;
+}
+.be-section {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  background: transparent;
+}
+.be-section.on {
+  border-color: var(--accent);
+  background: rgba(96, 165, 250, 0.05);
+}
+.be-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: var(--font-body);
+}
+.be-section-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 0 4px;
+}
+.be-section-body label {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--font-secondary);
+  gap: 4px;
+  min-width: 140px;
+}
+.be-section-body.be-attrs {
+  flex-direction: column;
+  gap: 8px;
+}
+/* 批次修改的屬性:一個一列,名稱 + 不改 / 是 / 否(放大字體時名稱自己一行) */
+.be-tri {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.be-tri > span {
+  min-width: 8em;
+  font-size: var(--font-secondary);
+}
+
+.be-grid3 {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+/* ─── 零件批次建立 wizard ─── */
+.bcp-modal {
+  width: 92vw;
+  max-width: 1100px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+.bcp-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  min-height: 300px;
+}
+.bcp-step-hint {
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+  padding: 4px 0 12px;
+}
+.bcp-tpl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  margin: 8px 0;
+}
+.bcp-tpl-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.bcp-tpl-card:hover { border-color: var(--accent); }
+.bcp-tpl-card.selected {
+  border-color: var(--accent);
+  background: rgba(96, 165, 250, 0.08);
+}
+.bcp-tpl-name {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.bcp-tpl-count {
+  font-size: var(--font-secondary);
+  font-weight: 400;
+  color: var(--text-dim);
+}
+.bcp-tpl-items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  line-height: 1.7;
+}
+
+.bcp-brand-block {
+  border-bottom: 1px solid var(--border);
+  padding: 8px 0;
+}
+.bcp-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 8px;
+  background: var(--bg-2);
+  border-radius: 4px;
+}
+.bcp-brand-count { color: var(--text-dim); font-size: var(--font-secondary); }
+.bcp-model-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px 4px;
+}
+.bcp-model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: var(--font-secondary);
+  cursor: pointer;
+  background: transparent;
+}
+.bcp-model-chip input { margin: 0; }
+.bcp-model-chip.on {
+  background: var(--accent-fill);
+  color: white;
+  border-color: var(--accent);
+}
+.bcp-summary {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: var(--font-body);
+  padding: 12px;
+  background: var(--bg-2);
+  border-radius: 6px;
+  margin-top: 12px;
+}
+.bcp-summary b { font-size: var(--font-section); color: var(--accent); }
+
+.bcp-defaults-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  background: var(--bg-2);
+  border-radius: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.bcp-defaults-bar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-secondary);
+}
+.bcp-cat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-secondary);
+  margin-bottom: 10px;
+}
+.bcp-cat-row select { min-width: 240px; }
+.bcp-preview-wrap {
+  max-height: 400px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.bcp-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-secondary);
+}
+.bcp-preview-table th,
+.bcp-preview-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.bcp-preview-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-2);
+  z-index: 1;
+}
+.bcp-preview-table input {
+  width: 100%;
+  font-size: var(--font-secondary);
+  padding: 2px 4px;
+}
+.bcp-preview-table .bcp-exists {
+  background: rgba(251, 146, 60, 0.15);
+  border-color: var(--warn-text-orange);
+}
+.bcp-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(96, 165, 250, 0.15);
+  color: var(--info-text);
+  font-size: var(--font-secondary);
+  border-radius: 4px;
+}
+.bcp-format-hint {
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+  padding: 6px 0;
+}
+.bcp-result-card {
+  padding: 20px;
+  background: var(--bg-2);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+.bcp-result-hero { font-size: 20px; }
+.bcp-result-hero b { color: var(--success-text); font-size: 28px; padding: 0 6px; }
+.bcp-result-row { margin-top: 10px; font-size: var(--font-secondary); }
+.bcp-result-sub { color: var(--text-dim); font-size: var(--font-secondary); margin-top: 4px; }
+
+/* PartTemplatesPage 左側列表項 */
+.pt-list-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  color: var(--text);
+  cursor: pointer;
+}
+.pt-list-item:hover { background: var(--bg-2); }
+/* 品牌、零件範本清單佔滿整頁時一格一格排(全站檢視 V01:以前是左邊 260 / 300px 一條直列) */
+.pt-list-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px;
+}
+.pt-list-grid .pt-list-item { margin-bottom: 0; border-color: var(--border); }
+.pt-list-item.selected {
+  background: rgba(96, 165, 250, 0.1);
+  border-color: var(--accent);
+}
+.pt-list-name { font-weight: 600; }
+.pt-list-meta { font-size: var(--font-secondary); color: var(--text-dim); }
+.pt-items-table input {
+  width: 100%;
+  font-size: var(--font-secondary);
+  padding: 4px 6px;
+}
+
+/* 維修列表 inline 編輯欄(報價/成本/實付) */
+/* 寫成 input.xxx:單寫類別會輸給全站的 input[type="number"] 規則 */
+input.rp-inline-money {
+  width: 96px; /* 放得下六位數 */
+  min-height: 36px;
+  padding: 3px 6px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+  /* 看得出可以改:平常就有一條虛線框(以前要滑過去才有框) */
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: var(--font-body);
+  transition: border-color 0.15s, background 0.15s;
+}
+input.rp-inline-money:hover:not(:disabled) {
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+input.rp-inline-money:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg-2);
+}
+input.rp-inline-money:disabled {
+  color: var(--text-dim);
+  cursor: not-allowed;
+}
+input.rp-inline-money:disabled { border-color: transparent; }
+input.rp-inline-money.saving {
+  opacity: 0.6;
+}
+input.rp-inline-money.saved {
+  border-style: solid;
+  border-color: var(--success-text);
+}
+input.rp-inline-money.failed {
+  border-style: solid;
+  border-color: var(--danger-text);
+}
+/* 存檔中 / 已存 / 沒存成(lib/inlineSave.ts) */
+.rp-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 6px;
+  max-width: 220px;
+}
+.rp-inline-state {
+  font-size: var(--font-meta);
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.rp-inline-state.saved { color: var(--success-text); }
+.rp-inline-state.failed { color: var(--danger-text); }
+.rp-inline-retry {
+  margin-left: 4px;
+  min-height: 28px;
+  padding: 0 8px;
+}
+.rp-inline-err {
+  flex-basis: 100%;
+  text-align: right;
+  white-space: normal;
+  font-size: var(--font-meta);
+  color: var(--danger-text);
+}
+

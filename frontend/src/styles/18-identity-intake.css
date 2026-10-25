@@ -1,0 +1,387 @@
+/* ===== MP POS 樣式 18/26:商品識別 / 待確認入庫、防重複面板、先找一次、備份與還原、銷退明細、舊 POS 紀錄 =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* ─────────────────────────────────────────────────────────
+ * 商品識別 / 待確認入庫(apps.identity)
+ * ───────────────────────────────────────────────────────── */
+
+/* 建立批次表單 */
+.intake-create {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.intake-textarea {
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
+  padding: 8px 10px;
+}
+.intake-create-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.intake-create-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+.intake-label { color: var(--text-dim); font-size: var(--font-secondary); }
+
+/* 批次列 */
+.intake-batchbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.intake-batchmeta { color: var(--text-dim); font-size: var(--font-secondary); }
+/* 進貨匯入(全站檢視 V06e):門市標粗(貨進錯店是這頁最會出的錯);明細合計跟單據總額並排,差的標出來 */
+.intake-batchmeta b { color: var(--text); }
+.intake-batchmeta { flex: 1 1 120px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.intake-batchbar > select { max-width: 220px; }
+.intake-sum { font-size: var(--font-secondary); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.intake-gap { margin-left: 8px; color: var(--warn-text); font-weight: 600; }
+
+.intake-commit-ok {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(80, 200, 120, 0.12);
+  color: #7fd8a0;
+  border-bottom: 1px solid var(--border);
+}
+
+.intake-work { flex: 1; min-height: 0; }
+/* 這一頁的左右兩欄都只有一塊內容。沿用 .md-master(40px 工具列 + 表格)與
+   .md-detail(標題 + 內容 + 按鈕列)的多列版型時,內容會被塞進第一列那幾十 px,
+   只看得到表頭 / 標題,明細與候選全部被裁掉。 */
+.intake-work .md-master,
+.intake-work .md-detail { grid-template-rows: minmax(0, 1fr); }
+/* 窄畫面:上面多一條「×」回清單(components/PaneBack;全站檢視 R03) */
+@media (max-width: 768px) {
+  .intake-work.md-show-detail .md-detail { grid-template-rows: auto minmax(0, 1fr); }
+}
+
+/* 狀態徽章 */
+.intake-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: var(--font-secondary);
+  font-weight: 600;
+}
+.intake-badge.ok { background: rgba(80, 200, 120, 0.18); color: #6ecf94; }
+.intake-badge.warn { background: rgba(240, 176, 96, 0.18); color: var(--warn-text-amber); }
+.intake-badge.danger { background: rgba(255, 112, 112, 0.18); color: #ff8080; }
+.intake-badge.muted { background: rgba(138, 147, 166, 0.18); color: var(--text-dim); }
+
+.intake-row-done td { opacity: 0.5; }
+tr.selected .intake-badge { filter: none; }
+
+/* 明細詳情 */
+.intake-item-detail { padding: 16px; overflow: auto; }
+.intake-subhead {
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+  margin: 12px 0 6px;
+}
+
+.intake-candidate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  background: var(--panel-2);
+}
+.intake-candidate.conflict { border-color: #553030; }
+.intake-candidate-name { color: var(--text); }
+.intake-candidate-attr { color: var(--text-dim); }
+.intake-candidate-sub { color: var(--text-dim); font-size: var(--font-secondary); margin-top: 2px; }
+.intake-conflict-tag { color: #ff8080; }
+.intake-alias-conflicts {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--warn-text-orange);
+  border-radius: 6px;
+  color: var(--warn-text-orange);
+  font-size: var(--font-secondary);
+  line-height: 1.6;
+}
+.intake-inactive-tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--warn-text-orange);
+  color: var(--warn-text-orange);
+  font-size: var(--font-secondary);
+}
+
+.intake-actions {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.intake-otherpick { display: flex; flex-direction: column; gap: 4px; max-width: 360px; }
+.intake-action-btns { display: flex; gap: 8px; }
+
+.intake-hint { color: var(--text-dim); font-size: var(--font-secondary); margin-top: 6px; }
+.intake-taxpick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+}
+.intake-taxpick select { font: inherit; }
+.intake-correct {
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+.intake-correct-row { display: flex; gap: 12px; margin: 6px 0; }
+.intake-correct label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+}
+.intake-correct input { font: inherit; }
+.intake-correct-serials { margin: 6px 0 10px; }
+.intake-correct-serials input { width: 100%; }
+.intake-units {
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+.intake-unit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+.intake-unit-idx {
+  flex: none;
+  width: 22px;
+  text-align: right;
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+}
+.intake-unit-row input { flex: 1; font: inherit; min-width: 0; }
+.intake-docs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+  padding: 0 16px;
+  flex-wrap: wrap;
+}
+.intake-doc-thumb {
+  display: inline-block;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  line-height: 0;
+}
+.intake-doc-thumb img { height: 48px; width: auto; display: block; object-fit: cover; } /* 縮小但留在畫面上(紅隊:收成一行字就不會對著看) */
+.intake-ocrconf { margin: 8px 0; font-size: var(--font-secondary); color: var(--text-dim); }
+.intake-ocrconf.low { color: #ff8080; }
+
+/* 別名頁籤 */
+.alias-panel { display: flex; flex-direction: column; gap: 12px; }
+.alias-hint { color: var(--text-dim); font-size: var(--font-secondary); line-height: 1.5; }
+.alias-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.alias-table { width: 100%; border-collapse: collapse; }
+.alias-table th, .alias-table td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-secondary);
+}
+.alias-table th { color: var(--text-dim); font-weight: 500; }
+.alias-table tr.inactive td { opacity: 0.45; }
+
+/* ─── 新增商品防重複:「可能已經建過」面板 ─────────────── */
+.dup-panel {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--warn-text-orange);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.dup-title { font-weight: 600; margin-bottom: 8px; }
+.dup-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+.dup-row-main { min-width: 0; flex: 1; }
+.dup-row-sub { color: var(--text-dim); font-size: var(--font-secondary); margin-top: 2px; }
+.dup-row input { flex: 0 0 200px; }
+.dup-proceed {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.dup-proceed input { flex: 1; min-width: 0; }
+.dup-remember { margin: -4px 0 12px; font-size: var(--font-secondary); }
+.dup-row .ph-mini { margin: 0; }
+
+/* 用過的商品:那幾格不能改,講原因 */
+.pf-lock-note {
+  margin-bottom: 8px; padding: 6px 10px;
+  border-left: 3px solid var(--warn-text-orange);
+  background: var(--panel-2); color: var(--text-dim); font-size: var(--font-secondary);
+}
+.checkbox.disabled { opacity: 0.55; cursor: not-allowed; }
+.checkbox.disabled input { cursor: not-allowed; }
+
+/* ─── 新增商品先找一次(FindFirstPanel) ───────────────── */
+.ff-search { display: flex; gap: 8px; }
+.ff-search input { flex: 1; min-width: 0; }
+.ff-note { margin-top: 12px; color: var(--text-dim); }
+.ff-list { margin-top: 8px; }
+.ff-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.ff-row:first-child { border-top: 0; }
+.ff-row .ph-mini { width: 44px; height: 44px; margin: 0; }
+.ff-row-main { min-width: 0; flex: 1; }
+.ff-row-sub { color: var(--text-dim); font-size: var(--font-secondary); margin-top: 2px; overflow-wrap: anywhere; }
+.ff-row .btn { flex: none; }
+.ff-none { margin-right: auto; align-self: center; color: var(--text-dim); }
+/* 字改過了:先前那一批候選只能看,不能選 */
+.ff-list.stale .ff-row-main, .ff-list.stale .ph-mini { opacity: 0.45; }
+
+/* ─── 備份與還原 ─────────────────────────────────────── */
+.backup-page { max-width: 880px; }
+.backup-card {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.backup-card .section-head { margin-bottom: 10px; }
+.backup-facts {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 6px 12px;
+  margin: 0 0 10px;
+}
+.backup-facts dt { color: var(--text-dim); }
+.backup-facts dd { margin: 0; }
+.backup-credential {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--warn-text-orange);
+  border-radius: 6px;
+}
+.backup-credential code {
+  display: block;
+  font-size: var(--font-section);
+  letter-spacing: 1px;
+  word-break: break-all;
+  user-select: all;
+}
+.backup-credential p { margin: 8px 0; color: var(--text-dim); font-size: var(--font-secondary); }
+.backup-table { margin-top: 12px; width: 100%; }
+.backup-sub { color: var(--text-dim); font-size: var(--font-secondary); margin-top: 2px; }
+.backup-bad { color: #ef4444; white-space: pre-wrap; }
+.backup-good { color: #16a34a; }
+/* 不用 flex:td 變成 flex 之後就不是表格儲存格,底線會對不齊 */
+.backup-actions { text-align: right; white-space: nowrap; }
+.backup-actions .btn + .btn { margin-left: 6px; }
+.backup-upload { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.backup-upload input[type="text"], .backup-upload input:not([type]) { flex: 1; min-width: 180px; }
+.backup-report { margin-bottom: 12px; }
+.ledger-table th { text-align: left; }
+.ledger-table td { vertical-align: top; }
+.ledger-table th.num, .ledger-table td.num { text-align: right; }
+.ledger-info { color: var(--text-dim); }
+/* 全站檢視 L03:對帳有不一致時一致的收起來;還原四步只標在哪;舊系統原始資料可展開 */
+.ledger-fold td { padding-top: 6px; padding-bottom: 6px; }
+.restore-steps { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0 0 10px; padding: 0; font-size: var(--font-secondary); }
+.restore-steps li { padding: 2px 10px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-dim); }
+.restore-steps li.done { color: var(--text); }
+.restore-steps li.now { color: var(--text); border-color: var(--accent); font-weight: 600; }
+.legacy-raw-box { margin: 6px 0; }
+.legacy-raw-box > summary { cursor: pointer; color: var(--text-dim); font-size: var(--font-secondary); }
+
+/* 銷退單明細(整張退,唯讀) */
+.sr-lines { width: 100%; }
+.sr-lines th { text-align: left; }
+.sr-lines th.num, .sr-lines td.num { text-align: right; width: 110px; }
+.sr-lines td:last-child, .sr-lines th:last-child { padding-left: 24px; }
+
+/* ---- 舊 POS 紀錄(會員頁)與舊系統對照頁 ---- */
+.legacy-filters { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.legacy-filters input, .legacy-filters select { min-width: 0; width: 130px; }
+.legacy-tag {
+  margin-left: 6px; font-size: var(--font-meta); padding: 1px 4px;
+  border: 1px solid var(--text-dim); border-radius: 3px; color: var(--text-dim);
+}
+.legacy-sub { color: var(--text-dim); font-size: var(--font-secondary); }
+.legacy-links { margin: 6px 0 10px; display: grid; gap: 6px; }
+.legacy-candidate {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+}
+.legacy-pager { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin-top: 8px; }
+.legacy-doc-modal td:nth-child(6) { white-space: nowrap; }
+.legacy-doc-modal .modal-body { overflow-x: auto; }
+.legacy-page { max-width: 1100px; }
+.legacy-tabbar { margin-bottom: 12px; }
+/* 廠商叫貨:分頁放在頁首那一排裡,不再畫一條底線(頁首本身有) */
+.vo-tabs { border-bottom: 0; align-self: stretch; align-items: flex-end; }
+.legacy-toolbar { margin-bottom: 8px; }
+.legacy-toolbar input { width: 220px; max-width: 100%; }
+.legacy-actions { white-space: nowrap; text-align: right; }
+.legacy-actions .btn + .btn { margin-left: 6px; }
+.legacy-pick { display: grid; gap: 6px; padding: 8px; background: var(--surface-2, transparent); }
+.legacy-raw { white-space: pre-wrap; font-size: var(--font-secondary); max-height: 240px; overflow: auto; }
+@media (max-width: 640px) {
+  .legacy-filters input, .legacy-filters select { width: calc(50% - 6px); }
+  .legacy-candidate { flex-direction: column; align-items: flex-start; }
+}
+.legacy-table-wrap { overflow-x: auto; }
+.legacy-table-wrap table { min-width: 560px; }
+.legacy-table-wrap th, .legacy-table-wrap td { padding: 6px 8px; }
+.legacy-table-wrap th.num, .legacy-table-wrap td.num { text-align: right; }
+/* 舊 POS 紀錄:照日期分段、每張單一小段,品項直接列出來 */
+.legacy-table-wrap tr.legacy-date td { background: var(--panel-2); font-weight: 600; color: var(--text); }
+.legacy-table-wrap tr.legacy-doc td { color: var(--text-dim); font-size: var(--font-secondary); padding-top: 4px; padding-bottom: 2px; }
+.legacy-table-wrap tr.legacy-neg td { color: var(--danger-text-soft); }
+

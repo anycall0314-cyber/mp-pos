@@ -1,0 +1,128 @@
+/* ===== MP POS 樣式 24/26:庫存三張、盤點分頁、發票 / 進貨明細、異動查詢、維修單清單、序號查詢、維修月報、第一次入庫 =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* ── 庫存三張(進銷存表 / 異動查詢 / 序號查詢):篩選一排、表格吃掉剩下的高度、最下面翻頁 ── */
+.sr-page .report-table.sr-table { flex: 1; min-height: 0; height: auto; overflow: auto; }
+/* 盤點單:一次一張表,上面的分頁(全站檢視 B1) */
+.sr-page .sc-tabs { flex: none; margin: 4px 0; }
+.sr-table.sr-busy { opacity: 0.6; }
+/* 發票明細:作廢的整列淡掉(金額不算進合計);待查的狀態那一格標出來 */
+.sr-table tr.inv-void td { color: var(--text-dim); }
+.sr-table tr.inv-check .inv-state { color: var(--danger-text); font-weight: 600; }
+.sr-filter input[type="text"] {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: var(--font-body);
+  min-height: var(--control-height);
+  width: 200px;
+}
+.sr-filter label { white-space: nowrap; }
+/* 進貨明細:第一排在 1366 寬要擠成一排(全站檢視 V06d);欄名念給讀螢幕的聽、不顯示 */
+.pl-filter input[type="text"] { width: 150px; }
+.pl-filter input[type="date"] { width: 136px; }
+.pl-range { display: inline-flex; align-items: center; gap: 4px; color: var(--text-dim); }
+.sr-filter input:disabled { opacity: 0.7; }
+/* 異動查詢:從進銷存表帶過來、鎖在那一個商品上 */
+.sr-only-one {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: var(--control-height);
+  padding: 0 6px 0 10px;
+  border: 1px solid var(--accent); border-radius: 6px;
+  background: var(--panel-2); color: var(--text);
+  max-width: 420px; overflow: hidden; text-overflow: ellipsis;
+}
+.sr-only-one button {
+  background: none; border: 0; color: var(--text-dim);
+  font: inherit; font-size: var(--font-section); line-height: 1;
+  cursor: pointer; padding: 4px 6px;
+}
+.sr-filter .sr-check { color: var(--text); cursor: pointer; }
+.sr-filter .sr-check input { width: 18px; height: 18px; }
+.sr-table .report-grid tfoot td {
+  position: sticky; bottom: 0;
+  background: var(--panel-2);
+  font-weight: 600;
+  border-top: 1px solid var(--border);
+}
+.sr-table .sr-dim {
+  color: var(--text-dim); font-size: var(--font-secondary);
+  white-space: normal; max-width: 320px;
+}
+.sr-table .sr-closing .wb-badge { margin-right: 8px; }
+.sr-table .report-neg-text { color: var(--danger-text); }
+.sr-table tr.sr-pick { cursor: pointer; }
+/* 維修單清單:同一格的第二行(方式、機型、預計完修;全站檢視 E11) */
+.rp-sub { font-size: var(--font-secondary); color: var(--text-dim); }
+/* 序號查詢:品名可以換行,第二行(SN、品號、日期)小字(全站檢視 B12) */
+.sr-table td.sr-name { white-space: normal; min-width: 12rem; }
+.sr-table .sr-sub { font-size: var(--font-secondary); color: var(--text-dim); }
+.sr-link {
+  background: none; border: 0; padding: 0;
+  color: var(--accent); font: inherit; cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.sr-link:hover { text-decoration: underline; }
+.sr-pager {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 銷貨日報(2026-10-12):商品那一格、整張單的勾、銷退那一塊的標題 ── */
+.sd-filter input[type="text"] {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: var(--font-body);
+  min-height: var(--control-height);
+  width: 180px;
+}
+.sd-filter .sd-whole {
+  display: inline-flex; flex-direction: row; align-items: center; gap: 6px;
+  color: var(--text); cursor: pointer; white-space: nowrap;
+}
+.sd-filter .sd-whole input { width: 18px; height: 18px; }
+.sd-sum .sd-narrowed { align-self: center; margin-right: 8px; }
+/* 銷退不是錯誤:標題用一般的顏色,數字本身是負的(紅的) */
+.report-void-header.sd-return-header {
+  color: var(--text);
+  background: var(--panel-2);
+  border-color: var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 維修月報:每個人分到多少那一張小表(在合計與逐筆之間) */
+.rm-people { margin-bottom: 12px; }
+.rm-people .report-grid { width: auto; min-width: 360px; }
+
+/* 盤點:管理員改調整量的那一格(窄一點,靠右) */
+.sc-adjust { width: 72px; text-align: right; }
+/* 盤點:配件那一排。配件那一格是工作台的掃碼框(外觀跟「手機」那一格一樣),「沒加入」在它底下往下長,
+   同一排的其他東西對齊第一行、不跟著往下掉;送出靠右 */
+.sc-scanrow { align-items: flex-start; }
+.list-filterbar label.sc-scan { align-items: flex-start; line-height: var(--control-height); }
+.sc-scan .wb-scan { flex: 0 1 360px; min-width: 200px; line-height: normal; white-space: normal; }
+.sr-filter .sc-scan .wb-scan-in > input {
+  width: 100%;
+  min-height: var(--control-height);
+  font-size: var(--font-body) !important;
+  padding: 0 10px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 6px !important;
+}
+.sc-scanrow > label:not(.sc-scan), .sc-scanrow > .sr-only-one { min-height: var(--control-height); }
+.sc-submit { margin-left: auto; }
+/* 第一次入庫:舊品名分組的那一列 */
+.sc-group td { font-weight: 600; color: var(--text-dim, inherit); }
+

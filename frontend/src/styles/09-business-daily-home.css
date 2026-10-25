@@ -1,0 +1,533 @@
+/* ===== MP POS 樣式 09/26:營業日報與今日總覽(HomePage) =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* ─────────────────────────────────────────────────────────
+ * 營業日報(BusinessDailyReport)響應式
+ * 桌機:左寬右窄兩張卡片(現金櫃流水 / 當日營收)
+ * 手機:上下 stack,內格從 5 欄 / 4 欄 縮成 2 欄
+ * ───────────────────────────────────────────────────────── */
+/* 摘要卡 grid:容器寬不夠就自動 stack(不靠 @media,完全由父層寬度驅動)
+ * 桌機:兩張卡(現金櫃流水 / 當日營收)左右並排
+ * 窄畫面:每張卡 minmax 320 撐不下就 wrap → 上下排
+ */
+.biz-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.biz-summary-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.biz-summary-card-title {
+  font-size: var(--font-secondary);
+  color: var(--text);
+  font-weight: 700;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+}
+/* 摘要卡內部:三欄式 grid(運算子 / 標籤 / 金額)
+ * 前日現金、加項、減項是輔助行(小字),今日結餘是主角數字(大字粗體)
+ * 加項顯示 + 號,減項顯示 − 號,主角顯示 = 號
+ */
+.biz-flow {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+  background: var(--panel);
+}
+.biz-flow-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 16px;
+}
+.biz-flow-row.biz-flow-empty { display: block; text-align: center; padding: 14px 16px; }
+.biz-flow-op {
+  text-align: center;
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: var(--font-body);
+}
+.biz-flow-label {
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+}
+.biz-flow-value {
+  color: var(--text);
+  font-size: var(--font-body);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+/* 加項 + 號偏綠 */
+.biz-flow-add .biz-flow-op { color: var(--success-text); }
+/* 減項 − 號偏紅,金額 dim */
+.biz-flow-sub .biz-flow-op { color: var(--danger-text-soft); }
+.biz-flow-sub .biz-flow-value { color: var(--text-dim); }
+/* 前日現金:粗體稍微強調,但不及主角 */
+.biz-flow-opening .biz-flow-label { color: var(--text); font-weight: 600; }
+.biz-flow-opening .biz-flow-value { font-size: var(--font-body); }
+/* 主角數字:粗體大字 + 上方分隔線 */
+.biz-flow-hero {
+  margin-top: 6px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  border-top: 1px solid var(--border);
+  align-items: center;
+}
+.biz-flow-hero .biz-flow-op {
+  color: var(--accent);
+  font-size: var(--font-body);
+}
+.biz-flow-hero .biz-flow-label {
+  color: var(--text);
+  font-weight: 700;
+  font-size: var(--font-body);
+}
+.biz-flow-hero .biz-flow-value {
+  color: var(--text);
+  font-size: var(--font-total);
+  line-height: 1.2857;
+  font-weight: 700;
+}
+.biz-flow-empty {
+  padding: 12px 16px;
+}
+.biz-flow-empty .biz-flow-label {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* 收入 / 支出 群組 */
+.biz-group {
+  margin-bottom: 20px;
+}
+.biz-group-header {
+  display: grid;
+  /* 跟 .biz-section-header 完全同 column + padding,讓「筆數/小計」header 上下對齊 */
+  grid-template-columns: 20px minmax(0, 1fr) 50px 90px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px 4px 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.biz-group-label {
+  font-size: var(--font-secondary);
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 1px;
+}
+.biz-group-th {
+  font-size: var(--font-table-head);
+  font-weight: 600;
+  color: var(--text-dim);
+}
+/* 筆數欄:header 跟 value 都置中,避免兩個字的「筆數」靠右後 0 看起來偏向小計欄 */
+.biz-group-th-count {
+  text-align: center;
+}
+.biz-group-th-total {
+  text-align: right;
+}
+
+/* Section 折疊區 */
+.biz-section {
+  margin-bottom: 6px;
+}
+.biz-section-header {
+  width: 100%;
+  display: grid;
+  /* 跟 .biz-group-header 同 columns,讓「筆數」「小計」上下垂直對齊 */
+  grid-template-columns: 20px minmax(0, 1fr) 50px 90px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+.biz-section-arrow {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  transition: transform 0.15s;
+  display: inline-block;
+}
+.biz-section-title {
+  font-size: var(--font-body);
+  color: var(--text);
+  font-weight: 700;
+}
+.biz-section-count {
+  font-size: var(--font-body);
+  color: var(--text-dim);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.biz-section-total {
+  text-align: right;
+  font-size: var(--font-body);
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.biz-section-body {
+  padding: 8px 0 4px 12px;
+  /* line-table 父層加 overflow-x,手機可橫向捲動 */
+  overflow-x: auto;
+}
+
+@media (max-width: 768px) {
+  /* 摘要卡 grid 已用 auto-fit 處理 stack,這裡不再覆寫,只縮 gap */
+  .biz-summary-grid {
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  /* Section header:標題彈性 + 數字併排,不再固定 220 / 80 */
+  .biz-section-header {
+    grid-template-columns: 20px 1fr auto auto;
+    gap: 8px;
+    padding: 10px 10px;
+  }
+  .biz-section-title { font-size: var(--font-body); }
+  .biz-section-count { font-size: var(--font-secondary); }
+  .biz-section-total { font-size: var(--font-body); }
+  .biz-section-body {
+    padding: 8px 0 4px 4px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+ * HomePage(/home):狀態列 + 櫃檯動作 + 待辦 / 注意 + 今日營收 / 最近交易 + 銷量趨勢
+ * 所有 grid 都用 auto-fit fluid,窄畫面自動 wrap,不靠 @media
+ * ───────────────────────────────────────────────────────── */
+.hp-statusbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-secondary);
+}
+.hp-statusbar-left,
+.hp-statusbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.hp-status-sep { color: var(--text-dim); }
+.hp-status-wh { color: var(--text); font-weight: 600; }
+.hp-status-user { color: var(--text-dim); }
+.hp-status-date { color: var(--text-dim); }
+.hp-status-time { color: var(--text); font-weight: 600; }
+
+.hp-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.hp-section-title {
+  font-size: var(--font-section);
+  line-height: 1.4445;
+  color: var(--text);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+/* 今日營收:營業額、銷貨筆數兩格 */
+.hp-stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: 12px;
+  padding: 12px 14px;
+}
+.hp-stat-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.hp-stat-label {
+  font-size: var(--font-body);
+  font-weight: 500;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.hp-stat-value {
+  font-size: var(--font-kpi);
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  margin-bottom: 4px;
+}
+.hp-stat-hint {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+}
+.hp-stat-up { color: var(--success-text); font-weight: 600; }
+.hp-stat-down { color: var(--danger-text); font-weight: 600; }
+.hp-stat-warn { color: var(--warn-text); font-weight: 600; }
+.hp-stat-muted { color: var(--text-dim); }
+
+/* 兩欄面板 */
+.hp-two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 16px;
+}
+.hp-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.hp-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+}
+.hp-panel-title {
+  font-weight: 600;
+  font-size: var(--font-section);
+  line-height: 1.4445;
+  color: var(--text);
+}
+.hp-panel-link {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: var(--font-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.hp-panel-link:hover { color: var(--text); }
+.hp-panel-body {
+  display: flex;
+  flex-direction: column;
+}
+/* 首頁讀到過之後重抓失敗:照樣顯示上一次的,最上面講一句(全站檢視 R08) */
+.hp-stale {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--warn-text-orange);
+}
+.hp-panel-empty {
+  padding: 24px 14px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+}
+
+/* 一行(銷量趨勢用) */
+.hp-alert-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.hp-alert-row:last-child { border-bottom: 0; }
+.hp-alert-link {
+  text-decoration: none;
+  color: inherit;
+}
+.hp-alert-link:hover { background: var(--row-hover); }
+
+/* 銷售趨勢膠囊 — 取代 alert-dot,把 % 數直接秀出來 */
+.hp-trend-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--font-secondary);
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.hp-trend-up {
+  background: rgba(74, 222, 128, 0.18);
+  color: var(--success-text);
+}
+.hp-trend-down {
+  background: rgba(251, 146, 60, 0.18);
+  color: var(--warn-text-orange);
+}
+:root[data-theme="light"] .hp-trend-up {
+  background: #dcfce7;
+  color: #15803d;
+}
+:root[data-theme="light"] .hp-trend-down {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+/* 比較期間這種說明放在標題下面一行(以前用 11px 硬塞在標題旁邊) */
+.hp-panel-meta {
+  display: block;
+  font-size: var(--font-secondary);
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+.hp-alert-content { flex: 1; min-width: 0; }
+.hp-alert-title {
+  font-size: var(--font-body);
+  color: var(--text);
+  font-weight: 600;
+}
+.hp-alert-sub {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+/* 最近交易 row */
+.hp-recent-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: var(--text);
+}
+.hp-recent-row:last-child { border-bottom: 0; }
+.hp-recent-row:hover { background: var(--row-hover); }
+.hp-recent-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: var(--font-body);
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.hp-recent-content {
+  flex: 1;
+  min-width: 0;
+}
+.hp-recent-title {
+  font-size: var(--font-body);
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hp-recent-sub {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.hp-recent-amount {
+  font-size: var(--font-body);
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* 櫃檯動作(四顆,看權限;名字是動作) */
+.hp-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: 10px;
+}
+.hp-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  padding: 12px 16px;
+  background: var(--panel-2);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: var(--font-section);
+  font-weight: 600;
+}
+.hp-action:hover { background: var(--accent-fill); color: white; }
+
+/* 首頁選門市(沒鎖門市的帳號) */
+.hp-store {
+  min-height: 36px;
+  font-weight: 600;
+}
+
+/* 待辦 / 注意:一組一行「名稱 數字」,底下最多三筆 */
+.hp-group { border-bottom: 1px solid var(--border); }
+.hp-group:last-child { border-bottom: 0; }
+.hp-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 14px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: var(--font-body);
+  font-weight: 600;
+}
+.hp-group-head:hover { background: var(--row-hover); }
+.hp-group-count {
+  min-width: 32px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--warn-text);
+}
+.hp-group-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 14px 6px 28px;
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: var(--font-secondary);
+}
+.hp-group-item:hover { background: var(--row-hover); color: var(--text); }
+.hp-group-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hp-group-sub { flex-shrink: 0; }
+

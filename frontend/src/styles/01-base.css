@@ -1,0 +1,160 @@
+/* ===== MP POS 樣式 01/26:變數、日間主題、字級、重設、數字輸入框 =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+:root {
+  --bg: #0f1115;
+  --panel: #161a21;
+  --panel-2: #1c2230;
+  --border: #2a3142;
+  --text: #d8dde7;
+  --text-dim: #8a93a6;
+  --accent: #4f8cff;
+  /* 實心按鈕的底色(上面放白字):#4f8cff 配白字對比只有 3.2,不到 4.5;這個是 5.2 */
+  --accent-fill: #2563eb;
+  --row-hover: #1f2532;
+  --row-selected: #233452;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", sans-serif;
+  /* 根字級跟著瀏覽器設定(預設 16px);下面的字級都用 rem,使用者把瀏覽器字體調大時會一起變大 */
+  font-size: 100%;
+  /* 字級只有這幾級。新的樣式一律用這些變數,不要再寫死 px
+     (11~13px 的小字以前拿來放庫存數、欄位名稱、操作提示,在門市的螢幕上太小)。 */
+  --font-meta: 0.75rem;        /* 12px:建構版本這種不影響作業的註記 */
+  --font-secondary: 0.875rem;  /* 14px:說明、日期、副文、條件摘要 */
+  --font-table-head: 0.9375rem;/* 15px:表格的欄位名稱 */
+  --font-body: 1rem;           /* 16px:正文、商品資料、表單、側欄、分頁、按鈕 */
+  --font-section: 1.125rem;    /* 18px:區塊標題、掃碼輸入 */
+  --font-page: 1.5rem;         /* 24px:頁標題 */
+  --font-total: 1.75rem;       /* 28px:應付 / 結餘總額 */
+  --font-kpi: 2rem;            /* 32px:首頁的大數字 */
+  --control-height: 2.75rem;   /* 44px:輸入框、下拉、一般按鈕 */
+  --control-height-lg: 3rem;   /* 48px:掃碼框、結帳按鈕 */
+  --row-pad: 0.75rem;          /* 表格上下各 12px → 單行大約 48px */
+  /* 警示文字 / 外框:夜間是亮黃、亮橘;白底上那兩個顏色對比只有 1.7~2.3,日間換成深色(見下面的日間區塊)。
+     要用警示色寫字一律用這三個變數,不要直接寫 #fbbf24 / #fb923c / #f0b060 */
+  --warn-text: #fbbf24;
+  --warn-text-orange: #fb923c;
+  --warn-text-amber: #f0b060;
+  /* 成功 / 錯誤 / 資訊的文字與外框也一樣:夜間的亮綠、亮紅、亮藍在白底上對比只有 1.7~2.7。
+     用這些顏色寫字一律用變數,不要直接寫 #4ade80 / #ff7070 / #60a5fa */
+  --success-text: #4ade80;
+  --success-text-soft: #80d090;
+  --danger-text: #ff7070;
+  --danger-text-soft: #ff9090;
+  --danger-text-mid: #f87171;
+  --info-text: #60a5fa;
+  --info-text-soft: #93c5fd;
+  color-scheme: dark;
+}
+
+/* 日間模式:套用 <html data-theme="light"> 即可切換 */
+:root[data-theme="light"] {
+  --bg: #f4f6fa;
+  --panel: #ffffff;
+  --panel-2: #f0f3f8;
+  --border: #d8dde7;
+  --text: #1c2230;
+  --text-dim: #6b7280;
+  --accent: #2962ff;
+  --accent-fill: #2962ff;
+  --row-hover: #eef2fa;
+  --row-selected: #d7e3ff;
+  --warn-text: #b45309;
+  --warn-text-orange: #c2410c;
+  --warn-text-amber: #b45309;
+  --success-text: #15803d;
+  --success-text-soft: #15803d;
+  --danger-text: #b91c1c;
+  --danger-text-soft: #b91c1c;
+  --danger-text-mid: #b91c1c;
+  --info-text: #1d4ed8;
+  --info-text-soft: #1d4ed8;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font-size: var(--font-body); line-height: 1.5; }
+input[type="text"], input[type="number"], input[type="date"], input[type="time"],
+input[type="datetime-local"], input[type="search"], input[type="tel"], input[type="email"],
+input[type="password"], input:not([type]), select, textarea {
+  font-family: inherit;
+  font-size: var(--font-body);
+  min-height: var(--control-height);
+}
+button { font-family: inherit; }
+/* 金額框(MoneyInput)與明細表的數字框:拿掉瀏覽器的上下箭頭。
+   窄欄位裡箭頭會蓋住最後一位數字(100 看成 10、128000 少一位) */
+.money-input, .num-input { -moz-appearance: textfield; appearance: textfield; }
+.money-input::-webkit-outer-spin-button, .money-input::-webkit-inner-spin-button,
+.num-input::-webkit-outer-spin-button, .num-input::-webkit-inner-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+
+.app-shell { display: flex; height: 100%; }
+
+.topbar {
+  display: flex; align-items: center; gap: 24px;
+  padding: 0 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 600; letter-spacing: 1px; }
+.topnav { display: flex; gap: 4px; }
+.theme-toggle {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 4px;
+  width: 32px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.theme-toggle:hover { color: var(--text); border-color: var(--text-dim); }
+.topnav-link {
+  padding: 6px 12px; border-radius: 4px;
+  color: var(--text-dim); text-decoration: none;
+  background: transparent; border: 0; cursor: pointer;
+  font: inherit; line-height: 1.4;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.topnav-link:hover { color: var(--text); background: var(--row-hover); }
+.topnav-link.active { color: var(--text); background: var(--panel-2); }
+.topnav-caret { font-size: 9px; color: var(--text-dim); }
+.topnav-link:hover .topnav-caret { color: var(--text); }
+
+.topnav-group { position: relative; }
+.topnav-dropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  min-width: 160px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px;
+  z-index: 50;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.topnav-dropdown-item {
+  display: block;
+  padding: 6px 12px;
+  color: var(--text-dim);
+  text-decoration: none;
+  border-radius: 3px;
+  font-size: var(--font-body);
+  white-space: nowrap;
+}
+.topnav-dropdown-item:hover {
+  color: var(--text);
+  background: var(--row-hover);
+}
+.topnav-dropdown-item.active {
+  color: var(--text);
+  background: var(--accent-fill);
+}
+

@@ -92,6 +92,8 @@
 - `AGENTS.md` 30KB 內(Codex 預設只讀前 32KB;每一輪對話都整份讀進去,越大越慢)。要加東西先搬東西出去。
 - `CURRENT_TASK.md` 只放現在這一件;做完就刪、等 owner 的搬去 `WAITING.md`。
 - `COMPLETED.md` 一筆 10 行內。
+- **一批一個新對話**:做完一批、提交、COMPLETED 五行,就開新的對話做下一批(同一個對話連做十幾批會越來越慢)。
+- **超過 100KB 的資料檔不整份讀**(`inventory.json`、`controls.csv`、匯出的 JSON / CSV 這類),用 grep 查要的那幾行。
 - 規則寫規則檔(`docs/規則/`),一個主題一檔;寫規則、不寫日記。介面 / 版面 / 文字的小修不寫進任何規則檔,有新的版型規則才寫 `docs/ui-patterns.md`。
 
 ## 永久原則

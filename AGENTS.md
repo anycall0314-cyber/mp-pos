@@ -14,6 +14,7 @@
 - **動到哪個主題,先整份讀它的規則檔**(下面「主題索引」),不憑印象;商業邏輯不確定就問 owner,不猜。
 - **複審(2026-10-24 起第三版,全文在 README「複審怎麼做」)**:只有改到「**怎麼算、怎麼寫**」才找外部複審 —— 金額 / 稅 / 成本 / 佣金的算法、庫存加減與序號狀態、現金收支入帳、付款結帳、權限判斷、資料庫變更、鎖與同時操作;Codex 首輪(`high`)、有 P0 / P1 才第二輪、最多兩輪、只擋 P0 / P1。**只顯示金額或庫存數字的畫面、報表版面、清單、查詢、匯入預覽、建檔流程、文字、排版 = 一般**:自己對 diff + 測試全過就交付。**紅隊只在「新模組第一次設計」跑一次**,日常任務不跑、實作後不跑。任何一輪超過 15 分鐘沒結論就停。
 - **做完回報 5 行**:做了什麼 / 改了哪些主要檔 / 資料庫 / 測試 / 風險或沒做的。提交後寫 `COMPLETED.md`,一筆 10 行內。
+- **一批一個新對話**(做完提交就開新的,不在同一個對話連做十幾批)。只改呈現的批次,驗收 = 測試(含守門)+ 型別檢查 + 改到那一頁一張截圖;完整的角色 × 狀態 × 主題矩陣整個專案收尾才跑一次。**超過 100KB 的資料檔(`inventory.json`、`controls.csv` 這類)不整份打開**,用 grep 查。
 - 做完有新規則:改 `docs/規則/` 對應檔(沒有就新開一檔、索引加一行)。**介面 / 版面 / 文字的小修不寫進這裡、也不寫規則檔**;有新的版型規則才寫 `docs/ui-patterns.md`。
 
 ## 全站硬規則(每一件任務都適用)
@@ -97,7 +98,7 @@
 
 後端 `backend/apps/`:`core`(租戶基底、金額、只給管理員的欄位、業務員成本、分頁、冪等)· `tenants`(公司、帳號、權限 abilities、登入、系統設定主檔、平台後台)· `catalog`(商品、類別、品況、機型、型號庫、usage、shop_terms)· `identity`(別名、叫法比對、防重複、待確認入庫)· `inventory`(門市、序號、異動、標籤、flows / reports、盤點、廠商換貨)· `parties`(廠商、來源、會員、業務員、電信、方案、SIM)· `purchasing` · `sales`(銷貨、銷退、合約、佣金、日報、WP-103)· `transfers` · `cash`(雜支、現金調整、代收話費、營業日報)· `repairs` · `backup` · `legacy` · `ledger`(快照與對帳)· `analytics`(報表語意層)· `vendor_orders`(廠商叫貨、kcimos)· `trade`(批發)· `photos`。
 
-前端 `frontend/src/`:`api/`(client、hooks、search、types)· `components/`(ComboBox、Drawer、MoneyInput、shell/、workbench/、labels/、photos/)· `pages/<模組>/` · `lib/`(畫面規則 + 同名測試)· `auth/` · `hooks/` · `nav.ts` · `App.tsx` · `styles.css`(字級、尺寸、顏色都用變數;全站按鈕只有 `btn` / `wb-btn` 一套,主要按鈕是淡色(藍字、淡藍細框、淡底;2026-10-25),控制項顏色用 `--ctl-*` / `--primary-*`)。
+前端 `frontend/src/`:`api/`(client、hooks、search、types)· `components/`(ComboBox、Drawer、MoneyInput、shell/、workbench/、labels/、photos/)· `pages/<模組>/` · `lib/`(畫面規則 + 同名測試)· `auth/` · `hooks/` · `nav.ts` · `App.tsx` · `styles.css`(只剩 @import;規則在 `styles/01-base` ~ `26-*.css`,順序 = 層疊順序;按鈕 / 分頁 / 單選列在 `03-controls.css`、日間顏色在 `16-light-theme.css`、頁面自己的在那一頁的檔。字級、尺寸、顏色都用變數;全站按鈕只有 `btn` / `wb-btn` 一套,主要按鈕是淡色(藍字、淡藍細框、淡底;2026-10-25),控制項顏色用 `--ctl-*` / `--primary-*`)。
 
 ## 慣例
 

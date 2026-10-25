@@ -1,0 +1,299 @@
+/* ===== MP POS 樣式 26/26:手機走動盤點、平台型號庫、分類瀏覽、商品建檔整頁、打烊實點、記住條碼、AppliedFilters、主檔整頁(pane-page) =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* ── 手機走動盤點(/m/count):一欄、手指好按(最小 48px)、字放大也不擠 ── */
+.pc-page { min-height: 100%; background: var(--bg); color: var(--text); padding-inline: 16px; padding-block: 12px 32px;
+  display: flex; flex-direction: column; gap: 12px; max-width: 560px; margin: 0 auto; font-size: 16px; }
+.pc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pc-title { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.pc-who { margin-left: 8px; color: var(--text-dim); font-weight: 400; }
+.pc-btn { min-height: 48px; padding: 0 16px; border-radius: var(--btn-radius); border: 1px solid var(--border); background: var(--panel-2);
+  color: var(--text); font: inherit; cursor: pointer; }
+.pc-btn:disabled { opacity: 0.5; }
+.pc-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pc-mode { min-height: 48px; border-radius: 10px; border: 1.5px solid var(--border); background: var(--panel); color: var(--text); font: inherit; }
+.pc-mode.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.pc-cam { position: relative; border-radius: 12px; overflow: hidden; background: #000; aspect-ratio: 4 / 3; max-width: 100%; }
+.pc-cam video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pc-aim { position: absolute; left: 12%; right: 12%; top: 38%; bottom: 38%; border: 2px solid rgba(255, 255, 255, 0.85); border-radius: 8px; pointer-events: none; }
+.pc-cam-off { position: absolute; right: 8px; bottom: 8px; background: rgba(0, 0, 0, 0.55); color: #fff; border-color: transparent; }
+.pc-cam-on { min-height: 120px; font-size: 18px; font-weight: 600; border-style: dashed; }
+.pc-type { display: flex; gap: 8px; }
+.pc-type input, .pc-pile input { flex: 1; min-width: 0; min-height: 48px; padding: 0 12px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font: inherit; }
+.pc-note { padding: 12px 14px; border-radius: 10px; font-weight: 600; overflow-wrap: anywhere; }
+.pc-note.ok { background: var(--success-bg, rgba(34, 197, 94, 0.15)); color: var(--success-text, inherit); }
+.pc-note.bad { background: var(--danger-bg, rgba(239, 68, 68, 0.15)); color: var(--danger-text, inherit); }
+.pc-last { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pc-pile { display: flex; flex: 1 1 260px; gap: 8px; align-items: center; min-width: 0; }
+.pc-pile label { white-space: nowrap; color: var(--text-dim); }
+.pc-pile input { max-width: 110px; }
+.pc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--border); }
+.pc-list li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 10px 2px; border-bottom: 1px solid var(--border); }
+.pc-list li.undone { opacity: 0.5; text-decoration: line-through; }
+.pc-name { min-width: 0; overflow-wrap: anywhere; }
+.pc-qty { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-dim); }
+.pc-code { grid-column: 1 / -1; color: var(--text-dim); font-size: 13px; overflow-wrap: anywhere; }
+.pc-gone { margin-top: 30vh; text-align: center; line-height: 1.7; padding-inline: 8px; }
+/* 盤點:手機盤點那一排(稱呼、產生 QR Code、每一支手機)與沒對到的碼 */
+.sc-phone-btn { margin-left: auto; }
+/* 手機配對收起來時:「已配對 N 台」在按鈕左邊;電腦抓不到新資料寫「連線中斷」(全站檢視 V06b) */
+.sc-paired { margin-left: auto; align-self: center; font-weight: 600; }
+.sc-paired + .sc-phone-btn { margin-left: 0; }
+.sc-paired.stale { color: var(--danger-text); }
+.sc-phones { align-items: center; }
+.sc-qr { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
+.sc-phone { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; }
+.sc-unknowns { margin-bottom: 12px; }
+.sc-unknown-do { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sc-unknown-do .combobox { min-width: 220px; }
+.pc-pending { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: 10px;
+  border: 1.5px dashed var(--danger-text, #d33); }
+
+/* 平台管理 → 型號庫(PlatformDevicesTab) */
+.dw-page { display: grid; gap: 4px; }
+.dw-last { padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; display: grid; gap: 4px; }
+.dw-last.bad { border-color: var(--danger-text); color: var(--danger-text); }
+.dw-dim { color: var(--text-dim); font-size: var(--font-secondary); }
+.dw-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dw-name { display: flex; gap: 6px; align-items: center; flex: 1 1 220px; min-width: 0; }
+.dw-name input { flex: 1; min-width: 0; height: var(--control-height); padding: 0 10px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--panel-2); color: var(--text); font-size: var(--font-body); }
+.dw-nowrap { white-space: nowrap; }
+.dw-error { color: var(--danger-text); margin-top: 4px; }
+.dw-runs { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.dw-runs li.bad { color: var(--danger-text); }
+.dw-table td { vertical-align: top; }
+.ds-form { margin-bottom: 8px; }
+.ds-pick { flex: 1 1 220px; min-width: 0; }
+.ds-check { display: inline-flex; gap: 4px; align-items: center; white-space: nowrap; }
+
+/* 商品頁「分類瀏覽」:類別 → 品牌 → 型號 → 商品 */
+.mb-groups { padding: 6px 12px; border-bottom: 1px solid var(--border); }
+.cb-crumbs { padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: var(--font-body); }
+.cb-crumb { background: none; border: none; padding: 0; color: var(--accent-text, var(--accent-fill)); cursor: pointer; font: inherit; }
+.cb-dim { color: var(--text-dim); font-size: var(--font-secondary); }
+.pl-fits { color: var(--text-dim); font-size: var(--font-secondary); margin-top: 2px; }
+.cb-note { padding: 6px 12px; }
+.cb-editor { margin-top: 24px; }
+.cb-editor h4 { margin: 0 0 8px; }
+.cb-add { display: flex; gap: 8px; margin-bottom: 8px; }
+.cb-add input { flex: 1; min-width: 0; }
+.cb-row-btns { width: 1%; white-space: nowrap; text-align: right; }
+.cb-row-btns .btn { margin-left: 4px; }
+.mb-brand-label {
+  padding: 6px 12px; font-size: 14px; font-weight: 600; color: var(--text-dim);
+  background: var(--panel-2); border-bottom: 1px solid var(--border);
+}
+
+/* 商品建檔整頁(SPEC-005,owner 2026-10-18):寬螢幕分兩欄(欄位順序不變:左欄排完接右欄);窄的照舊一欄 */
+@media (min-width: 1100px) {
+  .pf-page > form.pf-compact { column-count: 2; column-gap: 32px; }
+  .pf-page > form.pf-compact > * { break-inside: avoid; }
+}
+.pf-saved { padding: 24px 0; display: flex; flex-direction: column; gap: 12px; }
+.pf-saved-title { font-size: var(--font-section); font-weight: 700; }
+.pf-saved-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* 序號查詢:已退那一台的「確認可賣」「廠商換貨」(2026-10-23) */
+.sr-act {
+  white-space: nowrap;
+}
+.sr-act .btn + .btn {
+  margin-left: 6px;
+}
+
+/* 營業日報:打烊實點(2026-10-23) */
+.biz-count-input {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+}
+.biz-count-input input {
+  flex: 1;
+  min-width: 0;
+}
+.biz-count-list,
+.biz-count-adj {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: var(--font-secondary);
+}
+.biz-count-adj {
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+}
+.biz-count-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+.biz-count-time,
+.biz-count-by,
+.biz-count-empty {
+  color: var(--text-dim);
+}
+.biz-count-short,
+.biz-count-error {
+  color: var(--danger-text);
+  font-weight: 600;
+}
+.biz-count-over {
+  color: var(--warn-text);
+  font-weight: 600;
+}
+.biz-count-ok {
+  color: var(--success-text);
+}
+
+/* 先找有沒有建過:記住這個條碼(有「記住條碼」權限、找的是條碼才有;2026-10-23) */
+.ff-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+/* 毛利的顯示 / 遮住:只有眼睛圖示(2026-10-23) */
+.eye-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 4px;
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  cursor: pointer;
+  vertical-align: middle;
+}
+.eye-toggle:hover { color: var(--text); }
+
+/* 系統設定最下面的版本(2026-10-23 從今日總覽搬來) */
+.settings-version {
+  margin-top: 24px;
+  color: var(--text-dim);
+  font-size: var(--font-meta);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+/* 清單上面那一排「已套用的條件」(components/AppliedFilters.tsx) */
+.applied-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-secondary);
+}
+.applied-chip {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  white-space: nowrap;
+}
+.applied-clear {
+  min-height: 32px;
+  padding: 2px 12px;
+}
+
+/* 主檔頁沒選任何一筆:清單佔滿整個寬度、不開右邊(UI 改善計劃 UI-07) */
+.md-layout.list-only,
+.pc-layout.list-only {
+  grid-template-columns: 1fr;
+}
+.md-layout.list-only > .md-master,
+.pc-layout.list-only > .pc-master {
+  border-right: 0;
+}
+.md-layout.list-only > .md-detail { display: none; }
+.md-table tr.md-empty-row { cursor: default; }
+.md-table tr.md-empty-row:hover td { background: transparent; }
+.md-detail-close {
+  margin-left: auto;
+  min-width: 44px;
+  font-size: var(--font-section);
+}
+.pc-layout.list-only > .pc-detail { display: none; }
+/* 改過還沒存、按了會丟掉的那一下:表單最上面那一句(全站檢視 R02;lib/draftGuard.ts),捲到下面也看得到 */
+.pc-detail-warn {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* 電腦上也整頁的主檔頁(`pane-page`:來源、廠商、業務員、品牌系列、零件範本;全站檢視 V01):選了一筆整頁換成那一筆、
+ * 最上面「×」回清單(跟窄畫面同一套)。會員(owner 定:按編輯開右邊)、商品(紅隊:連續查庫存要並排)不加 */
+.pc-layout.pane-page:not(.list-only) { grid-template-columns: minmax(0, 1fr); }
+.pc-layout.pane-page:not(.list-only) > .pc-master { display: none; }
+.pane-page .pc-pane-back {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+/* 窄畫面:主檔頁選了一筆,右邊那一塊整頁換掉清單、最上面「×」回清單(全站檢視 R01;components/PaneBack.tsx)。
+ * 清單只是藏起來(元件沒卸掉,搜尋還在);整頁捲到哪由 PaneBack 記住、回清單時捲回去 */
+.pc-pane-back { display: none; }
+@media (max-width: 768px) {
+  .pc-layout:not(.list-only):not(.solo) { grid-template-columns: minmax(0, 1fr); }
+  .pc-layout:not(.list-only):not(.solo) > .pc-master { display: none; }
+  .pc-layout:not(.list-only):not(.solo) > .pc-detail { min-width: 0; }
+  .pc-pane-back {
+    display: flex;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .pc-detail-body { padding: 12px; }
+  .pc-detail-body dl { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
+  .pc-detail-body dt { margin-top: 8px; }
+  .pc-detail-body dd input:not([type="checkbox"]):not([type="radio"]) { max-width: 100%; }
+}
+
+/* 名單那一列最後的「編輯」(會員頁:點名字只看消費紀錄,要改資料按這顆) */
+.pc-list-table .pc-row-edit {
+  min-height: 32px;
+  padding: 2px 12px;
+}
+
+/* 同一支電話好幾位會員:點名字(components/SamePhonePick.tsx) */
+.same-phone {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.same-phone .btn { min-height: 36px; }
+.same-phone-who { font-weight: 600; }
+
+/* 進貨單底下「還缺什麼」那一句:點了捲到那一行(全站檢視 C5) */
+.ws-issue-link {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  font: inherit;
+}
+
+/* 中古收購(廠商)存好之後:訊息旁邊留著「列印標籤」 */
+.hub-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 0;
+}
+.hub-done .banner { flex: 1; margin: 0; }

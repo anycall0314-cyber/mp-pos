@@ -2,6 +2,7 @@
 // 新寫的頁面另外造按鈕 / 分頁 / 開關外觀會變紅;現有的記在 controlsBaseline.json,只能減少。
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readAllCss } from "./cssText.mjs";
 import test from "node:test";
 
 import { BASELINE, parseCss, scanAll, scanCss, scanSource, tally } from "./controlsPolicy.mjs";
@@ -64,7 +65,7 @@ test("也會攔(淡色複查找到的漏網寫法):variant 依狀態切 primary�
 });
 
 test("共用外觀契約(淡色):主要按鈕不是鮮藍實心白字、單選列選中不借表格選取色、工具列欄位跟頁面同底", () => {
-  const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+  const css = readAllCss();
   const rule = (sel) => parseCss(css).filter((r) => r.selector.split(",").map((x) => x.trim()).includes(sel));
   const decl = (sel, prop) => rule(sel).flatMap((r) => r.decls).filter(([p]) => p === prop).map(([, v]) => v);
   for (const sel of [".btn.primary", ':root[data-theme="light"] .btn.primary']) {

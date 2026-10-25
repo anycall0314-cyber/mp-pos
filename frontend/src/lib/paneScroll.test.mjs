@@ -1,6 +1,7 @@
 // 主檔頁窄畫面:選了一筆整頁換成那一筆、× 回清單(全站檢視 R01)。跑法:npm test。
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readAllCss } from "./cssText.mjs";
 import test from "node:test";
 
 import { keepListBody, openPaneAtTop, trackListScroll } from "./paneScroll.ts";
@@ -84,8 +85,8 @@ test("五個主檔頁與進貨匯入窄畫面都有回清單的 ×;樣式在窄�
   assert.match(intake, /className=\{selectedItem \? "md-layout intake-work md-show-detail" : "md-layout intake-work list-only"\}/);
   // 一直掛著(清單開著時才記得到位置),沒選的時候那一塊藏起來
   assert.match(intake, /<section className="md-detail">\n\s+<PaneBack open=\{!!selectedItem\} onClose=\{\(\) => setSelectedItemId\(null\)\} \/>\n\s+\{selectedItem && <ItemDetail key=\{selectedItem\.id\}/);
-  assert.match(read("../styles.css"), /\.md-layout\.list-only > \.md-detail \{ display: none; \}/);
-  const css = read("../styles.css");
+  assert.match(readAllCss(), /\.md-layout\.list-only > \.md-detail \{ display: none; \}/);
+  const css = readAllCss();
   assert.match(css, /\.intake-work\.md-show-detail \.md-detail \{ grid-template-rows: auto minmax\(0, 1fr\); \}/);
   const narrow = css.slice(css.indexOf(".pc-pane-back { display: none; }"));
   assert.match(narrow, /^\.pc-pane-back \{ display: none; \}\n@media \(max-width: 768px\) \{/);
@@ -141,7 +142,7 @@ test("電腦上也整頁的主檔頁(全站檢視 V01):來源、廠商、業務�
   }
   assert.match(read("../pages/products/BrandSeriesPage.tsx"), /<PaneBack open onClose=\{backToBrands\} \/>/);
   assert.match(read("../pages/products/PartTemplatesPage.tsx"), /<PaneBack open onClose=\{cancel\} disabled=\{save\.isPending\} \/>/);
-  const css = read("../styles.css");
+  const css = readAllCss();
   assert.match(css, /\.pc-layout\.pane-page:not\(\.list-only\) > \.pc-master \{ display: none; \}/);
   assert.match(css, /\.pane-page \.pc-pane-back \{\n  display: flex;/);
   assert.match(read("../components/PaneBack.tsx"), /return keepListBody\(window, body, bodyAt\.current, hidden, \(\) => !leaving\.current\);/);

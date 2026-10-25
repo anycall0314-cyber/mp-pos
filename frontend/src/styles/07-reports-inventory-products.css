@@ -1,0 +1,391 @@
+/* ===== MP POS 樣式 07/26:報表頁、庫存查詢矩陣、商品 / 類別頁、會員頁、類別拖拉、銷貨明細 sub-row、系統設定分頁、徽章 =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* ─── 報表頁 ─── */
+.report-meta {
+  padding: 8px 16px;
+  color: var(--text-dim);
+  font-size: var(--font-body);
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.report-table {
+  overflow: auto;
+  height: calc(100% - 140px);
+}
+.report-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-body);
+}
+.report-grid th, .report-grid td {
+  text-align: left;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.report-grid th {
+  position: sticky; top: 0;
+  background: var(--panel-2);
+  color: var(--text-dim); font-weight: 500;
+  z-index: 1;
+}
+.report-grid td.num, .report-grid th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* 負的數字(銷退扣回去的那幾格):顏色跟主題走 */
+.report-grid td.report-neg { color: var(--danger-text); }
+/* 同單第一行加上方分隔線比較粗,代表新一張單開始 */
+.report-grid tr.order-first td {
+  border-top: 2px solid var(--border);
+}
+.report-grid tr.order-cont td {
+  border-top: 0;
+}
+.report-grid tr.order-subtotal td {
+  background: rgba(255,255,255,0.03);
+  font-weight: 600;
+  border-bottom: 2px solid var(--border);
+}
+.report-grid tr:hover td {
+  background: var(--row-hover);
+}
+.report-grid tr.order-subtotal:hover td {
+  background: rgba(255,255,255,0.05);
+}
+.report-grid .report-serial {
+  color: var(--text-dim);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: var(--font-secondary);
+}
+.report-grid.void tr td {
+  color: var(--text-dim);
+  background: rgba(255, 100, 100, 0.06);
+  text-decoration: line-through;
+}
+.report-grid.void tr.order-subtotal td {
+  background: rgba(255, 100, 100, 0.10);
+}
+.report-void-header {
+  padding: 10px 16px;
+  margin-top: 16px;
+  font-weight: 600;
+  color: var(--danger-text-soft);
+  background: rgba(255, 100, 100, 0.08);
+  border-top: 1px solid rgba(255, 100, 100, 0.3);
+  border-bottom: 1px solid rgba(255, 100, 100, 0.3);
+}
+
+/* ─── 庫存查詢:倉別多選 + 矩陣表格 ─── */
+.warehouse-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 6px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-body);
+  align-items: center;
+}
+.warehouse-picker-label {
+  color: var(--text-dim);
+  margin-right: 8px;
+}
+.warehouse-picker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.warehouse-picker-hint {
+  color: var(--danger-text-soft);
+  margin-left: 8px;
+}
+.stock-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-body);
+}
+.stock-matrix-table th,
+.stock-matrix-table td {
+  text-align: left;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.stock-matrix-table th {
+  position: sticky;
+  top: 0;
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-weight: 500;
+  z-index: 1;
+}
+.stock-matrix-table th .warehouse-col-name {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  font-weight: 400;
+}
+.stock-matrix-table th.num,
+.stock-matrix-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.stock-matrix-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.stock-matrix-table th.sortable:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+.stock-matrix-table tbody tr:hover td {
+  background: var(--row-hover);
+}
+.stock-matrix-table tr.stock-matrix-total-row td {
+  background: var(--panel-2);
+  font-weight: 600;
+  border-top: 2px solid var(--border);
+  position: sticky;
+  bottom: 0;
+}
+.inventory-filterbar {
+  flex-wrap: wrap;
+}
+
+/* ─── 商品 / 類別 合併頁版型 ─── */
+.pc-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 480px) 1fr;
+  /* 佔掉標題列以外剩下的高度(寫死 100% 的話,上面有標題列,底部會被切掉) */
+  flex: 1;
+  min-height: 0;
+}
+/* 會員自己一頁(新分頁):沒有左邊名單 */
+.pc-layout.solo {
+  grid-template-columns: 1fr;
+}
+.pc-master {
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  min-height: 0;
+  overflow: hidden;
+}
+.pc-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.pc-section + .pc-section {
+  border-top: 2px solid var(--border);
+}
+.pc-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  font-weight: 600;
+  font-size: var(--font-body);
+  color: var(--text-dim);
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+  min-height: 30px;
+}
+.pc-section-header-btn {
+  font-size: var(--font-secondary);
+  padding: 2px 8px;
+}
+.pc-section-search {
+  display: flex;
+  gap: 6px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.pc-section-search input {
+  flex: 1;
+  padding: 4px 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: var(--font-body);
+}
+.pc-section-search .btn {
+  font-size: var(--font-body);
+}
+.pc-section-body {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.pc-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-body);
+}
+.pc-list-table th,
+.pc-list-table td {
+  text-align: left;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pc-list-table th {
+  position: sticky;
+  top: 0;
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-weight: 500;
+  z-index: 1;
+}
+.pc-list-table tbody tr {
+  cursor: pointer;
+}
+.pc-list-table tbody tr:hover td {
+  background: var(--row-hover);
+}
+.pc-list-table tbody tr.selected td {
+  background: var(--row-selected);
+}
+.pc-list-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.pc-detail {
+  background: var(--bg);
+  overflow: auto;
+}
+.pc-detail-body {
+  padding: 20px 24px;
+}
+.pc-detail-title {
+  margin: 0 0 16px 0;
+  font-size: var(--font-section);
+  font-weight: 600;
+}
+.pc-detail-body dl {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  row-gap: 10px;
+  column-gap: 16px;
+  margin: 0;
+}
+.pc-detail-body dt {
+  color: var(--text-dim);
+  font-weight: normal;
+}
+.pc-detail-body dd {
+  margin: 0;
+}
+
+/* ─── 類別管理 拖拉排序 ─── */
+.category-mgr table tr {
+  cursor: grab;
+  transition: background-color 0.1s, transform 0.1s;
+}
+.category-mgr table tr:active {
+  cursor: grabbing;
+}
+.category-mgr table .drag-handle {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: var(--font-section);
+  user-select: none;
+}
+.category-mgr table tr.row-dragging {
+  opacity: 0.4;
+}
+.category-mgr table tr.row-drag-over {
+  background: var(--accent-fill) !important;
+  background: rgba(80, 150, 255, 0.15) !important;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.category-mgr table tr.row-drag-over td {
+  background: transparent !important;
+}
+.combobox-create.active { background: var(--accent-fill); color: white; }
+
+/* ─── 銷貨明細 sub-row:門號商品才出現的「門號/方案/卡號/佣金」 ─── */
+.telecom-sub-row > td {
+  background: var(--panel-2);
+  padding: 6px 8px 8px;
+  border-top: 0;
+}
+.telecom-sub-row {
+  border-bottom: 1px solid var(--border);
+}
+.telecom-sub-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1.4fr 0.8fr;
+  gap: 6px 12px;
+}
+.telecom-sub-field {
+  font-size: var(--font-body);
+  color: var(--text-dim);
+}
+.telecom-sub-field input,
+.telecom-sub-field select {
+  width: 100%;
+  padding: 3px 8px;
+  font-size: var(--font-body);
+}
+
+/* 系統設定分四頁(共用 Tabs,「還沒儲存」是分頁旁黃字);自動存的格子旁邊「已存 / 沒存成 重送」(全站檢視 L02) */
+.settings-tabs { margin: 8px 16px 0; }
+
+.cell-mark { margin-left: 6px; font-size: var(--font-secondary); white-space: nowrap; color: var(--text-dim); }
+.cell-mark.saved { color: var(--success-text); }
+button.cell-mark.failed { background: none; border: 0; padding: 0; font: inherit; font-size: var(--font-secondary); color: var(--danger-text); cursor: pointer; text-decoration: underline; }
+
+/* 嵌套 .page(中古入庫 hub 內含 PurchaseEntryPage)時讓內層撐高度 */
+.secondhand-hub > .page,
+.secondhand-hub > .entry-body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 文字按鈕(像連結,用在表格內單號 click-to-detail) */
+.link-button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  text-decoration: underline;
+}
+.link-button:hover { opacity: 0.8; }
+
+/* 待確認調撥單 modal */
+.transfer-confirm-modal {
+  width: min(960px, 92vw);
+}
+.transfer-confirm-modal .modal-body {
+  max-height: 64vh;
+  overflow-y: auto;
+}
+
+/* Toolbar 上的徽章(待確認筆數) */
+.badge-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  line-height: 1;
+  padding: 0 7px;
+  background: #f0b060;
+  color: #1a1a1a;
+  border-radius: 11px;
+  font-size: var(--font-secondary);
+  font-weight: 600;
+  margin-left: 4px;
+}
+

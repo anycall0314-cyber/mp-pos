@@ -1,0 +1,668 @@
+/* ===== MP POS 樣式 08/26:響應式:桌機 user info、手機 / 小平板、首頁手機、庫存與序號手機卡片、銷貨日報手機卡片 =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* ─────────────────────────────────────────────────────────
+ * 桌機/平板 user info(>= 769px)
+ * ───────────────────────────────────────────────────────── */
+.user-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 4px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+}
+.user-pill-text { display: flex; flex-direction: column; line-height: 1.5; flex: 1; min-width: 0; }
+.user-pill-name { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-pill-meta { color: var(--text-dim); }
+.user-pill-logout { min-height: 36px; padding: 0 10px; font-size: var(--font-secondary); }
+.sidebar-footer .user-pill { margin-left: 0; padding-left: 0; border-left: 0; }
+
+/* 桌機版:漢堡按鈕隱藏 */
+.hamburger { display: none; }
+
+/* ─────────────────────────────────────────────────────────
+ * 手機 / 小平板響應式(<= 768px)
+ *
+ * 設計目標:整個系統在手機上至少能用、不會跑版、按鈕大到能戳。
+ *  - topbar 變漢堡選單
+ *  - master-detail 變上下 stack
+ *  - drawer / modal 全螢幕
+ *  - 多欄 grid 變單欄
+ *  - 表格保持水平捲動、字略縮小
+ * ───────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* topbar 整體 */
+  .topbar {
+    padding: 0 8px;
+    gap: 8px;
+    min-height: 44px;
+  }
+  .brand { font-size: var(--font-body); letter-spacing: 0.5px; }
+
+  /* 漢堡按鈕顯示 */
+  .hamburger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 48px;
+    height: 28px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: var(--font-secondary);
+    padding: 0 10px;
+    flex-shrink: 0;
+  }
+  .hamburger:active { background: var(--row-hover); }
+
+  /* 預設隱藏 nav */
+  .topnav { display: none; }
+
+  /* nav 展開:全螢幕覆蓋 */
+  .topnav.open {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 44px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--panel);
+    padding: 8px;
+    z-index: 100;
+    gap: 2px;
+    overflow-y: auto;
+    border-top: 1px solid var(--border);
+  }
+  .topnav.open .topnav-group { width: 100%; }
+  .topnav.open .topnav-link {
+    width: 100%;
+    padding: 12px 16px;
+    justify-content: space-between;
+    font-size: var(--font-body);
+  }
+  /* 展開後 dropdown 改 inline,不浮起來 */
+  .topnav.open .topnav-dropdown {
+    position: static;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+    padding-left: 0;
+    margin-top: 2px;
+  }
+  .topnav.open .topnav-dropdown-item {
+    padding: 12px 16px 12px 32px;
+    font-size: var(--font-body);
+  }
+  /* sections 在手機展開時改單欄 + 顯示分隔線 */
+  .topnav.open .topnav-dropdown-sections {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .topnav.open .topnav-dropdown-divider {
+    display: block;
+    height: 1px;
+    background: var(--border);
+    margin: 4px 16px;
+  }
+
+  /* user-pill 簡化:只留 username,角色資訊隱藏(預留漢堡內看?) */
+  .user-pill {
+    padding-left: 6px;
+    margin-left: 0;
+    border-left: 0;
+    flex-shrink: 0;
+  }
+  .user-pill-meta { display: none; }
+  .user-pill-logout { padding: 6px 10px; font-size: var(--font-secondary); }
+
+  /* theme-toggle 在手機顯示但更小 */
+  .theme-toggle { width: 30px; height: 26px; }
+
+  /* Master-Detail:上下 stack;detail 預設 fold,master 站滿一頁 */
+  .md-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+  }
+  .md-master {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .md-detail { display: none; }
+  /* 加 .md-show-detail 時(可由 React 控制),才顯示 detail 隱藏 master */
+  .md-layout.md-show-detail .md-master { display: none; }
+  .md-layout.md-show-detail .md-detail { display: grid; }
+
+  .md-table th, .md-table td { padding: 8px 10px; font-size: var(--font-secondary); }
+  .md-detail-body dl { grid-template-columns: 1fr; row-gap: 4px; }
+  .md-detail-body dt {
+    font-weight: 600;
+    color: var(--text-dim);
+    font-size: var(--font-secondary);
+    margin-top: 8px;
+  }
+
+  /* Drawer 全螢幕 */
+  .drawer {
+    width: 100% !important;
+    border-left: 0;
+  }
+  .drawer-backdrop { background: var(--bg); }
+
+  /* Modal 全螢幕:覆寫 modal-card 跟所有 *-modal 變體的固定寬度
+   * iOS Safari 的 100vh 包含網址列 / 底部 tab bar 的高度,實際可見區域比較小,
+   * 會導致 modal-actions(關閉按鈕)被切掉。用 100dvh(dynamic viewport)
+   * 跟 env(safe-area-inset-*) 解決,iOS 15.4+ / Chrome 108+ 支援。 */
+  .modal-overlay {
+    padding: 0;
+    align-items: stretch;
+  }
+  .modal-card {
+    min-width: 0 !important;
+    max-width: 100vw !important;
+    width: 100vw !important;
+    max-height: 100vh !important;
+    height: 100vh;
+    max-height: 100dvh !important;
+    height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+    padding: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+  }
+  .modal-card .modal-title {
+    font-size: var(--font-body);
+    margin-bottom: 8px;
+    flex-shrink: 0;
+  }
+  .modal-card .modal-body {
+    flex: 1;
+    min-height: 0;
+    max-height: none !important;
+    overflow-y: auto;
+  }
+  .modal-card .modal-actions {
+    flex-shrink: 0;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    /* 黏在底部不被內容推下去 */
+    position: sticky;
+    bottom: 0;
+    background: var(--panel-2);
+  }
+
+  /* 多欄 form grid 改單欄 */
+  .field-row, .field-row-3 { grid-template-columns: 1fr; }
+
+  /* 銷貨 / 進貨 entry header 大 grid 改 stack */
+  .sales-header-grid,
+  .purchase-header-grid {
+    display: flex !important;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sales-header-grid .short-field,
+  .sales-header-grid .medium-field,
+  .purchase-header-grid .short-field,
+  .purchase-header-grid .medium-field {
+    width: 100%;
+  }
+  .sales-header-grid .short-field input,
+  .sales-header-grid .short-field select,
+  .sales-header-grid .medium-field input,
+  .sales-header-grid .medium-field select,
+  .purchase-header-grid .short-field input,
+  .purchase-header-grid .short-field select,
+  .purchase-header-grid .medium-field input,
+  .purchase-header-grid .medium-field select {
+    width: 100%;
+  }
+
+  /* entry-body-split (側欄 + 主區) 改 stack */
+  .entry-body-split { display: flex; flex-direction: column; }
+  .serial-aside, .serial-aside-wide { width: 100% !important; }
+
+  /* Toolbar 換行 */
+  .page-toolbar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 40px;
+    padding: 8px;
+    gap: 6px;
+  }
+  .page-toolbar-mid { width: 100%; }
+  .page-toolbar-actions { width: 100%; justify-content: flex-end; }
+
+  /* line-table 水平捲動 wrapper(在父元素加 overflow-x:auto 就行;
+     但 line-table 本身字小一點 + cell padding 縮) */
+  .line-table { font-size: var(--font-secondary); }
+  .line-table th, .line-table td { padding: 6px 8px; }
+
+  /* 觸控友善:btn 高一點、input 字 16px 避免 iOS 自動 zoom */
+  .btn {
+    padding: 0 var(--btn-pad-x);
+    min-height: var(--control-height);
+    font-size: var(--font-body);
+  }
+  input, select, textarea { font-size: var(--font-body); }
+  input[type="checkbox"], input[type="radio"] {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* page padding 縮小,寸土寸金 */
+  .entry-body { padding: 8px; }
+  .entry-header { margin-bottom: 8px; }
+
+  /* 列表頁篩選列:date / btn 在手機放大、整體換行 */
+  .list-filterbar {
+    padding: 8px;
+    gap: 8px;
+  }
+  .list-filterbar label {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-width: 0 !important;
+    flex: 1;
+  }
+  .list-filterbar label > div {
+    width: 100%;
+    min-width: 0 !important;
+  }
+  .list-filterbar input[type="date"] {
+    height: var(--control-height);
+    padding: 4px 8px;
+    font-size: var(--font-body);
+    width: 100%;
+  }
+  .list-filterbar .btn {
+    height: var(--control-height);
+    padding: 0 var(--btn-pad-x);
+    font-size: var(--font-body);
+  }
+  /* 報表表頭密度 / 高度在手機獨立配 */
+  .report-meta {
+    font-size: var(--font-secondary);
+    padding: 8px;
+    line-height: 1.7;
+  }
+  /* 手機卡片版改 flex,不需要 sticky thead 的高度抓 */
+  .report-table { height: auto; flex: 1; overflow-y: auto; }
+
+  /* ComboBox 下拉選單手機版:
+   * 1) 限寬不超出視窗右邊
+   * 2) 每個選項 label / secondary 改上下排,文字不會被切掉
+   * 3) 高度上限縮小,讓鍵盤跳出後還看得到一些選項
+   */
+  .combobox-pop {
+    max-width: calc(100vw - 16px) !important;
+    width: max-content;
+    min-width: 100%;
+    max-height: 40vh;
+    /* 確保不超出視窗右邊 */
+    right: auto;
+  }
+  .combobox-option {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 10px 12px;
+    font-size: var(--font-body);
+  }
+  .combobox-option-label {
+    width: 100%;
+  }
+  .combobox-option-secondary {
+    white-space: normal;
+    font-size: var(--font-secondary);
+    width: 100%;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+ * HomePage(/home):登入後第一頁,大字大行高,手機桌機都好點
+ * ───────────────────────────────────────────────────────── */
+.home-grid {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  overflow-y: auto;
+}
+.home-group {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+}
+.home-group-label {
+  font-size: var(--font-body);
+  font-weight: 700;
+  color: var(--text);
+  padding: 4px 8px 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.home-item-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.home-item-link {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 4px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: var(--font-body);
+}
+.home-item-link:hover { background: var(--row-hover); }
+.home-item-link.active { background: var(--panel-2); }
+
+@media (max-width: 768px) {
+  /* 手機:單欄 + 更大字 + 更大可點區 */
+  .home-grid {
+    grid-template-columns: 1fr;
+    padding: 8px;
+    gap: 12px;
+  }
+  .home-group-label { font-size: var(--font-section); }
+  .home-item-link { padding: 14px 14px; font-size: var(--font-body); }
+}
+
+/* ─────────────────────────────────────────────────────────
+ * 庫存查詢手機卡片版 + 序號清單手機卡片版
+ * ───────────────────────────────────────────────────────── */
+.stock-mobile-list {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+.stock-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+.stock-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.stock-card-no {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+}
+.stock-card-name {
+  font-size: var(--font-body);
+  font-weight: 700;
+  color: var(--text);
+  flex: 1;
+}
+.stock-card-compat {
+  padding: 4px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.stock-card-compat:hover {
+  background: var(--accent-fill);
+  color: white;
+  border-color: var(--accent);
+}
+.stock-link-name {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  font-size: inherit;
+  font-family: inherit;
+  text-decoration: underline dotted var(--border);
+  text-underline-offset: 3px;
+}
+.stock-link-name:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+.stock-card-meta {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.stock-card-wh {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 0;
+}
+.stock-card-wh-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--font-body);
+}
+.stock-card-wh-name {
+  color: var(--text-dim);
+}
+.stock-card-wh-row .stock-link {
+  font-size: var(--font-body);
+  font-weight: 700;
+  padding: 2px 10px;
+  min-width: 44px;
+  text-align: center;
+}
+.stock-card-summary {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: var(--font-body);
+  color: var(--text-dim);
+}
+.stock-card-summary b {
+  color: var(--text);
+  font-weight: 700;
+  margin-left: 2px;
+}
+.stock-card-total {
+  background: var(--panel-2);
+  border-color: var(--accent);
+}
+
+/* 序號清單手機卡片 */
+.serial-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px;
+}
+.serial-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+}
+.serial-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.serial-card-no {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-weight: 600;
+  font-size: var(--font-body);
+}
+.serial-card-detail {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: var(--font-body);
+}
+.serial-card-detail dt {
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+}
+.serial-card-detail dd {
+  margin: 0;
+  color: var(--text);
+}
+
+/* ─────────────────────────────────────────────────────────
+ * 銷貨日報手機卡片版(每張銷貨單一張卡)
+ * ───────────────────────────────────────────────────────── */
+.report-mobile-list {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+.report-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+.report-card.void {
+  border-color: rgba(255, 100, 100, 0.4);
+  background: rgba(255, 100, 100, 0.05);
+}
+.report-card.void .report-card-no,
+.report-card.void .report-card-customer,
+.report-card.void .report-card-item-name {
+  text-decoration: line-through;
+  color: var(--text-dim);
+}
+.report-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+.report-card-no {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-weight: 700;
+  font-size: var(--font-body);
+  color: var(--text);
+}
+.report-card-date {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+}
+.report-card-customer {
+  font-size: var(--font-body);
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.report-card-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(255, 100, 100, 0.18);
+  color: var(--danger-text-soft);
+  border-radius: 3px;
+  font-size: var(--font-secondary);
+  font-weight: 600;
+}
+.report-card-meta {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.report-card-sep {
+  margin: 0 6px;
+  color: var(--text-dim);
+}
+.report-card-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.report-card-item {
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.report-card-item:last-child {
+  border-bottom: 0;
+}
+.report-card-item-name {
+  font-size: var(--font-body);
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.report-card-item-serial {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+.report-card-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--font-body);
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.report-card-item-row b {
+  font-size: var(--font-body);
+  font-variant-numeric: tabular-nums;
+}
+.report-card-item-cost {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+}
+.report-card-item-cost.dim {
+  font-style: italic;
+}
+.report-card-foot {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+}
+.report-card-foot b {
+  color: var(--text);
+  font-size: var(--font-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+

@@ -1,10 +1,11 @@
-// 全站控制項的自動檢查(docs/ui-controls.md §7)。用 TypeScript 的語法樹掃 JSX、用小型解析器掃 styles.css,
+// 全站控制項的自動檢查(docs/ui-controls.md §7)。用 TypeScript 的語法樹掃 JSX、用小型解析器掃全部樣式檔(styles.css + styles/*.css 接起來,指紋裡的檔名一律記 styles.css),
 // 找出「在頁面另外造按鈕 / 分頁 / 開關外觀」的寫法。現有的違規記在 controlsBaseline.json(只能減少);
 // 新的違規讓 controlsPolicy.test.mjs 變紅。
 //
 // 重產基線:node src/lib/controlsPolicy.mjs --write-baseline —— 只在「搬掉了舊寫法、基線要跟著變少」時用,
 // 提交前看 diff 必須只有刪除;不可以拿來放行新寫法。例外只有「新加一條規則」:現有的命中記進基線一次,diff 只能是那一條規則的新增。
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { readAllCss } from "./cssText.mjs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
@@ -213,11 +214,11 @@ function walkFiles(dir, acc = []) {
   return acc;
 }
 
-/** 掃整個前端:每一份 TSX / JSX + styles.css */
+/** 掃整個前端:每一份 TSX / JSX + 全部樣式檔(接起來當一份 styles.css) */
 export function scanAll() {
   const out = [];
   for (const p of walkFiles(SRC)) out.push(...scanSource(relative(SRC, p), readFileSync(p, "utf8")));
-  out.push(...scanCss("styles.css", readFileSync(join(SRC, "styles.css"), "utf8")));
+  out.push(...scanCss("styles.css", readAllCss()));
   return out;
 }
 

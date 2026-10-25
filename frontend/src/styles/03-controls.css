@@ -1,0 +1,211 @@
+/* ===== MP POS 樣式 03/26:按鈕(全站一套、主要淡色、再按一次)與共用控制項:分頁、單選列、ChoiceGroup、狀態標籤、工具列、焦點、圖示鈕 =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* ── 按鈕:全站一套(2026-10-24 owner「我要全站設計統一一致，設計風格也要相同，再來按鈕能收窄就收」)──
+ * 長相只有四種:一般(灰)、主要(藍底白字;每一頁最重要的那一顆,owner 選藍色)、危險(紅字)、小。
+ * .btn 與工作台的 .wb-btn 共用這一份:.wb-btn.go / .wb-btn.blue = 主要。
+ * 左右留白收窄(14 → 10px)、主要按鈕不再有最小寬度,騰出位置;高度照舊 44px(平板手指點得到)。
+ * 「再按一次」(ArmButton / useArm)一律黃色提示。新按鈕用這幾個 class,不要另外寫顏色、圓角、留白。 */
+:root {
+  --btn-pad-x: 10px;
+  --btn-radius: 6px;
+  --btn-h-sm: 32px;
+}
+.btn,
+.wb-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: var(--control-height);
+  padding: 0 var(--btn-pad-x); border-radius: var(--btn-radius);
+  background: var(--ctl-bg); color: var(--text);
+  border: 1px solid var(--ctl-border); cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-body); line-height: 1.5; font-weight: 500;
+  text-decoration: none; white-space: nowrap;
+  /* 預設由內容撐寬,不跟隨容器拉伸(全站規範) */
+  width: auto;
+  flex: 0 0 auto;
+}
+.btn:hover,
+.wb-btn:hover { background: var(--ctl-hover); }
+/* 主要動作(2026-10-25 owner 要淡色):藍字、淡藍細框、很淡的藍底;靠位置與字重找得到,不再是鮮藍實心白字。
+   一個作用中的工作區至多一個;要更強的(特定掃碼 / 結帳)另列具名例外,不在這裡改回實心 */
+.btn.primary,
+.wb-btn.go,
+.wb-btn.blue {
+  background: var(--primary-bg); border-color: var(--primary-border); color: var(--primary-text); font-weight: 600;
+}
+.btn.primary:hover,
+.wb-btn.go:hover,
+.wb-btn.blue:hover { background: var(--primary-bg-hover); filter: none; }
+.btn.danger,
+.wb-btn.danger { color: var(--danger-text); }
+.btn.danger:hover,
+.wb-btn.danger:hover { background: rgba(255, 112, 112, 0.12); }
+.btn.small,
+.wb-btn.small { min-height: var(--btn-h-sm); padding: 0 8px; font-size: var(--font-secondary); }
+.btn:disabled,
+.wb-btn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
+/* 「再按一次」:跟主要 / 危險 / 一般都一樣是黃色 */
+.btn.armed,
+.btn.primary.armed,
+.btn.danger.armed,
+.btn.armed:hover,
+.wb-btn.armed,
+.wb-btn.go.armed,
+.wb-btn.danger.armed,
+.wb-btn.armed:hover,
+.ui-icon-btn.armed,
+.ui-icon-btn.armed:hover {
+  background: var(--wb-amber-soft, rgba(245, 158, 11, 0.18));
+  border-color: var(--warn-text-amber);
+  color: var(--warn-text-amber);
+  font-weight: 600;
+  filter: none;
+}
+
+/* ══ 共用控制項(docs/ui-controls.md;元件在 components/ui/)═══════════════════════
+ * 控制項的顏色、圓角、留白、高度只寫在這一段(與上面的 .btn)。頁面只寫排版(位置、寬度、間距)。
+ * controlsPolicy.test.mjs 會擋頁面另外寫按鈕外觀、拿掉焦點框;展示頁 /dev/controls(開發模式)。 */
+:root {
+  --control-height-compact: 2.5rem; /* 40px:桌面滑鼠用的查詢工具列(觸控照舊 44px) */
+  /* 控制項自己的顏色(2026-10-25 淡色):不借表格的選取色、不鋪灰磚 */
+  --ctl-bg: transparent;                      /* 一般按鈕、欄位、單選列沒選的:跟頁面一樣 */
+  --ctl-hover: rgba(148, 163, 184, 0.12);     /* 滑過 */
+  --ctl-selected: rgba(148, 163, 184, 0.20);  /* 單選列選中:中性淺底 + 字重 */
+  --ctl-border: var(--border);
+  --ctl-border-strong: #4b5568;               /* 滑過 / 欄位的邊框加深 */
+  --primary-text: #8cb4ff;                    /* 主要動作:藍字 */
+  --primary-border: rgba(79, 140, 255, 0.55);
+  --primary-bg: rgba(79, 140, 255, 0.10);
+  --primary-bg-hover: rgba(79, 140, 255, 0.18);
+}
+:root[data-theme="light"] {
+  --ctl-hover: #f3f4f6;
+  --ctl-selected: #eceff3;
+  --ctl-border: #d1d5db;
+  --ctl-border-strong: #9ca3af;
+  --primary-text: #1d4ed8;
+  --primary-border: #9db8f5;
+  --primary-bg: #f3f7ff;
+  --primary-bg-hover: #e6eeff;
+}
+/* 鍵盤焦點:看得見、跟「選中」分開(滑鼠點不出框) */
+.btn:focus-visible,
+.wb-btn:focus-visible,
+.ui-icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* 分頁列會橫捲(overflow),框畫在外面會被切掉上下:畫在裡面 */
+.ui-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.btn.ui-btn-text { background: transparent; border-color: transparent; color: var(--accent); }
+.btn.ui-btn-text:hover { background: var(--ctl-hover); }
+/* 日間主題的 .btn 白底灰框規則比較具體,文字型要再寫一次才蓋得過 */
+:root[data-theme="light"] .btn.ui-btn-text { background: transparent; border-color: transparent; color: var(--accent); }
+:root[data-theme="light"] .btn.ui-btn-text:hover { background: var(--ctl-hover); border-color: transparent; }
+.btn.ui-btn-lg { min-height: var(--control-height-lg); }
+.btn[aria-busy="true"] { cursor: progress; }
+/* 只有圖示的按鈕:看起來 32px,觸控有效範圍至少 44px */
+.ui-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: var(--btn-h-sm); min-height: var(--btn-h-sm); padding: 0 6px;
+  background: transparent; color: var(--text-dim);
+  border: 1px solid transparent; border-radius: var(--btn-radius);
+  font: inherit; font-size: var(--font-section); line-height: 1; cursor: pointer;
+}
+.ui-icon-btn:hover { background: var(--ctl-hover); color: var(--text); }
+.ui-icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.ui-icon-btn.danger:hover { color: var(--danger-text); background: var(--danger-bg, var(--ctl-hover)); }
+@media (pointer: coarse) { .ui-icon-btn { min-width: 44px; min-height: 44px; } }
+/* 小標籤裡的 ×(相容機型、規格值):看起來跟字一樣大,觸控時點擊範圍往外放大、不把標籤撐大 */
+.ui-icon-btn.compact { min-width: 20px; min-height: 20px; padding: 0; margin-left: 4px; color: inherit; font-size: var(--font-body); position: relative; }
+@media (pointer: coarse) {
+  .ui-icon-btn.compact { min-width: 20px; min-height: 20px; }
+  .ui-icon-btn.compact::after { content: ""; position: absolute; inset: -12px; }
+}
+/* 分頁:文字 + 底線(換工作區);選中的有 aria-selected */
+.ui-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.ui-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 36px; padding: 0 12px; margin-bottom: -1px;
+  background: none; border: 0; border-bottom: 2px solid transparent;
+  color: var(--text-dim); font: inherit; font-size: var(--font-body); white-space: nowrap; cursor: pointer;
+}
+.ui-tab:hover { color: var(--text); }
+.ui-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.ui-tab:disabled { opacity: 0.45; cursor: not-allowed; }
+.ui-tab-note { font-size: var(--font-secondary); font-weight: 500; color: var(--text-dim); }
+.ui-tab-note.alert { color: var(--danger-text); font-weight: 700; }
+.ui-tab-note.warn { color: var(--warn-text); font-weight: 700; }
+@media (pointer: coarse) { .ui-tab { min-height: 44px; } }
+/* 單選列(2~4 個互斥條件):中性底色表示選中,不用藍底 */
+.ui-seg { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--ctl-border); border-radius: var(--btn-radius); background: var(--ctl-bg); flex: 0 0 auto; }
+.ui-seg-item {
+  min-height: calc(var(--control-height) - 6px); padding: 0 var(--btn-pad-x);
+  background: transparent; color: var(--text-dim);
+  border: 0; border-radius: calc(var(--btn-radius) - 2px);
+  font: inherit; font-size: var(--font-body); white-space: nowrap; cursor: pointer;
+}
+.ui-seg-item:hover { color: var(--text); background: var(--ctl-hover); }
+.ui-seg-item[aria-checked="true"] { background: var(--ctl-selected); color: var(--text); font-weight: 600; }
+.ui-seg-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ui-seg-item:disabled { opacity: 0.45; cursor: not-allowed; }
+/* 一排可以直接點的選項(ChoiceGroup):付款方式、電信業者、門市、挑哪幾台;選中中性淺底 + 字重,不用藍底 */
+.ui-choices { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ui-choice {
+  min-height: var(--control-height); padding: 0 14px;
+  background: var(--ctl-bg); color: var(--text-dim);
+  border: 1px solid var(--ctl-border); border-radius: var(--btn-radius);
+  font: inherit; font-size: var(--font-body); white-space: nowrap; cursor: pointer;
+}
+.ui-choice.sm { min-height: var(--btn-h-sm); padding: 0 8px; font-size: var(--font-secondary); }
+.ui-choice:hover { background: var(--ctl-hover); color: var(--text); }
+.ui-choice[aria-checked="true"],
+.ui-choice[aria-pressed="true"] { background: var(--ctl-selected); border-color: var(--ctl-border-strong); color: var(--text); font-weight: 600; }
+.ui-choice:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ui-choice:disabled { opacity: 0.55; cursor: not-allowed; }
+@media (pointer: coarse) { .ui-choice.sm { min-height: 44px; } }
+.ui-choices.fill { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
+.ui-choices.fill .ui-choice { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px 8px; white-space: normal; }
+.ui-choice-sub { font-size: var(--font-secondary); font-weight: 400; color: var(--text-dim); }
+.ui-choices:not(.fill) .ui-choice-sub { margin-left: 6px; }
+@media (max-width: 768px) {
+  .ui-choices.fill { grid-template-columns: 1fr; }
+  .ui-choices.fill .ui-choice { flex-direction: row; justify-content: space-between; padding: 6px 14px; }
+}
+/* 緊湊商品表單:跟輸入框一樣高、小字收起來 */
+.pf-compact .ui-choices.fill { gap: 4px; }
+.pf-compact .ui-choices.fill .ui-choice { min-height: 34px; padding: 0 10px; font-size: var(--font-secondary); }
+.pf-compact .ui-choice-sub { display: none; }
+/* 狀態標籤:純顯示、不能按 */
+.ui-badge {
+  display: inline-flex; align-items: center; padding: 0 6px; border-radius: 4px;
+  border: 1px solid var(--border); color: var(--text-dim);
+  font-size: var(--font-secondary); font-weight: 500; line-height: 1.6; white-space: nowrap; cursor: default;
+}
+.ui-badge.info { color: var(--info-text); border-color: currentColor; }
+.ui-badge.success { color: var(--success-text); border-color: currentColor; }
+.ui-badge.warn { color: var(--warn-text); border-color: currentColor; }
+.ui-badge.danger { color: var(--danger-text); border-color: currentColor; }
+/* 查詢 / 工作對象工具列:欄名 + 控制項,會換行;桌面滑鼠 40px、觸控 44px */
+.ui-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+@media (pointer: fine) { .ui-toolbar { --control-height: var(--control-height-compact); } }
+.ui-tf { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.ui-tf-label { font-size: var(--font-secondary); color: var(--text-dim); }
+.ui-toolbar .ui-tf select,
+.ui-toolbar .ui-tf input:not([type="checkbox"]):not([type="radio"]),
+.ui-tf select,
+.ui-tf input:not([type="checkbox"]):not([type="radio"]) {
+  min-height: var(--control-height); padding: 0 10px;
+  background: var(--ctl-bg); color: var(--text);
+  border: 1px solid var(--ctl-border); border-radius: var(--btn-radius);
+  font: inherit; font-size: var(--font-body);
+}
+.ui-toolbar .ui-tf select:hover,
+.ui-toolbar .ui-tf input:not([type="checkbox"]):not([type="radio"]):hover { border-color: var(--ctl-border-strong); }
+
+/* 共用控制項展示頁(只有開發模式):純排版 */
+.dev-controls section { margin-bottom: 24px; }
+.dev-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+

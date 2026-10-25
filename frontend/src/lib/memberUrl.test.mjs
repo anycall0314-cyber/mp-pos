@@ -2,6 +2,7 @@
 // 同一天「跳分頁只要顯示消費紀錄不要編輯會員資料，原來的頁面右邊只需顯示編輯欄位」)。跑法:npm test。
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readAllCss } from "./cssText.mjs";
 import test from "node:test";
 
 import {
@@ -50,7 +51,7 @@ test("新分頁只有消費紀錄,不能改會員資料", () => {
   assert.match(page, /<LegacyHistorySection memberId=\{member\.id\} \/>/);
   for (const gone of ["useSaveMember", "<input", "<select", "儲存"]) assert.ok(!page.includes(gone), gone);
   assert.match(page, /className="pc-layout solo"/);
-  assert.match(read("../styles.css"), /\.pc-layout\.solo \{\s*grid-template-columns: 1fr;/);
+  assert.match(readAllCss(), /\.pc-layout\.solo \{\s*grid-template-columns: 1fr;/);
 });
 
 // owner 2026-10-21「不用有側邊欄，也不需要有客戶，單純只要消費紀錄，讓分頁無需有任何功能讓門市開了兩個功能pos頁面」

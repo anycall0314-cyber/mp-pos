@@ -1,0 +1,255 @@
+/* ===== MP POS 樣式 23/26:廠商叫貨、半自動廠商、kcimos、品名連連看、到貨入庫、平台管理叫貨廠商 =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* ─────────────────────────────────────────────────────────
+ * 廠商叫貨(膜總裁):商品清單填包數、最下面固定合計與主要按鈕;叫貨串接設定
+ * ───────────────────────────────────────────────────────── */
+.vo-vendor { color: var(--text-dim); font-size: var(--font-secondary); }
+/* 先選類別、再選廠商(只有一家時整塊不出現) */
+.vo-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.vo-pick-row { display: flex; flex-wrap: wrap; gap: 6px; }
+/* 廠商叫貨的工具列(全站控制項 B1):橫排;批發頁的 .vo-pick 照舊直排 */
+.vo-pick.ui-toolbar { flex-direction: row; align-items: center; gap: 8px 12px; }
+.vo-chip {
+  min-height: var(--control-height);
+  padding: 0 14px;
+  font: inherit;
+  color: var(--text-dim);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.vo-chip.active { color: var(--text); border-color: var(--accent); background: rgba(79, 140, 255, 0.14); }
+.vo-chip-vendor { font-weight: 600; color: var(--text); border-radius: 8px; }
+.vo-chip-vendor.off { color: var(--text-dim); font-weight: 400; }
+.vo-chip-why { margin-left: 8px; font-size: var(--font-secondary); font-weight: 400; color: var(--warn-text); }
+.vo-test {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 8px;
+  font-size: var(--font-secondary);
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--warn-text);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.report-table.vo-table { flex: 1; min-height: 0; height: auto; }
+.vo-grid td.vo-name, .vo-confirm td.vo-name { white-space: normal; min-width: 12rem; overflow-wrap: anywhere; }
+.vo-grid tr.vo-picked td { background: rgba(120, 160, 255, 0.07); }
+.vo-grid tr.vo-order { cursor: pointer; }
+.vo-grid tr.vo-unsure td { background: rgba(255, 180, 60, 0.08); }
+.vo-grid tr.vo-detail td { background: var(--panel); padding: 8px 16px 12px; white-space: normal; }
+.vo-qty {
+  width: 5.5rem;
+  min-height: var(--control-height);
+  padding: 0 8px;
+  text-align: right;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.vo-qty:disabled { opacity: 0.45; }
+.vo-sub { font-size: var(--font-secondary); color: var(--text-dim); font-weight: 400; }
+/* 品名後面的小標(未對照 / 已停用):跟品名隔開一點 */
+.vo-name .wb-badge { margin-left: 6px; }
+.vo-search {
+  flex: 1 1 14rem;
+  max-width: 24rem;
+  min-height: var(--control-height);
+  padding: 0 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.vo-filter .vo-check { gap: 6px; color: var(--text); }
+.vo-filter .vo-check input { width: 1.15rem; height: 1.15rem; }
+.vo-diff { color: var(--warn-text); }
+/* 半自動廠商的叫貨單:要傳給廠商的那一段(可以選取)、標記與進度 */
+.vm-manual { display: grid; gap: 8px; margin-bottom: 10px; }
+.vm-message {
+  margin: 0;
+  padding: 10px 12px;
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.vm-manual-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.vm-progress { display: flex; gap: 8px; }
+/* 待確認:上一次送進廠商網站不知道有沒有成立 */
+.vm-pending { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.vm-pending input,
+.vm-progress input {
+  flex: 1 1 14rem;
+  min-width: 0;
+  min-height: var(--control-height);
+  padding: 0 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.vm-pending input { flex: 0 1 14rem; }
+/* 書籤列用的小幫手那一顆(用拖的) */
+.vm-helper { display: inline-flex; align-items: center; gap: 8px; }
+.vm-helper a { cursor: grab; text-decoration: none; }
+.vr-grid .vm-price { width: 6.5rem; }
+.vr-grid .vm-price.bad { border-color: var(--danger-text); }
+.vr-grid .vm-drop { margin-left: 8px; }
+/* 平台:半自動廠商的價目表與整批貼上 */
+.pv-paste {
+  width: 100%;
+  min-height: 9rem;
+  padding: 8px 10px;
+  font: inherit;
+  font-family: var(--font-mono, monospace);
+  white-space: pre;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.pv-items td input { width: 100%; min-width: 0; }
+.pv-items td.num input { text-align: right; }
+.pv-import tr.err td { color: var(--danger-text); }
+/* 品名連連看(對照):左邊廠商的品項、右邊店內商品;還沒連的那一列淡淡標出來 */
+.vm-grid td.vo-name { width: 45%; }
+.vm-grid tr.vm-open td { background: rgba(255, 180, 60, 0.06); }
+.vm-grid .vm-none { color: var(--warn-text); }
+.vm-grid td.vm-acts { white-space: nowrap; text-align: right; }
+.vm-grid td.vm-acts .btn + .btn { margin-left: 8px; }
+.vo-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+}
+.vo-bar-sum { color: var(--text-dim); }
+.vo-bar-total { margin-left: auto; font-size: var(--font-section); font-variant-numeric: tabular-nums; }
+.vo-pending {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  color: var(--warn-text);
+  background: rgba(255, 180, 60, 0.1);
+  border-bottom: 1px solid var(--border);
+}
+.vo-pending span { flex: 1; }
+.vo-section {
+  padding: 10px 16px;
+  margin-top: 16px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--panel-2);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.vo-confirm { margin-bottom: 12px; }
+.vo-confirm tr.vo-confirm-total td { border-top: 2px solid var(--border); font-weight: 600; }
+.vo-form, .vl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 10px 12px;
+}
+.vo-form label, .vl-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+  min-width: 0;
+}
+.vo-form .vo-form-wide, .vl-grid .vl-wide { grid-column: 1 / -1; }
+.vo-form input, .vo-form select, .vl-grid input, .vl-grid select, .vo-page .page-toolbar-mid select {
+  min-height: var(--control-height);
+  padding: 0 10px;
+  font: inherit;
+  font-size: var(--font-body);
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-width: 0;
+}
+.vo-facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 14px 0 0; }
+.vo-facts dt { color: var(--text-dim); }
+.vo-facts dd { margin: 0; }
+.vo-warn { margin-top: 14px; color: var(--warn-text); }
+.vl-card {
+  max-width: 46rem;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.vl-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; font-size: var(--font-section); }
+.vl-vendor, .vl-state { font-size: var(--font-secondary); font-weight: 400; color: var(--text-dim); }
+.vl-state.vl-on { color: var(--success-text); }
+.vl-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+/* 供應商那一格是搜尋框(不能包在 label 裡:點選項會被 label 再點一次) */
+.vl-grid .vl-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+  min-width: 0;
+}
+/* 平台管理 → 叫貨廠商 */
+.pv-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0 8px; }
+.pv-head:first-child { margin-top: 0; }
+.pv-head h3 { margin: 0; font-size: var(--font-section); }
+.pv-add { display: flex; gap: 8px; }
+.pv-add input { min-height: var(--control-height); padding: 0 10px; font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; }
+.pv-checks { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.pv-checks label { display: inline-flex; align-items: center; gap: 6px; }
+/* 廠商清單:名稱後面「只給哪幾家公司」那一小段 */
+.pv-audience { margin-left: 8px; color: var(--warn-text); font-size: var(--font-secondary); white-space: nowrap; }
+/* 到貨入庫的面板 */
+.vr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin-bottom: 10px;
+  color: var(--text-dim);
+}
+.vr-head .vr-fill { margin-left: auto; display: flex; gap: 8px; }
+.vr-grid { width: 100%; }
+.vr-grid td { vertical-align: top; }
+.vr-grid td.vo-name { min-width: 0; width: 100%; }
+.vr-grid .vr-map { margin-top: 6px; max-width: 24rem; }
+.vr-grid .vr-fixed { display: inline-flex; align-items: baseline; gap: 8px; color: var(--text-dim); }
+.vr-grid .vo-qty { width: 4.75rem; }
+.vr-grid .btn-link { padding: 0; font: inherit; color: var(--accent); background: none; border: 0; cursor: pointer; }
+.vo-confirm tr.vr-void td { opacity: 0.55; }
+/* 金鑰那一格:打進去的字遮成圓點(不是密碼框,瀏覽器不會把存過的密碼填進來) */
+.vl-grid input.vl-secret { -webkit-text-security: disc; font-family: monospace; }
+.vl-grid input.vl-secret::placeholder { -webkit-text-security: none; font-family: inherit; }
+

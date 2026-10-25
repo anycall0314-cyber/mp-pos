@@ -1,0 +1,142 @@
+/* ===== MP POS 樣式 16/26:日間模式精緻化(按鈕、卡片、表格、ComboBox、焦點、導覽分頁) =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* ──────────────────────────────────────────────────────────────────
+   日間模式精緻化(Light theme refinement)
+   參考 Linear / Stripe / shadcn 的 SaaS 風格:
+   - 全部按鈕統一 outline 樣式,不再用實心藍區分 primary
+   - hover 整顆背景柔和加深,邊框同步加深
+   - 卡片用細淺灰邊框 + 圓角
+   - 表格列 hover 用淺灰
+   只覆寫 :root[data-theme="light"] scope,夜間維持原狀。
+   ────────────────────────────────────────────────────────────────── */
+
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --panel-2: #f7f8fa;
+  --border: #e5e7eb;
+  --text: #1f2937;
+  --text-dim: #6b7280;
+  --row-hover: #f3f4f6;
+  --row-selected: #eef2ff;
+}
+
+/* ─── 按鈕(日間)──────────────────────────────────────
+   一般按鈕白底灰框;主要按鈕照樣藍底白字(全站一套,檔案最前面那一段)。 */
+:root[data-theme="light"] .btn,
+:root[data-theme="light"] .wb-btn {
+  background: var(--ctl-bg);
+  color: #1f2937;
+  border-color: var(--ctl-border);
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+:root[data-theme="light"] .btn:hover,
+:root[data-theme="light"] .wb-btn:hover {
+  background: var(--ctl-hover);
+  border-color: var(--ctl-border-strong);
+}
+:root[data-theme="light"] .btn.primary,
+:root[data-theme="light"] .wb-btn.go,
+:root[data-theme="light"] .wb-btn.blue {
+  background: var(--primary-bg);
+  border-color: var(--primary-border);
+  color: var(--primary-text);
+}
+:root[data-theme="light"] .btn.primary:hover,
+:root[data-theme="light"] .wb-btn.go:hover,
+:root[data-theme="light"] .wb-btn.blue:hover {
+  background: var(--primary-bg-hover);
+  border-color: var(--primary-text);
+  filter: none;
+}
+:root[data-theme="light"] .btn.danger,
+:root[data-theme="light"] .wb-btn.danger {
+  color: #dc2626;
+  border-color: #fecaca;
+}
+:root[data-theme="light"] .btn.danger:hover,
+:root[data-theme="light"] .wb-btn.danger:hover {
+  background: #fef2f2;
+  border-color: var(--danger-text-mid);
+}
+:root[data-theme="light"] .btn:disabled,
+:root[data-theme="light"] .wb-btn:disabled {
+  opacity: 0.5;
+}
+:root[data-theme="light"] .btn.armed,
+:root[data-theme="light"] .wb-btn.armed,
+:root[data-theme="light"] .ui-icon-btn.armed {
+  background: #fef3c7;
+  border-color: #92400e;
+  color: #92400e;
+}
+
+/* ─── 卡片 / 面板 ─────────────────────────────────────── */
+:root[data-theme="light"] .pf-inline-modal,
+:root[data-theme="light"] .modal-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+/* 頂部導覽列細邊框、白底 */
+:root[data-theme="light"] .topbar {
+  background: #ffffff;
+  border-bottom-color: #e5e7eb;
+}
+
+/* ─── 表格 ─────────────────────────────────────────── */
+:root[data-theme="light"] table tbody tr:hover {
+  background: #f9fafb;
+}
+:root[data-theme="light"] table th {
+  background: #f9fafb;
+  color: #6b7280;
+  border-bottom-color: #e5e7eb;
+  font-weight: 600;
+}
+:root[data-theme="light"] table td,
+:root[data-theme="light"] table th {
+  border-bottom-color: #f3f4f6;
+}
+
+/* ─── ComboBox / 下拉 ─────────────────────────────────── */
+/* combobox 選中態:不再用實心藍,改用淺底色 */
+:root[data-theme="light"] .combobox-option.active,
+:root[data-theme="light"] .combobox-create.active {
+  background: #f3f4f6 !important;
+  color: #1f2937 !important;
+}
+/* 底色改淺之後,副標還是原本的白字就看不見了(庫存 / 符合原因都在副標) */
+:root[data-theme="light"] .combobox-option.active .combobox-option-secondary {
+  color: #6b7280;
+}
+:root[data-theme="light"] .combobox-option-create .combobox-option-label {
+  color: #1f2937;
+}
+
+/* ─── 表單欄位 focus ─────────────────────────────────── */
+/* focus ring 用較柔和的藍邊 + 淺藍光暈,不用實心藍 */
+:root[data-theme="light"] input:focus,
+:root[data-theme="light"] textarea:focus,
+:root[data-theme="light"] select:focus,
+:root[data-theme="light"] .combobox.open .combobox-input {
+  border-color: var(--info-text-soft);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.25);
+}
+
+/* ─── 導覽分頁:active 改用淺灰底 + 深字,不用實心藍 ─── */
+:root[data-theme="light"] .topnav-link.active {
+  background: #f3f4f6;
+  color: #111827;
+}
+:root[data-theme="light"] .topnav-link:hover {
+  background: #f9fafb;
+}
+

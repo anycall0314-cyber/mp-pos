@@ -1,0 +1,300 @@
+/* ===== MP POS 樣式 02/26:外框:更多下拉、側邊欄、功能搜尋、頁面分頁列、page toolbar =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* 「更多 ▾」分群下拉 */
+.topnav-dropdown-sections {
+  min-width: 220px;
+  padding: 6px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+}
+.topnav-dropdown-section { display: flex; flex-direction: column; }
+.topnav-dropdown-section-label {
+  padding: 6px 10px 4px;
+  font-size: var(--font-secondary);
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.topnav-dropdown-divider {
+  display: none; /* sections 用 grid 分欄,不需要橫線 */
+}
+
+.main { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.main-page { flex: 1; min-height: 0; overflow: hidden; }
+.placeholder { padding: 32px; color: var(--text-dim); }
+
+/* ── 側邊欄導覽 ─────────────────────────────────────── */
+.app-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sidebar {
+  width: 216px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+.sidebar-brand {
+  flex: none;
+  font-weight: 600;
+  letter-spacing: 1px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-nav { flex: 1; overflow-y: auto; padding: 4px 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.sidebar-bottom { flex: none; padding: 6px 8px; border-top: 1px solid var(--border); }
+.sidebar-group { margin-top: 6px; }
+.sidebar-group:first-child { margin-top: 2px; }
+.sidebar-group-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-body);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-dim);
+}
+.sidebar-group-label:hover { color: var(--text); }
+.sidebar-caret { flex: none; transition: transform 0.15s ease; }
+.sidebar-group.open .sidebar-caret { transform: rotate(90deg); }
+.sidebar-link {
+  display: block;
+  min-height: var(--control-height);
+  padding: 10px;
+  border-radius: 6px;
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: var(--font-body);
+  font-weight: 500;
+  line-height: 1.5;
+}
+.sidebar-link:hover { color: var(--text); background: var(--row-hover); }
+.sidebar-link.active { color: var(--text); background: var(--panel-2); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+.sidebar-footer {
+  flex: none;
+  border-top: 1px solid var(--border);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sidebar-footer .theme-toggle { margin-left: 0; }
+
+/* 功能搜尋(側邊欄最上面;Ctrl / Cmd + K) */
+.nav-search { position: relative; flex: none; padding: 8px 8px 4px; }
+.nav-search input {
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: var(--font-body);
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.nav-search input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.nav-search-menu {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 100%;
+  max-height: 60vh;
+  overflow: auto;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 70;
+  padding: 4px;
+}
+.nav-search-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: var(--font-body);
+}
+.nav-search-item.sel, .nav-search-item:hover { background: var(--row-selected); }
+.nav-search-item.none { color: var(--text-dim); cursor: default; }
+.nav-search-item.none:hover { background: transparent; }
+.nav-search-where { font-size: var(--font-secondary); color: var(--text-dim); }
+
+/* 頁面上方的分頁列:同一個入口底下的其他頁;右邊是低頻設定的選單 */
+.module-bar {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  min-height: 46px;
+  padding: 0 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.module-tabs { display: flex; gap: 2px; min-width: 0; flex-wrap: wrap; }
+.module-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: var(--font-body);
+  font-weight: 500;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  border-top: 2px solid transparent;
+}
+.module-tab:hover { color: var(--text); }
+.module-tab.active { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
+.module-tools { margin-left: auto; position: relative; display: flex; align-items: center; flex: none; }
+/* 頁面主要按鈕(新增…):有分頁列的頁放在分頁列最右邊、設定選單左邊(2026-10-23) */
+.module-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
+.module-actions:empty { display: none; }
+.module-actions ~ .module-tools { margin-left: 8px; }
+.module-actions:empty ~ .module-tools { margin-left: auto; }
+.module-actions .page-toolbar-actions { flex-wrap: nowrap; }
+/* 分頁列上的按鈕跟分頁一樣高(全站按鈕統一,2026-10-24) */
+.module-actions .btn { min-height: 36px; }
+/* 有分頁列時頁內只剩篩選 / 小分頁那一排:不放大標題,高度跟著內容 */
+.page-toolbar.slim { min-height: 0; padding-top: 6px; padding-bottom: 6px; }
+/* 窄螢幕:分頁放不下就換行,不要藏到要橫向捲才看得到(看起來像功能被拿掉) */
+@media (max-width: 900px) {
+  .module-bar { flex-wrap: wrap; }
+  .module-tab { min-height: 44px; }
+  /* 分頁多的入口:窄螢幕改成一顆下拉(全站檢視 G6:統計分析 11 個分頁,字放大後疊成四排才看到報表) */
+  .module-bar.many .module-tabs { display: none; }
+  .module-bar.many .module-select { display: block; }
+}
+.module-select { display: none; align-self: center; min-width: 9em; margin: 4px 0; }
+.module-tools-btn {
+  min-height: 36px;
+  padding: 0 var(--btn-pad-x);
+  font: inherit;
+  font-size: var(--font-body);
+  font-weight: 500;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--btn-radius);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.module-tools-btn:hover { background: var(--row-hover); }
+.module-tools-btn.active { color: var(--text); border-color: var(--accent); font-weight: 600; }
+.module-tools-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% - 2px);
+  min-width: 160px;
+  padding: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 55;
+}
+.module-tools-item {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 4px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: var(--font-body);
+  white-space: nowrap;
+}
+.module-tools-item:hover { background: var(--row-hover); }
+.module-tools-item.active { background: var(--row-selected); font-weight: 600; }
+
+.mobile-topbar { display: none; }
+.sidebar-backdrop { display: none; }
+
+@media (max-width: 900px) {
+  .app-shell { flex-direction: column; }
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: none;
+    height: 44px;
+    padding: 0 12px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+  .mobile-topbar .hamburger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 48px;
+    height: 30px;
+    padding: 0 10px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: var(--font-secondary);
+  }
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 60;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+  .app-shell.mobile-nav-open .sidebar { transform: translateX(0); }
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 50;
+  }
+}
+.page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.page > .md-layout, .page > .md-table {
+  flex: 1; min-height: 0;
+}
+
+/* Page toolbar */
+.page-toolbar {
+  display: flex; align-items: center; gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  min-height: 56px;
+}
+.page-title { font-size: var(--font-page); line-height: 1.3334; font-weight: 600; }
+.page-toolbar-mid { flex: 1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.page-toolbar-mid select,
+.page-toolbar-mid input[type="date"],
+.page-toolbar-mid input[type="text"],
+.page-toolbar-mid input[type="search"] {
+  min-height: var(--control-height);
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: var(--font-body);
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.page-toolbar-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+

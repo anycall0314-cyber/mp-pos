@@ -1,0 +1,151 @@
+/* ===== MP POS 樣式 12/26:銷貨日報(篩選分群、摘要卡、明細) =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* ─────────────────────────────────────────────────────────
+ * 銷貨日報:篩選列分群 + 摘要卡片
+ * ───────────────────────────────────────────────────────── */
+.sd-filter {
+  /* 桌機:沿用 .list-filterbar 的 flex-wrap row 行為 */
+  align-items: flex-start;
+}
+.sd-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.sd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 160px;
+}
+.sd-field > input,
+.sd-field > .combobox {
+  width: 100%;
+  min-width: 0;
+}
+
+/* 銷貨日報(owner 2026-10-10:上面太大、明細看不到幾列):桌機把篩選壓成一排、合計改成一排字,剩下的高度都給明細。
+   欄名在桌機收起來(框裡的字就是欄名),手機照舊一項一排、欄名在上面(見下面 max-width: 768px 那一段)。 */
+.sd-page .sd-label { display: none; }
+.sd-page .sd-filter { align-items: center; gap: 8px; padding: 6px 16px; flex-wrap: wrap; }
+.sd-page .sd-filter-group { flex-wrap: nowrap; }
+.sd-page .sd-field { flex: 0 1 auto; }
+.sd-page .sd-filter-dates input[type="date"] { width: 9.5rem; }
+.sd-page .sd-filter-people { flex: 1 1 22rem; min-width: 0; }
+.sd-page .sd-filter-people .sd-field { flex: 1 1 7rem; max-width: 12rem; }
+.sd-range-sep { color: var(--text-dim); }
+/* 合計:標題旁邊的小表格 —— 上面一列名稱、下面一列數字,格線用每一格外圍的 1px(折行時也接得起來) */
+.sd-sum {
+  display: flex;
+  flex-wrap: nowrap;
+  margin: 1px;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.sd-sum-cell {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-width: 4.25rem;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.sd-sum-label {
+  padding: 1px 12px;
+  font-size: var(--font-secondary);
+  line-height: 1.3;
+  color: var(--text-dim);
+  background: var(--panel-2);
+  box-shadow: 0 1px 0 var(--border);
+  text-align: right;
+  white-space: nowrap;
+}
+.sd-sum-cell b {
+  padding: 2px 12px;
+  font-size: var(--font-body);
+  line-height: 1.3;
+  font-weight: 700;
+  color: var(--text);
+  text-align: right;
+  white-space: nowrap;
+}
+.sd-sum-cell b.sd-sum-neg { color: var(--danger-text); }
+.sd-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 22px;
+  padding: 6px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.sd-strip-item { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.sd-strip-label { font-size: var(--font-secondary); color: var(--text-dim); }
+.sd-strip b { font-size: var(--font-body); font-weight: 700; color: var(--text); }
+.sd-strip b.sd-strip-neg { color: var(--danger-text); }
+.sd-strip-parts .sd-strip-item:first-child .sd-strip-label { color: var(--info-text); }
+/* 明細:吃掉剩下的高度(不再用固定扣 140px 的算法);表格排進畫面寬度 —— 品名可以折行,其餘不折 */
+.report-table.sd-table { flex: 1; min-height: 0; height: auto; }
+.sd-grid th, .sd-grid td { padding: 5px 6px; }
+.sd-grid th:first-child, .sd-grid td:first-child { padding-left: 16px; }
+.sd-grid th:last-child, .sd-grid td:last-child { padding-right: 16px; }
+.sd-grid td.sd-product { white-space: normal; min-width: 11rem; overflow-wrap: anywhere; }
+.sd-grid td.sd-customer { max-width: 8rem; overflow: hidden; text-overflow: ellipsis; }
+
+/* 摘要列改成卡片網格,fluid auto-fit */
+.sd-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr));
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.sd-summary-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+.sd-summary-card-label {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.sd-summary-card-value {
+  font-size: var(--font-section);
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.sd-summary-card-void {
+  border-color: rgba(255, 100, 100, 0.4);
+}
+.sd-summary-card-void .sd-summary-card-value {
+  color: var(--danger-text-soft);
+}
+.sd-summary-hint {
+  padding: 4px 16px 8px;
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.sd-parts-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  background: rgba(96, 165, 250, 0.18);
+  color: var(--info-text);
+  border-radius: 8px;
+  font-size: var(--font-secondary);
+  font-weight: 600;
+}
+

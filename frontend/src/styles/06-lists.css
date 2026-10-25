@@ -1,0 +1,374 @@
+/* ===== MP POS 樣式 06/26:清單頁:日期篩選列、報表那一排、底條、PaneForm、明細表、狀態 pill、Master-Detail、ComboBox =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* 列表頁日期區間 filterbar */
+.list-filterbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-body);
+  flex-wrap: wrap;
+}
+/* 報表那一排:框裡改了還沒按查詢(全站檢視 R05;pages/reports/ReportRangeBar.tsx) */
+.list-filterbar .range-pending {
+  color: var(--warn-text-orange);
+  white-space: nowrap;
+}
+.list-filterbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  white-space: nowrap;   /* 欄名不折行(畫面窄的時候「門市」會被擠成上下兩個字) */
+}
+.list-filterbar input[type="date"] {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: var(--font-body);
+  min-height: var(--control-height);
+}
+.list-filterbar select {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: var(--font-body);
+  min-height: var(--control-height);
+}
+.list-filterbar-count {
+  margin-left: auto;
+  color: var(--text-dim);
+}
+
+/* 點到的列高亮 */
+.line-table tr.line-row-active > td {
+  background: rgba(79, 140, 255, 0.12);
+}
+
+/* 序號完成度小標 */
+.serial-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: var(--font-secondary);
+  background: rgba(255, 112, 112, 0.15);
+  color: var(--danger-text-soft);
+  font-variant-numeric: tabular-nums;
+}
+.serial-badge.ok {
+  background: rgba(128, 208, 144, 0.15);
+  color: var(--success-text-soft);
+}
+.entry-footer {
+  padding: 8px 16px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  display: flex; gap: 24px; align-items: center; justify-content: flex-end;
+}
+.entry-summary { display: flex; gap: 24px; }
+.entry-summary { align-items: baseline; flex-wrap: wrap; }
+.entry-summary > span { color: var(--text-dim); font-size: var(--font-body); }
+.entry-summary b { color: var(--text); font-weight: 600; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.entry-summary > span.grand b { font-size: var(--font-total); line-height: 1.2857; font-weight: 700; margin-left: 8px; }
+/* 銷退最下面那一條(全站檢視 V05):退回哪裡、退款方式、作廢原發票、金額、整張退 */
+.sr-body { padding-top: 8px; }
+.sr-footer { flex-wrap: wrap; row-gap: 6px; }
+.sr-footer select { margin-left: 6px; }
+.sr-void-inv { display: inline-flex; gap: 4px; align-items: center; color: var(--text); }
+.sr-footer-err { color: var(--danger-text); font-size: var(--font-body); }
+/* 個人收購最下面那一條(全站檢視 V05):收購金額、付款方式、儲存收購 */
+.sh-footer { flex-wrap: wrap; row-gap: 6px; }
+.sh-footer-field { display: inline-flex; align-items: center; gap: 6px; color: var(--text-dim); }
+.sh-footer-field input { width: 140px; }
+.sh-warn { color: var(--warn-text-orange); font-size: var(--font-body); }
+/* 代收話費整頁工作區(全站檢視 V04):上面回清單 + 今天幾筆多少、欄位一欄、新增會員在電話下面展開 */
+.pb-page { padding-top: 8px; }
+.pb-footer { justify-content: flex-end; }
+.pb-head { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+/* 主檔新增 / 編輯整頁(PaneForm;電信方案、SIM 卡,owner 2026-10-25 不要 modal):清單整頁換成表單,清單那一塊留著不卸(`pane-list` 藏起來) */
+.pane-list { display: contents; }
+.pane-list[hidden] { display: none; }
+.pane-form { padding-top: 8px; }
+.pane-form-head { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+.pane-form-title { margin: 0; font-size: var(--font-section); font-weight: 600; }
+.pane-form-body { max-width: 720px; }
+.pane-form-body.wide { max-width: none; }
+.pane-form-facts { display: grid; grid-template-columns: 120px 1fr; row-gap: 6px; column-gap: 16px; margin: 12px 0 0; color: var(--text-dim); }
+.pane-form-facts dd { margin: 0; color: var(--text); }
+.pane-form-footer { justify-content: flex-end; }
+.pb-today { color: var(--text-dim); }
+.pb-today b { color: var(--text); margin: 0 4px; font-variant-numeric: tabular-nums; }
+.pb-form { max-width: 720px; }
+.pb-newmember { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.pb-newmember input { flex: 1; }
+
+/* 右下角放大版「確認結帳」CTA,跟右上角結帳按鈕並存 */
+.checkout-cta {
+  min-height: var(--control-height-lg);
+  padding: 0 26px;
+  font-size: var(--font-body);
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+/* Detail line table (for items inside entry form) */
+.line-table { width: 100%; border-collapse: collapse; font-size: var(--font-body); }
+.line-table th, .line-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 4px 8px;
+  vertical-align: middle;
+}
+.line-table th {
+  padding-top: 10px; padding-bottom: 10px;
+  font-size: var(--font-table-head);
+  text-align: left; color: var(--text-dim); font-weight: 600;
+  background: var(--panel-2);
+  position: sticky; top: 0;
+}
+.line-table input, .line-table select, .line-table textarea {
+  width: 100%; box-sizing: border-box;
+  background: transparent;
+  border: 1px solid transparent;
+  /* 水平 padding 設 0:讓輸入框內文字與表頭(th 的 6px padding)對齊。
+     原本 input 另有 6px,加上 td 的 6px 變成 12px,導致數量/單價/金額
+     數字比表頭往左 6px、對不準。 */
+  padding: 3px 0;
+  min-height: 40px;
+  color: var(--text);
+  font-size: var(--font-body);
+  font-family: inherit;
+}
+.line-table input:hover, .line-table select:hover {
+  border-color: var(--border);
+}
+.line-table input:focus, .line-table select:focus, .line-table textarea:focus {
+  border-color: var(--accent); outline: none;
+  background: var(--bg);
+}
+.scan-bar {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 8px;
+}
+.scan-input {
+  flex: 0 0 420px; max-width: 60%;
+  background: var(--panel-2);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 8px 12px;
+  min-height: var(--control-height-lg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--font-section);
+}
+.scan-input:focus { outline: none; border-color: var(--accent); }
+.scan-msg { font-size: var(--font-body); font-weight: 500; }
+
+.line-table .num { text-align: right; }
+.line-table .num-input { text-align: right; }
+/* 表格內的 ComboBox(商品 / 促銷 / 卡號)輸入框:左內距歸零,
+   讓顯示文字與表頭(th 6px padding)對齊;右側保留給清除鈕 */
+.line-table .combobox-input { padding-left: 0; padding-right: 20px; min-height: 40px; }
+.line-table textarea { resize: none; min-height: 40px; height: 40px; padding-top: 8px; }
+.line-table input[type="checkbox"], .line-table input[type="radio"] { min-height: 0; width: 18px; height: 18px; }
+.line-table .telecom-cell { background: rgba(80, 100, 140, 0.08); }
+.line-table .disabled-cell {
+  background: repeating-linear-gradient(
+    45deg, rgba(255,255,255,0.02), rgba(255,255,255,0.02) 4px,
+    transparent 4px, transparent 8px
+  );
+}
+.line-table .row-actions button {
+  background: transparent; border: 0; color: var(--text-dim);
+  cursor: pointer; padding: 2px 6px;
+}
+.line-table .row-actions button:hover { color: var(--danger-text); }
+
+/* Status pill */
+.pill {
+  display: inline-block;
+  padding: 1px 8px; border-radius: 10px;
+  font-size: var(--font-secondary);
+  background: var(--panel-2); color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+.pill.draft { color: #f0b860; border-color: #5a3f1a; background: #2a1d0a; }
+/* 這顆自己帶深色底(日間也是),字要維持亮綠,不跟主題走 */
+.pill.posted { color: #80d090; border-color: #2a6b3a; background: #143a23; }
+.pill.void { color: #999; }
+
+/* Member lookup tag (sales entry 會員欄位) */
+.member-tag {
+  display: inline-flex; align-items: center;
+  white-space: nowrap;
+  padding: 5px 10px;
+  border-radius: 3px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  font-size: var(--font-body);
+}
+
+/* Void row in list pages */
+tr.row-void td { opacity: 0.5; text-decoration: line-through; }
+
+/* Master-Detail 通用版型 */
+.md-layout {
+  display: grid;
+  /* master 區放寬到 720px 容納多欄表格;detail 仍 fill 剩餘空間 */
+  grid-template-columns: minmax(360px, 720px) 1fr;
+  height: 100%;
+}
+.md-master {
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  display: grid;
+  grid-template-rows: minmax(52px, auto) 1fr; /* 搜尋框 44px + 上下留白 */
+}
+.md-master-toolbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+.md-master-toolbar input {
+  flex: 1; padding: 4px 8px; background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: 3px; color: var(--text);
+}
+.md-table { overflow: auto; }
+.md-table table { width: 100%; border-collapse: collapse; }
+.md-table th, .md-table td {
+  text-align: left; padding: var(--row-pad) 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.md-table th {
+  position: sticky; top: 0;
+  background: var(--panel-2);
+  color: var(--text-dim); font-size: var(--font-table-head); font-weight: 600;
+  z-index: 1;
+}
+.md-table tr { cursor: pointer; }
+.md-table tr:hover td { background: var(--row-hover); }
+.md-table tr.selected td { background: var(--row-selected); }
+.md-table tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; } /* 鍵盤停在哪一列(全站檢視 L04) */
+
+.md-detail {
+  background: var(--bg);
+  /* 上面的分頁列與下面的按鈕列照內容高(字放大後寫死 36 / 44px 會壓到中間的內容) */
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+}
+.md-detail-head {
+  display: flex; align-items: center; gap: 0;
+  border-bottom: 1px solid var(--border);
+}
+.md-detail-head > .ui-tabs { flex: 1; border-bottom: 0; }
+.md-detail-body { padding: 16px; overflow: auto; }
+.md-detail-body dl {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  row-gap: 8px;
+  column-gap: 16px;
+  margin: 0;
+}
+.md-detail-body dt {
+  color: var(--text-dim);
+  font-weight: normal;
+}
+.md-detail-body dd { margin: 0; }
+.md-detail-footer {
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  padding: 6px 16px;
+}
+.md-detail-footer button {
+  min-height: var(--control-height);
+  padding: 0 var(--btn-pad-x); border-radius: var(--btn-radius);
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); cursor: pointer;
+  font-family: inherit; font-size: var(--font-body); font-weight: 500;
+}
+.md-detail-footer button.primary { background: var(--primary-bg); border-color: var(--primary-border); color: var(--primary-text); font-weight: 600; }
+.md-empty { padding: 32px; color: var(--text-dim); }
+
+/* ---- ComboBox ---- */
+.combobox { position: relative; width: 100%; }
+.combobox-input-wrap { position: relative; display: flex; }
+.combobox-input {
+  width: 100%;
+  padding: 4px 22px 4px 8px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: var(--font-body);
+  min-height: var(--control-height);
+  box-sizing: border-box;
+}
+.combobox.open .combobox-input { border-color: var(--accent); }
+.combobox-input:disabled { color: var(--text-dim); background: var(--panel-2); }
+.combobox-clear {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  background: transparent; border: 0; color: var(--text-dim);
+  cursor: pointer; padding: 0 4px; font-size: var(--font-section); line-height: 1;
+}
+.combobox-clear:hover { color: var(--text); }
+.combobox-pop {
+  position: absolute; top: calc(100% + 2px); left: 0;
+  /* 容器至少跟輸入框等寬,內容過寬時自動撐開,但有上限避免超出畫面 */
+  min-width: 100%;
+  width: max-content;
+  max-width: min(640px, 90vw);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.combobox-hint { padding: 10px 12px; color: var(--text-dim); font-size: var(--font-body); }
+.combobox-list { list-style: none; margin: 0; padding: 0; }
+.combobox-option {
+  padding: 6px 10px; cursor: pointer; font-size: var(--font-body);
+  display: flex; justify-content: space-between; gap: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.combobox-option:last-child { border-bottom: 0; }
+.combobox-option.active { background: var(--accent-fill); color: white; }
+.combobox-option.disabled { opacity: 0.55; cursor: not-allowed; }
+.combobox-option.active .combobox-option-secondary { color: rgba(255,255,255,0.8); }
+.combobox-option-create {
+  background: rgba(96, 165, 250, 0.06);
+  border-top: 1px dashed var(--border);
+}
+.combobox-option-create .combobox-option-label { color: var(--accent); font-weight: 600; }
+.combobox-option-create .combobox-option-secondary { color: var(--text-dim); font-size: var(--font-secondary); }
+.combobox-option-label {
+  flex: 1;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.35;
+}
+.combobox-option-secondary {
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.combobox-create {
+  padding: 8px 10px; cursor: pointer; font-size: var(--font-body);
+  color: var(--accent); border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+

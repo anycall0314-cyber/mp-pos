@@ -1,6 +1,7 @@
 // 商品標籤:條碼的每一條線要剛好是印表機的整數個點(不然熱感印出來刷不到);張數不能亂。跑法:npm test。
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readAllCss } from "./cssText.mjs";
 import test from "node:test";
 
 import { code128Bits } from "./code128.ts";
@@ -49,7 +50,7 @@ test("上下兩聯:撕線在正中間,條碼跨在撕線上、上下各一半", 
 });
 
 test("樣式裡的尺寸跟 LABEL 是同一組數字", () => {
-  const css = read("../styles.css");
+  const css = readAllCss();
   assert.ok(css.includes(`@page label { size: ${LABEL.widthMm}mm ${LABEL.heightMm}mm; margin: 0; }`));
   const tile = css.match(/\.label-tile \{[^}]*\}/)[0];
   assert.match(tile, new RegExp(`width: ${LABEL.widthMm}mm;`));
@@ -175,7 +176,7 @@ test("位置微調:畫面上寫現在推了多少", () => {
 });
 
 test("位置微調:推的是整張的內容,外框與紙不動;只有測試標籤那一頁能調", () => {
-  const css = read("../styles.css");
+  const css = readAllCss();
   assert.ok(css.includes(".label-inner { position: absolute; inset: 0; transform: translate(var(--label-dx, 0mm), var(--label-dy, 0mm)); }"));
   const tile = read("../components/labels/LabelTile.tsx");
   // 兩聯、條碼、對撕線的短線都在會被推的那一層裡面;外框是標籤自己的(留在紙的四邊)
@@ -208,7 +209,7 @@ test("廠商印在碼那一行的右邊、品號前面;印不出條碼時改印�
   assert.match(tile, /<span className="label-code">\{text\.head\}<\/span>\s*\)\}\s*\{supplier\}\s*<span className="label-sku">/);
   assert.match(tile, /<span className="label-src">\{text\.source\}<\/span>\s*\{!bars && supplier\}/);
   assert.match(tile, /setSupplierSqueeze\(measureSqueeze\(supplierRef\.current\)\)/);
-  const css = read("../styles.css");
+  const css = readAllCss();
   assert.match(css.match(/\.label-supplier \{[^}]*\}/)[0], /max-width: 10mm; margin-left: auto; overflow: hidden;/);
   // 測試標籤印得出廠商(簡稱、太長的名稱、印不出條碼的那一張),owner 實機印一次就看得到
   const page = read("../pages/labels/LabelPrintPage.tsx");
@@ -217,7 +218,7 @@ test("廠商印在碼那一行的右邊、品號前面;印不出條碼時改印�
 });
 
 test("標籤上的小字都是粗體(熱感印表機細的筆畫印不出來)", () => {
-  const css = read("../styles.css");
+  const css = readAllCss();
   for (const cls of ["label-name", "label-src", "label-grade", "label-price", "label-code", "label-last5", "label-sku", "label-nobars", "label-supplier"]) {
     const rule = css.match(new RegExp(`\\.${cls} \\{[^}]*\\}`));
     assert.ok(rule, cls);

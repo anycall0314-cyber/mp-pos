@@ -1,0 +1,334 @@
+/* ===== MP POS 樣式 10/26:庫存查詢頁(篩選 / chip / 低庫存)、庫存警示頁 =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* ─────────────────────────────────────────────────────────
+ * 庫存查詢頁:篩選欄位 / chip / 預設低庫存面板
+ * ───────────────────────────────────────────────────────── */
+/* 篩選欄位:fluid,容器不夠寬就自動 wrap,每欄獨立 row */
+.inv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.inv-field input,
+.inv-field .combobox {
+  width: 100%;
+  min-width: 0;
+}
+.inv-field-keyword { flex-basis: 240px; }
+.inv-field-category { flex-basis: 240px; }
+
+/* 庫存查詢分頁列 */
+.inv-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.inv-pager-label {
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+  min-width: 150px;
+  text-align: center;
+}
+
+/* 已選類別 chip 列(篩選列下方獨立列) */
+.inv-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-secondary);
+}
+.inv-chip-row-label {
+  color: var(--text-dim);
+  margin-right: 4px;
+}
+.inv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--accent-fill);
+  color: white;
+  border: 1px solid var(--accent);
+  border-radius: 14px;
+  cursor: pointer;
+  font-size: var(--font-secondary);
+  font-weight: 500;
+  line-height: 1.4;
+}
+.inv-chip:hover { opacity: 0.85; }
+.inv-chip-x {
+  font-size: var(--font-body);
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+/* 預設面板:低庫存品項列表 */
+.inv-default {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+.inv-default-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-dim);
+}
+.inv-default-empty-title {
+  font-size: var(--font-body);
+  margin-bottom: 6px;
+}
+.inv-default-empty-hint {
+  font-size: var(--font-secondary);
+}
+.inv-default-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px;
+}
+.inv-default-title {
+  font-size: var(--font-body);
+  font-weight: 700;
+  color: var(--text);
+}
+.inv-default-link {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  text-decoration: none;
+}
+.inv-default-link:hover { color: var(--text); }
+.inv-default-list {
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.inv-default-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+.inv-default-row:last-child { border-bottom: 0; }
+.inv-default-row:hover { background: var(--row-hover); }
+.inv-default-row-main {
+  flex: 1;
+  min-width: 0;
+}
+.inv-default-row-name {
+  font-size: var(--font-body);
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inv-default-row-sub {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.inv-default-row-qty {
+  flex-shrink: 0;
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+}
+.inv-default-row-qty b {
+  font-size: var(--font-section);
+  font-weight: 700;
+  color: var(--warn-text);
+  font-variant-numeric: tabular-nums;
+  margin: 0 2px;
+}
+
+/* ─────────────────────────────────────────────────────────
+ * 庫存警示頁(/inventory/alerts)
+ * 左色條區分緊急度 + 商品狀態 badge + 觸發原因 + 操作按鈕
+ * ───────────────────────────────────────────────────────── */
+/* 上方緊急度統計列(可點 filter) */
+.ia-counts-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 100px), 1fr));
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.ia-count {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text);
+}
+.ia-count:hover { background: var(--row-hover); }
+.ia-count.active {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.ia-count-num {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.ia-count-label {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+}
+.ia-count-critical .ia-count-num { color: var(--danger-text); }
+.ia-count-warning .ia-count-num { color: var(--warn-text); }
+.ia-count-info .ia-count-num { color: var(--info-text); }
+
+/* 警示列表 */
+.ia-list {
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ia-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-dim);
+}
+.ia-empty-title { font-size: var(--font-body); margin-bottom: 6px; }
+.ia-empty-hint { font-size: var(--font-secondary); }
+.ia-empty-link {
+  color: var(--accent);
+  text-decoration: none;
+  margin: 0 4px;
+}
+
+/* 每一筆警示 row */
+.ia-row {
+  display: grid;
+  grid-template-columns: 6px 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 12px 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.ia-row-bar {
+  width: 6px;
+  height: 100%;
+  align-self: stretch;
+}
+.ia-row-critical .ia-row-bar { background: #ff7070; }
+.ia-row-warning .ia-row-bar { background: #fbbf24; }
+.ia-row-info .ia-row-bar { background: #60a5fa; }
+.ia-row-critical { border-color: rgba(255, 100, 100, 0.3); }
+.ia-row-warning { border-color: rgba(251, 191, 36, 0.3); }
+.ia-row-info { border-color: rgba(96, 165, 250, 0.3); }
+
+.ia-row-main {
+  min-width: 0;
+}
+.ia-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.ia-row-name {
+  font-size: var(--font-body);
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.ia-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: var(--font-secondary);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.ia-badge-active {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--success-text);
+}
+.ia-badge-replacing {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--warn-text);
+}
+.ia-badge-discontinued {
+  background: rgba(148, 148, 148, 0.15);
+  color: var(--text-dim);
+}
+.ia-badge-clearance {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+}
+.ia-row-sub {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+}
+.ia-sep { margin: 0 5px; }
+.ia-row-reason {
+  margin-top: 6px;
+  font-size: var(--font-secondary);
+  color: var(--text);
+}
+.ia-row-critical .ia-row-reason { color: var(--danger-text-soft); font-weight: 600; }
+.ia-row-warning .ia-row-reason { color: var(--warn-text); font-weight: 600; }
+.ia-row-hosts {
+  margin-top: 4px;
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+}
+.ia-row-formula {
+  margin-top: 4px;
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+/* tabs 在 Toolbar 內 */
+.ia-badge-acc {
+  background: rgba(96, 165, 250, 0.15);
+  color: var(--info-text);
+}
+
+.ia-hint {
+  padding: 8px 16px;
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+}
+

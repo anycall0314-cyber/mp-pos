@@ -1,0 +1,354 @@
+/* ===== MP POS 樣式 11/26:商品表單緊湊版、相容性 / 匯入視窗、匯入表格 =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* ─────────────────────────────────────────────────────────
+ * 商品表單緊湊版(套用在 ProductForm 內,改抽屜內部所有間距/分群/segmented)
+ *  - 欄位間距 24 → 12;標籤與輸入框 → 4;input 高度統一 34px
+ *  - 單選列(ui-choices) / fieldset 收緊
+ *  - 群組以 1px 細線分隔
+ * ───────────────────────────────────────────────────────── */
+.pf-compact .field {
+  margin-bottom: 12px;
+}
+.pf-compact .field-label {
+  margin-bottom: 4px;
+}
+.pf-compact .field input[type="text"],
+.pf-compact .field input[type="number"],
+.pf-compact .field input[type="date"],
+.pf-compact .field input[type="search"],
+.pf-compact .field input:not([type]),
+.pf-compact .field select {
+  height: 34px;
+  padding: 4px 8px;
+  font-size: var(--font-body);
+}
+.pf-compact .field textarea {
+  font-size: var(--font-body);
+  min-height: 56px;
+}
+/* 群組用淺色背景 + 細線分隔 */
+.pf-compact .fieldset {
+  border: 0;
+  background: var(--panel-2);
+  padding: 10px 12px;
+  border-radius: 4px;
+  margin: 0 0 12px;
+}
+.pf-compact .fieldset legend {
+  font-size: var(--font-secondary);
+  font-weight: 700;
+  color: var(--text-dim);
+  padding: 0;
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+}
+.pf-compact .field-row {
+  gap: 10px;
+  margin-bottom: 12px;
+}
+/* details 折疊區塊 */
+.pf-compact .pf-details {
+  border-top: 1px solid var(--border);
+  padding: 8px 0 0;
+  margin-top: 12px;
+}
+.pf-compact .pf-details > summary {
+  cursor: pointer;
+  font-size: var(--font-secondary);
+  font-weight: 700;
+  color: var(--text-dim);
+  padding: 4px 0;
+  list-style: revert;
+  letter-spacing: 0.5px;
+}
+.pf-compact .pf-details > summary:hover { color: var(--text); }
+.pf-compact .pf-details-body {
+  padding: 6px 4px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pf-compact .pf-details-body .checkbox {
+  font-size: var(--font-secondary);
+}
+
+.pf-chip-status {
+  font-size: var(--font-secondary);
+  opacity: 0.8;
+}
+
+/* 商品相容性 Modal */
+.cm-modal {
+  min-width: 480px;
+  max-width: 640px;
+}
+.cm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cm-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.cm-row-main { flex: 1; min-width: 0; }
+.cm-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.cm-row-name {
+  font-size: var(--font-body);
+  font-weight: 600;
+  color: var(--text);
+}
+.cm-row-sub {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+}
+.cm-row-extra {
+  margin-top: 6px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.cm-daily {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.cm-demand {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: var(--font-secondary);
+  font-weight: 600;
+}
+.cm-demand-hot { background: rgba(255, 100, 100, 0.18); color: var(--danger-text); }
+.cm-demand-warm { background: rgba(251, 191, 36, 0.18); color: var(--warn-text); }
+.cm-demand-stable { background: rgba(96, 165, 250, 0.18); color: var(--info-text); }
+.cm-demand-cold { background: rgba(148, 148, 148, 0.18); color: var(--text-dim); }
+.cm-demand-none {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-dim);
+}
+.cm-row-stock {
+  text-align: right;
+  flex-shrink: 0;
+}
+.cm-row-stock-num {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.cm-row-stock-of {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+/* 商品匯入 Modal */
+.pi-modal {
+  min-width: 560px;
+  max-width: 800px;
+}
+.pi-note {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: var(--font-secondary);
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pi-note-dim {
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+}
+/* 匯入表格(全站檢視 D7 / D8):貼上 / 選檔案切換、範例檔靠右 */
+
+.pi-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 6px;
+}
+.pi-template {
+  margin-left: auto;
+}
+.pi-paste {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: monospace;
+  font-size: var(--font-secondary);
+  resize: vertical;
+}
+.pi-file-info {
+  margin-top: 8px;
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+}
+.pi-error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 100, 100, 0.12);
+  border: 1px solid rgba(255, 100, 100, 0.4);
+  border-radius: 4px;
+  color: var(--danger-text-soft);
+  font-size: var(--font-secondary);
+}
+.pi-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 100px), 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.pi-summary-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  text-align: center;
+}
+.pi-summary-num {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.pi-summary-label {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+.pi-summary-ok .pi-summary-num { color: var(--success-text); }
+.pi-summary-skip .pi-summary-num { color: var(--warn-text); }
+
+.pi-section {
+  margin-top: 14px;
+}
+.pi-section-title {
+  font-size: var(--font-secondary);
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+.pi-section-warn { color: var(--warn-text); }
+.pi-section-ok { color: var(--success-text); }
+.pi-cat-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pi-cat-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--success-text);
+  border-radius: 10px;
+  font-size: var(--font-secondary);
+}
+.pi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-secondary);
+}
+.pi-table th,
+.pi-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.pi-table th {
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-weight: 500;
+  font-size: var(--font-secondary);
+}
+.pi-skip-reason {
+  color: var(--danger-text-soft);
+  font-size: var(--font-secondary);
+}
+
+.ia-row-stock {
+  text-align: right;
+  flex-shrink: 0;
+  padding: 0 8px;
+}
+.ia-row-stock-num {
+  font-size: 28px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  line-height: 1;
+}
+.ia-row-critical .ia-row-stock-num { color: var(--danger-text); }
+.ia-row-warning .ia-row-stock-num { color: var(--warn-text); }
+.ia-row-stock-of {
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.ia-row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.ia-row-btn {
+  font-size: var(--font-secondary);
+  padding: 0 8px;
+  text-decoration: none;
+  white-space: nowrap;
+  min-height: var(--btn-h-sm);
+}
+
+@media (max-width: 768px) {
+  /* 手機:row 改成兩段式直立 — 主資訊 / 庫存數字併排上,操作按鈕全寬獨立下 */
+  .ia-row {
+    grid-template-columns: 6px 1fr auto;
+    grid-template-areas:
+      "bar main stock"
+      "bar actions actions";
+    row-gap: 8px;
+    padding-bottom: 10px;
+  }
+  .ia-row-bar { grid-area: bar; }
+  .ia-row-main { grid-area: main; }
+  .ia-row-stock { grid-area: stock; }
+  .ia-row-actions {
+    grid-area: actions;
+    flex-direction: row;
+    gap: 8px;
+    padding-right: 14px;
+  }
+  .ia-row-actions .ia-row-btn {
+    flex: 1;
+    text-align: center;
+    padding: 8px 10px;
+    font-size: var(--font-secondary);
+  }
+  .ia-row-stock-num { font-size: 22px; }
+}
+.inv-default-foot {
+  text-align: center;
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+  padding: 4px 0 8px;
+}
+

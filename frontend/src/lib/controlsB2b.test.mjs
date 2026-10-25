@@ -1,10 +1,11 @@
 // 全站控制項 B2b(第一段):主檔頁的分頁 / 篩選 / 表單單選分清楚、兩段確認一律黃色、圖示鈕有名字、待存的開關改勾選框。只改呈現、不改作業規則。跑法:npm test。
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readAllCss } from "./cssText.mjs";
 import test from "node:test";
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
-const css = read("../styles.css");
+const css = readAllCss();
 
 test("真分頁用 Tabs:商品(列表 / 分類瀏覽 / 類別管理、基本 / 別名)、系統設定、中古收購、共用明細面板", () => {
   const products = read("../pages/products/ProductsPage.tsx");

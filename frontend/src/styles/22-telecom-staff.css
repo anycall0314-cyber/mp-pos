@@ -1,0 +1,110 @@
+/* ===== MP POS 樣式 22/26:合約到期、新增手機型號售價、員工帳號、改密碼 =====
+   2026-10-25 從 styles.css 原樣拆出來(內容、順序沒改)。層疊順序由 styles.css 的 @import 決定,
+   這一檔只能放原本就排在這個位置的規則;新規則放它所屬主題的檔,找不到主題放 26-stocktake-master-latest.css 最後面。
+   測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。 */
+/* ── 合約到期(門號合約快到期的名單) ── */
+.ct-bar { flex-wrap: wrap; row-gap: 8px; }
+.ct-bar select, .ct-bar .ct-search {
+  min-height: var(--control-height);
+  padding: 0 10px;
+  border: 1px solid var(--wb-input-border);
+  border-radius: 6px;
+  background: var(--wb-input);
+  color: var(--wb-text);
+  font-size: var(--font-body);
+}
+.ct-bar .ct-search { width: 15rem; max-width: 100%; }
+.ct-overdue { margin-bottom: 8px; }
+.ct-actions { white-space: nowrap; text-align: right; }
+.ct-actions .wb-btn + .wb-btn { margin-left: 6px; }
+.ct-note-cell { max-width: 16rem; overflow-wrap: anywhere; }
+.ct-detail { display: flex; flex-direction: column; gap: 6px; padding: 4px 0; }
+.ct-note { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.ct-note input {
+  flex: 1 1 14rem;
+  min-width: 0;
+  min-height: var(--control-height);
+  padding: 0 10px;
+  border: 1px solid var(--wb-input-border);
+  border-radius: 6px;
+  background: var(--wb-input);
+  color: var(--wb-text);
+  font-size: var(--font-body);
+}
+.ct-pages { display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 10px; }
+/* 畫面上的名單不是現在要的那一份(剛換分頁 / 篩選 / 翻頁):看得到、按不到 */
+.ct-stale { opacity: 0.5; pointer-events: none; }
+/* 標完留在原地的那一列:資料變淡,按鈕(可以復原)照常 */
+.wb-table tr.ct-done > td:not(.ct-actions) { opacity: 0.55; }
+.wb-card.ct-done > :not(.wb-detail-actions):not(.ct-detail) { opacity: 0.55; }
+/* 日期、門號、還剩幾天、門市不折行(折了一列變兩行高);客人、方案、備註可以折 */
+.ct-table td.wb-mono, .ct-table td.ct-fit { white-space: nowrap; }
+/* 三顆狀況按鈕:現在的狀況那一顆亮著(不能按,但不要變淡) */
+.ct-state.on:disabled { opacity: 1; }
+.ct-unsaved { color: var(--warn-text); }
+.ct-card-note { overflow-wrap: anywhere; }
+@media (max-width: 768px) {
+  /* 窄畫面:篩選的下拉一排排滿、搜尋自己一排,不要被擠到畫面外 */
+  .ct-bar .ws-grow { display: none; }
+  .ct-bar select { flex: 1 1 7rem; min-width: 0; }
+  .ct-bar .ct-search { flex: 1 1 100%; width: auto; }
+}
+
+/* ─── 新增手機型號:每個容量的建議售價 ─── */
+.npm-prices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+.npm-price {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.npm-price-cap {
+  min-width: 64px;
+  color: var(--text-dim);
+  font-size: var(--font-secondary);
+}
+.npm-price input {
+  width: 130px;
+}
+/* 預覽清單每一列右邊的價錢 */
+.npm-row-price {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.npm-row-price.none {
+  color: var(--warn-text);
+}
+
+/* ── 系統設定 → 員工帳號:每個帳號一列、每一項一個勾 ─────────────── */
+.staff-table { border-collapse: collapse; }
+.staff-table th,
+.staff-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+  font-size: var(--fs-body);
+}
+.staff-table thead th { color: var(--text-dim); font-weight: 600; font-size: var(--fs-sub); }
+.staff-table th.staff-group { text-align: center; border-bottom: none; padding-bottom: 2px; }
+.staff-table th.staff-item,
+.staff-table td.staff-check { text-align: center; }
+/* 名稱不折行(字放大也是一行);項目底下的說明才折 */
+.staff-table th.staff-item,
+.staff-table td { white-space: nowrap; }
+.staff-table th.staff-item .staff-note { white-space: normal; max-width: 11em; margin: 0 auto; }
+.staff-scroll { overflow-x: auto; }
+.staff-table td.staff-check input { width: 22px; height: 22px; }
+.staff-acts { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
+.staff-acts .btn { min-height: var(--btn-h-sm); padding: 0 8px; font-size: var(--font-secondary); }
+.staff-acts .staff-pw { width: 11em; }
+/* 自己改密碼那一頁 */
+.pw-form { max-width: 360px; display: grid; gap: 12px; }
+.pw-form input { width: 100%; box-sizing: border-box; }
+.pw-actions { display: flex; justify-content: flex-end; }
+.staff-note { color: var(--text-dim); font-size: var(--fs-sub); font-weight: 400; }
+.staff-table tr.staff-off td { opacity: 0.55; }
+
