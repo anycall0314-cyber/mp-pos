@@ -308,3 +308,33 @@ def seed_tenant_defaults(tenant):
             sort_order=sort_order,
             is_active=True,
         )
+
+
+# 新公司一開始有的身份別(owner 2026-10-27 舉的例子;「管理者」是公司管理員帳號,不在這裡)。勾選都照預設,各家自己改、自己增刪
+DEFAULT_STAFF_ROLES = ("店長", "門市", "行政")
+
+
+def seed_staff_roles(tenant) -> None:
+    """只給新公司(已經在用的公司刪掉的身份別不能自己長回來,所以不放進會重跑的 seed_tenant_defaults)。"""
+    from .models import StaffRole
+
+    if StaffRole.objects.filter(tenant=tenant).exists():
+        return
+    for name in DEFAULT_STAFF_ROLES:
+        StaffRole.objects.create(tenant=tenant, name=name, denied_abilities=[])
+
+
+def first_staff_role(tenant):
+    """平台後台開的店員帳號帶這家公司最多人用的身份別(一樣多 → 先建的)。沒有身份別 = 照預設全開,會比公司設定的寬;
+    不用「排第一個的」:新公司第一個是店長,新人不該預設拿店長的權限。"""
+    from django.db.models import Count, Q
+
+    from .models import StaffRole, UserProfile
+
+    if not tenant:
+        return None
+    return (
+        StaffRole.objects.filter(tenant=tenant)
+        .annotate(n=Count("profiles", filter=Q(profiles__role=UserProfile.Role.TENANT_USER)))
+        .order_by("-n", "id").first()
+    )

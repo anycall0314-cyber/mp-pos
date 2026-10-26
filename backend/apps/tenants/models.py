@@ -383,6 +383,33 @@ class DocNumberFloor(TenantOwnedModel):
         return f"{self.prefix}>{self.floor}"
 
 
+class StaffRole(TenantOwnedModel):
+    """身份別(owner 2026-10-27:「我要做身份別，比如管理者，店長，門市，行政（可自行添加刪除）」)。
+
+    一個身份別 = 一組權限勾選;店員帳號跟著身份別走,改身份別的勾選,那個身份的人一起變。
+    帳號自己另外多開 / 多關的項目是「例外」,記在帳號上(`UserProfile.denied_abilities`)。
+    「管理者」不是這一張表的一列:就是公司管理員(`UserProfile.Role.TENANT_ADMIN`),固定全開、不能刪。
+    `denied_abilities` 的寫法跟帳號的一樣(清單與判斷在 apps/tenants/abilities.py):代碼 = 關掉、`+代碼` = 預設不開的項目打開。
+    """
+
+    name = models.CharField("名稱", max_length=20)
+    denied_abilities = models.JSONField(
+        "關掉的權限", default=list, blank=True,
+        help_text="項目代碼的清單;空的 = 照預設(預設不開的項目以外全開)",
+    )
+
+    class Meta:
+        verbose_name = "身份別"
+        verbose_name_plural = "身份別"
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "name"], name="uniq_staffrole_tenant_name"),
+        ]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class UserProfile(TimestampedModel):
     """Django User 的延伸:綁定 tenant + 角色 + 預設倉。
 
@@ -430,12 +457,23 @@ class UserProfile(TimestampedModel):
         default=True,
         help_text="True 時只能操作 default_warehouse;管理員角色預設 False",
     )
+    # 店員帳號的身份別;權限 = 身份別的勾選 + 這個帳號的例外(denied_abilities)。
+    # 還有人在用的身份別刪不掉(PROTECT;改成空的等於變回全開,是放寬)。空的 = 照預設
+    staff_role = models.ForeignKey(
+        StaffRole,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="profiles",
+        verbose_name="身份別",
+    )
     # 這個帳號不會變的識別碼。公司備份用它認「是不是同一個人」:帳號名稱可以改、
     # 也可以被別人拿去用,數字 id 換一台伺服器就不同,兩個都不能拿來認人。
     account_uuid = models.UUIDField(
         "帳號識別碼", default=uuid.uuid4, unique=True, editable=False
     )
-    # 這個帳號被關掉的權限項目(清單與判斷在 apps/tenants/abilities.py)。空的 = 全開;只對店員帳號有用
+    # 這個帳號跟身份別不一樣的地方(例外;清單與判斷在 apps/tenants/abilities.py):代碼 = 多關、`+代碼` = 多開。
+    # 空的 = 完全照身份別(沒有身份別 = 照預設);只對店員帳號有用
     denied_abilities = models.JSONField(
         "關掉的權限", default=list, blank=True,
         help_text="項目代碼的清單;空的 = 全部可以做(管理員永遠全開)",
@@ -453,6 +491,8 @@ class UserProfile(TimestampedModel):
             raise ValidationError("平台管理員不可指定 tenant")
         if self.role != self.Role.PLATFORM_ADMIN and self.tenant_id is None:
             raise ValidationError("此角色必須指定 tenant")
+        if self.staff_role_id is not None and self.staff_role.tenant_id != self.tenant_id:
+            raise ValidationError("身份別必須是同一家公司的")
 
     def save(self, *args, **kwargs):
         self.full_clean()

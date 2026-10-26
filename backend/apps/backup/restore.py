@@ -289,7 +289,9 @@ class Package:
                 and isinstance(acc.get("is_warehouse_locked"), bool)
                 and isinstance(acc.get("denied_abilities"), list)
                 and len(acc["denied_abilities"]) <= 200
-                and all(isinstance(k, str) and 0 < len(k) <= 60 for k in acc["denied_abilities"]),
+                and all(isinstance(k, str) and 0 < len(k) <= 60 for k in acc["denied_abilities"])
+                # 身份別(2026-10-27 起才有;更早的備份沒有這一格 = 沒有身份別)
+                and _role_ok(acc.get("staff_role")),
                 "帳號對照",
             )
             ids.add(acc["id"])
@@ -1551,6 +1553,7 @@ def restore_new_company(enc_path, credential, *, code, admin_username, name="",
                 )
                 warehouses = result.pop("_pk_map")["inventory.Warehouse"]
                 without_store = 0
+                roles = {}
                 for u, acc in created:
                     store = warehouses.get(acc["default_warehouse_id"])
                     if acc["default_warehouse_id"] and store is None:
@@ -1562,6 +1565,9 @@ def restore_new_company(enc_path, credential, *, code, admin_username, name="",
                     UserProfile.objects.create(
                         user=u, tenant=tenant, role=acc["role"] or "tenant_user",
                         default_warehouse_id=store, **identity,
+                        # 身份別照名稱建回來(同名的只建一個);帳號的例外是跟它比的,兩個一起帶回來權限才一樣
+                        staff_role=_staff_role(tenant, acc.get("staff_role"), roles)
+                        if acc["role"] == "tenant_user" else None,
                         # 被關掉的權限照備份的帶回來(不放寬)
                         denied_abilities=list(acc["denied_abilities"]),
                         # 門市對不回來的一律維持鎖定(= 沒有門市可用),不放寬
@@ -1589,3 +1595,28 @@ def restore_new_company(enc_path, credential, *, code, admin_username, name="",
     audit(tenant, operator, "restore.new_company", rows=result["rows"],
           admin=admin_username)
     return tenant, result
+
+
+def _role_ok(value) -> bool:
+    if value is None:
+        return True
+    return (
+        isinstance(value, dict)
+        and isinstance(value.get("name"), str) and 0 < len(value["name"]) <= 20
+        and isinstance(value.get("denied_abilities"), list)
+        and len(value["denied_abilities"]) <= 200
+        and all(isinstance(k, str) and 0 < len(k) <= 60 for k in value["denied_abilities"])
+    )
+
+
+def _staff_role(tenant, value, made: dict):
+    """搬到新環境:備份裡的身份別照名稱建一個(同名的第一次看到時建),回那一個;沒有身份別 → None。"""
+    from apps.tenants.models import StaffRole
+
+    if value is None:
+        return None
+    if value["name"] not in made:
+        made[value["name"]] = StaffRole.objects.create(
+            tenant=tenant, name=value["name"], denied_abilities=list(value["denied_abilities"]),
+        )
+    return made[value["name"]]

@@ -634,6 +634,26 @@ class NewEnvironmentRestoreTests(_Base):
         boss = UserProfile.objects.get(tenant=tenant, user__username="a-boss-a2")
         self.assertEqual(boss.denied_abilities, [])
 
+    def test_staff_roles_come_back_with_the_accounts(self):
+        """身份別(2026-10-27):搬到新環境時照名稱建回來,帳號的例外是跟它比的 —— 兩個一起回來,權限才跟原本一樣。"""
+        from apps.tenants.models import StaffRole
+
+        role = StaffRole.objects.create(tenant=self.a.tenant, name="門市", denied_abilities=["void_sales", "sales_return"])
+        StaffRole.objects.create(tenant=self.a.tenant, name="沒人用", denied_abilities=[])
+        UserProfile.objects.filter(user=self.a.clerk_user).update(staff_role=role, denied_abilities=["+sales_return"])
+        tenant, result, _, _ = self.restore_as_new()
+        clerk = UserProfile.objects.get(tenant=tenant, role="tenant_user")
+        self.assertEqual((clerk.staff_role.name, clerk.staff_role.tenant_id), ("門市", tenant.id))
+        self.assertEqual((clerk.staff_role.denied_abilities, clerk.denied_abilities), (["void_sales", "sales_return"], ["+sales_return"]))
+        me = Company.client(clerk.user).get("/api/v1/auth/me/").json()["abilities"]
+        self.assertEqual((me["void_sales"], me["sales_return"]), (False, True))
+        so = SalesOrder.objects.get(tenant=tenant)
+        r = Company.client(clerk.user).post(f"/api/v1/sales-orders/{so.id}/void/", {}, format="json")
+        self.assertEqual(r.status_code, 403, r.content)
+        # 原本那家公司的身份別沒被動到;管理員沒有身份別
+        self.assertEqual(StaffRole.objects.filter(tenant=self.a.tenant).count(), 2)
+        self.assertIsNone(UserProfile.objects.get(tenant=tenant, user__username="a-boss-a2").staff_role)
+
     def test_stock_counts_come_back_with_their_scope_and_decisions(self):
         """盤點單(2026-10-12)跟著備份走:只盤哪幾個類別、數到的、刷到的、少了哪一台、核准的決定,
         搬到新環境之後都還在,而且指到那邊的類別、商品、序號(不是原本那家公司的)。"""
@@ -1845,6 +1865,12 @@ class RejectionTests(_Base):
             ("accounts.json", lambda d: [{**d[0], "denied_abilities": [""]}, d[1]]),
             ("accounts.json", lambda d: [{**d[0], "denied_abilities": ["x" * 61]}, d[1]]),
             ("accounts.json", lambda d: [{**d[0], "denied_abilities": ["a"] * 201}, d[1]]),
+            # 身份別:沒有(None)或是 {名稱, 勾選};名稱空的、太長、勾選不是字串清單都不收
+            ("accounts.json", lambda d: [{**d[0], "staff_role": "門市"}, d[1]]),
+            ("accounts.json", lambda d: [{**d[0], "staff_role": {"name": "", "denied_abilities": []}}, d[1]]),
+            ("accounts.json", lambda d: [{**d[0], "staff_role": {"name": "門" * 21, "denied_abilities": []}}, d[1]]),
+            ("accounts.json", lambda d: [{**d[0], "staff_role": {"name": "門市", "denied_abilities": [7]}}, d[1]]),
+            ("accounts.json", lambda d: [{**d[0], "staff_role": {"name": "門市"}}, d[1]]),
             ("manifest.json", lambda d: d.update(tables={k: "3" for k in d["tables"]})),
             ("manifest.json", lambda d: d.update(warehouses="w1")),
             ("manifest.json", lambda d: d.update(snapshot_at=None)),

@@ -8,6 +8,9 @@
 - 只放「已經真的會擋」的項目(放了沒有用的勾比沒有更糟)。要加一項:這裡加一筆 + 端點裡呼叫 `require` + 測試。
 - **預設不開的項目**(`opt_in=True`,2026-10-23 起;owner「此權限作為開關形式,可以讓管理員指派」):
   管理員勾了才算開,記成同一個清單裡的一筆 `+代碼`(`GRANT`)—— 不用另外一個欄位,公司備份照樣帶著。
+- **身份別**(2026-10-27 起;`StaffRole`):店員帳號跟著身份別走 —— 帳號關掉的 = 身份別關掉的,加上帳號自己多關的、
+  減掉帳號自己多開的(例外,記在 `UserProfile.denied_abilities`:代碼 = 多關、`+代碼` = 多開)。
+  兩邊都記同一種寫法;跟身份別一樣的不記,所以改身份別的勾選,那個身份的人一起變。沒有身份別 = 照預設。
 """
 from dataclasses import dataclass
 
@@ -102,12 +105,27 @@ LABELS = {a.key: a.label for a in ABILITIES}
 ALSO_NEEDS = {REPORT_EXPLORE: (REPORT_STAFF, REPORT_PRODUCTS, REPORT_DAILY, REPORT_ACTIVATIONS, VIEW_BUSINESS_DAILY)}
 
 
+def _stored(value) -> set[str]:
+    """資料庫裡記的清單;只認字串,怪東西不當成任何項目。"""
+    return {k for k in (value or []) if isinstance(k, str)} if isinstance(value, list) else set()
+
+
+def _granted(stored: set[str]) -> set[str]:
+    return {k[len(GRANT):] for k in stored if k.startswith(GRANT)} & KEYS
+
+
+def role_off(role) -> set[str]:
+    """身份別關掉的那幾項:勾掉的,加上預設不開、也沒有被勾的。沒有身份別 = 照預設(只有預設不開的那幾項是關的)。"""
+    stored = _stored(getattr(role, "denied_abilities", None)) if role is not None else set()
+    return (stored & KEYS) | (OPT_IN - _granted(stored))
+
+
 def switched_off(profile) -> set[str]:
-    """管理員在員工帳號頁關掉的那幾項(資料庫裡記的),加上預設不開、也沒有被勾的那幾項。
-    只認清單裡有的、而且是字串的;怪東西不當成任何項目。"""
-    stored = [k for k in (getattr(profile, "denied_abilities", None) or []) if isinstance(k, str)]
-    granted = {k[len(GRANT):] for k in stored if k.startswith(GRANT)}
-    return (set(stored) & KEYS) | (OPT_IN - granted)
+    """這個帳號關掉的那幾項:身份別關掉的、減掉帳號多開的、加上帳號多關的(兩邊都記到同一項時算關,不放寬)。
+    只認清單裡有的、而且是字串的。"""
+    role = getattr(profile, "staff_role", None) if profile is not None else None
+    stored = _stored(getattr(profile, "denied_abilities", None))
+    return (role_off(role) - _granted(stored)) | (stored & KEYS)
 
 
 def blocked_by(off: set[str], key: str) -> list[str]:
@@ -171,22 +189,61 @@ def for_user(user) -> dict[str, bool]:
     return {a.key: a.key not in off for a in ABILITIES}
 
 
+def own(off: set[str]) -> dict[str, bool]:
+    """每一項自己開或關(不算連帶的);身份別頁、帳號頁的勾選照這個畫。"""
+    return {a.key: a.key not in off for a in ABILITIES}
+
+
+def exceptions(profile) -> list[str]:
+    """帳號跟身份別不一樣的項目(照清單的順序;畫面標「例外」)。跟身份別一樣的記錄不算。"""
+    base, off = role_off(getattr(profile, "staff_role", None)), switched_off(profile)
+    return [a.key for a in ABILITIES if (a.key in off) != (a.key in base)]
+
+
 def catalog() -> list[dict]:
-    return [{"key": a.key, "label": a.label, "group": a.group, "note": a.note, "opt_in": a.opt_in} for a in ABILITIES]
+    return [
+        {"key": a.key, "label": a.label, "group": a.group, "note": a.note, "opt_in": a.opt_in,
+         "needs": list(ALSO_NEEDS.get(a.key, ()))}
+        for a in ABILITIES
+    ]
 
 
-def change(profile, wanted: dict) -> list[str]:
-    """把 `{項目: 可不可以}` 套到這個帳號上,回新的「關掉的項目」(照清單的順序;不在這次送來的項目不動)。
-    預設不開的項目:勾了記一筆 `+代碼`,取消就拿掉。"""
-    stored = {k for k in (profile.denied_abilities or []) if isinstance(k, str)}
+def _apply(current, wanted: dict, allowed_by_default) -> list[str]:
+    """把 `{項目: 可不可以}` 套到記的清單上:跟預設一樣 → 不記;不一樣 → 關記代碼、開記 `+代碼`。
+    不在這次送來的項目不動;照清單的順序排。"""
+    stored = _stored(current)
     for key, allowed in wanted.items():
-        if key in OPT_IN:
-            stored.discard(key)
-            (stored.add if allowed else stored.discard)(GRANT + key)
-        elif allowed:
-            stored.discard(key)
-        else:
-            stored.add(key)
+        stored.discard(key)
+        stored.discard(GRANT + key)
+        if allowed != allowed_by_default(key):
+            stored.add(GRANT + key if allowed else key)
     ordered = [a.key for a in ABILITIES if a.key in stored] + [GRANT + a.key for a in ABILITIES if GRANT + a.key in stored]
     # 清單裡已經沒有的舊項目留著(不替人丟資料),排在後面
     return ordered + sorted(stored - set(ordered))
+
+
+def change(profile, wanted: dict) -> list[str]:
+    """把 `{項目: 可不可以}` 套到這個帳號上,回新的例外清單。跟身份別一樣的 → 回到身份別(不記)。"""
+    base = role_off(getattr(profile, "staff_role", None))
+    return _apply(profile.denied_abilities, wanted, lambda key: key not in base)
+
+
+def change_role(role, wanted: dict) -> list[str]:
+    """把 `{項目: 可不可以}` 套到身份別上,回新的「關掉的項目」。跟預設一樣的不記。"""
+    return _apply(role.denied_abilities, wanted, lambda key: key not in OPT_IN)
+
+
+def leftovers(stored) -> list[str]:
+    """換身份別時:例外全部清掉(完全照新身份別;畫面同一次再送要的例外),只留清單裡已經沒有的舊項目(不替人丟資料)。"""
+    return sorted(k for k in _stored(stored) if k.removeprefix(GRANT) not in KEYS)
+
+
+def turned_on_but_blocked(after: set[str], wanted: dict) -> tuple[str, list[str]] | None:
+    """這一次要開的項目裡,開了也還是不能用的那一項(它要的另外幾項關著)與要先開的幾項;沒有 → None。
+    畫面只送改過的項目,所以沒動到的「連帶關掉」不會被擋。"""
+    for key, allowed in wanted.items():
+        if allowed:
+            because = blocked_by(after, key)
+            if because:
+                return key, because
+    return None

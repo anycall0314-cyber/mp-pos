@@ -7,7 +7,7 @@ from .platform_views import (
     PlatformUserViewSet,
     PlatformWarehouseViewSet,
 )
-from .staff_views import staff_account, staff_account_access, staff_accounts
+from .staff_views import staff_account, staff_account_access, staff_accounts, staff_role, staff_roles
 from .views import (
     InvoiceTrackViewSet,
     InvoiceTypeViewSet,
@@ -40,4 +40,6 @@ urlpatterns = router.urls + [
     path("staff-accounts/", staff_accounts, name="staff-accounts"),
     path("staff-accounts/<int:pk>/", staff_account, name="staff-account"),
     path("staff-accounts/<int:pk>/access/", staff_account_access, name="staff-account-access"),
+    path("staff-roles/", staff_roles, name="staff-roles"),
+    path("staff-roles/<int:pk>/", staff_role, name="staff-role"),
 ]

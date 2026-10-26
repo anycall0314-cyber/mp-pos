@@ -104,6 +104,7 @@ REGISTRY: dict[str, Entry] = {
     ),
     "auth.User": Entry(ACCOUNT, "只留帳號名稱等對照資訊;不含密碼"),
     "tenants.UserProfile": Entry(ACCOUNT, "角色、預設門市、鎖倉;還原時依對照處理"),
+    "tenants.StaffRole": Entry(ACCOUNT, "身份別:帳號對照帶著每個帳號的身份別(名稱與勾選),搬到新環境照名稱建回來;就地還原跟帳號一樣不動"),
     "auth.Group": Entry(EXCLUDED, "平台層級權限,不屬於任何公司"),
     "auth.Permission": Entry(EXCLUDED, "平台層級權限,不屬於任何公司"),
     "authtoken.Token": Entry(EXCLUDED, "登入憑證;舊 token 不能因為還原重新生效"),

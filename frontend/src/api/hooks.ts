@@ -124,6 +124,7 @@ import {
   SavedReport,
   StaffAccount,
   StaffAccountsResponse,
+  StaffRole,
 } from "./types";
 
 // 讀清單一律走這三支(規則在 `lib/listAll.ts`):每一處都要明講是「整份都要」還是「只要最前面那一頁」。
@@ -1994,14 +1995,49 @@ export const useStaffAccounts = () =>
     queryFn: () => api<StaffAccountsResponse>(`/staff-accounts/`),
   });
 
-export function useSaveStaffAbilities() {
+export interface StaffAccountInput {
+  name?: string;
+  username?: string;
+  password?: string;
+  warehouse?: number | null;
+  warehouse_locked?: boolean;
+  staff_role?: number | null;
+  /** 只送改過的項目;跟身份別一樣的會回到身份別 */
+  abilities?: Record<string, boolean>;
+}
+
+/** 員工帳號:新增(沒有 id)或改(有 id;只送要改的) */
+export function useSaveStaffAccount() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, abilities }: { id: number; abilities: Record<string, boolean> }) =>
-      api<StaffAccount>(`/staff-accounts/${id}/`, {
-        method: "PATCH",
-        body: JSON.stringify({ abilities }),
+    mutationFn: ({ id, ...body }: StaffAccountInput & { id?: number }) =>
+      api<StaffAccount>(id ? `/staff-accounts/${id}/` : `/staff-accounts/`, {
+        method: id ? "PATCH" : "POST",
+        body: JSON.stringify(body),
       }),
-    // 重抓由頁面決定(全部存完才抓一次:不拿半路的結果蓋掉還在存的那幾格)
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff-accounts"] }),
+  });
+}
+
+/** 身份別:新增(沒有 id;可以照另一個身份別開始)或改(有 id) */
+export function useSaveStaffRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id?: number; name?: string; copy_from?: number | null; abilities?: Record<string, boolean> }) =>
+      api<StaffRole>(id ? `/staff-roles/${id}/` : `/staff-roles/`, {
+        method: id ? "PATCH" : "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff-accounts"] }),
+  });
+}
+
+/** 刪身份別(還有人在用的伺服器會擋) */
+export function useDeleteStaffRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api<void>(`/staff-roles/${id}/`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["staff-accounts"] }),
   });
 }
 

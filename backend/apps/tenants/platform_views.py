@@ -18,9 +18,10 @@ from apps.backup.auth import BlocksCompanyUnderMaintenance
 from apps.inventory.models import Warehouse
 from apps.parties.models import SalesPerson
 
+from . import abilities
 from .models import Tenant, UserProfile
 from .permissions import IsPlatformAdmin
-from .services import seed_tenant_defaults
+from .services import first_staff_role, seed_staff_roles, seed_tenant_defaults
 
 
 # ────────────────────────────────────────────────────────────
@@ -76,6 +77,7 @@ class PlatformTenantViewSet(viewsets.ModelViewSet):
 
         tenant = serializer.save()
         seed_tenant_defaults(tenant)
+        seed_staff_roles(tenant)
         # 類別範本只給新公司(紅隊:已經在用的公司自動補會多出近義類別);seed_tenant_defaults 會對現有公司重跑,不放那裡
         category_template.apply(tenant)
 
@@ -237,6 +239,7 @@ class PlatformUserSerializer(serializers.ModelSerializer):
             role=role,
             default_warehouse=default_warehouse,
             is_warehouse_locked=is_warehouse_locked,
+            staff_role=first_staff_role(tenant) if role == UserProfile.Role.TENANT_USER else None,
         )
         if create_sp and tenant:
             sp_code = (sp_code or user.username).strip()[:20]
@@ -272,6 +275,10 @@ class PlatformUserSerializer(serializers.ModelSerializer):
             if role == UserProfile.Role.PLATFORM_ADMIN:
                 profile.tenant = None
         if tenant != "__missing__":
+            if tenant != profile.tenant:
+                # 換公司:原本的身份別是舊公司的,換成新公司最多人用的;舊公司給的例外一起清掉(不然舊公司多開的項目在新公司還有效)
+                profile.staff_role = first_staff_role(tenant)
+                profile.denied_abilities = abilities.leftovers(profile.denied_abilities)
             profile.tenant = tenant
         if default_warehouse != "__missing__":
             profile.default_warehouse = default_warehouse

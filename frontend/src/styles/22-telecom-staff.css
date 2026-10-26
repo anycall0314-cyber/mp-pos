@@ -78,26 +78,22 @@
   color: var(--warn-text);
 }
 
-/* ── 系統設定 → 員工帳號:每個帳號一列、每一項一個勾 ─────────────── */
-.staff-table { border-collapse: collapse; }
-.staff-table th,
-.staff-table td {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  text-align: left;
-  vertical-align: middle;
-  font-size: var(--fs-body);
-}
-.staff-table thead th { color: var(--text-dim); font-weight: 600; font-size: var(--fs-sub); }
-.staff-table th.staff-group { text-align: center; border-bottom: none; padding-bottom: 2px; }
-.staff-table th.staff-item,
-.staff-table td.staff-check { text-align: center; }
-/* 名稱不折行(字放大也是一行);項目底下的說明才折 */
-.staff-table th.staff-item,
-.staff-table td { white-space: nowrap; }
-.staff-table th.staff-item .staff-note { white-space: normal; max-width: 11em; margin: 0 auto; }
-.staff-scroll { overflow-x: auto; }
-.staff-table td.staff-check input { width: 22px; height: 22px; }
+/* ── 系統設定 → 員工帳號:帳號 / 身份別的整頁,權限直的排(一類一區;2026-10-27) ─────────────── */
+.staff-form { display: grid; gap: 10px; margin-bottom: 16px; }
+.staff-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 14em), 1fr)); gap: 0 16px; }
+.ab-list { display: grid; gap: 14px; }
+.ab-group { border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+.ab-group-head { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: var(--fs-body); cursor: pointer; }
+.ab-group-head input,
+.ab-check input { width: 20px; height: 20px; flex: none; }
+.ab-items { list-style: none; margin: 8px 0 0; padding: 0 0 0 30px; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22em), 1fr)); gap: 6px 20px; }
+.ab-item { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 32px; }
+.ab-check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.ab-label { white-space: nowrap; }
+.ab-note { color: var(--text-dim); font-size: var(--fs-sub); }
+.ab-tag { font-size: var(--fs-sub); padding: 0 6px; border-radius: 4px; color: var(--primary-text); border: 1px solid var(--border); }
+.ab-tag.warn { color: var(--warn-text); }
+.ab-item.differs .ab-label { font-weight: 600; }
 .staff-acts { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
 .staff-acts .btn { min-height: var(--btn-h-sm); padding: 0 8px; font-size: var(--font-secondary); }
 .staff-acts .staff-pw { width: 11em; }
@@ -105,6 +101,4 @@
 .pw-form { max-width: 360px; display: grid; gap: 12px; }
 .pw-form input { width: 100%; box-sizing: border-box; }
 .pw-actions { display: flex; justify-content: flex-end; }
-.staff-note { color: var(--text-dim); font-size: var(--fs-sub); font-weight: 400; }
-.staff-table tr.staff-off td { opacity: 0.55; }
 

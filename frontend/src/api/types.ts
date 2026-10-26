@@ -883,16 +883,47 @@ export interface StaffAccount {
   name: string;
   role: UserRole;
   role_label: string;
+  /** 身份別(店員帳號才有;管理員 = 「管理者」,固定全開) */
+  staff_role: { id: number; name: string } | null;
   warehouse: string;
+  warehouse_id: number | null;
+  warehouse_locked: boolean;
   is_active: boolean;
-  /** 管理員永遠全開,不能在這一頁關 */
+  /** 管理員永遠全開,不能在這一頁改 */
   editable: boolean;
+  /** 實際能不能做(連帶關掉的也算關) */
   abilities: Record<string, boolean>;
+  /** 自己開或關(身份別 + 例外,不算連帶的):帳號頁的勾選照這個畫 */
+  own: Record<string, boolean>;
+  /** 跟身份別不一樣的項目 */
+  exceptions: string[];
+}
+
+/** 身份別:一組勾選;帳號跟著它走 */
+export interface StaffRole {
+  id: number;
+  name: string;
+  abilities: Record<string, boolean>;
+  /** 幾個帳號是這個身份別 */
+  accounts: number;
+}
+
+export interface AbilityItem {
+  key: string;
+  label: string;
+  group: string;
+  note: string;
+  opt_in: boolean;
+  /** 這一項要另外這幾項都開著才能用 */
+  needs: string[];
 }
 
 export interface StaffAccountsResponse {
-  abilities: { key: string; label: string; group: string; note: string }[];
+  abilities: AbilityItem[];
   accounts: StaffAccount[];
+  roles: StaffRole[];
+  /** 新增帳號時建議的帳號名稱(公司代碼 + 流水號) */
+  next_username: string;
 }
 
 export interface LoginResponse {

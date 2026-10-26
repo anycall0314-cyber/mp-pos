@@ -98,11 +98,17 @@ def dump_json(obj) -> bytes:
 _dump = dump_json
 
 
+def _role_of(row) -> dict | None:
+    if row is None:
+        return None
+    return {"name": row["name"], "denied_abilities": [k for k in (row["denied_abilities"] or []) if isinstance(k, str)]}
+
+
 def export_company(tenant, zip_path, backup_id) -> dict:
     """匯出到 zip_path(明文,呼叫端負責加密與刪除)。回傳 manifest。"""
     registry.check_registry()
     from apps.inventory.models import Warehouse
-    from apps.tenants.models import Tenant, UserProfile
+    from apps.tenants.models import StaffRole, Tenant, UserProfile
 
     User = get_user_model()
     tables: dict[str, int] = {}
@@ -125,8 +131,11 @@ def export_company(tenant, zip_path, backup_id) -> dict:
         profiles = {
             p["user_id"]: p for p in UserProfile.objects.filter(tenant=company).values(
                 "user_id", "role", "default_warehouse_id", "is_warehouse_locked",
-                "account_uuid", "denied_abilities",
+                "account_uuid", "denied_abilities", "staff_role_id",
             )
+        }
+        staff_roles = {
+            r["id"]: r for r in StaffRole.objects.filter(tenant=company).values("id", "name", "denied_abilities")
         }
 
         for model in registry.ordered_company_models():
@@ -199,6 +208,8 @@ def export_company(tenant, zip_path, backup_id) -> dict:
                 "is_warehouse_locked": p["is_warehouse_locked"],
                 # 這個帳號被關掉的權限項目:搬到新環境還原時要跟著回來(不然大家變回全開)
                 "denied_abilities": [k for k in (p["denied_abilities"] or []) if isinstance(k, str)],
+                # 身份別(名稱與勾選;帳號的 denied_abilities 是跟它比的例外)。搬到新環境照名稱建回來
+                "staff_role": _role_of(staff_roles.get(p["staff_role_id"])) if p["role"] == "tenant_user" else None,
             })
         zf.writestr("accounts.json", _dump(accounts))
 
