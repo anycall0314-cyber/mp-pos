@@ -643,7 +643,7 @@ export function InventoryQueryPage() {
                       title={pinned ? "取消常用" : "釘成常用"}
                       onClick={() => togglePin(c)}
                     >
-                      {pinned ? "★" : "☆"}
+                      <PinStar on={pinned} />
                     </button>
                     <button
                       type="button"
@@ -1019,5 +1019,15 @@ function LowStockPanel({
         </tbody>
       </table>
     </>
+  );
+}
+
+/** 常用類別前面的星:畫成線條圖示(以前是 ★ / ☆ 字元,在某些電腦上會變成彩色的表情符號) */
+function PinStar({ on }: { on: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"
+      fill={on ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+      <path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.8z" />
+    </svg>
   );
 }

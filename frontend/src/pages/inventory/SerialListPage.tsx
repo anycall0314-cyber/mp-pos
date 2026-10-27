@@ -166,6 +166,10 @@ export function SerialListPage() {
     }
   }
 
+  // 這一頁每一列都空著的欄不佔位置(在店的機器沒有賣出單;沒有「已退」的就沒有處理按鈕)。匯出照舊每一欄都有
+  const showSale = rows.some((r) => !!r.sale);
+  const showAct = rows.some((r) => r.status === "returned");
+
   return (
     <div className="page sr-page">
       <Toolbar
@@ -252,7 +256,7 @@ export function SerialListPage() {
         {!data && isFetching && <div className="md-empty">載入中…</div>}
         {data && rows.length === 0 && <div className="md-empty">沒有符合的設備</div>}
         {data && rows.length > 0 && (
-          <table className="report-grid">
+          <table className="report-grid sr-grid">
             <thead>
               {/* 13 欄 → 8 欄(全站檢視 B12:以前一定要往右捲才看得到賣出單與賣出日) */}
               <tr>
@@ -262,8 +266,8 @@ export function SerialListPage() {
                 <th>門市</th>
                 <th>進貨</th>
                 <th className="num">{costWord}</th>
-                <th>賣出</th>
-                <th>處理</th>
+                {showSale && <th>賣出</th>}
+                {showAct && <th>處理</th>}
               </tr>
             </thead>
             <tbody>
@@ -271,27 +275,35 @@ export function SerialListPage() {
                 const codes = unitCodes(r);
                 return (
                   <tr key={r.id} className="report-row sr-pick" onClick={() => setUnit(r.id)}>
-                    <td>
-                      <div>{codes.imei || codes.sn}</div>
-                      {codes.imei && codes.sn && <div className="sr-sub">{codes.sn}</div>}
+                    <td className="sr-code">
+                      <div className="id-code">{codes.imei || codes.sn}</div>
+                      {codes.imei && codes.sn && <div className="sr-sub id-code">{codes.sn}</div>}
                     </td>
                     <td className="sr-name">
                       <div>{r.name}</div>
-                      <div className="sr-sub">{r.sku}</div>
+                      <div className="sr-sub id-code">{r.sku}</div>
                     </td>
-                    <td>{r.status_label}</td>
-                    <td>{r.store}</td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      {r.source && <Link to={docPath(r.source.doc)}>{r.source.doc.no}</Link>}
+                    <td className="sr-status">{r.status_label}</td>
+                    <td className="sr-store">{r.store}</td>
+                    <td className="sr-src">
+                      {r.source && (
+                        <Link className="id-code" to={docPath(r.source.doc)} onClick={(e) => e.stopPropagation()}>
+                          {r.source.doc.no}
+                        </Link>
+                      )}
                       <div className="sr-sub">{[dayOf(r.received_at), r.source?.label].filter(Boolean).join(" · ")}</div>
                     </td>
-                    <td className="num">{costText(r.cost)}</td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      {r.sale && <Link to={docPath(r.sale.doc)}>{r.sale.doc.no}</Link>}
+                    <td className="num sr-cost" data-label={costWord}>{costText(r.cost)}</td>
+                    <td className="sr-sale" hidden={!showSale}>
+                      {r.sale && (
+                        <Link className="id-code" to={docPath(r.sale.doc)} onClick={(e) => e.stopPropagation()}>
+                          {r.sale.doc.no}
+                        </Link>
+                      )}
                       {r.sale?.date && <div className="sr-sub">{r.sale.date}</div>}
                     </td>
                     {/* 銷退退回來的「已退」:確認可以賣 → 回在庫;有瑕疵的送廠商換貨(owner 2026-10-23) */}
-                    <td onClick={(e) => e.stopPropagation()} className="sr-act">
+                    <td onClick={(e) => e.stopPropagation()} className="sr-act" hidden={!showAct}>
                       {r.status === "returned" && (
                         <>
                           {canRelease && (

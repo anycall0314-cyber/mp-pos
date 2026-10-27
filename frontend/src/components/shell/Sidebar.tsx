@@ -15,9 +15,12 @@ export function Sidebar({
   onNavigate,
   onOpenRequest,
   footer,
+  scope,
 }: {
   modules: NavModule[];
   match: NavMatch | null;
+  /** 這個帳號的公司(側欄最上面,產品名字底下) */
+  scope?: string;
   onNavigate: () => void;
   onOpenRequest: () => void;
   footer: ReactNode;
@@ -45,7 +48,10 @@ export function Sidebar({
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-brand">MP POS</div>
+      <div className="sidebar-brand">
+        <span className="sidebar-brand-name">MP POS</span>
+        {scope && <span className="sidebar-brand-scope">{scope}</span>}
+      </div>
       <NavSearch
         modules={modules}
         onNavigate={onNavigate}

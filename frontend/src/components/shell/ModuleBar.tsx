@@ -12,9 +12,12 @@ export function ModuleBar({
   match,
   pathname,
   actionsRef,
+  showTitle = true,
 }: {
   match: NavMatch | null;
   pathname: string;
+  /** 頁標題(入口名字)放在分頁前面;窄螢幕放在上方那一條,這裡不放 */
+  showTitle?: boolean;
   /** 頁面主要按鈕放的那一格(`moduleActions.ts`);只有正在看分頁本身時才有 */
   actionsRef?: (el: HTMLDivElement | null) => void;
 }) {
@@ -61,6 +64,7 @@ export function ModuleBar({
 
   return (
     <div className={`module-bar${many ? " many" : ""}`}>
+      {showTitle && <h1 className="module-title">{module.label}</h1>}
       {many && (
         <select
           className="module-select"

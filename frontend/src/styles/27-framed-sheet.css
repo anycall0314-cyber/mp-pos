@@ -1,0 +1,260 @@
+/* ===== MP POS 樣式 27/27:外框加工作紙(2026-10-28 owner 選「12/1 前做 A + B」) =====
+   風格照 design-taste-frontend 的 app 風格「framed-sheet」(兩個候選交給 Jev 選的):
+   側欄和上方分頁列同一塊底(中間不畫線)像一個 L 形外框;頁面放在一張「工作紙」上,右邊、下面留 8px,圓角、1px 邊、沒有陰影。
+   外框一律灰;顏色只留給資料、狀態和主要動作(主要動作照 owner 2026-10-25 的淡藍,這裡不動)。
+   字級、控制項高度照舊(16px / 44px,owner 定的),密度靠拿掉空白、把寬度用好,不靠縮小字。
+   這一檔排在最後:只蓋外框、表格、單號字型與 A + B 那幾頁的版面;按鈕 / 分頁的外觀照舊在 03-controls.css。 */
+:root {
+  --frame: #14181f;            /* 外框:側欄 + 分頁列 + 手機上方那條 */
+  --sheet: #0f1115;            /* 工作紙 = 原本的頁面底,夜間裡面看起來跟以前一樣 */
+  --sheet-edge: #262d3b;
+  --sheet-radius: 14px;
+  --sheet-inset: 8px;
+  --nav-active: rgba(148, 163, 184, 0.16);  /* 側欄目前這一項:中性淺底,不用藍色左邊條 */
+  --rule: #1f2532;             /* 表格列與列之間的線:比標題列下面那條淡 */
+  /* 單號、IMEI / 序號、品號用等寬字:每一位上下對齊,比對與念給客人聽不容易看錯(Jev 選的那一點) */
+  --id-font: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+:root[data-theme="light"] {
+  --frame: #f3f5f8;
+  --sheet: #ffffff;
+  --sheet-edge: #e3e7ed;
+  --nav-active: #e5e8ed;
+  --rule: #f0f2f5;
+}
+
+/* ── 外框 ─────────────────────────────────────────────── */
+.app-shell { background: var(--frame); }
+.sidebar { background: var(--frame); border-right: 0; }
+.sidebar-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-bottom: 0;
+  padding: 14px 16px 8px;
+}
+.sidebar-brand-name { font-weight: 600; letter-spacing: 1px; }
+.sidebar-brand-scope {
+  font-size: var(--font-secondary);
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nav-search input { background: var(--sheet); }
+.sidebar-link.active { background: var(--nav-active); box-shadow: none; }
+.sidebar-bottom { border-top: 0; }
+.sidebar-footer { border-top: 0; padding: 12px 16px 16px; }
+
+.main { background: var(--frame); }
+.module-bar { background: var(--frame); border-bottom: 0; padding: 0 var(--sheet-inset) 0 16px; }
+/* 頁標題 = 這個入口的名字,放在分頁前面(不多佔一排高度) */
+.module-title {
+  align-self: center;
+  margin: 0 8px 0 0;
+  font-size: var(--font-section);
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.main-page {
+  --bg: var(--sheet);
+  background: var(--sheet);
+  border: 1px solid var(--sheet-edge);
+  border-radius: var(--sheet-radius);
+  margin: 0 var(--sheet-inset) var(--sheet-inset) 0;
+}
+/* 沒有分頁列的頁(今日總覽、開單頁):上面也留一樣的邊 */
+.main > .main-page:first-child { margin-top: var(--sheet-inset); }
+
+/* 手機 / 小平板:外框收掉,工作紙就是整個螢幕;上方那條放這一頁的名字 */
+@media (max-width: 900px) {
+  .main-page,
+  .main > .main-page:first-child { margin: 0; border: 0; border-radius: 0; }
+  .mobile-topbar { height: 48px; background: var(--frame); border-bottom: 0; }
+  .module-bar { padding: 0 8px; }
+}
+.mobile-title {
+  margin: 0;
+  font-size: var(--font-section);
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── 沒有另外排樣式的下拉與輸入框:跟共用欄位同一個長相(:where 不加權重,頁面自己的規則照樣優先) ── */
+:where(select),
+:where(input[type="text"], input[type="search"], input[type="tel"], input[type="number"], input[type="date"], input:not([type])) {
+  color: var(--text);
+  background-color: var(--ctl-bg);
+  border: 1px solid var(--ctl-border);
+  border-radius: var(--btn-radius);
+  padding: 0 10px;
+}
+
+/* ── 表格:標題列不鋪底色(捲動時照樣固定在上面),標題下面那條線最深,列與列之間淡;數字一律等寬 ── */
+table { font-variant-numeric: tabular-nums; }
+.line-table th,
+.md-table th,
+.report-grid th,
+.stock-matrix-table th,
+.pc-list-table th,
+.pi-table th,
+.re-parts-table th,
+:root[data-theme="light"] table th {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.line-table td,
+.md-table td,
+:root[data-theme="light"] table td { border-bottom-color: var(--rule); }
+/* 表格裡的連結(單號):藍字、不畫底線、點過不變紫 */
+:where(td > a[href]:not([class~="btn"])) { color: var(--primary-text); text-decoration: none; }
+:where(td > a[href]:not([class~="btn"])):hover { text-decoration: underline; }
+
+/* 單號、IMEI / 序號、品號 */
+.id-code {
+  font-family: var(--id-font);
+  font-size: 0.9375em;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 今日總覽(B1):頁標題放在門市那一排;待辦 / 注意各自照內容高度;今日營收併進最近交易那一張,跟銷量回溫 / 退燒排同一排 ── */
+.hp-title {
+  margin: 0 10px 0 0;
+  font-size: var(--font-section);
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--text);
+}
+.hp-statusbar { background: transparent; border-bottom: 0; padding: 12px 16px 0; }
+.hp-body { padding: 12px 16px 16px; gap: 16px; }
+.hp-two-col { align-items: start; }
+.hp-three-col {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+/* 平板以下一張一排:三張排兩欄會剩一張落單、兩欄底邊也對不齊 */
+@media (max-width: 1100px) {
+  .hp-three-col { grid-template-columns: minmax(0, 1fr); }
+}
+/* 卡片標題列不鋪底色,標題下一條線就好 */
+.hp-panel-head { background: transparent; }
+/* 沒有東西時一句話就好,不撐出一大塊 */
+.hp-panel-empty { padding: 14px; text-align: left; }
+/* 營業額 | 銷貨筆數:同一個框用一條直線隔開,不再各自一張小卡 */
+.hp-stat-row {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+}
+.hp-stat-card { background: transparent; border: 0; border-radius: 0; padding: 12px 14px; }
+.hp-stat-card + .hp-stat-card { border-left: 1px solid var(--border); }
+.hp-stat-label { font-size: var(--font-secondary); margin-bottom: 2px; }
+.hp-stat-value { font-size: var(--font-total); margin-bottom: 0; }
+.hp-subhead {
+  padding: 10px 14px 4px;
+  font-size: var(--font-secondary);
+  color: var(--text-dim);
+}
+
+/* ── 工作台版型(銷貨單 / 進貨單 / 調撥 / 開單頁)跟著工作紙:頁底 = 紙,卡片不加陰影,表格標題列不鋪底色 ── */
+:root {
+  --wb-page: var(--sheet);
+  --wb-head: var(--wb-card);
+}
+:root[data-theme="light"] {
+  --wb-page: var(--sheet);
+  --wb-head: var(--wb-card);
+  --wb-card-shadow: none;
+  --wb-line-soft: #e6e9ee;
+}
+.wb-table th { border-bottom-color: var(--wb-line); }
+.wb-table td { border-bottom-color: var(--wb-line-soft); }
+
+/* ── 銷貨單清單(B2):最近 / 這一天幾張 ── */
+.ws-list-count { color: var(--text-dim); font-size: var(--font-secondary); white-space: nowrap; }
+
+/* ── 開銷貨單(B3):會員欄的提示字以前被切掉;來源通常只是「直客」,讓位置給會員 ── */
+@media (min-width: 901px) {
+  .ws-f.grow[data-at="customer"] { flex: 1 1 180px; max-width: 280px; }
+  .ws-f.grow[data-at="member"] { flex: 2 1 300px; max-width: 460px; }
+}
+/* 原本就用等寬字的序號 / 品號,改用同一套字 */
+.wb-mono,
+.wb-lines .pcode,
+.wb-inv-card .pcode { font-family: var(--id-font); }
+span.wb-chip.cat > .pin svg { display: block; }
+
+/* ── 序號查詢(B5):平板與手機不再左右滑 —— 一台一筆:序號 + 成本、品名、狀態 · 門市 · 進貨單 · 賣出單、處理按鈕;欄位往下排,不拿掉 ── */
+@media (max-width: 900px) {
+  .sr-table .sr-grid thead { display: none; }
+  .sr-table .sr-grid,
+  .sr-table .sr-grid tbody { display: block; width: 100%; }
+  .sr-table .sr-grid tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .sr-table .sr-grid td { display: block; padding: 0; border: 0; white-space: normal; text-align: left; }
+  .sr-table .sr-grid td.sr-code { flex: 1 1 auto; font-weight: 600; }
+  .sr-table .sr-grid td.sr-cost { flex: none; margin-left: auto; text-align: right; }
+  .sr-table .sr-grid td.sr-cost::before { content: attr(data-label) " "; color: var(--text-dim); font-size: var(--font-secondary); }
+  .sr-table .sr-grid td.sr-name { flex: 1 1 100%; min-width: 0; }
+  .sr-table .sr-grid td.sr-status,
+  .sr-table .sr-grid td.sr-store,
+  .sr-table .sr-grid td.sr-src,
+  .sr-table .sr-grid td.sr-sale { flex: none; font-size: var(--font-secondary); color: var(--text-dim); }
+  .sr-table .sr-grid td.sr-store::before,
+  .sr-table .sr-grid td.sr-src::before,
+  .sr-table .sr-grid td.sr-sale::before { content: "·"; margin-right: 6px; }
+  /* 成本跟序號同一行(右邊);其他照原本的順序往下排 */
+  .sr-table .sr-grid td.sr-code { order: 0; }
+  .sr-table .sr-grid td.sr-cost { order: 1; }
+  .sr-table .sr-grid td.sr-name { order: 2; }
+  .sr-table .sr-grid td.sr-status { order: 3; }
+  .sr-table .sr-grid td.sr-store { order: 4; }
+  .sr-table .sr-grid td.sr-src { order: 5; }
+  .sr-table .sr-grid td.sr-sale { order: 6; }
+  .sr-table .sr-grid td.sr-act { order: 7; }
+  .sr-table .sr-grid td.sr-src .sr-sub,
+  .sr-table .sr-grid td.sr-sale .sr-sub { display: inline; margin-left: 6px; }
+  .sr-table .sr-grid td.sr-act { flex: 1 1 100%; display: flex; gap: 8px; }
+  .sr-table .sr-grid td.sr-act:empty { display: none; }
+}
+/* 手機:搜尋框自己一整排,查詢 / 更多條件在下一排(以前查詢鈕蓋住輸入框) */
+@media (max-width: 640px) {
+  .sr-filter label:has(input[type="text"]) { flex: 1 1 100%; }
+  .sr-filter input[type="text"] { width: 100%; }
+}
+/* 這一頁都空著、收起來的欄(hidden):手機排法也不要叫出來 */
+.sr-table .sr-grid td[hidden] { display: none; }
+
+/* ── 日間主題:外框上的灰字(側欄項目、公司名)在淡灰底上要夠深(對比 4.5 以上) ── */
+:root[data-theme="light"] .sidebar-link:not(.active),
+:root[data-theme="light"] .sidebar-brand-scope,
+:root[data-theme="light"] .user-pill-meta { color: #555c6b; }
+
+/* ── 手機:工作台的頁(銷貨單、開單頁、庫存查詢)左右留 16px,字不貼螢幕邊 ── */
+@media (max-width: 640px) {
+  .wb { padding-left: 16px; padding-right: 16px; }
+  .wb.ws { padding: 0; }
+  .ws-party, .ws-tools, .ws-foot, .ws-head { padding-left: 16px; padding-right: 16px; }
+}
+/* 銷貨單手機卡片的金額也用等寬數字 */
+.wb-inv-card { font-variant-numeric: tabular-nums; }
+/* 分頁列沒選的分頁也在淡灰外框上:灰字加深(只在這一排換變數,分頁本身的樣式照舊在 03-controls) */
+:root[data-theme="light"] .module-bar { --text-dim: #555c6b; }

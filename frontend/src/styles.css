@@ -1,4 +1,4 @@
-/* MP POS 全站樣式。2026-10-25 起拆成 styles/ 底下 26 個檔,這裡只剩 @import:
+/* MP POS 全站樣式。2026-10-25 起拆成 styles/ 底下的檔(2026-10-28 加了第 27 個),這裡只剩 @import:
    順序 = 層疊順序(後面的蓋前面的),不要調換、不要在這裡寫規則;改按鈕 / 分頁 / 單選列 → 03-controls.css,
    日間主題的按鈕顏色 → 16-light-theme.css,頁面自己的 → 那一頁的檔。
    測試與控制項守門讀的是全部接起來的內容(lib/cssText.mjs 的 readAllCss)。
@@ -28,6 +28,7 @@
      24-stock-reports               庫存三張、盤點分頁、發票 / 進貨明細、異動查詢、維修單清單、序號查詢、維修月報、第一次入庫
      25-trade                       批發單(賣家)、中古機上架、價目表
      26-stocktake-master-latest     手機走動盤點、平台型號庫、分類瀏覽、商品建檔整頁、打烊實點、記住條碼、AppliedFilters、主檔整頁(pane-page)
+     27-framed-sheet                外框加工作紙(側欄 + 分頁列一塊底、工作紙)、頁標題、表格標題列與列線、單號等寬字、今日總覽 / 常用畫面的版面
 */
 @import "./styles/01-base.css";
 @import "./styles/02-shell.css";
@@ -55,3 +56,4 @@
 @import "./styles/24-stock-reports.css";
 @import "./styles/25-trade.css";
 @import "./styles/26-stocktake-master-latest.css";
+@import "./styles/27-framed-sheet.css";

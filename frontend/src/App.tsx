@@ -77,7 +77,8 @@ import { TelecomPlansPage } from "@/pages/telecom-plans/TelecomPlansPage";
 import { ModuleBar } from "@/components/shell/ModuleBar";
 import { ModuleActionsSlot } from "@/components/shell/moduleActions";
 import { Sidebar } from "@/components/shell/Sidebar";
-import { matchForUser, visibleModules } from "@/nav";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { matchForUser, ownsTitle, visibleModules } from "@/nav";
 
 function Placeholder({ title }: { title: string }) {
   return <div className="placeholder">{title}(尚未實作)</div>;
@@ -96,6 +97,8 @@ function readTheme(): Theme {
 export function App() {
   const [theme, setTheme] = useState<Theme>(readTheme);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // 窄螢幕(側欄收成「選單」那一條的寬度):頁標題放上方那一條,分頁列不重複放
+  const narrow = useIsMobile(900);
   // 分頁列右邊放頁面按鈕的那一格(有分頁列、正在看分頁本身才有)
   const [actionsSlot, setActionsSlot] = useState<HTMLDivElement | null>(null);
   const location = useLocation();
@@ -174,11 +177,16 @@ export function App() {
             >
               {mobileNavOpen ? "關閉" : "選單"}
             </button>
-            <div className="brand">MP POS</div>
+            {narrow && navMatch && !ownsTitle(location.pathname) ? (
+              <h1 className="mobile-title">{navMatch.module.label}</h1>
+            ) : (
+              <div className="brand">MP POS</div>
+            )}
           </div>
           <Sidebar
             modules={modules}
             match={navMatch}
+            scope={user?.profile?.tenant_name ?? ""}
             onNavigate={() => setMobileNavOpen(false)}
             onOpenRequest={() => setMobileNavOpen(true)}
             footer={
@@ -249,7 +257,7 @@ export function App() {
         )}
         <main className="main">
         {!focusMode && !isPrintMode && (
-          <ModuleBar match={navMatch} pathname={location.pathname} actionsRef={setActionsSlot} />
+          <ModuleBar match={navMatch} pathname={location.pathname} actionsRef={setActionsSlot} showTitle={!narrow} />
         )}
         <ModuleActionsSlot.Provider value={actionsSlot}>
         <div className="main-page">

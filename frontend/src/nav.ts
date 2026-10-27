@@ -385,6 +385,16 @@ export function isWorkspacePath(pathname: string): boolean {
 }
 
 /**
+ * 頁面自己有頁標題(h1)的頁:外框不再放一個(一頁只有一個頁標題;2026-10-28 外框加工作紙)。
+ * 其他頁的頁標題 = 入口名字:桌面在分頁列最前面(ModuleBar),窄螢幕在上方那一條(App)。
+ */
+const OWN_TITLE_PATHS = ["/sales/new", "/purchases/new"];
+
+export function ownsTitle(pathname: string): boolean {
+  return OWN_TITLE_PATHS.includes(pathname.replace(/\/+$/, ""));
+}
+
+/**
  * 正在看分頁本身(或清單頁展開某一張:`/purchases/12`):頁面主要按鈕放到分頁列最右邊、不再多一排大標題。
  * 子頁(新增 / 編輯商品 `/products/12/edit`)照舊自己有標題。
  */

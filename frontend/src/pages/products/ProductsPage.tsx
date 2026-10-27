@@ -550,7 +550,7 @@ export function ProductsPage() {
                   {!isSearching && (productsResult.data ?? []).length > 0 && (
                     <div
                       style={{
-                        padding: "6px 12px",
+                        padding: "6px 16px",
                         fontSize: 14,
                         color: "var(--text-dim)",
                         background: "var(--panel-2)",

@@ -11,6 +11,7 @@
 
 ## 等 owner 一句話
 
+- **外框加工作紙(UI 改版 A + B,2026-10-28)**:在分支 `ui/framed-sheet`,等 owner 看前後比較說要不要併進 main(併了才上測試站;正式站照舊等「上正式站」)。紀錄 `COMPLETED.md` 2026-10-28;規則 `docs/ui-patterns.md` 最後一節。
 - **舊會員整批帶進來、舊消費當快照**(`bring_in_legacy_members`,2026-10-09 做完):owner 說先不提交到正式站;正式站在他明講「可以導入資料了」之前不放任何舊 POS 資料。規則 `docs/規則/舊系統資料.md`;原文:archive「做完、owner 說先不提交的」。
 
 ## 暫停(穩定營運之後再排)

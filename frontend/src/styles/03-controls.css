@@ -104,6 +104,15 @@
 /* 日間主題的 .btn 白底灰框規則比較具體,文字型要再寫一次才蓋得過 */
 :root[data-theme="light"] .btn.ui-btn-text { background: transparent; border-color: transparent; color: var(--accent); }
 :root[data-theme="light"] .btn.ui-btn-text:hover { background: var(--ctl-hover); border-color: transparent; }
+/* 文字型的危險動作(2026-10-28 維修單清單的作廢):一列一顆時不要每一列都是紅框;「再按一次」照樣黃色 */
+.btn.ui-btn-text.danger,
+:root[data-theme="light"] .btn.ui-btn-text.danger { color: var(--danger-text); }
+.btn.ui-btn-text.armed,
+:root[data-theme="light"] .btn.ui-btn-text.armed {
+  background: var(--wb-amber-soft, rgba(245, 158, 11, 0.18));
+  border-color: var(--warn-text-amber);
+  color: var(--warn-text-amber);
+}
 .btn.ui-btn-lg { min-height: var(--control-height-lg); }
 .btn[aria-busy="true"] { cursor: progress; }
 /* 只有圖示的按鈕:看起來 32px,觸控有效範圍至少 44px */

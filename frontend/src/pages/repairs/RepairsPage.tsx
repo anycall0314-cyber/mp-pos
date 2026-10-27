@@ -316,7 +316,7 @@ export function RepairsPage() {
                     <td>
                       <Link
                         to={`/repairs/${r.id}`}
-                        className="stock-link-name"
+                        className="stock-link-name id-code"
                       >
                         {r.no}
                       </Link>
@@ -420,7 +420,7 @@ export function RepairsPage() {
                           <ArmButton
                             key={r.id}
                             label="作廢"
-                            className="btn danger"
+                            className="btn ui-btn-text danger"
                             onConfirm={() =>
                               voidRepair
                                 .mutateAsync(r.id)

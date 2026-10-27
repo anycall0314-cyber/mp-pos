@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 
 import { TrendingItem, useHomeSummary, useTrending, useWarehouses } from "@/api/hooks";
 import { useCurrentUser } from "@/auth/AuthContext";
+import { useIsMobile } from "@/hooks/useIsMobile";
 import {
   type HomeGroup,
   HOME_STORE_KEY,
@@ -37,6 +38,8 @@ export function HomePage() {
   const summary = useHomeSummary(store, ready);
   const trending = useTrending(6);
   const now = useNow();
+  // 窄螢幕的頁標題在上方那一條(App),這裡不重複放
+  const narrow = useIsMobile(900);
 
   const today = summary.data?.today;
   const recent = summary.data?.recent_sales ?? [];
@@ -69,6 +72,7 @@ export function HomePage() {
     <div className="page">
       <header className="hp-statusbar">
         <div className="hp-statusbar-left">
+          {!narrow && <h1 className="hp-title">今日總覽</h1>}
           {locked ? (
             <span className="hp-status-wh">{scopeName}</span>
           ) : (
@@ -131,26 +135,21 @@ export function HomePage() {
           </section>
         </div>
 
-        <div className="hp-two-col">
+        <div className="hp-three-col">
           <section className="hp-panel">
             <div className="hp-panel-head">
               <div className="hp-panel-title">今日營收</div>
-            </div>
-            <div className="hp-stat-row">
-              <StatCard label="營業額" value={summary.data ? `$${money(today?.revenue)}` : "—"} />
-              <StatCard label="銷貨筆數" value={summary.data ? String(today?.sales_count ?? 0) : "—"} />
-            </div>
-          </section>
-
-          <section className="hp-panel">
-            <div className="hp-panel-head">
-              <div className="hp-panel-title">最近交易</div>
               {reachable("/reports/sales-daily", who) && (
                 <NavLink to="/reports/sales-daily" className="hp-panel-link">
                   銷貨日報 →
                 </NavLink>
               )}
             </div>
+            <div className="hp-stat-row">
+              <StatCard label="營業額" value={summary.data ? `$${money(today?.revenue)}` : "—"} />
+              <StatCard label="銷貨筆數" value={summary.data ? String(today?.sales_count ?? 0) : "—"} />
+            </div>
+            <div className="hp-subhead">最近交易</div>
             <div className="hp-panel-body">
               {loading && <div className="hp-panel-empty">載入中…</div>}
               {failed && <RetryLine retry={() => summary.refetch()} />}
@@ -184,9 +183,7 @@ export function HomePage() {
               ))}
             </div>
           </section>
-        </div>
 
-        <div className="hp-two-col">
           <section className="hp-panel">
             <div className="hp-panel-head">
               <div className="hp-panel-title">

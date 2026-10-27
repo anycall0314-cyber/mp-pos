@@ -435,6 +435,10 @@ export function SalesListPage() {
           </button>
         )}
         {marginToggle}
+        {!recentQ.isLoading && !recentQ.isError && (
+          // 沒選日期只拿最近的一頁(伺服器一頁 50 張):講「最近幾張」,不講成全部
+          <span className="ws-list-count">{day ? `這一天 ${allRows.length} 張` : `最近 ${allRows.length} 張`}</span>
+        )}
         <span className="ws-grow" />
         {draftLines > 0 && (
           <span className="wb-badge warn">草稿 {draftLines} 行</span>
@@ -475,7 +479,7 @@ export function SalesListPage() {
                 onClick={() => setExpanded(open ? null : t.id)}
               >
                 <div className="wb-xfer-card-head">
-                  <span className={t.is_void ? "wb-dim" : "pname"}>{t.no}</span>
+                  <span className={`id-code ${t.is_void ? "wb-dim" : "pname"}`}>{t.no}</span>
                   {t.is_void && <span className="wb-badge">已作廢</span>}
                   {!t.is_void && t.return_no && <span className="wb-badge warn">已退</span>}
                   {t.is_void && voidStamp(t) && <span className="wb-dim wb-small">{voidStamp(t)}</span>}
@@ -487,6 +491,10 @@ export function SalesListPage() {
                   {t.customer_name}
                   <span className="wb-dim"> · {t.items.length} 項</span>
                   <b style={{ float: "right" }}>{money(t.total)}</b>
+                </div>
+                <div className="wb-dim wb-small">
+                  {[t.warehouse_name, t.sales_person_name].filter(Boolean).join(" · ")}
+                  {t.member_name && ` · ${t.member_name}`}
                 </div>
                 {open && (
                   <div
@@ -542,7 +550,7 @@ export function SalesListPage() {
                     }`}
                     onClick={() => setExpanded(open ? null : t.id)}
                   >
-                    <td>{t.no}</td>
+                    <td><span className="id-code">{t.no}</span></td>
                     <td className="wb-small">
                       {t.doc_date.slice(5)} {clock(t.created_at)}
                     </td>
@@ -580,7 +588,7 @@ export function SalesListPage() {
             className="wb-btn small"
             onClick={() => setShowAll(true)}
           >
-            看更多
+            再列 {allRows.length - SHORT} 張
           </button>
         </div>
       )}
