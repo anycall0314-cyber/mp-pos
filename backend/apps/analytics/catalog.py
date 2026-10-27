@@ -363,7 +363,10 @@ BASES = [
     Base("sales_gross", "銷售額(含稅)", "sales",
          lambda: Sum(F("untaxed_amount") + F("tax_amount"), filter=COUNTED)),
     Base("sales_qty", "銷量", "sales", lambda: Sum("qty", filter=COUNTED), "int"),
-    Base("sales_cost", "銷貨成本", "sales", lambda: Sum("cost_at_post", filter=COUNTED), group="毛利"),
+    # 實際成本(與從它算出來的毛利、毛利率)只有管理員看得到;其他人看業務員成本與業務員毛利
+    # (owner 2026-10-28;規則在 core/cost_access.py)。進貨金額、庫存金額也是實際成本,一樣只給管理員
+    Base("sales_cost", "銷貨成本", "sales", lambda: Sum("cost_at_post", filter=COUNTED),
+         roles=MANAGERS, group="毛利"),
     # 業務員成本(owner 2026-10-09;算獎金看的毛利用的):成交當下記在明細上的數字,不是現在的規則。
     # 沒有記的舊單 = 實際成本(owner:沒設定就用實際成本算),所以沒設定規則時 業務員毛利 = 毛利
     Base("sales_staff_cost", "業務員成本", "sales",
@@ -389,7 +392,7 @@ BASES = [
 
     Base("return_untaxed", "銷退額(未稅)", "returns", lambda: Sum("untaxed_amount", filter=COUNTED)),
     Base("return_qty", "銷退量", "returns", lambda: Sum("qty", filter=COUNTED), "int"),
-    Base("return_cost", "沖回成本", "returns", lambda: Sum("cost_at_post", filter=COUNTED)),
+    Base("return_cost", "沖回成本", "returns", lambda: Sum("cost_at_post", filter=COUNTED), roles=MANAGERS),
     Base("return_staff_cost", "沖回業務員成本", "returns",
          lambda: Sum(Coalesce("staff_cost", "cost_at_post"), filter=COUNTED)),
     # 被退掉的那幾行當初記的佣金(門號那一行整張退掉,佣金也不算了);公司的那一個一樣只有管理員看得到
@@ -424,14 +427,14 @@ BASES = [
     # 進貨金額 = 記進庫存的成本(未稅單位成本 × 數量),跟庫存金額、加權平均成本是同一個數字。
     # 單位成本存到分,有贈品或除不盡時,跟進貨單頭的未稅小計可能差幾分錢(進貨明細沒有存死每行未稅)。
     Base("purchase_untaxed", "進貨金額(未稅)", "purchases",
-         lambda: Sum(F("unit_landed_cost") * F("qty"))),
+         lambda: Sum(F("unit_landed_cost") * F("qty")), roles=MANAGERS),
     Base("purchase_qty", "進貨數量", "purchases", lambda: Sum("qty"), "int"),
 
     Base("received", "收款", "payments", lambda: Sum("amount")),
     Base("refunded", "退款", "refunds", lambda: Sum("total"), group="收款"),
 
     Base("stock_qty", "庫存數量", "stock", lambda: Sum("qty"), "int"),
-    Base("stock_value", "庫存金額", "stock", lambda: Sum("cost_value")),
+    Base("stock_value", "庫存金額", "stock", lambda: Sum("cost_value"), roles=MANAGERS),
 
     # 期間 = 合約到期日落在哪一段。已經續約 / 不續約的也算在裡面,要分開看就用「合約處理狀況」分組
     Base("contracts_due", "到期門號數", "contracts", lambda: Count("id"), "int"),

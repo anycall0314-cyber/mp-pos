@@ -832,14 +832,20 @@ export function ProductsPage() {
                     </dd>
                     <dt>售價</dt>
                     <dd>{formatMoney(selectedProduct.list_price)}</dd>
-                    <dt>加權平均成本</dt>
-                    <dd>{formatMoney(selectedProduct.weighted_avg_cost)}</dd>
-                    {staffCostApplies(selectedProduct) && (
+                    {/* 平均成本是實際成本,只有管理員的資料裡有;其他人看業務員成本(owner 2026-10-28) */}
+                    {selectedProduct.weighted_avg_cost !== undefined && (
+                      <>
+                        <dt>加權平均成本</dt>
+                        <dd>{formatMoney(selectedProduct.weighted_avg_cost)}</dd>
+                      </>
+                    )}
+                    {(staffCostApplies(selectedProduct) ||
+                      (selectedProduct.weighted_avg_cost === undefined && !selectedProduct.is_virtual)) && (
                       <>
                         <dt>業務員成本</dt>
                         <dd>
                           {formatMoney(
-                            selectedProduct.staff_cost ?? selectedProduct.weighted_avg_cost,
+                            selectedProduct.staff_cost ?? selectedProduct.weighted_avg_cost ?? 0,
                           )}
                           {/* 怎麼算只有管理員的資料裡有 */}
                           {canSetStaffCost(selectedProduct) &&

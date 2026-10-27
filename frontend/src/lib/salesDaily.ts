@@ -2,7 +2,7 @@
 // 資料由伺服器一次給齊(backend/apps/sales/daily_report.py):期間內的銷貨單與銷退,每一行的欄位名稱跟銷貨單清單一樣,
 // 銷退的每一行數量與金額是負的。這裡管:條件怎麼變成網址、打了商品的字之後列哪幾行、合計怎麼算、匯出的檔。
 // **合計的算法是從原本的頁面原樣搬過來的**(2026-10-12 之前寫在 SalesDailyReport.tsx 裡),數字不因為這次改動而變。
-import { staffMargin } from "./staffCost.ts";
+import { staffCostOf, staffMargin } from "./staffCost.ts";
 import { intStr } from "./money.ts";
 
 export interface DailyItem {
@@ -20,7 +20,8 @@ export interface DailyItem {
   unit_price: string;
   amount: string;
   untaxed_amount: string;
-  cost_at_post: string;
+  /** 實際成本:只有管理員的資料裡有;其他人看業務員成本(owner 2026-10-28) */
+  cost_at_post?: string;
   staff_cost: string;
   /** 打了商品的字時,這一行對不對得上(沒打字 = 都是 true) */
   matched: boolean;
@@ -128,7 +129,7 @@ export function orderPaidAmount(o: Pick<DailyOrder, "items">): number {
 /** 毛利 = 未稅金額 − 成本(未稅金額是存檔當下存死的,報表不自己回推稅別)。 */
 export function itemGrossProfit(it: DailyItem): number {
   if (!itemCountsMargin(it)) return 0;
-  return Number(it.untaxed_amount) - Number(it.cost_at_post);
+  return Number(it.untaxed_amount) - Number(it.cost_at_post ?? 0);
 }
 
 /** 業務員毛利 = 未稅金額 − 業務員成本(成交當下記在單上的;沒有設定規則時跟毛利一樣)。 */
@@ -145,12 +146,14 @@ export interface DailyTotals {
   lines: number;
   amountIncl: number;
   cost: number;
+  staffCost: number;
   profit: number;
   staffProfit: number;
   /** 零件調貨單獨統計(不汙染商品毛利) */
   partsLines: number;
   partsAmount: number;
   partsCost: number;
+  partsStaffCost: number;
   partsProfit: number;
   partsStaffProfit: number;
 }
@@ -160,11 +163,13 @@ export function dailyTotals(orders: DailyOrder[]): DailyTotals {
   let lines = 0;
   let amountIncl = 0;
   let cost = 0;
+  let staffCost = 0;
   let profit = 0;
   let staffProfit = 0;
   let partsLines = 0;
   let partsAmount = 0;
   let partsCost = 0;
+  let partsStaffCost = 0;
   let partsProfit = 0;
   let partsStaffProfit = 0;
   for (const o of orders) {
@@ -174,7 +179,8 @@ export function dailyTotals(orders: DailyOrder[]): DailyTotals {
         partsLines += 1;
         partsAmount += paidAmount(it);
         if (itemCountsMargin(it)) {
-          partsCost += Number(it.cost_at_post);
+          partsCost += Number(it.cost_at_post ?? 0);
+          partsStaffCost += staffCostOf(it);
           partsProfit += itemGrossProfit(it);
           partsStaffProfit += itemStaffProfit(it);
         }
@@ -182,7 +188,8 @@ export function dailyTotals(orders: DailyOrder[]): DailyTotals {
         lines += 1;
         amountIncl += paidAmount(it);
         if (itemCountsMargin(it)) {
-          cost += Number(it.cost_at_post);
+          cost += Number(it.cost_at_post ?? 0);
+          staffCost += staffCostOf(it);
           profit += itemGrossProfit(it);
           staffProfit += itemStaffProfit(it);
         }
@@ -190,8 +197,8 @@ export function dailyTotals(orders: DailyOrder[]): DailyTotals {
     }
   }
   return {
-    lines, amountIncl, cost, profit, staffProfit,
-    partsLines, partsAmount, partsCost, partsProfit, partsStaffProfit,
+    lines, amountIncl, cost, staffCost, profit, staffProfit,
+    partsLines, partsAmount, partsCost, partsStaffCost, partsProfit, partsStaffProfit,
   };
 }
 
@@ -241,15 +248,21 @@ export const DAILY_CSV_HEAD = [
   "作廢", "銷退", "原銷貨單", "會員",
 ];
 
+/** 不是管理員:成本換成業務員成本、沒有毛利那一欄(實際成本不在資料裡;owner 2026-10-28) */
+export const DAILY_CSV_HEAD_STAFF = DAILY_CSV_HEAD.filter((h) => h !== "毛利").map((h) => (h === "成本" ? "業務員成本" : h));
+
 /**
  * 匯出的表:正常單、銷退、作廢,一行一列。**前 14 欄的欄名與內容跟以前一樣**(客戶那一欄只寫來源,不接會員 ——
- * 有人拿舊的檔在對),後面多「銷退」「原銷貨單」「會員」。
+ * 有人拿舊的檔在對),後面多「銷退」「原銷貨單」「會員」。actual = false(不是管理員)見 DAILY_CSV_HEAD_STAFF。
  */
-export function dailyTable(active: DailyOrder[], returns: DailyOrder[], voided: DailyOrder[]): unknown[][] {
-  const out: unknown[][] = [DAILY_CSV_HEAD];
+export function dailyTable(active: DailyOrder[], returns: DailyOrder[], voided: DailyOrder[], actual = true): unknown[][] {
+  const out: unknown[][] = [actual ? DAILY_CSV_HEAD : DAILY_CSV_HEAD_STAFF];
   const write = (o: DailyOrder, kind: "sale" | "return" | "void") => {
     for (const it of o.items) {
       const counts = itemCountsMargin(it);
+      const money = actual
+        ? [counts ? intStr(it.cost_at_post ?? 0) : "", counts ? intStr(itemGrossProfit(it)) : ""]
+        : [counts ? intStr(staffCostOf(it)) : ""];
       out.push([
         o.doc_date,
         o.no,
@@ -261,8 +274,7 @@ export function dailyTable(active: DailyOrder[], returns: DailyOrder[], voided: 
         String(it.qty),
         intStr(it.unit_price),
         intStr(it.amount),
-        counts ? intStr(it.cost_at_post) : "",
-        counts ? intStr(itemGrossProfit(it)) : "",
+        ...money,
         counts ? intStr(itemStaffProfit(it)) : "",
         kind === "void" ? "Y" : "",
         kind === "return" ? "Y" : "",

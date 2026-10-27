@@ -311,6 +311,11 @@ class RepairOrderPart(TenantOwnedModel):
         decimal_places=2,
         default=Decimal("0"),
     )
+    # 一件的業務員成本:跟上面的單位成本同一刻記(照公司 / 零件的規則從單位成本加,`staff_cost.from_actual`),
+    # 之後改規則不影響這一張。空的 = 2026-10-28 之前加的零件,沒有記 → 當成單位成本(owner:沒設定就用實際成本)
+    staff_unit_cost = models.DecimalField(
+        "業務員成本(一件)", max_digits=14, decimal_places=2, null=True, blank=True,
+    )
 
     class Meta:
         ordering = ["id"]

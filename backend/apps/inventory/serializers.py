@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.core import staff_cost
+from apps.core.manager_fields import ManagerOnlyFieldsMixin
 from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
 
 from .identifiers import codes_of
@@ -61,7 +62,7 @@ class ProductSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelS
     acquired_via_sales_order_no = serializers.CharField(
         source="acquired_via_sales_order.no", read_only=True, default=""
     )
-    # 這一台的業務員成本(算獎金看的毛利用的):中古機拿這一台自己的成本當基準,一般商品跟商品上的那個數字一樣
+    # 這一台的業務員成本(算獎金看的毛利用的):這一台現在賣掉會記的那個數字(沒有規則 = 這一台的成本)
     staff_cost = serializers.SerializerMethodField()
     # 這一台的兩個碼(可能只有一個);serial_no 是主碼(有 IMEI 用 IMEI,沒有才用 SN)
     imei = serializers.SerializerMethodField()
@@ -76,7 +77,7 @@ class ProductSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelS
     def get_staff_cost(self, obj) -> str:
         request = self.context.get("request")
         tenant = getattr(request, "tenant", None) or obj.tenant
-        return str(staff_cost.shown_unit_cost(obj.product, tenant, own_cost=obj.purchase_unit_cost))
+        return str(staff_cost.serial_unit_cost(obj.product, tenant, obj.purchase_unit_cost))
 
     def get_imei(self, obj):
         return self._codes(obj)["imei"]
@@ -135,7 +136,10 @@ class ProductSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelS
         ]
 
 
-class StockBalanceSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
+class StockBalanceSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
+    # 這家門市的平均成本是實際成本:只有管理員拿得到(owner 2026-10-28;規則在 core/cost_access.py)
+    manager_only_fields = ("weighted_avg_cost",)
+
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
     warehouse_code = serializers.CharField(source="warehouse.code", read_only=True)

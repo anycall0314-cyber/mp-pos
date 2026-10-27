@@ -8,6 +8,7 @@ from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
 from apps.catalog.models import Product
+from apps.core import cost_access
 from apps.core.money import money_int
 from apps.core.warehouse_scoping import WarehouseScopedMixin, report_warehouse_id
 from apps.inventory.models import ProductSerial, StockBalance, Warehouse
@@ -443,6 +444,9 @@ def business_daily_report(request):
     )
     purchases_rows = []
     purchases_total = 0
+    # 每一張進貨單付了多少是進價:沒有「進貨入庫」「廠商叫貨」的店員不列(owner 2026-10-28;規則在 core/cost_access.py)。
+    # 當天的合計照給 —— 現金櫃流水要加得起來、打烊實點要對得上抽屜裡的錢
+    priced = cost_access.sees_purchase_prices(request.user)
     for po in purchases_qs:
         purchases_rows.append(
             {
@@ -450,7 +454,7 @@ def business_daily_report(request):
                 "no": po.no,
                 "supplier_name": po.supplier.name if po.supplier_id else "",
                 "payment_method_name": po.payment_method.name,
-                "total_cost": str(po.cash_payment_amount),
+                **({"total_cost": str(po.cash_payment_amount)} if priced else {}),
             }
         )
         purchases_total += money_int(po.cash_payment_amount)

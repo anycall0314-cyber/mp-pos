@@ -3,6 +3,7 @@ from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.core import cost_access
 from apps.core.idempotency import IdempotentCreateMixin
 from apps.core.warehouse_scoping import WarehouseScopedMixin
 from apps.tenants import abilities
@@ -58,6 +59,12 @@ class PurchaseOrderViewSet(
         "category": ["exact"],
         "doc_date": ["exact", "gte", "lte"],
     }
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        # 進貨單上都是進價:沒有「進貨入庫」「廠商叫貨」的店員看不到(連清單都不給;owner 2026-10-28,
+        # 規則在 core/cost_access.py)。作廢也算:作廢回的是整張單
+        cost_access.require_purchase_prices(request.user)
 
     def get_queryset(self):
         return (

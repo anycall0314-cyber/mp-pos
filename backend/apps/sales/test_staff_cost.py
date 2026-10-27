@@ -281,16 +281,19 @@ class ProductSettingTests(_Shop):
         self.product_rule(self.c.case, "plus", "30")
         seen = self.one(self.c.clerk)
         self.assertEqual(D(seen["staff_cost"]), D("130"))                  # 平均成本 100 + 30
-        self.assertEqual(D(seen["weighted_avg_cost"]), D("100"))           # 實際成本照舊看得到
+        # 實際成本只有管理員看得到(owner 2026-10-28;10-09 原本說不用藏)
+        self.assertNotIn("weighted_avg_cost", seen)
         self.assertNotIn("staff_cost_mode", seen)
         self.assertNotIn("staff_cost_value", seen)
         seen = self.one(self.c.admin)
         self.assertEqual((seen["staff_cost_mode"], D(seen["staff_cost_value"]), D(seen["staff_cost"])),
                          ("plus", D("30"), D("130")))
+        self.assertEqual(D(seen["weighted_avg_cost"]), D("100"))
         row = next(x for x in self.c.clerk.get(PRODUCTS, {"search": self.c.case.name}).json()["results"]
                    if x["id"] == self.c.case.id)
         self.assertEqual(D(row["staff_cost"]), D("130"))
         self.assertNotIn("staff_cost_mode", row)
+        self.assertNotIn("weighted_avg_cost", row)
 
     def test_without_any_rule_it_is_the_average_cost(self):
         self.assertEqual(D(self.one(self.c.clerk)["staff_cost"]), D("100"))
@@ -373,10 +376,11 @@ class ProductSettingTests(_Shop):
         return {x["serial_no"]: D(x["staff_cost"]) for x in rows}
 
     def test_each_unit_shows_a_number_without_any_markup_for_now(self):
-        """開單頁挑到某一台時用的數字。帶序號的先不加成:一般的手機每一台都是商品的平均成本,中古機是那一台自己的成本。"""
+        """開單頁挑到某一台、庫存查詢每一台用的數字 = 這一台現在賣掉會記的業務員成本。帶序號的先不加成:就是那一台自己的成本
+        (2026-10-28 起;以前一般的手機寫商品的平均成本,跟賣掉時記的不一樣 —— 店員看不到實際成本之後,這個數字要對得上)。"""
         ProductSerial.objects.filter(tenant=self.t, serial_no="甲P2").update(purchase_unit_cost=D("8000"))
         self.company_rule("percent", "10")
-        self.assertEqual(self.units(), {"甲P1": D("20000"), "甲P2": D("20000")})
+        self.assertEqual(self.units(), {"甲P1": D("20000"), "甲P2": D("8000")})
         Product.objects.filter(pk=self.c.phone.pk).update(is_secondhand=True)
         self.assertEqual(self.units(), {"甲P1": D("20000"), "甲P2": D("8000")})
 
@@ -451,8 +455,12 @@ class SaleTests(_Shop):
         doc = self.sell(self.cases(2), self.phone("甲P1"))
         self.assertEqual(self.stored(doc, 0), (D("200"), D("240"), "company:percent:20.00"))
         self.assertEqual(self.stored(doc, 1), (D("20000"), D("20000"), ""))          # 手機帶序號:先不加,記實際成本
-        # 回應裡兩個都有:實際成本不藏
+        # 店員(開單的人)的回應裡只有業務員成本:實際成本、用的是哪一條(知道規則就倒算得出實際成本)只有管理員有
         line = doc["items"][0]
+        self.assertEqual(D(line["staff_cost"]), D("240"))
+        self.assertNotIn("cost_at_post", line)
+        self.assertNotIn("staff_cost_rule", line)
+        line = self.c.admin.get(f"{SALES}{doc['id']}/").json()["items"][0]
         self.assertEqual((D(line["cost_at_post"]), D(line["staff_cost"]), line["staff_cost_rule"]),
                          (D("200"), D("240"), "company:percent:20.00"))
 
@@ -583,6 +591,8 @@ class SaleTests(_Shop):
         doc = self.sell(self.cases(2))
         SalesOrderItem.objects.filter(so_id=doc["id"]).update(staff_cost=None)          # 2026-10-09 之前開的單
         seen = self.c.clerk.get(f"{SALES}{doc['id']}/").json()["items"][0]
+        self.assertEqual(D(seen["staff_cost"]), D("200"))
+        seen = self.c.admin.get(f"{SALES}{doc['id']}/").json()["items"][0]
         self.assertEqual((D(seen["staff_cost"]), seen["staff_cost_rule"]), (D("200"), ""))
         rows = self.c.clerk.get(SALES).json()["results"]
         self.assertEqual(D(next(x for x in rows if x["id"] == doc["id"])["items"][0]["staff_cost"]), D("200"))
@@ -635,14 +645,17 @@ class ReportTests(_Shop):
         self.sell(self.cases(2))                                    # 780 − 240
         old = self.sell(self.cases(1))                              # 390 − 100(當成舊單:沒有記)
         SalesOrderItem.objects.filter(so_id=old["id"]).update(staff_cost=None)
-        got = self.ask(self.c.clerk, "sales_untaxed", "sales_cost", "sales_staff_cost", "sales_profit", "staff_profit")
+        got = self.ask(self.c.admin, "sales_untaxed", "sales_cost", "sales_staff_cost", "sales_profit", "staff_profit")
         self.assertEqual(got["sales_untaxed"], D("1170"))
         self.assertEqual((got["sales_cost"], got["sales_profit"]), (D("300"), D("870")))            # 實際的照舊
         self.assertEqual((got["sales_staff_cost"], got["staff_profit"]), (D("340"), D("830")))
+        # 店員只看得到業務員的那一組(owner 2026-10-28)
+        self.assertEqual(self.ask(self.c.clerk, "sales_staff_cost", "staff_profit"),
+                         {"sales_staff_cost": D("340"), "staff_profit": D("830")})
 
     def test_without_any_rule_staff_profit_equals_the_profit(self):
         self.sell(self.cases(2), self.phone("甲P1"))
-        got = self.ask(self.c.clerk, "sales_profit", "staff_profit", "gross_profit", "staff_gross_profit")
+        got = self.ask(self.c.admin, "sales_profit", "staff_profit", "gross_profit", "staff_gross_profit")
         self.assertEqual(got["staff_profit"], got["sales_profit"])
         self.assertEqual(got["staff_gross_profit"], got["gross_profit"])
 

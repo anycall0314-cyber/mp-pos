@@ -2,6 +2,7 @@ import { downloadCsv } from "@/components/downloadCsv";
 import { useState } from "react";
 
 import { usePartsUsageReport } from "@/api/hooks";
+import { useSeesActualCost } from "@/auth/AuthContext";
 import { Toolbar } from "@/components/Toolbar";
 import { money } from "@/lib/money";
 import { localToday } from "@/lib/dates";
@@ -19,6 +20,8 @@ function today(): string {
 }
 
 export function PartsUsageReportPage() {
+  // 現在的平均成本是實際成本,只有管理員的資料裡有;其他人看業務員成本(owner 2026-10-28)
+  const actual = useSeesActualCost();
   const [from, setFrom] = useState(firstOfMonth);
   const [to, setTo] = useState(today);
   const [applied, setApplied] = useState({ from: firstOfMonth(), to: today() });
@@ -131,7 +134,7 @@ export function PartsUsageReportPage() {
                 <th className="num">維修領用</th>
                 <th className="num">對外調貨</th>
                 <th className="num">合計</th>
-                <th className="num">當前單位成本</th>
+                <th className="num">{actual ? "當前單位成本" : "業務員成本"}</th>
               </tr>
             </thead>
             <tbody>
@@ -146,7 +149,7 @@ export function PartsUsageReportPage() {
                     <b>{r.total_qty}</b>
                   </td>
                   <td className="num">
-                    {money(r.unit_cost)}
+                    {money((actual ? r.unit_cost : r.staff_cost) ?? 0)}
                   </td>
                 </tr>
               ))}

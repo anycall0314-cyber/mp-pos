@@ -68,8 +68,9 @@ class SalesOrderItemSerialSerializer(TenantScopedRelatedFieldsMixin, serializers
 
 
 class SalesOrderItemSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
-    # 公司實際拿的佣金(開單當下從方案抄的):只有管理員拿得到
-    manager_only_fields = ("company_commission",)
+    # 公司實際拿的佣金(開單當下從方案抄的)、實際成本、業務員成本當時用的規則(知道規則就倒算得出實際成本):
+    # 只有管理員拿得到;其他人看業務員成本(owner 2026-10-28;規則在 core/cost_access.py)
+    manager_only_fields = ("company_commission", "cost_at_post", "staff_cost_rule")
 
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
@@ -399,7 +400,10 @@ class SalesReturnItemSerialSerializer(TenantScopedRelatedFieldsMixin, serializer
         read_only_fields = ["id", "serial_no"]
 
 
-class SalesReturnItemSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
+class SalesReturnItemSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
+    # 沖回的實際成本只有管理員拿得到,其他人看沖回的業務員成本(owner 2026-10-28)
+    manager_only_fields = ("cost_at_post",)
+
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_requires_serial = serializers.BooleanField(

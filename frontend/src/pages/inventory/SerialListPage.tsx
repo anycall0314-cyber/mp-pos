@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { fetchSerialReportExport, useReleaseReturned, useSerialReport } from "@/api/hooks";
-import { useCan } from "@/auth/AuthContext";
+import { useCan, useSeesActualCost } from "@/auth/AuthContext";
 import { ArmButton } from "@/components/workbench/ArmButton";
 import { toast } from "@/components/workbench/toast";
 import { searchSuppliers } from "@/api/search";
@@ -38,6 +38,9 @@ import { downloadCsv, NOT_PICKED, Pager, StoreField, useStoreName, type Picked }
  * 跟庫存查詢一樣各門市都看得到(不照帳號的門市鎖)。
  */
 export function SerialListPage() {
+  // 帶序號的還沒有業務員成本的規則:業務員成本 = 那一台的成本,數字一樣,欄名照看的人(owner 2026-10-28)
+  const actual = useSeesActualCost();
+  const costWord = actual ? "成本" : "業務員成本";
   // 今日總覽「退回待確認」帶 ?status=returned 進來:一打開就是已退的那幾台
   const [params] = useSearchParams();
   const startStatus = SERIAL_STATUS_CHOICES.some((c) => c.key === params.get("status"))
@@ -152,7 +155,7 @@ export function SerialListPage() {
         exportIfComplete(
           all,
           exportFileName("序號查詢", { store: storeName, day: localDay() }),
-          () => serialTable(all.results),
+          () => serialTable(all.results, actual),
           downloadCsv,
         ),
       );
@@ -241,7 +244,7 @@ export function SerialListPage() {
 
       {data && (
         <div className="ex-period">
-          共 {data.count} 台　成本合計 ${costText(data.cost_total)}
+          共 {data.count} 台　{costWord}合計 ${costText(data.cost_total)}
         </div>
       )}
 
@@ -258,7 +261,7 @@ export function SerialListPage() {
                 <th>狀態</th>
                 <th>門市</th>
                 <th>進貨</th>
-                <th className="num">成本</th>
+                <th className="num">{costWord}</th>
                 <th>賣出</th>
                 <th>處理</th>
               </tr>

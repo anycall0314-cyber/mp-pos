@@ -339,8 +339,10 @@ export function moveTable(rows: MoveRow[]): unknown[][] {
   return out;
 }
 
-export function serialTable(rows: SerialRow[]): unknown[][] {
-  const head = ["IMEI", "SN", "品號", "品名", "狀態", "門市", "來源", "進貨單號", "進貨日", "成本", "賣出單號", "賣出日"];
+/** actual = false(不是管理員):帶序號的業務員成本就是那一台的成本,數字一樣、欄名叫業務員成本(owner 2026-10-28) */
+export function serialTable(rows: SerialRow[], actual = true): unknown[][] {
+  const head = ["IMEI", "SN", "品號", "品名", "狀態", "門市", "來源", "進貨單號", "進貨日",
+    actual ? "成本" : "業務員成本", "賣出單號", "賣出日"];
   return [
     head,
     ...rows.map((r) => {

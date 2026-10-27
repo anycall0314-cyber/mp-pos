@@ -85,6 +85,22 @@ def shown_unit_cost(product, tenant, own_cost=None) -> Decimal:
     return _cents(base) if rule is None else rule.one(base)
 
 
+def from_actual(product, tenant, actual) -> Decimal:
+    """一件的業務員成本,這一件的實際成本已經記下來(actual)時用:沒有規則 = 那個數字;有規則 = 從那個數字加(固定金額不看它)。
+
+    維修領用的零件:領用時記的成本就是當時的平均成本,跟開單時一般商品從平均成本加是同一個基準。
+    """
+    if product.is_virtual:
+        return ZERO
+    rule = rule_for(product, tenant)
+    return _cents(actual or 0) if rule is None else rule.one(actual or 0)
+
+
+def serial_unit_cost(product, tenant, own_cost) -> Decimal:
+    """帶序號的某一台現在賣掉會記多少業務員成本(跟成交時 `line_cost` 算一件同一個算法;沒有規則 = 那一台的成本)。"""
+    return line_cost(product, tenant, qty=1, actual_cost=own_cost, unit_costs=[own_cost])[0]
+
+
 def line_cost(product, tenant, *, qty, actual_cost, unit_costs=()) -> tuple[Decimal, str]:
     """成交時這一行的業務員成本(整行,不是一件)與當時用的規則。
 

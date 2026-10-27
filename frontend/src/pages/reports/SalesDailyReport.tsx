@@ -6,7 +6,7 @@ import {
   searchMembers,
   searchSalesPersons,
 } from "@/api/search";
-import { useDefaultWarehouse } from "@/auth/AuthContext";
+import { useDefaultWarehouse, useSeesActualCost } from "@/auth/AuthContext";
 import type { Customer, Member, SalesPerson, Warehouse } from "@/api/types";
 import { Banner } from "@/components/Banner";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
@@ -36,6 +36,7 @@ import {
 import { downloadCsv } from "@/components/downloadCsv";
 import { exportFileName, exportIfComplete } from "@/lib/reportExports";
 import { errorText } from "@/lib/errorText";
+import { staffCostOf } from "@/lib/staffCost";
 import { PeriodQuick } from "@/components/PeriodQuick";
 import { StoreSelect } from "@/components/StoreSelect";
 
@@ -57,6 +58,8 @@ type AppliedFilter = DailyFilter;
  */
 export function SalesDailyReportPage() {
   const defaultWarehouse = useDefaultWarehouse();
+  // 實際成本與毛利只有管理員;其他人的資料裡沒有實際成本,看業務員成本與業務員毛利(owner 2026-10-28)
+  const actual = useSeesActualCost();
   const isMobile = useIsMobile();
   // 表單狀態
   const [from, setFrom] = useState<string>(today);
@@ -159,7 +162,7 @@ export function SalesDailyReportPage() {
         from: applied.from,
         to: applied.to,
       }),
-      () => dailyTable(activeOrders, returnOrders, voidOrders),
+      () => dailyTable(activeOrders, returnOrders, voidOrders, actual),
       downloadCsv,
     );
   }
@@ -193,13 +196,19 @@ export function SalesDailyReportPage() {
           <SumCell label="正常單" value={String(activeOrders.length)} />
           <SumCell label="明細" value={String(totals.lines)} />
           <SumCell label="含稅金額" value={`$${fmtMoney(totals.amountIncl)}`} />
-          <SumCell label="成本" value={`$${fmtMoney(totals.cost)}`} />
-          <SumCell
-            label="毛利"
-            title="毛利 = 未稅金額 − 成本"
-            value={`$${fmtMoney(totals.profit)}`}
-            negative={totals.profit < 0}
-          />
+          {actual ? (
+            <>
+              <SumCell label="成本" value={`$${fmtMoney(totals.cost)}`} />
+              <SumCell
+                label="毛利"
+                title="毛利 = 未稅金額 − 成本"
+                value={`$${fmtMoney(totals.profit)}`}
+                negative={totals.profit < 0}
+              />
+            </>
+          ) : (
+            <SumCell label="業務員成本" value={`$${fmtMoney(totals.staffCost)}`} />
+          )}
           <SumCell
             label="業務員毛利"
             title="業務員毛利 = 未稅金額 − 業務員成本"
@@ -215,7 +224,9 @@ export function SalesDailyReportPage() {
                 negative
               />
               <SumCell label="淨額" title="含稅金額 − 銷退" value={`$${fmtMoney(net.amount)}`} negative={net.amount < 0} />
-              <SumCell label="淨毛利" title="毛利 − 銷退的毛利" value={`$${fmtMoney(net.profit)}`} negative={net.profit < 0} />
+              {actual && (
+                <SumCell label="淨毛利" title="毛利 − 銷退的毛利" value={`$${fmtMoney(net.profit)}`} negative={net.profit < 0} />
+              )}
               <SumCell
                 label="業務員淨毛利"
                 title="業務員毛利 − 銷退的業務員毛利"
@@ -365,12 +376,18 @@ export function SalesDailyReportPage() {
         <div className="sd-strip sd-strip-parts" title="零件調貨獨立列計,不污染商品毛利">
           <StripItem label="零件調貨" value={String(totals.partsLines)} />
           <StripItem label="含稅金額" value={`$${fmtMoney(totals.partsAmount)}`} />
-          <StripItem label="成本" value={`$${fmtMoney(totals.partsCost)}`} />
-          <StripItem
-            label="毛利"
-            value={`$${fmtMoney(totals.partsProfit)}`}
-            negative={totals.partsProfit < 0}
-          />
+          {actual ? (
+            <>
+              <StripItem label="成本" value={`$${fmtMoney(totals.partsCost)}`} />
+              <StripItem
+                label="毛利"
+                value={`$${fmtMoney(totals.partsProfit)}`}
+                negative={totals.partsProfit < 0}
+              />
+            </>
+          ) : (
+            <StripItem label="業務員成本" value={`$${fmtMoney(totals.partsStaffCost)}`} />
+          )}
           <StripItem
             label="業務員毛利"
             value={`$${fmtMoney(totals.partsStaffProfit)}`}
@@ -423,6 +440,7 @@ export function SalesDailyReportPage() {
 }
 
 function SalesReportMobileList({ orders, voided, returned }: ReportTableProps) {
+  const actual = useSeesActualCost();
   if (orders.length === 0) return null;
   return (
     <div className="report-mobile-list">
@@ -482,9 +500,15 @@ function SalesReportMobileList({ orders, voided, returned }: ReportTableProps) {
                       </span>
                       <b>${fmtMoney(Number(it.amount))}</b>
                     </div>
-                    {countsMargin ? (
+                    {countsMargin && !actual ? (
                       <div className="report-card-item-cost">
-                        成本 ${fmtMoney(Number(it.cost_at_post))}
+                        業務員成本 ${fmtMoney(staffCostOf(it))}
+                        <span className="report-card-sep">·</span>
+                        業務員毛利 ${fmtMoney(itemStaffProfit(it))}
+                      </div>
+                    ) : countsMargin ? (
+                      <div className="report-card-item-cost">
+                        成本 ${fmtMoney(Number(it.cost_at_post ?? 0))}
                         <span className="report-card-sep">·</span>
                         毛利{" "}
                         <span
@@ -508,19 +532,23 @@ function SalesReportMobileList({ orders, voided, returned }: ReportTableProps) {
             <div className="report-card-foot">
               <span>含稅金額</span>
               <b>${fmtMoney(orderAmount)}</b>
-              <span className="report-card-sep">·</span>
-              <span>該單毛利</span>
-              <b
-                style={{
-                  color: !hasMarginItem
-                    ? "var(--text-dim)"
-                    : orderProfit < 0
-                    ? "var(--danger-text)"
-                    : undefined,
-                }}
-              >
-                {hasMarginItem ? `$${fmtMoney(orderProfit)}` : "—"}
-              </b>
+              {actual && (
+                <>
+                  <span className="report-card-sep">·</span>
+                  <span>該單毛利</span>
+                  <b
+                    style={{
+                      color: !hasMarginItem
+                        ? "var(--text-dim)"
+                        : orderProfit < 0
+                        ? "var(--danger-text)"
+                        : undefined,
+                    }}
+                  >
+                    {hasMarginItem ? `$${fmtMoney(orderProfit)}` : "—"}
+                  </b>
+                </>
+              )}
               {hasMarginItem && (
                 <>
                   <span className="report-card-sep">·</span>
@@ -591,6 +619,7 @@ function SalesReportTable({
   returned,
   day,
 }: ReportTableProps & { day: (d: string) => string }) {
+  const actual = useSeesActualCost();
   if (orders.length === 0) return null;
   return (
     <table className={`report-grid sd-grid ${voided ? "void" : ""}`}>
@@ -606,8 +635,8 @@ function SalesReportTable({
           <th className="num">數量</th>
           <th className="num">單價</th>
           <th className="num">金額</th>
-          <th className="num">成本</th>
-          <th className="num">毛利</th>
+          <th className="num">{actual ? "成本" : "業務員成本"}</th>
+          {actual && <th className="num">毛利</th>}
           <th className="num">業務員毛利</th>
         </tr>
       </thead>
@@ -626,6 +655,7 @@ function SalesReportTable({
               hasMarginItem={hasMarginItem}
               returned={returned}
               day={day}
+              actual={actual}
             />
           );
         })}
@@ -640,12 +670,15 @@ function ReportOrderGroup({
   hasMarginItem,
   returned,
   day,
+  actual,
 }: {
   order: DailyOrder;
   orderProfit: number;
   hasMarginItem: boolean;
   returned?: boolean;
   day: (d: string) => string;
+  /** 看得到實際成本(管理員);其他人:成本那一欄是業務員成本、沒有毛利那一欄 */
+  actual: boolean;
 }) {
   const orderStaffProfit = order.items.reduce((s, it) => s + itemStaffProfit(it), 0);
   return (
@@ -688,20 +721,22 @@ function ReportOrderGroup({
             <td className="num">{fmtMoney(Number(it.unit_price))}</td>
             <td className="num">{fmtMoney(Number(it.amount))}</td>
             <td className="num">
-              {countsMargin ? fmtMoney(Number(it.cost_at_post)) : "—"}
+              {!countsMargin ? "—" : fmtMoney(actual ? Number(it.cost_at_post ?? 0) : staffCostOf(it))}
             </td>
-            <td
-              className="num"
-              style={{
-                color: !countsMargin
-                  ? "var(--text-dim)"
-                  : profit < 0
-                  ? "var(--danger-text)"
-                  : undefined,
-              }}
-            >
-              {countsMargin ? fmtMoney(profit) : "—"}
-            </td>
+            {actual && (
+              <td
+                className="num"
+                style={{
+                  color: !countsMargin
+                    ? "var(--text-dim)"
+                    : profit < 0
+                    ? "var(--danger-text)"
+                    : undefined,
+                }}
+              >
+                {countsMargin ? fmtMoney(profit) : "—"}
+              </td>
+            )}
             <td
               className="num"
               style={{
@@ -723,18 +758,20 @@ function ReportOrderGroup({
         <td colSpan={11} className="num" style={{ textAlign: "right" }}>
           該單小計
         </td>
-        <td
-          className="num"
-          style={{
-            color: !hasMarginItem
-              ? "var(--text-dim)"
-              : orderProfit < 0
-              ? "var(--danger-text)"
-              : undefined,
-          }}
-        >
-          {hasMarginItem ? fmtMoney(orderProfit) : "—"}
-        </td>
+        {actual && (
+          <td
+            className="num"
+            style={{
+              color: !hasMarginItem
+                ? "var(--text-dim)"
+                : orderProfit < 0
+                ? "var(--danger-text)"
+                : undefined,
+            }}
+          >
+            {hasMarginItem ? fmtMoney(orderProfit) : "—"}
+          </td>
+        )}
         <td
           className="num"
           style={{

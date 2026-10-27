@@ -909,7 +909,10 @@ export interface StockMatrixProduct {
   category_name: string;
   category_code: string;
   list_price: string;
-  weighted_avg_cost: string;
+  /** 平均成本(實際成本):只有管理員的資料裡有;其他人看 staff_cost(owner 2026-10-28) */
+  weighted_avg_cost?: string;
+  /** 一件的業務員成本(沒有規則 = 平均成本) */
+  staff_cost?: string;
   requires_serial: boolean;
   is_secondhand: boolean;
   stock_by_warehouse: Record<string, number>;

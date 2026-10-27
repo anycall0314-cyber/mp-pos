@@ -6,12 +6,13 @@ owner 2026-10-12(取舊歐睿報表的優點,第 2 批;舊 FI010 進退貨商品
 - 不列作廢的進貨單(作廢 = 當作沒進過;跟自訂分析的「進貨金額」同一批明細)。
 - 成本 = 記進庫存的未稅成本(單位成本 × 數量,含分攤的運費;贈品會把單位成本拉低)。**合計的成本 = 自訂分析同一段期間的「進貨金額(未稅)」**。
 - 單價、金額是單上打的(含稅還是未稅看那張單的課稅別)。
-- 看進貨單本來就不另外擋,所以這一張也沒有權限的勾;鎖在門市的帳號只看自己門市(跟進貨單清單一樣)。
+- 跟進貨單清單一樣:要有「進貨入庫」或「廠商叫貨」才看得到(2026-10-28 起;以前誰都看得到);鎖在門市的帳號只看自己門市。
 """
 from django.db.models import DecimalField, ExpressionWrapper, F, Sum
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
+from apps.core import cost_access
 from apps.core.warehouse_scoping import report_warehouse_id
 from apps.inventory import reports as stock_reports
 from apps.inventory.report_views import listing
@@ -70,7 +71,10 @@ def rows(page):
 
 @api_view(["GET"])
 def purchase_line_report(request):
-    """進貨明細。?from= &to= &warehouse= &supplier= &category= &search= &page= &export=1"""
+    """進貨明細。?from= &to= &warehouse= &supplier= &category= &search= &page= &export=1
+
+    都是進價:要有「進貨入庫」或「廠商叫貨」(owner 2026-10-28;規則在 core/cost_access.py)。"""
+    cost_access.require_purchase_prices(request.user)
     p = request.query_params
     try:
         start, end = stock_reports.parse_range(p)

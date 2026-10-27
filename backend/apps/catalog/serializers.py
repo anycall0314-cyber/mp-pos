@@ -353,8 +353,10 @@ class CategorySerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, ser
 
 
 class ProductSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, serializers.ModelSerializer):
-    # 業務員成本怎麼算是績效的基準:只有管理員拿得到設定、改得動;算出來的數字(staff_cost)大家都看得到
-    manager_only_fields = ("staff_cost_mode", "staff_cost_value")
+    # 業務員成本怎麼算是績效的基準:只有管理員拿得到設定、改得動;算出來的數字(staff_cost)大家都看得到。
+    # 平均成本是實際成本:只有管理員拿得到;上次進價:管理員與能進貨 / 叫貨的人(owner 2026-10-28;規則在 core/cost_access.py)
+    manager_only_fields = ("staff_cost_mode", "staff_cost_value", "weighted_avg_cost")
+    purchase_price_fields = ("last_purchase_price",)
     # 一件的業務員成本(照現在的平均成本與規則算;沒有規則 = 平均成本)。成交時記在單上的以那一刻為準
     staff_cost = serializers.SerializerMethodField()
     stock_qty = serializers.IntegerField(read_only=True)

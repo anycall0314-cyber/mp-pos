@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
-  DAILY_CSV_HEAD, customerText, dailyQuery, dailyTable, dailyTotals, daysAgo, itemGrossProfit, itemStaffProfit, orderPaidAmount,
+  DAILY_CSV_HEAD, DAILY_CSV_HEAD_STAFF, customerText, dailyQuery, dailyTable, dailyTotals, daysAgo, itemGrossProfit, itemStaffProfit, orderPaidAmount,
   narrowedBy, netTotals, serialList, shownOrders, splitOrders, truncatedText,
 } from "./salesDaily.ts";
 import { toCsv } from "./stockReports.ts";
@@ -89,9 +89,10 @@ test("合計跟改之前同一個算法:商品與零件分開,不計毛利的行
   assert.equal(Math.round(t.profit * 100) / 100, 3809.52 + 580);
   assert.equal(Math.round(t.staffProfit * 100) / 100, 2809.52 + 580);
   assert.deepEqual([t.partsLines, t.partsAmount, t.partsCost, t.partsProfit, t.partsStaffProfit], [1, 500, 300, 200, 200]);
+  assert.deepEqual([t.staffCost, t.partsStaffCost], [21200, 300]);
   assert.deepEqual(dailyTotals([]), {
-    lines: 0, amountIncl: 0, cost: 0, profit: 0, staffProfit: 0,
-    partsLines: 0, partsAmount: 0, partsCost: 0, partsProfit: 0, partsStaffProfit: 0,
+    lines: 0, amountIncl: 0, cost: 0, staffCost: 0, profit: 0, staffProfit: 0,
+    partsLines: 0, partsAmount: 0, partsCost: 0, partsStaffCost: 0, partsProfit: 0, partsStaffProfit: 0,
   });
 });
 
@@ -172,6 +173,28 @@ test("匯出:前 14 欄的內容跟以前一樣(欄名 2026-10-23 照全站用�
   assert.equal(table.length, 4);
   assert.ok(table.every((row) => row.length === DAILY_CSV_HEAD.length));
   assert.ok(toCsv(table).includes('"=""356789012345678"""'));
+});
+
+test("不是管理員:資料裡沒有實際成本 → 合計不出錯;匯出成本那一欄是業務員成本、沒有毛利那一欄(owner 2026-10-28)", () => {
+  const strip = (it) => {
+    const { cost_at_post: _, ...rest } = it;
+    return rest;
+  };
+  const sold = order({ items: [strip(line()), strip(line({ id: 2, product_warehouse_type: "parts", staff_cost: "300.00" }))] });
+  const t = dailyTotals([sold]);
+  assert.deepEqual([t.staffCost, t.partsStaffCost, Math.round(t.staffProfit * 100) / 100], [21000, 300, 2809.52]);
+  assert.ok(Number.isFinite(t.cost) && Number.isFinite(t.profit));
+  assert.deepEqual(DAILY_CSV_HEAD_STAFF, [
+    "日期", "單號", "門市", "業務員", "來源", "商品", "序號", "數量", "單價", "金額", "業務員成本", "業務員毛利", "作廢",
+    "銷退", "原銷貨單", "會員",
+  ]);
+  const table = dailyTable([sold], [], [], false);
+  assert.deepEqual(table[1].slice(9, 12), ["25000", "21000", "2810"]);
+  assert.ok(table.every((row) => row.length === DAILY_CSV_HEAD_STAFF.length));
+  const page = readFileSync(new URL("../pages/reports/SalesDailyReport.tsx", import.meta.url), "utf8");
+  assert.ok(page.includes("dailyTable(activeOrders, returnOrders, voidOrders, actual)"));
+  assert.ok(page.includes('{actual && <th className="num">毛利</th>}'));
+  assert.ok(page.includes('<SumCell label="業務員成本" value={`$${fmtMoney(totals.staffCost)}`} />'));
 });
 
 test("銷貨日報那一頁用的是新的資料來源、算法在這一個檔", () => {

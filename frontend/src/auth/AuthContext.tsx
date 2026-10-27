@@ -1,4 +1,4 @@
-import { type AbilityKey, can } from "@/lib/abilities";
+import { type AbilityKey, can, seesActualCost, seesPurchasePrices } from "@/lib/abilities";
 import { attachIdleLogout } from "@/lib/idleLogout";
 import { attachSignInCheck } from "@/lib/signInPlace";
 import { useQueryClient } from "@tanstack/react-query";
@@ -135,6 +135,16 @@ export function useCurrentUser(): CurrentUser | null {
 /** 這個帳號能不能做這一項(員工帳號的權限)。只決定按鈕要不要出現;真正擋的是伺服器。 */
 export function useCan(key: AbilityKey): boolean {
   return can(useAuth().user, key);
+}
+
+/** 看得到實際成本、實際毛利(只有管理員);其他人看業務員成本與業務員毛利(owner 2026-10-28)。 */
+export function useSeesActualCost(): boolean {
+  return seesActualCost(useAuth().user);
+}
+
+/** 看得到進價:管理員,或有「進貨入庫」「廠商叫貨」的店員。 */
+export function useSeesPurchasePrices(): boolean {
+  return seesPurchasePrices(useAuth().user);
 }
 
 /**

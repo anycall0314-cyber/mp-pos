@@ -90,14 +90,16 @@ export interface Product {
   category: number;
   category_code: string;
   category_name: string;
-  weighted_avg_cost: string;
+  /** 平均成本(實際成本):只有管理員的資料裡有(owner 2026-10-28) */
+  weighted_avg_cost?: string;
   /** 一件的業務員成本(算獎金看的毛利用的;沒有設定規則 = 平均成本)。伺服器算好的 */
   staff_cost?: string;
   /** 業務員成本怎麼算:只有管理員的資料裡有這兩欄。"" = 照全公司 */
   staff_cost_mode?: string;
   staff_cost_value?: string;
   list_price: string;
-  last_purchase_price: string | null;
+  /** 上次進價:管理員與有「進貨入庫」「廠商叫貨」的人才有 */
+  last_purchase_price?: string | null;
   requires_serial: boolean;
   allows_telecom_line: boolean;
   /** 門號商品是哪一家電信(開單只列這一家的方案) */
@@ -227,7 +229,8 @@ export interface StockBalance {
   warehouse_code: string;
   warehouse_name: string;
   qty: number;
-  weighted_avg_cost: string;
+  /** 這家門市的平均成本:只有管理員的資料裡有 */
+  weighted_avg_cost?: string;
 }
 
 export interface TransferOrderItemSerial {
@@ -373,7 +376,8 @@ export interface SalesReturnItem {
   untaxed_amount: string;
   tax_amount: string;
   /** 沖回成本 */
-  cost_at_post: string;
+  /** 實際成本:只有管理員的資料裡有;其他人看 staff_cost */
+  cost_at_post?: string;
   /** 沖回的業務員成本(照抄原行) */
   staff_cost?: string;
   serials: SalesReturnItemSerial[];
@@ -718,7 +722,8 @@ export interface SalesOrderItem {
   serials: SalesOrderItemSerial[];
   /** write-only: 建單時送序號 id 陣列;讀回來看 serials */
   serial_ids?: number[];
-  cost_at_post: string;
+  /** 實際成本:只有管理員的資料裡有;其他人看 staff_cost */
+  cost_at_post?: string;
   /** 業務員成本(整行;成交當下記的,沒有記的舊單 = 實際成本)。業務員毛利 = 未稅金額 − 這個數字 */
   staff_cost?: string;
   /** 當時用的規則,例 company:percent:20.00;空的 = 沒有規則 */
@@ -1401,7 +1406,10 @@ export interface RepairOrderPart {
   part_name: string;
   part_sku: string;
   qty: number;
-  unit_cost: string;
+  /** 單位成本(實際成本):只有管理員的資料裡有 */
+  unit_cost?: string;
+  /** 一件的業務員成本(沒有記的舊零件 = 單位成本) */
+  staff_unit_cost?: string;
 }
 
 export interface RepairOrder {
@@ -1501,7 +1509,10 @@ export interface PartsUsageReport {
     repair_qty: number;
     transfer_qty: number;
     total_qty: number;
-    unit_cost: string;
+    /** 現在的平均成本:只有管理員的資料裡有 */
+    unit_cost?: string;
+    /** 現在一件的業務員成本 */
+    staff_cost?: string;
   }[];
 }
 

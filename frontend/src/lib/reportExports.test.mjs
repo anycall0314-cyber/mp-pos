@@ -151,6 +151,12 @@ test("庫存查詢:各門市一欄、總成本 = 平均成本 × 合計,最後�
     ["合計", "", "", "", 1, 12, 13, "", "4689", "60954"],
   ]);
   assert.deepEqual(stockMatrixTable(stores, [])[1], ["合計", "", "", "", 0, 0, 0, "", "", "0"]);
+  // 不是管理員:資料裡沒有平均成本,用業務員成本(owner 2026-10-28)
+  const clerk = products.map(({ weighted_avg_cost: _, ...p }, i) => ({ ...p, staff_cost: ["20000.50", "120.00"][i] }));
+  const staff = stockMatrixTable(stores, clerk, false);
+  assert.deepEqual(staff[0].slice(-2), ["業務員成本", "業務員總成本"]);
+  assert.deepEqual(staff[2].slice(-2), ["120", "1200"]);
+  assert.ok(!JSON.stringify(staff).includes("95"));
 });
 
 test("合約到期:一位客人一列,電話與門號是文字", () => {
@@ -216,7 +222,7 @@ test("七張報表都有「匯出」", () => {
   for (const [path, builder] of [
     ["pages/reports/FixedReportPage.tsx", "fixedReportTable(all)"],
     ["pages/reports/CommissionLinesPage.tsx", "commissionTable(data)"],
-    ["pages/inventory/InventoryQueryPage.tsx", "stockMatrixTable(stores, got.rows)"],
+    ["pages/inventory/InventoryQueryPage.tsx", "stockMatrixTable(stores, got.rows, actual)"],
     ["pages/telecom/ContractsPage.tsx", "contractTable(got.rows)"],
   ]) {
     const text = read(path);

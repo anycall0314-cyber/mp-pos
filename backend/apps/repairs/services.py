@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.db import transaction
 
 from apps.catalog.models import Product
+from apps.core import staff_cost
 from apps.core.money import round_money
 from apps.core.tenant_fields import same_company
 from apps.inventory.locking import lock_document, lock_stock_rows, locked_balance
@@ -12,24 +13,40 @@ from apps.inventory.models import StockBalance, StockMovement
 from .models import RepairOrder, RepairOrderPart
 
 
-def compute_in_house_quote(repair_order: RepairOrder) -> Decimal:
-    """自修建議報價 = 領用零件成本合計 + 工資。"""
+def compute_in_house_quote(repair_order: RepairOrder, staff: bool = False) -> Decimal:
+    """自修建議報價 = 領用零件成本合計 + 工資。staff = 零件照業務員成本算(不是管理員看的;owner 2026-10-28)。"""
+    tenant = repair_order.tenant
     parts_cost = sum(
-        (p.qty * (p.part_product.weighted_avg_cost or Decimal("0")))
+        (p.qty * (staff_cost.shown_unit_cost(p.part_product, tenant) if staff
+                  else (p.part_product.weighted_avg_cost or Decimal("0"))))
         for p in repair_order.parts.select_related("part_product").all()
     )
     # 零件成本是平均值、會有零頭;報價是金額,收成整數元
     return round_money(Decimal(parts_cost) + (repair_order.labor_fee or Decimal("0")))
 
 
-def _parts_cost(repair_order: RepairOrder) -> Decimal:
+def part_unit_cost(line: RepairOrderPart, staff: bool = False) -> Decimal:
+    """這一行一件的成本。staff = 業務員成本(跟單位成本同一刻記的;沒有記的舊零件 = 單位成本)。"""
+    if staff and line.staff_unit_cost is not None:
+        return Decimal(line.staff_unit_cost)
+    return Decimal(line.unit_cost or 0)
+
+
+def snapshot_part_cost(line: RepairOrderPart, part: Product, tenant) -> None:
+    """記下這一行一件的成本(零件當下的平均成本)與同一刻的業務員成本。呼叫端負責存檔。"""
+    line.unit_cost = part.weighted_avg_cost or Decimal("0")
+    line.staff_unit_cost = staff_cost.from_actual(part, tenant, line.unit_cost)
+
+
+def _parts_cost(repair_order: RepairOrder, staff: bool = False) -> Decimal:
     """合計這張單領用零件的成本:**每一行自己記的成本**(建單時抄零件當下的平均成本;完工時還沒記到的會再抄一次)。
+    staff = 業務員成本(不是管理員看的都用這個;owner 2026-10-28)。
 
     不拿零件「現在」的平均成本來補(複審 2026-10-12 抓到的 P0):成本真的是 0 的零件,之後進貨把平均成本拉高,
     已經完工的單毛利不能跟著變;而且開單頁看到的也是每一行記的這個數字 —— 這裡另外去補,同一張單又是兩個毛利。
     """
     # 用 .all():呼叫端先抓好明細的話(報表一次算很多張)就不再一張一張查
-    return sum((Decimal(p.unit_cost or 0) * p.qty for p in repair_order.parts.all()), Decimal("0"))
+    return sum((part_unit_cost(p, staff) * p.qty for p in repair_order.parts.all()), Decimal("0"))
 
 
 # 一張維修單是怎麼修的(維修月報分這三種;字數一樣)。「內轉」= 委外模式、但修的是自己公司另一位技師
@@ -44,7 +61,7 @@ def way_of(repair_order: RepairOrder) -> str:
     return TRANSFER if tech and tech != repair_order.sales_person_id else VENDOR
 
 
-def money_of(repair_order: RepairOrder) -> dict:
+def money_of(repair_order: RepairOrder, staff: bool = False) -> dict:
     """這張維修單公司賺多少、怎麼來的。**維修毛利全系統只有這一份算法**(owner 2026-10-12:「工資是分業績的」——
     工資、內部結算價只是收件人與技師之間怎麼分,不是公司付出去的錢,所以不扣):
 
@@ -53,15 +70,16 @@ def money_of(repair_order: RepairOrder) -> dict:
 
     毛利 = 實付 − 零件成本 − 委外費用(每一張都成立);也 = 個人毛利分解(`compute_personal_margin`)兩個人加起來。
     委外給外廠的單不算零件(那一種原本三個地方就都只扣委外費用)。
+    staff = 零件照業務員成本算 → 業務員毛利(不是管理員看的都用這個;owner 2026-10-28)。
     """
     paid = repair_order.customer_paid_amount or Decimal("0")
     way = way_of(repair_order)
-    parts = Decimal("0") if way == VENDOR else _parts_cost(repair_order)
+    parts = Decimal("0") if way == VENDOR else _parts_cost(repair_order, staff)
     outside = (repair_order.external_quote_actual or Decimal("0")) if way == VENDOR else Decimal("0")
     return {"way": way, "paid": paid, "parts": parts, "outside": outside, "margin": paid - parts - outside}
 
 
-def compute_personal_margin(repair_order: RepairOrder) -> dict:
+def compute_personal_margin(repair_order: RepairOrder, staff: bool = False) -> dict:
     """個人毛利分解 — 拆給 sales_person(收件)與 technician(技師)。
 
     公式表:
@@ -80,9 +98,10 @@ def compute_personal_margin(repair_order: RepairOrder) -> dict:
                 sales_person_amount, technician_amount,
                 kind: "in_house_solo" | "in_house_split" |
                       "external_vendor" | "internal_transfer" }
+    staff = 零件照業務員成本算(不是管理員看的都用這個;owner 2026-10-28)。
     """
     paid = repair_order.customer_paid_amount or Decimal("0")
-    parts_cost = _parts_cost(repair_order)
+    parts_cost = _parts_cost(repair_order, staff)
     labor = repair_order.labor_fee or Decimal("0")
     settle = repair_order.internal_settle_amount or Decimal("0")
     ext_actual = repair_order.external_quote_actual or Decimal("0")
@@ -128,10 +147,11 @@ def compute_personal_margin(repair_order: RepairOrder) -> dict:
     }
 
 
-def compute_margin(repair_order: RepairOrder) -> Decimal:
+def compute_margin(repair_order: RepairOrder, staff: bool = False) -> Decimal:
     """維修毛利(公司的)。怎麼算只有 `money_of` 那一份:自修 / 內轉 = 實付 − 零件成本;委外 = 實付 − 委外實際費用。
-    2026-10-12 以前這裡的自修還多扣了工資(同一張單在清單、開單頁、個人毛利分解是三個數字)。"""
-    return money_of(repair_order)["margin"]
+    2026-10-12 以前這裡的自修還多扣了工資(同一張單在清單、開單頁、個人毛利分解是三個數字)。
+    staff = 業務員毛利(零件照業務員成本)。"""
+    return money_of(repair_order, staff)["margin"]
 
 
 @transaction.atomic
@@ -181,10 +201,15 @@ def complete_repair_order(repair_order: RepairOrder) -> None:
             )
             for line in lines:
                 part = line.part_product
-                # snapshot 當下成本(若未填過)
-                if not line.unit_cost:
-                    line.unit_cost = part.weighted_avg_cost or Decimal("0")
-                    line.save(update_fields=["unit_cost"])
+                # 加的時候零件還沒有成本(0)、現在有了 → 單位成本與業務員成本同一刻重抄。
+                # 現在還是 0 就不動:0 也是記下來的成本,業務員成本不能因為之後改了規則被蓋掉(複審 2026-10-28)。
+                # 2026-10-28 之前加的零件有單位成本、沒有業務員成本 → 完工這一刻照規則從那個單位成本補上
+                if not line.unit_cost and part.weighted_avg_cost:
+                    snapshot_part_cost(line, part, tenant)
+                    line.save(update_fields=["unit_cost", "staff_unit_cost"])
+                elif line.staff_unit_cost is None:
+                    line.staff_unit_cost = staff_cost.from_actual(part, tenant, line.unit_cost)
+                    line.save(update_fields=["staff_unit_cost"])
                 balance = locked_balance(tenant, part, wh, create=True)
                 short = line.qty - balance.qty
                 if short > 0:

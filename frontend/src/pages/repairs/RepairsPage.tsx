@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { useRepairOrders, useSaveRepairOrder, useVoidRepairOrder } from "@/api/hooks";
-import { useCan } from "@/auth/AuthContext";
+import { useCan, useSeesActualCost } from "@/auth/AuthContext";
 import { ArmButton } from "@/components/workbench/ArmButton";
 import { toast } from "@/components/workbench/toast";
 import { errorText } from "@/lib/errorText";
@@ -149,6 +149,8 @@ const NUMBER_FMT = (v: string | number) =>
   money(v);
 
 export function RepairsPage() {
+  // 不是管理員:伺服器給的毛利是照零件的業務員成本算的(owner 2026-10-28)
+  const actual = useSeesActualCost();
   // 今日總覽點過來帶的條件:?status=ready_pickup(待取件)、?overdue=1(預計完修日過了還沒完成)、
   // ?overdue=external(委外超過預計取回日還沒取回;跟首頁「委外單逾期」同一條)
   const [params] = useSearchParams();
@@ -299,7 +301,7 @@ export function RepairsPage() {
                 </th>
                 <th className="num">實付</th>
                 <th className="num" title="自修:實付 − 零件成本 / 委外:實付 − 委外費用">
-                  毛利
+                  {actual ? "毛利" : "業務員毛利"}
                 </th>
                 {canVoid && <th aria-label="作廢" />}
               </tr>

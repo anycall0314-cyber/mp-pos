@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from apps.catalog.models import Product
 from apps.parties.serializers import MemberSerializer
+from apps.core.manager_fields import ManagerOnlyFieldsMixin
 from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
 
 from .models import (
@@ -127,9 +128,18 @@ class RepairItemSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSeri
                 )
 
 
-class RepairOrderPartSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
+class RepairOrderPartSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
+    # 單位成本是實際成本:只有管理員拿得到;大家都有一件的業務員成本(沒有記的舊零件 = 單位成本)
+    # (owner 2026-10-28;規則在 core/cost_access.py)
+    manager_only_fields = ("unit_cost",)
+
     part_name = serializers.CharField(source="part_product.name", read_only=True)
     part_sku = serializers.CharField(source="part_product.sku", read_only=True)
+    staff_unit_cost = serializers.SerializerMethodField()
+
+    def get_staff_unit_cost(self, obj) -> str:
+        from .services import part_unit_cost
+        return str(part_unit_cost(obj, staff=True))
 
     class Meta:
         model = RepairOrderPart
@@ -140,11 +150,16 @@ class RepairOrderPartSerializer(TenantScopedRelatedFieldsMixin, serializers.Mode
             "part_sku",
             "qty",
             "unit_cost",
+            "staff_unit_cost",
         ]
         read_only_fields = ["id", "part_name", "part_sku", "unit_cost"]
 
 
-class RepairOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
+class RepairOrderSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
+    # 建議報價是存下來的「零件實際成本 + 工資」,扣掉工資就是實際成本:只有管理員拿得到
+    # (畫面上的建議報價是用零件的業務員成本即時算的;owner 2026-10-28)
+    manager_only_fields = ("suggested_quote",)
+
     member_detail = MemberSerializer(source="member", read_only=True)
     parts = RepairOrderPartSerializer(many=True, read_only=True)
     parts_input = serializers.ListField(
@@ -169,16 +184,20 @@ class RepairOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSer
     sales_person_name = serializers.CharField(source="sales_person.name", read_only=True, default="")
     technician_name = serializers.CharField(source="technician.name", read_only=True, default="")
     margin_breakdown = serializers.SerializerMethodField()
-    # 這張單公司賺多少(維修毛利只有 services.money_of 那一份算法;清單、開單頁、月報都是這個數字)
+    # 這張單公司賺多少(維修毛利只有 services.money_of 那一份算法;清單、開單頁、月報都是這個數字)。
+    # 不是管理員:零件照業務員成本算 = 業務員毛利(owner 2026-10-28)
     margin = serializers.SerializerMethodField()
+
+    def _staff(self) -> bool:
+        return not self._for_a_manager()
 
     def get_margin(self, obj) -> str:
         from .services import compute_margin
-        return str(compute_margin(obj))
+        return str(compute_margin(obj, staff=self._staff()))
 
     def get_margin_breakdown(self, obj):
         from .services import compute_personal_margin
-        b = compute_personal_margin(obj)
+        b = compute_personal_margin(obj, staff=self._staff())
         return {
             "kind": b["kind"],
             "sales_person_id": b["sales_person_id"],
@@ -372,13 +391,9 @@ class RepairOrderSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSer
                 row.save(update_fields=["qty"])
         for pid, data in wanted.items():
             if pid not in existing:
-                # snapshot 當下成本(完工時會再 refresh 一次)
-                from decimal import Decimal
+                # snapshot 當下成本與業務員成本(完工時還沒記到的會再 refresh 一次)
+                from .services import snapshot_part_cost
                 part = own[pid]
-                RepairOrderPart.objects.create(
-                    tenant=tenant,
-                    repair_order=order,
-                    part_product=part,
-                    qty=data["qty"],
-                    unit_cost=part.weighted_avg_cost or Decimal("0"),
-                )
+                line = RepairOrderPart(tenant=tenant, repair_order=order, part_product=part, qty=data["qty"])
+                snapshot_part_cost(line, part, tenant)
+                line.save()

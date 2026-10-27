@@ -19,6 +19,7 @@ from rest_framework.decorators import action, api_view
 from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 
+from apps.core import cost_access, staff_cost
 from apps.core.warehouse_scoping import locked_warehouse_id, report_warehouse_id
 from apps.identity.normalize import normalize_serial
 from apps.tenants.permissions import is_tenant_admin
@@ -859,6 +860,8 @@ def parts_usage_report(request):
         mv_qs = mv_qs.filter(from_warehouse_id=wid)
 
     # 依 product_id 彙整:repair_qty / transfer_qty / 成本金額
+    # 現在的平均成本是實際成本,只給管理員;大家都有業務員成本(owner 2026-10-28;規則在 core/cost_access.py)
+    actual = cost_access.sees_actual_cost(request.user)
     rows: dict[int, dict] = {}
     for m in mv_qs:
         if not m.product_id:
@@ -873,7 +876,8 @@ def parts_usage_report(request):
                 "repair_qty": 0,
                 "transfer_qty": 0,
                 "total_qty": 0,
-                "unit_cost": str(m.product.weighted_avg_cost or 0),
+                **({"unit_cost": str(m.product.weighted_avg_cost or 0)} if actual else {}),
+                "staff_cost": str(staff_cost.shown_unit_cost(m.product, tenant)),
             },
         )
         if m.movement_type == StockMovement.MovementType.REPAIR_USAGE:

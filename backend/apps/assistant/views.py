@@ -2,6 +2,8 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.core import cost_access
+
 from . import services
 from .models import CommandLog
 from .serializers import CommandCreateSerializer, CommandLogSerializer
@@ -24,6 +26,12 @@ class CommandViewSet(
     search_fields = ["raw_input", "intent_action", "message"]
     ordering = ["-id"]
     filterset_fields = ["status", "intent_action", "source"]
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        # 現在只有進貨提案(原文與提案裡都是進價):跟進貨單同一條,要有「進貨入庫」或「廠商叫貨」
+        # (owner 2026-10-28;規則在 core/cost_access.py;複審第二輪抓到的)
+        cost_access.require_purchase_prices(request.user)
 
     def get_queryset(self):
         return CommandLog.objects.for_tenant(self.request.tenant)

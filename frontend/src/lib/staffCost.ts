@@ -3,7 +3,8 @@
 //   (1) 還沒存的單:用伺服器給的「一件的業務員成本」估;
 //   (2) 已經存的單:用單上記的那個數字(沒有記的舊單 = 實際成本,伺服器已經換好);
 //   (3) 設定畫面的選項、文字與要送出去的值。
-// 實際成本照舊所有人看得到(owner 2026-10-09:不用藏);公司佣金只有管理員有。
+// 實際成本與實際毛利只有管理員的資料裡有,其他人看業務員成本與業務員毛利(owner 2026-10-28;
+// 2026-10-09 原本說不用藏,10-28 改了);公司佣金只有管理員有。
 import { money } from "./money.ts";
 
 type Num = string | number | null | undefined;
@@ -76,6 +77,18 @@ export function ruleProblem(mode: string, text: string): string | null {
 /** 要送給伺服器的兩欄。沒有設定 = 數值不留。 */
 export function rulePayload(mode: string, text: string): { staff_cost_mode: string; staff_cost_value: string } {
   return { staff_cost_mode: mode, staff_cost_value: mode ? text.trim() : "0" };
+}
+
+/**
+ * 庫存表上一件的成本:管理員看平均成本(實際成本);其他人的資料裡沒有平均成本,看業務員成本(沒有規則 = 平均成本)。
+ */
+export function unitCostShown(p: { weighted_avg_cost?: Num; staff_cost?: Num }, actual: boolean): number {
+  return num(actual ? p.weighted_avg_cost : p.staff_cost);
+}
+
+/** 成本那一欄的欄名(管理員:平均成本;其他人:業務員成本)。 */
+export function unitCostLabel(actual: boolean): string {
+  return actual ? "平均成本" : "業務員成本";
 }
 
 interface ProductLike {

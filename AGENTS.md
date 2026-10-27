@@ -84,7 +84,7 @@
 | `會員與來源.md` | 客戶識別、會員主檔、舊系統消費紀錄、全站用語、客戶來源與會員 |
 | `維修.md` | 手機解鎖、返修、收據列印、快速收件、維修單與庫存、維修毛利與月報、租戶設定 |
 | `現金與日報.md` | 店頭雜支、代收話費、維修收款與營業日報、現金調整方向、打烊實點 |
-| `帳號與權限.md` | 登入 / RBAC、員工帳號權限、身份別與帳號例外、密碼與收回、單一位置登入、閒置登出、倉別鎖定、經手人預設、平台後台、門市資訊、只認自己公司 |
+| `帳號與權限.md` | 登入 / RBAC、員工帳號權限、身份別與帳號例外、實際成本與進價誰看得到、密碼與收回、單一位置登入、閒置登出、倉別鎖定、經手人預設、平台後台、門市資訊、只認自己公司 |
 | `廠商叫貨.md` | 多廠商與平台名單、膜總裁 B2B 叫貨與到貨入庫、品名連連看、半自動廠商、只給指定公司、kcimos 價目與自動送單 |
 | `批發.md` | 經銷商之間互相買賣(賣家 / 買家 / 對外金鑰) |
 | `標籤與列印.md` | 商品標籤(Argox 45 × 25 兩聯)、列印頁不渲染導覽 |
@@ -96,7 +96,7 @@
 
 ## 程式碼定位(精簡版;完整在 `docs/規則/程式碼定位.md`)
 
-後端 `backend/apps/`:`core`(租戶基底、金額、只給管理員的欄位、業務員成本、分頁、冪等)· `tenants`(公司、帳號、權限 abilities、登入、系統設定主檔、平台後台)· `catalog`(商品、類別、品況、機型、型號庫、usage、shop_terms)· `identity`(別名、叫法比對、防重複、待確認入庫)· `inventory`(門市、序號、異動、標籤、flows / reports、盤點、廠商換貨)· `parties`(廠商、來源、會員、業務員、電信、方案、SIM)· `purchasing` · `sales`(銷貨、銷退、合約、佣金、日報、WP-103)· `transfers` · `cash`(雜支、現金調整、代收話費、營業日報)· `repairs` · `backup` · `legacy` · `ledger`(快照與對帳)· `analytics`(報表語意層)· `vendor_orders`(廠商叫貨、kcimos)· `trade`(批發)· `photos`。
+後端 `backend/apps/`:`core`(租戶基底、金額、只給管理員的欄位、誰看得到實際成本與進價、業務員成本、分頁、冪等)· `tenants`(公司、帳號、權限 abilities、登入、系統設定主檔、平台後台)· `catalog`(商品、類別、品況、機型、型號庫、usage、shop_terms)· `identity`(別名、叫法比對、防重複、待確認入庫)· `inventory`(門市、序號、異動、標籤、flows / reports、盤點、廠商換貨)· `parties`(廠商、來源、會員、業務員、電信、方案、SIM)· `purchasing` · `sales`(銷貨、銷退、合約、佣金、日報、WP-103)· `transfers` · `cash`(雜支、現金調整、代收話費、營業日報)· `repairs` · `backup` · `legacy` · `ledger`(快照與對帳)· `analytics`(報表語意層)· `vendor_orders`(廠商叫貨、kcimos)· `trade`(批發)· `photos`。
 
 前端 `frontend/src/`:`api/`(client、hooks、search、types)· `components/`(ComboBox、Drawer、MoneyInput、shell/、workbench/、labels/、photos/)· `pages/<模組>/` · `lib/`(畫面規則 + 同名測試)· `auth/` · `hooks/` · `nav.ts` · `App.tsx` · `styles.css`(只剩 @import;規則在 `styles/01-base` ~ `26-*.css`,順序 = 層疊順序;按鈕 / 分頁 / 單選列在 `03-controls.css`、日間顏色在 `16-light-theme.css`、頁面自己的在那一頁的檔。字級、尺寸、顏色都用變數;全站按鈕只有 `btn` / `wb-btn` 一套,主要按鈕是淡色(藍字、淡藍細框、淡底;2026-10-25),控制項顏色用 `--ctl-*` / `--primary-*`)。
 

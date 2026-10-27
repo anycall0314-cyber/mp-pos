@@ -145,13 +145,14 @@ class ListTests(SimpleTestCase):
 
 class OwnStoreTests(_Shop):
     """鎖在門市的帳號:自訂分析只算自己門市(owner 2026-10-10;以前看得到全公司)。"""
-    SPEC = {"measures": ["net_sales", "gross_profit"], "dimensions": ["warehouse"], "period": AUG_SEP}
+    # 店員看業務員毛利(實際毛利只有管理員;owner 2026-10-28)
+    SPEC = {"measures": ["net_sales", "staff_gross_profit"], "dimensions": ["warehouse"], "period": AUG_SEP}
 
     def test_a_locked_clerk_only_gets_the_own_store(self):
         r = self.clerk.post(QUERY, self.SPEC, format="json")
         self.assertEqual(r.status_code, 200, r.content.decode())
-        self.assertEqual(self.table(r.json()), {"甲湳雅店": {"net_sales": "25780.00", "gross_profit": "5480.00"}})
-        self.assertEqual(r.json()["totals"], {"net_sales": "25780.00", "gross_profit": "5480.00"})
+        self.assertEqual(self.table(r.json()), {"甲湳雅店": {"net_sales": "25780.00", "staff_gross_profit": "5480.00"}})
+        self.assertEqual(r.json()["totals"], {"net_sales": "25780.00", "staff_gross_profit": "5480.00"})
         # 畫面上看得到是哪一家(不是默默少算)
         self.assertEqual(r.json()["applied"]["filters"], [{
             "dimension": "warehouse", "label": "門市",

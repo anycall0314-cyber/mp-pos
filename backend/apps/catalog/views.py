@@ -26,6 +26,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 
+from apps.core import cost_access, staff_cost
 from apps.core.filters import _is_postgres
 from apps.identity.dedup import DuplicateProduct
 from apps.identity.models import ProductAlias
@@ -1328,6 +1329,8 @@ class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
 
         # 7. 組裝。過濾已在 DB 端做完,這裡只負責攤成每倉欄位。
         products_data = []
+        # 平均成本是實際成本,只給管理員;其他人看業務員成本(owner 2026-10-28;規則在 core/cost_access.py)
+        actual = cost_access.sees_actual_cost(request.user)
         for p in products:
             stock_by_wh = {}
             for wid in warehouse_ids:
@@ -1353,7 +1356,8 @@ class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
                     "category_name": p.category.name if p.category else "",
                     "category_code": p.category.code if p.category else "",
                     "list_price": str(p.list_price),
-                    "weighted_avg_cost": str(p.weighted_avg_cost),
+                    **({"weighted_avg_cost": str(p.weighted_avg_cost)} if actual else {}),
+                    "staff_cost": str(staff_cost.shown_unit_cost(p, request.tenant)),
                     "requires_serial": p.requires_serial,
                     "is_secondhand": p.is_secondhand,
                     "stock_by_warehouse": stock_by_wh,

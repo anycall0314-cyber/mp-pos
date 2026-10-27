@@ -56,6 +56,9 @@ test("匯出:上面是每個人分到多少,空一行,下面是逐筆;金額不�
   assert.deepEqual(table[6].slice(4), ["委外", "王小明", "", "2000", "0", "3500", "-1500"]);
   assert.equal(table.slice(4).every((line) => line.length === REPAIR_HEAD.length), true);
   assert.deepEqual([...new Set(PEOPLE_HEAD.map((h) => h.length))], [2]);
+  // 不是管理員:伺服器照業務員成本算,欄名跟著換(owner 2026-10-28)
+  const staff = repairTable({ results: [row], people, choices: { way: ways } }, false);
+  assert.deepEqual(staff[4].slice(7), ["實付", "業務員成本", "委外費用", "業務員毛利"]);
 });
 
 test("頁面:選項從伺服器的清單畫、匯出走「完整才存檔」、要有這一項權限才進得來", () => {
@@ -65,7 +68,7 @@ test("頁面:選項從伺服器的清單畫、匯出走「完整才存檔」、�
   for (const word of ["自修", "內轉"]) assert.ok(!code.includes(word), `頁面寫死了「${word}」`);
   assert.ok(!/<option[^>]*>\s*(自修|委外|內轉)\s*</.test(page), "頁面寫死了下拉的選項");
   assert.ok(page.includes("exportIfComplete(all, exportFileName(\"維修月報\", { store: storeName,"));
-  assert.ok(page.includes("repairTable(all)"));
+  assert.ok(page.includes("repairTable(all, actual)"));
   assert.ok(page.includes("data.people.map((p) =>"), "每個人分到多少要照伺服器給的畫");
   const app = readFileSync(new URL("../App.tsx", import.meta.url), "utf8");
   assert.match(app, /path="\/reports\/repairs"\s+element=\{\s*<NeedsAbility ability="report_repairs" doing="看維修月報">\s*<RepairMonthlyPage \/>/);

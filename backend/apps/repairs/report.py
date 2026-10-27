@@ -9,6 +9,7 @@ owner 2026-10-12(取舊歐睿報表的優點;舊 MNT015 維修單月報表)。�
 - 人員:每個人收件幾件、維修幾件、分到多少(個人毛利分解 `services.compute_personal_margin`);全部的人加起來 = 合計的毛利。
   自修而且沒有另外的技師 = 收件人自己修(收件、維修各算一件)。沒有填收件人的歸「(未指定)」。
 - 要有「維修月報」那一項;鎖在門市的帳號只看自己門市收件的維修單。
+- 不是管理員:零件照業務員成本算(零件成本、毛利、每個人分到多少都是;owner 2026-10-28,規則在 core/cost_access.py)。
 - 維修收的錢沒有進營業日報(維修單上沒有記客人怎麼付錢);這一頁的「客戶實付」是單上記的數字。
 """
 from datetime import timedelta
@@ -18,6 +19,7 @@ from django.utils import timezone
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
+from apps.core import cost_access
 from apps.core.warehouse_scoping import report_warehouse_id
 from apps.inventory import reports as stock_reports
 from apps.inventory.report_views import listing
@@ -36,8 +38,9 @@ def _money(value) -> str:
     return str(Decimal(value or 0).quantize(_CENT))
 
 
-def completed(tenant, *, start, end, warehouse_id=None, way=""):
-    """期間內完工、沒作廢的維修單(照完工的先後),每一張帶著算好的錢。way = 只看哪一種修法。"""
+def completed(tenant, *, start, end, warehouse_id=None, way="", staff=False):
+    """期間內完工、沒作廢的維修單(照完工的先後),每一張帶著算好的錢。way = 只看哪一種修法;
+    staff = 零件照業務員成本算。"""
     if way and way not in WAYS:
         raise stock_reports.ReportError("沒有這種方式")
     orders = RepairOrder.objects.filter(
@@ -51,10 +54,10 @@ def completed(tenant, *, start, end, warehouse_id=None, way=""):
               .prefetch_related("parts__part_product").order_by("completed_at", "id"))
     out = []
     for order in orders:
-        money = money_of(order)
+        money = money_of(order, staff)
         if way and money["way"] != way:
             continue
-        out.append((order, money, compute_personal_margin(order)))
+        out.append((order, money, compute_personal_margin(order, staff)))
     return out
 
 
@@ -116,7 +119,8 @@ def repair_monthly_report(request):
     try:
         start, end = stock_reports.parse_range(p)
         found = completed(request.tenant, start=start, end=end, warehouse_id=report_warehouse_id(request),
-                          way=(p.get("way") or "").strip())
+                          way=(p.get("way") or "").strip(),
+                          staff=not cost_access.sees_actual_cost(request.user))
     except stock_reports.ReportError as exc:
         return Response({"detail": str(exc)}, status=400)
     return listing(request, [_row(order, money) for order, money, _ in found], lambda page: page, {

@@ -14,6 +14,7 @@ from django.db.models.functions import Coalesce
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
+from apps.core import cost_access
 from apps.core.warehouse_scoping import report_warehouse_id
 from apps.inventory import reports as stock_reports
 from apps.tenants import abilities
@@ -199,7 +200,13 @@ def sales_daily_report(request):
     except stock_reports.ReportError as exc:
         return Response({"detail": str(exc)}, status=400)
     with stock_reports.one_moment():       # 銷貨與銷退要是同一刻的(中間有人開單不會只算到一半)
-        return Response(daily(
+        data = daily(
             request.tenant, start=start, end=end, warehouse_id=report_warehouse_id(request),
             search=p.get("search", ""), **conditions,
-        ))
+        )
+    if not cost_access.sees_actual_cost(request.user):
+        # 實際成本只給管理員,其他人看業務員成本與業務員毛利(owner 2026-10-28;規則在 core/cost_access.py)
+        for doc in (*data["orders"], *data["returns"]):
+            for item in doc["items"]:
+                item.pop("cost_at_post", None)
+    return Response(data)

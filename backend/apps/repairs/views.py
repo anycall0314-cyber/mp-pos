@@ -4,6 +4,7 @@ from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.core import cost_access
 from apps.core.warehouse_scoping import WarehouseScopedMixin
 from apps.tenants import abilities
 
@@ -157,13 +158,15 @@ class RepairOrderViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
     def quote_preview(self, request, pk=None):
         """自修建議報價預覽(零件成本 + 工資)+ 缺料檢查。"""
         order = self.get_object()
-        suggested = compute_in_house_quote(order)
+        # 不是管理員:零件照業務員成本算(owner 2026-10-28;規則在 core/cost_access.py)
+        staff = not cost_access.sees_actual_cost(request.user)
+        suggested = compute_in_house_quote(order, staff=staff)
         shortages = parts_with_insufficient_stock(order)
         return Response(
             {
                 "suggested_quote": str(suggested),
                 "shortages": shortages,
-                "margin": str(compute_margin(order)),
+                "margin": str(compute_margin(order, staff=staff)),
             }
         )
 

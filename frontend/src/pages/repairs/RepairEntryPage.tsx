@@ -23,6 +23,7 @@ import {
   useCurrentUser,
   useDefaultHandledBy,
   useDefaultWarehouse,
+  useSeesActualCost,
 } from "@/auth/AuthContext";
 import type {
   Member,
@@ -59,6 +60,7 @@ interface PartLine {
   part_name: string;
   part_sku: string;
   qty: number;
+  /** 一件的成本:管理員是單位成本(實際成本),其他人是業務員成本(資料裡只有這一個;owner 2026-10-28) */
   unit_cost: string;
 }
 
@@ -122,6 +124,9 @@ function RepairEntryForm() {
   const reopen = useReopenRepair();
   const warehouses = useWarehouses();
   const defaultWh = useDefaultWarehouse();
+  // 零件成本與維修毛利:管理員看實際的,其他人看業務員成本與業務員毛利(owner 2026-10-28)
+  const actual = useSeesActualCost();
+  const costWord = actual ? "零件成本" : "業務員成本";
   const defaultHandledBy = useDefaultHandledBy();
   const currentUser = useCurrentUser();
   const userRole = currentUser?.profile?.role ?? "tenant_user";
@@ -256,7 +261,7 @@ function RepairEntryForm() {
         part_name: p.part_name,
         part_sku: p.part_sku,
         qty: p.qty,
-        unit_cost: p.unit_cost,
+        unit_cost: p.unit_cost ?? p.staff_unit_cost ?? "0",
       })),
     );
     setVendor(o.external_vendor ?? "");
@@ -1154,7 +1159,7 @@ function RepairEntryForm() {
                             part_sku: opt.payload?.sku ?? "",
                             qty: 1,
                             unit_cost:
-                              opt.payload?.weighted_avg_cost ?? "0",
+                              opt.payload?.weighted_avg_cost ?? opt.payload?.staff_cost ?? "0",
                           },
                         ]);
                       }}
@@ -1170,7 +1175,7 @@ function RepairEntryForm() {
                             <th>品名 / 品號</th>
                             <th style={{ width: 90 }}>數量</th>
                             <th style={{ width: 110 }} className="num">
-                              單位成本
+                              {actual ? "單位成本" : "業務員成本"}
                             </th>
                             <th style={{ width: 110 }} className="num">
                               小計
@@ -1231,7 +1236,7 @@ function RepairEntryForm() {
                           ))}
                           <tr className="re-parts-foot">
                             <td colSpan={3} className="num">
-                              零件成本合計
+                              {costWord}合計
                             </td>
                             <td className="num">
                               <b>${money(partsCost)}</b>
@@ -1320,7 +1325,7 @@ function RepairEntryForm() {
                 {mode === "in_house" ? (
                   <>
                     <div className="re-summary-row">
-                      <span>零件成本合計</span>
+                      <span>{costWord}合計</span>
                       <b>${money(partsCost)}</b>
                     </div>
                     <div className="re-summary-row">
@@ -1483,7 +1488,7 @@ function RepairEntryForm() {
               </select>
             </label>
             <span title={marginFormula({ mode, salesPerson, technician })}>
-              預估毛利<b style={{ color: margin < 0 ? "var(--danger-text)" : "var(--success-text)" }}>${money(margin)}</b>
+              {actual ? "預估毛利" : "業務員毛利"}<b style={{ color: margin < 0 ? "var(--danger-text)" : "var(--success-text)" }}>${money(margin)}</b>
             </span>
           </div>
           {!isLocked && (

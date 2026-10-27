@@ -29,9 +29,11 @@ import { openLabelPrint } from "@/components/labels/openLabelPrint";
 import { PhotoName, usePhotoPeek } from "@/components/photos/PhotoName";
 import { SerialHistoryModal } from "@/components/SerialHistoryModal";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useSeesActualCost } from "@/auth/AuthContext";
 import { codesLabel } from "@/lib/deviceCodes";
 import { money, roundInt } from "@/lib/money";
 import { errorText } from "@/lib/errorText";
+import { unitCostLabel, unitCostShown } from "@/lib/staffCost";
 
 /**
  * 庫存查詢(工作台版型)。
@@ -118,6 +120,8 @@ function UnitsOfStore({
 }) {
   const serials = useInStockSerials(product.id, warehouse.id);
   const rows = serials.data ?? [];
+  // 帶序號的還沒有業務員成本的規則:業務員成本 = 這一台的成本;欄名照看的人(owner 2026-10-28)
+  const actual = useSeesActualCost();
   const qty = product.stock_by_warehouse[String(warehouse.id)] ?? 0;
   return (
     <div className="wb-inv-store">
@@ -130,7 +134,9 @@ function UnitsOfStore({
       {rows.map((s) => (
         <div key={s.id} className="wb-inv-unit">
           <span className="wb-mono">{codesLabel(s)}</span>
-          <span className="wb-dim">成本 {price(s.purchase_unit_cost)}</span>
+          <span className="wb-dim">
+            {actual ? "成本" : "業務員成本"} {price(actual ? s.purchase_unit_cost : (s.staff_cost ?? s.purchase_unit_cost))}
+          </span>
           {product.tracks_unit_condition && (
             <>
               {s.condition_grade && <span>{s.condition_grade} 級</span>}
@@ -269,6 +275,9 @@ function ProductDetail({
 
 export function InventoryQueryPage() {
   const isMobile = useIsMobile();
+  // 平均成本是實際成本,只有管理員的資料裡有;其他人看業務員成本(owner 2026-10-28)
+  const actual = useSeesActualCost();
+  const totalLabel = actual ? "總成本" : "業務員總成本";
   // 還沒查之前:列出低於安全庫存的品項,一進來就看到要注意的
   const homeSummary = useHomeSummary();
   const lowStockItems = homeSummary.data?.low_stock?.items ?? [];
@@ -358,7 +367,7 @@ export function InventoryQueryPage() {
       const refused = exportIfComplete(
         { count: got.rows.length, truncated: got.truncated },
         exportFileName("庫存查詢", { day: localDay() }),
-        () => stockMatrixTable(stores, got.rows),
+        () => stockMatrixTable(stores, got.rows, actual),
         downloadCsv,
       );
       if (refused) toast(refused, "err");
@@ -442,7 +451,7 @@ export function InventoryQueryPage() {
   }, [warehouses, products]);
   const grandTotal = products.reduce((s, p) => s + p.stock_total, 0);
   const grandCost = products.reduce(
-    (s, p) => s + Number(p.weighted_avg_cost || 0) * p.stock_total,
+    (s, p) => s + unitCostShown(p, actual) * p.stock_total,
     0,
   );
 
@@ -738,8 +747,8 @@ export function InventoryQueryPage() {
                   </span>
                 </div>
                 <div className="wb-dim wb-small">
-                  售價 {price(p.list_price)} · 平均成本{" "}
-                  {price(p.weighted_avg_cost)}
+                  售價 {price(p.list_price)} · {unitCostLabel(actual)}{" "}
+                  {price(unitCostShown(p, actual))}
                 </div>
                 {opened.has(p.id) && (
                   <div className="wb-inv-card-detail">
@@ -766,7 +775,7 @@ export function InventoryQueryPage() {
                     合計 <b>{grandTotal}</b>
                   </span>
                 </div>
-                <div className="wb-dim wb-small">總成本 {price(grandCost)}</div>
+                <div className="wb-dim wb-small">{totalLabel} {price(grandCost)}</div>
               </div>
             )}
           </div>
@@ -809,8 +818,8 @@ export function InventoryQueryPage() {
                   合計{sortMark({ kind: "total" })}
                 </th>
                 <th className="num">售價</th>
-                <th className="num">平均成本</th>
-                <th className="num">總成本</th>
+                <th className="num">{unitCostLabel(actual)}</th>
+                <th className="num">{totalLabel}</th>
               </tr>
             </thead>
             <tbody>
@@ -864,9 +873,9 @@ export function InventoryQueryPage() {
                         <b>{p.stock_total}</b>
                       </td>
                       <td className="num">{price(p.list_price)}</td>
-                      <td className="num">{price(p.weighted_avg_cost)}</td>
+                      <td className="num">{price(unitCostShown(p, actual))}</td>
                       <td className="num">
-                        {price(Number(p.weighted_avg_cost) * p.stock_total)}
+                        {price(unitCostShown(p, actual) * p.stock_total)}
                       </td>
                     </tr>
                     {opened.has(p.id) && (

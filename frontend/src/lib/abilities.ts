@@ -48,6 +48,23 @@ export function can(
   return user?.abilities?.[key] !== false;
 }
 
+type Who = { abilities?: Record<string, boolean>; profile?: { role?: string } | null } | null | undefined;
+
+/**
+ * 看得到實際成本、實際毛利:只有管理員(公司管理員、平台管理員;跟 nav.ts 的 isManager 同一個意思)。
+ * 其他人看業務員成本與業務員毛利(owner 2026-10-28)。真正擋的是伺服器(backend/apps/core/cost_access.py):
+ * 店員的資料裡根本沒有實際成本,畫面只決定欄名與要不要留那一欄。
+ */
+export function seesActualCost(user: Who): boolean {
+  const role = user?.profile?.role;
+  return role === "tenant_admin" || role === "platform_admin";
+}
+
+/** 看得到進價(進貨單、進貨明細、叫貨單、上次進價):管理員,或有「進貨入庫」「廠商叫貨」其中一項(伺服器同一條)。 */
+export function seesPurchasePrices(user: Who): boolean {
+  return seesActualCost(user) || can(user, "purchase") || can(user, "vendor_order");
+}
+
 /** 員工帳號頁:照分類排,分類與項目都照伺服器給的順序。 */
 export function groupAbilities<T extends AbilityInfo>(list: T[]): { group: string; items: T[] }[] {
   const groups: { group: string; items: T[] }[] = [];

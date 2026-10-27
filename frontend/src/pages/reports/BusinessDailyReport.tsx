@@ -5,7 +5,7 @@ import { useBusinessDailyReport, useCashCount, useWarehouses, type BusinessDaily
 import { MoneyInput } from "@/components/MoneyInput";
 import { errorMessageOf } from "@/components/Banner";
 import { countedValue, diffText } from "@/lib/cashCount";
-import { useDefaultWarehouse } from "@/auth/AuthContext";
+import { useDefaultWarehouse, useSeesPurchasePrices } from "@/auth/AuthContext";
 import { Toolbar } from "@/components/Toolbar";
 import { intStr, money } from "@/lib/money";
 import { localToday } from "@/lib/dates";
@@ -14,6 +14,9 @@ import { shiftDay } from "@/lib/fixedReports";
 const today = localToday;
 
 export function BusinessDailyReportPage() {
+  // 每一張進貨單的金額是進價:沒有「進貨入庫」「廠商叫貨」的人資料裡沒有、也打不開進貨單;
+  // 當天的合計照算(現金櫃流水要加得起來;owner 2026-10-28)
+  const priced = useSeesPurchasePrices();
   const defaultWarehouse = useDefaultWarehouse();
   const warehousesQuery = useWarehouses();
   const allWarehouses = warehousesQuery.data ?? [];
@@ -154,7 +157,7 @@ export function BusinessDailyReportPage() {
           r.no,
           (r.supplier_name ?? "").toString().replace(/,/g, " "),
           r.payment_method_name,
-          intStr(r.total_cost),
+          intStr(r.total_cost, ""),
         ].join(","),
       );
     }
@@ -557,17 +560,17 @@ export function BusinessDailyReportPage() {
                   {report.purchases.rows.map((r) => (
                     <tr
                       key={r.id}
-                      onClick={() =>
-                        window.open(`/purchases/${r.id}?focus=1`, "_blank")
+                      onClick={
+                        priced ? () => window.open(`/purchases/${r.id}?focus=1`, "_blank") : undefined
                       }
-                      style={{ cursor: "pointer" }}
-                      title="點擊在新分頁查看進貨單"
+                      style={priced ? { cursor: "pointer" } : undefined}
+                      title={priced ? "點擊在新分頁查看進貨單" : undefined}
                     >
                       <td>{r.no}</td>
                       <td>{String(r.supplier_name || "—")}</td>
                       <td>{String(r.payment_method_name)}</td>
                       <td className="num">
-                        {money(r.total_cost)}
+                        {r.total_cost === undefined ? "—" : money(r.total_cost)}
                       </td>
                     </tr>
                   ))}

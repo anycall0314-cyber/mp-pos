@@ -7,6 +7,7 @@ from django.db import IntegrityError
 from django.db.models import Q
 
 from apps.catalog.models import Product
+from apps.core import cost_access
 from apps.inventory.models import Warehouse
 from apps.parties.models import Supplier
 from apps.tenants import abilities
@@ -160,10 +161,15 @@ class IntakeBatchViewSet(
     POST /api/v1/identity/intakes/{id}/commit/  全部對應完 → 過帳成進貨單
     """
 
-    needs_ability = abilities.PURCHASE      # 員工帳號的權限:進貨匯入算「進貨入庫」;看清單照舊
+    needs_ability = abilities.PURCHASE      # 員工帳號的權限:進貨匯入算「進貨入庫」
     serializer_class = IntakeBatchSerializer
     filterset_fields = ["status", "source", "supplier"]
     ordering = ["-id"]
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        # 待確認的明細有進價:看清單也要有「進貨入庫」或「廠商叫貨」(owner 2026-10-28;規則在 core/cost_access.py)
+        cost_access.require_purchase_prices(request.user)
 
     def get_queryset(self):
         qs = (
@@ -281,6 +287,10 @@ class IntakeItemViewSet(
 
     needs_ability = abilities.PURCHASE      # 員工帳號的權限:同上
     serializer_class = IntakeItemSerializer
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        cost_access.require_purchase_prices(request.user)      # 同上:有進價
 
     def get_queryset(self):
         return IntakeItem.objects.for_tenant(self.request.tenant).select_related(

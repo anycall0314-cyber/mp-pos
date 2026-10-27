@@ -57,7 +57,9 @@ class _Repairs(TestCase):
             "received_date": "2026-09-01", "mode": "in_house", "unlock_method": "none", "host_model_name": "iPhone 15",
             "parts_input": [{"part_product": self.c.case.id, "qty": parts}] if parts else [],
         })
-        RepairOrderPart.objects.filter(repair_order_id=order["id"]).update(unit_cost=Decimal("400"))
+        # 業務員成本跟單位成本同一刻記(沒有規則 = 一樣)
+        RepairOrderPart.objects.filter(repair_order_id=order["id"]).update(
+            unit_cost=Decimal("400"), staff_unit_cost=Decimal("400"))
         if completed_at is not None:
             fields.update(status="completed", completed_at=completed_at)
         RepairOrder.objects.filter(pk=order["id"]).update(**fields)

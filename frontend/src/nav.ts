@@ -69,7 +69,8 @@ export const NAV_MODULES: NavModule[] = [
     label: "進貨入庫",
     to: "/purchases",
     tabs: [
-      { to: "/purchases", label: "進貨單據", aliases: ["進貨單", "進貨", "進貨作業"] },
+      // 進貨單上都是進價:有「進貨入庫」或「廠商叫貨」才看得到(owner 2026-10-28;伺服器 core/cost_access.py)
+      { to: "/purchases", label: "進貨單據", aliases: ["進貨單", "進貨", "進貨作業"], needs: ["purchase", "vendor_order"] },
       // 商品管理放在進貨這裡(2026-10-07 owner:建好品號的下一步就是進貨)。以前在「商品庫存」底下
       {
         to: "/products",
@@ -96,11 +97,12 @@ export const NAV_MODULES: NavModule[] = [
         // 叫貨的人與收貨的人都用這一頁(收貨的人不一定是叫貨的人):兩項都關掉才收起來
         needs: ["vendor_order", "purchase"],
       },
-      // 進貨單的每一行一列(2026-10-12;取舊歐睿 FI010 的優點)。看進貨單本來就不另外設權限的勾
+      // 進貨單的每一行一列(2026-10-12;取舊歐睿 FI010 的優點)。跟進貨單據同一條:要看得到進價
       {
         to: "/purchases/lines",
         label: "進貨明細",
         aliases: ["進退貨商品查詢表", "進貨商品查詢", "進貨明細表", "進價查詢"],
+        needs: ["purchase", "vendor_order"],
       },
       // 進貨對象一律叫「廠商」(全站檢視 G3,2026-10-23)
       { to: "/suppliers", label: "廠商資料", aliases: ["供應商", "供應商管理"] },

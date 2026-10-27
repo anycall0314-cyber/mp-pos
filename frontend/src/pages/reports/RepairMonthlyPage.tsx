@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { fetchRepairMonthlyExport, useRepairMonthly } from "@/api/hooks";
+import { useSeesActualCost } from "@/auth/AuthContext";
 import type { Warehouse } from "@/api/types";
 import { Banner, errorMessageOf } from "@/components/Banner";
 import { Toolbar } from "@/components/Toolbar";
@@ -31,6 +32,8 @@ import { PeriodQuick } from "@/components/PeriodQuick";
  * 哪幾張算、毛利怎麼算、每個人分到多少、下拉的選項都由伺服器決定;鎖在門市的帳號只看自己門市。
  */
 export function RepairMonthlyPage() {
+  // 不是管理員:伺服器照業務員成本算零件成本與毛利,欄名跟著換(owner 2026-10-28)
+  const actual = useSeesActualCost();
   const [applied, setApplied] = useState<RepairFilter>(() => ({
     from: monthStart(),
     to: localDay(),
@@ -67,7 +70,7 @@ export function RepairMonthlyPage() {
     try {
       const all = await fetchRepairMonthlyExport(applied);
       setExportNote(
-        exportIfComplete(all, exportFileName("維修月報", { store: storeName, from: applied.from, to: applied.to }), () => repairTable(all), downloadCsv),
+        exportIfComplete(all, exportFileName("維修月報", { store: storeName, from: applied.from, to: applied.to }), () => repairTable(all, actual), downloadCsv),
       );
     } catch (e) {
       setExportNote(errorMessageOf(e));
@@ -185,9 +188,9 @@ export function RepairMonthlyPage() {
                 <th>收件</th>
                 <th>維修</th>
                 <th className="num">實付</th>
-                <th className="num">成本</th>
+                <th className="num">{actual ? "成本" : "業務員成本"}</th>
                 <th className="num">委外</th>
-                <th className="num">毛利</th>
+                <th className="num">{actual ? "毛利" : "業務員毛利"}</th>
               </tr>
             </thead>
             <tbody>

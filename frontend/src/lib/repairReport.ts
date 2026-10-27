@@ -92,17 +92,19 @@ export function repairCards(totals: RepairTotals): { label: string; value: strin
 
 export const PEOPLE_HEAD = ["人員", "收件", "維修", "分到"];
 export const REPAIR_HEAD = ["完工日", "維修單號", "門市", "機型", "方式", "收件人", "維修人員", "實付", "零件成本", "委外費用", "毛利"];
+/** 不是管理員:伺服器給的零件成本與毛利是照業務員成本算的(owner 2026-10-28),欄名跟著換 */
+export const REPAIR_HEAD_STAFF = REPAIR_HEAD.map((h) => (h === "零件成本" ? "業務員成本" : h === "毛利" ? "業務員毛利" : h));
 
 /**
  * 匯出:上面是每個人分到多少,空一行,下面是逐筆。金額不加千分位。
  * 兩段都在同一個檔裡:只匯出逐筆的話,檔裡看不出每個人分到多少(那是伺服器照每一張單算的,逐筆的欄算不回來)。
  */
-export function repairTable(listing: Pick<RepairListing, "results" | "people" | "choices">): unknown[][] {
+export function repairTable(listing: Pick<RepairListing, "results" | "people" | "choices">, actual = true): unknown[][] {
   return [
     PEOPLE_HEAD,
     ...listing.people.map((p) => [p.name, p.received, p.repaired, intStr(p.amount)]),
     [],
-    REPAIR_HEAD,
+    actual ? REPAIR_HEAD : REPAIR_HEAD_STAFF,
     ...listing.results.map((r) => [
       r.date, r.doc.no, r.store, r.model, wayLabel(listing.choices.way, r.way), r.receiver, r.technician,
       intStr(r.paid), intStr(r.parts), intStr(r.outside), intStr(r.margin),

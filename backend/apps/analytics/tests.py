@@ -63,9 +63,10 @@ class _Shop(TestCase):
         self.wh1, self.wh2 = self.c.wh, self.c.wh2
 
     def run_query(self, measures, dimensions=(), period=AUG_SEP, **extra):
+        # 用管理員查:成本、毛利、進貨金額、庫存金額只有管理員看得到(owner 2026-10-28)
         return engine.run(self.t, {
             "measures": list(measures), "dimensions": list(dimensions), "period": period, **extra,
-        })
+        }, self.c.admin_user)
 
     def by_label(self, result, measure=None):
         """{角度名稱(多個用 | 接): 值}"""
@@ -77,7 +78,7 @@ class _Shop(TestCase):
 
     def assertRejected(self, spec, text):
         with self.assertRaises(engine.QueryError) as ctx:
-            engine.run(self.t, spec)
+            engine.run(self.t, spec, self.c.admin_user)
         self.assertIn(text, str(ctx.exception))
 
 
@@ -571,7 +572,7 @@ class ShapeTests(_Shop):
                 self.assertTrue(callable(dim.labels), dim.key)
 
     def test_catalog_lists_what_can_be_combined(self):
-        d = engine.describe()
+        d = engine.describe(self.c.admin_user)
         by_key = {m["key"]: m for m in d["measures"]}
         self.assertIn("warehouse", by_key["net_sales"]["dimensions"])
         self.assertNotIn("product", by_key["received"]["dimensions"])
@@ -725,10 +726,24 @@ class ApiTests(_Shop):
     def test_store_clerk_sees_only_the_own_store(self):
         # owner 2026-10-10(員工帳號權限第三批):鎖在門市的帳號只算自己門市。
         # 2026-10-04 定的「報表暫時不依門市上鎖」到這裡為止;細的在 test_report_access.py
-        r = self.c.clerk.post("/api/v1/analytics/query/", self.SPEC, format="json")
+        # 店員看業務員毛利;實際成本、毛利、毛利率、進貨金額、庫存金額只有管理員(owner 2026-10-28)
+        spec = {**self.SPEC, "measures": ["net_sales", "staff_gross_profit"]}
+        r = self.c.clerk.post("/api/v1/analytics/query/", spec, format="json")
         self.assertEqual(r.status_code, 200, r.content)
         self.assertEqual({row["dims"][0]["label"] for row in r.json()["rows"]}, {"甲湳雅店"})
-        self.assertEqual(r.json()["totals"], {"net_sales": "25780.00", "gross_profit": "5580.00"})
+        self.assertEqual(r.json()["totals"], {"net_sales": "25780.00", "staff_gross_profit": "5580.00"})
+        actual = ("sales_cost", "return_cost", "sales_profit", "gross_profit", "margin_rate",
+                  "purchase_untaxed", "stock_value")
+        listed = {m["key"] for m in self.c.clerk.get("/api/v1/analytics/catalog/").json()["measures"]}
+        self.assertEqual(listed & set(actual), set())
+        self.assertTrue({"sales_staff_cost", "return_staff_cost", "staff_profit", "staff_gross_profit",
+                         "staff_total", "purchase_qty", "stock_qty"} <= listed)
+        for key in actual:
+            r = self.c.clerk.post("/api/v1/analytics/query/", {**self.SPEC, "measures": [key]}, format="json")
+            self.assertEqual(r.status_code, 400, key)
+            self.assertIn("沒有權限看", r.json()["detail"], key)
+        admin = {m["key"] for m in self.c.admin.get("/api/v1/analytics/catalog/").json()["measures"]}
+        self.assertTrue(set(actual) <= admin)
 
     def test_query_only_reads(self):
         from django.db import connection

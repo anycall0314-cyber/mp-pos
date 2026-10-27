@@ -40,7 +40,9 @@ type Format = "money" | "int" | "pct";
 type Filters = Record<string, AnalyticsOption[]>;
 
 const CUSTOM = "custom";
+// 實際毛利只有管理員看得到,其他人預設看業務員毛利(owner 2026-10-28;伺服器的指標清單也只列看得到的)
 const DEFAULT_MEASURES = ["net_sales", "gross_profit"];
+const STAFF_DEFAULT_MEASURES = ["net_sales", "staff_gross_profit"];
 const DEFAULT_DIMS = ["warehouse"];
 const DEFAULT_PRESET = "this_month";
 const COMPARES = [
@@ -104,7 +106,8 @@ export function ExploreReportPage() {
   const saveReport = useSaveReport();
   const deleteReport = useDeleteReport();
 
-  const [measures, setMeasures] = useState<string[]>(DEFAULT_MEASURES);
+  const defaultMeasures = isAdmin ? DEFAULT_MEASURES : STAFF_DEFAULT_MEASURES;
+  const [measures, setMeasures] = useState<string[]>(defaultMeasures);
   const [dims, setDims] = useState<string[]>(DEFAULT_DIMS);
   const [preset, setPreset] = useState<string>(DEFAULT_PRESET);
   const [from, setFrom] = useState<string>(today);
@@ -162,7 +165,7 @@ export function ExploreReportPage() {
     else setApplied(spec);
   }
 
-  // 第一次進來先跑預設的(本月各門市的淨銷售額與毛利)
+  // 第一次進來先跑預設的(本月各門市的淨銷售額與毛利;不是管理員是業務員毛利)
   const started = useRef(false);
   useEffect(() => {
     if (catalog && !started.current) {
@@ -197,7 +200,7 @@ export function ExploreReportPage() {
   }
 
   function reset() {
-    setMeasures(DEFAULT_MEASURES);
+    setMeasures(defaultMeasures);
     setDims(DEFAULT_DIMS);
     setPreset(DEFAULT_PRESET);
     setGrain("month");

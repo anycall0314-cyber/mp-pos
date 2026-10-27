@@ -18,6 +18,7 @@ from rest_framework.decorators import api_view
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
+from apps.core import cost_access
 from apps.core.warehouse_scoping import locked_warehouse_id
 from apps.inventory.models import Warehouse
 from apps.tenants import abilities
@@ -101,8 +102,9 @@ def _may_order(request, link) -> None:
 
 
 def _needs_either(request) -> None:
-    """叫貨的人與收貨的人都用得到的(品名連連看、更新進度):「廠商叫貨」「進貨入庫」有一項就可以。"""
-    if not (abilities.can(request.user, abilities.VENDOR_ORDER) or abilities.can(request.user, abilities.PURCHASE)):
+    """叫貨的人與收貨的人都用得到的(品名連連看、更新進度、看叫貨單):「廠商叫貨」「進貨入庫」有一項就可以
+    (跟看得到進價是同一條,`core/cost_access.py`)。"""
+    if not cost_access.sees_purchase_prices(request.user):
         raise PermissionDenied("這個帳號沒有開「廠商叫貨」或「進貨入庫」")
 
 
@@ -423,6 +425,8 @@ def catalog(request):
 @api_view(["GET", "POST"])
 def orders(request):
     if request.method == "GET":
+        # 叫貨單上都是進價:叫貨的人、收貨的人看得到,其他店員看不到(owner 2026-10-28)
+        _needs_either(request)
         try:
             store = _store(request, request.query_params.get("warehouse"), required=False)
             wanted = request.query_params.get("vendor")
@@ -455,6 +459,7 @@ def orders(request):
 
 @api_view(["GET"])
 def order_detail(request, pk: int):
+    _needs_either(request)
     order = _orders(request).filter(pk=pk).first()
     if order is None:
         return _bad("找不到這張叫貨單", status.HTTP_404_NOT_FOUND)

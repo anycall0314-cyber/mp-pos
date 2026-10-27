@@ -2,6 +2,7 @@
 // 原則:檔的內容 = 這個帳號在畫面上本來就看得到的(欄位、門市範圍都由伺服器決定,這裡只是把收到的資料排成表);
 // 畫面有合計的,檔的最後一列是「合計」;沒有值留空白(不寫成 0);金額是整數、不加千分位。
 import { intStr } from "./money.ts";
+import { unitCostLabel, unitCostShown } from "./staffCost.ts";
 
 type Format = "money" | "int" | "pct";
 
@@ -84,18 +85,24 @@ export interface MatrixProductLike {
   spec: string;
   category_name: string;
   list_price: string;
-  weighted_avg_cost: string;
+  weighted_avg_cost?: string;
+  staff_cost?: string;
   stock_by_warehouse: Record<string, number>;
   stock_total: number;
 }
 
-/** 每個商品一列:各門市一欄、合計、售價、平均成本、總成本(= 平均成本 × 合計,跟畫面同一個算法)。最後一列合計。 */
+/**
+ * 每個商品一列:各門市一欄、合計、售價、平均成本、總成本(= 平均成本 × 合計,跟畫面同一個算法)。最後一列合計。
+ * actual = false(不是管理員):平均成本換成業務員成本、總成本換成業務員總成本(owner 2026-10-28)。
+ */
 export function stockMatrixTable(
   warehouses: { id: number; name: string }[],
   products: MatrixProductLike[],
+  actual = true,
 ): unknown[][] {
   const out: unknown[][] = [
-    ["品號", "品名", "規格", "類別", ...warehouses.map((w) => w.name), "合計", "售價", "平均成本", "總成本"],
+    ["品號", "品名", "規格", "類別", ...warehouses.map((w) => w.name), "合計", "售價",
+      unitCostLabel(actual), actual ? "總成本" : "業務員總成本"],
   ];
   const sums = warehouses.map(() => 0);
   let grand = 0;
@@ -103,12 +110,13 @@ export function stockMatrixTable(
   for (const p of products) {
     const each = warehouses.map((w) => p.stock_by_warehouse[String(w.id)] ?? 0);
     each.forEach((q, i) => (sums[i] += q));
-    const value = Number(p.weighted_avg_cost || 0) * p.stock_total;
+    const one = unitCostShown(p, actual);
+    const value = one * p.stock_total;
     grand += p.stock_total;
     cost += value;
     out.push([
       p.sku, p.name, p.spec, p.category_name, ...each, p.stock_total,
-      intStr(p.list_price), intStr(p.weighted_avg_cost), intStr(value),
+      intStr(p.list_price), intStr(one), intStr(value),
     ]);
   }
   // 合計列的平均成本 = 總成本 ÷ 合計(跟畫面最下面那一列一樣;沒有庫存就空著)
