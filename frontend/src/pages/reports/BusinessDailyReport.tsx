@@ -365,7 +365,7 @@ export function BusinessDailyReportPage() {
                       style={{ cursor: "pointer" }}
                       title="點擊在新分頁查看銷貨單"
                     >
-                      <td>{r.no}</td>
+                      <td className="id-code">{r.no}</td>
                       <td>{String(r.customer_name || "—")}</td>
                       <td>{String(r.sales_person_name || "—")}</td>
                       <td className="num">
@@ -421,7 +421,7 @@ export function BusinessDailyReportPage() {
                         style={{ cursor: "pointer" }}
                         title="點擊在新分頁查看銷貨單"
                       >
-                        <td>{r.no}</td>
+                        <td className="id-code">{r.no}</td>
                         <td>{String(r.customer_name || "—")}</td>
                         <td>{String(r.sales_person_name || "—")}</td>
                         <td className="num">
@@ -483,7 +483,7 @@ export function BusinessDailyReportPage() {
                       style={{ cursor: "pointer" }}
                       title="點擊在新分頁列印收據"
                     >
-                      <td>{r.no}</td>
+                      <td className="id-code">{r.no}</td>
                       <td>{String(r.carrier_name ?? "")}</td>
                       <td>{String(r.phone_no ?? "")}</td>
                       <td>{String(r.member_name || "—")}</td>
@@ -518,7 +518,7 @@ export function BusinessDailyReportPage() {
                 <tbody>
                   {repairRows.map((r) => (
                     <tr key={r.id}>
-                      <td>{r.no}</td>
+                      <td className="id-code">{r.no}</td>
                       <td>{String(r.name || "—")}</td>
                       <td>{String(r.model || "—")}</td>
                       <td className="num">{money(String(r.amount ?? "0"))}</td>
@@ -566,7 +566,7 @@ export function BusinessDailyReportPage() {
                       style={priced ? { cursor: "pointer" } : undefined}
                       title={priced ? "點擊在新分頁查看進貨單" : undefined}
                     >
-                      <td>{r.no}</td>
+                      <td className="id-code">{r.no}</td>
                       <td>{String(r.supplier_name || "—")}</td>
                       <td>{String(r.payment_method_name)}</td>
                       <td className="num">
@@ -610,7 +610,7 @@ export function BusinessDailyReportPage() {
                       style={{ cursor: "pointer" }}
                       title="點擊在新分頁開啟雜支列表"
                     >
-                      <td>{r.no}</td>
+                      <td className="id-code">{r.no}</td>
                       <td>{String(r.category_label)}</td>
                       <td>{String(r.payee || "—")}</td>
                       <td>{String(r.note || "—")}</td>
@@ -657,7 +657,7 @@ export function BusinessDailyReportPage() {
                       style={{ cursor: "pointer" }}
                       title="點擊在新分頁查看銷退單"
                     >
-                      <td>{r.no}</td>
+                      <td className="id-code">{r.no}</td>
                       <td>{String(r.original_so_no ?? "—")}</td>
                       <td>{String(r.customer_name || "—")}</td>
                       <td>{String(r.payment_method_name ?? "")}</td>
@@ -703,7 +703,7 @@ export function BusinessDailyReportPage() {
                       style={{ cursor: "pointer" }}
                       title="點擊在新分頁查看收購單"
                     >
-                      <td>{r.no}</td>
+                      <td className="id-code">{r.no}</td>
                       <td>{String(r.member_name || r.customer_name || "—")}</td>
                       <td>{String(r.sales_person_name || "—")}</td>
                       <td className="num" style={{ color: "var(--danger-text)" }}>
@@ -754,7 +754,7 @@ export function BusinessDailyReportPage() {
                       style={{ cursor: "pointer" }}
                       title="點擊在新分頁開啟現金調整列表"
                     >
-                      <td>{r.no}</td>
+                      <td className="id-code">{r.no}</td>
                       <td
                         style={{
                           color:

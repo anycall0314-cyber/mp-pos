@@ -251,7 +251,7 @@ export function PurchaseProductPickerModal({
                           <span className="intake-inactive-tag">已停用</span>
                         )}
                       </td>
-                      <td>{r.product.sku}</td>
+                      <td className="id-code">{r.product.sku}</td>
                       <td>{r.product.category_name}</td>
                       <td className="num">
                         {r.product.last_purchase_price

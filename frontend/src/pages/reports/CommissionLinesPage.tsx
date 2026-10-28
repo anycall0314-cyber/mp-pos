@@ -117,7 +117,7 @@ export function CommissionLinesPage() {
                   <td>{r.date}</td>
                   <td>
                     {r.kind === "sale" ? (
-                      <Link to={`/sales/${r.doc_id}`}>{r.doc_no}</Link>
+                      <Link className="id-code" to={`/sales/${r.doc_id}`}>{r.doc_no}</Link>
                     ) : (
                       <>
                         {r.doc_no} <span className="pill void">銷退</span>

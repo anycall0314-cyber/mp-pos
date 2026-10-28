@@ -123,8 +123,6 @@ export function ConditionsPage() {
             lineHeight: 1.6,
           }}
         >
-          「新增手機型號」時選的品況。預設有全新 / 已拆封 / 中古機(保固內)/ 中古機,可以自己增刪改。
-          <br />
           名稱有「中古」會自動勾「視為中古機」:這個品況的商品每一台各記成本。
         </div>
 
@@ -278,11 +276,6 @@ export function ConditionsPage() {
         {!conditions.isLoading && (conditions.data?.length ?? 0) === 0 && (
           <div className="empty-cta">
             <div className="empty-cta-title">尚未建立任何品況</div>
-            <div className="empty-cta-desc">
-              預設值由系統 seed 4 個。如果這裡是空的,
-              <br />
-              代表 migration 還沒跑,請聯絡系統管理員。
-            </div>
             <button className="btn primary btn-save" onClick={startNew}>
               + 自己建一個
             </button>

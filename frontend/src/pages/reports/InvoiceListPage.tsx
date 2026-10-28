@@ -281,11 +281,11 @@ export function InvoiceListPage() {
               {rows.map((r) => (
                 <tr key={r.id} className={`report-row inv-${r.state}`}>
                   <td>{r.date}</td>
-                  <td>{r.invoice_no}</td>
+                  <td className="id-code">{r.invoice_no}</td>
                   <td>{r.form}</td>
                   <td>{r.buyer_tax_id}</td>
                   <td>
-                    <Link to={docPath(r.doc)}>{r.doc.no}</Link>
+                    <Link className="id-code" to={docPath(r.doc)}>{r.doc.no}</Link>
                   </td>
                   <td>{r.store}</td>
                   <td>{r.customer}</td>

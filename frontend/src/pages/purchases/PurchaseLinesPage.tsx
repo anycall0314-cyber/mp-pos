@@ -216,11 +216,11 @@ export function PurchaseLinesPage() {
                 <tr key={r.id} className="report-row">
                   <td>{r.date}</td>
                   <td>
-                    <Link to={docPath(r.doc)}>{r.doc.no}</Link>
+                    <Link className="id-code" to={docPath(r.doc)}>{r.doc.no}</Link>
                   </td>
                   <td>{r.store}</td>
                   <td>{r.supplier}</td>
-                  <td>{r.sku}</td>
+                  <td className="id-code">{r.sku}</td>
                   <td>{r.name}</td>
                   <td className="num">{qtyText(r)}</td>
                   <td className="num">{money(r.unit_price)}</td>

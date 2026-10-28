@@ -572,7 +572,7 @@ export function StockCountPage() {
             <tbody>
               {(detail.unknown_rows ?? []).map((u) => (
                 <tr key={u.id} className="report-row">
-                  <td>{u.code}</td>
+                  <td className="id-code">{u.code}</td>
                   <td className="num">{u.times}</td>
                   <td>{u.label}</td>
                   <td>
@@ -633,7 +633,7 @@ export function StockCountPage() {
                 const change = (next: Partial<LineEdit>) => setLineEdits((all) => ({ ...all, [r.id]: { ...edit, ...next } }));
                 return (
                   <tr key={r.id} className="report-row">
-                    <td>{r.product.sku}</td>
+                    <td className="id-code">{r.product.sku}</td>
                     <td>{r.product.name}</td>
                     {detail.manager && <td className="num">{r.book_qty}</td>}
                     <td className="num">{r.counted_qty}</td>
@@ -687,7 +687,7 @@ export function StockCountPage() {
             <tbody>
               {newestFirst(detail.scan_rows).map((s) => (
                 <tr key={s.id} className="report-row">
-                  <td>{s.code}</td>
+                  <td className="id-code">{s.code}</td>
                   <td>{s.known ? s.name : s.name || "不認得"}</td>
                   {counting && (
                     <td>
@@ -822,7 +822,7 @@ export function StockCountPage() {
                               <input type="checkbox" checked={picked.has(r.id)} aria-label={r.code} onChange={(e) => togglePick([r.id], e.target.checked)} />
                             </td>
                           )}
-                          <td>{r.code}</td>
+                          <td className="id-code">{r.code}</td>
                           <td>{r.old_name}</td>
                           <td>{(reviewing ? edit.product : r.product)?.name ?? "—"}</td>
                           <td className="num">
@@ -867,7 +867,7 @@ export function StockCountPage() {
             <tbody>
               {(detail.extra_rows ?? []).map((e) => (
                 <tr key={e.id} className="report-row">
-                  <td>{e.code}</td>
+                  <td className="id-code">{e.code}</td>
                   <td>{extraText(e)}</td>
                 </tr>
               ))}
@@ -886,7 +886,7 @@ export function StockCountPage() {
             <tbody>
               {(detail.uncounted_rows ?? []).map((u) => (
                 <tr key={u.product.id} className="report-row">
-                  <td>{u.product.sku}</td>
+                  <td className="id-code">{u.product.sku}</td>
                   <td>{u.product.name}</td>
                   <td className="num">{u.book_qty}</td>
                 </tr>

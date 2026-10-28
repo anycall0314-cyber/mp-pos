@@ -123,7 +123,7 @@ export function SalesReturnsPage() {
                       onClick={() => navigate(`/sales/returns/${sr.id}`)}
                       className={sr.is_void ? "row-void" : undefined}
                     >
-                      <td>{sr.no}</td>
+                      <td className="id-code">{sr.no}</td>
                       <td>{sr.doc_date}</td>
                       <td>{sr.original_so_no}</td>
                       <td>{sr.member_name || "非會員"}</td>

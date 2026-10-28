@@ -342,7 +342,7 @@ export function PurchaseListPage() {
                     }`}
                     onClick={() => setExpanded(open ? null : t.id)}
                   >
-                    <td>{t.no}</td>
+                    <td className="id-code">{t.no}</td>
                     <td className="wb-small">
                       {t.doc_date.slice(5)} {clock(t.created_at)}
                     </td>

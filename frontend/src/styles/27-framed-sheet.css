@@ -1,9 +1,9 @@
-/* ===== MP POS 樣式 27/27:外框加工作紙(2026-10-28 owner 選「12/1 前做 A + B」) =====
+/* ===== MP POS 樣式 27/27:外框加工作紙(2026-10-28 owner 選「12/1 前做 A + B」,同一天加做 C:其他畫面) =====
    風格照 design-taste-frontend 的 app 風格「framed-sheet」(兩個候選交給 Jev 選的):
    側欄和上方分頁列同一塊底(中間不畫線)像一個 L 形外框;頁面放在一張「工作紙」上,右邊、下面留 8px,圓角、1px 邊、沒有陰影。
    外框一律灰;顏色只留給資料、狀態和主要動作(主要動作照 owner 2026-10-25 的淡藍,這裡不動)。
    字級、控制項高度照舊(16px / 44px,owner 定的),密度靠拿掉空白、把寬度用好,不靠縮小字。
-   這一檔排在最後:只蓋外框、表格、單號字型與 A + B 那幾頁的版面;按鈕 / 分頁的外觀照舊在 03-controls.css。 */
+   這一檔排在最後:只蓋外框、表格、單號字型與 A + B + C 那幾頁的版面;按鈕 / 分頁的外觀照舊在 03-controls.css。 */
 :root {
   --frame: #14181f;            /* 外框:側欄 + 分頁列 + 手機上方那條 */
   --sheet: #0f1115;            /* 工作紙 = 原本的頁面底,夜間裡面看起來跟以前一樣 */
@@ -258,3 +258,34 @@ span.wb-chip.cat > .pin svg { display: block; }
 .wb-inv-card { font-variant-numeric: tabular-nums; }
 /* 分頁列沒選的分頁也在淡灰外框上:灰字加深(只在這一排換變數,分頁本身的樣式照舊在 03-controls) */
 :root[data-theme="light"] .module-bar { --text-dim: #555c6b; }
+
+/* ── 其他畫面(C):報表、主檔、設定 ───────────────────────── */
+/* 清單與報表的表格:第一欄、最後一欄離紙邊 16px,跟上面的篩選列、頁首對齊(以前 10px,左邊差半格) */
+:is(.pc-list-table, .report-grid, .md-table > table) :is(th, td):first-child { padding-left: 16px; }
+:is(.pc-list-table, .report-grid, .md-table > table) :is(th, td):last-child { padding-right: 16px; }
+.pc-section-header, .pc-section-search { padding-left: 16px; padding-right: 16px; }
+/* 統計分析分頁多(九個以上):分頁左右留白收一點,1440 寬連「匯出明細 / 匯出總體」也排得進一排 */
+@media (min-width: 901px) {
+  .module-tabs:has(> .module-tab:nth-child(9)) { gap: 0; --module-tab-pad-x: 9px; }
+}
+/* 備份還原、每日對帳、歐睿對照:跟其他頁一樣靠左,不再浮在紙的正中間 */
+.entry-body.backup-page, .entry-body.legacy-page { margin-left: 0; margin-right: 0; }
+/* 銷貨日報標題旁的合計小表:格線改成真的框線(以前用陰影畫,手機上像浮起來);折行時一樣接得起來 */
+.sd-sum { box-shadow: none; border: 1px solid var(--border); margin: 0; }
+.sd-sum-cell { box-shadow: none; border-left: 1px solid var(--border); border-top: 1px solid var(--border); margin: -1px 0 0 -1px; }
+.sd-sum-label { box-shadow: none; border-bottom: 1px solid var(--border); }
+/* 平板與手機:字離螢幕邊至少 16px */
+@media (max-width: 900px) {
+  .list-filterbar { padding-left: 16px; padding-right: 16px; }
+  .entry-body { padding-left: 16px; padding-right: 16px; }
+  .page-toolbar { padding-left: 16px; padding-right: 16px; }
+  .sd-page .sd-filter { padding: 10px 16px; }
+  .sd-strip { padding-left: 16px; padding-right: 16px; }
+  .sd-summary { padding-left: 16px; padding-right: 16px; }
+  .report-meta { padding-left: 16px; padding-right: 16px; }
+}
+/* 篩選列(報表、進銷存、異動、代收、雜支…):一格至少放得下完整日期,放不下就換到下一排;以前全部擠在一排,字疊在一起 */
+@media (max-width: 768px) {
+  .list-filterbar label { flex: 1 1 9.5rem; }
+  .list-filterbar label.sr-check { flex: 0 0 auto; flex-direction: row; align-items: center; gap: 6px; }
+}

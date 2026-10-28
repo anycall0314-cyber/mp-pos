@@ -274,9 +274,6 @@ export function SettingsPage() {
       <div className="entry-body">
         <TabPanel id="st" k="general" active={tab === "general"}>
           <h3 style={{ marginTop: 0 }}>維修</h3>
-          <p style={{ color: "var(--text-dim)", fontSize: 14 }}>
-            返修保固天數:自原維修單完修日起算,在此範圍內視為保固有效。
-          </p>
           <div
             style={{
               display: "flex",
@@ -296,7 +293,7 @@ export function SettingsPage() {
               style={{ width: 120 }}
             />
             <span style={{ fontSize: 14, color: "var(--text-dim)" }}>
-              天(預設 90 天)
+              天
             </span>
             <button
               type="button"
@@ -337,7 +334,7 @@ export function SettingsPage() {
               style={{ width: 120 }}
             />
             <span style={{ fontSize: 14, color: "var(--text-dim)" }}>
-              個月列入待聯絡(預設 3 個月)
+              個月列入待聯絡
             </span>
             <button
               type="button"
@@ -452,7 +449,7 @@ export function SettingsPage() {
               <tbody>
                 {(warehouses.data ?? []).map((w) => (
                   <tr key={w.id}>
-                    <td>{w.code}</td>
+                    <td className="id-code">{w.code}</td>
                     <td>{w.name}</td>
                     <td>
                       <input

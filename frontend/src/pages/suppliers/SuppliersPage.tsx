@@ -190,17 +190,6 @@ export function SuppliersPage() {
                 </button>
               )}
             </div>
-            {!query && filtered.length > 1 && (
-              <div
-                style={{
-                  padding: "2px 10px 6px",
-                  fontSize: 14,
-                  color: "var(--text-dim)",
-                }}
-              >
-                拖曳左側 ≡ 調整順序,常用廠商往前排,挑選時更快
-              </div>
-            )}
             <div className="pc-section-body">
               {suppliersResult.isLoading && (
                 <div className="md-empty">載入中…</div>
@@ -279,7 +268,7 @@ export function SuppliersPage() {
                           >
                             ≡
                           </td>
-                          <td>{s.code}</td>
+                          <td className="id-code">{s.code}</td>
                           <td>{s.name}</td>
                           <td>{s.phone || "—"}</td>
                           <td

@@ -478,7 +478,7 @@ export function CustomersPage() {
                             onClick={() => navigate(`/sales/${so.id}`)}
                             className={so.is_void ? "row-void" : undefined}
                           >
-                            <td>{so.no}</td>
+                            <td className="id-code">{so.no}</td>
                             <td>{so.doc_date}</td>
                             <td>
                               {so.sales_person_name || "—"}

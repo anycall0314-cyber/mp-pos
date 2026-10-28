@@ -346,15 +346,6 @@ export function BrandSeriesPage() {
         <div style={{ flex: 1, minWidth: 0 }}>
           {error && <Banner kind="error" message={error} />}
           {editingBrand && brandForm}
-          <div
-            style={{
-              fontSize: 14,
-              color: "var(--text-dim)",
-              padding: "4px 0 8px",
-            }}
-          >
-            建立後可在「新增商品」「型號展開」「零件批次建立」直接挑選
-          </div>
           {brands.isLoading && <div>載入中…</div>}
           {!brands.isLoading && (brands.data?.length ?? 0) === 0 && (
             <div style={{ color: "var(--text-dim)", padding: 16 }}>

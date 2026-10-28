@@ -131,7 +131,6 @@ export function InvoicePrinterPage() {
                   ))}
                 </select>
               </label>
-              <span className="invoice-printer-hint">印出亂碼就換一個速率</span>
             </div>
 
             <h3>測試</h3>

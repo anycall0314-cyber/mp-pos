@@ -185,7 +185,7 @@ export function SalesPersonsPage() {
                             : ""
                         }
                       >
-                        <td>{s.code}</td>
+                        <td className="id-code">{s.code}</td>
                         <td>{s.name}</td>
                         <td>{s.phone || "—"}</td>
                         <td

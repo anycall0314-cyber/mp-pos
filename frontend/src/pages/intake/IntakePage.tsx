@@ -258,9 +258,6 @@ export function IntakePage() {
               }}
             />
           </div>
-          <div className="intake-hint">
-            貼文字或上傳照片都可;上傳的進貨單會存原圖、自動讀成明細後進待確認區(廠商 / 倉沿用上方選擇)。
-          </div>
         </div>
       )}
 

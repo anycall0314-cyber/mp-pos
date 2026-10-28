@@ -65,7 +65,7 @@ export function PhoneBillsPage() {
 
   const columns: MasterColumn<PhoneBillCollection>[] = [
     { key: "doc_date", header: "日期", render: (r) => r.doc_date },
-    { key: "no", header: "單號", render: (r) => r.no },
+    { key: "no", header: "單號", render: (r) => <span className="id-code">{r.no}</span> },
     { key: "warehouse", header: "門市", render: (r) => r.warehouse_name, side: true },
     { key: "carrier", header: "電信", render: (r) => r.carrier_name, side: true },
     { key: "phone", header: "電話", render: (r) => r.phone_no },

@@ -195,7 +195,7 @@ export function SecondhandSheetImport(props: Props) {
                         <td className="num">{r.row}</td>
                         <td>{r.name}</td>
                         <td>{p?.name ?? "—"}</td>
-                        <td>{r.imei}</td>
+                        <td className="id-code">{r.imei}</td>
                         <td>{r.sn}</td>
                         <td>{r.grade}</td>
                         <td className="num">{r.battery ?? ""}</td>

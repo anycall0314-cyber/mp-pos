@@ -576,7 +576,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
                       {/* 店內品名底下寫廠商的叫法(核對用);料號、一包幾個在右邊兩欄 */}
                       {row.product && <div className="vo-sub">{rowTitle(row)}</div>}
                     </td>
-                    <td>{row.sku}</td>
+                    <td className="id-code">{row.sku}</td>
                     <td className="num">
                       {row.pack_qty} {row.unit || "片"}
                     </td>
@@ -1118,7 +1118,7 @@ function HistoryTab({ link, openFirst }: { link: VendorLinkRow; openFirst: numbe
                                     {sentTitle(i)}
                                     {sentVendorSide(i) && <div className="vo-sub">{sentVendorSide(i)}</div>}
                                   </td>
-                                  <td>{i.sku}</td>
+                                  <td className="id-code">{i.sku}</td>
                                   <td className="num">{packsText(i.packs, i.qty, i.unit)}</td>
                                   <td className="num">{i.unit_price === null ? "—" : `@${money(i.unit_price)}`}</td>
                                   <td className="num">{i.unit_price === null ? "—" : money(Number(i.unit_price) * i.qty)}</td>

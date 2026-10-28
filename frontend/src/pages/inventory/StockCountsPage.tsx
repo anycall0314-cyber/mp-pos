@@ -132,7 +132,7 @@ export function StockCountsPage() {
               {data.map((c) => (
                 <tr key={c.id} className="report-row">
                   <td>
-                    <Link to={`/inventory/stocktake/${c.id}`}>{c.no}</Link>
+                    <Link className="id-code" to={`/inventory/stocktake/${c.id}`}>{c.no}</Link>
                   </td>
                   <td>{c.warehouse.name}</td>
                   <td>{scopeText(c)}</td>
@@ -170,7 +170,7 @@ export function StockCountsPage() {
                 {left.data.rows.map((u) => (
                   <tr key={u.code} className="report-row">
                     <td>{u.store}</td>
-                    <td>{u.code}</td>
+                    <td className="id-code">{u.code}</td>
                     <td>{u.old_name}</td>
                     <td>{u.purchased_on ?? ""}</td>
                   </tr>

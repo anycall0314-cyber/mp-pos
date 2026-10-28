@@ -140,7 +140,7 @@ export function PartsUsageReportPage() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.product_id} className="report-row">
-                  <td>{r.sku}</td>
+                  <td className="id-code">{r.sku}</td>
                   <td>{r.name}</td>
                   <td>{r.warehouse_type === "parts" ? "零件倉" : "商品倉"}</td>
                   <td className="num">{r.repair_qty}</td>

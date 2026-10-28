@@ -235,7 +235,7 @@ export function MembersPage() {
                         <td style={{ color: m.phone ? "inherit" : "var(--text-dim)" }}>
                           {m.phone || "—"}
                         </td>
-                        <td style={{ color: "var(--text-dim)" }}>{m.code}</td>
+                        <td className="id-code" style={{ color: "var(--text-dim)" }}>{m.code}</td>
                         <td>
                           <button
                             type="button"

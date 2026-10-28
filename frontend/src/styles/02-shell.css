@@ -147,7 +147,7 @@
 .module-tab {
   display: inline-flex;
   align-items: center;
-  padding: 0 14px;
+  padding: 0 var(--module-tab-pad-x, 14px);
   color: var(--text-dim);
   text-decoration: none;
   font-size: var(--font-body);

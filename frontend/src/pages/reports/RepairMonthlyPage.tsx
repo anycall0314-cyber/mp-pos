@@ -198,7 +198,7 @@ export function RepairMonthlyPage() {
                 <tr key={r.id} className="report-row">
                   <td>{r.date}</td>
                   <td>
-                    <Link to={docPath(r.doc)}>{r.doc.no}</Link>
+                    <Link className="id-code" to={docPath(r.doc)}>{r.doc.no}</Link>
                   </td>
                   <td>{r.store}</td>
                   <td>{r.model}</td>

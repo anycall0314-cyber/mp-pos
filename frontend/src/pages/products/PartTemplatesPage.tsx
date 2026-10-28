@@ -457,15 +457,6 @@ export function PartTemplatesPage() {
         {/* ─── 範本清單(沒在編輯時佔滿整頁;全站檢視 V01) ─── */}
         {!editing && (
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: 14,
-              color: "var(--text-dim)",
-              padding: "4px 0 8px",
-            }}
-          >
-            建立後可在「進貨入庫 → 商品管理 → 批次工具 → 零件批次」一鍵展開
-          </div>
           {list.isLoading && <div>載入中…</div>}
           {!list.isLoading && (list.data?.length ?? 0) === 0 && !editing && (
             <div style={{ color: "var(--text-dim)", padding: 16 }}>

@@ -362,7 +362,7 @@ function Ledger({ partner }: { partner: number }) {
             )}
             {data.orders.map((o) => (
               <tr key={o.id}>
-                <td>{o.no}</td>
+                <td className="id-code">{o.no}</td>
                 <td>{o.placed_at.slice(0, 10)}</td>
                 <td className="num">{money(o.owed)}</td>
                 <td className="num">{money(o.paid)}</td>

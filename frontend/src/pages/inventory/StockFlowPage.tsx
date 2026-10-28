@@ -198,7 +198,7 @@ export function StockFlowPage() {
             <tbody>
               {shown.map((r) => (
                 <tr key={r.product} className="report-row">
-                  <td>{r.sku}</td>
+                  <td className="id-code">{r.sku}</td>
                   <td className="sr-name">
                     <Link to="/inventory/movements" state={movesFor(r)}>
                       {r.name}

@@ -17,7 +17,7 @@ import { SimCardForm } from "./SimCardForm";
 import { errorText } from "@/lib/errorText";
 
 const columns: MasterColumn<SimCard>[] = [
-  { key: "card_no", header: "卡號", render: (r) => r.card_no },
+  { key: "card_no", header: "卡號", render: (r) => <span className="id-code">{r.card_no}</span> },
   {
     key: "vendor",
     header: "廠商",

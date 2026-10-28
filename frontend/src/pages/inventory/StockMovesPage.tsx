@@ -241,7 +241,7 @@ export function StockMovesPage() {
                       {r.kind_label}
                       {r.note && <div className="sr-dim">{r.note}</div>}
                     </td>
-                    <td>{r.sku}</td>
+                    <td className="id-code">{r.sku}</td>
                     <td className="sr-name">{r.name}</td>
                     <td>
                       {r.serial !== null && (
@@ -264,7 +264,7 @@ export function StockMovesPage() {
                         </div>
                       ))}
                     </td>
-                    <td>{r.doc && <Link to={docPath(r.doc)}>{r.doc.no}</Link>}</td>
+                    <td>{r.doc && <Link className="id-code" to={docPath(r.doc)}>{r.doc.no}</Link>}</td>
                   </tr>
                 );
               })}

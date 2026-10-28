@@ -60,7 +60,7 @@ export function PettyExpensesPage() {
 
   const columns: MasterColumn<PettyExpense>[] = [
     { key: "doc_date", header: "日期", render: (r) => r.doc_date },
-    { key: "no", header: "單號", render: (r) => r.no },
+    { key: "no", header: "單號", render: (r) => <span className="id-code">{r.no}</span> },
     { key: "warehouse", header: "門市", render: (r) => r.warehouse_name, side: true },
     { key: "category", header: "類別", render: (r) => r.category_label },
     {
