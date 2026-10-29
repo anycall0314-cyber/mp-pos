@@ -337,6 +337,8 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   z-index: 100;
   box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
+/* 下面放不下、上面比較寬:往上開(ComboBox 量過才加) */
+.combobox-pop.up { top: auto; bottom: calc(100% + 2px); box-shadow: 0 -4px 12px rgba(0,0,0,0.4); }
 .combobox-hint { padding: 10px 12px; color: var(--text-dim); font-size: var(--font-body); }
 .combobox-list { list-style: none; margin: 0; padding: 0; }
 .combobox-option {

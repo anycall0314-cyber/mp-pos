@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -44,6 +45,32 @@ interface ComboBoxProps<T = unknown> {
   ariaLabel?: string;
 }
 
+/** 下拉選單往下放不下、上面比較寬時往上開;高度不超出看得到的範圍(視窗與外面會切掉內容的框,取最小的) */
+function fitPop(root: HTMLElement, pop: HTMLElement): { up: boolean; max: number } {
+  const vv = window.visualViewport;
+  let top = vv ? vv.offsetTop : 0;
+  let bottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+  for (let el = root.parentElement; el; el = el.parentElement) {
+    const s = getComputedStyle(el);
+    if (s.overflowX !== "visible" || s.overflowY !== "visible") {
+      const b = el.getBoundingClientRect();
+      top = Math.max(top, b.top);
+      bottom = Math.min(bottom, b.bottom);
+    }
+  }
+  const r = root.getBoundingClientRect();
+  const below = bottom - r.bottom - 6;
+  const above = r.top - top - 6;
+  // 原本(樣式表)的高度上限:桌機 280、手機 40vh;量完把畫面上的放回去
+  const inline = pop.style.maxHeight;
+  pop.style.maxHeight = "";
+  const cap = parseFloat(getComputedStyle(pop).maxHeight) || 280;
+  pop.style.maxHeight = inline;
+  const need = Math.min(pop.scrollHeight, cap);
+  const up = need > below && above > below;
+  return { up, max: Math.max(80, Math.min(cap, up ? above : below)) };
+}
+
 export function ComboBox<T = unknown>({
   value,
   selectedOption,
@@ -73,6 +100,8 @@ export function ComboBox<T = unknown>({
 
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState<{ up: boolean; max: number } | null>(null);
   const requestSeq = useRef(0);
   /** 現在這份清單是哪一串字的結果:Enter 要等「現在打的字」的結果回來才選(全站檢視 A2:以前會選到舊清單的第一筆) */
   const resultsFor = useRef<string | null>(null);
@@ -249,6 +278,33 @@ export function ComboBox<T = unknown>({
 
   const showCreateRow = !!onCreateNew && query.trim().length > 0;
 
+  // 開著的時候:內容變了、頁面捲動、視窗大小變了(手機鍵盤)都重新量一次要往上還往下
+  useLayoutEffect(() => {
+    if (!open) {
+      setPlace(null);
+      return;
+    }
+    let frame = 0;
+    const fit = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (!rootRef.current || !popRef.current) return;
+        const next = fitPop(rootRef.current, popRef.current);
+        setPlace((prev) => (prev && prev.up === next.up && prev.max === next.max ? prev : next));
+      });
+    };
+    if (rootRef.current && popRef.current) setPlace(fitPop(rootRef.current, popRef.current));
+    window.addEventListener("scroll", fit, true);
+    window.addEventListener("resize", fit);
+    window.visualViewport?.addEventListener("resize", fit);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", fit, true);
+      window.removeEventListener("resize", fit);
+      window.visualViewport?.removeEventListener("resize", fit);
+    };
+  }, [open, options, loading, showCreateRow]);
+
   return (
     <div
       ref={rootRef}
@@ -303,7 +359,11 @@ export function ComboBox<T = unknown>({
         )}
       </div>
       {open && (
-        <div className="combobox-pop">
+        <div
+          ref={popRef}
+          className={`combobox-pop${place?.up ? " up" : ""}`}
+          style={place ? { maxHeight: place.max } : undefined}
+        >
           {loading && options.length === 0 ? (
             <div className="combobox-hint">搜尋中…</div>
           ) : options.length === 0 ? (

@@ -90,13 +90,14 @@ details.re-personal > summary { cursor: pointer; list-style: revert; }
 }
 
 /* 區塊樣式 */
+/* 不切超出去的東西:領用零件、廠商的下拉選單會長出區塊外(owner 2026-10-29「下拉選單選項整個都被截掉」);圓角改由標題自己圓 */
 .re-section {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 6px;
-  overflow: hidden;
 }
 .re-section-title {
+  border-radius: 5px 5px 0 0;
   padding: 10px 14px;
   font-size: var(--font-body);
   font-weight: 700;

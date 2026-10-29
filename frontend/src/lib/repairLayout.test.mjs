@@ -62,3 +62,16 @@ test("新零件進貨還不知道有沒有進好:同一把鑰匙只能再送一�
   assert.equal(src.match(/notLoaded \|\| quickPending\}/g)?.length, 4); // 三個儲存鈕 + 完成
   assert.match(src, /\{!partsShown && quickPanel\}/, "零件清單看不到也要擺出來");
 });
+
+test("下拉選單不被切掉:維修單的區塊不切超出去的東西;下面放不下就往上開(owner 2026-10-29「下拉選單選項整個都被截掉」)", async () => {
+  const { readAllCss } = await import("./cssText.mjs");
+  const css = readAllCss();
+  const section = css.match(/\n\.re-section \{([^}]*)\}/)?.[1] ?? "";
+  assert.ok(section.includes("border-radius"), "找得到 .re-section");
+  assert.ok(!/overflow\s*:\s*(hidden|clip|auto|scroll)/.test(section), "區塊切掉下拉選單");
+  assert.match(css, /\.combobox-pop\.up \{ top: auto; bottom: calc\(100% \+ 2px\);/);
+  const combo = readFileSync(new URL("../components/ComboBox.tsx", import.meta.url), "utf8");
+  assert.match(combo, /const up = need > below && above > below;/);
+  assert.match(combo, /className=\{`combobox-pop\$\{place\?\.up \? " up" : ""\}`\}/);
+  assert.match(combo, /window\.addEventListener\("scroll", fit, true\);/, "捲動之後重新量");
+});
