@@ -10,7 +10,9 @@ from django.db import connections
 from django.test import TestCase, TransactionTestCase
 
 from apps.backup.tests.factory import Company
+from apps.catalog.models import Product
 from apps.inventory import stockcount
+from apps.inventory.identifiers import create_serial
 from apps.inventory.models import ProductSerial, StockBalance, StockMovement
 from apps.ledger import checks
 from apps.repairs import report
@@ -173,9 +175,9 @@ class RefurbTests(_Refurb, TestCase):
         self.assertEqual(r.status_code, 400, r.content)
         far.refresh_from_db()
         self.assertEqual(far.status, S.IN_STOCK)
-        look = self.c.clerk.get(f"{URL}stock-lookup/", {"code": "R0003"}).json()
+        [look] = self.c.clerk.get(f"{URL}stock-search/", {"q": "R0003"}).json()
         self.assertEqual((look["ok"], look["reason"]), (False, "這一台不在你的門市"))
-        look = self.c.clerk.get(f"{URL}stock-lookup/", {"code": "R0001"}).json()
+        [look] = self.c.clerk.get(f"{URL}stock-search/", {"q": "R0001"}).json()
         self.assertEqual((look["ok"], look["product_name"]), (True, self.c.phone.name))
         self.assertEqual(self.open(client=self.c.clerk).status_code, 201)
 
@@ -321,3 +323,49 @@ class RefurbAtOnceTests(_Refurb, TransactionTestCase):
         self.assertEqual(self.complete(row["id"]).status_code, 200)
         self.unit.refresh_from_db()
         self.assertEqual(self.unit.purchase_unit_cost, D("20150.00"))
+
+
+class StockSearchTests(_Refurb, TestCase):
+    """owner 2026-10-29:「整理自家庫存,手動打序號,我希望可以打品名,或是打上序號前幾碼,會自動帶出最接近的手機」"""
+
+    def setUp(self):
+        self.make_company()
+        self.c.purchase(phone_serials=["35612345", "11135612"])
+        longer = Product.objects.create(tenant=self.c.tenant, category=self.c.cat_phone,
+                                        name="甲 Apple iPhone 15 128GB 黑", list_price=20000)
+        create_serial(tenant=self.c.tenant, product=longer, code="L0001", warehouse=self.home)
+
+    def find(self, q, client=None):
+        r = (client or self.c.admin).get(f"{URL}stock-search/", {"q": q})
+        self.assertEqual(r.status_code, 200, r.content)
+        return [(x["serial_no"], x["ok"], x["exact"]) for x in r.json()]
+
+    def test_first_digits_put_the_ones_that_start_with_it_first(self):
+        self.assertEqual(self.find("356"), [("35612345", True, False), ("11135612", True, False)])   # 開頭相同的先
+
+    def test_name_ignores_case_and_spaces_and_the_shorter_name_comes_first(self):
+        rows = self.find("iphone15")
+        self.assertEqual(len(rows), 6)
+        self.assertEqual(rows[-1], ("L0001", True, False))               # 品名比較長,排後面(照字排它會在前面)
+        self.assertEqual({r[0] for r in rows[:5]}, {"R0001", "R0002", "R0003", "35612345", "11135612"})
+        self.assertEqual(len(self.find("15 黑")), 6)
+        self.assertEqual(self.find("15 白"), [])
+
+    def test_a_scanned_code_is_marked_and_shown_even_when_it_cannot_go(self):
+        self.assertEqual(self.find("R0002"), [("R0002", True, True)])
+        self.c.sell(serial_no="R0002")
+        r = self.c.admin.get(f"{URL}stock-search/", {"q": "R0002"}).json()
+        self.assertEqual([(x["ok"], x["exact"], x["reason"]) for x in r], [(False, True, "這一台已售,不能送去整理")])
+        self.assertEqual(self.find("R000"), [("R0001", True, False), ("R0003", True, False)])   # 已售的打一半不列
+
+    def test_clerk_only_sees_own_store(self):
+        self.assertEqual(self.find("R000", client=self.c.clerk), [("R0001", True, False), ("R0002", True, False)])
+        r = self.c.clerk.get(f"{URL}stock-search/", {"q": "R0003"}).json()
+        self.assertEqual([(x["serial_no"], x["ok"], x["reason"]) for x in r], [("R0003", False, "這一台不在你的門市")])
+
+    def test_nothing_typed_lists_secondhand_and_refurbishing_ones_drop_out(self):
+        self.assertEqual(self.find(""), [])
+        Product.objects.filter(pk=self.c.phone.pk).update(is_secondhand=True)   # 用過的商品不能改旗標,這裡直接改資料
+        self.assertEqual([r[0] for r in self.find("")], ["11135612", "35612345", "R0003", "R0002", "R0001"])
+        self.opened()                                                    # R0001 送去整理
+        self.assertNotIn("R0001", [r[0] for r in self.find("iphone")])

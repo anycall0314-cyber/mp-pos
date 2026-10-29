@@ -115,6 +115,54 @@ def undo(order, serial):
     _record(order, serial, "重開,整理成本扣回")
 
 
+SEARCH_LIMIT = 20
+
+
+def candidates(tenant, q, *, own_warehouse_id=None, limit=SEARCH_LIMIT):
+    """打字找要送去整理的那一台(owner 2026-10-29:「打品名,或是打上序號前幾碼,會自動帶出最接近的手機」)。
+
+    回 [(那一台, 是不是刷到的那一台)],最接近的排前面:碼完全相同 → 碼開頭相同 → 碼裡有這串 → 品名有打的每一段
+    (不分大小寫、不看空白,品名短的先)。碼完全相同的不管能不能送都回來(畫面講為什麼不行;對到兩台就都不算刷到);
+    其他的只回能送的:在庫、鎖在門市的帳號只看自己門市。什麼都沒打:能送的中古機,最近進來的先。
+    """
+    from django.db.models import Q, Value
+    from django.db.models.functions import Length, Replace, Upper
+
+    from apps.identity.normalize import normalize_serial
+    from apps.inventory.identifiers import find_serial_ids
+    from apps.inventory.models import ProductSerialIdentifier
+
+    q = (q or "").strip()
+    base = ProductSerial.objects.filter(tenant=tenant).select_related("product", "warehouse")
+    ok = base.filter(status=S.IN_STOCK, warehouse__isnull=False)
+    if own_warehouse_id is not None:
+        ok = ok.filter(warehouse_id=own_warehouse_id)
+    if not q:
+        return [(s, False) for s in ok.filter(product__is_secondhand=True).order_by("-id")[:limit]]
+
+    out = []
+
+    def add(rows, scanned=False):
+        rows = list(rows.exclude(pk__in=[s.pk for s, _ in out])[:limit - len(out)])
+        out.extend((s, scanned) for s in rows)
+
+    exact = find_serial_ids(tenant, q)
+    add(base.filter(pk__in=exact).order_by("id"), scanned=len(exact) == 1)
+    nv = normalize_serial(q)
+    if len(nv) >= 3:
+        codes = ProductSerialIdentifier.objects.filter(tenant=tenant)
+        for look in ("startswith", "contains"):
+            hit = codes.filter(**{f"normalized_value__{look}": nv}).values("serial_id")
+            add(ok.filter(Q(pk__in=hit) | Q(**{f"serial_key__{look}": nv})).order_by("serial_key"))
+    words = q.upper().split()
+    named = ok.annotate(flat_name=Replace(Upper("product__name"), Value(" "), Value("")))
+    for w in words:
+        named = named.filter(Q(flat_name__contains=w) | Q(product__sku__iexact=w))
+    if len(out) < limit:
+        add(named.order_by(Length("product__name"), "product__name", "-id"))
+    return out
+
+
 def release(order, serial):
     """作廢(還沒完工;呼叫端已鎖好):回到在庫,成本不動。"""
     if serial.status != S.REFURB:

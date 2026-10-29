@@ -12,6 +12,7 @@ import type {
   Product,
   ProductSerial,
   PurchaseOrderCategory,
+  RepairStockCandidate,
   ResolveCandidate,
   ResolveResult,
   SalesOrder,
@@ -634,6 +635,34 @@ export async function searchInStockSerials(
       label: s.serial_no,
       secondary: parts.length > 0 ? parts.join(" · ") : s.product_name,
       payload: s,
+    };
+  });
+}
+
+/**
+ * 自家庫存送去整理:打品名 / 序號前幾碼 / 刷碼,最接近的排前面(owner 2026-10-29)。
+ * 刷到的那一台不能送時還是列出來,不能選、寫原因。
+ */
+export async function searchStockSerials(
+  query: string,
+): Promise<ComboOption<RepairStockCandidate>[]> {
+  const data = await api<RepairStockCandidate[]>(
+    `/repair-orders/stock-search/?${qs({ q: query.trim() })}`,
+  );
+  return data.map((s) => {
+    const parts = [s.product_name];
+    if (!s.ok) parts.push(s.reason);
+    else {
+      parts.push(s.warehouse_name);
+      if (s.condition_grade) parts.push(`${s.condition_grade} 級`);
+      if (s.battery_health != null) parts.push(`電池 ${s.battery_health}%`);
+    }
+    return {
+      id: s.id,
+      label: s.serial_no,
+      secondary: parts.join(" · "),
+      payload: s,
+      disabled: !s.ok,
     };
   });
 }

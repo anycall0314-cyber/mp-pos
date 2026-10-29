@@ -136,7 +136,7 @@ class StockModelTests(TestCase):
         c = Company("a", "甲通訊行", "甲")
         c.purchase(phone_serials=["M0001"])
         unit = ProductSerial.objects.get(tenant=c.tenant, serial_no="M0001")
-        found = c.admin.get("/api/v1/repair-orders/stock-lookup/", {"code": "M0001"}).json()
+        [found] = c.admin.get("/api/v1/repair-orders/stock-search/", {"q": "M0001"}).json()
         self.assertTrue(found["model_key"])
         self.assertEqual((found["model_key"], found["model_name"]),
                          (c.phone.phone_model_key, c.phone.phone_model_name))

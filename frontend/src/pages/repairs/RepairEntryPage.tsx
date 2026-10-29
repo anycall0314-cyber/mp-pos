@@ -4,7 +4,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "@/api/client";
 import {
   lookupMembers,
-  lookupStockSerial,
   useCompleteRepair,
   useRepairItemsByModel,
   useRepairOrder,
@@ -19,6 +18,7 @@ import {
   searchProducts,
   searchMembers,
   searchSalesPersons,
+  searchStockSerials,
 } from "@/api/search";
 import {
   useCan,
@@ -34,6 +34,7 @@ import type {
   RepairItem,
   RepairMode,
   RepairStatus,
+  RepairStockCandidate,
   RepairStockSerial,
   RepairUnlockMethod,
   SalesPerson,
@@ -193,8 +194,6 @@ function RepairEntryForm() {
   // 完工時零件成本或委外費用加進它的成本,工資不算)。既有的單看它有沒有掛那一台
   const [source, setSource] = useState<"customer" | "stock">("customer");
   const [stockUnit, setStockUnit] = useState<RepairStockSerial | null>(null);
-  const [stockCode, setStockCode] = useState("");
-  const [stockLooking, setStockLooking] = useState(false);
   const isStock = source === "stock";
   // 新零件當場進貨(QuickPartPanel;要有「進貨入庫」):null = 收著,字串 = 開著、品名先帶搜尋框打的字。
   // 這個分頁有一次還不知道有沒有進好的:一打開就展開(只能再送一次)
@@ -459,29 +458,14 @@ function RepairEntryForm() {
     finally { setCreating(false); }
   }
 
-  /** 自家庫存:刷到的碼是哪一台(能不能送去整理伺服器說了算,建單時會再看一次) */
-  async function scanStock() {
-    const code = stockCode.trim();
-    if (!code || stockLooking) return;
+  /** 自家庫存:選到的那一台(能不能送去整理伺服器說了算,不能送的選不到;建單時會再看一次) */
+  function pickStock(found: RepairStockCandidate) {
     setError(null);
-    setStockLooking(true);
-    try {
-      const found = await lookupStockSerial(code);
-      if (!found.ok) {
-        setError(found.reason);
-        return;
-      }
-      setStockUnit(found);
-      setStockCode("");
-      if (warehouseId === "" && found.warehouse) setWarehouseId(found.warehouse);
-      setModelKey(found.model_key);
-      setModelName(found.product_name);
-      setDeviceSerial(found.serial_no);
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setStockLooking(false);
-    }
+    setStockUnit(found);
+    if (warehouseId === "" && found.warehouse) setWarehouseId(found.warehouse);
+    setModelKey(found.model_key);
+    setModelName(found.product_name);
+    setDeviceSerial(found.serial_no);
   }
 
   function submit(opts?: { printAfter?: boolean }) {
@@ -997,17 +981,13 @@ function RepairEntryForm() {
                         )}
                       </div>
                     ) : (
-                      <input
-                        value={stockCode}
-                        onChange={(e) => setStockCode(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            void scanStock();
-                          }
-                        }}
-                        placeholder="刷 IMEI 或序號"
-                        disabled={stockLooking}
+                      // 打品名 / 序號前幾碼帶出最接近的幾台;條碼槍刷完整的碼(自帶 Enter)直接選那一台(owner 2026-10-29)
+                      <ComboBox<RepairStockCandidate>
+                        value=""
+                        fetchOptions={searchStockSerials}
+                        onChange={(_, opt) => opt?.payload && pickStock(opt.payload)}
+                        exactOnEnter={(opt) => !!opt.payload?.exact}
+                        placeholder="IMEI／序號／品名"
                         autoFocus
                       />
                     )}

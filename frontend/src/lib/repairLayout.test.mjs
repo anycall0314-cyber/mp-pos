@@ -85,3 +85,11 @@ test("領用零件只搜零件倉;「新零件進貨」黏在下拉框最下面,
   assert.match(create, /position: sticky; bottom: 0;/);
   assert.match(create, /background: var\(--panel\)/, "黏住的那一列要有底色蓋住下面的選項");
 });
+
+test("自家庫存:打品名或序號前幾碼帶出最接近的幾台;條碼槍刷完整的碼直接選那一台(owner 2026-10-29)", () => {
+  assert.match(src, /fetchOptions=\{searchStockSerials\}/);
+  assert.match(src, /exactOnEnter=\{\(opt\) => !!opt\.payload\?\.exact\}/, "刷碼自帶 Enter 只選刷到的那一台");
+  assert.ok(!src.includes('placeholder="刷 IMEI 或序號"'), "舊的只認完整碼的框還在");
+  const search = readFileSync(new URL("../api/search.ts", import.meta.url), "utf8");
+  assert.match(search, /disabled: !s\.ok,/, "不能送去整理的那一台選不到");
+});

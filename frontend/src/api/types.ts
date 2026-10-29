@@ -1507,15 +1507,23 @@ export interface RepairStockSerial {
   status_label: string;
 }
 
-/** 刷碼找自家庫存的那一台(`/repair-orders/stock-lookup/`):ok = 可以送去整理,不行的原因在 reason */
+/** 自家庫存的那一台給維修單選的樣子:ok = 可以送去整理,不行的原因在 reason */
 export interface RepairStockLookup extends RepairStockSerial {
   /** 那一台在哪家門市(收件門市還沒選就帶這一家) */
   warehouse: number | null;
   /** 那一台商品的機型(維修項目照機型列);對不到機型是空字串 */
   model_key: string;
   model_name: string;
+  /** 中古機的成色與電池(同型號好幾台時認得出是哪一台) */
+  condition_grade: string;
+  battery_health: number | null;
   ok: boolean;
   reason: string;
+}
+
+/** 打字找自家庫存的那一台(`/repair-orders/stock-search/`):exact = 打的就是這一台的碼(條碼槍刷的) */
+export interface RepairStockCandidate extends RepairStockLookup {
+  exact: boolean;
 }
 
 /** 維修單上當場進一個零件(`/purchase-orders/quick-part/`;規則在後端 purchasing/quick_part.py) */

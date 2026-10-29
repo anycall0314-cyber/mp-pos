@@ -22,6 +22,27 @@ from .services import (
 )
 
 
+def _stock_row(s, own):
+    """自家庫存的那一台給畫面看的樣子;own = 鎖在門市的帳號的門市。能不能送伺服器說了算,建單時鎖住之後會再看一次。"""
+    from apps.inventory.models import ProductSerial
+
+    reason = ""
+    if s.status != ProductSerial.Status.IN_STOCK or s.warehouse_id is None:
+        reason = f"這一台{s.get_status_display()},不能送去整理"
+    elif own is not None and s.warehouse_id != own:
+        reason = "這一台不在你的門市"
+    return {
+        "id": s.id, "serial_no": s.serial_no, "product_name": s.product.name,
+        # 機型照那一台的商品帶(維修項目照機型列;owner 2026-10-29「沒辦法先選擇機型」)
+        "model_key": s.product.phone_model_key, "model_name": s.product.phone_model_name,
+        "warehouse": s.warehouse_id, "warehouse_name": s.warehouse.name if s.warehouse_id else "",
+        "status": s.status, "status_label": s.get_status_display(),
+        # 同型號好幾台時認得出是哪一台(中古機才有)
+        "condition_grade": s.condition_grade, "battery_health": s.battery_health,
+        "ok": not reason, "reason": reason,
+    }
+
+
 class RepairItemViewSet(viewsets.ModelViewSet):
     """維修項目模板 CRUD。"""
 
@@ -184,37 +205,19 @@ class RepairOrderViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(self.get_serializer(order).data)
 
-    @action(detail=False, methods=["get"], url_path="stock-lookup")
-    def stock_lookup(self, request):
-        """自家庫存送去整理:刷到的碼是哪一台、能不能送(?code=…;規則在 repairs/stock.py,建單時鎖住之後會再看一次)。"""
+    @action(detail=False, methods=["get"], url_path="stock-search")
+    def stock_search(self, request):
+        """自家庫存送去整理:打品名 / 序號前幾碼 / 刷碼,列出最接近的那幾台(?q=…;排法在 repairs/stock.py)。"""
         from apps.core.warehouse_scoping import locked_warehouse_id
-        from apps.inventory.identifiers import find_serial_ids
-        from apps.inventory.models import ProductSerial
 
-        code = request.query_params.get("code") or ""
-        if not code.strip() or len(code) > 80:
-            return Response({"detail": "請刷序號"}, status=status.HTTP_400_BAD_REQUEST)
-        ids = find_serial_ids(request.tenant, code)
-        if len(ids) > 1:
-            return Response({"detail": "這個碼對到不只一台,請改刷那一台的另一個碼"},
-                            status=status.HTTP_400_BAD_REQUEST)
-        if not ids:
-            return Response({"detail": "系統沒有這個序號"}, status=status.HTTP_400_BAD_REQUEST)
-        s = ProductSerial.objects.select_related("product", "warehouse").get(pk=ids[0])
+        from .stock import candidates
+
+        q = request.query_params.get("q") or ""
+        if len(q) > 80:
+            return Response([])
         own = locked_warehouse_id(request.user)
-        reason = ""
-        if s.status != ProductSerial.Status.IN_STOCK or s.warehouse_id is None:
-            reason = f"這一台{s.get_status_display()},不能送去整理"
-        elif own is not None and s.warehouse_id != own:
-            reason = "這一台不在你的門市"
-        return Response({
-            "id": s.id, "serial_no": s.serial_no, "product_name": s.product.name,
-            # 機型照那一台的商品帶(維修項目照機型列;owner 2026-10-29「沒辦法先選擇機型」)
-            "model_key": s.product.phone_model_key, "model_name": s.product.phone_model_name,
-            "warehouse": s.warehouse_id, "warehouse_name": s.warehouse.name if s.warehouse_id else "",
-            "status": s.status, "status_label": s.get_status_display(),
-            "ok": not reason, "reason": reason,
-        })
+        return Response([{**_stock_row(s, own), "exact": scanned}
+                         for s, scanned in candidates(request.tenant, q, own_warehouse_id=own)])
 
     @action(detail=False, methods=["get"], url_path="history-by-phone")
     def history_by_phone(self, request):
