@@ -139,9 +139,8 @@ export function SuppliersPage() {
       const saved = await saveSupplier.mutateAsync(payload);
       setError(null);
       if (isCreate) {
-        // 連續新增:清空表單、維持新增模式,讓使用者可直接輸入下一筆
+        // 連續新增:清空表單、維持新增模式,讓使用者可直接輸入下一筆(不跳提示;owner 2026-10-29「這個提示刪除不需要」)
         draft.saved("new", EMPTY_FORM);
-        setFlashMsg(`已新增「${saved.name}」(${saved.code}),可繼續輸入下一筆`);
       } else {
         setFlashMsg("已儲存");
         draft.saved(`s${saved.id}`, toForm(saved));
