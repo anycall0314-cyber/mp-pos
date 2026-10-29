@@ -63,7 +63,6 @@ export function SimCardForm({ initial, onClose }: Props) {
     initial?.vendor ? { id: initial.vendor, label: initial.vendor_name, secondary: initial.vendor_code } : null,
   );
   const [error, setError] = useState<string | null>(null);
-  const [flash, setFlash] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [showNewVendor, setShowNewVendor] = useState(false);
   const [newVendor, setNewVendor] = useState({ code: "", name: "" });
@@ -100,7 +99,6 @@ export function SimCardForm({ initial, onClose }: Props) {
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    setFlash(null);
     setFieldErrors({});
     if (!state.card_no) {
       setFieldErrors({ card_no: ["請填卡號"] });
@@ -128,7 +126,6 @@ export function SimCardForm({ initial, onClose }: Props) {
       const next = { ...state, card_no: "", note: "" };
       setState(next);
       setBase(next);
-      setFlash(`已新增 ${saved.card_no},可以接著刷下一張`);
       cardRef.current?.focus();
     } catch (e) {
       if (e instanceof ApiHttpError && e.body && typeof e.body === "object") {
@@ -159,7 +156,6 @@ export function SimCardForm({ initial, onClose }: Props) {
         </button>
       }
     >
-      {flash && <Banner kind="success" message={flash} />}
       {error && <Banner kind="error" message={error} />}
       <form onSubmit={submit}>
         <Field label="卡號 (ICCID)" required error={fieldErrors.card_no}>

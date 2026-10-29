@@ -76,7 +76,6 @@ export function TelecomPlanForm({ initial, onClose }: Props) {
     initial?.carrier ? { id: initial.carrier, label: initial.carrier_name, secondary: initial.carrier_code } : null,
   );
   const [error, setError] = useState<string | null>(null);
-  const [flash, setFlash] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [showNewCarrier, setShowNewCarrier] = useState(false);
   const [newCarrier, setNewCarrier] = useState({ code: "", name: "" });
@@ -113,7 +112,6 @@ export function TelecomPlanForm({ initial, onClose }: Props) {
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    setFlash(null);
     setFieldErrors({});
     if (!state.name) {
       setFieldErrors({ name: ["請填專案名稱"] });
@@ -144,7 +142,6 @@ export function TelecomPlanForm({ initial, onClose }: Props) {
       const next = { ...state, name: "", monthly_fee: "0", commission: "0", company_commission: "", note: "" };
       setState(next);
       setBase(next);
-      setFlash(`已新增 ${saved.name},可以接著打下一個`);
       nameRef.current?.focus();
     } catch (e) {
       if (e instanceof ApiHttpError && e.body && typeof e.body === "object") {
@@ -175,7 +172,6 @@ export function TelecomPlanForm({ initial, onClose }: Props) {
         </button>
       }
     >
-      {flash && <Banner kind="success" message={flash} />}
       {error && <Banner kind="error" message={error} />}
       <form onSubmit={submit}>
         <Field label="專案名稱" required error={fieldErrors.name}>
