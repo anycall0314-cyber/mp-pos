@@ -25,7 +25,8 @@ EXPORT_MAX = 20000      # 異動查詢 / 序號查詢匯出一次最多幾列
 CODE_SEARCH_MIN = 3     # 用序號找:至少打幾個字才比對登記的碼(跟序號搜尋同一個門檻)
 
 # 帳上還在門市裡的序號狀態(跟每日庫存快照同一組;調撥中的不掛在任何門市)
-IN_STORE = (ProductSerial.Status.IN_STOCK, ProductSerial.Status.RETURNED, ProductSerial.Status.RMA)
+IN_STORE = (ProductSerial.Status.IN_STOCK, ProductSerial.Status.RETURNED, ProductSerial.Status.RMA,
+            ProductSerial.Status.REFURB)
 
 
 class ReportError(Exception):

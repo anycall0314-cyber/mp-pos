@@ -69,6 +69,7 @@ import {
   RepairHistoryItem,
   RepairItem,
   RepairOrder,
+  RepairStockLookup,
   RepairQuotePreview,
   LegacyPurchase,
   Member,
@@ -1562,9 +1563,22 @@ export interface SerialCodeChange {
   after_sn: string;
 }
 
+/** 送去整理的維修單(自家庫存);cost_added = 完工時加進這一台成本的金額(只有管理員拿得到,其他人是 null) */
+export interface SerialHistoryRefurb {
+  id: number;
+  no: string;
+  mode_label: string;
+  status: string;
+  status_label: string;
+  received_date: string;
+  completed_at: string | null;
+  cost_added: string | null;
+}
+
 export interface SerialHistory {
   serial: ProductSerial;
   acquisition: SerialHistoryAcquisition | null;
+  refurbs?: SerialHistoryRefurb[];
   movements: SerialHistoryMovement[];
   sales: SerialHistorySale[];
   /** 這一台的 IMEI / SN 被補登或修改過的紀錄(新的在前) */
@@ -1897,6 +1911,8 @@ export function useVoidRepairOrder() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["repair-orders"] });
       qc.invalidateQueries({ queryKey: ["home-summary"] });
+      // 自家庫存的整理單作廢:那一台回到在庫
+      qc.invalidateQueries({ queryKey: ["serials"] });
     },
   });
 }
@@ -1907,6 +1923,11 @@ export const useRepairOrder = (id: number | null) =>
     queryFn: () => api<RepairOrder>(`/repair-orders/${id}/`),
     enabled: !!id,
   });
+
+/** 自家庫存送去整理:刷到的碼是哪一台、能不能送(找不到 / 對到兩台會丟錯誤,訊息直接給畫面) */
+export function lookupStockSerial(code: string): Promise<RepairStockLookup> {
+  return api<RepairStockLookup>(`/repair-orders/stock-lookup/?code=${encodeURIComponent(code)}`);
+}
 
 export function useSaveRepairOrder() {
   const qc = useQueryClient();
@@ -1929,6 +1950,7 @@ export function useSaveRepairOrder() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["repair-orders"] });
       qc.invalidateQueries({ queryKey: ["repair-order"] });
+      qc.invalidateQueries({ queryKey: ["serials"] });
     },
   });
 }
@@ -1956,6 +1978,9 @@ export function useCompleteRepair() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["repair-orders"] });
       qc.invalidateQueries({ queryKey: ["repair-order"] });
+      // 自家庫存的整理單:那一台的狀態與成本變了
+      qc.invalidateQueries({ queryKey: ["serials"] });
+      qc.invalidateQueries({ queryKey: ["serial-history"] });
     },
   });
 }
@@ -1968,6 +1993,8 @@ export function useReopenRepair() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["repair-orders"] });
       qc.invalidateQueries({ queryKey: ["repair-order"] });
+      qc.invalidateQueries({ queryKey: ["serials"] });
+      qc.invalidateQueries({ queryKey: ["serial-history"] });
     },
   });
 }

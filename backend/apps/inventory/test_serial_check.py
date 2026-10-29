@@ -68,7 +68,7 @@ class SerialCheckTests(TestCase):
         got = self.taken_codes([IMEI_A, IMEI_B, IMEI_C])
         self.assertEqual({code: (row["status"], row["in_store"], row["warehouse_name"]) for code, row in got.items()},
                          {IMEI_A: ("sold", False, ""), IMEI_B: ("in_transit", True, ""), IMEI_C: ("in_stock", True, "甲湳雅店")})
-        self.assertEqual(set(IN_STORE), {"in_stock", "in_transit", "rma"})
+        self.assertEqual(set(IN_STORE), {"in_stock", "in_transit", "rma", "refurb"})
 
     def test_a_voided_purchase_frees_its_codes(self):
         po = self.buy([{"imei": IMEI_A, "sn": SN_A}])

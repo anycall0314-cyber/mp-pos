@@ -12,7 +12,7 @@ export interface TakenInfo {
   warehouse_name: string;
   status: string;
   status_label: string;
-  /** 還在店裡(在庫 / 調撥中 / 廠商換貨中);false = 已經不在了(已售 / 已退) */
+  /** 還在店裡(在庫 / 調撥中 / 廠商換貨中 / 整理中);false = 已經不在了(已售 / 已退) */
   in_store: boolean;
 }
 

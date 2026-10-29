@@ -288,7 +288,12 @@ def expected_serials(count):
     back = VendorExchange.objects.filter(
         tenant=count.tenant, warehouse=count.warehouse, done_at__gte=count.created_at,
     ).exclude(status=VendorExchange.Status.PENDING)
-    return serials.exclude(pk__in=arrived.values("serial_id")).exclude(pk__in=back.values("serial_id"))
+    # 開盤之後才整理完(或取消整理)回到在庫的:那一筆「整理」異動也沒有寫門市,同一個道理排掉(repairs/stock.py)
+    refurbed = StockMovement.objects.filter(
+        tenant=count.tenant, serial__isnull=False, movement_type=T.REFURB, created_at__gte=count.created_at,
+    )
+    return (serials.exclude(pk__in=arrived.values("serial_id")).exclude(pk__in=back.values("serial_id"))
+            .exclude(pk__in=refurbed.values("serial_id")))
 
 
 def unknown_key(code: str) -> str:

@@ -106,7 +106,8 @@ def taken(tenant, codes, exclude_serial_id=None):
     return [keys[k] for k in keys if k in hit]
 
 
-IN_STORE = (ProductSerial.Status.IN_STOCK, ProductSerial.Status.IN_TRANSIT, ProductSerial.Status.RMA)
+IN_STORE = (ProductSerial.Status.IN_STOCK, ProductSerial.Status.IN_TRANSIT, ProductSerial.Status.RMA,
+            ProductSerial.Status.REFURB)
 
 
 def taken_details(tenant, codes) -> dict:

@@ -311,6 +311,9 @@ export function RepairsPage() {
                 // 毛利用伺服器算好的(維修毛利只有一份算法:工資不扣、自修扣零件成本)
                 const margin = Number(r.margin || 0);
                 const locked = r.is_void || r.status === "completed";
+                // 自家庫存送去整理的單:不收錢、沒有毛利(花的錢加進那一台的成本),工資不算
+                const stock = !!r.stock_serial_detail;
+                const dash = <span style={{ color: "var(--text-dim)" }}>—</span>;
                 return (
                   <tr key={r.id}>
                     <td>
@@ -342,7 +345,7 @@ export function RepairsPage() {
                     </td>
                     <td>{r.status_label}</td>
                     <td>
-                      <div>{r.customer_name}</div>
+                      <div>{stock ? "自家庫存" : r.customer_name}</div>
                       <div className="rp-sub">{r.host_model_name}</div>
                     </td>
                     <td>
@@ -378,6 +381,8 @@ export function RepairsPage() {
                             })
                           }
                         />
+                      ) : stock ? (
+                        dash
                       ) : (
                         <InlineMoneyCell
                           initial={r.labor_fee}
@@ -390,20 +395,26 @@ export function RepairsPage() {
                       )}
                     </td>
                     <td className="num">
-                      <InlineMoneyCell
-                        initial={r.customer_paid_amount}
-                        disabled={locked}
-                        title="實付金額"
-                        onSave={(v) =>
-                          patchField(r.id, { customer_paid_amount: v })
-                        }
-                      />
+                      {stock ? (
+                        dash
+                      ) : (
+                        <InlineMoneyCell
+                          initial={r.customer_paid_amount}
+                          disabled={locked}
+                          title="實付金額"
+                          onSave={(v) =>
+                            patchField(r.id, { customer_paid_amount: v })
+                          }
+                        />
+                      )}
                     </td>
                     <td
                       className="num"
                       style={{
                         color:
-                          margin < 0
+                          stock
+                            ? "var(--text-dim)"
+                            : margin < 0
                             ? "var(--danger-text)"
                             : margin > 0
                               ? "var(--success-text)"
@@ -411,7 +422,7 @@ export function RepairsPage() {
                         fontWeight: 600,
                       }}
                     >
-                      ${NUMBER_FMT(margin)}
+                      {stock ? "—" : `$${NUMBER_FMT(margin)}`}
                     </td>
                     {canVoid && (
                       <td>

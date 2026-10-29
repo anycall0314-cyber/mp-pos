@@ -197,7 +197,7 @@ def check_serials(tenant):
             codes.append(
                 f"{serial_no}:主序號沒有登記"
                 + ("(跟另一台設備的碼相同,刷這個碼會對到兩台)" if key in taken_codes else ""))
-        if status in (S.IN_STOCK, S.RETURNED) and warehouse_id is None:
+        if status in (S.IN_STOCK, S.RETURNED, S.REFURB) and warehouse_id is None:
             place.append(f"{serial_no}:{S(status).label}卻沒有門市")
         if status in (S.SOLD, S.IN_TRANSIT) and warehouse_id is not None:
             place.append(f"{serial_no}:{S(status).label}卻還掛在門市")
@@ -208,7 +208,7 @@ def check_serials(tenant):
             record.append(f"{serial_no}:已售,但沒有有效的銷貨")
         elif status == S.SOLD and net > 1:
             record.append(f"{serial_no}:同時掛在 {net} 張有效的銷貨")
-        elif status in (S.IN_STOCK, S.IN_TRANSIT, S.RETURNED, S.VOID) and net > 0:
+        elif status in (S.IN_STOCK, S.IN_TRANSIT, S.RETURNED, S.REFURB, S.VOID) and net > 0:
             record.append(f"{serial_no}:{S(status).label},但有銷貨沒退")
         elif status == S.RETURNED and not returned.get(sid):
             record.append(f"{serial_no}:已退,但沒有有效的銷退")

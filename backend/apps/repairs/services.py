@@ -10,6 +10,7 @@ from apps.core.tenant_fields import same_company
 from apps.inventory.locking import lock_document, lock_stock_rows, locked_balance
 from apps.inventory.models import StockBalance, StockMovement
 
+from . import stock
 from .models import RepairOrder, RepairOrderPart
 
 
@@ -184,20 +185,25 @@ def complete_repair_order(repair_order: RepairOrder) -> None:
         wh = repair_order.warehouse
         lines = list(repair_order.parts.select_related("part_product").order_by("id"))
         parts = [line.part_product for line in lines]
+        # 自家庫存送去整理的那一台(repairs/stock.py):它的商品、它自己跟零件一次鎖
+        unit = stock.prepare(repair_order)
         if not same_company(tenant.pk, wh, repair_order.customer, repair_order.sales_person,
                             repair_order.technician, repair_order.repair_item,
-                            repair_order.external_vendor, *lines, *parts):
+                            repair_order.external_vendor, unit, *lines, *parts):
             raise ValueError("維修單掛到的門市 / 客戶 / 人員 / 項目 / 廠商 / 零件不屬於這家公司")
+        shared = {}
+        if unit is not None:
+            unit.product = shared.setdefault(unit.product_id, unit.product)
+        unit_ids = [unit.pk] if unit is not None else []
 
         # 自修:依 RepairOrderPart 扣零件倉庫存
         if repair_order.mode == RepairOrder.Mode.IN_HOUSE:
             # 零件(商品)也鎖:成本快照要讀鎖到之後的加權平均(同一瞬間可能有進貨在改它)
-            shared = {}
             for line in lines:
                 line.part_product = shared.setdefault(line.part_product_id, line.part_product)
             lock_stock_rows(
-                tenant, products=shared.values(),
-                balances=[(part, wh) for part in shared.values()], create=True,
+                tenant, products=shared.values(), serial_ids=unit_ids,
+                balances=[(line.part_product, wh) for line in lines], create=True,
             )
             for line in lines:
                 part = line.part_product
@@ -238,11 +244,21 @@ def complete_repair_order(repair_order: RepairOrder) -> None:
                 )
             # 自修毛利重算 suggested_quote(完工時 snapshot 當下成本)
             repair_order.suggested_quote = compute_in_house_quote(repair_order)
+        elif unit is not None:
+            lock_stock_rows(tenant, products=shared.values(), serial_ids=unit_ids)
+
+        if unit is not None:
+            # 零件已經扣好、每一行的成本也記好了:零件成本 + 委外費用加進那一台的成本,回到在庫
+            stock.reread(unit)
+            try:
+                stock.finish(repair_order, unit)
+            except stock.StockRepairError as exc:
+                raise ValueError(str(exc))
 
         repair_order.status = RepairOrder.Status.COMPLETED
         repair_order.completed_at = timezone.now()
         repair_order.save(
-            update_fields=["status", "completed_at", "suggested_quote"]
+            update_fields=["status", "completed_at", "suggested_quote", "stock_cost_added"]
         )
 
 
@@ -287,9 +303,21 @@ def reopen_repair_order(repair_order: RepairOrder) -> None:
             tenant=tenant, pk__in={pid for pid, _ in owed})}
         stores = {w.pk: w for w in Warehouse.objects.filter(
             tenant=tenant, pk__in={wid for _, wid in owed})}
+        # 自家庫存的整理單:那一台的商品(要扣回平均成本)與那一台一起鎖;鎖到之後才看能不能重開。
+        # 零件的商品也放進同一次、照編號先鎖(複審 2026-10-29 P1):庫存餘額的鎖會連它的商品一起鎖,
+        # 只先鎖那一台的商品的話,順序變成「那一台的商品 → 零件」,跟進貨照編號鎖的順序相反會互卡
+        unit = stock.prepare(repair_order)
         lock_stock_rows(
-            tenant, balances=[(products[pid], stores[wid]) for pid, wid in owed], create=True
+            tenant, products=[unit.product, *products.values()] if unit is not None else [],
+            serial_ids=[unit.pk] if unit is not None else [],
+            balances=[(products[pid], stores[wid]) for pid, wid in owed], create=True
         )
+        if unit is not None:
+            stock.reread(unit)
+            try:
+                stock.undo(repair_order, unit)
+            except stock.StockRepairError as exc:
+                raise ValueError(str(exc))
         for (pid, wid), qty in sorted(owed.items()):
             part, wh = products[pid], stores[wid]
             balance = locked_balance(tenant, part, wh, create=True)
@@ -308,7 +336,7 @@ def reopen_repair_order(repair_order: RepairOrder) -> None:
 
         repair_order.status = RepairOrder.Status.READY_PICKUP
         repair_order.completed_at = None
-        repair_order.save(update_fields=["status", "completed_at"])
+        repair_order.save(update_fields=["status", "completed_at", "stock_cost_added"])
 
 
 def set_repair_status(repair_order: RepairOrder, new_status: str) -> None:
@@ -334,6 +362,15 @@ def void_repair_order(repair_order: RepairOrder) -> None:
             raise ValueError("此維修單已作廢")
         if repair_order.status == RepairOrder.Status.COMPLETED:
             raise ValueError("已完工的維修單要先重開(歸還零件)才能作廢")
+        unit = stock.prepare(repair_order)
+        if unit is not None:
+            # 自家庫存的整理單:那一台回到在庫
+            lock_stock_rows(repair_order.tenant, serial_ids=[unit.pk])
+            stock.reread(unit)
+            try:
+                stock.release(repair_order, unit)
+            except stock.StockRepairError as exc:
+                raise ValueError(str(exc))
         repair_order.is_void = True
         repair_order.save(update_fields=["is_void"])
 

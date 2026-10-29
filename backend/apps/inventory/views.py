@@ -1,5 +1,6 @@
 import math
 from datetime import timedelta
+from decimal import Decimal
 
 from django.db.models import (
     Count,
@@ -126,7 +127,7 @@ class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
             "warehouse_name": serial.warehouse.name if serial.warehouse_id else "",
             "status": serial.status,
             "status_label": serial.get_status_display(),
-            # 還在店裡(在庫 / 調撥中 / 廠商換貨中)還是已經不在了(已售 / 已退):個人收購要分開講
+            # 還在店裡(在庫 / 調撥中 / 廠商換貨中 / 整理中)還是已經不在了(已售 / 已退):個人收購要分開講
             "in_store": serial.status in IN_STORE,
         } for code, serial in found.items()]})
 
@@ -207,6 +208,26 @@ class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
         """序號完整履歷:收購來源 + 異動軌跡 + 銷售紀錄(含作廢)。"""
         serial = self.get_object()
 
+        # 送去整理的維修單(repairs/stock.py):完工的那幾張加進去的成本。收購 / 進貨的金額 = 現在的成本扣掉這些。
+        # 加進去的金額是零件的實際成本,只有管理員拿得到(維修單的 stock_cost_added 也是;複審 2026-10-29 P1):
+        # 其他人只看到單號與狀態,收購 / 進貨的金額照舊是這一台現在的成本(拆不出整理花了多少)
+        from apps.repairs.models import RepairOrder
+
+        manager = cost_access.sees_actual_cost(request.user)
+        orders = list(RepairOrder.objects.filter(tenant=serial.tenant, stock_serial=serial, is_void=False)
+                      .order_by("received_date", "id"))
+        refurbs = [
+            {
+                "id": o.id, "no": o.no, "mode_label": o.get_mode_display(),
+                "status": o.status, "status_label": o.get_status_display(),
+                "received_date": o.received_date, "completed_at": o.completed_at,
+                "cost_added": str(o.stock_cost_added) if manager else None,
+            }
+            for o in orders
+        ]
+        added = sum((o.stock_cost_added for o in orders), Decimal("0")) if manager else Decimal("0")
+        first_cost = str(serial.purchase_unit_cost - added)
+
         # 收購來源:廠商進貨單 or 個人收購銷貨單
         acquisition = None
         if serial.acquired_via_sales_order_id:
@@ -232,7 +253,7 @@ class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
                     if serial.acquired_from_member_id
                     else ""
                 ),
-                "amount": str(serial.purchase_unit_cost),
+                "amount": first_cost,
             }
         elif serial.purchase_order_item_id:
             poi = serial.purchase_order_item
@@ -245,7 +266,7 @@ class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
                 "doc_date": po.doc_date,
                 "supplier_id": po.supplier_id,
                 "supplier_name": po.supplier.name if po.supplier_id else "",
-                "amount": str(serial.purchase_unit_cost),
+                "amount": first_cost,
             }
 
         # 異動軌跡
@@ -320,6 +341,7 @@ class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
             {
                 "serial": ProductSerialSerializer(serial).data,
                 "acquisition": acquisition,
+                "refurbs": refurbs,
                 "movements": movement_data,
                 "sales": sales_data,
                 "code_changes": code_changes,

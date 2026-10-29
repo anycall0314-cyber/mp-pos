@@ -158,7 +158,8 @@ class RepairOrderPartSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedField
 class RepairOrderSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
     # 建議報價是存下來的「零件實際成本 + 工資」,扣掉工資就是實際成本:只有管理員拿得到
     # (畫面上的建議報價是用零件的業務員成本即時算的;owner 2026-10-28)
-    manager_only_fields = ("suggested_quote",)
+    # 加進自家庫存那一台的成本(零件實際成本 + 委外費用)也一樣
+    manager_only_fields = ("suggested_quote", "stock_cost_added")
 
     member_detail = MemberSerializer(source="member", read_only=True)
     parts = RepairOrderPartSerializer(many=True, read_only=True)
@@ -184,12 +185,24 @@ class RepairOrderSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMix
     sales_person_name = serializers.CharField(source="sales_person.name", read_only=True, default="")
     technician_name = serializers.CharField(source="technician.name", read_only=True, default="")
     margin_breakdown = serializers.SerializerMethodField()
+    # 自家庫存送去整理的那一台(repairs/stock.py);客人的單是 null
+    stock_serial_detail = serializers.SerializerMethodField()
     # 這張單公司賺多少(維修毛利只有 services.money_of 那一份算法;清單、開單頁、月報都是這個數字)。
     # 不是管理員:零件照業務員成本算 = 業務員毛利(owner 2026-10-28)
     margin = serializers.SerializerMethodField()
 
     def _staff(self) -> bool:
         return not self._for_a_manager()
+
+    def get_stock_serial_detail(self, obj):
+        s = obj.stock_serial
+        if s is None:
+            return None
+        return {
+            "id": s.id, "serial_no": s.serial_no, "product_name": s.product.name,
+            "warehouse_name": s.warehouse.name if s.warehouse_id else "",
+            "status": s.status, "status_label": s.get_status_display(),
+        }
 
     def get_margin(self, obj) -> str:
         from .services import compute_margin
@@ -295,12 +308,17 @@ class RepairOrderSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMix
             "payment_method",
             "completed_at",
             "is_void",
+            "stock_serial",
+            "stock_serial_detail",
+            "stock_cost_added",
             "parts",
             "parts_input",
             "created_at",
             "updated_at",
         ]
         read_only_fields = [
+            "stock_serial_detail",
+            "stock_cost_added",
             "status",
             "id",
             "no",
@@ -342,7 +360,19 @@ class RepairOrderSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMix
         existing_member_id = getattr(self.instance, "member_id", None)
         if member is not None and not member.is_active and member.pk != existing_member_id:
             raise serializers.ValidationError({"member": "會員已停用"})
-        if member is None and customer is None:
+        # 自家庫存的整理單(repairs/stock.py):建單之後不能換台;沒有會員、不收錢
+        if self.instance is not None and "stock_serial" in attrs \
+                and attrs["stock_serial"] != self.instance.stock_serial:
+            raise serializers.ValidationError({"stock_serial": "建單之後不能換整理的機器"})
+        unit = attrs.get("stock_serial", getattr(self.instance, "stock_serial", None))
+        if unit is not None:
+            if member is not None or customer is not None:
+                raise serializers.ValidationError({"stock_serial": "自家庫存的維修單不選會員"})
+            paid = attrs.get("customer_paid_amount", getattr(self.instance, "customer_paid_amount", 0))
+            method = attrs.get("payment_method", getattr(self.instance, "payment_method", None))
+            if paid or method is not None:
+                raise serializers.ValidationError({"customer_paid_amount": "自家庫存的維修單不收錢"})
+        elif member is None and customer is None:
             raise serializers.ValidationError({"member": "請選送修會員"})
         # 序號 / IMEI 必填(開不了機勾「取不到」)擋在收件畫面(RepairEntryPage),伺服器不擋:
         # 其他建維修單的地方與既有的單照舊
@@ -354,14 +384,40 @@ class RepairOrderSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMix
         return attrs
 
     def create(self, validated_data):
+        from django.db import transaction
+
         if validated_data.get("member") is not None:
             from apps.parties.sources import transaction_source
             validated_data["customer"] = transaction_source(validated_data, validated_data["tenant"])
         parts_input = validated_data.pop("parts_input", None)
-        instance = super().create(validated_data)
-        if parts_input is not None:
-            self._sync_parts(instance, parts_input)
+        unit = validated_data.get("stock_serial")
+        if unit is not None:
+            # 收件單上看的機型與序號照那一台帶
+            validated_data["device_serial"] = unit.serial_no
+            validated_data["serial_unavailable"] = False
+            if not validated_data.get("host_model_name"):
+                validated_data["host_model_name"] = unit.product.name[:128]
+        with transaction.atomic():
+            instance = super().create(validated_data)
+            if parts_input is not None:
+                self._sync_parts(instance, parts_input)
+            if unit is not None:
+                self._start_refurb(instance, unit)
         return instance
+
+    def _start_refurb(self, order, unit):
+        """那一台 在庫 → 整理中(鎖住那一台之後才看;鎖在門市的帳號只能刷自己門市的)。"""
+        from apps.core.warehouse_scoping import locked_warehouse_id
+
+        from . import stock
+
+        request = self.context.get("request")
+        own = locked_warehouse_id(request.user) if request is not None else None
+        try:
+            stock.start(order, unit.pk, own_warehouse_id=own)
+        except stock.StockRepairError as exc:
+            raise serializers.ValidationError({"stock_serial": str(exc)})
+        unit.refresh_from_db(fields=["status", "warehouse"])        # 回應裡看到的是改過之後的
 
     def update(self, instance, validated_data):
         parts_input = validated_data.pop("parts_input", None)

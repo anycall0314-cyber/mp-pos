@@ -20,6 +20,7 @@ SERIAL_STATES = {
     ProductSerial.Status.IN_STOCK: StockSnapshot.State.IN_STOCK,
     ProductSerial.Status.RETURNED: StockSnapshot.State.RETURNED,
     ProductSerial.Status.RMA: StockSnapshot.State.RMA,
+    ProductSerial.Status.REFURB: StockSnapshot.State.REFURB,
     ProductSerial.Status.IN_TRANSIT: StockSnapshot.State.IN_TRANSIT,
 }
 

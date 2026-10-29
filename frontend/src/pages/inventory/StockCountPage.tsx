@@ -723,6 +723,28 @@ export function StockCountPage() {
             </tbody>
           </table>
         )}
+        {shown === "refurb" && (
+          <table className="report-grid">
+            <thead>
+              <tr>
+                <th>整理中的序號</th>
+                <th>品名</th>
+                <th>維修單</th>
+                <th className="num">送出天數</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(detail.refurb_rows ?? []).map((v) => (
+                <tr key={v.id} className="report-row">
+                  <td className="id-code">{v.serial_no}</td>
+                  <td>{v.name}</td>
+                  <td className="id-code">{v.repair_no || "—"}</td>
+                  <td className="num">{v.days ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
         {shown === "missing" && (
           <table className="report-grid">
             <thead>

@@ -123,6 +123,15 @@ export interface CountVendor {
   days: number;
 }
 
+/** 送去整理、還沒整理完的那幾台(自家庫存的維修單;盤點不用刷,另外列出來) */
+export interface CountRefurb {
+  id: number;
+  serial_no: string;
+  name: string;
+  repair_no: string;
+  days: number | null;
+}
+
 export interface CountDetail extends CountSummary {
   manager: boolean;
   /** 帳上有數量、還沒輸入的配件有幾樣(只有數字) */
@@ -132,6 +141,7 @@ export interface CountDetail extends CountSummary {
   phones?: CountPhone[];
   unknown_rows?: CountUnknown[];
   vendor_rows?: CountVendor[];
+  refurb_rows?: CountRefurb[];
   /** 剛按「手機盤點」那一次回來才有:QR Code 的憑證(只在這一刻看得到) */
   pair?: { id: number; label: string; token: string; expires_at: string };
   missing_rows?: CountMissing[];
@@ -420,12 +430,13 @@ export function defaultCountStore(
  * 盤點單一次只顯示一張表、上面用分頁切(全站檢視 B1:以前幾張表疊在一頁、各自在小框裡捲,門市的螢幕看不到剛刷的那一台)。
  * 名稱一律四個字(同一排字數一樣)。
  */
-export type CountTab = "lines" | "scans" | "unknowns" | "vendor" | "missing" | "new" | "extra" | "uncounted";
+export type CountTab = "lines" | "scans" | "unknowns" | "vendor" | "refurb" | "missing" | "new" | "extra" | "uncounted";
 const TAB_LABELS: Record<CountTab, string> = {
   lines: "配件數量",
   scans: "手機序號",
   unknowns: "沒對到碼",
   vendor: "廠商換貨",
+  refurb: "送去整理",
   missing: "少的序號",
   new: "首次入庫",
   extra: "多刷的碼",
@@ -436,7 +447,7 @@ const ALERT_TABS = new Set<CountTab>(["unknowns", "missing", "extra", "uncounted
 
 /** 這張單現在有哪幾個分頁:有東西的才出現;配件、手機在盤點中一直在(要有地方看剛記的)。 */
 export function countTabs(
-  d: Pick<CountDetail, "status" | "manager" | "line_rows" | "scan_rows" | "unknown_rows" | "vendor_rows"
+  d: Pick<CountDetail, "status" | "manager" | "line_rows" | "scan_rows" | "unknown_rows" | "vendor_rows" | "refurb_rows"
     | "missing_rows" | "new_rows" | "extra_rows" | "uncounted_rows">,
 ): { key: CountTab; label: string; count: number; alert: boolean }[] {
   const counting = d.status === "counting";
@@ -446,6 +457,7 @@ export function countTabs(
     ["scans", d.scan_rows.length, counting || d.scan_rows.length > 0],
     ["unknowns", d.unknown_rows?.length ?? 0, (d.unknown_rows?.length ?? 0) > 0],
     ["vendor", d.vendor_rows?.length ?? 0, (d.vendor_rows?.length ?? 0) > 0],
+    ["refurb", d.refurb_rows?.length ?? 0, (d.refurb_rows?.length ?? 0) > 0],
     ["missing", d.missing_rows?.length ?? 0, d.manager && (d.missing_rows?.length ?? 0) > 0],
     ["new", d.new_rows?.length ?? 0, d.manager && reviewed && (d.new_rows?.length ?? 0) > 0],
     ["extra", d.extra_rows?.length ?? 0, d.manager && (d.extra_rows?.length ?? 0) > 0],

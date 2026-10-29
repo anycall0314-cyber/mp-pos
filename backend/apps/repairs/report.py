@@ -43,8 +43,9 @@ def completed(tenant, *, start, end, warehouse_id=None, way="", staff=False):
     staff = 零件照業務員成本算。"""
     if way and way not in WAYS:
         raise stock_reports.ReportError("沒有這種方式")
+    # 自家庫存送去整理的單不算(不收錢,花的錢加進那一台的成本;repairs/stock.py)
     orders = RepairOrder.objects.filter(
-        tenant=tenant, is_void=False, status=RepairOrder.Status.COMPLETED,
+        tenant=tenant, is_void=False, status=RepairOrder.Status.COMPLETED, stock_serial__isnull=True,
         completed_at__gte=stock_reports.day_start(start),
         completed_at__lt=stock_reports.day_start(end + timedelta(days=1)),
     )

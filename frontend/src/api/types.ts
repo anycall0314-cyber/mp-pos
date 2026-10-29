@@ -181,6 +181,8 @@ export type SerialStatus =
   | "sold"
   | "returned"
   | "rma"
+  // 自家庫存送去整理(自家庫存的維修單;不能賣、不能調撥,算庫存)
+  | "refurb"
   | "void"
   // 盤點時帳上在庫、現場沒有,管理員核准之後標成這個(不算在庫、還佔著碼;找到了可以找回)
   | "lost";
@@ -1486,9 +1488,31 @@ export interface RepairOrder {
   payment_method?: number | null;
   completed_at: string | null;
   is_void: boolean;
+  /** 自家庫存送去整理的那一台(客人的單是 null);建單之後不能換 */
+  stock_serial?: number | null;
+  stock_serial_detail?: RepairStockSerial | null;
+  /** 完工時加進那一台成本的金額(只有管理員拿得到) */
+  stock_cost_added?: string;
   parts: RepairOrderPart[];
   created_at: string;
   updated_at: string;
+}
+
+export interface RepairStockSerial {
+  id: number;
+  serial_no: string;
+  product_name: string;
+  warehouse_name: string;
+  status: SerialStatus;
+  status_label: string;
+}
+
+/** 刷碼找自家庫存的那一台(`/repair-orders/stock-lookup/`):ok = 可以送去整理,不行的原因在 reason */
+export interface RepairStockLookup extends RepairStockSerial {
+  /** 那一台在哪家門市(收件門市還沒選就帶這一家) */
+  warehouse: number | null;
+  ok: boolean;
+  reason: string;
 }
 
 export interface PartsUsageReport {

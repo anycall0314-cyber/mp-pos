@@ -600,7 +600,7 @@ class SerialReportTests(TestCase):
         self.assertEqual((unit["sku"], unit["name"], unit["cost"]), (self.c.phone.sku, self.c.phone.name, "20000.00"))
         self.assertEqual(data["cost_total"], "40000.00")
         # 2026-10-12 多「盤虧」(盤點核准之後少的那幾台)
-        self.assertEqual([s["label"] for s in data["statuses"]], ["在庫", "調撥中", "已售", "已退", "廠商換貨中", "作廢", "盤虧"])
+        self.assertEqual([s["label"] for s in data["statuses"]], ["在庫", "調撥中", "已售", "已退", "廠商換貨中", "整理中", "作廢", "盤虧"])
 
     def test_sold_units_show_who_sold_them_and_when(self):
         data = self.rows(status="sold")

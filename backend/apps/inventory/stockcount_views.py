@@ -150,6 +150,24 @@ def _detail(count, user):
         "supplier": x.supplier.name if x.supplier_id else "",
         "days": (today - stockcount_phone.timezone.localdate(x.created_at)).days,
     } for x in at_vendor]
+    # 送去整理、還沒整理完的(repairs/stock.py):跟廠商換貨一樣不用刷、另外列出來
+    from apps.repairs.models import RepairOrder
+
+    refurbing = ProductSerial.objects.filter(
+        tenant=count.tenant, warehouse_id=wh, status=ProductSerial.Status.REFURB,
+    ).select_related("product").order_by("id")
+    if scope:
+        refurbing = refurbing.filter(product__category_id__in=scope)
+    refurbing = list(refurbing)
+    orders = {}
+    for o in (RepairOrder.objects.filter(tenant=count.tenant, stock_serial__in=refurbing, is_void=False)
+              .exclude(status=RepairOrder.Status.COMPLETED).order_by("id")):
+        orders[o.stock_serial_id] = o
+    out["refurb_rows"] = [{
+        "id": u.id, "serial_no": u.serial_no, "name": u.product.name,
+        "repair_no": orders[u.id].no if u.id in orders else "",
+        "days": (today - orders[u.id].received_date).days if u.id in orders else None,
+    } for u in refurbing]
     states = dict(ProductSerial.Status.choices)
     out["scan_rows"] = [{
         "id": s.id, "code": s.code, "known": s.serial_id is not None,

@@ -232,13 +232,13 @@ test("開新盤點預設的門市:上次選的(還在、還啟用)→ 帳號的�
 test("盤點單一次一張表:有東西的才有分頁,配件、手機在盤點中一直在;名稱都是四個字", () => {
   const base = { status: "counting", manager: false, line_rows: [], scan_rows: [] };
   assert.deepEqual(countTabs(base).map((t) => t.key), ["lines", "scans"]);
-  const busy = { ...base, unknown_rows: [{}], vendor_rows: [{}], missing_rows: [{}], extra_rows: [{}], uncounted_rows: [{}], new_rows: [{}] };
+  const busy = { ...base, unknown_rows: [{}], vendor_rows: [{}], refurb_rows: [{}], missing_rows: [{}], extra_rows: [{}], uncounted_rows: [{}], new_rows: [{}] };
   // 盤的人看不到少的、多的、沒盤的(盲盤)
-  assert.deepEqual(countTabs(busy).map((t) => t.key), ["lines", "scans", "unknowns", "vendor"]);
+  assert.deepEqual(countTabs(busy).map((t) => t.key), ["lines", "scans", "unknowns", "vendor", "refurb"]);
   // 管理員:首次入庫只在送出之後
-  assert.deepEqual(countTabs({ ...busy, manager: true }).map((t) => t.key), ["lines", "scans", "unknowns", "vendor", "missing", "extra", "uncounted"]);
+  assert.deepEqual(countTabs({ ...busy, manager: true }).map((t) => t.key), ["lines", "scans", "unknowns", "vendor", "refurb", "missing", "extra", "uncounted"]);
   const review = countTabs({ ...busy, manager: true, status: "submitted", scan_rows: [{}, {}] });
-  assert.deepEqual(review.map((t) => t.key), ["scans", "unknowns", "vendor", "missing", "new", "extra", "uncounted"]);
+  assert.deepEqual(review.map((t) => t.key), ["scans", "unknowns", "vendor", "refurb", "missing", "new", "extra", "uncounted"]);
   assert.equal(review[0].count, 2);
   for (const t of review) assert.equal([...t.label].length, 4, t.label);
   // 紅色的數字只給要處理 / 注意的

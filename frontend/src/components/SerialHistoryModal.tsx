@@ -168,6 +168,39 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
                 </div>
               )}
 
+              {(data.refurbs ?? []).length > 0 && (
+                <>
+                  {/* 送去整理(自家庫存的維修單):完工的那幾張加進這一台的成本(金額只有管理員看得到;那時上面收購 / 進貨的金額不含) */}
+                  <div className="bulk-preview-head">整理紀錄</div>
+                  <table className="line-table" style={{ marginBottom: 12 }}>
+                    <thead>
+                      <tr>
+                        <th>維修單</th>
+                        <th>收件日</th>
+                        <th>方式</th>
+                        <th>狀態</th>
+                        {isAdmin && <th className="num">加進成本</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(data.refurbs ?? []).map((r) => (
+                        <tr key={r.id}>
+                          <td className="id-code">{r.no}</td>
+                          <td>{r.received_date}</td>
+                          <td>{r.mode_label}</td>
+                          <td>{r.status_label}</td>
+                          {isAdmin && (
+                            <td className="num">
+                              {r.status === "completed" && r.cost_added != null ? money(r.cost_added) : "—"}
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+
               <div className="bulk-preview-head">銷售紀錄</div>
               {data.sales.length === 0 && (
                 <div className="md-empty" style={{ marginBottom: 12 }}>

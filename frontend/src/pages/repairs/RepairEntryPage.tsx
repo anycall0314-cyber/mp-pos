@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "@/api/client";
 import {
   lookupMembers,
+  lookupStockSerial,
   useCompleteRepair,
   useRepairItemsByModel,
   useRepairOrder,
@@ -32,6 +33,7 @@ import type {
   RepairItem,
   RepairMode,
   RepairStatus,
+  RepairStockSerial,
   RepairUnlockMethod,
   SalesPerson,
   Supplier,
@@ -185,6 +187,13 @@ function RepairEntryForm() {
   const paymentMethods = usePaymentMethods({ activeOnly: true }).data ?? [];
   const [status, setStatusState] = useState<RepairStatus>("pending");
   const isLocked = status === "completed"; // 完成後鎖定欄位,須重開才能改
+  // 送修來源(2026-10-29):客人送修 / 自家庫存送去整理(repairs/stock.py:那一台變整理中,
+  // 完工時零件成本或委外費用加進它的成本,工資不算)。既有的單看它有沒有掛那一台
+  const [source, setSource] = useState<"customer" | "stock">("customer");
+  const [stockUnit, setStockUnit] = useState<RepairStockSerial | null>(null);
+  const [stockCode, setStockCode] = useState("");
+  const [stockLooking, setStockLooking] = useState(false);
+  const isStock = source === "stock";
 
   // 手機解鎖方式
   const [unlockMethod, setUnlockMethod] = useState<RepairUnlockMethod | "">("");
@@ -227,6 +236,10 @@ function RepairEntryForm() {
     if (!o) return;
     // 金額照資料庫原本的字串放進 state(框裡會顯示成整數):沒動過的欄位存檔時原樣送回去,不會被改寫
     setMode(o.mode);
+    if (o.stock_serial_detail) {
+      setSource("stock");
+      setStockUnit(o.stock_serial_detail);
+    }
     setCustomer(o.customer ?? "");
     setMember(o.member_detail ?? null);
     setCustomerName(o.customer_name);
@@ -327,6 +340,11 @@ function RepairEntryForm() {
     externalActual: Number(extActual || 0),
   };
   const margin = repairMargin({ ...numbers });
+  // 自家庫存:完工時加進那一台成本的金額(跟伺服器同一套 = 零件成本 + 委外費用);已完工的看記下來的
+  const refurbCost =
+    isLocked && existing.data?.stock_cost_added != null
+      ? Number(existing.data.stock_cost_added)
+      : 0 - repairMargin({ ...numbers, paid: 0 });
 
   // 個人毛利分解(前端即時計算,與 backend compute_personal_margin 公式對齊)
   const personalBreakdown = useMemo(
@@ -431,6 +449,30 @@ function RepairEntryForm() {
     finally { setCreating(false); }
   }
 
+  /** 自家庫存:刷到的碼是哪一台(能不能送去整理伺服器說了算,建單時會再看一次) */
+  async function scanStock() {
+    const code = stockCode.trim();
+    if (!code || stockLooking) return;
+    setError(null);
+    setStockLooking(true);
+    try {
+      const found = await lookupStockSerial(code);
+      if (!found.ok) {
+        setError(found.reason);
+        return;
+      }
+      setStockUnit(found);
+      setStockCode("");
+      if (warehouseId === "" && found.warehouse) setWarehouseId(found.warehouse);
+      setModelName(found.product_name);
+      setDeviceSerial(found.serial_no);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setStockLooking(false);
+    }
+  }
+
   function submit(opts?: { printAfter?: boolean }) {
     return submitGate.current(async () => {
       setSubmitting(true);
@@ -447,21 +489,33 @@ function RepairEntryForm() {
     if (notLoaded) return false;
     setError(null);
     // 收件要填的只有 lib/repairIntake 那幾格;門市、收件人、收件日沒有預設才要人選
-    const problem = intakeProblem({
-      phone: customerPhone, name: customerName, modelKey, serial: deviceSerial, serialUnavailable,
-      defect, unlockMethod, unlockPassword, unlockPattern,
-    });
-    if (problem) {
-      setError(problem);
-      return false;
-    }
-    if (!intake && !customer && !member) {
-      setError("請選或建立送修會員");
-      return false;
-    }
-    if (lookupStatus === "pick") {
-      setError("先點是哪一位會員");
-      return false;
+    if (isStock) {
+      // 自家庫存:不用會員、機型、解鎖方式;要刷到那一台、寫要整理什麼
+      if (!stockUnit) {
+        setError("請刷要整理的那一台");
+        return false;
+      }
+      if (!defect.trim()) {
+        setError("請填故障描述");
+        return false;
+      }
+    } else {
+      const problem = intakeProblem({
+        phone: customerPhone, name: customerName, modelKey, serial: deviceSerial, serialUnavailable,
+        defect, unlockMethod, unlockPassword, unlockPattern,
+      });
+      if (problem) {
+        setError(problem);
+        return false;
+      }
+      if (!intake && !customer && !member) {
+        setError("請選或建立送修會員");
+        return false;
+      }
+      if (lookupStatus === "pick") {
+        setError("先點是哪一位會員");
+        return false;
+      }
     }
     if (!warehouseId) {
       setError("請選擇收件門市");
@@ -483,7 +537,7 @@ function RepairEntryForm() {
     try {
       // 電話查不到會員:存檔時用這個姓名建一位(owner 選「存檔自動建」;畫面上電話那一格先講會建)
       let sender = member;
-      if (intake && !sender && !customer) {
+      if (intake && !isStock && !sender && !customer) {
         const bad = phoneForNewMember(customerPhone);
         if (bad) {
           setError(bad);
@@ -521,6 +575,15 @@ function RepairEntryForm() {
         customer_paid_amount: customerPaid || "0",
         payment_method: paymentMethod || null,
       };
+      if (isStock) {
+        // 自家庫存:沒有會員、不收錢;那一台只在建單時送(之後不能換)
+        Object.assign(body, {
+          customer: null, member: null, customer_paid_amount: "0", payment_method: null,
+          is_return_visit: false, previous_repair_order: null, intake_estimate: "0",
+          unlock_method: "none", unlock_password: "", unlock_pattern: "",
+          ...(isEdit ? {} : { stock_serial: stockUnit?.id }),
+        });
+      }
       if (mode === "in_house") {
         body.repair_item = repairItemId;
         body.labor_fee = laborFee || "0";
@@ -673,21 +736,34 @@ function RepairEntryForm() {
               )
             ) : (
               <>
-                <button
-                  className="btn"
-                  onClick={() => submit()}
-                  disabled={save.isPending || submitting || notLoaded}
-                  title="只儲存,不開啟列印"
-                >
-                  {save.isPending ? "儲存中…" : "儲存"}
-                </button>
-                <button
-                  className="btn primary"
-                  onClick={() => submit({ printAfter: true })}
-                  disabled={save.isPending || submitting || notLoaded}
-                >
-                  {save.isPending ? "儲存中…" : "儲存並列印收據"}
-                </button>
+                {isStock ? (
+                  // 自家庫存沒有收件單可印
+                  <button
+                    className="btn primary"
+                    onClick={() => submit()}
+                    disabled={save.isPending || submitting || notLoaded}
+                  >
+                    {save.isPending ? "儲存中…" : "儲存"}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      className="btn"
+                      onClick={() => submit()}
+                      disabled={save.isPending || submitting || notLoaded}
+                      title="只儲存,不開啟列印"
+                    >
+                      {save.isPending ? "儲存中…" : "儲存"}
+                    </button>
+                    <button
+                      className="btn primary"
+                      onClick={() => submit({ printAfter: true })}
+                      disabled={save.isPending || submitting || notLoaded}
+                    >
+                      {save.isPending ? "儲存中…" : "儲存並列印收據"}
+                    </button>
+                  </>
+                )}
               </>
             )}
           </>
@@ -716,9 +792,10 @@ function RepairEntryForm() {
         {!intake && isEdit && (
           <section className="re-topbar">
             <div className="re-topbar-who">
-              <b>{customerName || "—"}</b>
-              {customerPhone && <span>{customerPhone}</span>}
+              <b>{isStock ? "自家庫存" : customerName || "—"}</b>
+              {!isStock && customerPhone && <span>{customerPhone}</span>}
               <span>{modelName || "—"}</span>
+              {isStock && stockUnit && <span className="id-code">{stockUnit.serial_no}</span>}
             </div>
             <div className="re-stepper re-stepper-top">
               {steps.map((s, i) => {
@@ -767,7 +844,8 @@ function RepairEntryForm() {
           </div>
         )}
 
-        {/* 頂部:維修方式 segmented + 返修勾選 */}
+        {/* 頂部:維修方式 segmented + 返修勾選(自家庫存收件時兩個都沒有,整條不出來) */}
+        {!(intake && isStock) && (
         <div className="re-mode-bar">
           {!intake && (
             // 維修方式單選(全站控制項 MC-06);有內容時換方式要再按一次(小字變「再按一次,內容會清掉」)
@@ -782,6 +860,7 @@ function RepairEntryForm() {
               ]}
             />
           )}
+          {!isStock && (
           <label className="re-return-toggle">
             <input
               type="checkbox"
@@ -821,7 +900,9 @@ function RepairEntryForm() {
               </button>
             )}
           </label>
+          )}
         </div>
+        )}
 
         {/* 收件:單欄;既有的單也單欄(全站檢視 V02),費用明細、個人毛利、備註接在維修內容後面 */}
         <div className={intake ? "re-grid re-grid-intake" : "re-grid re-grid-single"}>
@@ -831,9 +912,64 @@ function RepairEntryForm() {
             <section className="re-section">
               <div className="re-section-title">基本資料</div>
               <div className="re-section-body">
-                {!intake && (
+                {intake && (
+                  <ChoiceGroup
+                    label="送修來源"
+                    layout="fill"
+                    value={source}
+                    onChange={(v) => {
+                      setSource(v);
+                      setError(null);
+                    }}
+                    options={[
+                      { value: "customer", label: "客人送修" },
+                      { value: "stock", label: "自家庫存" },
+                    ]}
+                  />
+                )}
+                {isStock && (
+                  <Field label="整理的機器" required>
+                    {stockUnit ? (
+                      <div className="re-customer-status">
+                        <span className="re-customer-badge member">{stockUnit.product_name}</span>
+                        <span className="id-code">{stockUnit.serial_no}</span>
+                        <span>{stockUnit.warehouse_name}</span>
+                        <span>{stockUnit.status_label}</span>
+                        {!isEdit && (
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => {
+                              setStockUnit(null);
+                              setModelName("");
+                              setDeviceSerial("");
+                            }}
+                          >
+                            換一台
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <input
+                        value={stockCode}
+                        onChange={(e) => setStockCode(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void scanStock();
+                          }
+                        }}
+                        placeholder="刷 IMEI 或序號"
+                        disabled={stockLooking}
+                        autoFocus
+                      />
+                    )}
+                  </Field>
+                )}
+                {!isStock && !intake && (
                   <Field label="送修會員"><ComboBox<Member> value={member?.id ?? ""} selectedOption={member ? {id: member.id, label: member.name, secondary: member.phone, payload: member} : null} fetchOptions={searchMembers} disabled={isLocked || notLoaded} placeholder="電話／姓名／公司／統編" onChange={(_, opt) => { const m = opt?.payload ?? null; setMember(m); if (m) { setCustomerName(m.name); setCustomerPhone(m.phone); setLookupStatus("found"); setShowQuickCreate(false); } }} /></Field>
                 )}
+                {!isStock && (<>
                 <div className="re-2col">
                   <Field
                     label="聯絡電話"
@@ -917,6 +1053,7 @@ function RepairEntryForm() {
                     )}
                   </div>
                 )}
+                </>)}
                 <div className="re-2col">
                   {(!intake || !defaultWh.id) && (
                   <Field label="收件門市" required>
@@ -986,6 +1123,7 @@ function RepairEntryForm() {
                     />
                   </Field>
                   )}
+                  {!isStock && (<>
                   <Field
                     label="機型"
                     required
@@ -1020,6 +1158,7 @@ function RepairEntryForm() {
                       取不到(開不了機)
                     </label>
                   </Field>
+                  </>)}
                   {!intake && (
                   <Field label="預計完修日期">
                     <input
@@ -1029,6 +1168,7 @@ function RepairEntryForm() {
                     />
                   </Field>
                   )}
+                  {!isStock && (<>
                   <Field label="預估費用" hint="印在收件單上,註明以檢測後報價為準">
                     <input
                       inputMode="numeric"
@@ -1044,16 +1184,18 @@ function RepairEntryForm() {
                       maxLength={200}
                     />
                   </Field>
+                  </>)}
                 </div>
                 <Field label="故障描述" required>
                   <textarea
                     rows={3}
                     value={defect}
                     onChange={(e) => setDefect(e.target.value)}
-                    placeholder="會員描述的問題"
+                    placeholder={isStock ? "要整理的地方" : "會員描述的問題"}
                   />
                 </Field>
 
+                {!isStock && (
                 <Field
                   label="手機解鎖方式"
                   required
@@ -1093,6 +1235,7 @@ function RepairEntryForm() {
                     />
                   )}
                 </Field>
+                )}
               </div>
             </section>
 
@@ -1328,6 +1471,7 @@ function RepairEntryForm() {
                       <span>{costWord}合計</span>
                       <b>${money(partsCost)}</b>
                     </div>
+                    {!isStock && (<>
                     <div className="re-summary-row">
                       <span>工資</span>
                       <MoneyInput
@@ -1355,6 +1499,7 @@ function RepairEntryForm() {
                         className="re-summary-input"
                       />
                     </div>
+                    </>)}
                   </>
                 ) : (
                   <>
@@ -1373,6 +1518,7 @@ function RepairEntryForm() {
 
             {/* 個人毛利分解(按公式即時算) */}
             {/* 個人毛利收起來,按一下才開(紅隊:那一塊數字正對著客人) */}
+            {!isStock && (
             <details className="re-card re-personal">
               <summary className="re-card-title">
                 個人毛利分解
@@ -1431,6 +1577,7 @@ function RepairEntryForm() {
                   "收件 = 實付 − 內部結算價;維修人員 = 內部結算價 − 零件成本"}
               </div>
             </details>
+            )}
 
             {/* 備註 */}
             <section className="re-card">
@@ -1453,6 +1600,15 @@ function RepairEntryForm() {
       {!intake && isEdit && (
         <div className="entry-footer re-footer">
           {error && <span className="sr-footer-err">{error}</span>}
+          {isStock ? (
+            <div className="entry-summary">
+              {actual && (
+                <span>
+                  整理費<b>${money(refurbCost)}</b>
+                </span>
+              )}
+            </div>
+          ) : (
           <div className="entry-summary">
             <span>
               報價<b>${money(quoteShown)}</b>
@@ -1491,6 +1647,7 @@ function RepairEntryForm() {
               {actual ? "預估毛利" : "業務員毛利"}<b style={{ color: margin < 0 ? "var(--danger-text)" : "var(--success-text)" }}>${money(margin)}</b>
             </span>
           </div>
+          )}
           {!isLocked && (
             <button
               type="button"

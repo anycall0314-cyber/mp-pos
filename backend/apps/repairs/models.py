@@ -272,6 +272,18 @@ class RepairOrder(TenantOwnedModel):
     completed_at = models.DateTimeField("完工時間", null=True, blank=True)
     is_void = models.BooleanField("作廢", default=False)
 
+    # 自家庫存的機器送去整理(2026-10-29;owner:收購的中古機機況太差,整理完再賣):有填 = 這張不是客人的,
+    # 修的是自己庫存的那一台(建單時那一台變「整理中」);完工時零件成本或委外實際費用加進那一台的成本(工資不算,
+    # 跟維修毛利同一套)。不收客人的錢、不算維修月報。建單之後不能換台。規則在 repairs/stock.py
+    stock_serial = models.ForeignKey(
+        "inventory.ProductSerial", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="refurb_orders", verbose_name="自家庫存的機器",
+    )
+    # 完工那一刻加進那一台成本的金額(重開時照這個扣回去;沒完工 / 不是自家庫存 = 0)
+    stock_cost_added = models.DecimalField(
+        "加進機器的成本", max_digits=14, decimal_places=2, default=Decimal("0"), db_default=Decimal("0"),
+    )
+
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["tenant", "no"], name="uniq_repair_no"),

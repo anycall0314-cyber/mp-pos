@@ -35,6 +35,9 @@ class ProductSerial(TenantOwnedModel):
         RETURNED = "returned", "已退"
         # 送廠商換貨(2026-10-21):還掛在原門市、算這家門市的庫存,不能賣、不能調撥、盤點不用刷。紀錄在 VendorExchange
         RMA = "rma", "廠商換貨中"
+        # 自家庫存送去整理(2026-10-29;owner:收購時機況太差,整理完再賣,自修或外包):開一張「自家庫存」的維修單。
+        # 跟廠商換貨中一樣:還掛在原門市、算庫存、平均成本照算,不能賣、不能調撥、盤點不用刷。規則在 repairs/stock.py
+        REFURB = "refurb", "整理中"
         VOID = "void", "作廢"
         # 盤點時帳上在庫、現場沒有,管理員核准之後標成這個(2026-10-12)。不算在庫、不能賣;
         # **還佔著它的碼**(跟作廢不一樣:找到了可以按「找回」變回在庫,所以同一個 IMEI 不能再進一次貨)
@@ -176,8 +179,9 @@ class ProductSerial(TenantOwnedModel):
 
 # 算平均成本時算進去的設備:在庫 + 廠商換貨中 + 已退(都還是這家公司的貨、有成本)。
 # 只算在庫的話,有一台在換貨時進貨,平均成本會被新進的那一批拉走(複審 2026-10-21 P0);
-# 銷退退回來、還沒確認可賣的已退也一樣(複審 2026-10-23 P0)
-COSTED_STATUSES = (ProductSerial.Status.IN_STOCK, ProductSerial.Status.RMA, ProductSerial.Status.RETURNED)
+# 銷退退回來、還沒確認可賣的已退也一樣(複審 2026-10-23 P0);送去整理的(整理中)也一樣
+COSTED_STATUSES = (ProductSerial.Status.IN_STOCK, ProductSerial.Status.RMA, ProductSerial.Status.RETURNED,
+                   ProductSerial.Status.REFURB)
 
 
 class ProductSerialIdentifier(TenantOwnedModel):
@@ -385,6 +389,8 @@ class StockMovement(TenantOwnedModel):
         VENDOR_EXCHANGE = "vendor_exchange", "廠商換貨"
         # 銷退退回來的「已退」確認可以賣、回到在庫(2026-10-23):只是紀錄,不寫門市、不動數量(一直在原門市)
         RETURN_RELEASE = "return_release", "退回可賣"
+        # 自家庫存送去整理 / 整理完成 / 取消 / 重開(2026-10-29):只是紀錄,不寫門市、不動數量(一直在原門市)
+        REFURB = "refurb", "整理"
 
     serial = models.ForeignKey(
         ProductSerial,

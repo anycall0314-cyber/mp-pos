@@ -15,6 +15,7 @@ class StockSnapshot(TenantOwnedModel):
         IN_STOCK = "in_stock", "在庫"
         RETURNED = "returned", "退回待處理"
         RMA = "rma", "廠商換貨中"
+        REFURB = "refurb", "整理中"
         IN_TRANSIT = "in_transit", "調撥中"
 
     business_date = models.DateField("營業日")
