@@ -368,7 +368,9 @@ tr.row-void td { opacity: 0.5; text-decoration: line-through; }
   flex-shrink: 0;
   white-space: nowrap;
 }
+/* 「新增 / 新零件進貨」那一列黏在下拉框最下面:結果再多也看得到,不用捲到底(owner 2026-10-29 維修單找不到怎麼進貨) */
 .combobox-create {
+  position: sticky; bottom: 0;
   padding: 8px 10px; cursor: pointer; font-size: var(--font-body);
   color: var(--accent); border-top: 1px solid var(--border);
   background: var(--panel);

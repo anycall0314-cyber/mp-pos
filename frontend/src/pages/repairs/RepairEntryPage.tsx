@@ -1354,7 +1354,7 @@ function RepairEntryForm() {
                         ]);
                       }}
                       fetchOptions={(q) =>
-                        searchProducts(q, { activeOnly: true })
+                        searchProducts(q, { activeOnly: true, partsOnly: true })
                       }
                       placeholder="搜尋零件加入…"
                       onCreateNew={canBuyPart && !isLocked && quickPart === null ? (q) => setQuickPart(q) : undefined}

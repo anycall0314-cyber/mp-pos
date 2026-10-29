@@ -146,3 +146,19 @@ class StockModelTests(TestCase):
         }, format="json")
         self.assertEqual(r.status_code, 201, r.content.decode())
         self.assertEqual(r.json()["host_model_key"], c.phone.phone_model_key)
+
+
+class PartsSearchTests(TestCase):
+    """維修單的領用零件只搜零件倉(手機、配件挑了也不能用;列出來會把「新零件進貨」擠到最下面,owner「沒有相關品號就無法進貨」)。"""
+
+    def test_search_can_ask_for_parts_only(self):
+        c = Company("a", "甲通訊行", "甲")
+        cat = Category.objects.create(tenant=c.tenant, code="RP", name="維修料")
+        part = Product.objects.create(tenant=c.tenant, sku="RP-900001", name="Fold5 內屏", category=cat,
+                                      warehouse_type="parts", requires_serial=False)
+        c.phone.name = "Galaxy Z Fold5 256GB"
+        c.phone.save()
+        found = lambda **q: [p["id"] for p in c.admin.get("/api/v1/products/", {"search": "Fold5", **q}).json()["results"]]
+        self.assertEqual(set(found()), {part.id, c.phone.id})                    # 不帶:照舊全部
+        self.assertEqual(found(warehouse_type="parts"), [part.id])
+        self.assertEqual(found(warehouse_type="product"), [c.phone.id])

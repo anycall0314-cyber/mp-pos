@@ -211,7 +211,7 @@ class ProductViewSet(abilities.WritesNeed, viewsets.ModelViewSet):
     ]
     ordering_fields = ["sku", "name", "created_at", "list_price"]
     ordering = ["sku"]
-    filterset_fields = ["is_active", "category", "requires_serial", "is_secondhand", "is_virtual"]
+    filterset_fields = ["is_active", "category", "requires_serial", "is_secondhand", "is_virtual", "warehouse_type"]
 
     def get_search_fields(self):
         """依查詢內容動態調整搜尋欄位:

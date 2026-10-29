@@ -75,3 +75,13 @@ test("下拉選單不被切掉:維修單的區塊不切超出去的東西;下面
   assert.match(combo, /className=\{`combobox-pop\$\{place\?\.up \? " up" : ""\}`\}/);
   assert.match(combo, /window\.addEventListener\("scroll", fit, true\);/, "捲動之後重新量");
 });
+
+test("領用零件只搜零件倉;「新零件進貨」黏在下拉框最下面,結果再多也看得到(owner 2026-10-29「沒有相關品號的話，他無法進貨」)", async () => {
+  assert.match(src, /searchProducts\(q, \{ activeOnly: true, partsOnly: true \}\)/);
+  const search = readFileSync(new URL("../api/search.ts", import.meta.url), "utf8");
+  assert.match(search, /warehouse_type: opts\?\.partsOnly \? "parts" : undefined,/);
+  const { readAllCss } = await import("./cssText.mjs");
+  const create = readAllCss().match(/\n\.combobox-create \{([^}]*)\}/)?.[1] ?? "";
+  assert.match(create, /position: sticky; bottom: 0;/);
+  assert.match(create, /background: var\(--panel\)/, "黏住的那一列要有底色蓋住下面的選項");
+});

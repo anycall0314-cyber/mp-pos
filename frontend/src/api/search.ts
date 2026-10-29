@@ -51,6 +51,8 @@ export async function searchProducts(
     warehouseId?: number | "";
     /** 只列主機 (accessory_type=none),機型配件挑相容主機用 */
     hostOnly?: boolean;
+    /** 只列零件倉的(維修單領用零件:手機、配件挑了也不能用,列出來只會把「新零件進貨」擠到最下面) */
+    partsOnly?: boolean;
   },
 ): Promise<ComboOption<Product>[]> {
   const warehouseParam =
@@ -70,6 +72,7 @@ export async function searchProducts(
       in_stock_only: opts?.inStockOnly ? "true" : undefined,
       warehouse: warehouseParam,
       host_only: opts?.hostOnly ? "true" : undefined,
+      warehouse_type: opts?.partsOnly ? "parts" : undefined,
     })}`,
   );
   return data.map((p) => ({
