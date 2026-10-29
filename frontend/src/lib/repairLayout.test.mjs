@@ -32,3 +32,33 @@ test("單欄;個人毛利收起來;儲存並列印收據還在上面", () => {
   assert.match(src, /<details className="re-card re-personal">/);
   assert.match(src, /儲存並列印收據/);
 });
+
+test("自家庫存:刷到那一台就帶機型;一開單就能選自修 / 委外、維修項目、零件(客人送修照舊收件後才填)", () => {
+  assert.match(src, /setModelKey\(found\.model_key\);/);
+  assert.match(src, /const fillNow = !intake \|\| isStock;/);
+  assert.match(src, /\{mode === "in_house" && fillNow && \(/);
+  assert.match(src, /\{mode === "external" && fillNow && \(/);
+  assert.ok(!src.includes('{mode === "in_house" && !intake && ('));
+});
+
+test("新零件當場進貨:零件搜尋框找不到就展開(不開彈窗),要進貨權限;進好的放進零件清單", () => {
+  // 面板開著時不能再開一個(換名字重開會讓還在送的那一次交回兩次)
+  assert.match(src, /onCreateNew=\{canBuyPart && !isLocked && quickPart === null \? \(q\) => setQuickPart\(q\) : undefined\}/);
+  assert.match(src, /const canBuyPart = useCan\("purchase"\);/);
+  const panel = readFileSync(new URL("../pages/repairs/QuickPartPanel.tsx", import.meta.url), "utf8");
+  assert.ok(!/Modal|Drawer/.test(panel), "主檔新增不開彈窗");
+  assert.match(panel, /const key = useRef\(restored\?\.key \?\? crypto\.randomUUID\(\)\);/, "同一次進貨重送不會進兩次");
+  assert.match(panel, /asDuplicate\(e\)/, "同名 / 很像的列出來,可以改進既有的");
+});
+
+test("新零件進貨還不知道有沒有進好:同一把鑰匙只能再送一次、不能收起來,維修單也不能存(複審 2026-10-29)", () => {
+  const panel = readFileSync(new URL("../pages/repairs/QuickPartPanel.tsx", import.meta.url), "utf8");
+  assert.match(panel, /writePending\(page, sending\);\s+\/\/ 先記再送/);
+  assert.match(panel, /sessionStorage\.getItem\(PENDING \+ page\)/, "每張維修單各記各的");
+  assert.match(panel, /if \(!mounted\.current\) return;\s+\/\/ 記下來的那一次留著/, "收掉的面板不再交回");
+  assert.match(panel, /const busy = buy\.isPending \|\| unsure;/);
+  assert.match(panel, /onClick=\{onCancel\} disabled=\{busy\}/);
+  assert.match(src, /if \(quickPending\) \{\n\s+setError\("新零件還在進貨"\);/);
+  assert.equal(src.match(/notLoaded \|\| quickPending\}/g)?.length, 4); // 三個儲存鈕 + 完成
+  assert.match(src, /\{!partsShown && quickPanel\}/, "零件清單看不到也要擺出來");
+});

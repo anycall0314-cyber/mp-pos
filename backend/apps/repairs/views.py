@@ -209,6 +209,8 @@ class RepairOrderViewSet(WarehouseScopedMixin, viewsets.ModelViewSet):
             reason = "這一台不在你的門市"
         return Response({
             "id": s.id, "serial_no": s.serial_no, "product_name": s.product.name,
+            # 機型照那一台的商品帶(維修項目照機型列;owner 2026-10-29「沒辦法先選擇機型」)
+            "model_key": s.product.phone_model_key, "model_name": s.product.phone_model_name,
             "warehouse": s.warehouse_id, "warehouse_name": s.warehouse.name if s.warehouse_id else "",
             "status": s.status, "status_label": s.get_status_display(),
             "ok": not reason, "reason": reason,

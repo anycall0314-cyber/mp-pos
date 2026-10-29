@@ -153,6 +153,24 @@ details.re-personal > summary { cursor: pointer; list-style: revert; }
   font-weight: 600;
 }
 
+/* 新零件當場進貨(QuickPartPanel):接在零件搜尋框下面展開,不開彈窗 */
+.re-quick-part {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.re-quick-part-title { font-weight: 700; color: var(--text); }
+.re-quick-part-existing { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.re-quick-part-similar { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.re-quick-part-similar li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.re-quick-part-err { color: var(--danger-text); }
+.re-quick-part-actions { display: flex; gap: 8px; }
+
 /* 右欄卡片通用 */
 .re-card {
   background: var(--panel);

@@ -21,6 +21,7 @@ import {
   searchSalesPersons,
 } from "@/api/search";
 import {
+  useCan,
   useCurrentUser,
   useDefaultHandledBy,
   useDefaultWarehouse,
@@ -53,6 +54,7 @@ import { localDay } from "@/lib/fixedReports";
 import { intakeProblem, makeSubmitGate, paidNeedsMethod, phoneForNewMember } from "@/lib/repairIntake";
 import { intStr, money, roundInt } from "@/lib/money";
 import { marginFormula, personalSplit, repairMargin } from "@/lib/repairMargin";
+import { pendingQuickPart, QuickPartPanel } from "./QuickPartPanel";
 import { RepairHistoryModal } from "./RepairHistoryModal";
 import { UnlockPatternInput } from "./UnlockPatternInput";
 import { errorText } from "@/lib/errorText";
@@ -194,6 +196,12 @@ function RepairEntryForm() {
   const [stockCode, setStockCode] = useState("");
   const [stockLooking, setStockLooking] = useState(false);
   const isStock = source === "stock";
+  // 新零件當場進貨(QuickPartPanel;要有「進貨入庫」):null = 收著,字串 = 開著、品名先帶搜尋框打的字。
+  // 這個分頁有一次還不知道有沒有進好的:一打開就展開(只能再送一次)
+  const canBuyPart = useCan("purchase");
+  const [quickPart, setQuickPart] = useState<string | null>(() => pendingQuickPart(idParam ?? "new"));
+  // 進貨送出去到拿到確定答案之前不能存維修單:存進去的零件清單會少這一個(複審 2026-10-29)
+  const [quickPending, setQuickPending] = useState(false);
 
   // 手機解鎖方式
   const [unlockMethod, setUnlockMethod] = useState<RepairUnlockMethod | "">("");
@@ -214,6 +222,8 @@ function RepairEntryForm() {
   // 新開的單只做收件(owner 2026-10-19:「門市只是負責收件…要檢測才會有細項」):
   // 自修 / 委外、維修人員、項目、零件、費用、狀態都等檢測之後打開這張單再填
   const intake = !isEdit;
+  // 自家庫存沒有「門市收件、檢測之後再填」這一段:一開單就能選自修 / 委外、維修項目、零件(owner 2026-10-29)
+  const fillNow = !intake || isStock;
   // 存檔一次只跑一個(建會員到存單整段):連按兩下不會建出兩位會員、兩張單
   const submitGate = useRef(makeSubmitGate());
   const [submitting, setSubmitting] = useState(false);
@@ -464,6 +474,7 @@ function RepairEntryForm() {
       setStockUnit(found);
       setStockCode("");
       if (warehouseId === "" && found.warehouse) setWarehouseId(found.warehouse);
+      setModelKey(found.model_key);
       setModelName(found.product_name);
       setDeviceSerial(found.serial_no);
     } catch (e) {
@@ -488,6 +499,10 @@ function RepairEntryForm() {
   async function submitNow(opts?: { printAfter?: boolean }): Promise<boolean> {
     if (notLoaded) return false;
     setError(null);
+    if (quickPending) {
+      setError("新零件還在進貨");
+      return false;
+    }
     // 收件要填的只有 lib/repairIntake 那幾格;門市、收件人、收件日沒有預設才要人選
     if (isStock) {
       // 自家庫存:不用會員、機型、解鎖方式;要刷到那一台、寫要整理什麼
@@ -698,6 +713,39 @@ function RepairEntryForm() {
   const paidDiff = roundInt(customerPaid) - quoteShown;
   const currentStepIdx = steps.findIndex((s) => s.value === status);
 
+  // 零件清單看得到就接在它下面;看不到(重新整理後還沒刷那一台、換成委外)也擺在上面:還不知道有沒有進好的那一次要能再送
+  const page = idParam ?? "new";
+  const partsShown = mode === "in_house" && fillNow;
+  const quickPanel = quickPart !== null && (
+    <QuickPartPanel
+      key={quickPart}
+      page={page}
+      name={quickPart}
+      warehouse={warehouseId}
+      onCancel={() => setQuickPart(null)}
+      onPending={setQuickPending}
+      onDone={(res) => {
+        // 進好的零件放進清單;已經在清單裡的(選了既有的那一個)加數量
+        const p = res.product;
+        setParts((now) =>
+          now.some((x) => x.part_product === p.id)
+            ? now.map((x) => (x.part_product === p.id ? { ...x, qty: x.qty + res.qty } : x))
+            : [
+                ...now,
+                {
+                  part_product: p.id,
+                  part_name: p.name,
+                  part_sku: p.sku,
+                  qty: res.qty,
+                  unit_cost: p.weighted_avg_cost ?? p.staff_cost ?? "0",
+                },
+              ],
+        );
+        setQuickPart(null);
+      }}
+    />
+  );
+
   return (
     <div className="page">
       <Toolbar
@@ -741,7 +789,7 @@ function RepairEntryForm() {
                   <button
                     className="btn primary"
                     onClick={() => submit()}
-                    disabled={save.isPending || submitting || notLoaded}
+                    disabled={save.isPending || submitting || notLoaded || quickPending}
                   >
                     {save.isPending ? "儲存中…" : "儲存"}
                   </button>
@@ -750,7 +798,7 @@ function RepairEntryForm() {
                     <button
                       className="btn"
                       onClick={() => submit()}
-                      disabled={save.isPending || submitting || notLoaded}
+                      disabled={save.isPending || submitting || notLoaded || quickPending}
                       title="只儲存,不開啟列印"
                     >
                       {save.isPending ? "儲存中…" : "儲存"}
@@ -758,7 +806,7 @@ function RepairEntryForm() {
                     <button
                       className="btn primary"
                       onClick={() => submit({ printAfter: true })}
-                      disabled={save.isPending || submitting || notLoaded}
+                      disabled={save.isPending || submitting || notLoaded || quickPending}
                     >
                       {save.isPending ? "儲存中…" : "儲存並列印收據"}
                     </button>
@@ -844,10 +892,9 @@ function RepairEntryForm() {
           </div>
         )}
 
-        {/* 頂部:維修方式 segmented + 返修勾選(自家庫存收件時兩個都沒有,整條不出來) */}
-        {!(intake && isStock) && (
+        {/* 頂部:維修方式 segmented + 返修勾選(客人送修收件時只有返修;自家庫存沒有返修) */}
         <div className="re-mode-bar">
-          {!intake && (
+          {fillNow && (
             // 維修方式單選(全站控制項 MC-06);有內容時換方式要再按一次(小字變「再按一次,內容會清掉」)
             <ChoiceGroup
               label="維修方式"
@@ -902,7 +949,7 @@ function RepairEntryForm() {
           </label>
           )}
         </div>
-        )}
+        {!partsShown && quickPanel}
 
         {/* 收件:單欄;既有的單也單欄(全站檢視 V02),費用明細、個人毛利、備註接在維修內容後面 */}
         <div className={intake ? "re-grid re-grid-intake" : "re-grid re-grid-single"}>
@@ -1240,7 +1287,7 @@ function RepairEntryForm() {
             </section>
 
             {/* 第二區:維修內容(自修) */}
-            {mode === "in_house" && !intake && (
+            {mode === "in_house" && fillNow && (
               <section className="re-section">
                 <div className="re-section-title">維修內容</div>
                 <div className="re-section-body">
@@ -1310,7 +1357,10 @@ function RepairEntryForm() {
                         searchProducts(q, { activeOnly: true })
                       }
                       placeholder="搜尋零件加入…"
+                      onCreateNew={canBuyPart && !isLocked && quickPart === null ? (q) => setQuickPart(q) : undefined}
+                      createNewLabel="新零件進貨"
                     />
+                    {partsShown && quickPanel}
                     {parts.length > 0 && (
                       <table className="re-parts-table">
                         <thead>
@@ -1395,7 +1445,7 @@ function RepairEntryForm() {
             )}
 
             {/* 第三區:委外資訊 */}
-            {mode === "external" && !intake && (
+            {mode === "external" && fillNow && (
               <section className="re-section">
                 <div className="re-section-title">委外資訊</div>
                 <div className="re-section-body">
@@ -1653,7 +1703,7 @@ function RepairEntryForm() {
               type="button"
               className={arm.armed === "complete" ? "btn primary armed checkout-cta" : "btn primary checkout-cta"}
               onClick={() => changeStatus("completed")}
-              disabled={submitting || save.isPending || complete.isPending || notLoaded}
+              disabled={submitting || save.isPending || complete.isPending || notLoaded || quickPending}
             >
               {arm.armed === "complete" ? "再按一次完成" : "完成"}
             </button>

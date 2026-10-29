@@ -397,6 +397,8 @@ class RepairOrderSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMix
             validated_data["serial_unavailable"] = False
             if not validated_data.get("host_model_name"):
                 validated_data["host_model_name"] = unit.product.name[:128]
+            if not validated_data.get("host_model_key"):
+                validated_data["host_model_key"] = unit.product.phone_model_key[:128]
         with transaction.atomic():
             instance = super().create(validated_data)
             if parts_input is not None:

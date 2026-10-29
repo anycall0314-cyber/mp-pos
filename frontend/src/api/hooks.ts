@@ -69,6 +69,8 @@ import {
   RepairHistoryItem,
   RepairItem,
   RepairOrder,
+  RepairQuickPartInput,
+  RepairQuickPartResult,
   RepairStockLookup,
   RepairQuotePreview,
   LegacyPurchase,
@@ -1927,6 +1929,23 @@ export const useRepairOrder = (id: number | null) =>
 /** 自家庫存送去整理:刷到的碼是哪一台、能不能送(找不到 / 對到兩台會丟錯誤,訊息直接給畫面) */
 export function lookupStockSerial(code: string): Promise<RepairStockLookup> {
   return api<RepairStockLookup>(`/repair-orders/stock-lookup/?code=${encodeURIComponent(code)}`);
+}
+
+/** 維修單上當場進一個零件:key = 這一次的鑰匙(連線斷掉拿同一把再送不會進兩次) */
+export function useBuyRepairPart() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { body: RepairQuickPartInput; key: string }) =>
+      api<RepairQuickPartResult>("/purchase-orders/quick-part/", {
+        method: "POST",
+        headers: { "Idempotency-Key": vars.key },
+        body: JSON.stringify(vars.body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
 }
 
 export function useSaveRepairOrder() {

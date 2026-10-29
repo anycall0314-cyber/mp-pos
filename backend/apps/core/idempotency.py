@@ -27,17 +27,23 @@ KEEP_DAYS = 7
 _KEY_RE = re.compile(r"[A-Za-z0-9_\-]{8,64}")
 
 
+def key_of(request) -> str:
+    """請求帶的鑰匙(沒帶回空字串;格式不對丟 400)。"""
+    key = (request.headers.get(HEADER) or "").strip()
+    if key and not _KEY_RE.fullmatch(key):
+        raise ValidationError({"detail": "Idempotency-Key 格式不對"})
+    return key
+
+
 class IdempotentCreateMixin:
     """放在 viewset 繼承清單的最前面;`idempotency_scope` 填這個端點建的是哪一種單。"""
 
     idempotency_scope = ""
 
     def create(self, request, *args, **kwargs):
-        key = (request.headers.get(HEADER) or "").strip()
+        key = key_of(request)
         if not key:
             return super().create(request, *args, **kwargs)
-        if not _KEY_RE.fullmatch(key):
-            raise ValidationError({"detail": "Idempotency-Key 格式不對"})
         tenant = request.tenant
         with transaction.atomic():
             record = self._claim(tenant, key, request.user)
@@ -59,9 +65,12 @@ class IdempotentCreateMixin:
             record.save(update_fields=["doc_no", "updated_at"])
             return response
 
-    def _claim(self, tenant, key, user):
-        """拿到這把鑰匙的那一列(新的或既有的),並且鎖住它直到交易結束。"""
-        scope = self.idempotency_scope
+    def _claim(self, tenant, key, user, scope=None):
+        """拿到這把鑰匙的那一列(新的或既有的),並且鎖住它直到交易結束。
+
+        `scope`:同一個 viewset 另一個建單動作(例如維修單當場進零件)用自己的範圍,鑰匙不會跟一般建單混用。
+        """
+        scope = scope or self.idempotency_scope
         who = user if getattr(user, "is_authenticated", False) else None
         try:
             # 包一層 savepoint:撞到唯一限制時外層交易還能繼續用

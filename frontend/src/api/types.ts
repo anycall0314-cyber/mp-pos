@@ -1511,8 +1511,30 @@ export interface RepairStockSerial {
 export interface RepairStockLookup extends RepairStockSerial {
   /** 那一台在哪家門市(收件門市還沒選就帶這一家) */
   warehouse: number | null;
+  /** 那一台商品的機型(維修項目照機型列);對不到機型是空字串 */
+  model_key: string;
+  model_name: string;
   ok: boolean;
   reason: string;
+}
+
+/** 維修單上當場進一個零件(`/purchase-orders/quick-part/`;規則在後端 purchasing/quick_part.py) */
+export interface RepairQuickPartInput {
+  /** 用既有的零件;跟 name 擇一 */
+  product?: number;
+  /** 新零件的品名 */
+  name?: string;
+  supplier: number;
+  warehouse: number;
+  qty: number;
+  unit_price: string;
+  payment_method: number | null;
+}
+
+export interface RepairQuickPartResult {
+  purchase_order: { id: number; no: string };
+  qty: number;
+  product: Product;
 }
 
 export interface PartsUsageReport {

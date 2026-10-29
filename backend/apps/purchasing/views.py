@@ -4,7 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.core import cost_access
-from apps.core.idempotency import IdempotentCreateMixin
+from apps.core.idempotency import IdempotentCreateMixin, key_of
 from apps.core.warehouse_scoping import WarehouseScopedMixin
 from apps.tenants import abilities
 
@@ -99,6 +99,37 @@ class PurchaseOrderViewSet(
             )
         po = self.get_queryset().get(pk=po.pk)
         return Response(self.get_serializer(po).data)
+
+    @action(detail=False, methods=["post"], url_path="quick-part")
+    def quick_part(self, request):
+        """維修單上當場進一個零件(規則在 quick_part.py):既有的零件或新建一個 + 一張只有這一行的進貨單。
+
+        跟建進貨單一樣帶 Idempotency-Key:連線斷掉拿同一把再送,回已經進好的那一張、不會進兩次。
+        """
+        from apps.identity.dedup import DuplicateProduct
+
+        from . import quick_part
+
+        form = quick_part.QuickPartSerializer(data=request.data)
+        form.is_valid(raise_exception=True)
+        key = key_of(request)
+        with transaction.atomic():
+            record = self._claim(request.tenant, key, request.user, scope="repair-quick-part") if key else None
+            if record is not None and record.doc_no:
+                done = PurchaseOrder.objects.for_tenant(request.tenant).filter(no=record.doc_no).first()
+                if done is not None:
+                    return Response(quick_part.result(done, request), headers={"Idempotent-Replay": "true"})
+            try:
+                po = quick_part.buy(self, request, form.validated_data)
+            except DuplicateProduct as dup:
+                transaction.set_rollback(True)          # 鑰匙也不留:改個名字或選既有的再送是新的一次
+                return Response(dup.as_dict(), status=status.HTTP_409_CONFLICT)
+            except PurchaseOrderError as exc:
+                raise serializers.ValidationError({"detail": str(exc)})
+            if record is not None:
+                record.doc_no = po.no
+                record.save(update_fields=["doc_no", "updated_at"])
+            return Response(quick_part.result(po, request), status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get"])
     def transferable(self, request, pk=None):
