@@ -24,7 +24,7 @@ class QuickPartTests(TestCase):
         self.unit = ProductSerial.objects.get(tenant=self.c.tenant, serial_no="Q0001")
 
     def buy(self, client=None, key=None, **body):
-        payload = {"supplier": self.c.supplier.id, "warehouse": self.home.id, "qty": 1, "unit_price": "5250", **body}
+        payload = {"supplier": self.c.supplier.id, "warehouse": self.home.id, "qty": 1, "unit_price": "5000", **body}
         headers = {"HTTP_IDEMPOTENCY_KEY": key} if key else {}
         return (client or self.c.admin).post(URL, payload, format="json", **headers)
 
@@ -37,15 +37,16 @@ class QuickPartTests(TestCase):
         data = self.bought(name="Fold5 內屏")
         part = Product.objects.get(pk=data["product"]["id"])
         self.assertEqual((part.name, part.warehouse_type, part.category.name), ("Fold5 內屏", "parts", "維修料"))
-        self.assertEqual(part.weighted_avg_cost, D("5000.00"))               # 5,250 含稅 → 未稅 5,000
+        self.assertEqual(part.weighted_avg_cost, D("5000.00"))               # 打多少成本就是多少(owner「廠商都是未稅」)
         self.assertEqual(D(data["product"]["weighted_avg_cost"]), D("5000"))  # 管理員看到的是實際成本
         po = PurchaseOrder.objects.get(pk=data["purchase_order"]["id"])
         self.assertEqual((po.no, po.supplier_id, po.warehouse_id, po.note), (data["purchase_order"]["no"],
                          self.c.supplier.id, self.home.id, "維修單當場進貨"))
         self.assertEqual([(i.product_id, i.qty) for i in po.items.all()], [(part.id, 1)])
+        self.assertEqual((po.tax_method, po.tax_amount, po.total_cost), ("untaxed", D("0"), D("5000")))
         self.assertEqual(StockBalance.objects.get(product=part, warehouse=self.home).qty, 1)
         # 第二個新零件放進同一個類別(不再建一個「維修料」)
-        again = self.bought(name="Fold5 後蓋", unit_price="1050")
+        again = self.bought(name="Fold5 後蓋", unit_price="1000")
         self.assertEqual(Product.objects.get(pk=again["product"]["id"]).category_id, part.category_id)
         self.assertEqual(Category.objects.filter(tenant=self.c.tenant, name="維修料").count(), 1)
 

@@ -95,7 +95,8 @@ def buy(view, request, data) -> PurchaseOrder:
             "supplier": data["supplier"],
             "warehouse": data["warehouse"],
             "doc_date": timezone.localdate(),
-            "tax_method": PurchaseOrder.TaxMethod.TAXABLE_INCLUDED,
+            # 打的進價就是成本、不扣稅(owner 2026-10-29「廠商都是未稅」:以前當含稅,打 300 成本記 286)
+            "tax_method": PurchaseOrder.TaxMethod.UNTAXED,
             "invoice_form": invoice,
             "payment_method": data.get("payment_method"),
             "note": NOTE,
