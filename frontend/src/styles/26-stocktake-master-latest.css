@@ -288,11 +288,3 @@
   text-decoration: underline;
   font: inherit;
 }
-
-/* 中古收購(廠商)存好之後:留著「列印標籤」 */
-.hub-done {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px 0;
-}

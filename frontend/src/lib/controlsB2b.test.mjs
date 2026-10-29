@@ -17,13 +17,12 @@ test("真分頁用 Tabs:商品(列表 / 分類瀏覽 / 類別管理、基本 / �
   const hub = read("../pages/secondhand-acquisition/SecondhandAcquisitionPage.tsx");
   assert.match(hub, /<Tabs\n\s+id="sh"\n\s+label="收購來源"/);
   assert.match(hub, /panels=\{false\}/, "內容靠直接子元素排版,不帶指不到的 aria-controls");
-  assert.match(hub, /setVendorDone\(null\);/, "切分頁照舊清掉上一個的列印標籤");
-  // 中古收購存好不跳「已儲存 / 收購完成 / 已入庫」(10-29 owner);列印標籤照留
-  assert.ok(!hub.includes("Banner") && hub.includes("openPurchaseLabels(vendorDone.id)"));
+  // 中古收購、進貨開單存好不跳「已儲存 / 收購完成 / 已入庫」,也不留列印標籤(10-29 owner;標籤到進貨單清單、庫存查詢印)
+  assert.ok(!hub.includes("Banner") && !hub.includes("openPurchaseLabels"));
   const personal = read("../pages/secondhand-acquisition/SecondhandPersonalEntry.tsx");
-  assert.ok(!personal.includes("setSuccess") && personal.includes("列印標籤(序末"));
+  assert.ok(!personal.includes("setSuccess") && !personal.includes("openLabelPrint"));
   const wb = read("../pages/purchases/PurchaseWorkbenchPage.tsx");
-  assert.match(wb, /if \(!embedded\) \{\n\s+toast\(`\$\{created\.no\} 已入庫/);
+  assert.ok(!wb.includes("已入庫 ·") && !wb.includes("openPurchaseLabels"));
   const md = read("../components/master-detail/MasterDetail.tsx");
   assert.match(md, /<Tabs\n\s+id=\{tabsId\}\n\s+label="明細"/);
   assert.match(md, /<IconButton\n\s+className="md-detail-close"\n\s+label="收起明細"/);

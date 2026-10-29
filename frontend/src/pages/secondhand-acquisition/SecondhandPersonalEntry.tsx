@@ -15,7 +15,6 @@ import type {
 } from "@/api/types";
 import { useDefaultWarehouse } from "@/auth/AuthContext";
 import { SamePhonePick } from "@/components/SamePhonePick";
-import { openLabelPrint } from "@/components/labels/openLabelPrint";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
 import { Field } from "@/components/Field";
@@ -123,12 +122,6 @@ export function SecondhandPersonalEntry() {
   const [docDate, setDocDate] = useState(todayStr);
   const [note, setNote] = useState("");
 
-  /**
-   * 最後收進來的那一台(可以直接印它的標籤)。
-   * 留到下一台存成功才換掉:下一筆存失敗時,上一台的列印入口不能跟著不見(它已經入庫、可能還沒貼)。
-   * 按鈕上寫著是哪一台(序號末 5 碼),不會跟正在填的下一筆搞混。
-   */
-  const [savedSerial, setSavedSerial] = useState<{ id: number; last5: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -237,7 +230,7 @@ export function SecondhandPersonalEntry() {
       return;
     }
     try {
-      const res = await acquire.mutateAsync({
+      await acquire.mutateAsync({
         member: member!.id,
         warehouse: warehouse as number,
         product: product as number,
@@ -256,7 +249,6 @@ export function SecondhandPersonalEntry() {
           : {}),
       });
       setSaves((n) => n + 1);
-      setSavedSerial({ id: res.serial.id, last5: res.serial.serial_no.slice(-5) });
       reset();
     } catch (e) {
       // 欄位錯誤只留中文那幾句、不露欄位名(全站檢視 G2;規則在 lib/errorText.ts)
@@ -274,17 +266,6 @@ export function SecondhandPersonalEntry() {
   return (
     <>
     <div className="entry-body">
-      {savedSerial !== null && (
-        <div style={{ margin: "8px 0 16px" }}>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => openLabelPrint(`serials=${savedSerial.id}`)}
-          >
-            列印標籤(序末 {savedSerial.last5})
-          </button>
-        </div>
-      )}
       <div className="entry-header" style={{ marginBottom: 12 }}>
         <div className="field-row-3">
           <Field label="收購來源會員 (電話)" required>
