@@ -1485,13 +1485,16 @@ export function PurchaseWorkbenchPage({
           /* 清不掉就算了 */
         }
       }
-      toast(`${created.no} 已入庫 · ${money(created.total_cost)}`, "ok", {
-        ms: 7000,
-        action: {
-          label: "列印標籤",
-          fn: () => openPurchaseLabels(created.id),
-        },
-      });
+      // 中古收購(廠商)內嵌時不跳「已入庫」:那邊頁面上留著「列印標籤」(10-29 owner 要拿掉已儲存提示)
+      if (!embedded) {
+        toast(`${created.no} 已入庫 · ${money(created.total_cost)}`, "ok", {
+          ms: 7000,
+          action: {
+            label: "列印標籤",
+            fn: () => openPurchaseLabels(created.id),
+          },
+        });
+      }
       if (left > 0) {
         saveDraftRef.current();
         toast(`送出時才加進來的 ${left} 筆還留在明細`, "");

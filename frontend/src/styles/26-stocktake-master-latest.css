@@ -289,11 +289,10 @@
   font: inherit;
 }
 
-/* 中古收購(廠商)存好之後:訊息旁邊留著「列印標籤」 */
+/* 中古收購(廠商)存好之後:留著「列印標籤」 */
 .hub-done {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 12px 0;
 }
-.hub-done .banner { flex: 1; margin: 0; }

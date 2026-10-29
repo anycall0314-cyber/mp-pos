@@ -15,7 +15,6 @@ import type {
 } from "@/api/types";
 import { useDefaultWarehouse } from "@/auth/AuthContext";
 import { SamePhonePick } from "@/components/SamePhonePick";
-import { Banner } from "@/components/Banner";
 import { openLabelPrint } from "@/components/labels/openLabelPrint";
 import { ComboBox, ComboOption } from "@/components/ComboBox";
 import { Drawer } from "@/components/Drawer";
@@ -124,7 +123,6 @@ export function SecondhandPersonalEntry() {
   const [docDate, setDocDate] = useState(todayStr);
   const [note, setNote] = useState("");
 
-  const [success, setSuccess] = useState<string | null>(null);
   /**
    * 最後收進來的那一台(可以直接印它的標籤)。
    * 留到下一台存成功才換掉:下一筆存失敗時,上一台的列印入口不能跟著不見(它已經入庫、可能還沒貼)。
@@ -233,7 +231,6 @@ export function SecondhandPersonalEntry() {
 
   async function submit() {
     setError(null);
-    setSuccess(null);
     const err = validate();
     if (err) {
       setError(err);
@@ -258,9 +255,6 @@ export function SecondhandPersonalEntry() {
           ? { wholesale_list: listIt, ...(listIt && typeof priceOf(wholesalePrice) === "number" ? { wholesale_price: priceOf(wholesalePrice) as number } : {}) }
           : {}),
       });
-      setSuccess(
-        `收購完成:序號 ${res.serial.serial_no},對應銷貨單 ${res.sales_order.no},付款 ${money(acquisitionPrice)} 元給 ${member?.name ?? "會員"}`,
-      );
       setSaves((n) => n + 1);
       setSavedSerial({ id: res.serial.id, last5: res.serial.serial_no.slice(-5) });
       reset();
@@ -280,7 +274,6 @@ export function SecondhandPersonalEntry() {
   return (
     <>
     <div className="entry-body">
-      {success && <Banner kind="success" message={success} />}
       {savedSerial !== null && (
         <div style={{ margin: "8px 0 16px" }}>
           <button
