@@ -519,11 +519,13 @@ export function PurchaseWorkbenchPage({
     (draft?.sent as Partial<PurchaseOrder> | null) ?? null,
   );
 
-  // 入庫倉還沒選、門市清單載進來了:帶第一家(鎖倉帳號是自己那一家)
+  // 入庫倉還沒選、或記住的那一家不是這家公司的(這台電腦之前登入別家公司記下的),門市清單載進來了:
+  // 帶第一家(鎖倉帳號是自己那一家)。跟銷貨開單同一套(2026-10-29 owner 中古收購入庫被擋「門市:無效的主鍵」)
   useEffect(() => {
-    if (warehouse !== "" || stores.length === 0) return;
+    if (stores.length === 0) return;
+    if (warehouse !== "" && (me.locked || stores.some((s) => s.id === warehouse))) return;
     setWarehouse(me.id && stores.some((s) => s.id === me.id) ? me.id : stores[0].id);
-  }, [warehouse, stores, me.id]);
+  }, [warehouse, stores, me.id, me.locked]);
 
   function commit(fn: (ls: Line[]) => Line[]) {
     const next = fn(linesRef.current);
