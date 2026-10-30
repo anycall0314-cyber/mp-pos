@@ -22,7 +22,7 @@ from apps.core.money import CENTS, ONE, money_text, round_money
 from apps.core.tenant_fields import same_company as _same_company
 from apps.inventory.locking import lock_document, lock_stock_rows, locked_balance as _locked_balance
 from apps.inventory.identifiers import IdentifierError, create_serial, main_code, split_codes, taken
-from apps.inventory.models import ProductSerial, StockBalance, StockMovement
+from apps.inventory.models import COSTED_STATUSES, ProductSerial, StockBalance, StockMovement
 from apps.parties.models import SimCard, TelecomPlan
 from apps.tenants.models import Tenant
 from apps.tenants.services import InvoiceTrackError, assign_invoice_no
@@ -687,6 +687,17 @@ def acquire_secondhand_from_member(
     virtual_product = _get_or_create_secondhand_intake_product(tenant)
 
     with transaction.atomic():
+        # 商品的平均成本把收購價加進去,跟進貨同一個算法(`purchasing.commit_purchase_order`):
+        # (全公司在庫的台數 × 現在的平均成本 + 收購價)÷(台數 + 1)。以前只記在那一台上,庫存表的平均成本 /
+        # 總成本沒有收購價,送去整理完只剩整理費(owner 2026-10-30)。先鎖商品,鎖到之後才數、才改。
+        lock_stock_rows(tenant, products=[secondhand_product])
+        here = ProductSerial.objects.filter(
+            tenant=tenant, product=secondhand_product, status__in=COSTED_STATUSES
+        ).count()
+        secondhand_product.weighted_avg_cost = (
+            (Decimal(here) * secondhand_product.weighted_avg_cost + price) / Decimal(here + 1)
+        ).quantize(CENTS)
+        secondhand_product.save(update_fields=["weighted_avg_cost"])
         try:
             serial = create_serial(
                 tenant=tenant,
