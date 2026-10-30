@@ -1,4 +1,4 @@
-// 廠商叫貨在畫面這一側:包數、合計、鑰匙與「送出去了還不知道結果」。跑法:npm test。
+// 廠商叫貨在畫面這一側:盒數、合計、鑰匙與「送出去了還不知道結果」。跑法:npm test。
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -19,7 +19,7 @@ const ROWS = [row("G02"), row("G01", { pack_qty: 10, unit_price: "280.00" }), ro
 let n = 0;
 const random = () => `seed-${++n}`;
 
-test("框裡打的字 → 包數:只收 0 到 9999 的整數", () => {
+test("框裡打的字 → 盒數:只收 0 到 9999 的整數", () => {
   assert.equal(packsFrom("2"), 2);
   assert.equal(packsFrom(" 12 "), 12);
   assert.equal(packsFrom(3), 3);
@@ -27,7 +27,7 @@ test("框裡打的字 → 包數:只收 0 到 9999 的整數", () => {
   for (const bad of ["", "-1", "1.5", "2包", "10000", "1e3", null, undefined, {}, "０２"]) assert.equal(packsFrom(bad), 0, String(bad));
 });
 
-test("改包數:0 包的不留在購物車,原本那一份不被改到", () => {
+test("改盒數:0 盒的不留在購物車,原本那一份不被改到", () => {
   const cart = { G02: 2 };
   assert.deepEqual(withPacks(cart, "G01", 3), { G02: 2, G01: 3 });
   assert.deepEqual(withPacks(cart, "G02", 0), {});
@@ -37,7 +37,7 @@ test("改包數:0 包的不留在購物車,原本那一份不被改到", () => {
   assert.deepEqual(cart, { G02: 2 });
 });
 
-test("合計:包數 × 一包幾片 = 片數,片數 × 單價 = 金額;順序照廠商的清單", () => {
+test("合計:盒數 × 一盒幾片 = 片數,片數 × 單價 = 金額;順序照廠商的清單", () => {
   const sum = summarize({ "M01#901": 3, G02: 2 }, ROWS);
   assert.deepEqual(sum.lines.map((l) => [l.row.key, l.packs, l.pieces, l.amount]), [["G02", 2, 50, 7500], ["M01#901", 3, 15, 1125]]);
   assert.deepEqual([sum.packs, sum.pieces, sum.amount, sum.gone], [5, 65, 8625, []]);
@@ -65,9 +65,10 @@ test("半自動的廠商:沒有參考價的也可以叫(金額當 0),不算「�
   assert.deepEqual(linesToSend(loose), [{ key: "G02", packs: 2, was: null }, { key: "S09", packs: 3, was: null }]);
 });
 
-test("幾包 = 幾片,兩個都寫出來", () => {
-  assert.equal(packsText(2, 50, "片"), "2 包 = 50 片");
-  assert.equal(packsText(1, 5, ""), "1 包 = 5 片");
+// owner 2026-10-30:「我叫貨是以盒為單位,每盒五片」。店員講的是盒,廠商收的是片。
+test("幾盒 = 幾片,兩個都寫出來", () => {
+  assert.equal(packsText(2, 50, "片"), "2 盒 = 50 片");
+  assert.equal(packsText(1, 5, ""), "1 盒 = 5 片");
   assert.equal(rowTitle({ name: "膜速箱", spec_label: "K43 iPhone 15 Pro", size: "" }), "膜速箱 K43 iPhone 15 Pro");
   assert.equal(rowTitle({ name: "高透亮面", spec_label: "", size: "125*196" }), "高透亮面 125*196");
 });
@@ -169,16 +170,16 @@ test("按下送出、請求還沒出去就先鎖住並存起來(重新整理回�
   assert.ok(lock > 0 && go > 0 && lock < go, "send() 要先 setDraft(beforeSend(…)) 才 place.mutateAsync(…)");
 });
 
-test("回來的已成立那一張是不是這張草稿:每一列的包數都一樣才算", () => {
+test("回來的已成立那一張是不是這張草稿:每一列的盒數都一樣才算", () => {
   const items = [{ sku: "G02", spec_id: null, packs: 2 }, { sku: "M01", spec_id: 901, packs: 3 }];
   assert.equal(sameAsSent({ G02: 2, "M01#901": 3 }, items), true);
   assert.equal(sameAsSent({ "M01#901": 3, G02: 2 }, items), true);          // 順序不管
   assert.equal(sameAsSent({ G01: 2, "M01#901": 3 }, items), false);         // 換了東西
-  assert.equal(sameAsSent({ G02: 5, "M01#901": 3 }, items), false);         // 改了包數
+  assert.equal(sameAsSent({ G02: 5, "M01#901": 3 }, items), false);         // 改了盒數
   assert.equal(sameAsSent({ G02: 2 }, items), false);                       // 少一列
   assert.equal(sameAsSent({ G02: 2, "M01#901": 3, G01: 1 }, items), false); // 多一列
   assert.equal(sameAsSent({ M01: 3, G02: 2 }, items), false);               // 規格不一樣
-  assert.equal(sameAsSent({ G02: 2, "M01#901": 3, G01: 0 }, items), true);  // 0 包的不算一列
+  assert.equal(sameAsSent({ G02: 2, "M01#901": 3, G01: 0 }, items), true);  // 0 盒的不算一列
   assert.equal(sameAsSent({}, items), true);                                // 草稿是空的:沒有東西可比
 });
 
@@ -233,17 +234,17 @@ test("大字:連到店內商品的寫店內的品名,沒連的寫廠商的叫法
 });
 
 test("小字:這一列在廠商那邊是什麼 —— 同一個店內商品的兩種包裝要分得出來", () => {
-  // 連到店內商品的:廠商的叫法、料號、一包幾個都要有
-  assert.equal(vendorSide(STORE_ROWS[2]), "20W 充電頭 · H05 · 一包 5 個");
-  assert.equal(vendorSide(STORE_ROWS[4]), "充電頭 大包 · H10 · 一包 10 個");
+  // 連到店內商品的:廠商的叫法、料號、一盒幾個都要有
+  assert.equal(vendorSide(STORE_ROWS[2]), "20W 充電頭 · H05 · 一盒 5 個");
+  assert.equal(vendorSide(STORE_ROWS[4]), "充電頭 大包 · H10 · 一盒 10 個");
   assert.equal(storeTitle(STORE_ROWS[2]), storeTitle(STORE_ROWS[4]));         // 大字一樣
   assert.notEqual(vendorSide(STORE_ROWS[2]), vendorSide(STORE_ROWS[4]));       // 小字分得出來
   // 沒連的:大字已經是廠商的叫法,小字只補料號與包裝
-  assert.equal(vendorSide(STORE_ROWS[0]), "G02 · 一包 25 片");
+  assert.equal(vendorSide(STORE_ROWS[0]), "G02 · 一盒 25 片");
   // 規格、尺寸算在廠商的叫法裡;沒寫單位的用「片」
   assert.equal(
     vendorSide({ name: "膜速箱", spec_label: "K43", size: "6.1", sku: "M01", pack_qty: 5, unit: "", product: film }),
-    "膜速箱 K43 6.1 · M01 · 一包 5 片",
+    "膜速箱 K43 6.1 · M01 · 一盒 5 片",
   );
 });
 
@@ -311,11 +312,11 @@ test("叫貨頁:清單、確認框、叫貨紀錄都是店內品名在上、廠�
   assert.match(page, /filterRows\(rows, \{ text, kind, pickedOnly, linkedOnly \}, draft\.cart\)/);
   assert.match(page, /const canPickLinked = linked > 0 && linked < rows\.length;\s*const linkedOnly = wantLinkedOnly && canPickLinked;/);
   assert.match(page, /\{canPickLinked && \(\s*<label className="vo-check">\s*<input type="checkbox" checked=\{linkedOnly\}/);
-  // 確認框:每一行底下都有廠商那邊是什麼(料號、一包幾個)
+  // 確認框:每一行底下都有廠商那邊是什麼(料號、一盒幾個)
   assert.match(page, /\{storeTitle\(l\.row\)\}[^]{0,200}<div className="vo-sub">\{vendorSide\(l\.row\)\}<\/div>/);
   // 叫貨紀錄:叫貨當下的店內品名
   assert.match(page, /\{sentTitle\(i\)\}\s*\{sentVendorSide\(i\) && <div className="vo-sub">\{sentVendorSide\(i\)\}<\/div>\}/);
-  // 被擋下來(可能是對照剛被改):重抓清單;包數留在草稿裡(afterSend 的 refused 不清購物車)
+  // 被擋下來(可能是對照剛被改):重抓清單;盒數留在草稿裡(afterSend 的 refused 不清購物車)
   const body = page.slice(page.indexOf("async function send()"));
   assert.match(body, /outcome\.kind === "refused"\) \{[^}]*void catalog\.refetch\(\);/);
   const draft = { ...emptyDraft(random), cart: { G02: 2, G01: 1 }, pending: true };

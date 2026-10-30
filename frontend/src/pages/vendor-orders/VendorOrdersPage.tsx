@@ -100,9 +100,9 @@ function readLastVendor(warehouse: number | null): string | null {
 }
 
 /**
- * 廠商叫貨:先選類別、再選廠商 → 看那家廠商的商品與這家門市的進價 → 填包數 → 確認 → 送出;「紀錄」看進度與到貨入庫。
+ * 廠商叫貨:先選類別、再選廠商 → 看那家廠商的商品與這家門市的進價 → 填盒數 → 確認 → 送出;「紀錄」看進度與到貨入庫。
  * 有哪些類別、哪些廠商是平台定的;**類別只用來篩廠商**,同一家廠商永遠是同一個入口、同一份購物車。
- * 價錢、一包幾片、送給廠商什麼都是伺服器決定的;這一頁的規則在 lib/vendorOrder.ts 與 lib/vendorPick.ts。
+ * 價錢、一盒幾片、送給廠商什麼都是伺服器決定的;這一頁的規則在 lib/vendorOrder.ts 與 lib/vendorPick.ts。
  */
 export function VendorOrdersPage() {
   const store = useDefaultWarehouse();
@@ -249,7 +249,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
   const qc = useQueryClient();
   const catalog = useVendorCatalog(link.warehouse, link.provider);
   const place = usePlaceVendorOrder();
-  // 草稿(包數、鑰匙、送出去了還不知道結果)跟著這個帳號、這家門市、這家廠商存在瀏覽器裡:
+  // 草稿(盒數、鑰匙、送出去了還不知道結果)跟著這個帳號、這家門市、這家廠商存在瀏覽器裡:
   // 重新整理、切到別家廠商再回來都是同一份、同一把鑰匙
   const storeKey = draftSlot(user?.username ?? "", link.warehouse, link.provider);
   // 升級成多廠商之前存的那一格(只有第一家廠商有):接著用,存新的那一格之後就拿掉
@@ -369,7 +369,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
     } else if (outcome.kind === "refused") {
       setRefused(outcome.message);
       if (!confirming) toast(outcome.message, "err");
-      // 被擋的原因可能是「這一列連到的店內商品剛剛被改了」:重抓清單,畫面換成現在的對照;填好的包數都留著
+      // 被擋的原因可能是「這一列連到的店內商品剛剛被改了」:重抓清單,畫面換成現在的對照;填好的盒數都留著
       void catalog.refetch();
     } else {
       setConfirming(false);
@@ -400,7 +400,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
                 <tr key={l.row.key}>
                   <td className="vo-name">
                     {storeTitle(l.row)}
-                    {/* 廠商那邊是哪一項、一包幾個:同一個店內商品的兩種包裝要分得出來 */}
+                    {/* 廠商那邊是哪一項、一盒幾個:同一個店內商品的兩種裝法要分得出來 */}
                     <div className="vo-sub">{vendorSide(l.row)}</div>
                   </td>
                   <td className="num">{packsText(l.packs, l.pieces, l.row.unit)}</td>
@@ -554,10 +554,10 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
               <tr>
                 <th>品名</th>
                 <th>料號</th>
-                <th className="num">每包</th>
+                <th className="num">每盒</th>
                 <th className="num">{manual ? "參考價" : "單價"}</th>
-                <th className="num">每包金額</th>
-                <th className="num">包數</th>
+                <th className="num">每盒金額</th>
+                <th className="num">盒數</th>
                 <th className="num">小計</th>
               </tr>
             </thead>
@@ -573,7 +573,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
                       {storeTitle(row)}
                       {row.product && !row.product.is_active && <span className="wb-badge warn">已停用</span>}
                       {!row.product && linked > 0 && <span className="wb-badge">未對照</span>}
-                      {/* 店內品名底下寫廠商的叫法(核對用);料號、一包幾個在右邊兩欄 */}
+                      {/* 店內品名底下寫廠商的叫法(核對用);料號、一盒幾個在右邊兩欄 */}
                       {row.product && <div className="vo-sub">{rowTitle(row)}</div>}
                     </td>
                     <td className="id-code">{row.sku}</td>
@@ -599,7 +599,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
                       ) : (
                         <QtyInput
                           className="vo-qty"
-                          aria-label={`${storeTitle(row)} 包數`}
+                          aria-label={`${storeTitle(row)} 盒數`}
                           value={packs}
                           min={0}
                           max={maxPacks(row)}
@@ -613,7 +613,7 @@ function OrderTab({ link, onPlaced }: { link: VendorLinkRow; onPlaced: (orderId:
                     <td className="num">
                       {packs > 0 && (priced || manual) ? (
                         <>
-                          {/* 半自動廠商沒有參考價的品項:只寫幾包幾個,不寫金額 */}
+                          {/* 半自動廠商沒有參考價的品項:只寫幾盒幾個,不寫金額 */}
                           {priced && <b>{money(Number(row.unit_price) * packs * row.pack_qty)}</b>}
                           <div className="vo-sub">{packsText(packs, packs * row.pack_qty, row.unit)}</div>
                         </>

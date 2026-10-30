@@ -275,7 +275,7 @@ def _lines(rows: list[dict], wanted, who: str = "廠商", *, unpriced_ok: bool =
             raise VendorError(f"「{row['name']}」重複了")
         seen.add(key)
         if isinstance(packs, bool) or not isinstance(packs, int) or not 1 <= packs <= MAX_PACKS:
-            raise VendorError(f"「{row['name']}」的包數要是 1 到 {MAX_PACKS} 的整數")
+            raise VendorError(f"「{row['name']}」的盒數要是 1 到 {MAX_PACKS} 的整數")
         if row["unit_price"] is None and not unpriced_ok:
             raise VendorError(f"「{row['name']}」這個帳號還沒有報價,不能叫")
         if row.get("per_unit") and packs != 1:

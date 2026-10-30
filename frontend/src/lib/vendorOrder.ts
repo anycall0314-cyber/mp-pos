@@ -1,5 +1,5 @@
 // 廠商叫貨在畫面這一側的規則(選類別、選廠商在 vendorPick.ts)。跑法:npm test。
-// 伺服器決定價錢、一包幾片、送給廠商什麼;這裡只管:包數怎麼填、合計怎麼算、
+// 伺服器決定價錢、一盒幾片、送給廠商什麼;這裡只管:盒數怎麼填、合計怎麼算、
 // 這張叫貨單的鑰匙與「送出去了還不知道結果」怎麼記(同一把鑰匙再送不會變成兩張)。
 import { money } from "./money.ts";
 
@@ -28,7 +28,7 @@ export interface CatalogRow {
   available_qty?: number | null;
 }
 
-/** 這一列最多可以訂幾包:一台一筆的 1;對方露了數量的不超過它;其餘照舊。 */
+/** 這一列最多可以訂幾盒:一台一筆的 1;對方露了數量的不超過它;其餘照舊。 */
 export function maxPacks(row: Pick<CatalogRow, "per_unit" | "available_qty" | "pack_qty">): number {
   if (row.per_unit) return 1;
   if (typeof row.available_qty === "number") return Math.min(Math.floor(row.available_qty / Math.max(row.pack_qty, 1)), MAX_PACKS);
@@ -47,10 +47,10 @@ export interface StoreProduct {
   is_active: boolean;
 }
 
-/** 購物車:哪一列叫幾包。0 包的不留。 */
+/** 購物車:哪一列叫幾盒。0 盒的不留。 */
 export type Cart = Record<string, number>;
 
-/** 框裡打的字 → 包數。不是 0 到上限之間的整數就當成 0(不叫)。 */
+/** 框裡打的字 → 盒數。不是 0 到上限之間的整數就當成 0(不叫)。 */
 export function packsFrom(raw: unknown): number {
   const text = typeof raw === "number" ? String(raw) : typeof raw === "string" ? raw.trim() : "";
   if (!/^\d{1,4}$/.test(text)) return 0;
@@ -68,7 +68,7 @@ export function withPacks(cart: Cart, key: string, packs: number): Cart {
 export interface CartLine {
   row: CatalogRow;
   packs: number;
-  /** 包數 × 一包幾片:送給廠商的是這個 */
+  /** 盒數 × 一盒幾片:送給廠商的是這個 */
   pieces: number;
   amount: number;
 }
@@ -153,16 +153,16 @@ export function linkedCount(rows: { product?: StoreProduct | null }[]): number {
 }
 
 /**
- * 送給伺服器的明細:鍵、包數,加上「畫面上看到這一列連到哪個店內商品」(`was`:商品編號,沒連 = null)。
- * 價錢、品名、一包幾片伺服器自己跟廠商要;`was` 跟伺服器現在的對照不一樣就不會成立(剛好有人改了對照)。
+ * 送給伺服器的明細:鍵、盒數,加上「畫面上看到這一列連到哪個店內商品」(`was`:商品編號,沒連 = null)。
+ * 價錢、品名、一盒幾片伺服器自己跟廠商要;`was` 跟伺服器現在的對照不一樣就不會成立(剛好有人改了對照)。
  */
 export function linesToSend(summary: CartSummary): { key: string; packs: number; was: number | null }[] {
   return summary.lines.map((l) => ({ key: l.row.key, packs: l.packs, was: l.row.product ? l.row.product.id : null }));
 }
 
-/** 「2 包 = 50 片」:店員講的是包,廠商收的是片,兩個都寫出來。 */
+/** 「2 盒 = 50 片」:店員講的是盒,廠商收的是片,兩個都寫出來。 */
 export function packsText(packs: number, pieces: number, unit: string): string {
-  return `${packs} 包 = ${pieces} ${unit || "片"}`;
+  return `${packs} 盒 = ${pieces} ${unit || "片"}`;
 }
 
 /**
@@ -188,7 +188,7 @@ export function storeTitle(row: { name: string; spec_label: string; size: string
 }
 
 /**
- * 大字底下那一行小字:這一列在廠商那邊是什麼 —— 廠商的叫法、料號、一包幾個。
+ * 大字底下那一行小字:這一列在廠商那邊是什麼 —— 廠商的叫法、料號、一盒幾個。
  * 連到店內商品的一定要有(紅隊:同一個店內商品在同一家有兩種包裝時,光看店內品名分不出來,會叫錯倍數);
  * 沒連的大字已經是廠商的叫法,只補料號與包裝。
  */
@@ -201,7 +201,7 @@ export function vendorSide(row: {
   unit: string;
   product?: StoreProduct | null;
 }): string {
-  const pack = `一包 ${row.pack_qty} ${row.unit || "片"}`;
+  const pack = `一盒 ${row.pack_qty} ${row.unit || "片"}`;
   return (row.product ? [rowTitle(row), row.sku, pack] : [row.sku, pack]).filter(Boolean).join(" · ");
 }
 
@@ -270,7 +270,7 @@ export function beforeSend(draft: OrderDraft): OrderDraft {
 }
 
 /**
- * 回來的那張「已成立」的單,是不是就是這張草稿的內容(每一列的包數都一樣)。
+ * 回來的那張「已成立」的單,是不是就是這張草稿的內容(每一列的盒數都一樣)。
  * 不一樣 = 這把鑰匙先前已經成立過另一份(上一次送出其實成功了),現在這一份沒有送出去。
  *
  * **比的是草稿裡完整的購物車,不是照現在的清單篩過的那幾列**:叫了兩項、廠商成立了、回應沒回來,

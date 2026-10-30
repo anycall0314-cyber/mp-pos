@@ -28,7 +28,7 @@ import { ProductForm } from "@/pages/products/ProductForm";
 /**
  * 品名連連看:這家廠商的每一個品項 ↔ 店裡的哪一個商品(owner 2026-10-10)。
  * 連好之後,這個品項到貨時入庫面板打開就帶好品號,只要確認數量。店裡還沒有的商品可以當場建(先找一次,確定沒有才建)。
- * 規則在 lib/vendorMapping.ts;品名、規格、一包幾個、那個商品能不能連,都由伺服器決定。
+ * 規則在 lib/vendorMapping.ts;品名、規格、一盒幾個、那個商品能不能連,都由伺服器決定。
  */
 export function MappingTab({ link }: { link: VendorLinkRow }) {
   const list = useVendorMappings(link.warehouse, link.provider);
@@ -142,7 +142,7 @@ export function MappingTab({ link }: { link: VendorLinkRow }) {
                   <td className="vo-name">
                     {itemTitle(row)}
                     <div className="vo-sub">
-                      {row.sku}　每包 {row.pack_qty} {row.unit || "個"}
+                      {row.sku}　每盒 {row.pack_qty} {row.unit || "個"}
                     </div>
                   </td>
                   <td className="vo-name">

@@ -395,7 +395,7 @@ function Cell({
 }
 
 /**
- * 半自動廠商的價目表:這家廠商賣什麼、一包幾個、參考單價。所有店家看到同一份。
+ * 半自動廠商的價目表:這家廠商賣什麼、一盒幾個、參考單價。所有店家看到同一份。
  * 料號建了不能改(各家門市的叫貨單與對照靠它認);不賣了就停用。可以從 Excel 整批貼上(先預覽、確認才存)。
  */
 /** 手動接單廠商的價目表:整頁(不是抽屜) */
@@ -468,7 +468,7 @@ function PriceListPage({ vendor, onClose }: { vendor: PlatformVendor; onClose: (
               <th style={{ width: 120 }}>規格</th>
               <th style={{ width: 90 }}>種類</th>
               <th style={{ width: 60 }}>單位</th>
-              <th style={{ width: 80 }} className="num">一包幾個</th>
+              <th style={{ width: 80 }} className="num">一盒幾個</th>
               <th style={{ width: 100 }} className="num">參考單價</th>
               <th style={{ width: 60, textAlign: "center" }}>啟用</th>
             </tr>
