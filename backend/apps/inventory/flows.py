@@ -38,6 +38,8 @@ KIND_LABELS = {
     "usage_back": "零件歸還",
     "adjust": "庫存調整",
     "purchase_void": "進貨作廢",
+    # 收購單作廢:收進來的那一台一起作廢(從收購的門市扣掉;沖回進貨那一欄,跟收購入庫同一欄)
+    "trade_in_void": "收購作廢",
     "sale_void": "銷貨作廢",
     "return_void": "銷退作廢",
     "transfer_void": "調撥作廢",
@@ -52,6 +54,7 @@ KIND_LABELS = {
 # 作廢那一筆是哪一種單的作廢、零件歸還是哪一種單:看來源單據
 _VOID_KIND = {
     "purchase_order": "purchase_void",
+    "sales_order": "trade_in_void",
     "sales_return": "return_void",
     "transfer_order": "transfer_void",
 }
@@ -163,7 +166,7 @@ def _column(kind: str, delta: int) -> str:
     up = delta > 0
     if kind in ("purchase", "trade_in"):
         return "purchase" if up else "adjust"
-    if kind == "purchase_void":
+    if kind in ("purchase_void", "trade_in_void"):
         return "adjust" if up else "purchase"
     if kind in ("sale", "parts_sale"):
         return "adjust" if up else "sale"

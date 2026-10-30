@@ -101,6 +101,7 @@ class FlowRuleTests(TestCase):
         self.assertEqual(e(T.PURCHASE_IN, "purchase_order", None, a, 5), [(a, "purchase", 5)])
         self.assertEqual(e(T.TRADE_IN, "sales_order", None, a, 1), [(a, "purchase", 1)])
         self.assertEqual(e(T.VOID, "purchase_order", a, None, 5), [(a, "purchase", -5)])
+        self.assertEqual(e(T.VOID, "sales_order", a, None, 1), [(a, "purchase", -1)])          # 收購作廢
         self.assertEqual(e(T.SALE_OUT, "sales_order", a, None, 2), [(a, "sale", 2)])
         self.assertEqual(e(T.PARTS_TRANSFER, "sales_order", a, None, 2), [(a, "sale", 2)])
         self.assertEqual(e(T.RETURN_IN, "sales_order", None, a, 2), [(a, "sale", -2)])        # 銷貨作廢

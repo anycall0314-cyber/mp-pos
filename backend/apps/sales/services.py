@@ -21,7 +21,9 @@ from apps.core.dates import add_months
 from apps.core.money import CENTS, ONE, money_text, round_money
 from apps.core.tenant_fields import same_company as _same_company
 from apps.inventory.locking import lock_document, lock_stock_rows, locked_balance as _locked_balance
-from apps.inventory.identifiers import IdentifierError, create_serial, main_code, split_codes, taken
+from apps.inventory.identifiers import (
+    IdentifierError, create_serial, main_code, release_codes, split_codes, taken, twin_ids,
+)
 from apps.inventory.models import COSTED_STATUSES, ProductSerial, StockBalance, StockMovement
 from apps.parties.models import SimCard, TelecomPlan
 from apps.tenants.models import Tenant
@@ -773,6 +775,48 @@ def acquire_secondhand_from_member(
     return serial, so
 
 
+def _void_bought_units(so: SalesOrder, serial_ids):
+    """收購單作廢:收進來的那一台一起作廢(owner 2026-10-30「可以」;以前作廢收購單錢退回去了,機器還在庫存)。
+
+    收進來之後沒動過的才可以:還在收購的門市、在庫、除了收購入庫沒有別的異動(賣過再退回、調撥、整理、換貨過的
+    都不行)、沒有被同行訂著。作廢 = 那一台 作廢、釋放它的碼(同一台可以重新收購)、從收購的門市扣掉(異動「收購作廢」,
+    進銷存表沖回進貨那一欄);商品的平均成本跟進貨單作廢一樣,用剩下那幾台重算。呼叫端已鎖住這張單。
+    """
+    from apps.purchasing.services import _recompute_weighted_avg_cost
+    from apps.trade import holds as trade_holds
+
+    serials = list(ProductSerial.objects.select_related("product").filter(pk__in=serial_ids).order_by("pk"))
+    # 碼會釋放:可能要接手那些碼的設備一起照編號鎖(同進貨單作廢)
+    lock_stock_rows(so.tenant, products=[s.product for s in serials], serial_ids=[*serial_ids, *twin_ids(serial_ids)])
+    for s in serials:
+        s.refresh_from_db(fields=["status", "warehouse"])
+        if s.status != ProductSerial.Status.IN_STOCK:
+            raise SalesOrderError(f"收進來的 {s.serial_no} 現在{s.get_status_display()},不能作廢這張收購單")
+        if s.warehouse_id != so.warehouse_id:
+            raise SalesOrderError(f"收進來的 {s.serial_no} 已經調到別家門市,不能作廢這張收購單")
+    if (StockMovement.objects.filter(tenant_id=so.tenant_id, serial_id__in=serial_ids)
+            .exclude(movement_type=StockMovement.MovementType.TRADE_IN).exists()):
+        raise SalesOrderError("收進來的機器之後賣過、調撥、整理或換貨過,不能作廢這張收購單")
+    held = trade_holds.held_lines(so.tenant, serial_ids)
+    if held:
+        line = held[0]
+        raise SalesOrderError(
+            f"收進來的 {line.unit.serial_no} 已經被同行「{line.order.partner.name}」訂走({line.order.no}),請先處理那張批發單")
+
+    for s in serials:
+        s.status = ProductSerial.Status.VOID
+        s.warehouse = None
+        s.save(update_fields=["status", "warehouse", "updated_at"])
+        StockMovement.objects.create(
+            tenant=so.tenant, serial=s, movement_type=StockMovement.MovementType.VOID,
+            from_warehouse=so.warehouse, ref_doc_type="sales_order", ref_doc_id=so.id,
+            note=f"收購單 {so.no} 作廢",
+        )
+    release_codes(serial_ids)
+    for product in {s.product_id: s.product for s in serials}.values():
+        _recompute_weighted_avg_cost(so.tenant, product)
+
+
 def void_sales_order(so: SalesOrder, user=None) -> SalesOrder:
     """整單作廢:序號全部退回 in_stock、SIM 卡退回 in_stock。記下哪一刻作廢的、誰按的(user;系統自己記,不收人填的時間)。
 
@@ -795,6 +839,13 @@ def void_sales_order(so: SalesOrder, user=None) -> SalesOrder:
         )
         if returned_by:
             raise SalesOrderError(f"這張銷貨單已由 {returned_by} 銷退,請先作廢銷退單")
+        # 收購單:收進來的那一台一起作廢(收購單只有「收購二手」那一行,下面的序號 / 配件 / SIM 都不會動到)
+        bought = list(
+            ProductSerial.objects.filter(tenant_id=so.tenant_id, acquired_via_sales_order=so)
+            .order_by("pk").values_list("pk", flat=True)
+        )
+        if bought:
+            _void_bought_units(so, bought)
 
         items = list(
             so.items.select_related("product", "sim_card")
