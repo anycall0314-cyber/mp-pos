@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { loadState, noticeGroups, pickStore, quickActions, QUICK_ACTIONS, todoGroups } from "./homeTodo.ts";
+import { arrivalGroups, loadState, noticeGroups, pickStore, quickActions, QUICK_ACTIONS, todoGroups } from "./homeTodo.ts";
 
 const clerk = { role: "tenant_user", abilities: {} };
 const boss = { role: "tenant_admin", abilities: {} };
@@ -60,6 +60,39 @@ test("注意:跟待辦分開,0 的不列", () => {
   const noVendor = noticeGroups({ repair_alerts: { overdue_external: { count: 1, items: [{ id: 1, no: "R-1", customer_name: "", vendor_name: "", overdue_days: 1 }] } } }, clerk);
   assert.equal(noVendor[0].items[0].title, "R-1");                // 沒填廠商不留「R-1 · 」
   assert.equal(new Set(noticeGroups({ ...summary, contracts_pending: 1, repair_alerts: { ...summary.repair_alerts, overdue_repairs: { count: 1, items: [] } } }, clerk).map((x) => x.label.length)).size, 1);
+});
+
+test("到貨:新品與缺貨補進兩組,0 的不列、名稱字數一樣;點一項查那個品號;全公司才寫哪幾家", () => {
+  const at = new Date(2026, 9, 30, 14, 5).toISOString();
+  const s = {
+    arrivals: {
+      new: { count: 1, items: [{ id: 3, sku: "LC 001/A", name: "新款皮套", qty: 4, at, warehouses: ["民生店", "湳雅店"] }] },
+      restock: { count: 0, items: [] },
+    },
+  };
+  const all = arrivalGroups(s, null);
+  assert.deepEqual(all.map((g) => g.label), ["新品已到貨"]);
+  assert.equal(all[0].to, "");                                   // 整組不是連結
+  assert.equal(all[0].items[0].to, "/inventory?search=LC%20001%2FA");
+  assert.equal(all[0].items[0].sub, "+4 · 民生店、湳雅店 · 14:05");
+  assert.equal(arrivalGroups(s, 2)[0].items[0].sub, "+4 · 14:05");   // 看一家門市:不寫門市
+  const both = arrivalGroups({ arrivals: { new: s.arrivals.new, restock: { count: 2, items: [] } } }, null);
+  assert.deepEqual(both.map((g) => g.key), ["new", "restock"]);
+  assert.equal(new Set(both.map((g) => g.label.length)).size, 1);
+  assert.equal(both[0].label.length, todoGroups(summary, clerk)[0].label.length);   // 跟待辦 / 注意同樣 5 個字
+  assert.deepEqual(arrivalGroups(undefined), []);
+  assert.deepEqual(arrivalGroups({}), []);
+});
+
+test("首頁的到貨在待辦、注意旁邊;沒有要去的頁的那一行不是連結;庫存查詢接得住首頁帶的品號", () => {
+  const page = readFileSync(new URL("../pages/home/HomePage.tsx", import.meta.url), "utf8");
+  assert.match(page, /<div className="hp-panel-title">待辦<\/div>[\s\S]*<div className="hp-panel-title">注意<\/div>[\s\S]*<div className="hp-panel-title">到貨<\/div>[\s\S]*今日營收/);
+  assert.match(page, /\{g\.to \? \(\s*<NavLink to=\{g\.to\} className="hp-group-head">/);
+  const css = readFileSync(new URL("../styles/09-business-daily-home.css", import.meta.url), "utf8");
+  assert.match(css, /^a\.hp-group-head:hover/m);
+  const inv = readFileSync(new URL("../pages/inventory/InventoryQueryPage.tsx", import.meta.url), "utf8");
+  assert.match(inv, /params\.get\("search"\)/);
+  assert.match(inv, /apply\(\{ keyword: linked, warehouseIds: all \}\)/);
 });
 
 test("還沒拿到資料:什麼都不列", () => {

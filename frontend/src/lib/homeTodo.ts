@@ -7,6 +7,8 @@
  *     庫存不足、逾期、合約待聯絡是給管店的人看的「注意」,分開放;
  *  3. 每一區跟著同一個門市範圍(鎖門市 = 那一家;沒鎖 = 全公司或首頁選的那一家)。
  *
+ *  4. 到貨(2026-10-30):今天進貨的新品、缺貨補進,讓門市跟進貨同步知道。
+ *
  * 這一份只決定「有哪幾組、點了去哪、誰看得到」;數字由伺服器 `home-summary` 給。
  */
 import { isManager, matchForUser, type NavRole } from "../nav.ts";
@@ -52,6 +54,12 @@ export interface TodoSource {
       items: { id: number; no: string; customer_name: string; host_model_name: string; ready_days: number }[];
     };
   };
+  arrivals?: Record<"new" | "restock", ArrivalSource>;
+}
+
+export interface ArrivalSource {
+  count: number;
+  items: { id: number; sku: string; name: string; qty: number; at: string; warehouses: string[] }[];
 }
 
 /** 首頁的主要快捷:名字是動作、字數一樣 */
@@ -123,6 +131,31 @@ export function noticeGroups(s: TodoSource | undefined, who: NavRole, store: num
       (s.low_stock?.items ?? []).map((x) => ({ key: `l${x.id}`, to: withStore("/inventory/alerts", store), title: x.name, sub: `剩 ${x.qty}` }))),
   ];
   return rows.filter((g) => g.count > 0 && reachable(g.to, who));
+}
+
+function clock(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/**
+ * 到貨(owner 2026-10-30:「看到今天入庫的新品,讓進貨資訊與門市人員沒有時差」「還有原本零庫存進貨的也要」):
+ * 哪些算新品、哪些算缺貨補進由伺服器定(`inventory/arrivals.py`),這裡只排成兩組。名稱一律 5 個字、0 的不列,
+ * 每一項點了到庫存查詢查那個品號;整組沒有要去的頁(`to` 空的,不是連結)。`store` = null(全公司)才寫進了哪幾家。
+ */
+export function arrivalGroups(s: TodoSource | undefined, store: number | null = null): HomeGroup[] {
+  if (!s?.arrivals) return [];
+  const rows = (key: string, label: string, g: ArrivalSource): HomeGroup => ({
+    key, label, count: g.count, to: "",
+    items: g.items.map((x) => ({
+      key: `${key}${x.id}`,
+      to: `/inventory?search=${encodeURIComponent(x.sku)}`,
+      title: x.name,
+      sub: join(`+${x.qty}`, store === null ? x.warehouses.join("、") : "", clock(x.at)),
+    })),
+  });
+  return [rows("new", "新品已到貨", s.arrivals.new), rows("restock", "缺貨已補進", s.arrivals.restock)]
+    .filter((g) => g.count > 0);
 }
 
 /** 首頁選的門市(沒鎖的帳號;記在這台電腦)。看不懂的、已經沒有的門市當成全公司 */

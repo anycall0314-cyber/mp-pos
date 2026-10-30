@@ -832,8 +832,12 @@ def home_summary(request):
         for t in transfer_qs.select_related("from_warehouse", "to_warehouse").order_by("created_at", "id")[:3]
     ]
 
+    # 今天到貨的新品、缺貨補進(2026-10-30;規則在 inventory/arrivals.py)
+    from apps.inventory.arrivals import today_arrivals
+
     return Response(
         {
+            "arrivals": today_arrivals(tenant, wid),
             "transfers_pending": {"count": transfer_qs.count(), "items": transfer_items},
             "intake_open": intake_qs.count(),
             "counts_pending": count_qs.count(),

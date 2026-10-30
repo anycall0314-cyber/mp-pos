@@ -481,7 +481,7 @@
   font-weight: 600;
 }
 
-/* 待辦 / 注意:一組一行「名稱 數字」,底下最多三筆 */
+/* 待辦 / 注意 / 到貨:一組一行「名稱 數字」,底下是明細(到貨的那一行不是連結) */
 .hp-group { border-bottom: 1px solid var(--border); }
 .hp-group:last-child { border-bottom: 0; }
 .hp-group-head {
@@ -496,7 +496,7 @@
   font-size: var(--font-body);
   font-weight: 600;
 }
-.hp-group-head:hover { background: var(--row-hover); }
+a.hp-group-head:hover { background: var(--row-hover); }
 .hp-group-count {
   min-width: 32px;
   padding: 2px 10px;

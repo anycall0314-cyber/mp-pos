@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { downloadCsv } from "@/components/downloadCsv";
 import { ChoiceGroup } from "@/components/ui";
@@ -294,10 +294,18 @@ export function InventoryQueryPage() {
   const [selectedWarehouseIds, setSelectedWarehouseIds] = useState<Set<number>>(
     new Set(),
   );
+  // 從首頁點商品進來帶著 ?search=品號(到貨、銷量回溫 / 退燒):直接查那一個
+  const [params] = useSearchParams();
+  const linked = (params.get("search") ?? "").trim();
   // 首次載入時每家分店都選起來
   useEffect(() => {
     if (allWarehouses.length > 0 && selectedWarehouseIds.size === 0) {
-      setSelectedWarehouseIds(new Set(allWarehouses.map((w) => w.id)));
+      const all = new Set(allWarehouses.map((w) => w.id));
+      setSelectedWarehouseIds(all);
+      if (linked) {
+        setKeyword(linked);
+        apply({ keyword: linked, warehouseIds: all });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allWarehouses]);

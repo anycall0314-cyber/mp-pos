@@ -1141,6 +1141,11 @@ export interface PhoneModel {
 }
 
 // 登入首頁所需的 metric 一次回
+export interface ArrivalGroup {
+  count: number;
+  items: { id: number; sku: string; name: string; qty: number; at: string; warehouses: string[] }[];
+}
+
 export interface HomeSummary {
   /** 門號合約:快到期(或已經過期)還沒處理的有幾筆 */
   contracts_pending?: number;
@@ -1155,6 +1160,8 @@ export interface HomeSummary {
   intake_open?: number;
   /** 送出等核准的盤點單 */
   counts_pending?: number;
+  /** 今天到貨的新品、缺貨補進(規則在後端 inventory/arrivals.py;最近進來的在前) */
+  arrivals?: { new: ArrivalGroup; restock: ArrivalGroup };
   warehouse_id: number | null;
   warehouse_name: string;
   today: { revenue: number; sales_count: number };

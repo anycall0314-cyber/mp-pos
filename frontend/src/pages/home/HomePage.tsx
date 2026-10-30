@@ -5,6 +5,7 @@ import { TrendingItem, useHomeSummary, useTrending, useWarehouses } from "@/api/
 import { useCurrentUser } from "@/auth/AuthContext";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import {
+  arrivalGroups,
   type HomeGroup,
   HOME_STORE_KEY,
   loadState,
@@ -20,7 +21,7 @@ import { money } from "@/lib/money";
  * 今日總覽(2026-10-23 改成「今天要做的事」;UI 改善計劃 6.1、全站檢視 G7,規則在 lib/homeTodo.ts):
  *  - 最上面一排:門市(沒鎖門市的帳號可以選,每一區跟著同一家)· 帳號 · 日期時間
  *  - 四顆櫃檯動作(看不到那一頁的收起來)
- *  - 待辦(按下去做得完的)| 注意(給管店的人看的)
+ *  - 待辦(按下去做得完的)| 注意(給管店的人看的)| 到貨(今天進貨的新品、缺貨補進)
  *  - 今日營收 | 最近交易
  *  - 銷量回溫 / 退燒
  * 資料來源:GET /home-summary/(每 30 秒重抓)
@@ -47,6 +48,7 @@ export function HomePage() {
   const linkStore = locked ? (user?.profile?.default_warehouse_id ?? null) : store;
   const todo = todoGroups(summary.data, who, linkStore);
   const notice = noticeGroups(summary.data, who, linkStore);
+  const arrivals = arrivalGroups(summary.data, linkStore);
 
   const scopeName = locked
     ? user?.profile?.default_warehouse_name || summary.data?.warehouse_name || ""
@@ -132,6 +134,12 @@ export function HomePage() {
               <div className="hp-panel-title">注意</div>
             </div>
             <GroupList groups={notice} loading={loading} failed={failed} empty="沒有要注意的" retry={() => summary.refetch()} />
+          </section>
+          <section className="hp-panel">
+            <div className="hp-panel-head">
+              <div className="hp-panel-title">到貨</div>
+            </div>
+            <GroupList groups={arrivals} loading={loading} failed={failed} empty="沒有新品或缺貨補進" retry={() => summary.refetch()} />
           </section>
         </div>
 
@@ -241,7 +249,7 @@ function readStore(): string | null {
   }
 }
 
-/** 待辦 / 注意:一組一行「名稱 數字」(點了到那一頁、帶好條件),底下最多三筆 */
+/** 待辦 / 注意 / 到貨:一組一行「名稱 數字」(點了到那一頁、帶好條件;沒有要去的頁就只是一行字),底下是明細 */
 function GroupList({
   groups,
   loading,
@@ -262,10 +270,17 @@ function GroupList({
     <div className="hp-panel-body">
       {groups.map((g) => (
         <div key={g.key} className="hp-group">
-          <NavLink to={g.to} className="hp-group-head">
-            <span>{g.label}</span>
-            <span className="hp-group-count">{g.count}</span>
-          </NavLink>
+          {g.to ? (
+            <NavLink to={g.to} className="hp-group-head">
+              <span>{g.label}</span>
+              <span className="hp-group-count">{g.count}</span>
+            </NavLink>
+          ) : (
+            <div className="hp-group-head">
+              <span>{g.label}</span>
+              <span className="hp-group-count">{g.count}</span>
+            </div>
+          )}
           {g.items.map((it) => (
             <NavLink key={it.key} to={it.to} className="hp-group-item">
               <span className="hp-group-title">{it.title}</span>
