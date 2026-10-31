@@ -28,7 +28,7 @@ from apps.tenants.permissions import is_tenant_admin
 
 from . import stockcount, stockcount_phone
 from .identifiers import find_serial_ids
-from .models import ProductSerial, StockBalance, StockCount, StockCountPhone, VendorExchange, Warehouse
+from .models import ProductSerial, StockBalance, StockCount, StockCountPhone, VendorExchange, Warehouse, book_cost
 
 S = StockCount.Status
 _CENT = Decimal("0.01")
@@ -82,6 +82,12 @@ def _summary(count, lines=None, scans=None):
         "lines": count.lines.count() if lines is None else lines,
         "scans": count.scans.count() if scans is None else scans,
     }
+
+
+def _lost_cost(m):
+    """盤虧那一台的金額:標成盤虧時記下來的(`unit_cost`,之後進貨改了平均也不變);還沒核准的照現在帳上的成本
+    (`book_cost`:新機是平均成本,跟賣掉記的同一個數字)。"""
+    return m.unit_cost if m.unit_cost is not None else book_cost(m.serial)
 
 
 def _detail(count, user):
@@ -179,7 +185,7 @@ def _detail(count, user):
         missing = list(count.missing.select_related("serial__product").order_by("id"))
         out["missing_rows"] = [{
             "id": m.id, "serial_no": m.serial.serial_no, "name": m.serial.product.name,
-            "cost": _money(m.serial.purchase_unit_cost), "skipped": m.skipped, "reason": m.reason,
+            "cost": _money(_lost_cost(m)), "skipped": m.skipped, "reason": m.reason,
             "applied": m.applied, "found": m.found_at is not None,
             # 現在帳上還在不在這家門市在庫(送出之後賣掉 / 調走的,核准時不會標成盤虧)
             "still_here": m.serial.status == ProductSerial.Status.IN_STOCK and m.serial.warehouse_id == wh,
@@ -206,7 +212,7 @@ def _detail(count, user):
                 "unit_price": _money(s.unit_price) if s.unit_price is not None else None,
                 "skipped": s.skipped, "reason": s.reason, "added": s.added_id is not None,
             })
-        lost = sum((Decimal(m.serial.purchase_unit_cost or 0) for m in missing
+        lost = sum((Decimal(_lost_cost(m)) for m in missing
                     if (m.applied and m.found_at is None) or (count.status == S.SUBMITTED and not m.skipped)), Decimal("0"))
         # 第一次入庫的:核准之後是入了的那幾台;還沒核准是「照現在的樣子核准」會入的(先帶出品號、有舊成本的)
         added = sum((Decimal(r["unit_cost"] if count.status == S.APPROVED else r["old_cost"] or 0)

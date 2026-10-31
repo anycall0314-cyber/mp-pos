@@ -17,7 +17,7 @@ from apps.catalog.models import Category, Product
 from apps.core.money import round_money
 from apps.identity.normalize import normalize_serial
 from apps.inventory.identifiers import codes_of, find_serial_ids
-from apps.inventory.locking import lock_stock_rows
+from apps.inventory.locking import lock_averages, lock_stock_rows
 from apps.inventory.models import ProductSerial
 from apps.sales.models import SalesOrder, SalesOrderItem, SalesOrderItemSerial, SalesOrderPayment
 from apps.sales.services import SalesOrderError, commit_sales_order, void_sales_order
@@ -124,7 +124,12 @@ def ship(*, tenant, user, order, request_key, warehouse, lines, shipping_fee=Non
         raise TradeError("出貨的門市不對")
     try:
         with transaction.atomic():
-            lock_stock_rows(tenant, serial_ids=[x for _, _, serials in wanted for x in serials])
+            # 新機的平均成本鎖要在鎖序號之前拿:後面過帳的銷貨單會拿它(賣掉記平均成本),等到那時才拿就變成
+            # 「序號 → 平均成本鎖」,跟門市同時賣同一台的銷貨單順序相反會互卡(2026-10-31)
+            wanted_ids = [x for _, _, serials in wanted for x in serials]
+            lock_averages(s.product for s in
+                          ProductSerial.objects.filter(tenant=tenant, pk__in=wanted_ids).select_related("product"))
+            lock_stock_rows(tenant, serial_ids=wanted_ids)
             order = orders._locked(order)
             found = done()
             if found is not None:

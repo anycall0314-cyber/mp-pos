@@ -16,7 +16,7 @@ from apps.catalog.models import Product
 from apps.inventory.models import ProductSerial, StockMovement
 from apps.parties.models import Member
 from apps.repairs.models import RepairOrder
-from apps.sales.models import SalesOrder
+from apps.sales.models import SalesOrder, SalesOrderItem
 from apps.sales.services import acquire_secondhand_from_member
 from apps.trade.tests import _Helpers as _TradeHelpers
 
@@ -98,6 +98,9 @@ class BuybackCostTests(_Buyback, TestCase):
         # 再收一台 5,000:(4,500 + 5,000)÷ 2
         self.buy("356938035643817", "5000")
         self.assertEqual(self.avg(), D("4750.00"))
+        # 賣掉整理過的那一台:中古機記那一台自己的(收購 + 整理 = 4,500),不是平均 4,750(新機才記平均;2026-10-31)
+        self.sell(unit)
+        self.assertEqual(SalesOrderItem.objects.filter(product=self.used).latest("id").cost_at_post, D("4500.00"))
 
     def test_same_formula_as_purchase_after_a_sale(self):
         # 賣掉不改平均;下一台照「在庫台數 × 現在的平均 + 收購價」算(進貨、盤點入庫也是這樣算,不是重算在庫那幾台)

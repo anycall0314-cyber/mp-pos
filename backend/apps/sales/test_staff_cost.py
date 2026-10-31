@@ -376,11 +376,11 @@ class ProductSettingTests(_Shop):
         return {x["serial_no"]: D(x["staff_cost"]) for x in rows}
 
     def test_each_unit_shows_a_number_without_any_markup_for_now(self):
-        """開單頁挑到某一台、庫存查詢每一台用的數字 = 這一台現在賣掉會記的業務員成本。帶序號的先不加成:就是那一台自己的成本
-        (2026-10-28 起;以前一般的手機寫商品的平均成本,跟賣掉時記的不一樣 —— 店員看不到實際成本之後,這個數字要對得上)。"""
+        """開單頁挑到某一台、庫存查詢每一台用的數字 = 這一台現在賣掉會記的業務員成本。帶序號的先不加成:就是那一台帳上的成本
+        (2026-10-28 起要跟賣掉時記的對得上;2026-10-31 起新機賣掉記平均成本,每一台都一樣,中古機是那一台自己的)。"""
         ProductSerial.objects.filter(tenant=self.t, serial_no="甲P2").update(purchase_unit_cost=D("8000"))
         self.company_rule("percent", "10")
-        self.assertEqual(self.units(), {"甲P1": D("20000"), "甲P2": D("8000")})
+        self.assertEqual(self.units(), {"甲P1": D("20000"), "甲P2": D("20000")})
         Product.objects.filter(pk=self.c.phone.pk).update(is_secondhand=True)
         self.assertEqual(self.units(), {"甲P1": D("20000"), "甲P2": D("8000")})
 
@@ -535,13 +535,14 @@ class SaleTests(_Shop):
 
     @serial_goods_switched_on
     def test_a_regular_phone_uses_the_average_not_its_own_cost(self):
-        """(開關打開時)兩支手機進價不同(20000 與 18000),平均 19000:賣哪一支業務員成本都一樣。"""
+        """(開關打開時)兩支手機進價不同(20000 與 18000),平均 19000:賣哪一支業務員成本都一樣
+        (2026-10-31 起實際成本也是平均)。"""
         ProductSerial.objects.filter(tenant=self.t, serial_no="甲P2").update(purchase_unit_cost=D("18000"))
         Product.objects.filter(pk=self.c.phone.pk).update(weighted_avg_cost=D("19000"))
         self.company_rule("percent", "10")
         cheap, dear = self.sell(self.phone("甲P2")), self.sell(self.phone("甲P1"))
-        self.assertEqual(self.stored(cheap), (D("18000"), D("20900"), "company:percent:10.00"))
-        self.assertEqual(self.stored(dear), (D("20000"), D("20900"), "company:percent:10.00"))
+        self.assertEqual(self.stored(cheap), (D("19000"), D("20900"), "company:percent:10.00"))
+        self.assertEqual(self.stored(dear), (D("19000"), D("20900"), "company:percent:10.00"))
 
     @serial_goods_switched_on
     def test_a_secondhand_unit_uses_its_own_cost(self):

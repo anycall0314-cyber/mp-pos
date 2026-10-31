@@ -7,7 +7,7 @@ from apps.catalog.models import Product
 from apps.core import staff_cost
 from apps.core.money import round_money
 from apps.core.tenant_fields import same_company
-from apps.inventory.locking import lock_document, lock_stock_rows, locked_balance
+from apps.inventory.locking import lock_averages, lock_document, lock_stock_rows, locked_balance
 from apps.inventory.models import StockBalance, StockMovement
 
 from . import stock
@@ -185,8 +185,10 @@ def complete_repair_order(repair_order: RepairOrder) -> None:
         wh = repair_order.warehouse
         lines = list(repair_order.parts.select_related("part_product").order_by("id"))
         parts = [line.part_product for line in lines]
-        # 自家庫存送去整理的那一台(repairs/stock.py):它的商品、它自己跟零件一次鎖
+        # 自家庫存送去整理的那一台(repairs/stock.py):它的商品、它自己跟零件一次鎖;
+        # 新機的平均成本鎖在鎖任何一列之前拿(整理費攤進平均,2026-10-31)
         unit = stock.prepare(repair_order)
+        lock_averages([unit.product] if unit is not None else [])
         if not same_company(tenant.pk, wh, repair_order.customer, repair_order.sales_person,
                             repair_order.technician, repair_order.repair_item,
                             repair_order.external_vendor, unit, *lines, *parts):
@@ -307,6 +309,7 @@ def reopen_repair_order(repair_order: RepairOrder) -> None:
         # 零件的商品也放進同一次、照編號先鎖(複審 2026-10-29 P1):庫存餘額的鎖會連它的商品一起鎖,
         # 只先鎖那一台的商品的話,順序變成「那一台的商品 → 零件」,跟進貨照編號鎖的順序相反會互卡
         unit = stock.prepare(repair_order)
+        lock_averages([unit.product] if unit is not None else [])
         lock_stock_rows(
             tenant, products=[unit.product, *products.values()] if unit is not None else [],
             serial_ids=[unit.pk] if unit is not None else [],

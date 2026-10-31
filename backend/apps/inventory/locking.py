@@ -13,10 +13,35 @@
 
 商品、序號、SIM 卡用的是「不擋外鍵」的鎖(FOR NO KEY UPDATE):別張單只是新增一列指到同一個商品 /
 序號時不會被擋住,但兩邊都要「改」它時仍然一次只有一個。
+
+新機的平均成本另外一把鎖(`lock_averages`,2026-10-31):賣掉要讀、進貨 / 作廢 / 盤點 / 整理要改新機平均成本的動作,
+**在鎖任何一列之前**(單據自己那一列除外)先拿那幾個品號的這把鎖。它不是資料列的鎖,所以不會跟上面那條順序交叉
+(庫存餘額的鎖會連帶鎖住它的商品那一列,銷貨要是改成先鎖新機的商品列,跟進貨照編號鎖商品會互卡;複審第二輪 P1)。
 """
 from decimal import Decimal
 
-from .models import ProductSerial, StockBalance
+from django.db import connection
+
+from .models import ProductSerial, StockBalance, costs_at_average
+
+# 平均成本那把鎖的類別號(任意固定的數字;pg_advisory_xact_lock 的第一個參數)
+AVERAGE_LOCK = 4903301
+
+
+def average_lock_key(product_id):
+    """平均成本那把鎖的兩個數字(測試另一條連線要拿同一把時也用這一支)。"""
+    return AVERAGE_LOCK, product_id % 2147483647
+
+
+def lock_averages(products):
+    """新機(`costs_at_average`)的平均成本鎖,照品號編號一把一把拿,交易結束自己放。同一個交易重拿不會等。
+    呼叫端一定要在鎖任何一列之前呼叫(單據自己那一列除外)。"""
+    ids = sorted({p.pk for p in products if costs_at_average(p)})
+    if not ids or connection.vendor != "postgresql":
+        return
+    with connection.cursor() as cur:
+        for pk in ids:
+            cur.execute("SELECT pg_advisory_xact_lock(%s, %s)", list(average_lock_key(pk)))
 
 
 def lock_document(obj):

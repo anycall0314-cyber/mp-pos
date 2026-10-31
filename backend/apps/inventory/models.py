@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import models
 
@@ -179,9 +181,38 @@ class ProductSerial(TenantOwnedModel):
 
 # 算平均成本時算進去的設備:在庫 + 廠商換貨中 + 已退(都還是這家公司的貨、有成本)。
 # 只算在庫的話,有一台在換貨時進貨,平均成本會被新進的那一批拉走(複審 2026-10-21 P0);
-# 銷退退回來、還沒確認可賣的已退也一樣(複審 2026-10-23 P0);送去整理的(整理中)也一樣
+# 銷退退回來、還沒確認可賣的已退也一樣(複審 2026-10-23 P0);送去整理的(整理中)也一樣;
+# 調撥途中的也一樣(2026-10-31:新機賣出記平均成本之後,漏數調撥中的會讓那段時間進的貨把平均拉走)
 COSTED_STATUSES = (ProductSerial.Status.IN_STOCK, ProductSerial.Status.RMA, ProductSerial.Status.RETURNED,
-                   ProductSerial.Status.REFURB)
+                   ProductSerial.Status.REFURB, ProductSerial.Status.IN_TRANSIT)
+
+
+def costs_at_average(product):
+    """帶序號、不是中古機的商品(新機、已拆封):每一台帳上的成本 = 商品的平均成本。
+    賣掉要讀平均、進貨 / 作廢 / 盤點 / 整理要改平均的動作,先拿這種商品的平均成本鎖(`locking.lock_averages`),
+    同一瞬間的進貨才不會在中間把平均改掉、或把正在賣掉的那一台算進在庫台數(複審 2026-10-31 P1)。"""
+    return product.requires_serial and not product.is_secondhand and not product.is_virtual
+
+
+def book_cost(serial, product=None):
+    """這一台帳上的成本:賣掉記的、庫存金額算的都是它(owner 2026-10-31)。
+
+    中古機 = 它自己的成本(收購 / 進貨 + 整理);其他帶序號的(新機、已拆封)= 商品的平均成本(全公司),
+    同一款每一台都一樣,店員挑哪一台賣都沒差。`purchase_unit_cost` 照舊記這一台真的進價,只給管理員看。
+    """
+    product = product or serial.product
+    if product.is_secondhand:
+        return serial.purchase_unit_cost or Decimal("0")
+    return product.weighted_avg_cost or Decimal("0")
+
+
+def book_cost_expr(prefix=""):
+    """`book_cost` 的資料庫寫法(加總、一次算很多台用);prefix 是從別張表走到設備的路徑(例:"serial__")。"""
+    return models.Case(
+        models.When(**{f"{prefix}product__is_secondhand": True}, then=models.F(f"{prefix}purchase_unit_cost")),
+        default=models.F(f"{prefix}product__weighted_avg_cost"),
+        output_field=models.DecimalField(max_digits=14, decimal_places=2),
+    )
 
 
 class ProductSerialIdentifier(TenantOwnedModel):
@@ -591,6 +622,8 @@ class StockCountMissing(TenantOwnedModel):
     applied = models.BooleanField("已標成盤虧", default=False)
     # 標成盤虧那一刻是「已退」(銷退退回來、還沒確認可賣):找回時回到已退,不直接變成可以賣(2026-10-23)
     was_returned = models.BooleanField("盤虧前是已退", default=False, db_default=False)
+    # 標成盤虧那一刻這一台帳上的成本(`book_cost`;新機是平均成本,之後進貨會變,盤虧金額不能跟著變;2026-10-31)
+    unit_cost = models.DecimalField("盤虧當下的成本", max_digits=14, decimal_places=2, null=True, blank=True)
     found_at = models.DateTimeField("找回時間", null=True, blank=True)
     found_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+", null=True, blank=True, verbose_name="找回的人")

@@ -18,7 +18,8 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
   // 這一台的兩個碼:空的那一格誰都可以補;已經登記的只有管理員能改
   const role = useCurrentUser()?.profile?.role;
   const isAdmin = role === "tenant_admin" || role === "platform_admin";
-  // 帶序號的業務員成本就是這一台的成本:數字一樣,不是管理員的欄名叫業務員成本(owner 2026-10-28)
+  // 帶序號的業務員成本就是這一台帳上的成本:數字一樣,不是管理員的欄名叫業務員成本(owner 2026-10-28);
+  // 新機帳上的成本是平均成本,真的進價只在管理員的收購來源那一行(2026-10-31)
   const costWord = isAdmin ? "單台成本" : "業務員成本";
   const saveCodes = useSetSerialCodes();
   const savedImei = data?.serial.imei ?? "";
@@ -138,7 +139,7 @@ export function SerialHistoryModal({ serialId, onClose }: Props) {
                 )}
                 <div>
                   {costWord}:
-                  <b>{money(data.serial.purchase_unit_cost)}</b>
+                  <b>{money(isAdmin ? data.serial.book_cost : data.serial.staff_cost)}</b>
                 </div>
               </div>
 

@@ -29,7 +29,7 @@ from apps.inventory.identifiers import (
     taken,
     twin_ids,
 )
-from apps.inventory.locking import lock_document, lock_stock_rows, locked_balance
+from apps.inventory.locking import lock_averages, lock_document, lock_stock_rows, locked_balance
 from apps.inventory.models import COSTED_STATUSES, ProductSerial, StockBalance, StockMovement
 
 from .models import PurchaseOrder, PurchaseOrderItem
@@ -205,8 +205,10 @@ def commit_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
         it.product = shared.setdefault(it.product_id, it.product)
 
     with transaction.atomic():
-        # 先鎖再檢查、再改(規則見 apps/inventory/locking.py):這張單要改成本的商品、要加數量的庫存餘額
+        # 先鎖再檢查、再改(規則見 apps/inventory/locking.py):這張單要改成本的商品、要加數量的庫存餘額;
+        # 新機的平均成本鎖在鎖商品之前拿(銷貨讀平均也拿它,2026-10-31)
         lock_document(po)
+        lock_averages(it.product for it in items)
         lock_stock_rows(
             po.tenant,
             products=[it.product for it in items if not it.product.is_virtual],
@@ -475,6 +477,7 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
             ProductSerial.objects.for_tenant(po.tenant)
             .filter(purchase_order_item__in=items).values_list("pk", flat=True)
         )
+        lock_averages(it.product for it in items)
         lock_stock_rows(
             po.tenant,
             products=[it.product for it in items if not it.product.is_virtual],
@@ -536,6 +539,22 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
             balance.weighted_avg_cost = ((remaining_value / remaining_qty).quantize(CENTS)
                                          if remaining_qty > 0 else Decimal("0"))
 
+        # 帶序號的新機(不是中古機):賣掉記的是平均成本,作廢要把這張單加進平均的那一筆反著扣回去(跟配件同一個算法);
+        # 用剩下那幾台的進價重算會讓不相干的平均跳一下。中古機每一台自己的成本,照舊用剩下那幾台重算
+        products_of = {it.product_id: it.product for it in items}
+        pooled_avg = {}
+        for pid in sorted({x.product_id for x in serials}):
+            if products_of[pid].is_secondhand:
+                continue
+            mine = [x for x in serials if x.product_id == pid]
+            here = ProductSerial.objects.filter(tenant=po.tenant, product_id=pid, status__in=COSTED_STATUSES).count()
+            avg = Product.objects.filter(pk=pid).values_list("weighted_avg_cost", flat=True).get()
+            remaining_qty = here - len(mine)
+            remaining_value = Decimal(here) * avg - sum((x.purchase_unit_cost for x in mine), Decimal("0"))
+            if remaining_qty > 0 and remaining_value < 0:
+                raise PurchaseOrderError("庫存成本已變動，不能整張作廢；請逐筆辦理商品退貨（退貨功能待完成）")
+            pooled_avg[pid] = (remaining_value / remaining_qty).quantize(CENTS) if remaining_qty > 0 else Decimal("0")
+
         affected_product_ids = set()
         for x in serials:
             affected_product_ids.add(x.product_id)
@@ -576,7 +595,12 @@ def void_purchase_order(po: PurchaseOrder) -> PurchaseOrder:
 
         # 重算加權平均(受影響商品)
         for pid in sorted(affected_product_ids):
-            _recompute_product_avg_cost(po.tenant, Product.objects.get(pk=pid))
+            product = Product.objects.get(pk=pid)
+            if pid in pooled_avg:
+                product.weighted_avg_cost = pooled_avg[pid]
+                product.save(update_fields=["weighted_avg_cost"])
+                continue
+            _recompute_product_avg_cost(po.tenant, product)
 
         po.is_void = True
         po.save(update_fields=["is_void"])

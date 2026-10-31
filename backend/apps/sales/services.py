@@ -4,7 +4,7 @@
 2. 整單序號不重複
 3. 算 subtotal / tax_amount / total(依 tax_method)
 4. 寫每筆 item.amount + cost_at_post
-   - cost_at_post = sum 各 serial 的 purchase_unit_cost(實體);虛擬 = 0
+   - cost_at_post = 每一台帳上的成本(`inventory.models.book_cost`:中古機它自己的、其他是平均成本);配件本倉平均;虛擬 = 0
 5. 序號狀態 → sold,sold_at=now
 6. 寫 StockMovement(SALE_OUT)
 7. SIM 卡 → issued
@@ -20,11 +20,11 @@ from apps.core import staff_cost
 from apps.core.dates import add_months
 from apps.core.money import CENTS, ONE, money_text, round_money
 from apps.core.tenant_fields import same_company as _same_company
-from apps.inventory.locking import lock_document, lock_stock_rows, locked_balance as _locked_balance
+from apps.inventory.locking import lock_averages, lock_document, lock_stock_rows, locked_balance as _locked_balance
 from apps.inventory.identifiers import (
     IdentifierError, create_serial, main_code, release_codes, split_codes, taken, twin_ids,
 )
-from apps.inventory.models import COSTED_STATUSES, ProductSerial, StockBalance, StockMovement
+from apps.inventory.models import COSTED_STATUSES, ProductSerial, StockBalance, StockMovement, book_cost
 from apps.parties.models import SimCard, TelecomPlan
 from apps.tenants.models import Tenant
 from apps.tenants.services import InvoiceTrackError, assign_invoice_no
@@ -409,6 +409,9 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
         # 先鎖再檢查:序號是不是還在庫、卡是不是還沒發出去,都要看鎖到之後的狀態
         sold_serial_ids = list(
             SalesOrderItemSerial.objects.filter(item__so=so).values_list("serial_id", flat=True))
+        # 新機賣掉記平均成本:鎖任何一列之前先拿那幾個品號的平均成本鎖(進貨改平均也拿它),
+        # 不然同一瞬間進同一款,這邊記舊的平均、那邊又把這一台算成在庫(複審 2026-10-31 P1)
+        lock_averages(it.product for it in items)
         _lock_rows(
             so.tenant, so.warehouse, serial_ids=sold_serial_ids,
             sim_ids=[it.sim_card_id for it in items if it.sim_card_id],
@@ -445,14 +448,15 @@ def commit_sales_order(so: SalesOrder) -> SalesOrder:
 
             # cost_at_post:
             # - 虛擬:0
-            # - 序號實體:sum 各 serial 的 purchase_unit_cost
+            # - 序號實體:每一台帳上的成本加總(`book_cost`):中古機它自己的;新機、已拆封 = 商品的平均成本
+            #   (全公司,鎖到之後重讀的那一個;owner 2026-10-31:照每一台進價算,門市會專挑便宜的那批賣)
             # - 配件(無序號實體):本倉 balance.weighted_avg_cost × qty
             unit_costs = []
             if product.is_virtual:
                 it.cost_at_post = Decimal("0")
             elif product.requires_serial:
                 item_serials = list(it.serials.select_related("serial").all())
-                unit_costs = [sos.serial.purchase_unit_cost for sos in item_serials]
+                unit_costs = [book_cost(sos.serial, costing.get(product.pk, product)) for sos in item_serials]
                 it.cost_at_post = sum(unit_costs, Decimal("0")).quantize(CENTS)
             else:
                 bal = StockBalance.objects.filter(

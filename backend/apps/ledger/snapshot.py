@@ -10,7 +10,7 @@ from django.db import connection, transaction
 from django.db.models import Sum
 from django.utils import timezone
 
-from apps.inventory.models import ProductSerial, StockBalance
+from apps.inventory.models import ProductSerial, StockBalance, book_cost_expr
 from apps.transfers.models import TransferOrder, TransferOrderItem, TransferOrderItemSerial
 
 from .models import StockSnapshot, StockSnapshotDay
@@ -77,9 +77,11 @@ def current_stock(tenant):
             item__to__is_void=False,
         ).values_list("serial_id", "item__to__to_warehouse_id")
     )
+    # 每一台照帳上的成本算(`book_cost`:中古機它自己的、新機是商品的平均成本),跟賣掉記的同一個數字
     for serial_id, product_id, warehouse_id, status, cost in (
         ProductSerial.objects.filter(tenant=tenant, status__in=list(SERIAL_STATES))
-        .values_list("id", "product_id", "warehouse_id", "status", "purchase_unit_cost")
+        .annotate(cost=book_cost_expr())
+        .values_list("id", "product_id", "warehouse_id", "status", "cost")
         .iterator(chunk_size=5000)
     ):
         state = SERIAL_STATES[status]

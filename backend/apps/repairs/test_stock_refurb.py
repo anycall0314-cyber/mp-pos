@@ -97,9 +97,9 @@ class RefurbTests(_Refurb, TestCase):
         # 商品的平均成本:三台 60,000 + 300 → 20,100
         self.c.phone.refresh_from_db()
         self.assertEqual(self.c.phone.weighted_avg_cost, D("20100.00"))
-        # 賣掉:成本 = 收購 / 進貨 + 整理
+        # 賣掉:新機記平均成本(整理費已經攤進平均;2026-10-31)。中古機記那一台自己的(收購 + 整理),見 sales/test_buyback_cost.py
         so = self.c.sell(serial_no="R0001")
-        self.assertEqual(SalesOrderItem.objects.get(so_id=so["id"], product=self.c.phone).cost_at_post, D("20300.00"))
+        self.assertEqual(SalesOrderItem.objects.get(so_id=so["id"], product=self.c.phone).cost_at_post, D("20100.00"))
 
     def test_external_adds_what_the_vendor_charged(self):
         row = self.opened(mode="external", external_vendor=self.c.supplier.id, external_quote_estimated="1200")
@@ -121,10 +121,11 @@ class RefurbTests(_Refurb, TestCase):
         self.assertEqual([(r["no"], D(r["cost_added"])) for r in data["refurbs"]],
                          [(first["no"], D("1500")), (second["no"], D("200"))])
         self.assertEqual(D(data["serial"]["purchase_unit_cost"]), D("21700"))
-        # 加進去的是零件的實際成本:只有管理員拆得出來;店員看到的進貨金額照舊是這一台現在的成本
+        # 加進去的是零件的實際成本:只有管理員拆得出來;店員看到的進貨金額是這一台的業務員成本
+        # (新機是平均成本:三台 60,000 + 整理 1,700;2026-10-31)
         data = self.c.clerk.get(f"/api/v1/serials/{self.unit.id}/history/").json()
         self.assertEqual([r["cost_added"] for r in data["refurbs"]], [None, None])
-        self.assertEqual(D(data["acquisition"]["amount"]), D("21700"))
+        self.assertEqual(D(data["acquisition"]["amount"]), D("20566.67"))
 
     def test_no_money_from_a_customer_and_not_in_the_monthly_report(self):
         self.assertEqual(self.open(customer_paid_amount="500").status_code, 400)

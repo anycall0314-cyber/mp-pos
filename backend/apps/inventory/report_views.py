@@ -108,7 +108,7 @@ def serial_report(request):
         request, queryset, lambda rows: reports.serial_rows(tenant, rows),
         {
             # 照同樣的條件全部加起來(不是只有這一頁)
-            "cost_total": str(queryset.aggregate(s=Sum("purchase_unit_cost"))["s"] or 0),
+            "cost_total": str(queryset.aggregate(s=Sum("unit_cost"))["s"] or 0),
             "statuses": [{"key": k, "label": v} for k, v in ProductSerial.Status.choices],
         },
     )

@@ -32,7 +32,7 @@ from apps.identity.normalize import normalize_serial
 from apps.tenants.models import Tenant
 
 from .identifiers import IdentifierError, create_serial, find_serial_ids
-from .locking import lock_document, lock_stock_rows, locked_balance
+from .locking import lock_averages, lock_document, lock_stock_rows, locked_balance
 from .models import (
     COSTED_STATUSES,
     ProductSerial,
@@ -45,6 +45,7 @@ from .models import (
     StockCountUnknown,
     StockMovement,
     VendorExchange,
+    book_cost,
 )
 
 S = StockCount.Status
@@ -499,6 +500,8 @@ def approve(count, user, lines=None, missing=None, extras=None):
         targets = {p.pk: p for p in Product.objects.filter(tenant=tenant, pk__in=[pid for _, pid, _, _ in plans])}
         if len(targets) != len({pid for _, pid, _, _ in plans}):
             raise CountError("品號不屬於這家公司")
+        # 新機的平均成本鎖在鎖任何一列之前拿:入庫的要改平均、盤虧的要記當下的平均(2026-10-31,`locking.lock_averages`)
+        lock_averages([*targets.values(), *(m.serial.product for m in gone if not m.skipped)])
         lock_stock_rows(
             tenant, products=[p for p in targets.values() if p.requires_serial],
             serial_ids=[m.serial_id for m in gone if not m.skipped],
@@ -536,17 +539,18 @@ def approve(count, user, lines=None, missing=None, extras=None):
         for m in gone:
             if m.skipped:
                 continue
-            serial = ProductSerial.objects.get(pk=m.serial_id)           # 鎖到之後重讀
+            serial = ProductSerial.objects.select_related("product").get(pk=m.serial_id)      # 鎖到之後重讀
             # 核准的當下已經不在這家門市在庫 / 已退的(盤完才賣掉、調走)不動:它不是不見了
             if serial.status in ON_SHELF and serial.warehouse_id == wh.pk:
                 m.was_returned = serial.status == ProductSerial.Status.RETURNED
+                m.unit_cost = book_cost(serial)
                 serial.status = ProductSerial.Status.LOST
                 serial.save(update_fields=["status"])
                 StockMovement.objects.create(
                     tenant=tenant, serial=serial, qty=1, movement_type=M.ADJUST, from_warehouse=wh,
                     ref_doc_type=REF, ref_doc_id=count.id, note=f"盤點單 {count.no} 盤虧"[:200])
                 m.applied = True
-        StockCountMissing.objects.bulk_update(gone, ["skipped", "reason", "applied", "was_returned"])
+        StockCountMissing.objects.bulk_update(gone, ["skipped", "reason", "applied", "was_returned", "unit_cost"])
         _blend_average(tenant, plans, targets)      # 先算(在庫的台數是入庫之前的),跟進貨一樣
         _add_units(count, plans, targets, user)
         count.status, count.approved_at, count.approved_by = S.APPROVED, timezone.now(), _by(user)

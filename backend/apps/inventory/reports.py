@@ -8,8 +8,8 @@ from contextlib import contextmanager
 from datetime import date, datetime, time, timedelta
 
 from django.db import connection, transaction
-from django.db.models import BooleanField, Case, Count, OuterRef, Q, Subquery, Sum, Value, When
-from django.db.models.functions import Coalesce
+from django.db.models import BooleanField, Case, Count, DecimalField, OuterRef, Q, Subquery, Sum, Value, When
+from django.db.models.functions import Coalesce, Round
 from django.utils import timezone
 
 from apps.catalog.models import Product
@@ -17,7 +17,7 @@ from apps.identity.normalize import normalize_serial
 
 from . import flows
 from .identifiers import codes_of
-from .models import ProductSerial, ProductSerialIdentifier, StockBalance, StockMovement, Warehouse
+from .models import ProductSerial, ProductSerialIdentifier, StockBalance, StockMovement, Warehouse, book_cost_expr
 
 MAX_DAYS = 366          # 期間一次最多看一年
 FLOW_MAX_ROWS = 5000    # 進銷存表一次最多列幾個商品
@@ -426,6 +426,18 @@ def _current_sale(tenant, field):
     )
 
 
+def _unit_cost(tenant):
+    """每一台的成本:已售的 = 把它賣出去的那一張記的(一台份);其他 = 帳上的成本(`book_cost`:中古機它自己的、
+    新機是商品的平均成本)。這一台真的進價不放這裡(店員也看這張表;2026-10-31)。"""
+    money = DecimalField(max_digits=14, decimal_places=2)
+    sold = Round(_current_sale(tenant, "item__cost_at_post") / _current_sale(tenant, "item__qty"), 2,
+                 output_field=money)
+    return Case(
+        When(status=ProductSerial.Status.SOLD, then=Coalesce(sold, book_cost_expr(), output_field=money)),
+        default=book_cost_expr(), output_field=money,
+    )
+
+
 def serials(tenant, *, statuses=(), warehouse_id=None, supplier_id=None,
             received=(None, None), sold=(None, None), search=""):
     """跨商品的每一台設備(新進的在前面)。
@@ -436,6 +448,7 @@ def serials(tenant, *, statuses=(), warehouse_id=None, supplier_id=None,
     qs = ProductSerial.objects.filter(tenant=tenant).annotate(
         sale_warehouse=_current_sale(tenant, "item__so__warehouse_id"),
         sale_date=_current_sale(tenant, "item__so__doc_date"),
+        unit_cost=_unit_cost(tenant),
     )
     if statuses:
         bad = [s for s in statuses if s not in S.values]
@@ -523,7 +536,7 @@ def serial_rows(tenant, page):
             "store": store,
             "source": source,
             "received_at": s.received_at,
-            "cost": str(s.purchase_unit_cost),
+            "cost": str(annotated.unit_cost),
             "sale": sale,
         })
     return out

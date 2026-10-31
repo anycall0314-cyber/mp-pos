@@ -65,13 +65,21 @@ class ProductAndStockTests(_Shop):
         self.assertNotIn("last_purchase_price", self.clerk_without_prices().get(url).json())
 
     def test_serial_goods_have_no_rule_yet(self):
-        """帶序號的業務員成本 = 那一台的成本,所以序號清單、庫存查詢每一台的成本照舊給。
-        要打開這個開關,先把那幾處(inventory/reports.py、report_views.py、serializers.py 的 purchase_unit_cost、
-        inventory/views.py 的序號履歷)改成照業務員成本給,再改這一條。"""
+        """帶序號的業務員成本 = 那一台帳上的成本(新機是平均成本),所以序號清單(inventory/reports.py、report_views.py)
+        每一台的成本照舊給大家。要打開這個開關,先把那兩處改成照業務員成本給,再改這一條。
+        這一台真的進價、帳上的成本只給管理員(2026-10-31:新機賣掉記平均成本,店員看得到進價就挑得出便宜的那批)。"""
         self.assertFalse(staff_cost.SERIAL_GOODS_TOO)
         admin, clerk = self.company_rule("percent", "20")
         unit = clerk.get("/api/v1/serials/", {"product": self.c.phone.id}).json()["results"][0]
-        self.assertEqual((D(unit["staff_cost"]), D(unit["purchase_unit_cost"])), (D("20000"), D("20000")))
+        self.assertEqual(D(unit["staff_cost"]), D("20000"))
+        self.assertNotIn("purchase_unit_cost", unit)
+        self.assertNotIn("book_cost", unit)
+        unit = admin.get("/api/v1/serials/", {"product": self.c.phone.id}).json()["results"][0]
+        self.assertEqual((D(unit["purchase_unit_cost"]), D(unit["book_cost"])), (D("20000"), D("20000")))
+        # 序號履歷也一樣(那一台的資料不帶進價,收購來源那一行是業務員成本)
+        history = clerk.get(f"/api/v1/serials/{unit['id']}/history/").json()
+        self.assertNotIn("purchase_unit_cost", history["serial"])
+        self.assertEqual(D(history["acquisition"]["amount"]), D("20000"))
 
 
 class SalesTests(_Shop):

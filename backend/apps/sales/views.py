@@ -338,7 +338,7 @@ class SalesOrderViewSet(
         so = self.get_queryset().get(pk=so.pk)
         return Response(
             {
-                "serial": ProductSerialSerializer(serial).data,
+                "serial": ProductSerialSerializer(serial, context={"request": request}).data,
                 "sales_order": self.get_serializer(so).data,
             },
             status=status.HTTP_201_CREATED,

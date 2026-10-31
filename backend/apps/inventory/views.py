@@ -34,6 +34,7 @@ from .models import (
     StockBalance,
     StockMovement,
     Warehouse,
+    book_cost,
 )
 from .serializers import (
     ProductSerialSerializer,
@@ -176,7 +177,7 @@ class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({"detail": str(exc)}, status=http_status.HTTP_403_FORBIDDEN)
         except IdentifierError as exc:
             return Response({"detail": str(exc)}, status=http_status.HTTP_400_BAD_REQUEST)
-        return Response(ProductSerialSerializer(self.get_queryset().get(pk=serial.pk)).data)
+        return Response(ProductSerialSerializer(self.get_queryset().get(pk=serial.pk), context={"request": request}).data)
 
     @action(detail=True, methods=["post"], url_path="release")
     def release(self, request, pk=None):
@@ -201,7 +202,7 @@ class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({"detail": str(exc)}, status=http_status.HTTP_403_FORBIDDEN)
         except ReleaseError as exc:
             return Response({"detail": str(exc)}, status=http_status.HTTP_400_BAD_REQUEST)
-        return Response(ProductSerialSerializer(self.get_queryset().get(pk=serial.pk)).data)
+        return Response(ProductSerialSerializer(self.get_queryset().get(pk=serial.pk), context={"request": request}).data)
 
     @action(detail=True, methods=["get"], url_path="history")
     def history(self, request, pk=None):
@@ -225,8 +226,10 @@ class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
             }
             for o in orders
         ]
+        # 其他人:收購 / 進貨那一欄給這一台的業務員成本(新機是平均成本;這一台真的進價只給管理員,2026-10-31)
         added = sum((o.stock_cost_added for o in orders), Decimal("0")) if manager else Decimal("0")
-        first_cost = str(serial.purchase_unit_cost - added)
+        first_cost = str(serial.purchase_unit_cost - added) if manager else str(
+            staff_cost.serial_unit_cost(serial.product, request.tenant, book_cost(serial)))
 
         # 收購來源:廠商進貨單 or 個人收購銷貨單
         acquisition = None
@@ -339,7 +342,7 @@ class ProductSerialViewSet(viewsets.ReadOnlyModelViewSet):
 
         return Response(
             {
-                "serial": ProductSerialSerializer(serial).data,
+                "serial": ProductSerialSerializer(serial, context={"request": request}).data,
                 "acquisition": acquisition,
                 "refurbs": refurbs,
                 "movements": movement_data,

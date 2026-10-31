@@ -30,7 +30,7 @@ from apps.identity.normalize import normalize_serial
 
 from .identifiers import IdentifierError, codes_of, find_serial_ids, looks_like_imei, set_codes
 from .locking import lock_stock_rows, locked_balance
-from .models import ProductSerial, StockMovement, VendorExchange, Warehouse
+from .models import ProductSerial, StockMovement, VendorExchange, Warehouse, book_cost
 
 S = ProductSerial.Status
 X = VendorExchange.Status
@@ -121,7 +121,7 @@ def _send_serial(tenant, serial_id, *, user, supplier_id, note, check):
         codes = codes_of(serial)
         exchange = VendorExchange.objects.create(
             tenant=tenant, serial=serial, product_id=serial.product_id, warehouse_id=serial.warehouse_id,
-            supplier_id=supplier_id, note=note, unit_cost=serial.purchase_unit_cost,
+            supplier_id=supplier_id, note=note, unit_cost=book_cost(serial),
             sent_imei=codes["imei"], sent_sn=codes["sn"], sent_by=_by(user),
             was_returned=serial.status == S.RETURNED,
         )

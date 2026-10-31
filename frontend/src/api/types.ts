@@ -205,7 +205,10 @@ export interface ProductSerial {
   warehouse_name?: string;
   status: SerialStatus;
   status_label: string;
-  purchase_unit_cost: string;
+  /** 這一台真的進價(收購 / 進貨 + 整理):只有管理員的資料裡有 */
+  purchase_unit_cost?: string;
+  /** 這一台帳上的成本(賣掉記的:中古機它自己的、新機是平均成本):只有管理員的資料裡有 */
+  book_cost?: string;
   /** 這一台的業務員成本(中古機用這一台自己的成本當基準) */
   staff_cost?: string;
   condition_grade: ConditionGrade;

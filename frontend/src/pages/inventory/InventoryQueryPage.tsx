@@ -135,7 +135,7 @@ function UnitsOfStore({
         <div key={s.id} className="wb-inv-unit">
           <span className="wb-mono">{codesLabel(s)}</span>
           <span className="wb-dim">
-            {actual ? "成本" : "業務員成本"} {price(actual ? s.purchase_unit_cost : (s.staff_cost ?? s.purchase_unit_cost))}
+            {actual ? "成本" : "業務員成本"} {price(actual ? s.book_cost : s.staff_cost)}
           </span>
           {product.tracks_unit_condition && (
             <>

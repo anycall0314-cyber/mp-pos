@@ -5,7 +5,7 @@ from apps.core.manager_fields import ManagerOnlyFieldsMixin
 from apps.core.tenant_fields import TenantScopedRelatedFieldsMixin
 
 from .identifiers import codes_of
-from .models import ProductSerial, StockBalance, StockMovement, Warehouse
+from .models import ProductSerial, StockBalance, StockMovement, Warehouse, book_cost
 
 
 class _TenantUniqueMixin:
@@ -40,7 +40,11 @@ class WarehouseSerializer(TenantScopedRelatedFieldsMixin, _TenantUniqueMixin, se
         return self._tenant_unique(Warehouse.objects, "code", value)
 
 
-class ProductSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
+class ProductSerialSerializer(ManagerOnlyFieldsMixin, TenantScopedRelatedFieldsMixin, serializers.ModelSerializer):
+    # 這一台真的進價(收購 / 進貨 + 整理)與帳上的成本都是實際成本,只給管理員(owner 2026-10-31:新機賣掉記平均成本
+    # 之後,店員看得到每一台的進價就挑得出便宜的那批);其他人看 staff_cost
+    manager_only_fields = ("purchase_unit_cost", "book_cost")
+
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_is_secondhand = serializers.BooleanField(
@@ -62,8 +66,11 @@ class ProductSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelS
     acquired_via_sales_order_no = serializers.CharField(
         source="acquired_via_sales_order.no", read_only=True, default=""
     )
-    # 這一台的業務員成本(算獎金看的毛利用的):這一台現在賣掉會記的那個數字(沒有規則 = 這一台的成本)
+    # 這一台的業務員成本(算獎金看的毛利用的):這一台現在賣掉會記的那個數字(沒有規則 = 帳上的成本 `book_cost`:
+    # 中古機它自己的、新機是商品的平均成本)
     staff_cost = serializers.SerializerMethodField()
+    # 這一台帳上的成本(`book_cost`:賣掉記的、庫存金額算的;中古機它自己的、新機是商品的平均成本)
+    book_cost = serializers.SerializerMethodField()
     # 這一台的兩個碼(可能只有一個);serial_no 是主碼(有 IMEI 用 IMEI,沒有才用 SN)
     imei = serializers.SerializerMethodField()
     sn = serializers.SerializerMethodField()
@@ -77,7 +84,10 @@ class ProductSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelS
     def get_staff_cost(self, obj) -> str:
         request = self.context.get("request")
         tenant = getattr(request, "tenant", None) or obj.tenant
-        return str(staff_cost.serial_unit_cost(obj.product, tenant, obj.purchase_unit_cost))
+        return str(staff_cost.serial_unit_cost(obj.product, tenant, book_cost(obj)))
+
+    def get_book_cost(self, obj) -> str:
+        return str(book_cost(obj))
 
     def get_imei(self, obj):
         return self._codes(obj)["imei"]
@@ -102,6 +112,7 @@ class ProductSerialSerializer(TenantScopedRelatedFieldsMixin, serializers.ModelS
             "status",
             "status_label",
             "purchase_unit_cost",
+            "book_cost",
             "staff_cost",
             "condition_grade",
             "condition_grade_label",
